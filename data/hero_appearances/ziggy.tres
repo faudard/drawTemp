@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" format=3 uid="uid://7d2f7ks5u2fx"]
+
+[ext_resource type="Script" uid="uid://clpjjfnx66wg4" path="res://scripts/data/hero_appearance_definition.gd" id="1_tgo2r"]
+
+[resource]
+script = ExtResource("1_tgo2r")
+hero_id = "ziggy"
+display_name = "Ziggy personnalisé"
+target_visual_id = "ziggy"
+generated_sprite_sheet_path = "res://assets/generated/heroes/ziggy_custom.png"
+generated_portrait_path = "res://assets/generated/heroes/ziggy_custom_portrait.png"
+legacy_migrated = true

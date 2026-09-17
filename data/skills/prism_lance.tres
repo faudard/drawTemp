@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="SporeSkillDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/skill_definition.gd" id="1_skill"]
+[ext_resource type="Script" path="res://scripts/data/skill_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="Effect_1"]
+script = ExtResource("2_effect")
+effect_type = "damage"
+damage_type = "prism"
+amount = 0
+use_attack_stat = true
+status_id = ""
+radius = 4
+area_shape = "line"
+target_scope = "enemies"
+
+[resource]
+script = ExtResource("1_skill")
+id = "prism_lance"
+display_name = "Lance prismatique"
+description = "Trace une ligne lumineuse depuis Luma et frappe tous les ennemis sur son axe."
+focus_cost = 1
+cooldown_rounds = 3
+range = 4
+target_mode = "ground"
+effects = Array[Resource]([SubResource("Effect_1")])
+vfx_id = "prism_beam"
+effect_tags = PackedStringArray("damage", "ranged", "aoe", "ignore_cover")

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SporeVfxDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/vfx_definition.gd" id="1_vfx"]
+
+[resource]
+script = ExtResource("1_vfx")
+id = "prism_beam"
+display_name = "Faisceau prismatique"
+description = "Faisceau continu pour les attaques de ligne sur le plateau 3D."
+kind = "beam"
+primary_color = Color(0.423529, 0.772549, 0.909804, 1)
+secondary_color = Color(1, 1, 1, 1)
+texture_path = ""
+texture_scale = 1.0
+duration = 0.42
+particle_count = 10
+radius = 28.0
+trail_width = 7.0
+shake_strength = 3.5
+flash_strength = 0.7
+frame_width = 0
+frame_height = 0
+start_frame = 0
+frame_count = 1
+fps = 12.0
+loop = false

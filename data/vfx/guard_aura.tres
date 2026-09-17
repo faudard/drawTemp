@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SporeVfxDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/vfx_definition.gd" id="1_vfx"]
+
+[resource]
+script = ExtResource("1_vfx")
+id = "guard_aura"
+display_name = "Aura de garde"
+description = "VFX data-driven V1.7."
+kind = "aura"
+primary_color = Color(0.482353, 0.878431, 0.678431, 1.000000)
+secondary_color = Color(1.000000, 0.819608, 0.400000, 1.000000)
+texture_path = ""
+texture_scale = 1.0
+duration = 0.75
+particle_count = 7
+radius = 34.0
+trail_width = 3.0
+shake_strength = 1
+flash_strength = 0.25
+frame_width = 0
+frame_height = 0
+start_frame = 0
+frame_count = 1
+fps = 12.0
+loop = false

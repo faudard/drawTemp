@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SporeEquipmentDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/equipment_definition.gd" id="1_eq"]
+
+[resource]
+script = ExtResource("1_eq")
+id = "sprout_badge"
+display_name = "Badge pousse"
+description = "+2 PV max"
+slot = "accessory"
+hp_bonus = 2
+attack_bonus = 0
+movement_bonus = 0
+range_bonus = 0
+initiative_bonus = 0
+focus_bonus = 0
+start_status_id = ""
+resistances = Array[Resource]([])

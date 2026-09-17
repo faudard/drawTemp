@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SporeVfxDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/vfx_definition.gd" id="1_vfx"]
+
+[resource]
+script = ExtResource("1_vfx")
+id = "poison_aura"
+display_name = "Aura de poison"
+description = "VFX data-driven V1.7."
+kind = "aura"
+primary_color = Color(0.478431, 0.850980, 0.419608, 1.000000)
+secondary_color = Color(0.788235, 0.588235, 1.000000, 1.000000)
+texture_path = ""
+texture_scale = 1.0
+duration = 0.85
+particle_count = 10
+radius = 30.0
+trail_width = 3.0
+shake_strength = 1
+flash_strength = 0.2
+frame_width = 0
+frame_height = 0
+start_frame = 0
+frame_count = 1
+fps = 12.0
+loop = false

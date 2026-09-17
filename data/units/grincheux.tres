@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="SporeUnitDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/unit_definition.gd" id="1_unit"]
+
+[resource]
+script = ExtResource("1_unit")
+id = "grincheux"
+visual_id = "grincheux"
+display_name = "Grincheux"
+role = "Garde"
+team = "enemy"
+color = Color(0.603922, 0.482353, 0.878431, 1)
+max_hp = 8
+attack = 2
+magic_power = 1
+physical_defense = 1
+magic_defense = 0
+movement = 3
+attack_range = 1
+weapon_family = "melee"
+attack_min_range = 1
+threat_min_range = 1
+threat_max_range = 1
+can_opportunity_attack = true
+basic_attack_damage_type = "physical"
+initiative = 5
+accuracy = 1
+evasion = 0
+max_focus = 2
+ai_profile = "defensive"
+primary_skill = "taunt"
+secondary_skill = "hat"
+reaction_type = "intercept"
+reaction_range = 1
+reaction_damage_bonus = 0

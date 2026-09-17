@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hero_appearance_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+hero_id = "preset"
+target_visual_id = "preset"
+display_name = "Petit malicieux"
+presentation_style = "neutral"
+archetype_style = "funky"
+silhouette_preset = "chibi"
+global_scale = 0.9
+body_width_scale = 0.95
+body_height_scale = 0.82
+head_scale = 1.28
+head_width_scale = 1.15
+body_style = "classic"
+head_shape_style = "wide"
+head_pattern_style = "spots"
+eyes_style = "cute"
+iris_style = "star"
+pupil_style = "round"
+brows_style = "arched"
+mouth_style = "grin"
+teeth_style = "single_fang"
+top_style = "poncho"
+bottom_style = "shorts"
+accessory_style = "goggles"
+weapon_style = "wand"
+idle_expression = "mischief"
+move_expression = "focused"
+attack_expression = "angry"
+cast_expression = "mystic"
+hit_expression = "hurt"
+ko_expression = "ko"
+portrait_expression = "mischief"
+legacy_migrated = true

@@ -1,0 +1,62 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" format=3 uid="uid://cyrolc2s7pkm6"]
+
+[ext_resource type="Script" uid="uid://clpjjfnx66wg4" path="res://scripts/data/hero_appearance_definition.gd" id="1_appearance"]
+
+[resource]
+script = ExtResource("1_appearance")
+display_name = "Momo personnalisé V1.26"
+presentation_style = "masculine"
+body_width_scale = 1.1
+head_width_scale = 1.1
+body_style = "rugged"
+head_shape_style = "mutant"
+ears_style = "pointed"
+horns_style = "short"
+eyes_style = "narrow"
+iris_style = "glow"
+pupil_style = "slit"
+teeth_style = "single_fang"
+skin_spots_style = "freckles"
+mark_style = "scar_left"
+mark_2_style = "cheek_slash"
+earrings_style = "stud"
+jewelry_style = "pendant"
+accessory_style = "scarf"
+accessory_2_style = "badge"
+asymmetry_enabled = true
+left_horns_style = "none"
+right_horns_style = "short"
+left_earrings_style = "none"
+right_earrings_style = "stud"
+left_accessory_2_style = "none"
+right_accessory_2_style = "badge"
+portrait_expression = "cheerful"
+skin_color = Color(0.952941, 0.898039, 0.752941, 1)
+head_primary_color = Color(0.94902, 0.478431, 0.447059, 1)
+head_secondary_color = Color(1, 0.819608, 0.4, 1)
+ears_color = Color(0.952941, 0.898039, 0.752941, 1)
+horns_color = Color(0.839216, 0.776471, 0.647059, 1)
+hair_color = Color(0.294118, 0.184314, 0.156863, 1)
+eyes_color = Color(0.956863, 0.968627, 1, 1)
+iris_color = Color(0.270588, 0.639216, 0.780392, 1)
+pupil_color = Color(0.090196, 0.066667, 0.121569, 1)
+brows_color = Color(0.247059, 0.168627, 0.164706, 1)
+nose_color = Color(0.85098, 0.615686, 0.560784, 1)
+mouth_color = Color(0.145098, 0.109804, 0.196078, 1)
+teeth_color = Color(1, 0.972549, 0.905882, 1)
+facial_hair_color = Color(0.419608, 0.309804, 0.227451, 1)
+skin_spots_color = Color(0.772549, 0.435294, 0.4, 1)
+mark_color = Color(0.545098, 0.14902, 0.207843, 1)
+mark_2_color = Color(0.427451, 0.156863, 0.215686, 1)
+mark_3_color = Color(0.623529, 0.227451, 0.282353, 1)
+earrings_color = Color(1, 0.819608, 0.4, 1)
+jewelry_color = Color(1, 0.819608, 0.4, 1)
+top_color = Color(0.270588, 0.639216, 0.780392, 1)
+bottom_color = Color(0.266667, 0.313725, 0.419608, 1)
+accessory_color = Color(1, 0.819608, 0.4, 1)
+accessory_2_color = Color(0.52549, 0.937255, 0.67451, 1)
+accessory_3_color = Color(0.941176, 0.670588, 0.988235, 1)
+weapon_color = Color(0.780392, 0.831373, 0.87451, 1)
+outline_color = Color(0.145098, 0.109804, 0.196078, 1)
+cap_color = Color(0.94902, 0.478431, 0.447059, 1)
+legacy_migrated = true

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SporeStatusDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/status_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "burning"
+display_name = "Brûlure"
+description = "Subit 2 dégâts en fin d’activation pendant 2 activations."
+color = Color(1, 0.52, 0.26, 1)
+vfx_id = "burn_aura"
+duration_activations = 2
+tick_phase = "activation_end"
+tick_damage_type = "fire"
+tick_damage = 2

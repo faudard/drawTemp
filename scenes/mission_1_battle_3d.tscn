@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/prototypes/spore_battle_board_3d.gd" id="1_board"]
+
+[node name="Mission1Battle3D" type="Node3D"]
+script = ExtResource("1_board")
+mission_index = 0
+map_scene_path = "res://maps/mission_1_map.tscn"
+hero_unit_ids = PackedStringArray("momo", "pipo", "luma")

@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hero_appearance_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Palette — Cuivre toxique"
+skin_color = Color(0.905882, 0.811765, 0.666667, 1.000000)
+head_primary_color = Color(0.705882, 0.325490, 0.035294, 1.000000)
+head_secondary_color = Color(0.639216, 0.901961, 0.207843, 1.000000)
+ears_color = Color(0.905882, 0.811765, 0.666667, 1.000000)
+horns_color = Color(0.470588, 0.443137, 0.423529, 1.000000)
+hair_color = Color(0.266667, 0.168627, 0.109804, 1.000000)
+eyes_color = Color(0.925490, 0.988235, 0.796078, 1.000000)
+iris_color = Color(0.133333, 0.772549, 0.368627, 1.000000)
+pupil_color = Color(0.019608, 0.180392, 0.086275, 1.000000)
+brows_color = Color(0.258824, 0.125490, 0.023529, 1.000000)
+nose_color = Color(0.788235, 0.556863, 0.392157, 1.000000)
+skin_spots_color = Color(0.517647, 0.662745, 0.549020, 1.000000)
+mouth_color = Color(0.160784, 0.145098, 0.141176, 1.000000)
+teeth_color = Color(0.996078, 0.988235, 0.909804, 1.000000)
+facial_hair_color = Color(0.360784, 0.250980, 0.200000, 1.000000)
+mark_color = Color(0.086275, 0.396078, 0.203922, 1.000000)
+mark_2_color = Color(0.078431, 0.325490, 0.176471, 1.000000)
+mark_3_color = Color(0.301961, 0.486275, 0.058824, 1.000000)
+earrings_color = Color(0.850980, 0.466667, 0.023529, 1.000000)
+jewelry_color = Color(0.517647, 0.800000, 0.086275, 1.000000)
+top_color = Color(0.247059, 0.384314, 0.070588, 1.000000)
+bottom_color = Color(0.160784, 0.145098, 0.141176, 1.000000)
+accessory_color = Color(0.639216, 0.901961, 0.207843, 1.000000)
+accessory_2_color = Color(0.850980, 0.466667, 0.023529, 1.000000)
+accessory_3_color = Color(0.290196, 0.870588, 0.501961, 1.000000)
+weapon_color = Color(0.658824, 0.635294, 0.619608, 1.000000)
+global_tint = Color(0.968627, 0.996078, 0.905882, 1.000000)

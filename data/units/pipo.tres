@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="SporeUnitDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/unit_definition.gd" id="1_unit"]
+
+[resource]
+script = ExtResource("1_unit")
+id = "pipo"
+visual_id = "pipo"
+display_name = "Pipo"
+role = "Soutien"
+team = "player"
+color = Color(0.423529, 0.772549, 0.788235, 1)
+max_hp = 10
+attack = 2
+magic_power = 2
+physical_defense = 1
+magic_defense = 1
+movement = 4
+attack_range = 1
+weapon_family = "melee"
+attack_min_range = 1
+threat_min_range = 1
+threat_max_range = 1
+can_opportunity_attack = true
+basic_attack_damage_type = "physical"
+initiative = 6
+accuracy = 2
+evasion = 5
+max_focus = 2
+primary_skill = "heal"
+secondary_skill = "mist"
+ai_profile = "default"
+reaction_type = "none"
+reaction_range = 1
+reaction_damage_bonus = 0
+default_job_id = "field_medic"
+available_job_ids = PackedStringArray("field_medic", "moss_warden")
+starting_level = 1

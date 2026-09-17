@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="SporeAIProfileDefinition" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/ai_profile_definition.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+id = "aggressive"
+display_name = "Agressif"
+description = "Cherche rapidement une position d'attaque et accepte davantage de risques."
+preferred_range = 1
+distance_weight = 13.0
+attack_position_bonus = 135.0
+cover_weight = 0.5
+height_weight = 2.0
+hazard_penalty = 9.0
+reaction_penalty = 10.0
+movement_cost_weight = 0.08
+target_hp_weight = 4.5
+target_distance_weight = 0.5
+crown_carrier_priority = 120.0
+marked_target_priority = 16.0
+skill_bias = 1.25
+prefer_skills = true
+avoid_reactions = false
+seek_cover = false

@@ -1,0 +1,51 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hero_appearance_definition.gd" id="1_appearance"]
+
+[resource]
+script = ExtResource("1_appearance")
+hero_id = "preset"
+display_name = "Regard arcanique"
+target_visual_id = "preset"
+presentation_style = "neutral"
+archetype_style = "mage"
+size_preset = "medium"
+body_style = "slim"
+head_shape_style = "droopy"
+head_pattern_style = "dense_spots"
+hair_style = "tuft"
+eyes_style = "big"
+iris_style = "glow"
+pupil_style = "diamond"
+brows_style = "arched"
+nose_style = "tiny"
+skin_spots_style = "blush"
+mouth_style = "smile"
+teeth_style = "none"
+facial_hair_style = "none"
+mark_style = "tribal"
+mark_2_style = "none"
+mark_3_style = "none"
+earrings_style = "crystal"
+jewelry_style = "amulet"
+top_style = "poncho"
+bottom_style = "kilt"
+accessory_style = "scarf"
+weapon_style = "wand"
+head_primary_color = Color(0.42, 0.22, 0.78, 1)
+head_secondary_color = Color(0.28, 0.88, 0.95, 1)
+skin_color = Color(0.92, 0.86, 0.97, 1)
+eyes_color = Color(0.98, 0.99, 1, 1)
+iris_color = Color(0.30, 0.92, 1.0, 1)
+pupil_color = Color(0.08, 0.04, 0.16, 1)
+brows_color = Color(0.24, 0.13, 0.31, 1)
+nose_color = Color(0.76, 0.62, 0.78, 1)
+skin_spots_color = Color(0.89, 0.42, 0.72, 0.75)
+mark_color = Color(0.89, 0.56, 1.0, 1)
+earrings_color = Color(0.35, 0.94, 1.0, 1)
+jewelry_color = Color(0.92, 0.78, 0.28, 1)
+top_color = Color(0.18, 0.12, 0.42, 1)
+bottom_color = Color(0.10, 0.12, 0.24, 1)
+accessory_color = Color(0.76, 0.40, 0.94, 1)
+weapon_color = Color(0.70, 0.90, 1.0, 1)
+legacy_migrated = true

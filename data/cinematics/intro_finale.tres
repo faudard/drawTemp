@@ -1,0 +1,53 @@
+[gd_resource type="Resource" script_class="SporeCinematicDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/cinematic_definition.gd" id="1_cine"]
+[ext_resource type="Script" path="res://scripts/data/battle_action_definition.gd" id="2_action"]
+
+[sub_resource type="Resource" id="Fade"]
+script = ExtResource("2_action")
+id = "fade"
+action_type = "fade_out"
+camera_duration = 0.2
+
+[sub_resource type="Resource" id="Boss"]
+script = ExtResource("2_action")
+id = "boss"
+action_type = "camera_focus_unit"
+unit_id = "archiviste"
+camera_zoom = 1.45
+camera_duration = 0.45
+
+[sub_resource type="Resource" id="In"]
+script = ExtResource("2_action")
+id = "in"
+action_type = "fade_in"
+camera_duration = 0.25
+
+[sub_resource type="Resource" id="Line1"]
+script = ExtResource("2_action")
+id = "line1"
+action_type = "dialogue"
+speaker = "L'Archiviste"
+message = "Silence. Votre improvisation n'est référencée dans aucun formulaire homologué."
+wait_for_input = true
+
+[sub_resource type="Resource" id="Line2"]
+script = ExtResource("2_action")
+id = "line2"
+action_type = "dialogue"
+speaker = "Momo"
+message = "Parfait. On va déposer une demande en trois coups de chapeau."
+wait_for_input = true
+
+[sub_resource type="Resource" id="Reset"]
+script = ExtResource("2_action")
+id = "reset"
+action_type = "camera_reset"
+camera_duration = 0.25
+
+[resource]
+script = ExtResource("1_cine")
+id = "intro_finale"
+display_name = "Intro — Dernier Rappel"
+description = "Face-à-face avec l'Archiviste."
+actions = Array[Resource]([SubResource("Fade"), SubResource("Boss"), SubResource("In"), SubResource("Line1"), SubResource("Line2"), SubResource("Reset")])

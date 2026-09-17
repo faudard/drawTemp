@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="SporeCinematicDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/cinematic_definition.gd" id="1_cine"]
+[ext_resource type="Script" path="res://scripts/data/battle_action_definition.gd" id="2_action"]
+
+[sub_resource type="Resource" id="Focus"]
+script = ExtResource("2_action")
+id = "focus"
+action_type = "camera_focus_unit"
+unit_id = "archiviste"
+camera_zoom = 1.5
+camera_duration = 0.3
+
+[sub_resource type="Resource" id="Shake"]
+script = ExtResource("2_action")
+id = "shake"
+action_type = "camera_shake"
+value = 7
+
+[sub_resource type="Resource" id="Line"]
+script = ExtResource("2_action")
+id = "line"
+action_type = "dialogue"
+speaker = "L'Archiviste"
+message = "Second registre ouvert. Les marges deviennent officiellement hostiles."
+wait_for_input = true
+
+[sub_resource type="Resource" id="Reset"]
+script = ExtResource("2_action")
+id = "reset"
+action_type = "camera_reset"
+camera_duration = 0.25
+
+[resource]
+script = ExtResource("1_cine")
+id = "archivist_phase2"
+display_name = "Archiviste — Phase II"
+description = "Transition réutilisable de la phase II du boss."
+actions = Array[Resource]([SubResource("Focus"), SubResource("Shake"), SubResource("Line"), SubResource("Reset")])

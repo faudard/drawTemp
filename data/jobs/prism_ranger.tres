@@ -1,0 +1,135 @@
+[gd_resource type="Resource" script_class="SporeJobDefinition" load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_definition.gd" id="1_job"]
+[ext_resource type="Script" path="res://scripts/data/job_skill_unlock.gd" id="2_unlock"]
+[ext_resource type="Script" path="res://scripts/data/resistance_entry.gd" id="3_res"]
+[ext_resource type="Script" path="res://scripts/data/progression_node_definition.gd" id="4_node"]
+
+[sub_resource type="Resource" id="Unlock_1"]
+script = ExtResource("2_unlock")
+skill_id = "mark"
+required_level = 1
+
+[sub_resource type="Resource" id="Unlock_2"]
+script = ExtResource("2_unlock")
+skill_id = "flare"
+required_level = 2
+
+[sub_resource type="Resource" id="Res_1"]
+script = ExtResource("3_res")
+damage_type = "prism"
+percent = 20
+
+[sub_resource type="Resource" id="Tree_1"]
+script = ExtResource("4_node")
+id = "skill_mark"
+display_name = "Balise prismatique"
+description = "Marque une cible."
+node_type = "skill"
+editor_position = Vector2(40, 170)
+cost = 0
+required_level = 1
+auto_unlock = true
+skill_id = "mark"
+
+[sub_resource type="Resource" id="Tree_2"]
+script = ExtResource("4_node")
+id = "skill_flare"
+display_name = "Tir prismatique"
+description = "Tir spécial à distance."
+node_type = "skill"
+editor_position = Vector2(280, 170)
+cost = 0
+required_level = 2
+auto_unlock = true
+required_node_ids = PackedStringArray("skill_mark")
+skill_id = "flare"
+
+[sub_resource type="Resource" id="Tree_3"]
+script = ExtResource("4_node")
+id = "long_lens"
+display_name = "Lentille longue"
+description = "Branche de spécialisation."
+node_type = "stat"
+editor_position = Vector2(520, 80)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_flare")
+exclusive_group = "path"
+stat_type = "range"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_4"]
+script = ExtResource("4_node")
+id = "prism_charge"
+display_name = "Charge prismatique"
+description = "Aboutissement de la branche."
+node_type = "passive"
+editor_position = Vector2(780, 80)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("long_lens")
+passive_type = "skill_power"
+passive_target = "flare"
+passive_value = 1
+
+[sub_resource type="Resource" id="Tree_5"]
+script = ExtResource("4_node")
+id = "scout_reflex"
+display_name = "Réflexes éclaireuse"
+description = "Branche alternative exclusive."
+node_type = "stat"
+editor_position = Vector2(520, 260)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_flare")
+exclusive_group = "path"
+stat_type = "initiative"
+stat_value = 2
+
+[sub_resource type="Resource" id="Tree_6"]
+script = ExtResource("4_node")
+id = "spectrum_skin"
+display_name = "Peau spectrale"
+description = "Aboutissement de la branche alternative."
+node_type = "passive"
+editor_position = Vector2(780, 260)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("scout_reflex")
+passive_type = "resistance"
+passive_target = "prism"
+passive_value = 15
+
+[resource]
+script = ExtResource("1_job")
+id = "prism_ranger"
+display_name = "Éclaireuse prismatique"
+description = "Luma privilégie la portée et le marquage à distance."
+unlock_from_job_id = ""
+unlock_level = 1
+next_job_ids = PackedStringArray("flare_gunner")
+hp_bonus = 0
+attack_bonus = 0
+magic_power_bonus = 2
+physical_defense_bonus = 0
+magic_defense_bonus = 1
+movement_bonus = 0
+range_bonus = 1
+initiative_bonus = 2
+focus_bonus = 0
+hp_growth = 0.4
+attack_growth = 0.15
+initiative_growth = 0.25
+starting_tree_points = 1
+tree_points_per_level = 1
+progression_nodes = Array[Resource]([SubResource("Tree_1"), SubResource("Tree_2"), SubResource("Tree_3"), SubResource("Tree_4"), SubResource("Tree_5"), SubResource("Tree_6")])
+skill_unlocks = Array[Resource]([SubResource("Unlock_1"), SubResource("Unlock_2")])
+resistances = Array[Resource]([SubResource("Res_1")])
+skill_power_skill_id = ""
+skill_power_bonus = 0
+guard_after_skill_id = ""

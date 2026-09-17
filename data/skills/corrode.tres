@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="SporeSkillDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/skill_definition.gd" id="1_skill"]
+[ext_resource type="Script" path="res://scripts/data/skill_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="Effect_1"]
+script = ExtResource("2_effect")
+effect_type = "damage"
+damage_type = "spore"
+amount = 1
+use_attack_stat = false
+status_id = ""
+radius = 0
+area_shape = "single"
+target_scope = "target"
+
+[sub_resource type="Resource" id="Effect_2"]
+script = ExtResource("2_effect")
+effect_type = "status"
+amount = 1
+use_attack_stat = false
+status_id = "weakened"
+radius = 0
+area_shape = "single"
+target_scope = "target"
+
+[resource]
+script = ExtResource("1_skill")
+id = "corrode"
+display_name = "Basse corrosive"
+description = "Dégâts et AFFAIBLI."
+focus_cost = 1
+cooldown_rounds = 2
+range = 3
+target_mode = "enemy"
+effects = Array[Resource]([SubResource("Effect_1"), SubResource("Effect_2")])
+vfx_id = "corrode_wave"
+effect_tags = PackedStringArray("damage", "weaken")

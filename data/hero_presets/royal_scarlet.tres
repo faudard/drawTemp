@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hero_appearance_definition.gd" id="1_appearance"]
+
+[resource]
+script = ExtResource("1_appearance")
+hero_id = "preset"
+display_name = "Royal écarlate"
+target_visual_id = "preset"
+presentation_style = "neutral"
+archetype_style = "warrior"
+size_preset = "medium"
+global_scale = 1.0
+body_width_scale = 1.05
+body_height_scale = 1.0
+head_scale = 1.08
+head_width_scale = 1.12
+body_style = "rugged"
+head_shape_style = "noble"
+head_pattern_style = "rim"
+eyes_style = "angry"
+mouth_style = "stern"
+facial_hair_style = "short_beard"
+mark_style = "scar_right"
+top_style = "armor"
+bottom_style = "trousers"
+accessory_style = "badge"
+weapon_style = "sword"
+skin_color = Color(0.95, 0.85, 0.68, 1)
+head_primary_color = Color(0.76, 0.12, 0.12, 1)
+head_secondary_color = Color(1, 0.72, 0.18, 1)
+eyes_color = Color(0.95, 0.98, 1, 1)
+mouth_color = Color(0.14, 0.10, 0.20, 1)
+facial_hair_color = Color(0.27, 0.18, 0.12, 1)
+mark_color = Color(0.45, 0.04, 0.08, 1)
+top_color = Color(0.30, 0.09, 0.10, 1)
+bottom_color = Color(0.15, 0.15, 0.18, 1)
+accessory_color = Color(1, 0.78, 0.25, 1)
+weapon_color = Color(0.80, 0.84, 0.88, 1)
+global_tint = Color(1, 1, 1, 1)
+sprite_scale = 0.5
+legacy_migrated = true

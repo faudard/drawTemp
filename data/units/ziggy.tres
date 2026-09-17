@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="SporeUnitDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/unit_definition.gd" id="1_unit"]
+
+[resource]
+script = ExtResource("1_unit")
+id = "ziggy"
+visual_id = "ziggy"
+display_name = "Ziggy"
+role = "Sporeur funky"
+team = "player"
+color = Color(0.760784, 0.482353, 0.878431, 1)
+max_hp = 8
+attack = 2
+magic_power = 3
+physical_defense = 0
+magic_defense = 1
+movement = 3
+attack_range = 3
+weapon_family = "focus"
+attack_min_range = 1
+threat_min_range = 1
+threat_max_range = 1
+can_opportunity_attack = true
+basic_attack_damage_type = "spore"
+initiative = 8
+accuracy = 4
+evasion = 3
+max_focus = 2
+primary_skill = "funk"
+secondary_skill = "spore_orbit"
+ai_profile = "default"
+reaction_type = "opportunity"
+reaction_range = 1
+reaction_damage_bonus = 0
+default_job_id = "spore_maestro"
+available_job_ids = PackedStringArray("spore_maestro", "groove_runner")
+starting_level = 1

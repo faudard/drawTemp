@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="SporeCinematicDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/cinematic_definition.gd" id="1_cine"]
+[ext_resource type="Script" path="res://scripts/data/battle_action_definition.gd" id="2_action"]
+
+[sub_resource type="Resource" id="FadeOut"]
+script = ExtResource("2_action")
+id = "fade_out"
+action_type = "fade_out"
+camera_duration = 0.2
+
+[sub_resource type="Resource" id="Focus"]
+script = ExtResource("2_action")
+id = "focus_crown"
+action_type = "camera_focus_cell"
+cell = Vector2i(9, 0)
+camera_zoom = 1.35
+camera_duration = 0.35
+
+[sub_resource type="Resource" id="FadeIn"]
+script = ExtResource("2_action")
+id = "fade_in"
+action_type = "fade_in"
+camera_duration = 0.3
+
+[sub_resource type="Resource" id="Dialogue"]
+script = ExtResource("2_action")
+id = "intro_line"
+action_type = "dialogue"
+speaker = "Ziggy"
+message = "La Couronne Beatbox est là. On la récupère, deux vinyles si on peut, puis sortie verte. Et personne ne lèche les spores." 
+wait_for_input = true
+
+[sub_resource type="Resource" id="Reset"]
+script = ExtResource("2_action")
+id = "camera_reset"
+action_type = "camera_reset"
+camera_zoom = 1.0
+camera_duration = 0.3
+
+[resource]
+script = ExtResource("1_cine")
+id = "intro_crown"
+display_name = "Intro — Couronne Beatbox"
+description = "Ouverture de la mission de la Couronne."
+actions = Array[Resource]([SubResource("FadeOut"), SubResource("Focus"), SubResource("FadeIn"), SubResource("Dialogue"), SubResource("Reset")])

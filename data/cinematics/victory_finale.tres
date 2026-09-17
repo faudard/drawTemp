@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="SporeCinematicDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/cinematic_definition.gd" id="1_cine"]
+[ext_resource type="Script" path="res://scripts/data/battle_action_definition.gd" id="2_action"]
+
+[sub_resource type="Resource" id="Shake"]
+script = ExtResource("2_action")
+id = "shake"
+action_type = "camera_shake"
+value = 8
+
+[sub_resource type="Resource" id="Line"]
+script = ExtResource("2_action")
+id = "line"
+action_type = "dialogue"
+speaker = "Luma"
+message = "Registre fermé. Champignons encore debout. Je considère ça comme une victoire administrative."
+wait_for_input = true
+
+[sub_resource type="Resource" id="Fade"]
+script = ExtResource("2_action")
+id = "fade"
+action_type = "fade_out"
+camera_duration = 0.35
+
+[sub_resource type="Resource" id="In"]
+script = ExtResource("2_action")
+id = "in"
+action_type = "fade_in"
+camera_duration = 0.2
+
+[resource]
+script = ExtResource("1_cine")
+id = "victory_finale"
+display_name = "Victoire — Finale"
+description = "Conclusion du combat final."
+actions = Array[Resource]([SubResource("Shake"), SubResource("Line"), SubResource("Fade"), SubResource("In")])

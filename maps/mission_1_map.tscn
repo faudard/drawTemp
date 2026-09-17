@@ -1,0 +1,470 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/maps/spore_map_3d.gd" id="1_map"]
+[ext_resource type="Script" path="res://scripts/maps/spore_tactical_tile_3d.gd" id="2_tile"]
+[ext_resource type="Script" path="res://scripts/maps/spore_hero_spawn_3d.gd" id="3_hero"]
+[ext_resource type="Script" path="res://scripts/maps/spore_enemy_spawn_3d.gd" id="4_enemy"]
+[ext_resource type="Script" path="res://scripts/maps/spore_map_interactable_3d.gd" id="5_object"]
+
+[node name="Mission1Map3D" type="Node3D"]
+script = ExtResource("1_map")
+grid_width = 10
+grid_height = 8
+tile_size = 1.4
+elevation_step = 0.55
+show_cell_coordinates = false
+
+[node name="Tiles" type="Node3D" parent="."]
+
+[node name="Cell_00_00" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(0, 0)
+
+[node name="Cell_01_00" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(1, 0)
+
+[node name="Cell_02_00" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(2, 0)
+
+[node name="Cell_03_00" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(3, 0)
+terrain_type = "bonus"
+display_label = "VINYL"
+
+[node name="Cell_04_00" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(4, 0)
+
+[node name="Cell_05_00" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(5, 0)
+
+[node name="Cell_06_00" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(6, 0)
+
+[node name="Cell_07_00" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(7, 0)
+
+[node name="Cell_08_00" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(8, 0)
+
+[node name="Cell_09_00" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(9, 0)
+terrain_type = "crown"
+display_label = "CROWN"
+
+[node name="Cell_00_01" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(0, 1)
+
+[node name="Cell_01_01" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(1, 1)
+elevation = 1
+
+[node name="Cell_02_01" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(2, 1)
+elevation = 1
+
+[node name="Cell_03_01" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(3, 1)
+
+[node name="Cell_04_01" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(4, 1)
+
+[node name="Cell_05_01" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(5, 1)
+
+[node name="Cell_06_01" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(6, 1)
+elevation = 1
+
+[node name="Cell_07_01" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(7, 1)
+
+[node name="Cell_08_01" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(8, 1)
+
+[node name="Cell_09_01" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(9, 1)
+
+[node name="Cell_00_02" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(0, 2)
+
+[node name="Cell_01_02" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(1, 2)
+terrain_type = "cover"
+cover_facing = "east"
+
+[node name="Cell_02_02" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(2, 2)
+
+[node name="Cell_03_02" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(3, 2)
+terrain_type = "hazard"
+
+[node name="Cell_04_02" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(4, 2)
+terrain_type = "obstacle"
+
+[node name="Cell_05_02" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(5, 2)
+terrain_type = "obstacle"
+
+[node name="Cell_06_02" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(6, 2)
+elevation = 1
+
+[node name="Cell_07_02" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(7, 2)
+
+[node name="Cell_08_02" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(8, 2)
+
+[node name="Cell_09_02" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(9, 2)
+
+[node name="Cell_00_03" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(0, 3)
+
+[node name="Cell_01_03" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(1, 3)
+
+[node name="Cell_02_03" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(2, 3)
+terrain_type = "obstacle"
+
+[node name="Cell_03_03" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(3, 3)
+
+[node name="Cell_04_03" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(4, 3)
+
+[node name="Cell_05_03" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(5, 3)
+terrain_type = "hazard"
+
+[node name="Cell_06_03" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(6, 3)
+
+[node name="Cell_07_03" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(7, 3)
+terrain_type = "obstacle"
+
+[node name="Cell_08_03" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(8, 3)
+
+[node name="Cell_09_03" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(9, 3)
+
+[node name="Cell_00_04" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(0, 4)
+
+[node name="Cell_01_04" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(1, 4)
+
+[node name="Cell_02_04" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(2, 4)
+
+[node name="Cell_03_04" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(3, 4)
+terrain_type = "cover"
+cover_facing = "north"
+
+[node name="Cell_04_04" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(4, 4)
+
+[node name="Cell_05_04" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(5, 4)
+
+[node name="Cell_06_04" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(6, 4)
+terrain_type = "cover"
+cover_facing = "south"
+
+[node name="Cell_07_04" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(7, 4)
+
+[node name="Cell_08_04" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(8, 4)
+elevation = 1
+
+[node name="Cell_09_04" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(9, 4)
+
+[node name="Cell_00_05" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(0, 5)
+
+[node name="Cell_01_05" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(1, 5)
+
+[node name="Cell_02_05" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(2, 5)
+
+[node name="Cell_03_05" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(3, 5)
+elevation = 1
+
+[node name="Cell_04_05" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(4, 5)
+terrain_type = "obstacle"
+
+[node name="Cell_05_05" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(5, 5)
+terrain_type = "obstacle"
+
+[node name="Cell_06_05" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(6, 5)
+terrain_type = "hazard"
+
+[node name="Cell_07_05" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(7, 5)
+
+[node name="Cell_08_05" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(8, 5)
+elevation = 2
+terrain_type = "cover"
+cover_facing = "west"
+
+[node name="Cell_09_05" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(9, 5)
+
+[node name="Cell_00_06" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(0, 6)
+terrain_type = "extraction"
+display_label = "EXIT"
+
+[node name="Cell_01_06" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(1, 6)
+
+[node name="Cell_02_06" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(2, 6)
+
+[node name="Cell_03_06" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(3, 6)
+elevation = 1
+
+[node name="Cell_04_06" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(4, 6)
+
+[node name="Cell_05_06" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(5, 6)
+
+[node name="Cell_06_06" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(6, 6)
+terrain_type = "cover"
+cover_facing = "north"
+
+[node name="Cell_07_06" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(7, 6)
+terrain_type = "hazard"
+
+[node name="Cell_08_06" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(8, 6)
+
+[node name="Cell_09_06" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(9, 6)
+
+[node name="Cell_00_07" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(0, 7)
+terrain_type = "extraction"
+display_label = "EXIT"
+
+[node name="Cell_01_07" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(1, 7)
+terrain_type = "extraction"
+display_label = "EXIT"
+
+[node name="Cell_02_07" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(2, 7)
+
+[node name="Cell_03_07" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(3, 7)
+
+[node name="Cell_04_07" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(4, 7)
+
+[node name="Cell_05_07" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(5, 7)
+
+[node name="Cell_06_07" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(6, 7)
+
+[node name="Cell_07_07" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(7, 7)
+terrain_type = "bonus"
+display_label = "VINYL"
+
+[node name="Cell_08_07" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(8, 7)
+
+[node name="Cell_09_07" type="Node3D" parent="Tiles"]
+script = ExtResource("2_tile")
+cell = Vector2i(9, 7)
+
+[node name="Spawns" type="Node3D" parent="."]
+
+[node name="HeroSpawn1" type="Node3D" parent="Spawns"]
+script = ExtResource("3_hero")
+cell = Vector2i(1, 6)
+order = 0
+
+[node name="HeroSpawn2" type="Node3D" parent="Spawns"]
+script = ExtResource("3_hero")
+cell = Vector2i(2, 7)
+order = 1
+
+[node name="HeroSpawn3" type="Node3D" parent="Spawns"]
+script = ExtResource("3_hero")
+cell = Vector2i(0, 6)
+order = 2
+
+[node name="EnemySpawn_grincheux_1" type="Node3D" parent="Spawns"]
+script = ExtResource("4_enemy")
+cell = Vector2i(8, 1)
+unit_id = "grincheux"
+role_override = "Garde"
+
+[node name="EnemySpawn_baveux_2" type="Node3D" parent="Spawns"]
+script = ExtResource("4_enemy")
+cell = Vector2i(8, 6)
+unit_id = "baveux"
+role_override = "Gluant"
+
+[node name="EnemySpawn_comptable_3" type="Node3D" parent="Spawns"]
+script = ExtResource("4_enemy")
+cell = Vector2i(6, 0)
+unit_id = "comptable"
+role_override = "Archer fiscal"
+
+[node name="EnemySpawn_dj_morille_4" type="Node3D" parent="Spawns"]
+script = ExtResource("4_enemy")
+cell = Vector2i(9, 4)
+unit_id = "dj_morille"
+role_override = "Disc-jockey hostile"
+
+[node name="Objects" type="Node3D" parent="."]
+
+[node name="GardenGate" type="Node3D" parent="Objects"]
+script = ExtResource("5_object")
+cell = Vector2i(5, 6)
+object_id = "garden_gate"
+display_name = "Porte du jardin"
+object_type = "door"
+starts_active = false
+one_shot = true
+reward_type = "none"
+reward_value = 0
+reward_team = "player"
+
+[node name="GardenSwitch" type="Node3D" parent="Objects"]
+script = ExtResource("5_object")
+cell = Vector2i(2, 6)
+object_id = "garden_switch"
+display_name = "Champignon-interrupteur"
+object_type = "switch"
+linked_object_id = "garden_gate"
+starts_active = false
+one_shot = true
+reward_type = "none"
+reward_value = 0
+reward_team = "player"
+
+[node name="GardenChest" type="Node3D" parent="Objects"]
+script = ExtResource("5_object")
+cell = Vector2i(7, 2)
+object_id = "garden_chest"
+display_name = "Coffre à spores"
+object_type = "chest"
+starts_active = false
+one_shot = true
+reward_type = "focus_team"
+reward_value = 1
+reward_team = "player"
+
+[node name="PreviewRig" type="Node3D" parent="."]
+
+[node name="Camera3D" type="Camera3D" parent="PreviewRig"]
+position = Vector3(9.5, 11.5, 10.5)
+projection = 1
+size = 16.0
+current = true
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="PreviewRig"]
+rotation = Vector3(-0.95, -0.7, 0.0)
+light_energy = 1.2
+shadow_enabled = true

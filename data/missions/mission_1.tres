@@ -1,0 +1,130 @@
+[gd_resource type="Resource" script_class="SporeMissionDefinition" load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/mission_definition.gd" id="1_mission"]
+[ext_resource type="Script" path="res://scripts/data/mission_rule.gd" id="2_rule"]
+[ext_resource type="Script" path="res://scripts/data/battle_trigger_definition.gd" id="3_trigger"]
+[ext_resource type="Script" path="res://scripts/data/battle_action_definition.gd" id="4_action"]
+[ext_resource type="Script" path="res://scripts/data/map_interactable_definition.gd" id="5_object"]
+
+[sub_resource type="Resource" id="Victory_1"]
+script = ExtResource("2_rule")
+rule_type = "crown_extracted"
+amount = 1
+unit_id = ""
+invert = false
+description = ""
+
+[sub_resource type="Resource" id="Defeat_1"]
+script = ExtResource("2_rule")
+rule_type = "all_players_defeated"
+amount = 1
+unit_id = ""
+invert = false
+description = ""
+
+[sub_resource type="Resource" id="Action_1"]
+script = ExtResource("4_action")
+id = "pulse_message"
+action_type = "message"
+message = "La Couronne pulse au loin. Le jardin commence à improviser."
+value = 0
+
+[sub_resource type="Resource" id="Action_2"]
+script = ExtResource("4_action")
+id = "pulse_wait"
+action_type = "wait"
+delay_seconds = 0.4
+
+[sub_resource type="Resource" id="Action_3"]
+script = ExtResource("4_action")
+id = "pulse_hazard"
+action_type = "add_hazard"
+cell = Vector2i(8, 4)
+value = 0
+
+[sub_resource type="Resource" id="Trigger_1"]
+script = ExtResource("3_trigger")
+id = "garden_pulse"
+enabled = true
+once = true
+condition_type = "round_start"
+condition_value = 2
+condition_unit_id = ""
+condition_cell = Vector2i(-1, -1)
+actions = Array[Resource]([SubResource("Action_1"), SubResource("Action_2"), SubResource("Action_3")])
+
+[sub_resource type="Resource" id="Door_1"]
+script = ExtResource("5_object")
+id = "garden_gate"
+display_name = "Porte du jardin"
+object_type = "door"
+cell = Vector2i(5, 6)
+linked_object_id = ""
+starts_active = false
+one_shot = true
+reward_type = "none"
+reward_value = 0
+reward_team = "player"
+
+[sub_resource type="Resource" id="Switch_1"]
+script = ExtResource("5_object")
+id = "garden_switch"
+display_name = "Champignon-interrupteur"
+object_type = "switch"
+cell = Vector2i(2, 6)
+linked_object_id = "garden_gate"
+starts_active = false
+one_shot = true
+reward_type = "none"
+reward_value = 0
+reward_team = "player"
+
+[sub_resource type="Resource" id="Chest_1"]
+script = ExtResource("5_object")
+id = "garden_chest"
+display_name = "Coffre à spores"
+object_type = "chest"
+cell = Vector2i(7, 2)
+linked_object_id = ""
+starts_active = false
+one_shot = true
+reward_type = "focus_team"
+reward_value = 1
+reward_team = "player"
+
+[resource]
+script = ExtResource("1_mission")
+id = "crown"
+display_name = "La Couronne Beatbox"
+brief = "Infiltre le jardin, récupère ♛ puis ramène-la dans la zone verte. Les vinyles restent optionnels."
+secondary_objective = "Collection complète — récupérer les 2 vinyles"
+objective = "crown"
+survival_rounds = 0
+grid_width = 10
+grid_height = 8
+map_scene_path = "res://maps/mission_1_map.tscn"
+intro_cinematic_id = "intro_crown"
+victory_cinematic_id = "victory_crown"
+defeat_cinematic_id = "defeat_generic"
+victory_rule_mode = "any"
+victory_rules = Array[Resource]([SubResource("Victory_1")])
+defeat_rule_mode = "any"
+defeat_rules = Array[Resource]([SubResource("Defeat_1")])
+battle_triggers = Array[Resource]([SubResource("Trigger_1")])
+interactables = Array[Resource]([SubResource("Door_1"), SubResource("Switch_1"), SubResource("Chest_1")])
+obstacles = Array[Vector2i]([Vector2i(4, 2), Vector2i(5, 2), Vector2i(4, 5), Vector2i(5, 5), Vector2i(7, 3), Vector2i(2, 3)])
+cover = Array[Vector2i]([Vector2i(1, 2), Vector2i(3, 4), Vector2i(6, 4), Vector2i(6, 6), Vector2i(8, 5)])
+hazards = Array[Vector2i]([Vector2i(3, 2), Vector2i(5, 3), Vector2i(6, 5), Vector2i(7, 6)])
+extraction = Array[Vector2i]([Vector2i(0, 7), Vector2i(0, 6), Vector2i(1, 7)])
+bonus = Array[Vector2i]([Vector2i(3, 0), Vector2i(7, 7)])
+crown = Vector2i(9, 0)
+height_level_1 = Array[Vector2i]([Vector2i(1, 1), Vector2i(2, 1), Vector2i(3, 5), Vector2i(3, 6), Vector2i(6, 1), Vector2i(6, 2), Vector2i(8, 4)])
+height_level_2 = Array[Vector2i]([Vector2i(8, 5)])
+hero_starts = Array[Vector2i]([Vector2i(1, 6), Vector2i(2, 7), Vector2i(0, 6)])
+enemy_ids = PackedStringArray("grincheux", "baveux", "comptable", "dj_morille")
+enemy_positions = Array[Vector2i]([Vector2i(8, 1), Vector2i(8, 6), Vector2i(6, 0), Vector2i(9, 4)])
+enemy_roles = PackedStringArray("Garde", "Gluant", "Archer fiscal", "Disc-jockey hostile")
+enemy_hp_overrides = PackedInt32Array(-1, -1, -1, -1)
+enemy_attack_overrides = PackedInt32Array(-1, -1, -1, -1)
+enemy_move_overrides = PackedInt32Array(-1, -1, -1, -1)
+enemy_range_overrides = PackedInt32Array(-1, -1, -1, -1)

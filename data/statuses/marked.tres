@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SporeStatusDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/status_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "marked"
+display_name = "Balisé"
+description = "+1 dégât reçu sur le prochain impact."
+color = Color(0.54, 0.82, 1, 1)
+vfx_id = "mark_ring"
+duration_activations = 0
+incoming_damage_delta = 1
+remove_on_damage_taken = true

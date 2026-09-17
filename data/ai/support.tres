@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="SporeAIProfileDefinition" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/ai_profile_definition.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+id = "support"
+display_name = "Support"
+description = "Reste à distance, cherche la couverture et privilégie ses compétences."
+preferred_range = 3
+distance_weight = 5.0
+attack_position_bonus = 70.0
+cover_weight = 7.0
+height_weight = 4.0
+hazard_penalty = 28.0
+reaction_penalty = 42.0
+movement_cost_weight = 0.22
+target_hp_weight = 1.5
+target_distance_weight = 1.2
+crown_carrier_priority = 45.0
+marked_target_priority = 8.0
+skill_bias = 1.8
+prefer_skills = true
+avoid_reactions = true
+seek_cover = true

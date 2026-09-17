@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hero_appearance_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+hero_id = "preset"
+target_visual_id = "preset"
+display_name = "Mystique cinématique"
+presentation_style = "feminine"
+archetype_style = "mage"
+silhouette_preset = "slender"
+global_scale = 1.04
+body_width_scale = 0.78
+body_height_scale = 1.18
+head_scale = 0.96
+head_width_scale = 0.9
+body_style = "slim"
+head_shape_style = "droopy"
+head_pattern_style = "dense_spots"
+hair_style = "long"
+eyes_style = "big"
+iris_style = "glow"
+pupil_style = "diamond"
+brows_style = "arched"
+mouth_style = "smile"
+earrings_style = "none"
+jewelry_style = "amulet"
+top_style = "poncho"
+bottom_style = "kilt"
+weapon_style = "wand"
+idle_expression = "mystic"
+move_expression = "focused"
+attack_expression = "angry"
+cast_expression = "mystic"
+hit_expression = "hurt"
+ko_expression = "ko"
+portrait_expression = "mystic"
+portrait_direction = "right"
+legacy_migrated = true

@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="SporeAIProfileDefinition" load_steps=2 format=3]
+
+[ext_resource path="res://scripts/data/ai_profile_definition.gd" type="Script" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "default"
+display_name = "Équilibré"
+description = "Profil tactique polyvalent."
+preferred_range = 1
+distance_weight = 10.0
+attack_position_bonus = 100.0
+cover_weight = 2.0
+height_weight = 3.0
+hazard_penalty = 18.0
+reaction_penalty = 22.0
+movement_cost_weight = 0.15
+target_hp_weight = 3.0
+target_distance_weight = 1.0
+crown_carrier_priority = 100.0
+marked_target_priority = 12.0
+skill_bias = 1.0
+prefer_skills = true
+avoid_reactions = true
+seek_cover = true

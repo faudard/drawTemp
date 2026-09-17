@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hero_appearance_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Palette — Écarlate & Or"
+skin_color = Color(0.952941, 0.898039, 0.752941, 1.000000)
+head_primary_color = Color(0.878431, 0.321569, 0.321569, 1.000000)
+head_secondary_color = Color(1.000000, 0.819608, 0.400000, 1.000000)
+ears_color = Color(0.952941, 0.898039, 0.752941, 1.000000)
+horns_color = Color(0.847059, 0.776471, 0.647059, 1.000000)
+hair_color = Color(0.294118, 0.184314, 0.156863, 1.000000)
+eyes_color = Color(0.972549, 0.980392, 0.988235, 1.000000)
+iris_color = Color(0.960784, 0.619608, 0.043137, 1.000000)
+pupil_color = Color(0.090196, 0.066667, 0.121569, 1.000000)
+brows_color = Color(0.247059, 0.168627, 0.164706, 1.000000)
+nose_color = Color(0.850980, 0.615686, 0.560784, 1.000000)
+skin_spots_color = Color(0.788235, 0.513725, 0.474510, 1.000000)
+mouth_color = Color(0.145098, 0.109804, 0.196078, 1.000000)
+teeth_color = Color(1.000000, 0.972549, 0.905882, 1.000000)
+facial_hair_color = Color(0.419608, 0.309804, 0.227451, 1.000000)
+mark_color = Color(0.545098, 0.149020, 0.207843, 1.000000)
+mark_2_color = Color(0.427451, 0.156863, 0.215686, 1.000000)
+mark_3_color = Color(0.623529, 0.227451, 0.282353, 1.000000)
+earrings_color = Color(1.000000, 0.819608, 0.400000, 1.000000)
+jewelry_color = Color(1.000000, 0.819608, 0.400000, 1.000000)
+top_color = Color(0.498039, 0.113725, 0.113725, 1.000000)
+bottom_color = Color(0.160784, 0.145098, 0.141176, 1.000000)
+accessory_color = Color(1.000000, 0.819608, 0.400000, 1.000000)
+accessory_2_color = Color(0.984314, 0.572549, 0.235294, 1.000000)
+accessory_3_color = Color(0.988235, 0.647059, 0.647059, 1.000000)
+weapon_color = Color(0.796078, 0.835294, 0.882353, 1.000000)
+global_tint = Color(1.000000, 1.000000, 1.000000, 1.000000)

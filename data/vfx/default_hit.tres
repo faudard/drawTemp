@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SporeVfxDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/vfx_definition.gd" id="1_vfx"]
+
+[resource]
+script = ExtResource("1_vfx")
+id = "default_hit"
+display_name = "Impact classique"
+description = "VFX data-driven V1.7."
+kind = "burst"
+primary_color = Color(1.000000, 0.482353, 0.447059, 1.000000)
+secondary_color = Color(1.000000, 1.000000, 1.000000, 1.000000)
+texture_path = ""
+texture_scale = 1.0
+duration = 0.38
+particle_count = 8
+radius = 25.0
+trail_width = 5.0
+shake_strength = 2.5
+flash_strength = 0.65
+frame_width = 0
+frame_height = 0
+start_frame = 0
+frame_count = 1
+fps = 12.0
+loop = false

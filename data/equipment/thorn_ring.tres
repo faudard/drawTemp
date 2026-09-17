@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SporeEquipmentDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/equipment_definition.gd" id="1_eq"]
+
+[resource]
+script = ExtResource("1_eq")
+id = "thorn_ring"
+display_name = "Anneau d'épine"
+description = "+1 ATQ"
+slot = "weapon"
+hp_bonus = 0
+attack_bonus = 1
+movement_bonus = 0
+range_bonus = 0
+initiative_bonus = 0
+focus_bonus = 0
+weapon_family = "melee"
+attack_min_range = 1
+attack_max_range = 1
+threat_min_range = 1
+threat_max_range = 1
+can_opportunity_attack = true
+basic_attack_damage_type = "physical"
+basic_attack_damage_bonus = 1
+start_status_id = ""
+resistances = Array[Resource]([])

@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hero_appearance_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+hero_id = "preset"
+target_visual_id = "preset"
+display_name = "Colosse gardien"
+presentation_style = "masculine"
+archetype_style = "warrior"
+silhouette_preset = "colossus"
+global_scale = 1.18
+body_width_scale = 1.22
+body_height_scale = 1.18
+head_scale = 0.9
+head_width_scale = 1.0
+body_style = "rugged"
+head_shape_style = "thick"
+head_pattern_style = "rim"
+eyes_style = "angry"
+brows_style = "angry"
+mouth_style = "stern"
+mark_style = "scar_left"
+top_style = "armor"
+bottom_style = "trousers"
+weapon_style = "hammer"
+idle_expression = "focused"
+move_expression = "focused"
+attack_expression = "angry"
+cast_expression = "heroic"
+hit_expression = "hurt"
+ko_expression = "ko"
+portrait_expression = "heroic"
+legacy_migrated = true

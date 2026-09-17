@@ -1,0 +1,47 @@
+[gd_resource type="Resource" script_class="SporeUnitVisualDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/unit_visual_definition.gd" id="1_visual"]
+
+[resource]
+script = ExtResource("1_visual")
+id = "choriste"
+display_name = "Choriste Moisi"
+unit_id = "choriste"
+portrait_path = ""
+sprite_sheet_path = ""
+use_sprite_sheet = false
+frame_width = 0
+frame_height = 0
+sprite_scale = 1.0
+sprite_offset = Vector2(0, 0)
+flip_with_facing = false
+direction_mode = "4_way"
+direction_layout = "rows"
+four_direction_order = "front,right,back,left"
+fallback_shape = "mushroom"
+primary_color = Color(0.447059, 0.788235, 0.529412, 1)
+secondary_color = Color(0.952941, 0.898039, 0.752941, 1)
+accent_color = Color(1, 0.819608, 0.4, 1)
+outline_color = Color(0.145098, 0.109804, 0.196078, 1)
+tint_sprite_with_primary = false
+idle_start = 0
+idle_count = 1
+idle_fps = 4.0
+idle_loop = true
+move_start = 0
+move_count = 1
+move_fps = 8.0
+move_loop = true
+attack_start = 0
+attack_count = 1
+attack_fps = 10.0
+attack_loop = false
+hit_start = 0
+hit_count = 1
+hit_fps = 10.0
+hit_loop = false
+ko_start = 0
+ko_count = 1
+ko_fps = 8.0
+ko_loop = false
+basic_attack_vfx_id = "spore_projectile"

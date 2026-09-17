@@ -1,0 +1,53 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hero_appearance_definition.gd" id="1_appearance"]
+
+[resource]
+script = ExtResource("1_appearance")
+hero_id = "preset"
+display_name = "Dandy funky"
+target_visual_id = "preset"
+presentation_style = "feminine"
+archetype_style = "funky"
+size_preset = "small"
+body_style = "curvy"
+head_shape_style = "wide"
+head_pattern_style = "split_two_tone"
+hair_style = "bob"
+eyes_style = "cute"
+iris_style = "star"
+pupil_style = "round"
+brows_style = "arched"
+nose_style = "button"
+skin_spots_style = "freckles"
+mouth_style = "grin"
+teeth_style = "buck"
+facial_hair_style = "none"
+mark_style = "none"
+mark_2_style = "none"
+mark_3_style = "none"
+earrings_style = "hoop"
+jewelry_style = "pendant"
+top_style = "poncho"
+bottom_style = "shorts"
+accessory_style = "goggles"
+accessory_2_style = "badge"
+weapon_style = "wand"
+head_primary_color = Color(0.86, 0.18, 0.78, 1)
+head_secondary_color = Color(0.34, 0.92, 0.63, 1)
+skin_color = Color(0.96, 0.83, 0.72, 1)
+eyes_color = Color(1, 1, 1, 1)
+iris_color = Color(0.98, 0.78, 0.16, 1)
+pupil_color = Color(0.15, 0.05, 0.20, 1)
+brows_color = Color(0.37, 0.10, 0.32, 1)
+nose_color = Color(0.88, 0.60, 0.58, 1)
+skin_spots_color = Color(0.80, 0.24, 0.54, 1)
+teeth_color = Color(1, 0.98, 0.90, 1)
+earrings_color = Color(0.98, 0.74, 0.14, 1)
+jewelry_color = Color(0.98, 0.74, 0.14, 1)
+top_color = Color(0.48, 0.10, 0.62, 1)
+bottom_color = Color(0.16, 0.12, 0.30, 1)
+accessory_color = Color(0.24, 0.88, 0.88, 1)
+accessory_2_color = Color(0.98, 0.74, 0.14, 1)
+weapon_color = Color(0.76, 0.90, 0.98, 1)
+legacy_migrated = true

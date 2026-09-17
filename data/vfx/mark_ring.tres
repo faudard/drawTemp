@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SporeVfxDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/vfx_definition.gd" id="1_vfx"]
+
+[resource]
+script = ExtResource("1_vfx")
+id = "mark_ring"
+display_name = "Balise prismatique"
+description = "VFX data-driven V1.7."
+kind = "ring"
+primary_color = Color(0.541176, 0.819608, 1.000000, 1.000000)
+secondary_color = Color(1.000000, 1.000000, 1.000000, 1.000000)
+texture_path = ""
+texture_scale = 1.0
+duration = 0.65
+particle_count = 7
+radius = 35.0
+trail_width = 3.0
+shake_strength = 1
+flash_strength = 0.25
+frame_width = 0
+frame_height = 0
+start_frame = 0
+frame_count = 1
+fps = 12.0
+loop = false

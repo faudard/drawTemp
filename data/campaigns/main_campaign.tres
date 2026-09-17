@@ -1,0 +1,81 @@
+[gd_resource type="Resource" script_class="SporeCampaignDefinition" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/campaign_definition.gd" id="1_campaign"]
+[ext_resource type="Script" path="res://scripts/data/campaign_node_definition.gd" id="2_node"]
+
+[sub_resource type="Resource" id="NodeCrown"]
+script = ExtResource("2_node")
+id = "mission_crown"
+node_type = "mission"
+title = "La Couronne Beatbox"
+body = "Récupérer la Couronne puis atteindre l'extraction."
+editor_position = Vector2(40, 120)
+mission_id = "crown"
+next_node_id = "event_jam"
+
+[sub_resource type="Resource" id="NodeJam"]
+script = ExtResource("2_node")
+id = "event_jam"
+node_type = "event"
+title = "Jam des lucioles"
+body = "À la sortie du jardin, une bande de lucioles propose un bœuf clandestin. Rester pour l'expérience ou récupérer leur condensateur ?"
+editor_position = Vector2(280, 120)
+choice_a_label = "RESTER POUR LE JAM — +2 Spores XP"
+choice_a_next_node_id = "mission_stage"
+choice_a_reward_type = "xp"
+choice_a_reward_value = 2
+choice_b_label = "PRENDRE LE CONDENSATEUR — +1 Focus max au prochain combat"
+choice_b_next_node_id = "mission_stage"
+choice_b_reward_type = "focus_buff"
+choice_b_reward_value = 1
+
+[sub_resource type="Resource" id="NodeStage"]
+script = ExtResource("2_node")
+id = "mission_stage"
+node_type = "mission"
+title = "Tenir la Scène"
+body = "Tenir la scène pendant trois manches."
+editor_position = Vector2(540, 120)
+mission_id = "stage"
+next_node_id = "event_moss"
+
+[sub_resource type="Resource" id="NodeMoss"]
+script = ExtResource("2_node")
+id = "event_moss"
+node_type = "event"
+title = "Atelier de mousse"
+body = "Le vieux Myco-Mécano veut payer la troupe : des spores sonnantes ou une couche de mousse protectrice ?"
+editor_position = Vector2(780, 120)
+choice_a_label = "PRENDRE LE CACHET — +2 Spores XP"
+choice_a_next_node_id = "mission_finale"
+choice_a_reward_type = "xp"
+choice_a_reward_value = 2
+choice_b_label = "RENFORCER LES CHAPEAUX — GARDE au prochain combat"
+choice_b_next_node_id = "mission_finale"
+choice_b_reward_type = "guard_buff"
+choice_b_reward_value = 1
+
+[sub_resource type="Resource" id="NodeFinale"]
+script = ExtResource("2_node")
+id = "mission_finale"
+node_type = "mission"
+title = "Dernier Rappel"
+body = "Affronter l'Archiviste et sa garde."
+editor_position = Vector2(1040, 120)
+mission_id = "finale"
+next_node_id = "tour_end"
+
+[sub_resource type="Resource" id="NodeEnd"]
+script = ExtResource("2_node")
+id = "tour_end"
+node_type = "end"
+title = "Fin de la tournée"
+body = "La tournée est terminée. La Nouvelle Tournée+ recommence avec une difficulté accrue."
+editor_position = Vector2(1280, 120)
+
+[resource]
+script = ExtResource("1_campaign")
+id = "main"
+display_name = "Tournée Sporebound"
+start_node_id = "mission_crown"
+nodes = Array[Resource]([SubResource("NodeCrown"), SubResource("NodeJam"), SubResource("NodeStage"), SubResource("NodeMoss"), SubResource("NodeFinale"), SubResource("NodeEnd")])
