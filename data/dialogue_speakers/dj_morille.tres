@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SporeDialogueSpeakerProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dialogue_speaker_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+id = "dj_morille"
+display_name = "DJ Morille"
+unit_id = "dj_morille"
+portrait_side = "right"
+accent_color = Color(0.88, 0.3, 0.72, 1)
+name_color = Color(1.0, 0.66, 0.88, 1)
+portrait_path = ""
+text_speed = 37.0
+voice_pitch = 0.78
+blip_every = 2
+blip_volume_db = -14.5

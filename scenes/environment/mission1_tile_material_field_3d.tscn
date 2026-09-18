@@ -1,0 +1,1262 @@
+[gd_scene load_steps=18 format=3]
+
+[sub_resource type="BoxMesh" id="1_cap_mesh"]
+size = Vector3(0.94, 0.08, 0.94)
+
+[sub_resource type="PlaneMesh" id="2_stroke_mesh"]
+size = Vector2(0.72, 0.50)
+
+[sub_resource type="CylinderMesh" id="3_disc_mesh"]
+top_radius = 0.24
+bottom_radius = 0.24
+height = 0.03
+
+[sub_resource type="StandardMaterial3D" id="4_grass_cap"]
+albedo_color = Color(0.27, 0.48, 0.30, 1)
+roughness = 0.98
+
+[sub_resource type="StandardMaterial3D" id="5_grass_stroke"]
+albedo_color = Color(0.39, 0.62, 0.38, 0.92)
+transparency = 1
+cull_mode = 2
+roughness = 1.0
+
+[sub_resource type="StandardMaterial3D" id="6_path_cap"]
+albedo_color = Color(0.47, 0.34, 0.20, 1)
+roughness = 0.97
+
+[sub_resource type="StandardMaterial3D" id="7_path_stroke"]
+albedo_color = Color(0.58, 0.42, 0.25, 0.92)
+transparency = 1
+cull_mode = 2
+roughness = 1.0
+
+[sub_resource type="StandardMaterial3D" id="8_spore_cap"]
+albedo_color = Color(0.26, 0.34, 0.24, 1)
+roughness = 0.98
+
+[sub_resource type="StandardMaterial3D" id="9_spore_stain"]
+albedo_color = Color(0.58, 0.30, 0.74, 0.90)
+transparency = 1
+cull_mode = 2
+emission_enabled = true
+emission = Color(0.47, 0.20, 0.74, 1)
+emission_energy_multiplier = 0.16
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="10_crown_cap"]
+albedo_color = Color(0.50, 0.41, 0.20, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="11_crown_disc"]
+albedo_color = Color(0.95, 0.78, 0.28, 1)
+emission_enabled = true
+emission = Color(0.96, 0.74, 0.20, 1)
+emission_energy_multiplier = 0.40
+roughness = 0.22
+
+[sub_resource type="StandardMaterial3D" id="12_exit_cap"]
+albedo_color = Color(0.20, 0.42, 0.34, 1)
+roughness = 0.96
+
+[sub_resource type="StandardMaterial3D" id="13_exit_disc"]
+albedo_color = Color(0.43, 1.00, 0.76, 1)
+emission_enabled = true
+emission = Color(0.30, 1.00, 0.74, 1)
+emission_energy_multiplier = 0.34
+roughness = 0.18
+
+[sub_resource type="StandardMaterial3D" id="14_bonus_cap"]
+albedo_color = Color(0.21, 0.39, 0.47, 1)
+roughness = 0.94
+
+[sub_resource type="StandardMaterial3D" id="15_bonus_disc"]
+albedo_color = Color(0.50, 0.82, 1.0, 1)
+emission_enabled = true
+emission = Color(0.22, 0.66, 1.0, 1)
+emission_energy_multiplier = 0.28
+roughness = 0.16
+
+[sub_resource type="StandardMaterial3D" id="16_edge_shadow"]
+albedo_color = Color(0.13, 0.15, 0.12, 1)
+roughness = 1.0
+
+[node name="Mission1TileMaterialField3D" type="Node3D"]
+
+[node name="TileCaps" type="Node3D" parent="."]
+
+[node name="Tile_0_0" type="Node3D" parent="TileCaps"]
+position = Vector3(-4.50, 0.03, -3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_0_0"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_0_0"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.120, 0.046, -0.120)
+rotation = Vector3(-1.5708, 0, -0.3600)
+
+[node name="Tile_1_0" type="Node3D" parent="TileCaps"]
+position = Vector3(-3.50, 0.03, -3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_1_0"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_1_0"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.060, 0.046, 0.000)
+rotation = Vector3(-1.5708, 0, 0.0300)
+
+[node name="Tile_2_0" type="Node3D" parent="TileCaps"]
+position = Vector3(-2.50, 0.03, -3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_2_0"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_2_0"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.000, 0.046, 0.120)
+rotation = Vector3(-1.5708, 0, -0.3000)
+
+[node name="Tile_3_0" type="Node3D" parent="TileCaps"]
+position = Vector3(-1.50, 0.03, -3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_3_0"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_3_0"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.060, 0.046, -0.030)
+rotation = Vector3(-1.5708, 0, 0.0900)
+
+[node name="Tile_4_0" type="Node3D" parent="TileCaps"]
+position = Vector3(-0.50, 0.03, -3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_4_0"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_4_0"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.120, 0.046, 0.090)
+rotation = Vector3(-1.5708, 0, -0.2400)
+
+[node name="Tile_5_0" type="Node3D" parent="TileCaps"]
+position = Vector3(0.50, 0.03, -3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_5_0"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_5_0"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.090, 0.046, -0.060)
+rotation = Vector3(-1.5708, 0, 0.1500)
+
+[node name="Tile_6_0" type="Node3D" parent="TileCaps"]
+position = Vector3(1.50, 0.03, -3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_6_0"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_6_0"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.030, 0.046, 0.060)
+rotation = Vector3(-1.5708, 0, -0.1800)
+
+[node name="Tile_7_0" type="Node3D" parent="TileCaps"]
+position = Vector3(2.50, 0.03, -3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_7_0"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_7_0"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.030, 0.046, -0.090)
+rotation = Vector3(-1.5708, 0, 0.2100)
+
+[node name="Tile_8_0" type="Node3D" parent="TileCaps"]
+position = Vector3(3.50, 0.03, -3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_8_0"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_8_0"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.090, 0.046, 0.030)
+rotation = Vector3(-1.5708, 0, -0.1200)
+
+[node name="Tile_9_0" type="Node3D" parent="TileCaps"]
+position = Vector3(4.50, 0.03, -3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_9_0"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("10_crown_cap")
+scale = Vector3(0.960, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_9_0"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("7_path_stroke")
+position = Vector3(-0.120, 0.046, -0.120)
+rotation = Vector3(-1.5708, 0, 0.2700)
+
+[node name="MarkerDisc" type="MeshInstance3D" parent="TileCaps/Tile_9_0"]
+mesh = SubResource("3_disc_mesh")
+material_override = SubResource("11_crown_disc")
+position = Vector3(0, 0.061, 0)
+
+[node name="Tile_0_1" type="Node3D" parent="TileCaps"]
+position = Vector3(-4.50, 0.03, -2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_0_1"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_0_1"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.090, 0.046, 0.030)
+rotation = Vector3(-1.5708, 0, 0.2100)
+
+[node name="Tile_1_1" type="Node3D" parent="TileCaps"]
+position = Vector3(-3.50, 0.03, -2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_1_1"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_1_1"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.120, 0.046, -0.120)
+rotation = Vector3(-1.5708, 0, -0.1200)
+
+[node name="Tile_2_1" type="Node3D" parent="TileCaps"]
+position = Vector3(-2.50, 0.03, -2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_2_1"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_2_1"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.060, 0.046, 0.000)
+rotation = Vector3(-1.5708, 0, 0.2700)
+
+[node name="Tile_3_1" type="Node3D" parent="TileCaps"]
+position = Vector3(-1.50, 0.03, -2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_3_1"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_3_1"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.000, 0.046, 0.120)
+rotation = Vector3(-1.5708, 0, -0.0600)
+
+[node name="Tile_4_1" type="Node3D" parent="TileCaps"]
+position = Vector3(-0.50, 0.03, -2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_4_1"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_4_1"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.060, 0.046, -0.030)
+rotation = Vector3(-1.5708, 0, 0.3300)
+
+[node name="Tile_5_1" type="Node3D" parent="TileCaps"]
+position = Vector3(0.50, 0.03, -2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_5_1"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_5_1"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.120, 0.046, 0.090)
+rotation = Vector3(-1.5708, 0, 0.0000)
+
+[node name="Tile_6_1" type="Node3D" parent="TileCaps"]
+position = Vector3(1.50, 0.03, -2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_6_1"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_6_1"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.090, 0.046, -0.060)
+rotation = Vector3(-1.5708, 0, -0.3300)
+
+[node name="Tile_7_1" type="Node3D" parent="TileCaps"]
+position = Vector3(2.50, 0.03, -2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_7_1"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_7_1"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.030, 0.046, 0.060)
+rotation = Vector3(-1.5708, 0, 0.0600)
+
+[node name="Tile_8_1" type="Node3D" parent="TileCaps"]
+position = Vector3(3.50, 0.03, -2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_8_1"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("6_path_cap")
+scale = Vector3(0.980, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_8_1"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("7_path_stroke")
+position = Vector3(0.030, 0.046, -0.090)
+rotation = Vector3(-1.5708, 0, -0.2700)
+
+[node name="Tile_9_1" type="Node3D" parent="TileCaps"]
+position = Vector3(4.50, 0.03, -2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_9_1"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_9_1"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.090, 0.046, 0.030)
+rotation = Vector3(-1.5708, 0, 0.1200)
+
+[node name="Tile_0_2" type="Node3D" parent="TileCaps"]
+position = Vector3(-4.50, 0.03, -1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_0_2"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_0_2"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.030, 0.046, -0.090)
+rotation = Vector3(-1.5708, 0, 0.0600)
+
+[node name="Tile_1_2" type="Node3D" parent="TileCaps"]
+position = Vector3(-3.50, 0.03, -1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_1_2"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_1_2"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.090, 0.046, 0.030)
+rotation = Vector3(-1.5708, 0, -0.2700)
+
+[node name="Tile_2_2" type="Node3D" parent="TileCaps"]
+position = Vector3(-2.50, 0.03, -1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_2_2"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_2_2"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.120, 0.046, -0.120)
+rotation = Vector3(-1.5708, 0, 0.1200)
+
+[node name="Tile_3_2" type="Node3D" parent="TileCaps"]
+position = Vector3(-1.50, 0.03, -1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_3_2"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_3_2"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.060, 0.046, 0.000)
+rotation = Vector3(-1.5708, 0, -0.2100)
+
+[node name="Tile_4_2" type="Node3D" parent="TileCaps"]
+position = Vector3(-0.50, 0.03, -1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_4_2"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_4_2"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.000, 0.046, 0.120)
+rotation = Vector3(-1.5708, 0, 0.1800)
+
+[node name="Tile_5_2" type="Node3D" parent="TileCaps"]
+position = Vector3(0.50, 0.03, -1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_5_2"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_5_2"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.060, 0.046, -0.030)
+rotation = Vector3(-1.5708, 0, -0.1500)
+
+[node name="Tile_6_2" type="Node3D" parent="TileCaps"]
+position = Vector3(1.50, 0.03, -1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_6_2"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("14_bonus_cap")
+scale = Vector3(1.000, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_6_2"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.120, 0.046, 0.090)
+rotation = Vector3(-1.5708, 0, 0.2400)
+
+[node name="MarkerDisc" type="MeshInstance3D" parent="TileCaps/Tile_6_2"]
+mesh = SubResource("3_disc_mesh")
+material_override = SubResource("15_bonus_disc")
+position = Vector3(0, 0.061, 0)
+
+[node name="Tile_7_2" type="Node3D" parent="TileCaps"]
+position = Vector3(2.50, 0.03, -1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_7_2"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("6_path_cap")
+scale = Vector3(1.000, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_7_2"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("7_path_stroke")
+position = Vector3(-0.090, 0.046, -0.060)
+rotation = Vector3(-1.5708, 0, -0.0900)
+
+[node name="Tile_8_2" type="Node3D" parent="TileCaps"]
+position = Vector3(3.50, 0.03, -1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_8_2"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_8_2"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.030, 0.046, 0.060)
+rotation = Vector3(-1.5708, 0, 0.3000)
+
+[node name="Tile_9_2" type="Node3D" parent="TileCaps"]
+position = Vector3(4.50, 0.03, -1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_9_2"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_9_2"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.030, 0.046, -0.090)
+rotation = Vector3(-1.5708, 0, -0.0300)
+
+[node name="Tile_0_3" type="Node3D" parent="TileCaps"]
+position = Vector3(-4.50, 0.03, -0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_0_3"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.970, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_0_3"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.030, 0.046, 0.060)
+rotation = Vector3(-1.5708, 0, -0.0900)
+
+[node name="Tile_1_3" type="Node3D" parent="TileCaps"]
+position = Vector3(-3.50, 0.03, -0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_1_3"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.970, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_1_3"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.030, 0.046, -0.090)
+rotation = Vector3(-1.5708, 0, 0.3000)
+
+[node name="Tile_2_3" type="Node3D" parent="TileCaps"]
+position = Vector3(-2.50, 0.03, -0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_2_3"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.970, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_2_3"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.090, 0.046, 0.030)
+rotation = Vector3(-1.5708, 0, -0.0300)
+
+[node name="Tile_3_3" type="Node3D" parent="TileCaps"]
+position = Vector3(-1.50, 0.03, -0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_3_3"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.970, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_3_3"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.120, 0.046, -0.120)
+rotation = Vector3(-1.5708, 0, -0.3600)
+
+[node name="Tile_4_3" type="Node3D" parent="TileCaps"]
+position = Vector3(-0.50, 0.03, -0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_4_3"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("8_spore_cap")
+scale = Vector3(0.970, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_4_3"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("9_spore_stain")
+position = Vector3(-0.060, 0.046, 0.000)
+rotation = Vector3(-1.5708, 0, 0.0300)
+
+[node name="Tile_5_3" type="Node3D" parent="TileCaps"]
+position = Vector3(0.50, 0.03, -0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_5_3"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("8_spore_cap")
+scale = Vector3(0.970, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_5_3"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("9_spore_stain")
+position = Vector3(0.000, 0.046, 0.120)
+rotation = Vector3(-1.5708, 0, -0.3000)
+
+[node name="Tile_6_3" type="Node3D" parent="TileCaps"]
+position = Vector3(1.50, 0.03, -0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_6_3"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("6_path_cap")
+scale = Vector3(0.970, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_6_3"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("7_path_stroke")
+position = Vector3(0.060, 0.046, -0.030)
+rotation = Vector3(-1.5708, 0, 0.0900)
+
+[node name="Tile_7_3" type="Node3D" parent="TileCaps"]
+position = Vector3(2.50, 0.03, -0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_7_3"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.970, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_7_3"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.120, 0.046, 0.090)
+rotation = Vector3(-1.5708, 0, -0.2400)
+
+[node name="Tile_8_3" type="Node3D" parent="TileCaps"]
+position = Vector3(3.50, 0.03, -0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_8_3"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.970, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_8_3"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.090, 0.046, -0.060)
+rotation = Vector3(-1.5708, 0, 0.1500)
+
+[node name="Tile_9_3" type="Node3D" parent="TileCaps"]
+position = Vector3(4.50, 0.03, -0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_9_3"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.970, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_9_3"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.030, 0.046, 0.060)
+rotation = Vector3(-1.5708, 0, -0.1800)
+
+[node name="Tile_0_4" type="Node3D" parent="TileCaps"]
+position = Vector3(-4.50, 0.03, 0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_0_4"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.990, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_0_4"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.090, 0.046, -0.060)
+rotation = Vector3(-1.5708, 0, -0.2400)
+
+[node name="Tile_1_4" type="Node3D" parent="TileCaps"]
+position = Vector3(-3.50, 0.03, 0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_1_4"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.990, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_1_4"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.030, 0.046, 0.060)
+rotation = Vector3(-1.5708, 0, 0.1500)
+
+[node name="Tile_2_4" type="Node3D" parent="TileCaps"]
+position = Vector3(-2.50, 0.03, 0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_2_4"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.990, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_2_4"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.030, 0.046, -0.090)
+rotation = Vector3(-1.5708, 0, -0.1800)
+
+[node name="Tile_3_4" type="Node3D" parent="TileCaps"]
+position = Vector3(-1.50, 0.03, 0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_3_4"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("8_spore_cap")
+scale = Vector3(0.990, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_3_4"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("9_spore_stain")
+position = Vector3(0.090, 0.046, 0.030)
+rotation = Vector3(-1.5708, 0, 0.2100)
+
+[node name="Tile_4_4" type="Node3D" parent="TileCaps"]
+position = Vector3(-0.50, 0.03, 0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_4_4"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("8_spore_cap")
+scale = Vector3(0.990, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_4_4"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("9_spore_stain")
+position = Vector3(-0.120, 0.046, -0.120)
+rotation = Vector3(-1.5708, 0, -0.1200)
+
+[node name="Tile_5_4" type="Node3D" parent="TileCaps"]
+position = Vector3(0.50, 0.03, 0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_5_4"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("6_path_cap")
+scale = Vector3(0.990, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_5_4"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("7_path_stroke")
+position = Vector3(-0.060, 0.046, 0.000)
+rotation = Vector3(-1.5708, 0, 0.2700)
+
+[node name="Tile_6_4" type="Node3D" parent="TileCaps"]
+position = Vector3(1.50, 0.03, 0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_6_4"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.990, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_6_4"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.000, 0.046, 0.120)
+rotation = Vector3(-1.5708, 0, -0.0600)
+
+[node name="Tile_7_4" type="Node3D" parent="TileCaps"]
+position = Vector3(2.50, 0.03, 0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_7_4"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.990, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_7_4"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.060, 0.046, -0.030)
+rotation = Vector3(-1.5708, 0, 0.3300)
+
+[node name="Tile_8_4" type="Node3D" parent="TileCaps"]
+position = Vector3(3.50, 0.03, 0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_8_4"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.990, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_8_4"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.120, 0.046, 0.090)
+rotation = Vector3(-1.5708, 0, 0.0000)
+
+[node name="Tile_9_4" type="Node3D" parent="TileCaps"]
+position = Vector3(4.50, 0.03, 0.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_9_4"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.990, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_9_4"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.090, 0.046, -0.060)
+rotation = Vector3(-1.5708, 0, -0.3300)
+
+[node name="Tile_0_5" type="Node3D" parent="TileCaps"]
+position = Vector3(-4.50, 0.03, 1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_0_5"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_0_5"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.120, 0.046, 0.090)
+rotation = Vector3(-1.5708, 0, 0.3300)
+
+[node name="Tile_1_5" type="Node3D" parent="TileCaps"]
+position = Vector3(-3.50, 0.03, 1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_1_5"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_1_5"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.090, 0.046, -0.060)
+rotation = Vector3(-1.5708, 0, 0.0000)
+
+[node name="Tile_2_5" type="Node3D" parent="TileCaps"]
+position = Vector3(-2.50, 0.03, 1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_2_5"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("6_path_cap")
+scale = Vector3(0.960, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_2_5"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("7_path_stroke")
+position = Vector3(-0.030, 0.046, 0.060)
+rotation = Vector3(-1.5708, 0, -0.3300)
+
+[node name="Tile_3_5" type="Node3D" parent="TileCaps"]
+position = Vector3(-1.50, 0.03, 1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_3_5"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("6_path_cap")
+scale = Vector3(0.960, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_3_5"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("7_path_stroke")
+position = Vector3(0.030, 0.046, -0.090)
+rotation = Vector3(-1.5708, 0, 0.0600)
+
+[node name="Tile_4_5" type="Node3D" parent="TileCaps"]
+position = Vector3(-0.50, 0.03, 1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_4_5"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("6_path_cap")
+scale = Vector3(0.960, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_4_5"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("7_path_stroke")
+position = Vector3(0.090, 0.046, 0.030)
+rotation = Vector3(-1.5708, 0, -0.2700)
+
+[node name="Tile_5_5" type="Node3D" parent="TileCaps"]
+position = Vector3(0.50, 0.03, 1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_5_5"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_5_5"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.120, 0.046, -0.120)
+rotation = Vector3(-1.5708, 0, 0.1200)
+
+[node name="Tile_6_5" type="Node3D" parent="TileCaps"]
+position = Vector3(1.50, 0.03, 1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_6_5"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_6_5"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.060, 0.046, 0.000)
+rotation = Vector3(-1.5708, 0, -0.2100)
+
+[node name="Tile_7_5" type="Node3D" parent="TileCaps"]
+position = Vector3(2.50, 0.03, 1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_7_5"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_7_5"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.000, 0.046, 0.120)
+rotation = Vector3(-1.5708, 0, 0.1800)
+
+[node name="Tile_8_5" type="Node3D" parent="TileCaps"]
+position = Vector3(3.50, 0.03, 1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_8_5"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_8_5"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.060, 0.046, -0.030)
+rotation = Vector3(-1.5708, 0, -0.1500)
+
+[node name="Tile_9_5" type="Node3D" parent="TileCaps"]
+position = Vector3(4.50, 0.03, 1.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_9_5"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.960, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_9_5"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.120, 0.046, 0.090)
+rotation = Vector3(-1.5708, 0, 0.2400)
+
+[node name="Tile_0_6" type="Node3D" parent="TileCaps"]
+position = Vector3(-4.50, 0.03, 2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_0_6"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("12_exit_cap")
+scale = Vector3(0.980, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_0_6"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.060, 0.046, -0.030)
+rotation = Vector3(-1.5708, 0, 0.1800)
+
+[node name="MarkerDisc" type="MeshInstance3D" parent="TileCaps/Tile_0_6"]
+mesh = SubResource("3_disc_mesh")
+material_override = SubResource("13_exit_disc")
+position = Vector3(0, 0.061, 0)
+
+[node name="Tile_1_6" type="Node3D" parent="TileCaps"]
+position = Vector3(-3.50, 0.03, 2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_1_6"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("6_path_cap")
+scale = Vector3(0.980, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_1_6"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("7_path_stroke")
+position = Vector3(0.120, 0.046, 0.090)
+rotation = Vector3(-1.5708, 0, -0.1500)
+
+[node name="Tile_2_6" type="Node3D" parent="TileCaps"]
+position = Vector3(-2.50, 0.03, 2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_2_6"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("14_bonus_cap")
+scale = Vector3(0.980, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_2_6"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.090, 0.046, -0.060)
+rotation = Vector3(-1.5708, 0, 0.2400)
+
+[node name="MarkerDisc" type="MeshInstance3D" parent="TileCaps/Tile_2_6"]
+mesh = SubResource("3_disc_mesh")
+material_override = SubResource("15_bonus_disc")
+position = Vector3(0, 0.061, 0)
+
+[node name="Tile_3_6" type="Node3D" parent="TileCaps"]
+position = Vector3(-1.50, 0.03, 2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_3_6"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_3_6"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.030, 0.046, 0.060)
+rotation = Vector3(-1.5708, 0, -0.0900)
+
+[node name="Tile_4_6" type="Node3D" parent="TileCaps"]
+position = Vector3(-0.50, 0.03, 2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_4_6"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_4_6"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.030, 0.046, -0.090)
+rotation = Vector3(-1.5708, 0, 0.3000)
+
+[node name="Tile_5_6" type="Node3D" parent="TileCaps"]
+position = Vector3(0.50, 0.03, 2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_5_6"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_5_6"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.090, 0.046, 0.030)
+rotation = Vector3(-1.5708, 0, -0.0300)
+
+[node name="Tile_6_6" type="Node3D" parent="TileCaps"]
+position = Vector3(1.50, 0.03, 2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_6_6"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_6_6"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.120, 0.046, -0.120)
+rotation = Vector3(-1.5708, 0, -0.3600)
+
+[node name="Tile_7_6" type="Node3D" parent="TileCaps"]
+position = Vector3(2.50, 0.03, 2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_7_6"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_7_6"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.060, 0.046, 0.000)
+rotation = Vector3(-1.5708, 0, 0.0300)
+
+[node name="Tile_8_6" type="Node3D" parent="TileCaps"]
+position = Vector3(3.50, 0.03, 2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_8_6"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_8_6"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.000, 0.046, 0.120)
+rotation = Vector3(-1.5708, 0, -0.3000)
+
+[node name="Tile_9_6" type="Node3D" parent="TileCaps"]
+position = Vector3(4.50, 0.03, 2.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_9_6"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(0.980, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_9_6"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.060, 0.046, -0.030)
+rotation = Vector3(-1.5708, 0, 0.0900)
+
+[node name="Tile_0_7" type="Node3D" parent="TileCaps"]
+position = Vector3(-4.50, 0.03, 3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_0_7"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("12_exit_cap")
+scale = Vector3(1.000, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_0_7"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.000, 0.046, 0.120)
+rotation = Vector3(-1.5708, 0, 0.0300)
+
+[node name="MarkerDisc" type="MeshInstance3D" parent="TileCaps/Tile_0_7"]
+mesh = SubResource("3_disc_mesh")
+material_override = SubResource("13_exit_disc")
+position = Vector3(0, 0.061, 0)
+
+[node name="Tile_1_7" type="Node3D" parent="TileCaps"]
+position = Vector3(-3.50, 0.03, 3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_1_7"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("12_exit_cap")
+scale = Vector3(1.000, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_1_7"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.060, 0.046, -0.030)
+rotation = Vector3(-1.5708, 0, -0.3000)
+
+[node name="MarkerDisc" type="MeshInstance3D" parent="TileCaps/Tile_1_7"]
+mesh = SubResource("3_disc_mesh")
+material_override = SubResource("13_exit_disc")
+position = Vector3(0, 0.061, 0)
+
+[node name="Tile_2_7" type="Node3D" parent="TileCaps"]
+position = Vector3(-2.50, 0.03, 3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_2_7"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_2_7"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.120, 0.046, 0.090)
+rotation = Vector3(-1.5708, 0, 0.0900)
+
+[node name="Tile_3_7" type="Node3D" parent="TileCaps"]
+position = Vector3(-1.50, 0.03, 3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_3_7"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_3_7"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.090, 0.046, -0.060)
+rotation = Vector3(-1.5708, 0, -0.2400)
+
+[node name="Tile_4_7" type="Node3D" parent="TileCaps"]
+position = Vector3(-0.50, 0.03, 3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_4_7"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_4_7"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.030, 0.046, 0.060)
+rotation = Vector3(-1.5708, 0, 0.1500)
+
+[node name="Tile_5_7" type="Node3D" parent="TileCaps"]
+position = Vector3(0.50, 0.03, 3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_5_7"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 1.000)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_5_7"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.030, 0.046, -0.090)
+rotation = Vector3(-1.5708, 0, -0.1800)
+
+[node name="Tile_6_7" type="Node3D" parent="TileCaps"]
+position = Vector3(1.50, 0.03, 3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_6_7"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.980)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_6_7"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.090, 0.046, 0.030)
+rotation = Vector3(-1.5708, 0, 0.2100)
+
+[node name="Tile_7_7" type="Node3D" parent="TileCaps"]
+position = Vector3(2.50, 0.03, 3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_7_7"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.960)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_7_7"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.120, 0.046, -0.120)
+rotation = Vector3(-1.5708, 0, -0.1200)
+
+[node name="Tile_8_7" type="Node3D" parent="TileCaps"]
+position = Vector3(3.50, 0.03, 3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_8_7"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.990)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_8_7"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(-0.060, 0.046, 0.000)
+rotation = Vector3(-1.5708, 0, 0.2700)
+
+[node name="Tile_9_7" type="Node3D" parent="TileCaps"]
+position = Vector3(4.50, 0.03, 3.50)
+
+[node name="Cap" type="MeshInstance3D" parent="TileCaps/Tile_9_7"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("4_grass_cap")
+scale = Vector3(1.000, 1.0, 0.970)
+
+[node name="Stroke" type="MeshInstance3D" parent="TileCaps/Tile_9_7"]
+mesh = SubResource("2_stroke_mesh")
+material_override = SubResource("5_grass_stroke")
+position = Vector3(0.000, 0.046, 0.120)
+rotation = Vector3(-1.5708, 0, -0.0600)
+
+[node name="BoardTrim" type="Node3D" parent="."]
+
+[node name="NorthTrim" type="MeshInstance3D" parent="BoardTrim"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("16_edge_shadow")
+position = Vector3(0.00, 0.00, -4.05)
+scale = Vector3(10.200, 0.120, 0.320)
+
+[node name="SouthTrim" type="MeshInstance3D" parent="BoardTrim"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("16_edge_shadow")
+position = Vector3(0.00, 0.00, 4.05)
+scale = Vector3(10.200, 0.120, 0.320)
+
+[node name="WestTrim" type="MeshInstance3D" parent="BoardTrim"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("16_edge_shadow")
+position = Vector3(-5.05, 0.00, 0.00)
+scale = Vector3(0.320, 0.120, 8.200)
+
+[node name="EastTrim" type="MeshInstance3D" parent="BoardTrim"]
+mesh = SubResource("1_cap_mesh")
+material_override = SubResource("16_edge_shadow")
+position = Vector3(5.05, 0.00, 0.00)
+scale = Vector3(0.320, 0.120, 8.200)

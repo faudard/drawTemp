@@ -4,10 +4,17 @@ extends VBoxContainer
 
 const CinematicDefinition = preload("res://scripts/data/cinematic_definition.gd")
 const BattleActionDefinition = preload("res://scripts/data/battle_action_definition.gd")
+const TimelineEditorScript = preload("res://addons/sporebound_studio/cinematic_timeline_editor.gd")
+const TimelinePreviewPlayerScene = preload("res://scenes/ui/cinematic_player_3d.tscn")
+const DialogueSpeakerCatalog = preload("res://scripts/catalogs/dialogue_speaker_catalog.gd")
+const UnitCatalog = preload("res://scripts/catalogs/unit_catalog.gd")
+const VisualCatalog = preload("res://scripts/catalogs/visual_catalog.gd")
+const DialoguePreviewScene = preload("res://scenes/ui/cinematic_dialogue_3d.tscn")
 
 const CINEMATIC_DIR := "res://data/cinematics/"
 const MISSION_DIR := "res://data/missions/"
 const UNIT_DIR := "res://data/units/"
+const DIALOGUE_PROFILE_DIR := "res://data/dialogue_speakers/"
 const ACTION_TYPES := [
 	"dialogue", "wait", "camera_focus_cell", "camera_focus_unit", "camera_zoom",
 	"camera_reset", "camera_shake", "play_music", "stop_music", "play_sfx",
@@ -20,7 +27,7 @@ var current_path := ""
 var dirty := false
 var name_edit: LineEdit
 var description_edit: TextEdit
-var action_list: ItemList
+var action_list: SporeCinematicTimelineEditor
 var action_index := -1
 var action_type: OptionButton
 var action_delay: SpinBox
@@ -35,6 +42,11 @@ var action_portrait: LineEdit
 var action_side: OptionButton
 var action_wait_input: CheckBox
 var action_auto: SpinBox
+var action_dialogue_profile: OptionButton
+var action_override_dialogue_profile: CheckBox
+var action_text_speed: SpinBox
+var action_voice_pitch: SpinBox
+var action_blip_every: SpinBox
 var action_zoom: SpinBox
 var action_duration: SpinBox
 var action_audio: LineEdit
@@ -44,6 +56,16 @@ var mission_intro: OptionButton
 var mission_victory: OptionButton
 var mission_defeat: OptionButton
 var validation: Label
+var dialogue_preview_container: SubViewportContainer
+var dialogue_preview_viewport: SubViewport
+var dialogue_preview: SporeCinematicDialogue3D
+var dialogue_preview_status: Label
+var dialogue_preview_sound: CheckBox
+var dialogue_preview_play: Button
+var dialogue_preview_refresh: Button
+var timeline_preview_player: SporeCinematicPlayer3D
+var timeline_preview_ui: Control
+var timeline_preview_running: bool = false
 
 
 func _ready() -> void:
@@ -102,9 +124,14 @@ func _build_ui() -> void:
 		button.text = spec[0]
 		button.pressed.connect(spec[1])
 		action_bar.add_child(button)
-	action_list = ItemList.new()
+	action_list = TimelineEditorScript.new() as SporeCinematicTimelineEditor
 	action_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	action_list.item_selected.connect(_on_action_selected)
+	action_list.move_requested.connect(_on_timeline_move_requested)
+	action_list.duplicate_requested.connect(_on_timeline_duplicate_requested)
+	action_list.delete_requested.connect(_on_timeline_delete_requested)
+	action_list.play_from_requested.connect(_on_timeline_play_from_requested)
+	action_list.play_sequence_requested.connect(_on_timeline_play_sequence_requested)
 	left.add_child(action_list)
 
 	var right_scroll := ScrollContainer.new()
@@ -118,6 +145,7 @@ func _build_ui() -> void:
 	action_title.text = "ACTION SÉLECTIONNÉE"
 	action_title.add_theme_font_size_override("font_size", 18)
 	right.add_child(action_title)
+	_build_dialogue_preview(right)
 	action_type = OptionButton.new()
 	for value in ACTION_TYPES:
 		action_type.add_item(value)
@@ -145,6 +173,15 @@ func _build_ui() -> void:
 	action_wait_input.text = "Dialogue : attendre Entrée/Espace/clic"
 	right.add_child(action_wait_input)
 	action_auto = _spin(right, "Auto-avance (s, si attente décochée)", 0, 30, 0.1)
+	_add_label(right, "Profil dialogue (auto = unité/locuteur)")
+	action_dialogue_profile = OptionButton.new()
+	right.add_child(action_dialogue_profile)
+	action_override_dialogue_profile = CheckBox.new()
+	action_override_dialogue_profile.text = "Surcharger voix/couleur/côté pour cette réplique"
+	right.add_child(action_override_dialogue_profile)
+	action_text_speed = _spin(right, "Dialogue : vitesse écriture (car./s)", 10, 120, 1)
+	action_voice_pitch = _spin(right, "Dialogue : hauteur voix", 0.55, 1.75, 0.05)
+	action_blip_every = _spin(right, "Dialogue : blip tous les N caractères", 1, 8, 1)
 	action_zoom = _spin(right, "Zoom caméra", 0.25, 3.0, 0.05)
 	action_duration = _spin(right, "Durée caméra/fondu (s)", 0, 5, 0.05)
 	action_audio = _line(right, "Audio res://... (.ogg/.wav/.mp3)")
@@ -153,6 +190,7 @@ func _build_ui() -> void:
 	apply.text = "Appliquer l'action"
 	apply.pressed.connect(_apply_action)
 	right.add_child(apply)
+	_connect_dialogue_preview_signals()
 
 	var sep := HSeparator.new()
 	right.add_child(sep)
@@ -177,6 +215,263 @@ func _build_ui() -> void:
 	help.text = "Une timeline est réutilisable : une mission peut l'utiliser en Intro/Victoire/Défaite, et un trigger Mission Logic peut l'appeler avec play_cinematic. Les chemins portrait/audio sont optionnels. Si le portrait est vide, le runtime tente le portrait du skin associé à unit_id ou au nom du locuteur."
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(help)
+
+
+func _build_dialogue_preview(parent: VBoxContainer) -> void:
+	var title: Label = Label.new()
+	title.text = "APERÇU JRPG — 16:9"
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(0.78, 0.90, 1.0, 1.0))
+	parent.add_child(title)
+
+	var frame: PanelContainer = PanelContainer.new()
+	frame.custom_minimum_size = Vector2(650.0, 366.0)
+	var frame_style: StyleBoxFlat = StyleBoxFlat.new()
+	frame_style.bg_color = Color(0.025, 0.035, 0.055, 1.0)
+	frame_style.border_color = Color(0.24, 0.36, 0.52, 1.0)
+	frame_style.border_width_left = 1
+	frame_style.border_width_top = 1
+	frame_style.border_width_right = 1
+	frame_style.border_width_bottom = 1
+	frame_style.corner_radius_top_left = 10
+	frame_style.corner_radius_top_right = 10
+	frame_style.corner_radius_bottom_left = 10
+	frame_style.corner_radius_bottom_right = 10
+	frame.add_theme_stylebox_override("panel", frame_style)
+	parent.add_child(frame)
+
+	dialogue_preview_container = SubViewportContainer.new()
+	dialogue_preview_container.custom_minimum_size = Vector2(640.0, 360.0)
+	dialogue_preview_container.stretch = true
+	frame.add_child(dialogue_preview_container)
+
+	dialogue_preview_viewport = SubViewport.new()
+	dialogue_preview_viewport.name = "DialoguePreviewViewport"
+	dialogue_preview_viewport.size = Vector2i(1280, 720)
+	dialogue_preview_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	dialogue_preview_viewport.gui_disable_input = true
+	dialogue_preview_container.add_child(dialogue_preview_viewport)
+
+	var background: ColorRect = ColorRect.new()
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	background.color = Color(0.075, 0.12, 0.10, 1.0)
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dialogue_preview_viewport.add_child(background)
+
+	var horizon: ColorRect = ColorRect.new()
+	horizon.anchor_left = 0.0
+	horizon.anchor_top = 0.0
+	horizon.anchor_right = 1.0
+	horizon.anchor_bottom = 0.52
+	horizon.color = Color(0.10, 0.16, 0.21, 1.0)
+	horizon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dialogue_preview_viewport.add_child(horizon)
+
+	var instance: Node = DialoguePreviewScene.instantiate()
+	if instance is SporeCinematicDialogue3D:
+		dialogue_preview = instance as SporeCinematicDialogue3D
+		dialogue_preview_viewport.add_child(dialogue_preview)
+
+	var toolbar: HBoxContainer = HBoxContainer.new()
+	toolbar.add_theme_constant_override("separation", 8)
+	parent.add_child(toolbar)
+
+	dialogue_preview_play = Button.new()
+	dialogue_preview_play.text = "▶ TEST TYPEWRITER"
+	dialogue_preview_play.pressed.connect(_play_dialogue_preview)
+	toolbar.add_child(dialogue_preview_play)
+
+	dialogue_preview_refresh = Button.new()
+	dialogue_preview_refresh.text = "⟳ RAFRAÎCHIR"
+	dialogue_preview_refresh.pressed.connect(_refresh_dialogue_preview.bind(false))
+	toolbar.add_child(dialogue_preview_refresh)
+
+	dialogue_preview_sound = CheckBox.new()
+	dialogue_preview_sound.text = "Son JRPG"
+	dialogue_preview_sound.button_pressed = true
+	dialogue_preview_sound.toggled.connect(_on_dialogue_preview_changed)
+	toolbar.add_child(dialogue_preview_sound)
+
+	dialogue_preview_status = Label.new()
+	dialogue_preview_status.text = "Sélectionne une action dialogue."
+	dialogue_preview_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dialogue_preview_status.add_theme_font_size_override("font_size", 11)
+	dialogue_preview_status.add_theme_color_override("font_color", Color(0.68, 0.76, 0.84, 1.0))
+	parent.add_child(dialogue_preview_status)
+
+
+func _connect_dialogue_preview_signals() -> void:
+	action_message.text_changed.connect(_on_dialogue_preview_changed)
+	action_speaker.text_changed.connect(_on_dialogue_preview_changed)
+	action_portrait.text_changed.connect(_on_dialogue_preview_changed)
+	action_unit.item_selected.connect(_on_dialogue_preview_changed)
+	action_side.item_selected.connect(_on_dialogue_preview_changed)
+	action_dialogue_profile.item_selected.connect(_on_dialogue_preview_changed)
+	action_override_dialogue_profile.toggled.connect(_on_dialogue_preview_changed)
+	action_text_speed.value_changed.connect(_on_dialogue_preview_changed)
+	action_voice_pitch.value_changed.connect(_on_dialogue_preview_changed)
+	action_blip_every.value_changed.connect(_on_dialogue_preview_changed)
+
+
+func _on_dialogue_preview_changed(_value: Variant = null) -> void:
+	call_deferred("_refresh_dialogue_preview", false)
+
+
+func _play_dialogue_preview() -> void:
+	_refresh_dialogue_preview(true)
+
+
+func _refresh_dialogue_preview(animate_typewriter: bool = false) -> void:
+	if dialogue_preview == null or not is_instance_valid(dialogue_preview):
+		return
+	if current == null or action_index < 0 or action_index >= current.actions.size():
+		dialogue_preview.editor_clear_preview()
+		if dialogue_preview_status != null:
+			dialogue_preview_status.text = "Aucune action sélectionnée."
+		return
+
+	var selected_action: Resource = current.actions[action_index] as Resource
+	if selected_action == null or String(selected_action.get("action_type")) != "dialogue":
+		dialogue_preview.editor_clear_preview()
+		if dialogue_preview_status != null:
+			dialogue_preview_status.text = "L'aperçu JRPG s'affiche pour les actions de type dialogue."
+		return
+
+	var unit_id: String = ""
+	if action_unit.selected >= 0:
+		unit_id = String(action_unit.get_item_metadata(action_unit.selected))
+
+	var speaker: String = action_speaker.text.strip_edges()
+	if speaker.is_empty() and not unit_id.is_empty():
+		var unit_definition: Resource = UnitCatalog.definition(unit_id)
+		if unit_definition != null:
+			speaker = String(unit_definition.get("display_name"))
+	if speaker.is_empty():
+		speaker = "Narrateur"
+
+	var profile_id: String = ""
+	if action_dialogue_profile.selected >= 0:
+		profile_id = String(
+			action_dialogue_profile.get_item_metadata(
+				action_dialogue_profile.selected
+			)
+		)
+	var profile: Resource = DialogueSpeakerCatalog.resolve(
+		profile_id,
+		unit_id,
+		speaker
+	)
+	var override_profile: bool = action_override_dialogue_profile.button_pressed
+
+	var portrait_side: String = (
+		action_side.get_item_text(action_side.selected)
+		if action_side.selected >= 0
+		else "left"
+	)
+	var text_speed: float = float(action_text_speed.value)
+	var voice_pitch: float = float(action_voice_pitch.value)
+	var blip_every: int = int(action_blip_every.value)
+	var accent: String = "neutral"
+	var accent_color: Color = Color(0.48, 0.82, 1.0, 1.0)
+	var name_color: Color = Color(0.76, 0.92, 1.0, 1.0)
+	var blip_volume: float = -16.0
+
+	if profile != null and not override_profile:
+		portrait_side = String(profile.get("portrait_side"))
+		text_speed = float(profile.get("text_speed"))
+		voice_pitch = float(profile.get("voice_pitch"))
+		blip_every = int(profile.get("blip_every"))
+		blip_volume = float(profile.get("blip_volume_db"))
+		accent_color = Color(profile.get("accent_color"))
+		name_color = Color(profile.get("name_color"))
+		accent = "profile"
+	elif speaker.to_lower() in ["narrateur", "narrator"]:
+		accent = "narrator"
+
+	var portrait: Texture2D = _preview_resolve_portrait(
+		action_portrait.text.strip_edges(),
+		unit_id,
+		speaker,
+		profile
+	)
+
+	dialogue_preview.set_line_profile(
+		accent_color,
+		name_color,
+		blip_volume
+	)
+	dialogue_preview.editor_preview_line(
+		speaker,
+		action_message.text if not action_message.text.is_empty() else "Nouvelle réplique...",
+		portrait,
+		portrait_side,
+		text_speed,
+		voice_pitch,
+		blip_every,
+		accent,
+		animate_typewriter,
+		dialogue_preview_sound.button_pressed
+	)
+
+	if dialogue_preview_status != null:
+		var profile_name: String = "Réglages de la réplique"
+		if profile != null and not override_profile:
+			profile_name = String(profile.get("display_name"))
+		dialogue_preview_status.text = (
+			"Profil : %s • %.0f car/s • voix %.2fx • blip / %d • portrait %s"
+			% [
+				profile_name,
+				text_speed,
+				voice_pitch,
+				blip_every,
+				portrait_side
+			]
+		)
+
+
+func _preview_resolve_portrait(
+	explicit_path: String,
+	unit_id: String,
+	speaker: String,
+	profile: Resource
+) -> Texture2D:
+	if not explicit_path.is_empty() and ResourceLoader.exists(explicit_path):
+		return load(explicit_path) as Texture2D
+
+	if profile != null:
+		var profile_path: String = String(profile.get("portrait_path"))
+		if not profile_path.is_empty() and ResourceLoader.exists(profile_path):
+			return load(profile_path) as Texture2D
+
+	if not unit_id.is_empty():
+		var unit: Resource = UnitCatalog.definition(unit_id)
+		if unit != null:
+			var visual_id: String = String(unit.get("visual_id"))
+			if visual_id.is_empty():
+				visual_id = unit_id
+			var visual: Resource = VisualCatalog.definition(visual_id)
+			if visual != null:
+				var visual_path: String = String(visual.get("portrait_path"))
+				if not visual_path.is_empty() and ResourceLoader.exists(visual_path):
+					return load(visual_path) as Texture2D
+
+	for candidate_id: String in UnitCatalog.all_unit_ids():
+		var candidate: Resource = UnitCatalog.definition(candidate_id)
+		if candidate == null:
+			continue
+		if String(candidate.get("display_name")).to_lower() != speaker.to_lower():
+			continue
+		var candidate_visual_id: String = String(candidate.get("visual_id"))
+		if candidate_visual_id.is_empty():
+			candidate_visual_id = candidate_id
+		var candidate_visual: Resource = VisualCatalog.definition(candidate_visual_id)
+		if candidate_visual == null:
+			continue
+		var candidate_path: String = String(candidate_visual.get("portrait_path"))
+		if not candidate_path.is_empty() and ResourceLoader.exists(candidate_path):
+			return load(candidate_path) as Texture2D
+
+	return null
 
 
 func _resource_files(directory: String) -> Array[String]:
@@ -261,75 +556,245 @@ func _save_current() -> void:
 
 
 func _refresh_action_list() -> void:
-	action_list.clear()
-	action_index = -1
-	if current == null:
+	if action_list == null:
 		return
-	for action in current.actions:
-		action_list.add_item(action.summary() if action != null and action.has_method("summary") else "<action>")
-	if not current.actions.is_empty():
-		action_list.select(0)
-		_on_action_selected(0)
+	if current == null:
+		action_index = -1
+		action_list.clear()
+		return
+	if current.actions.is_empty():
+		action_index = -1
+		action_list.set_actions(current.actions, -1)
+		_validate_current()
+		return
+
+	var wanted_index: int = action_index
+	if wanted_index < 0 or wanted_index >= current.actions.size():
+		wanted_index = 0
+	action_index = wanted_index
+	action_list.set_actions(current.actions, action_index)
+	_on_action_selected(action_index)
 	_validate_current()
 
 
 func _add_action() -> void:
 	if current == null:
 		return
-	var action := BattleActionDefinition.new()
+	var action: Resource = BattleActionDefinition.new()
 	action.id = "action_%02d" % (current.actions.size() + 1)
 	action.action_type = "dialogue"
 	action.speaker = "Narrateur"
 	action.message = "Nouvelle réplique."
 	current.actions.append(action)
+	action_index = current.actions.size() - 1
 	dirty = true
 	_refresh_action_list()
-	action_index = current.actions.size() - 1
-	action_list.select(action_index)
-	_on_action_selected(action_index)
 
 
 func _duplicate_action() -> void:
 	if current == null or action_index < 0 or action_index >= current.actions.size():
 		return
-	var copy := current.actions[action_index].duplicate(true)
-	copy.id = String(copy.id) + "_copy"
+	var source: Resource = current.actions[action_index] as Resource
+	if source == null:
+		return
+	var copy: Resource = source.duplicate(true) as Resource
+	copy.set("id", _unique_action_id(String(source.get("id")) + "_copy"))
 	current.actions.insert(action_index + 1, copy)
+	action_index += 1
 	dirty = true
 	_refresh_action_list()
-	action_index += 1
-	action_list.select(action_index)
-	_on_action_selected(action_index)
 
 
 func _move_action(direction: int) -> void:
 	if current == null or action_index < 0:
 		return
-	var target := action_index + direction
+	var target: int = action_index + direction
 	if target < 0 or target >= current.actions.size():
 		return
-	var action = current.actions[action_index]
+	var action: Resource = current.actions[action_index] as Resource
 	current.actions.remove_at(action_index)
 	current.actions.insert(target, action)
 	action_index = target
 	dirty = true
 	_refresh_action_list()
-	action_list.select(action_index)
-	_on_action_selected(action_index)
 
 
 func _remove_action() -> void:
 	if current == null or action_index < 0 or action_index >= current.actions.size():
 		return
 	current.actions.remove_at(action_index)
+	if current.actions.is_empty():
+		action_index = -1
+	else:
+		action_index = mini(action_index, current.actions.size() - 1)
 	dirty = true
 	_refresh_action_list()
+
+
+func _unique_action_id(base_id: String) -> String:
+	if current == null:
+		return base_id
+	var used: Dictionary = {}
+	for action_var: Variant in current.actions:
+		var action: Resource = action_var as Resource
+		if action != null:
+			used[String(action.get("id"))] = true
+	var candidate: String = base_id
+	var suffix: int = 2
+	while used.has(candidate):
+		candidate = "%s_%d" % [base_id, suffix]
+		suffix += 1
+	return candidate
+
+
+func _on_timeline_move_requested(from_index: int, to_index: int) -> void:
+	if current == null:
+		return
+	if from_index < 0 or from_index >= current.actions.size():
+		return
+	if to_index < 0 or to_index >= current.actions.size():
+		return
+	if from_index == to_index:
+		return
+
+	var action: Resource = current.actions[from_index] as Resource
+	current.actions.remove_at(from_index)
+	var destination: int = to_index
+	if from_index < to_index:
+		destination -= 1
+	destination = clampi(destination, 0, current.actions.size())
+	current.actions.insert(destination, action)
+	action_index = destination
+	dirty = true
+	_refresh_action_list()
+
+
+func _on_timeline_duplicate_requested(index: int) -> void:
+	action_index = index
+	_duplicate_action()
+
+
+func _on_timeline_delete_requested(index: int) -> void:
+	action_index = index
+	_remove_action()
+
+
+func _on_timeline_play_sequence_requested() -> void:
+	_play_timeline_preview_from(0)
+
+
+func _on_timeline_play_from_requested(index: int) -> void:
+	_play_timeline_preview_from(index)
+
+
+func _ensure_timeline_preview_player() -> void:
+	if timeline_preview_player != null and is_instance_valid(timeline_preview_player):
+		return
+	if dialogue_preview_viewport == null:
+		return
+
+	timeline_preview_ui = Control.new()
+	timeline_preview_ui.name = "TimelinePreviewUI"
+	timeline_preview_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	timeline_preview_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dialogue_preview_viewport.add_child(timeline_preview_ui)
+
+	var instance: Node = TimelinePreviewPlayerScene.instantiate()
+	if instance is SporeCinematicPlayer3D:
+		timeline_preview_player = instance as SporeCinematicPlayer3D
+		dialogue_preview_viewport.add_child(timeline_preview_player)
+		timeline_preview_player.configure(self, timeline_preview_ui)
+		timeline_preview_player.action_started.connect(_on_timeline_preview_action_started)
+		timeline_preview_player.playback_finished.connect(_on_timeline_preview_finished)
+
+
+func _play_timeline_preview_from(start_index: int) -> void:
+	if timeline_preview_running or current == null:
+		return
+	if current.actions.is_empty():
+		return
+
+	# Commit the form currently being edited so the preview uses exactly what
+	# the Resource will contain.
+	if action_index >= 0 and action_index < current.actions.size():
+		_apply_action()
+	_save_current()
+	_ensure_timeline_preview_player()
+	if timeline_preview_player == null:
+		return
+
+	timeline_preview_running = true
+	if dialogue_preview != null and is_instance_valid(dialogue_preview):
+		dialogue_preview.visible = false
+	if dialogue_preview_status != null:
+		dialogue_preview_status.text = "Lecture de la timeline…"
+
+	await timeline_preview_player.play_from(
+		String(current.get("id")),
+		clampi(start_index, 0, current.actions.size() - 1)
+	)
+	_on_timeline_preview_finished()
+
+
+func _on_timeline_preview_action_started(action_id: String) -> void:
+	if action_list != null:
+		action_list.set_playing_action(action_id)
+	if dialogue_preview_status != null:
+		dialogue_preview_status.text = "Lecture • %s" % action_id
+
+
+func _on_timeline_preview_finished() -> void:
+	if not timeline_preview_running:
+		return
+	timeline_preview_running = false
+	if action_list != null:
+		action_list.clear_playing_action()
+	if dialogue_preview != null and is_instance_valid(dialogue_preview):
+		dialogue_preview.visible = true
+	call_deferred("_refresh_dialogue_preview", false)
+
+
+func cinematic_3d_focus_cell(cell: Vector2i, zoom: float, _duration: float) -> void:
+	if dialogue_preview_status != null:
+		dialogue_preview_status.text = "CAMERA • cellule %s • zoom %.2f" % [cell, zoom]
+
+
+func cinematic_3d_focus_unit(unit_id: String, zoom: float, _duration: float) -> void:
+	if dialogue_preview_status != null:
+		dialogue_preview_status.text = "CAMERA • %s • zoom %.2f" % [unit_id, zoom]
+
+
+func cinematic_3d_zoom(zoom: float, _duration: float) -> void:
+	if dialogue_preview_status != null:
+		dialogue_preview_status.text = "CAMERA • zoom %.2f" % zoom
+
+
+func cinematic_3d_reset_camera(_duration: float) -> void:
+	if dialogue_preview_status != null:
+		dialogue_preview_status.text = "CAMERA • reset"
+
+
+func cinematic_3d_release_camera_override() -> void:
+	pass
+
+
+func cinematic_3d_camera_shake(strength: float) -> void:
+	if dialogue_preview_status != null:
+		dialogue_preview_status.text = "CAMERA • shake %.1f" % strength
+
+
+func cinematic_3d_execute_action(action: Resource) -> void:
+	if dialogue_preview_status == null or action == null:
+		return
+	dialogue_preview_status.text = "ACTION • %s" % String(action.get("action_type"))
 
 
 func _on_action_selected(index: int) -> void:
 	if current == null or index < 0 or index >= current.actions.size():
 		return
 	action_index = index
+	if action_list != null:
+		action_list.select(index)
 	var action = current.actions[index]
 	_select_text(action_type, String(action.action_type))
 	action_delay.value = float(action.delay_seconds)
@@ -344,10 +809,17 @@ func _on_action_selected(index: int) -> void:
 	_select_text(action_side, String(action.portrait_side))
 	action_wait_input.button_pressed = bool(action.wait_for_input)
 	action_auto.value = float(action.auto_advance_seconds)
+	_refresh_dialogue_profile_options()
+	_select_metadata(action_dialogue_profile, String(action.dialogue_profile_id))
+	action_override_dialogue_profile.button_pressed = bool(action.override_dialogue_profile)
+	action_text_speed.value = float(action.text_speed)
+	action_voice_pitch.value = float(action.voice_pitch)
+	action_blip_every.value = int(action.blip_every)
 	action_zoom.value = float(action.camera_zoom)
 	action_duration.value = float(action.camera_duration)
 	action_audio.text = String(action.audio_path)
 	action_volume.value = float(action.volume_db)
+	call_deferred("_refresh_dialogue_preview", false)
 
 
 func _apply_action() -> void:
@@ -366,6 +838,9 @@ func _apply_action() -> void:
 	action.portrait_side = action_side.get_item_text(action_side.selected)
 	action.wait_for_input = action_wait_input.button_pressed
 	action.auto_advance_seconds = float(action_auto.value)
+	action.text_speed = float(action_text_speed.value)
+	action.voice_pitch = float(action_voice_pitch.value)
+	action.blip_every = int(action_blip_every.value)
 	action.camera_zoom = float(action_zoom.value)
 	action.camera_duration = float(action_duration.value)
 	action.audio_path = action_audio.text.strip_edges()
@@ -373,6 +848,7 @@ func _apply_action() -> void:
 	dirty = true
 	_refresh_action_list()
 	action_list.select(action_index)
+	call_deferred("_refresh_dialogue_preview", false)
 
 
 func _refresh_nested_options() -> void:
@@ -390,6 +866,28 @@ func _refresh_nested_options() -> void:
 		action_nested.set_item_metadata(action_nested.item_count - 1, String(data.id))
 	_select_metadata(action_nested, selected_id)
 	_refresh_unit_options()
+	_refresh_dialogue_profile_options()
+
+
+func _refresh_dialogue_profile_options() -> void:
+	if action_dialogue_profile == null:
+		return
+	var wanted: String = ""
+	if action_dialogue_profile.selected >= 0:
+		wanted = String(action_dialogue_profile.get_item_metadata(action_dialogue_profile.selected))
+	action_dialogue_profile.clear()
+	action_dialogue_profile.add_item("AUTO — unité / locuteur")
+	action_dialogue_profile.set_item_metadata(0, "")
+	for path: String in _resource_files(DIALOGUE_PROFILE_DIR):
+		var profile: Resource = load(path) as Resource
+		if profile == null:
+			continue
+		action_dialogue_profile.add_item(String(profile.get("display_name")))
+		action_dialogue_profile.set_item_metadata(
+			action_dialogue_profile.item_count - 1,
+			String(profile.get("id"))
+		)
+	_select_metadata(action_dialogue_profile, wanted)
 
 
 func _refresh_unit_options() -> void:

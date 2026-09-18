@@ -1,0 +1,66 @@
+[gd_scene load_steps=8 format=3]
+
+[sub_resource type="PlaneMesh" id="1_patch"]
+size = Vector2(1.6, 1.2)
+
+[sub_resource type="StandardMaterial3D" id="2_moss_dark"]
+albedo_color = Color(0.20, 0.35, 0.22, 0.92)
+transparency = 1
+cull_mode = 2
+roughness = 1.0
+
+[sub_resource type="PlaneMesh" id="3_patch_small"]
+size = Vector2(0.92, 0.66)
+
+[sub_resource type="StandardMaterial3D" id="4_moss_light"]
+albedo_color = Color(0.30, 0.50, 0.32, 0.84)
+transparency = 1
+cull_mode = 2
+roughness = 1.0
+
+[sub_resource type="PlaneMesh" id="5_pebble"]
+size = Vector2(0.16, 0.12)
+
+[sub_resource type="StandardMaterial3D" id="6_pebble_mat"]
+albedo_color = Color(0.43, 0.41, 0.38, 1)
+roughness = 1.0
+
+[sub_resource type="StandardMaterial3D" id="7_dirt_mat"]
+albedo_color = Color(0.42, 0.31, 0.19, 0.90)
+transparency = 1
+cull_mode = 2
+roughness = 1.0
+
+[node name="PainterlyGroundPatch3D" type="Node3D"]
+
+[node name="MossBase" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_patch")
+material_override = SubResource("2_moss_dark")
+position = Vector3(0, 0.02, 0)
+rotation = Vector3(-1.5708, 0, 0.12)
+
+[node name="MossHighlight" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_patch_small")
+material_override = SubResource("4_moss_light")
+position = Vector3(0.12, 0.023, -0.08)
+rotation = Vector3(-1.5708, 0, -0.26)
+
+[node name="DirtStroke" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_patch_small")
+material_override = SubResource("7_dirt_mat")
+position = Vector3(-0.18, 0.021, 0.12)
+rotation = Vector3(-1.5708, 0, 0.42)
+scale = Vector3(1.18, 1.0, 1.18)
+
+[node name="PebbleA" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_pebble")
+material_override = SubResource("6_pebble_mat")
+position = Vector3(0.38, 0.024, 0.22)
+rotation = Vector3(-1.5708, 0, 0.58)
+
+[node name="PebbleB" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_pebble")
+material_override = SubResource("6_pebble_mat")
+position = Vector3(-0.31, 0.024, -0.16)
+rotation = Vector3(-1.5708, 0, -0.32)
+scale = Vector3(0.8, 1.0, 0.8)

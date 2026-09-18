@@ -6,6 +6,7 @@ const SkillCatalog = preload("res://scripts/catalogs/skill_catalog.gd")
 const StatusCatalog = preload("res://scripts/catalogs/status_catalog.gd")
 const VfxCatalog = preload("res://scripts/catalogs/vfx_catalog.gd")
 const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
+const CinematicTargetScene = preload("res://scenes/components/cinematic_target_3d.tscn")
 
 @export_group("Identity")
 @export var unit_id: String = "momo"
@@ -97,7 +98,9 @@ var _selection_disc: MeshInstance3D
 var _turn_marker: MeshInstance3D
 var _facing_marker: MeshInstance3D
 var _vitals_sprite: Sprite3D
+var _hp_label: Label3D
 var _status_vfx_root: Node3D
+var _cinematic_target: SporeCinematicTarget3D
 var _status_vfx_nodes: Dictionary = {}
 var _current_map: SporeMap3D = null
 var _selected: bool = false
@@ -309,6 +312,13 @@ func configure_from_unit_data(
 	place_on_map(map, cell)
 
 
+func cinematic_anchor_global(anchor_name: String = "head") -> Vector3:
+	_ensure_visual_nodes()
+	if _cinematic_target != null:
+		return _cinematic_target.anchor_global(anchor_name)
+	return global_position
+
+
 func begin_activation() -> void:
 	moved_this_activation = false
 	acted_this_activation = false
@@ -420,38 +430,172 @@ func place_on_map(map: SporeMap3D, new_cell: Vector2i) -> void:
 	position = map.cell_top_local(cell) + Vector3(0.0, 0.16, 0.0)
 
 
-func move_to_cell(map: SporeMap3D, new_cell: Vector2i, duration: float = 0.24) -> Tween:
+func move_to_cell(
+	map: SporeMap3D,
+	new_cell: Vector2i,
+	duration: float = 0.18
+) -> Tween:
 	_current_map = map
 	_set_animation_state("move")
+	_presentation_locked = true
+
 	var old_cell: Vector2i = cell
 	var tween: Tween = create_tween()
+
 	if map == null:
 		cell = new_cell
 		_finish_move_animation()
 		return tween
+
 	var direction: Vector2i = new_cell - old_cell
 	if direction != Vector2i.ZERO:
 		set_facing(direction)
+
 	var old_height: int = map.elevation_at(old_cell)
 	var new_height: int = map.elevation_at(new_cell)
-	var target: Vector3 = map.cell_top_local(new_cell) + Vector3(0.0, 0.16, 0.0)
+	var start: Vector3 = position
+	var target: Vector3 = (
+		map.cell_top_local(new_cell)
+		+ Vector3(0.0, 0.16, 0.0)
+	)
+
 	cell = new_cell
+
+	_spawn_step_puff(start)
+
+	var midpoint: Vector3 = (start + target) * 0.5
+	var height_delta: int = absi(new_height - old_height)
+
+	if old_height != new_height:
+		midpoint.y = (
+			maxf(start.y, target.y)
+			+ 0.28
+			+ float(height_delta) * 0.09
+		)
+	else:
+		midpoint.y = maxf(start.y, target.y) + 0.11
+
 	tween.set_trans(Tween.TRANS_SINE)
 	tween.set_ease(Tween.EASE_OUT)
-	if old_height != new_height:
-		var midpoint: Vector3 = (position + target) * 0.5
-		midpoint.y = maxf(position.y, target.y) + 0.38 + float(absi(new_height - old_height)) * 0.08
-		tween.tween_property(self, "position", midpoint, duration * 0.48)
-		tween.tween_property(self, "position", target, duration * 0.52)
-	else:
-		tween.tween_property(self, "position", target, duration)
-	tween.tween_callback(_finish_move_animation)
+	tween.tween_property(
+		self,
+		"position",
+		midpoint,
+		duration * 0.46
+	)
+
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.set_ease(Tween.EASE_IN)
+	tween.tween_property(
+		self,
+		"position",
+		target,
+		duration * 0.54
+	)
+
+	tween.tween_callback(
+		func() -> void:
+			_spawn_step_puff(target)
+			_finish_move_animation()
+	)
+
+	if _sprite != null:
+		var sprite_tween: Tween = create_tween()
+		sprite_tween.set_trans(Tween.TRANS_SINE)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3(
+				_sprite_art_scale * 0.94,
+				_sprite_art_scale * 1.06,
+				_sprite_art_scale
+			),
+			duration * 0.32
+		)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3(
+				_sprite_art_scale * 1.05,
+				_sprite_art_scale * 0.95,
+				_sprite_art_scale
+			),
+			duration * 0.40
+		)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3.ONE * _sprite_art_scale,
+			duration * 0.28
+		)
+
 	return tween
 
 
+func _spawn_step_puff(local_position: Vector3) -> void:
+	var parent_3d: Node3D = get_parent() as Node3D
+	if parent_3d == null:
+		return
+
+	var root: Node3D = Node3D.new()
+	root.name = "StepPuff"
+	root.position = local_position + Vector3(0.0, 0.035, 0.0)
+	parent_3d.add_child(root)
+
+	for index: int in range(3):
+		var puff: MeshInstance3D = MeshInstance3D.new()
+		var mesh: SphereMesh = SphereMesh.new()
+		mesh.radius = 0.055 + float(index) * 0.012
+		mesh.height = mesh.radius * 1.20
+		mesh.radial_segments = 8
+		mesh.rings = 4
+		puff.mesh = mesh
+
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.albedo_color = Color(0.72, 0.68, 0.55, 0.36)
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		puff.material_override = material
+
+		var angle: float = (
+			TAU * float(index) / 3.0
+			+ _presentation_time * 0.17
+		)
+		puff.position = Vector3(
+			cos(angle) * (0.08 + float(index) * 0.025),
+			0.0,
+			sin(angle) * (0.08 + float(index) * 0.025)
+		)
+		root.add_child(puff)
+
+	root.scale = Vector3(0.45, 0.30, 0.45)
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(
+		root,
+		"scale",
+		Vector3(1.25, 0.52, 1.25),
+		0.20
+	)
+	tween.tween_property(
+		root,
+		"position:y",
+		root.position.y + 0.06,
+		0.20
+	)
+	tween.set_parallel(false)
+	tween.tween_callback(Callable(root, "queue_free"))
+
+
 func _finish_move_animation() -> void:
+	_presentation_locked = false
 	if alive and _animation_state == "move":
 		_set_animation_state("idle")
+	if _sprite != null:
+		_sprite.scale = Vector3.ONE * _sprite_art_scale
 
 
 func set_facing(direction: Vector2i) -> void:
@@ -548,8 +692,11 @@ func heal(amount: int) -> int:
 		return 0
 	var before: int = hp
 	hp = mini(max_hp, hp + maxi(0, amount))
+	var restored: int = hp - before
 	_refresh_label()
-	return hp - before
+	if restored > 0:
+		_play_heal_flash()
+	return restored
 
 
 func change_focus(amount: int) -> int:
@@ -894,48 +1041,299 @@ func set_turn_active(value: bool) -> void:
 
 
 func label_text() -> String:
-	var status_text: String = status_display_text()
-	var reaction_text: String = ""
-	if reaction_type != "none":
-		reaction_text = "R:%s%s" % [reaction_type.to_upper(), "+" if reaction_ready else ""]
-	var base: String = "%s  HP %d/%d  MP %d/%d\nPUI.P %d • PUI.M %d • DEF.P %d • DEF.M %d\nMOV %d • RNG %d-%d • CT %d" % [display_name, hp, max_hp, focus, max_focus, effective_physical_power(), effective_magic_power(), effective_physical_defense(), effective_magic_defense(), move_range, attack_min_range, attack_range, ct]
-	var extras: PackedStringArray = PackedStringArray()
-	if downed:
-		extras.append("K.O. %d" % downed_countdown)
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append("Orientation : %s" % facing_name())
 	if is_casting():
-		extras.append("CAST:%s %dt" % [SkillCatalog.display_name(String(casting.get("skill_id", ""))), maxi(0, int(casting.get("remaining_ticks", 0)))])
-	if not reaction_text.is_empty():
-		extras.append(reaction_text)
+		lines.append(
+			"Prépare : %s (%d)"
+			% [
+				SkillCatalog.display_name(String(casting.get("skill_id", ""))),
+				maxi(0, int(casting.get("remaining_ticks", 0)))
+			]
+		)
+	var status_text: String = status_display_text()
 	if not status_text.is_empty():
-		extras.append(status_text)
-	return base if extras.is_empty() else base + "\n" + " • ".join(extras)
+		lines.append(status_text)
+	return "\n".join(lines)
 
 
 func play_attack(target_world_position: Vector3) -> Tween:
 	_set_animation_state("attack")
-	var origin: Vector3 = position
 	if _current_map != null:
 		var target_local: Vector3 = _current_map.to_local(target_world_position)
 		face_cell(_current_map.local_to_cell(target_local))
+
+	match weapon_family:
+		"ranged":
+			return _play_ranged_attack(target_world_position)
+		"spear":
+			return _play_spear_attack(target_world_position)
+		"focus":
+			return _play_focus_attack(target_world_position)
+		_:
+			return _play_melee_attack(target_world_position)
+
+
+func _play_melee_attack(target_world_position: Vector3) -> Tween:
+	var origin: Vector3 = position
 	var direction: Vector3 = target_world_position - origin
 	direction.y = 0.0
 	if direction.length_squared() > 0.001:
 		direction = direction.normalized()
-	var lunge: Vector3 = origin + direction * 0.24
+
 	_presentation_locked = true
-	if _sprite != null:
-		_sprite.position = _sprite_base_position()
+	var windup: Vector3 = origin - direction * 0.08
+	var lunge: Vector3 = origin + direction * 0.46
+
 	var tween: Tween = create_tween()
 	tween.set_trans(Tween.TRANS_SINE)
-	tween.tween_property(self, "position", lunge, 0.085)
-	tween.tween_property(self, "position", origin, 0.12)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "position", windup, 0.10)
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.tween_property(self, "position", lunge, 0.16)
+	tween.tween_interval(0.055)
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.tween_property(self, "position", origin, 0.22)
 	tween.tween_callback(_end_presentation_lock)
+
 	if _sprite != null:
 		var sprite_tween: Tween = create_tween()
-		sprite_tween.set_trans(Tween.TRANS_SINE)
-		sprite_tween.tween_property(_sprite, "scale", Vector3(_sprite_art_scale * 1.14, _sprite_art_scale * 0.88, _sprite_art_scale), 0.085)
-		sprite_tween.tween_property(_sprite, "scale", Vector3.ONE * _sprite_art_scale, 0.12)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3(
+				_sprite_art_scale * 0.92,
+				_sprite_art_scale * 1.08,
+				_sprite_art_scale
+			),
+			0.10
+		)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3(
+				_sprite_art_scale * 1.20,
+				_sprite_art_scale * 0.86,
+				_sprite_art_scale
+			),
+			0.16
+		)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3.ONE * _sprite_art_scale,
+			0.22
+		)
+
 	return tween
+
+
+func _play_spear_attack(target_world_position: Vector3) -> Tween:
+	var origin: Vector3 = position
+	var direction: Vector3 = target_world_position - origin
+	direction.y = 0.0
+	if direction.length_squared() > 0.001:
+		direction = direction.normalized()
+
+	_presentation_locked = true
+	var windup: Vector3 = origin - direction * 0.05
+	var thrust: Vector3 = origin + direction * 0.30
+
+	var tween: Tween = create_tween()
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.tween_property(self, "position", windup, 0.12)
+	tween.set_trans(Tween.TRANS_EXPO)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "position", thrust, 0.12)
+	tween.tween_interval(0.075)
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.tween_property(self, "position", origin, 0.24)
+	tween.tween_callback(_end_presentation_lock)
+
+	if _sprite != null:
+		var sprite_tween: Tween = create_tween()
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3(
+				_sprite_art_scale * 0.95,
+				_sprite_art_scale * 1.04,
+				_sprite_art_scale
+			),
+			0.12
+		)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3(
+				_sprite_art_scale * 1.28,
+				_sprite_art_scale * 0.92,
+				_sprite_art_scale
+			),
+			0.12
+		)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3.ONE * _sprite_art_scale,
+			0.24
+		)
+
+	_spawn_weapon_flash(
+		target_world_position,
+		Color(1.0, 0.84, 0.46, 1.0),
+		0.16,
+		0.26
+	)
+	return tween
+
+
+func _play_ranged_attack(target_world_position: Vector3) -> Tween:
+	var origin: Vector3 = position
+	var direction: Vector3 = target_world_position - origin
+	direction.y = 0.0
+	if direction.length_squared() > 0.001:
+		direction = direction.normalized()
+
+	_presentation_locked = true
+	var recoil: Vector3 = origin - direction * 0.10
+
+	var tween: Tween = create_tween()
+	tween.tween_interval(0.08)
+	tween.set_trans(Tween.TRANS_EXPO)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "position", recoil, 0.075)
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.tween_property(self, "position", origin, 0.20)
+	tween.tween_callback(_end_presentation_lock)
+
+	if _sprite != null:
+		var sprite_tween: Tween = create_tween()
+		sprite_tween.tween_interval(0.06)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3(
+				_sprite_art_scale * 0.94,
+				_sprite_art_scale * 1.05,
+				_sprite_art_scale
+			),
+			0.08
+		)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3.ONE * _sprite_art_scale,
+			0.19
+		)
+
+	_spawn_weapon_flash(
+		target_world_position,
+		Color(1.0, 0.84, 0.34, 1.0),
+		0.25,
+		0.34
+	)
+	return tween
+
+
+func _play_focus_attack(target_world_position: Vector3) -> Tween:
+	_presentation_locked = true
+	var origin: Vector3 = position
+
+	var tween: Tween = create_tween()
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.tween_property(
+		self,
+		"position",
+		origin + Vector3(0.0, 0.08, 0.0),
+		0.15
+	)
+	tween.tween_interval(0.08)
+	tween.tween_property(self, "position", origin, 0.22)
+	tween.tween_callback(_end_presentation_lock)
+
+	if _sprite != null:
+		var sprite_tween: Tween = create_tween()
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3.ONE * (_sprite_art_scale * 1.14),
+			0.15
+		)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3.ONE * _sprite_art_scale,
+			0.22
+		)
+
+	_spawn_weapon_flash(
+		target_world_position,
+		Color(0.52, 0.78, 1.0, 1.0),
+		0.18,
+		0.42
+	)
+	return tween
+
+
+func _spawn_weapon_flash(
+	target_world_position: Vector3,
+	color: Color,
+	forward_offset: float,
+	size_value: float
+) -> void:
+	var direction: Vector3 = target_world_position - global_position
+	direction.y = 0.0
+	if direction.length_squared() <= 0.001:
+		direction = Vector3.FORWARD
+	else:
+		direction = direction.normalized()
+
+	var flash: MeshInstance3D = MeshInstance3D.new()
+	flash.name = "AttackFlash"
+
+	var flash_mesh: SphereMesh = SphereMesh.new()
+	flash_mesh.radius = size_value
+	flash_mesh.height = size_value * 1.35
+	flash.mesh = flash_mesh
+
+	var flash_material: StandardMaterial3D = StandardMaterial3D.new()
+	flash_material.albedo_color = Color(color.r, color.g, color.b, 0.92)
+	flash_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	flash_material.emission_enabled = true
+	flash_material.emission = Color(color.r, color.g, color.b, 1.0)
+	flash_material.emission_energy_multiplier = 2.6
+	flash.material_override = flash_material
+
+	add_child(flash)
+	flash.position = Vector3(
+		direction.x * forward_offset,
+		0.78,
+		direction.z * forward_offset
+	)
+	flash.scale = Vector3(0.25, 0.25, 0.25)
+
+	var light: OmniLight3D = OmniLight3D.new()
+	light.light_color = Color(color.r, color.g, color.b, 1.0)
+	light.light_energy = 1.8
+	light.omni_range = 2.2
+	light.shadow_enabled = false
+	flash.add_child(light)
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_EXPO)
+	tween.tween_property(flash, "scale", Vector3.ONE, 0.055)
+	tween.tween_property(light, "light_energy", 0.0, 0.12)
+	tween.set_parallel(false)
+	tween.tween_property(
+		flash_material,
+		"albedo_color",
+		Color(color.r, color.g, color.b, 0.0),
+		0.09
+	)
+	tween.tween_callback(Callable(flash, "queue_free"))
 
 
 func play_cast(target_world_position: Vector3) -> Tween:
@@ -967,6 +1365,69 @@ func _end_presentation_lock() -> void:
 		_set_animation_state("idle")
 
 
+func play_victory() -> Tween:
+	if not alive:
+		return create_tween()
+
+	_presentation_locked = true
+	var origin: Vector3 = position
+	var tween: Tween = create_tween()
+
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "position:y", origin.y + 0.20, 0.18)
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(self, "position:y", origin.y, 0.16)
+	tween.tween_interval(0.08)
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.tween_property(self, "position:y", origin.y + 0.14, 0.16)
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.tween_property(self, "position:y", origin.y, 0.15)
+	tween.tween_callback(_end_victory_pose)
+
+	if _sprite != null:
+		var sprite_tween: Tween = create_tween()
+		sprite_tween.set_trans(Tween.TRANS_BACK)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3.ONE * (_sprite_art_scale * 1.14),
+			0.18
+		)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3.ONE * _sprite_art_scale,
+			0.16
+		)
+		sprite_tween.tween_interval(0.08)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3(
+				_sprite_art_scale * 1.08,
+				_sprite_art_scale * 0.94,
+				_sprite_art_scale
+			),
+			0.16
+		)
+		sprite_tween.tween_property(
+			_sprite,
+			"scale",
+			Vector3.ONE * _sprite_art_scale,
+			0.15
+		)
+
+	return tween
+
+
+func _end_victory_pose() -> void:
+	_presentation_locked = false
+	if alive:
+		_set_animation_state("idle")
+
+
 func play_ko() -> Tween:
 	_set_animation_state("ko")
 	if not downed:
@@ -984,6 +1445,8 @@ func play_ko() -> Tween:
 		_facing_marker.visible = false
 	if _vitals_sprite != null:
 		_vitals_sprite.visible = false
+	if _hp_label != null:
+		_hp_label.visible = false
 	if _status_vfx_root != null:
 		_status_vfx_root.visible = false
 	return tween
@@ -993,13 +1456,39 @@ func _play_hit_flash() -> void:
 	if _sprite == null:
 		return
 	_set_animation_state("hit")
-	_sprite.modulate = Color(1.0, 0.38, 0.38, 1.0)
+	_sprite.modulate = Color(1.0, 0.20, 0.16, 1.0)
+
 	var color_tween: Tween = create_tween()
-	color_tween.tween_property(_sprite, "modulate", _sprite_base_modulate(), 0.18)
+	color_tween.tween_property(_sprite, "modulate", Color(1.0, 0.72, 0.68, 1.0), 0.08)
+	color_tween.tween_property(_sprite, "modulate", _sprite_base_modulate(), 0.20)
 	color_tween.tween_callback(_finish_hit_animation)
+
 	var scale_tween: Tween = create_tween()
-	scale_tween.tween_property(_sprite, "scale", Vector3(_sprite_art_scale * 0.90, _sprite_art_scale * 1.08, _sprite_art_scale), 0.07)
-	scale_tween.tween_property(_sprite, "scale", Vector3.ONE * _sprite_art_scale, 0.11)
+	scale_tween.set_trans(Tween.TRANS_BACK)
+	scale_tween.tween_property(
+		_sprite,
+		"scale",
+		Vector3(_sprite_art_scale * 0.78, _sprite_art_scale * 1.20, _sprite_art_scale),
+		0.10
+	)
+	scale_tween.tween_property(_sprite, "scale", Vector3.ONE * _sprite_art_scale, 0.18)
+
+
+func _play_heal_flash() -> void:
+	if _sprite == null:
+		return
+	var base_modulate: Color = _sprite_base_modulate()
+	_sprite.modulate = Color(0.56, 1.0, 0.68, 1.0)
+	var tween: Tween = create_tween()
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.tween_property(
+		_sprite,
+		"scale",
+		Vector3.ONE * (_sprite_art_scale * 1.12),
+		0.10
+	)
+	tween.tween_property(_sprite, "scale", Vector3.ONE * _sprite_art_scale, 0.18)
+	tween.parallel().tween_property(_sprite, "modulate", base_modulate, 0.28)
 
 
 func _finish_hit_animation() -> void:
@@ -1008,6 +1497,14 @@ func _finish_hit_animation() -> void:
 
 
 func _ensure_visual_nodes() -> void:
+	if _cinematic_target == null:
+		_cinematic_target = get_node_or_null("CinematicTarget3D") as SporeCinematicTarget3D
+	if _cinematic_target == null:
+		var target_instance: Node = CinematicTargetScene.instantiate()
+		if target_instance is SporeCinematicTarget3D:
+			_cinematic_target = target_instance as SporeCinematicTarget3D
+			add_child(_cinematic_target)
+
 	if _shadow == null:
 		_shadow = get_node_or_null("Shadow") as MeshInstance3D
 	if _shadow == null:
@@ -1084,7 +1581,7 @@ func _ensure_visual_nodes() -> void:
 		_facing_marker.name = "FacingMarker"
 		add_child(_facing_marker)
 		var facing_mesh: BoxMesh = BoxMesh.new()
-		facing_mesh.size = Vector3(0.10, 0.035, 0.30)
+		facing_mesh.size = Vector3(0.16, 0.040, 0.44)
 		_facing_marker.mesh = facing_mesh
 		var facing_material: StandardMaterial3D = StandardMaterial3D.new()
 		facing_material.albedo_color = Color(0.40, 0.82, 1.0, 0.92) if team == "player" else Color(1.0, 0.44, 0.38, 0.92)
@@ -1104,6 +1601,19 @@ func _ensure_visual_nodes() -> void:
 		_vitals_sprite.pixel_size = 0.0065
 		_vitals_sprite.no_depth_test = true
 		_vitals_sprite.position = Vector3(0.0, 1.30, 0.0)
+
+	if _hp_label == null:
+		_hp_label = get_node_or_null("HpLabel") as Label3D
+	if _hp_label == null:
+		_hp_label = Label3D.new()
+		_hp_label.name = "HpLabel"
+		add_child(_hp_label)
+		_hp_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_hp_label.no_depth_test = true
+		_hp_label.font_size = 22
+		_hp_label.outline_size = 7
+		_hp_label.position = Vector3(0.0, 1.49, 0.0)
+		_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	if _status_vfx_root == null:
 		_status_vfx_root = get_node_or_null("StatusVfx") as Node3D
@@ -1474,10 +1984,16 @@ func _update_facing_visual() -> void:
 
 
 func _refresh_vitals_bar() -> void:
-	if _vitals_sprite == null:
-		return
-	_vitals_sprite.texture = _build_vitals_texture()
-	_vitals_sprite.visible = alive
+	if _vitals_sprite != null:
+		_vitals_sprite.texture = _build_vitals_texture()
+		_vitals_sprite.visible = alive
+	if _hp_label != null:
+		_hp_label.text = "%s • %d/%d PV" % [display_name, hp, max_hp]
+		_hp_label.visible = alive
+		if team == "player":
+			_hp_label.modulate = Color(0.76, 0.92, 1.0, 1.0)
+		else:
+			_hp_label.modulate = Color(1.0, 0.72, 0.66, 1.0)
 
 
 func _build_vitals_texture() -> Texture2D:

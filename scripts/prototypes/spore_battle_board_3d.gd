@@ -9,6 +9,7 @@ const VfxCatalog = preload("res://scripts/catalogs/vfx_catalog.gd")
 const ActionVfxScript = preload("res://scripts/prototypes/spore_action_vfx_3d.gd")
 const UnitActorScript = preload("res://scripts/maps/spore_unit_actor_3d.gd")
 const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
+const CinematicPlayerScene = preload("res://scenes/ui/cinematic_player_3d.tscn")
 
 const MODE_MOVE: String = "move"
 const MODE_ATTACK: String = "attack"
@@ -42,19 +43,20 @@ const ACTION_SKILL: String = "skill"
 @export var camera_angle_degrees: float = -38.0
 @export var zoom_min: float = 5.0
 @export var zoom_max: float = 18.0
-@export var camera_follow_active: bool = true
-@export_range(1.0, 20.0, 0.5) var camera_smoothing: float = 7.5
+@export var camera_follow_active: bool = false
+@export_range(1.0, 16.0, 0.5) var camera_pan_speed: float = 5.5
+@export_range(1.0, 20.0, 0.5) var camera_smoothing: float = 4.5
 @export var action_camera_enabled: bool = true
-@export_range(0.15, 1.2, 0.05) var action_camera_duration: float = 0.48
-@export_range(0.0, 4.0, 0.1) var action_camera_zoom_in: float = 1.6
-@export_range(0.0, 0.35, 0.01) var impact_shake_strength: float = 0.10
-@export var show_action_wheel: bool = true
+@export_range(0.15, 2.0, 0.05) var action_camera_duration: float = 0.95
+@export_range(0.0, 4.0, 0.1) var action_camera_zoom_in: float = 0.85
+@export_range(0.0, 0.35, 0.01) var impact_shake_strength: float = 0.07
+@export var show_action_wheel: bool = false
 
 @export_group("Action VFX")
 @export var action_vfx_enabled: bool = true
-@export var projectile_camera_follow: bool = true
-@export_range(0.0, 4.0, 0.1) var projectile_camera_zoom_in: float = 2.2
-@export_range(0.0, 1.0, 0.05) var vfx_impact_pause: float = 0.05
+@export var projectile_camera_follow: bool = false
+@export_range(0.0, 4.0, 0.1) var projectile_camera_zoom_in: float = 0.60
+@export_range(0.0, 1.0, 0.05) var vfx_impact_pause: float = 0.10
 @export var aoe_cell_impacts_enabled: bool = true
 @export_range(0.0, 0.20, 0.005) var aoe_cell_impact_stagger: float = 0.035
 @export var status_tick_vfx_enabled: bool = true
@@ -90,6 +92,21 @@ var round_activation_budget: int = 1
 var activated_this_round: Dictionary = {}
 var battle_rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _skill_hit_cache: Dictionary = {}
+var mission_objective_3d: String = "eliminate"
+var mission_survival_rounds_3d: int = 0
+var crown_cell_3d: Vector2i = Vector2i(-9, -9)
+var extraction_cells_3d: Array[Vector2i] = []
+var bonus_cells_3d: Array[Vector2i] = []
+var crown_carrier_id_3d: String = ""
+var bonus_collected_3d: int = 0
+var bonus_target_total_3d: int = 0
+var interactable_states_3d: Dictionary = {}
+var _objective_panel_3d: Panel = null
+var _objective_title_3d: Label = null
+var _objective_body_3d: Label = null
+var _objective_signature_3d: String = ""
+var _enemies_cleared_objective_hint_3d: bool = false
+var _objective_markers_3d: Node3D = null
 
 var _camera_rig: Node3D
 var _camera: Camera3D
@@ -99,8 +116,17 @@ var _actor_holder: Node3D
 var _highlight_holder: Node3D
 var _zone_holder: Node3D
 var _vfx_holder: Node3D
+var _enemy_intent_root: Node3D = null
 var _cursor_mesh: MeshInstance3D
+var _hover_forecast_label: Label3D = null
+var _threat_overlay_enabled: bool = false
+var _threat_cells_cache: Dictionary = {}
 var _ui_layer: CanvasLayer
+var _cinematic_player_3d: SporeCinematicPlayer3D = null
+var _cinematic_camera_active: bool = false
+var _cinematic_camera_saved_focus: Vector3 = Vector3.ZERO
+var _cinematic_camera_saved_distance: float = 12.5
+var _cinematic_end_started: bool = false
 var _info_label: Label
 var _help_label: Label
 var _turn_label: Label
@@ -116,6 +142,10 @@ var _preview_title: Label
 var _preview_body: Label
 var _preview_confirm_button: Button
 var _preview_cancel_button: Button
+var _action_banner_panel: Panel
+var _action_banner_title: Label
+var _action_banner_subtitle: Label
+var _action_banner_tween: Tween
 var _timeline_panel: Panel
 var _timeline_bar: HBoxContainer
 var _unit_card_panel: Panel
@@ -124,6 +154,8 @@ var _unit_card_body: Label
 var _unit_portrait: TextureRect
 var _unit_hp_bar: ProgressBar
 var _unit_focus_bar: ProgressBar
+var _unit_hp_text_label: Label
+var _unit_mp_text_label: Label
 var _action_wheel: Panel
 var _action_wheel_label: Label
 var _wheel_move_button: Button
@@ -142,9 +174,19 @@ var _camera_initialized: bool = false
 var _timeline_signature: String = ""
 var _unit_card_last_actor: SporeUnitActor3D = null
 var _presentation_time: float = 0.0
+var _hazard_cells_3d: Array[Vector2i] = []
+var _mission_triggers_3d: Array[Resource] = []
+var _fired_trigger_ids_3d: Dictionary = {}
+var _trigger_queue_3d: Array[Resource] = []
+var _mission_event_busy_3d: bool = false
+var _hazard_visual_root_3d: Node3D = null
+var _facing_selection_active: bool = false
+var _facing_panel: Panel = null
+var _battle_end_sequence_started: bool = false
 var _cursor_bob: float = 0.0
 var _action_camera_timer: float = 0.0
 var _action_camera_focus: Vector3 = Vector3.ZERO
+var _camera_return_focus: Vector3 = Vector3.ZERO
 var _action_camera_zoom: float = 0.0
 var _camera_shake_strength: float = 0.0
 var _impact_zoom_timer: float = 0.0
@@ -154,14 +196,37 @@ var _projectile_follow_vfx: SporeActionVfx3D = null
 func _ready() -> void:
 	_ensure_runtime_nodes()
 	_load_map()
+	_setup_mission_state_3d()
+	_setup_mission_events_3d()
+	_focus_camera_on_map_center(true)
 	_spawn_runtime_units()
+	_ensure_objective_ui_3d()
+	_refresh_objective_ui_3d(true)
 	_build_turn_order()
-	_start_next_activation()
-	_update_ui_text()
+	_ensure_cinematic_player_3d()
+	_evaluate_mission_triggers_3d("round_start", null)
+	if _mission_event_pending_3d():
+		call_deferred("_start_after_initial_mission_events_3d")
+	else:
+		_update_ui_text()
+	call_deferred("_play_mission_intro_3d")
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _camera == null or map_root == null or battle_finished:
+	if _camera == null or map_root == null:
+		return
+	if battle_finished:
+		if event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_R:
+			get_tree().reload_current_scene()
+		return
+	if _facing_selection_active:
+		if event is InputEventKey and event.pressed:
+			var facing_key: Key = (event as InputEventKey).keycode
+			match facing_key:
+				KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
+					_confirm_facing_and_end()
+				KEY_ESCAPE:
+					_close_facing_selector()
 		return
 	if event is InputEventMouseMotion:
 		var next_hovered: Vector2i = _screen_to_cell((event as InputEventMouseMotion).position)
@@ -202,6 +267,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_on_skill_pressed(2)
 			KEY_F:
 				_on_face_pressed(-1 if key_event.shift_pressed else 1)
+			KEY_T:
+				_toggle_enemy_threat_overlay()
 			KEY_C:
 				_focus_camera_on_active(true)
 			KEY_ENTER, KEY_KP_ENTER:
@@ -219,11 +286,16 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_cinematic_end_flow_3d()
+	_update_hazard_visuals_3d()
+	_refresh_objective_ui_3d()
 	_presentation_time += delta
 	_update_action_camera(delta)
+	_update_manual_camera_pan(delta)
 	_update_camera_smoothing(delta)
 	_update_cursor_animation()
 	_update_cursor()
+	_update_tactical_hover_forecast()
 	_update_action_wheel()
 
 
@@ -270,7 +342,10 @@ func _ensure_runtime_nodes() -> void:
 	if _light == null:
 		_light = DirectionalLight3D.new()
 		_light.name = "DirectionalLight3D"
-		_light.light_energy = 1.3
+		# IMMERSIVE_GARDEN_LIGHTING
+		_light.light_color = Color(1.0, 0.90, 0.78, 1.0)
+		_light.light_energy = 1.08
+		_light.shadow_enabled = true
 		_camera_rig.add_child(_light)
 	_position_camera()
 
@@ -292,6 +367,7 @@ func _ensure_runtime_nodes() -> void:
 		cursor_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_cursor_mesh.material_override = cursor_material
 	_build_ui()
+	_ensure_cinematic_player_3d()
 
 
 func _build_ui() -> void:
@@ -301,140 +377,169 @@ func _build_ui() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.name = "UI"
 	add_child(_ui_layer)
+
 	var root: Control = Control.new()
 	root.name = "Root"
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Critical: the full-screen HUD must not swallow board clicks.
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ui_layer.add_child(root)
 
-	var panel: Panel = Panel.new()
-	panel.name = "Panel"
-	panel.position = Vector2(18.0, 18.0)
-	panel.size = Vector2(520.0, 258.0)
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.11, 0.16, 0.92)
-	style.border_color = Color(0.31, 0.43, 0.56, 1.0)
+	style.bg_color = Color(0.055, 0.075, 0.105, 0.90)
+	style.border_color = Color(0.25, 0.38, 0.50, 0.92)
 	style.border_width_left = 1
 	style.border_width_top = 1
 	style.border_width_right = 1
 	style.border_width_bottom = 1
-	style.corner_radius_top_left = 16
-	style.corner_radius_top_right = 16
-	style.corner_radius_bottom_left = 16
-	style.corner_radius_bottom_right = 16
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+
+	var panel: Panel = Panel.new()
+	panel.name = "CommandPanel"
+	panel.position = Vector2(14.0, 14.0)
+	panel.size = Vector2(430.0, 174.0)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_theme_stylebox_override("panel", style)
 	root.add_child(panel)
 
-	_turn_label = _make_label(panel, Vector2(16.0, 12.0), Vector2(488.0, 30.0), 20, Color(1.0, 0.82, 0.40, 1.0))
-	_info_label = _make_label(panel, Vector2(16.0, 44.0), Vector2(488.0, 50.0), 16, Color(0.95, 0.94, 0.87, 1.0))
-	_move_button = _make_button(panel, "DÉPLACER [M]", Vector2(16.0, 101.0), Vector2(118.0, 34.0))
-	_attack_button = _make_button(panel, "ATTAQUER [A]", Vector2(142.0, 101.0), Vector2(118.0, 34.0))
+	_turn_label = _make_label(panel, Vector2(14.0, 9.0), Vector2(402.0, 26.0), 18, Color(1.0, 0.82, 0.40, 1.0))
+	_info_label = _make_label(panel, Vector2(14.0, 36.0), Vector2(402.0, 46.0), 12, Color(0.95, 0.94, 0.87, 1.0))
+	_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	_move_button = _make_button(panel, "MOVE [M]", Vector2(14.0, 87.0), Vector2(94.0, 32.0))
+	_attack_button = _make_button(panel, "ATTAQUE [A]", Vector2(114.0, 87.0), Vector2(104.0, 32.0))
+	_face_button = _make_button(panel, "ORIENT. [F]", Vector2(224.0, 87.0), Vector2(82.0, 32.0))
+	_face_button.tooltip_text = "Orientation : frapper de dos ou de flanc est plus efficace."
+	_end_button = _make_button(panel, "WAIT [ESPACE]", Vector2(312.0, 87.0), Vector2(104.0, 32.0))
 	_move_button.toggle_mode = true
 	_attack_button.toggle_mode = true
-	_face_button = _make_button(panel, "FACE [F]", Vector2(268.0, 101.0), Vector2(104.0, 34.0))
-	_end_button = _make_button(panel, "WAIT / FIN [ESPACE]", Vector2(380.0, 101.0), Vector2(124.0, 34.0))
-	_primary_skill_button = _make_button(panel, "SKILL I [1]", Vector2(16.0, 142.0), Vector2(238.0, 34.0))
-	_secondary_skill_button = _make_button(panel, "SKILL II [2]", Vector2(266.0, 142.0), Vector2(238.0, 34.0))
+
+	_primary_skill_button = _make_button(panel, "I [1]", Vector2(14.0, 126.0), Vector2(198.0, 32.0))
+	_secondary_skill_button = _make_button(panel, "II [2]", Vector2(218.0, 126.0), Vector2(198.0, 32.0))
+
 	_move_button.pressed.connect(_on_move_mode_pressed)
 	_attack_button.pressed.connect(_on_attack_mode_pressed)
 	_face_button.pressed.connect(_on_face_pressed.bind(1))
 	_end_button.pressed.connect(_on_end_activation_pressed)
 	_primary_skill_button.pressed.connect(_on_skill_pressed.bind(1))
 	_secondary_skill_button.pressed.connect(_on_skill_pressed.bind(2))
-	_help_label = _make_label(panel, Vector2(16.0, 184.0), Vector2(488.0, 60.0), 12, Color(0.68, 0.79, 0.87, 1.0))
-	_help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	_help_label = _make_label(panel, Vector2.ZERO, Vector2.ZERO, 10, Color.WHITE)
+	_help_label.visible = false
+
+	_timeline_panel = Panel.new()
+	_timeline_panel.name = "InitiativeTimeline"
+	_timeline_panel.position = Vector2(458.0, 14.0)
+	_timeline_panel.size = Vector2(292.0, 82.0)
+	_timeline_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_timeline_panel.add_theme_stylebox_override("panel", style)
+	root.add_child(_timeline_panel)
+	var timeline_title: Label = _make_label(_timeline_panel, Vector2(10.0, 6.0), Vector2(272.0, 18.0), 11, Color(0.68, 0.79, 0.87, 1.0))
+	timeline_title.text = "INITIATIVE"
+	_timeline_bar = HBoxContainer.new()
+	_timeline_bar.position = Vector2(10.0, 27.0)
+	_timeline_bar.size = Vector2(272.0, 48.0)
+	_timeline_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_timeline_bar.add_theme_constant_override("separation", 4)
+	_timeline_panel.add_child(_timeline_bar)
 
 	var log_panel: Panel = Panel.new()
-	log_panel.position = Vector2(18.0, 288.0)
-	log_panel.size = Vector2(390.0, 116.0)
+	log_panel.name = "BattleLog"
+	log_panel.position = Vector2(14.0, 650.0)
+	log_panel.size = Vector2(420.0, 88.0)
+	log_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	log_panel.add_theme_stylebox_override("panel", style)
 	root.add_child(log_panel)
-	_log_label = _make_label(log_panel, Vector2(14.0, 10.0), Vector2(362.0, 96.0), 12, Color(0.84, 0.88, 0.92, 1.0))
+	_log_label = _make_label(log_panel, Vector2(12.0, 9.0), Vector2(396.0, 70.0), 11, Color(0.82, 0.87, 0.91, 1.0))
 	_log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	_preview_panel = Panel.new()
 	_preview_panel.name = "CombatPreview"
-	_preview_panel.position = Vector2(790.0, 18.0)
-	_preview_panel.size = Vector2(470.0, 382.0)
+	_preview_panel.position = Vector2(820.0, 14.0)
+	_preview_panel.size = Vector2(420.0, 300.0)
+	_preview_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_preview_panel.add_theme_stylebox_override("panel", style)
 	_preview_panel.visible = false
 	root.add_child(_preview_panel)
-	_preview_title = _make_label(_preview_panel, Vector2(18.0, 14.0), Vector2(434.0, 32.0), 21, Color(1.0, 0.82, 0.40, 1.0))
-	_preview_body = _make_label(_preview_panel, Vector2(18.0, 52.0), Vector2(434.0, 252.0), 14, Color(0.94, 0.94, 0.88, 1.0))
+	_preview_title = _make_label(_preview_panel, Vector2(16.0, 12.0), Vector2(388.0, 28.0), 18, Color(1.0, 0.82, 0.40, 1.0))
+	_preview_body = _make_label(_preview_panel, Vector2(16.0, 45.0), Vector2(388.0, 198.0), 12, Color(0.94, 0.94, 0.88, 1.0))
 	_preview_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_preview_confirm_button = _make_button(_preview_panel, "CONFIRMER [ENTRÉE]", Vector2(18.0, 326.0), Vector2(250.0, 38.0))
-	_preview_cancel_button = _make_button(_preview_panel, "ANNULER [ÉCHAP]", Vector2(280.0, 326.0), Vector2(172.0, 38.0))
+	_preview_confirm_button = _make_button(_preview_panel, "CONFIRMER [ENTRÉE]", Vector2(16.0, 252.0), Vector2(220.0, 34.0))
+	_preview_cancel_button = _make_button(_preview_panel, "ANNULER [ÉCHAP]", Vector2(244.0, 252.0), Vector2(160.0, 34.0))
 	_preview_confirm_button.pressed.connect(_confirm_pending_action)
 	_preview_cancel_button.pressed.connect(_cancel_pending_action)
 
-	_timeline_panel = Panel.new()
-	_timeline_panel.name = "InitiativeTimeline"
-	_timeline_panel.position = Vector2(550.0, 18.0)
-	_timeline_panel.size = Vector2(224.0, 92.0)
-	_timeline_panel.add_theme_stylebox_override("panel", style)
-	root.add_child(_timeline_panel)
-	var timeline_title: Label = _make_label(_timeline_panel, Vector2(10.0, 7.0), Vector2(204.0, 22.0), 12, Color(0.68, 0.79, 0.87, 1.0))
-	timeline_title.text = "INITIATIVE"
-	_timeline_bar = HBoxContainer.new()
-	_timeline_bar.position = Vector2(10.0, 31.0)
-	_timeline_bar.size = Vector2(204.0, 50.0)
-	_timeline_bar.add_theme_constant_override("separation", 3)
-	_timeline_panel.add_child(_timeline_bar)
-
 	_unit_card_panel = Panel.new()
 	_unit_card_panel.name = "UnitCard"
-	_unit_card_panel.position = Vector2(790.0, 414.0)
-	_unit_card_panel.size = Vector2(470.0, 236.0)
+	_unit_card_panel.position = Vector2(880.0, 568.0)
+	_unit_card_panel.size = Vector2(360.0, 170.0)
+	_unit_card_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_unit_card_panel.add_theme_stylebox_override("panel", style)
 	root.add_child(_unit_card_panel)
+
 	_unit_portrait = TextureRect.new()
-	_unit_portrait.position = Vector2(16.0, 18.0)
-	_unit_portrait.size = Vector2(104.0, 136.0)
+	_unit_portrait.position = Vector2(12.0, 12.0)
+	_unit_portrait.size = Vector2(82.0, 104.0)
 	_unit_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_unit_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_unit_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_unit_card_panel.add_child(_unit_portrait)
-	_unit_card_title = _make_label(_unit_card_panel, Vector2(136.0, 16.0), Vector2(316.0, 30.0), 21, Color(1.0, 0.82, 0.40, 1.0))
+
+	_unit_card_title = _make_label(_unit_card_panel, Vector2(104.0, 10.0), Vector2(244.0, 25.0), 17, Color(1.0, 0.82, 0.40, 1.0))
+
 	_unit_hp_bar = ProgressBar.new()
-	_unit_hp_bar.position = Vector2(136.0, 50.0)
-	_unit_hp_bar.size = Vector2(316.0, 20.0)
+	_unit_hp_bar.position = Vector2(104.0, 39.0)
+	_unit_hp_bar.size = Vector2(244.0, 15.0)
 	_unit_hp_bar.show_percentage = false
-	_unit_hp_bar.add_theme_stylebox_override("background", _progress_style(Color(0.07, 0.08, 0.10, 0.95), 5))
-	_unit_hp_bar.add_theme_stylebox_override("fill", _progress_style(Color(0.31, 0.82, 0.42, 1.0), 5))
+	_unit_hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_unit_hp_bar.add_theme_stylebox_override("background", _progress_style(Color(0.07, 0.08, 0.10, 0.95), 4))
+	_unit_hp_bar.add_theme_stylebox_override("fill", _progress_style(Color(0.31, 0.82, 0.42, 1.0), 4))
 	_unit_card_panel.add_child(_unit_hp_bar)
+	_unit_hp_text_label = _make_label(
+		_unit_card_panel,
+		_unit_hp_bar.position,
+		_unit_hp_bar.size,
+		11,
+		Color.WHITE
+	)
+	_unit_hp_text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_unit_hp_text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_unit_hp_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 	_unit_focus_bar = ProgressBar.new()
-	_unit_focus_bar.position = Vector2(136.0, 76.0)
-	_unit_focus_bar.size = Vector2(316.0, 16.0)
+	_unit_focus_bar.position = Vector2(104.0, 58.0)
+	_unit_focus_bar.size = Vector2(244.0, 12.0)
 	_unit_focus_bar.show_percentage = false
-	_unit_focus_bar.add_theme_stylebox_override("background", _progress_style(Color(0.07, 0.08, 0.10, 0.95), 4))
-	_unit_focus_bar.add_theme_stylebox_override("fill", _progress_style(Color(0.34, 0.64, 1.0, 1.0), 4))
+	_unit_focus_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_unit_focus_bar.add_theme_stylebox_override("background", _progress_style(Color(0.07, 0.08, 0.10, 0.95), 3))
+	_unit_focus_bar.add_theme_stylebox_override("fill", _progress_style(Color(0.34, 0.64, 1.0, 1.0), 3))
 	_unit_card_panel.add_child(_unit_focus_bar)
-	_unit_card_body = _make_label(_unit_card_panel, Vector2(136.0, 99.0), Vector2(316.0, 120.0), 13, Color(0.92, 0.93, 0.88, 1.0))
+	_unit_mp_text_label = _make_label(
+		_unit_card_panel,
+		_unit_focus_bar.position,
+		_unit_focus_bar.size,
+		10,
+		Color.WHITE
+	)
+	_unit_mp_text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_unit_mp_text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_unit_mp_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	_unit_card_body = _make_label(_unit_card_panel, Vector2(104.0, 76.0), Vector2(244.0, 82.0), 10, Color(0.92, 0.93, 0.88, 1.0))
 	_unit_card_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	_action_wheel = Panel.new()
-	_action_wheel.name = "ActionWheel"
-	_action_wheel.size = Vector2(252.0, 190.0)
-	_action_wheel.add_theme_stylebox_override("panel", style)
-	_action_wheel.visible = false
-	root.add_child(_action_wheel)
-	_action_wheel_label = _make_label(_action_wheel, Vector2(71.0, 73.0), Vector2(110.0, 42.0), 13, Color(1.0, 0.88, 0.55, 1.0))
-	_action_wheel_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_action_wheel_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_action_wheel_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_wheel_move_button = _make_button(_action_wheel, "MOVE", Vector2(78.0, 8.0), Vector2(96.0, 32.0))
-	_wheel_attack_button = _make_button(_action_wheel, "ATK", Vector2(8.0, 55.0), Vector2(76.0, 32.0))
-	_wheel_move_button.toggle_mode = true
-	_wheel_attack_button.toggle_mode = true
-	_wheel_primary_button = _make_button(_action_wheel, "S1", Vector2(168.0, 55.0), Vector2(76.0, 32.0))
-	_wheel_secondary_button = _make_button(_action_wheel, "S2", Vector2(8.0, 111.0), Vector2(76.0, 32.0))
-	_wheel_face_button = _make_button(_action_wheel, "FACE", Vector2(168.0, 111.0), Vector2(76.0, 32.0))
-	_wheel_end_button = _make_button(_action_wheel, "WAIT / FIN", Vector2(78.0, 150.0), Vector2(96.0, 32.0))
-	_wheel_move_button.pressed.connect(_on_move_mode_pressed)
-	_wheel_attack_button.pressed.connect(_on_attack_mode_pressed)
-	_wheel_primary_button.pressed.connect(_on_skill_pressed.bind(1))
-	_wheel_secondary_button.pressed.connect(_on_skill_pressed.bind(2))
-	_wheel_face_button.pressed.connect(_on_face_pressed.bind(1))
-	_wheel_end_button.pressed.connect(_on_end_activation_pressed)
-
+	# The old floating ActionWheel duplicated commands and covered tactical cells.
+	_action_wheel = null
+	_action_wheel_label = null
+	_wheel_move_button = null
+	_wheel_attack_button = null
+	_wheel_primary_button = null
+	_wheel_secondary_button = null
+	_wheel_face_button = null
+	_wheel_end_button = null
 
 func _progress_style(color: Color, radius: int) -> StyleBoxFlat:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
@@ -452,6 +557,7 @@ func _make_label(parent: Control, pos: Vector2, size_value: Vector2, font_size: 
 	label.size = size_value
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(label)
 	return label
 
@@ -639,6 +745,835 @@ func _spawn_runtime_units() -> void:
 		actors_by_cell[enemy_cell] = enemy_actor
 
 
+func _setup_mission_state_3d() -> void:
+	mission_objective_3d = "eliminate"
+	mission_survival_rounds_3d = 0
+	crown_cell_3d = Vector2i(-9, -9)
+	extraction_cells_3d.clear()
+	bonus_cells_3d.clear()
+	crown_carrier_id_3d = ""
+	bonus_collected_3d = 0
+	bonus_target_total_3d = 0
+	interactable_states_3d.clear()
+	_objective_signature_3d = ""
+
+	var mission: Resource = MissionCatalog.definition(mission_index)
+	if mission != null:
+		mission_objective_3d = String(mission.get("objective"))
+		mission_survival_rounds_3d = int(mission.get("survival_rounds"))
+
+	if map_root != null:
+		var environment: Dictionary = map_root.to_environment()
+
+		var raw_crown: Variant = environment.get(
+			"crown",
+			Vector2i(-9, -9)
+		)
+		if raw_crown is Vector2i:
+			crown_cell_3d = raw_crown
+
+		var raw_extraction: Variant = environment.get("extraction", [])
+		if raw_extraction is Array:
+			for value: Variant in raw_extraction:
+				if value is Vector2i:
+					extraction_cells_3d.append(value)
+
+		var raw_bonus: Variant = environment.get("bonus", [])
+		if raw_bonus is Array:
+			for value: Variant in raw_bonus:
+				if value is Vector2i:
+					bonus_cells_3d.append(value)
+
+	bonus_target_total_3d = bonus_cells_3d.size()
+	_setup_interactables_3d()
+	_rebuild_objective_markers_3d()
+
+
+func _setup_interactables_3d() -> void:
+	interactable_states_3d.clear()
+
+	var definitions: Array[Resource] = MissionCatalog.interactables(
+		mission_index
+	)
+	for definition: Resource in definitions:
+		if definition == null:
+			continue
+
+		var object_id: String = String(definition.get("id"))
+		if object_id.is_empty():
+			continue
+
+		interactable_states_3d[object_id] = {
+			"definition": definition,
+			"active": bool(definition.get("starts_active")),
+			"used": false,
+		}
+
+	_refresh_interactable_visuals_3d()
+
+
+func _interactable_state_3d(object_id: String) -> Dictionary:
+	var raw_state: Variant = interactable_states_3d.get(object_id, {})
+	if raw_state is Dictionary:
+		return raw_state as Dictionary
+	return {}
+
+
+func _closed_door_at_3d(cell_value: Vector2i) -> bool:
+	for state_var: Variant in interactable_states_3d.values():
+		if not (state_var is Dictionary):
+			continue
+		var state: Dictionary = state_var as Dictionary
+		var definition: Resource = state.get("definition", null) as Resource
+		if definition == null:
+			continue
+		if (
+			String(definition.get("object_type")) == "door"
+			and definition.get("cell") == cell_value
+		):
+			return not bool(state.get("active", false))
+	return false
+
+
+func _refresh_interactable_visuals_3d() -> void:
+	if map_root == null:
+		return
+
+	for node: Node in _descendants(map_root):
+		if not node.has_method("runtime_object_id"):
+			continue
+
+		var object_id: String = String(node.call("runtime_object_id"))
+		var state: Dictionary = _interactable_state_3d(object_id)
+		if state.is_empty():
+			continue
+
+		node.call(
+			"apply_runtime_state",
+			bool(state.get("active", false)),
+			bool(state.get("used", false))
+		)
+
+
+func _handle_mission_cell_entry_3d(actor: SporeUnitActor3D) -> void:
+	if actor == null or not actor.alive or actor.team != "player":
+		return
+
+	_check_crown_pickup_3d(actor)
+	_check_bonus_pickup_3d(actor)
+	_handle_interactable_entry_3d(actor)
+	_refresh_objective_ui_3d(true)
+	_rebuild_objective_markers_3d()
+
+
+func _check_crown_pickup_3d(actor: SporeUnitActor3D) -> void:
+	if mission_objective_3d != "crown":
+		return
+	if not crown_carrier_id_3d.is_empty():
+		return
+	if actor.cell != crown_cell_3d:
+		return
+
+	crown_carrier_id_3d = actor.unit_id
+	_show_floating_text(
+		actor.position + Vector3(0.0, 1.46, 0.0),
+		"COURONNE !",
+		Color(1.0, 0.82, 0.32, 1.0)
+	)
+	_log(
+		"%s récupère la Couronne. "
+		+ "Ramène-la maintenant dans la SORTIE."
+		% actor.display_name
+	)
+
+
+func _check_bonus_pickup_3d(actor: SporeUnitActor3D) -> void:
+	if not bonus_cells_3d.has(actor.cell):
+		return
+
+	bonus_cells_3d.erase(actor.cell)
+	bonus_collected_3d += 1
+
+	var healed: int = actor.heal(1)
+	var heal_suffix: String = (
+		" • +%d PV" % healed
+		if healed > 0
+		else ""
+	)
+
+	_show_floating_text(
+		actor.position + Vector3(0.0, 1.42, 0.0),
+		"VINYLE %d/%d%s"
+		% [
+			bonus_collected_3d,
+			bonus_target_total_3d,
+			heal_suffix
+		],
+		Color(0.82, 0.66, 1.0, 1.0)
+	)
+
+	_log(
+		"%s récupère un vinyle (%d/%d)%s."
+		% [
+			actor.display_name,
+			bonus_collected_3d,
+			bonus_target_total_3d,
+			heal_suffix
+		]
+	)
+
+
+func _handle_interactable_entry_3d(actor: SporeUnitActor3D) -> void:
+	for object_id_var: Variant in interactable_states_3d.keys():
+		var object_id: String = String(object_id_var)
+		var state: Dictionary = _interactable_state_3d(object_id)
+		if state.is_empty():
+			continue
+
+		var definition: Resource = state.get("definition", null) as Resource
+		if definition == null:
+			continue
+
+		var raw_cell: Variant = definition.get("cell")
+		if not (raw_cell is Vector2i) or raw_cell != actor.cell:
+			continue
+
+		var object_type: String = String(definition.get("object_type"))
+		match object_type:
+			"switch":
+				var one_shot: bool = bool(definition.get("one_shot"))
+				if one_shot and bool(state.get("used", false)):
+					continue
+
+				state["used"] = true
+				state["active"] = not bool(state.get("active", false))
+
+				var linked_id: String = String(
+					definition.get("linked_object_id")
+				)
+				if not linked_id.is_empty():
+					var linked_state: Dictionary = _interactable_state_3d(
+						linked_id
+					)
+					if not linked_state.is_empty():
+						linked_state["active"] = bool(
+							state.get("active", false)
+						)
+
+				_show_floating_text(
+					actor.position + Vector3(0.0, 1.40, 0.0),
+					"INTERRUPTEUR !",
+					Color(0.42, 0.82, 1.0, 1.0)
+				)
+				_log(
+					"%s active %s."
+					% [
+						actor.display_name,
+						String(definition.get("display_name"))
+					]
+				)
+
+			"chest":
+				if bool(state.get("used", false)):
+					continue
+				state["used"] = true
+				state["active"] = true
+
+				var reward_type: String = String(
+					definition.get("reward_type")
+				)
+				var reward_value: int = int(
+					definition.get("reward_value")
+				)
+				var reward_team: String = String(
+					definition.get("reward_team")
+				)
+
+				if reward_type == "focus_team":
+					var recipients: Array[SporeUnitActor3D] = (
+						player_actors
+						if reward_team == "player"
+						else enemy_actors
+					)
+					for recipient: SporeUnitActor3D in recipients:
+						if recipient != null and recipient.alive:
+							recipient.change_focus(reward_value)
+
+				elif reward_type == "heal_team":
+					var heal_recipients: Array[SporeUnitActor3D] = (
+						player_actors
+						if reward_team == "player"
+						else enemy_actors
+					)
+					for recipient: SporeUnitActor3D in heal_recipients:
+						if recipient != null and recipient.alive:
+							recipient.heal(reward_value)
+
+				_show_floating_text(
+					actor.position + Vector3(0.0, 1.42, 0.0),
+					"COFFRE !",
+					Color(1.0, 0.80, 0.38, 1.0)
+				)
+				_log(
+					"%s ouvre %s."
+					% [
+						actor.display_name,
+						String(definition.get("display_name"))
+					]
+				)
+
+	_refresh_interactable_visuals_3d()
+
+
+func _living_count_3d(team_value: String) -> int:
+	var count: int = 0
+	var source: Array[SporeUnitActor3D] = (
+		player_actors
+		if team_value == "player"
+		else enemy_actors
+	)
+	for actor: SporeUnitActor3D in source:
+		if actor != null and actor.alive:
+			count += 1
+	return count
+
+
+func _crown_carrier_3d() -> SporeUnitActor3D:
+	if crown_carrier_id_3d.is_empty():
+		return null
+
+	for actor: SporeUnitActor3D in player_actors:
+		if actor != null and actor.unit_id == crown_carrier_id_3d:
+			return actor
+	return null
+
+
+func _mission_rule_matches_3d(rule: Resource) -> bool:
+	if rule == null:
+		return false
+
+	var result: bool = false
+	var rule_type: String = String(rule.get("rule_type"))
+	var amount: int = int(rule.get("amount"))
+	var unit_id: String = String(rule.get("unit_id"))
+
+	match rule_type:
+		"all_enemies_defeated":
+			result = _living_count_3d("enemy") <= 0
+
+		"all_players_defeated":
+			result = _living_count_3d("player") <= 0
+
+		"survive_rounds":
+			result = round_number > maxi(1, amount)
+
+		"crown_extracted":
+			var carrier: SporeUnitActor3D = _crown_carrier_3d()
+			result = (
+				carrier != null
+				and carrier.alive
+				and extraction_cells_3d.has(carrier.cell)
+			)
+
+		"round_at_least":
+			result = round_number >= maxi(1, amount)
+
+		"bonus_collected":
+			result = bonus_collected_3d >= maxi(0, amount)
+
+		"unit_defeated":
+			var defeated: SporeUnitActor3D = _actor_by_unit_id(unit_id)
+			result = defeated == null or not defeated.alive
+
+		"unit_alive":
+			var living_unit: SporeUnitActor3D = _actor_by_unit_id(unit_id)
+			result = living_unit != null and living_unit.alive
+
+		"unit_on_extraction":
+			var zone_unit: SporeUnitActor3D = _actor_by_unit_id(unit_id)
+			result = (
+				zone_unit != null
+				and zone_unit.alive
+				and extraction_cells_3d.has(zone_unit.cell)
+			)
+
+	if bool(rule.get("invert")):
+		return not result
+	return result
+
+
+func _mission_rules_satisfied_3d(
+	rules: Array,
+	mode: String
+) -> bool:
+	if rules.is_empty():
+		return false
+
+	if mode == "all":
+		for rule_var: Variant in rules:
+			if not (rule_var is Resource):
+				continue
+			if not _mission_rule_matches_3d(rule_var as Resource):
+				return false
+		return true
+
+	for rule_var: Variant in rules:
+		if (
+			rule_var is Resource
+			and _mission_rule_matches_3d(rule_var as Resource)
+		):
+			return true
+	return false
+
+
+func _mission_result_3d() -> int:
+	var mission: Resource = MissionCatalog.definition(mission_index)
+
+	if mission != null:
+		var raw_defeat: Variant = mission.get("defeat_rules")
+		if raw_defeat is Array:
+			var defeat_rules: Array = raw_defeat as Array
+			if _mission_rules_satisfied_3d(
+				defeat_rules,
+				String(mission.get("defeat_rule_mode"))
+			):
+				return -1
+
+		var raw_victory: Variant = mission.get("victory_rules")
+		if raw_victory is Array:
+			var victory_rules: Array = raw_victory as Array
+			if _mission_rules_satisfied_3d(
+				victory_rules,
+				String(mission.get("victory_rule_mode"))
+			):
+				return 1
+
+	if _living_count_3d("player") <= 0:
+		return -1
+
+	match mission_objective_3d:
+		"crown":
+			var carrier: SporeUnitActor3D = _crown_carrier_3d()
+			if (
+				carrier != null
+				and carrier.alive
+				and extraction_cells_3d.has(carrier.cell)
+			):
+				return 1
+
+		"survive":
+			if round_number > maxi(1, mission_survival_rounds_3d):
+				return 1
+
+		"eliminate":
+			if _living_count_3d("enemy") <= 0:
+				return 1
+
+	return 0
+
+
+func _ensure_objective_ui_3d() -> void:
+	if _ui_layer == null:
+		return
+
+	var root: Control = _ui_layer.get_node_or_null("Root") as Control
+	if root == null:
+		return
+
+	_objective_panel_3d = root.get_node_or_null(
+		"MissionObjectivePanel"
+	) as Panel
+
+	if _objective_panel_3d == null:
+		_objective_panel_3d = Panel.new()
+		_objective_panel_3d.name = "MissionObjectivePanel"
+		_objective_panel_3d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_objective_panel_3d.set_anchors_preset(
+			Control.PRESET_TOP_RIGHT
+		)
+		_objective_panel_3d.offset_left = -382.0
+		_objective_panel_3d.offset_top = 14.0
+		_objective_panel_3d.offset_right = -14.0
+		_objective_panel_3d.offset_bottom = 132.0
+
+		var style: StyleBoxFlat = StyleBoxFlat.new()
+		style.bg_color = Color(0.045, 0.060, 0.085, 0.92)
+		style.border_color = Color(0.46, 0.76, 0.56, 0.92)
+		style.border_width_left = 1
+		style.border_width_top = 1
+		style.border_width_right = 1
+		style.border_width_bottom = 1
+		style.corner_radius_top_left = 12
+		style.corner_radius_top_right = 12
+		style.corner_radius_bottom_left = 12
+		style.corner_radius_bottom_right = 12
+		_objective_panel_3d.add_theme_stylebox_override(
+			"panel",
+			style
+		)
+		root.add_child(_objective_panel_3d)
+
+		_objective_title_3d = Label.new()
+		_objective_title_3d.position = Vector2(14.0, 9.0)
+		_objective_title_3d.size = Vector2(340.0, 24.0)
+		_objective_title_3d.text = "OBJECTIF"
+		_objective_title_3d.add_theme_font_size_override(
+			"font_size",
+			15
+		)
+		_objective_title_3d.add_theme_color_override(
+			"font_color",
+			Color(1.0, 0.84, 0.40, 1.0)
+		)
+		_objective_title_3d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_objective_panel_3d.add_child(_objective_title_3d)
+
+		_objective_body_3d = Label.new()
+		_objective_body_3d.position = Vector2(14.0, 35.0)
+		_objective_body_3d.size = Vector2(340.0, 72.0)
+		_objective_body_3d.autowrap_mode = (
+			TextServer.AUTOWRAP_WORD_SMART
+		)
+		_objective_body_3d.add_theme_font_size_override(
+			"font_size",
+			12
+		)
+		_objective_body_3d.add_theme_color_override(
+			"font_color",
+			Color(0.91, 0.93, 0.88, 1.0)
+		)
+		_objective_body_3d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_objective_panel_3d.add_child(_objective_body_3d)
+	else:
+		_objective_title_3d = _objective_panel_3d.get_child(0) as Label
+		_objective_body_3d = _objective_panel_3d.get_child(1) as Label
+
+
+func _objective_status_text_3d() -> String:
+	var living_players: int = _living_count_3d("player")
+	var living_enemies: int = _living_count_3d("enemy")
+
+	match mission_objective_3d:
+		"crown":
+			if crown_carrier_id_3d.is_empty():
+				return (
+					"1. Récupérer la COURONNE\n"
+					+ "2. La ramener à la SORTIE\n"
+					+ "Vinyles : %d/%d • Alliés %d • Ennemis %d"
+					% [
+						bonus_collected_3d,
+						bonus_target_total_3d,
+						living_players,
+						living_enemies
+					]
+				)
+
+			var carrier: SporeUnitActor3D = _crown_carrier_3d()
+			var carrier_name: String = (
+				carrier.display_name
+				if carrier != null
+				else "?"
+			)
+			return (
+				"✓ Couronne récupérée par %s\n"
+				+ "→ Rejoins une case SORTIE\n"
+				+ "Vinyles : %d/%d • Alliés %d • Ennemis %d"
+				% [
+					carrier_name,
+					bonus_collected_3d,
+					bonus_target_total_3d,
+					living_players,
+					living_enemies
+				]
+			)
+
+		"survive":
+			return (
+				"Tenir jusqu'à la fin de la manche %d\n"
+				+ "Manche actuelle : %d • Alliés %d • Ennemis %d"
+				% [
+					mission_survival_rounds_3d,
+					round_number,
+					living_players,
+					living_enemies
+				]
+			)
+
+	return (
+		"Mettre tous les ennemis K.O.\n"
+		+ "Alliés %d • Ennemis %d • Vinyles %d/%d"
+		% [
+			living_players,
+			living_enemies,
+			bonus_collected_3d,
+			bonus_target_total_3d
+		]
+	)
+
+
+func _refresh_objective_ui_3d(force: bool = false) -> void:
+	if _objective_panel_3d == null:
+		_ensure_objective_ui_3d()
+
+	if _objective_body_3d == null:
+		return
+
+	var carrier: SporeUnitActor3D = _crown_carrier_3d()
+	var carrier_cell: String = (
+		str(carrier.cell)
+		if carrier != null
+		else "-"
+	)
+
+	var signature: String = "%s|%s|%s|%d|%d|%d|%d" % [
+		mission_objective_3d,
+		crown_carrier_id_3d,
+		carrier_cell,
+		bonus_collected_3d,
+		bonus_cells_3d.size(),
+		_living_count_3d("player"),
+		_living_count_3d("enemy")
+	]
+
+	if not force and signature == _objective_signature_3d:
+		return
+
+	_objective_signature_3d = signature
+	_objective_body_3d.text = _objective_status_text_3d()
+
+
+func _rebuild_objective_markers_3d() -> void:
+	if map_root == null:
+		return
+
+	if _objective_markers_3d == null or not is_instance_valid(
+		_objective_markers_3d
+	):
+		_objective_markers_3d = Node3D.new()
+		_objective_markers_3d.name = "MissionObjectiveMarkers"
+		add_child(_objective_markers_3d)
+
+	for child: Node in _objective_markers_3d.get_children():
+		child.queue_free()
+
+	if (
+		mission_objective_3d == "crown"
+		and crown_carrier_id_3d.is_empty()
+		and map_root.is_cell_valid(crown_cell_3d)
+	):
+		_add_objective_marker_3d(
+			crown_cell_3d,
+			"♛ COURONNE",
+			Color(1.0, 0.80, 0.28, 1.0)
+		)
+
+	for bonus_cell: Vector2i in bonus_cells_3d:
+		_add_objective_marker_3d(
+			bonus_cell,
+			"VINYLE",
+			Color(0.76, 0.58, 1.0, 1.0)
+		)
+
+	if not crown_carrier_id_3d.is_empty():
+		for exit_cell: Vector2i in extraction_cells_3d:
+			_add_objective_marker_3d(
+				exit_cell,
+				"SORTIE",
+				Color(0.46, 0.94, 0.62, 1.0)
+			)
+
+
+func _add_objective_marker_3d(
+	cell_value: Vector2i,
+	text_value: String,
+	color: Color
+) -> void:
+	if (
+		_objective_markers_3d == null
+		or map_root == null
+		or not map_root.is_cell_valid(cell_value)
+	):
+		return
+
+	var label: Label3D = Label3D.new()
+	label.text = text_value
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.font_size = 22
+	label.outline_size = 7
+	label.modulate = color
+	label.position = (
+		map_root.cell_top_local(cell_value)
+		+ Vector3(0.0, 0.76, 0.0)
+	)
+	_objective_markers_3d.add_child(label)
+
+	var ring: MeshInstance3D = MeshInstance3D.new()
+	var mesh: CylinderMesh = CylinderMesh.new()
+	mesh.top_radius = map_root.tile_size * 0.26
+	mesh.bottom_radius = map_root.tile_size * 0.26
+	mesh.height = 0.025
+	ring.mesh = mesh
+	ring.position = (
+		map_root.cell_top_local(cell_value)
+		+ Vector3(0.0, 0.058, 0.0)
+	)
+
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = Color(
+		color.r,
+		color.g,
+		color.b,
+		0.20
+	)
+	material.emission_enabled = true
+	material.emission = Color(color.r, color.g, color.b, 1.0)
+	material.emission_energy_multiplier = 0.32
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring.material_override = material
+	_objective_markers_3d.add_child(ring)
+
+
+func _ensure_cinematic_player_3d() -> void:
+	if _cinematic_player_3d != null and is_instance_valid(_cinematic_player_3d):
+		return
+
+	_cinematic_player_3d = get_node_or_null("CinematicPlayer3D") as SporeCinematicPlayer3D
+	if _cinematic_player_3d == null:
+		var instance: Node = CinematicPlayerScene.instantiate()
+		if not (instance is SporeCinematicPlayer3D):
+			return
+		_cinematic_player_3d = instance as SporeCinematicPlayer3D
+		add_child(_cinematic_player_3d)
+
+	var root: Control = null
+	if _ui_layer != null:
+		root = _ui_layer.get_node_or_null("Root") as Control
+	if root != null:
+		_cinematic_player_3d.configure(self, root)
+
+
+func _play_mission_intro_3d() -> void:
+	_ensure_cinematic_player_3d()
+	var mission: Resource = MissionCatalog.definition(mission_index)
+	var cinematic_id: String = String(mission.get("intro_cinematic_id")) if mission != null else ""
+	if _cinematic_player_3d != null and not cinematic_id.is_empty():
+		player_busy = true
+		await _cinematic_player_3d.play(cinematic_id)
+		player_busy = false
+	_start_next_activation()
+
+
+func _update_cinematic_end_flow_3d() -> void:
+	if not battle_finished or _cinematic_end_started:
+		return
+	_cinematic_end_started = true
+	call_deferred("_play_mission_end_cinematic_3d", _cinematic_victory_state_3d())
+
+
+func _cinematic_victory_state_3d() -> bool:
+	if has_method("_mission_result_3d"):
+		var mission_result: int = int(call("_mission_result_3d"))
+		if mission_result != 0:
+			return mission_result > 0
+	var living_players: int = 0
+	var living_enemies: int = 0
+	for actor: SporeUnitActor3D in player_actors:
+		if actor != null and actor.alive:
+			living_players += 1
+	for actor: SporeUnitActor3D in enemy_actors:
+		if actor != null and actor.alive:
+			living_enemies += 1
+	if living_players <= 0:
+		return false
+	return living_enemies <= 0 or battle_finished
+
+
+func _play_mission_end_cinematic_3d(victory: bool) -> void:
+	_ensure_cinematic_player_3d()
+	var mission: Resource = MissionCatalog.definition(mission_index)
+	var cinematic_id: String = ""
+	if mission != null:
+		cinematic_id = String(
+			mission.get("victory_cinematic_id")
+			if victory
+			else mission.get("defeat_cinematic_id")
+		)
+	player_busy = true
+	enemy_busy = false
+	if _cinematic_player_3d != null and not cinematic_id.is_empty():
+		await _cinematic_player_3d.play(cinematic_id)
+	player_busy = false
+	if has_method("_show_battle_result"):
+		call("_show_battle_result", victory)
+
+
+func cinematic_3d_unit_team(unit_id: String) -> String:
+	var actor: SporeUnitActor3D = _actor_by_unit_id(unit_id)
+	return actor.team if actor != null else ""
+
+
+func cinematic_3d_focus_cell(cell_value: Vector2i, zoom: float, duration: float) -> void:
+	if map_root == null or not map_root.is_cell_valid(cell_value):
+		return
+	_begin_cinematic_camera_override_3d()
+	var local_position: Vector3 = map_root.cell_top_local(cell_value)
+	_camera_focus_target = Vector3(local_position.x, 0.0, local_position.z)
+	_camera_target_distance = clampf(_cinematic_camera_saved_distance / maxf(0.25, zoom), 6.0, 22.0)
+
+
+func cinematic_3d_focus_unit(unit_id: String, zoom: float, duration: float) -> void:
+	var actor: SporeUnitActor3D = _actor_by_unit_id(unit_id)
+	if actor == null:
+		return
+	_begin_cinematic_camera_override_3d()
+	_camera_focus_target = Vector3(actor.position.x, 0.0, actor.position.z)
+	_camera_target_distance = clampf(_cinematic_camera_saved_distance / maxf(0.25, zoom), 6.0, 22.0)
+
+
+func cinematic_3d_zoom(zoom: float, duration: float) -> void:
+	_begin_cinematic_camera_override_3d()
+	_camera_target_distance = clampf(_cinematic_camera_saved_distance / maxf(0.25, zoom), 6.0, 22.0)
+
+
+func cinematic_3d_reset_camera(duration: float) -> void:
+	if not _cinematic_camera_active:
+		return
+	_camera_focus_target = _cinematic_camera_saved_focus
+	_camera_target_distance = _cinematic_camera_saved_distance
+
+
+func cinematic_3d_release_camera_override() -> void:
+	_cinematic_camera_active = false
+
+
+func cinematic_3d_camera_shake(intensity: float) -> void:
+	_camera_shake_strength = maxf(_camera_shake_strength, clampf(intensity * 0.025, 0.04, 0.28))
+
+
+func cinematic_3d_execute_action(action: Resource) -> void:
+	if action == null:
+		return
+	var action_type: String = String(action.get("action_type"))
+	match action_type:
+		"message":
+			_log("ÉVÉNEMENT : %s" % String(action.get("message")))
+		"set_objective_text":
+			_log("OBJECTIF : %s" % String(action.get("message")))
+		"set_phase":
+			_log("PHASE : %s" % String(action.get("message")))
+		_:
+			pass
+
+
+func _begin_cinematic_camera_override_3d() -> void:
+	if _cinematic_camera_active:
+		return
+	_cinematic_camera_active = true
+	_cinematic_camera_saved_focus = _camera_focus_target
+	_cinematic_camera_saved_distance = _camera_target_distance
+
+
 func _build_turn_order() -> void:
 	turn_order.clear()
 	for actor: SporeUnitActor3D in player_actors:
@@ -818,6 +1753,7 @@ func _finalize_actor_timing(actor: SporeUnitActor3D) -> void:
 	activation_count_in_round += 1
 	activated_this_round[actor.unit_id] = true
 	if _all_alive_actors_activated_this_round():
+		_evaluate_mission_triggers_3d("round_end", null)
 		activation_count_in_round = 0
 		activated_this_round.clear()
 		round_number += 1
@@ -904,10 +1840,115 @@ func _cancel_cast_for_command_3d(actor: SporeUnitActor3D, command_name: String) 
 	actor.refresh_mechanics_label()
 	if not skill_id.is_empty():
 		_log("%s annule %s en choisissant %s." % [actor.display_name, SkillCatalog.display_name(skill_id), command_name])
-		_show_floating_text(actor.position + Vector3(0.0, 1.30, 0.0), "CAST ANNULÉ", Color(1.0, 0.60, 0.34, 1.0))
+		_show_floating_text(actor.position + Vector3(0.0, 1.30, 0.0), "PRÉPARATION ANNULÉE", Color(1.0, 0.60, 0.34, 1.0))
+
+
+func _show_turn_transition(actor: SporeUnitActor3D) -> void:
+	if actor == null or _ui_layer == null:
+		return
+
+	var root: Control = _ui_layer.get_node_or_null("Root") as Control
+	if root == null:
+		return
+
+	var previous: Node = root.get_node_or_null("TurnTransition")
+	if previous != null:
+		previous.queue_free()
+
+	var panel: Panel = Panel.new()
+	panel.name = "TurnTransition"
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.size = Vector2(390.0, 62.0)
+
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	panel.position = Vector2(
+		(viewport_size.x - panel.size.x) * 0.5,
+		26.0
+	)
+	panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
+
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.045, 0.060, 0.085, 0.94)
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+
+	if actor.team == "player":
+		style.border_color = Color(0.36, 0.82, 1.0, 0.95)
+	else:
+		style.border_color = Color(1.0, 0.42, 0.38, 0.95)
+
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+
+	panel.add_theme_stylebox_override("panel", style)
+	root.add_child(panel)
+
+	var label: Label = Label.new()
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 22)
+
+	if actor.team == "player":
+		label.text = "À TOI  •  %s" % actor.display_name
+		label.add_theme_color_override(
+			"font_color",
+			Color(0.72, 0.91, 1.0, 1.0)
+		)
+	else:
+		label.text = "ENNEMI  •  %s" % actor.display_name
+		label.add_theme_color_override(
+			"font_color",
+			Color(1.0, 0.70, 0.64, 1.0)
+		)
+
+	panel.add_child(label)
+
+	var start_position: Vector2 = panel.position - Vector2(0.0, 12.0)
+	var shown_position: Vector2 = panel.position
+	panel.position = start_position
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(panel, "position", shown_position, 0.22)
+	tween.tween_property(panel, "modulate", Color.WHITE, 0.18)
+	tween.set_parallel(false)
+	tween.tween_interval(0.48)
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.tween_property(
+		panel,
+		"position",
+		shown_position + Vector2(0.0, -8.0),
+		0.20
+	)
+	tween.tween_property(
+		panel,
+		"modulate",
+		Color(1.0, 1.0, 1.0, 0.0),
+		0.20
+	)
+	tween.set_parallel(false)
+	tween.tween_callback(Callable(panel, "queue_free"))
+
+	_show_floating_text(
+		actor.position + Vector3(0.0, 1.52, 0.0),
+		"À TOI" if actor.team == "player" else "TOUR ENNEMI",
+		Color(0.45, 0.86, 1.0, 1.0)
+		if actor.team == "player"
+		else Color(1.0, 0.48, 0.42, 1.0)
+	)
 
 
 func _start_next_activation() -> void:
+	_clear_enemy_intent_preview()
 	if battle_finished:
 		return
 	if _check_battle_end():
@@ -918,6 +1959,7 @@ func _start_next_activation() -> void:
 		return
 	if active_actor != null:
 		_process_persistent_zones_for_actor(active_actor, "activation_end")
+		_apply_terrain_hazard_end_3d(active_actor)
 		if active_actor.alive:
 			_process_status_phase(active_actor, "activation_end")
 		var expired_statuses: PackedStringArray = active_actor.finish_status_activation()
@@ -925,6 +1967,11 @@ func _start_next_activation() -> void:
 			_log("%s : fin de %s." % [active_actor.display_name, ", ".join(expired_statuses)])
 		active_actor.end_activation()
 		_finalize_actor_timing(active_actor)
+		if _mission_event_pending_3d():
+			active_actor = null
+			selected_actor = null
+			call_deferred("_resume_after_mission_event_3d")
+			return
 		if _check_battle_end():
 			return
 	_clear_overlays()
@@ -952,13 +1999,19 @@ func _start_next_activation() -> void:
 		active_actor.moved_this_activation = true
 	if active_actor.status_prevents_action():
 		active_actor.acted_this_activation = true
-	_log("Tour de %s • CT %d • VIT %d." % [active_actor.display_name, active_actor.ct, active_actor.effective_speed()])
+	_log("Tour de %s • Vitesse %d." % [active_actor.display_name, active_actor.effective_speed()])
+	_show_action_banner(
+		active_actor.display_name,
+		"À VOUS" if active_actor.team == "player" else "TOUR ENNEMI",
+		"TOUR"
+	)
 	if active_actor.is_casting():
-		_log("CHARGING : %s conserve %s en se déplaçant ou en WAIT ; une nouvelle Action annule le cast." % [active_actor.display_name, SkillCatalog.display_name(String(active_actor.casting.get("skill_id", "")))])
+		_log("Préparation : %s conserve %s en se déplaçant ou en attendant ; une nouvelle action annule la préparation." % [active_actor.display_name, SkillCatalog.display_name(String(active_actor.casting.get("skill_id", "")))])
 	if active_actor.moved_this_activation and active_actor.acted_this_activation:
 		_log("%s ne peut pas agir pendant cette activation." % active_actor.display_name)
 		call_deferred("_start_next_activation")
 		return
+	_show_turn_transition(active_actor)
 	_focus_camera_on_active(false)
 	if active_actor.team == "player":
 		_refresh_player_overlays()
@@ -969,7 +2022,17 @@ func _start_next_activation() -> void:
 
 
 func _player_can_input() -> bool:
-	return not battle_finished and not enemy_busy and not player_busy and active_actor != null and active_actor.alive and active_actor.team == "player"
+	if _mission_event_pending_3d():
+		return false
+	return (
+		not battle_finished
+		and not enemy_busy
+		and not player_busy
+		and not _facing_selection_active
+		and active_actor != null
+		and active_actor.alive
+		and active_actor.team == "player"
+	)
 
 
 func _handle_player_click(cell: Vector2i) -> void:
@@ -1008,15 +2071,20 @@ func _player_move_to(cell: Vector2i) -> void:
 		var chance: int = CombatMechanics.teleport_success_chance(distance, active_actor.effective_move_range())
 		if battle_rng.randi_range(1, 100) <= chance:
 			active_actor.place_on_map(map_root, cell)
+			_play_terrain_feedback_3d(active_actor, start_cell, cell)
 			_show_floating_text(active_actor.position + Vector3(0.0, 1.2, 0.0), "TELEPORT", Color(0.70, 0.55, 1.0, 1.0))
 		else:
 			active_actor.place_on_map(map_root, start_cell)
 			_show_floating_text(active_actor.position + Vector3(0.0, 1.2, 0.0), "ÉCHEC %d%%" % chance, Color(1.0, 0.55, 0.40, 1.0))
 			_log("%s rate sa téléportation (%d%%)." % [active_actor.display_name, chance])
 	else:
-		await _move_actor_along_path(active_actor, path, 0.13)
+		await _move_actor_along_path(active_actor, path, 0.18)
 	if active_actor.alive:
 		actors_by_cell[active_actor.cell] = active_actor
+		_handle_mission_cell_entry_3d(active_actor)
+		if _check_battle_end():
+			player_busy = false
+			return
 	active_actor.moved_this_activation = true
 	if active_actor.movement_ability == "move_mp_up" and active_actor.cell != start_cell:
 		var restored_mp: int = maxi(1, int(ceil(float(active_actor.max_focus) / 10.0)))
@@ -1026,7 +2094,7 @@ func _player_move_to(cell: Vector2i) -> void:
 		_check_battle_end()
 		call_deferred("_start_next_activation")
 		return
-	_log("%s se déplace en %d,%d (%d pas)." % [active_actor.display_name, active_actor.cell.x, active_actor.cell.y, path.size() - 1])
+	_log("%s se déplace de %d case(s)." % [active_actor.display_name, path.size() - 1])
 	if not active_actor.acted_this_activation:
 		input_mode = MODE_ATTACK
 	selected_skill_id = ""
@@ -1037,27 +2105,119 @@ func _player_move_to(cell: Vector2i) -> void:
 	_finish_activation_if_complete()
 
 
+func _basic_attack_vfx_kind(actor: SporeUnitActor3D) -> String:
+	if actor == null:
+		return ""
+	match actor.weapon_family:
+		"ranged":
+			return "bullet"
+		"spear":
+			return "slash"
+		"focus":
+			return "beam"
+		"melee", "unarmed":
+			return "slash"
+	return ""
+
+
+func _basic_attack_anticipation(actor: SporeUnitActor3D) -> float:
+	if actor == null:
+		return 0.10
+	match actor.weapon_family:
+		"ranged":
+			return 0.14
+		"spear":
+			return 0.13
+		"focus":
+			return 0.18
+	return 0.11
+
+
+func _basic_attack_camera_duration(actor: SporeUnitActor3D) -> float:
+	if actor == null:
+		return 0.95
+	match actor.weapon_family:
+		"ranged":
+			return 1.12
+		"spear":
+			return 1.00
+		"focus":
+			return 1.18
+	return 0.98
+
+
+func _weapon_family_display_name(family: String) -> String:
+	match family:
+		"ranged":
+			return "Tir"
+		"spear":
+			return "Lance"
+		"focus":
+			return "Focaliseur"
+		"melee":
+			return "Mêlée"
+		"unarmed":
+			return "Corps à corps"
+	return family.capitalize() if not family.is_empty() else "Arme inconnue"
+
+
 func _player_attack(target: SporeUnitActor3D) -> void:
 	if active_actor == null or active_actor.acted_this_activation or target == null or not target.alive:
 		return
+
 	_cancel_cast_for_command_3d(active_actor, "Attack")
 	player_busy = true
 	active_actor.acted_this_activation = true
-	_begin_action_camera(active_actor.global_position, target.global_position, 0.72, action_camera_zoom_in)
+	_show_action_banner(
+		active_actor.display_name,
+		_weapon_family_display_name(active_actor.weapon_family),
+		"ATTAQUE"
+	)
+
+	var camera_duration: float = _basic_attack_camera_duration(active_actor)
+	var camera_zoom: float = 0.62 if active_actor.weapon_family == "ranged" else 0.78
+	_begin_action_camera(
+		active_actor.global_position,
+		target.global_position,
+		camera_duration,
+		camera_zoom
+	)
+
 	active_actor.play_attack(target.position)
-	await _play_action_vfx_to_impact(active_actor.basic_attack_vfx_id, active_actor.global_position + Vector3(0.0, 0.72, 0.0), target.global_position + Vector3(0.0, 0.64, 0.0), true, target, Vector3(0.0, 0.64, 0.0))
+
+	var anticipation: float = _basic_attack_anticipation(active_actor)
+	if anticipation > 0.0:
+		await get_tree().create_timer(anticipation).timeout
+
+	var vfx_kind: String = _basic_attack_vfx_kind(active_actor)
+	await _play_action_vfx_to_impact(
+		active_actor.basic_attack_vfx_id,
+		active_actor.global_position + Vector3(0.0, 0.72, 0.0),
+		target.global_position + Vector3(0.0, 0.64, 0.0),
+		false,
+		target,
+		Vector3(0.0, 0.64, 0.0),
+		vfx_kind
+	)
+
 	_resolve_attack(active_actor, target)
 	_camera_impact()
+
 	if vfx_impact_pause > 0.0:
 		await get_tree().create_timer(vfx_impact_pause).timeout
-	await get_tree().create_timer(0.08).timeout
+
+	# A short readable hold after impact makes the result register visually.
+	await get_tree().create_timer(0.14).timeout
 	player_busy = false
+
 	if not active_actor.alive:
 		if not _check_battle_end():
 			call_deferred("_start_next_activation")
 		return
+
 	if not active_actor.moved_this_activation and active_actor.alive:
 		input_mode = MODE_MOVE
+
 	selected_skill_id = ""
 	skill_preview_cells.clear()
 	preview_path_cells.clear()
@@ -1145,7 +2305,7 @@ func _apply_damage_with_reactions(
 	var applied: int = recipient.take_damage(mitigated_damage)
 	_interrupt_cast_3d(recipient, applied)
 	recipient.remove_statuses_on_damage_taken()
-	_show_floating_text(recipient.position + Vector3(0.0, 1.15, 0.0), "-%d" % applied, Color(1.0, 0.42, 0.36, 1.0))
+	_show_floating_text(recipient.position + Vector3(0.0, 1.15, 0.0), "-%d PV" % applied, Color(1.0, 0.42, 0.36, 1.0))
 	if not recipient.alive:
 		_handle_actor_ko(recipient, source_label)
 	else:
@@ -1250,17 +2410,26 @@ func _handle_actor_ko(actor: SporeUnitActor3D, source_label: String = "") -> voi
 func _show_floating_text(world_position: Vector3, text_value: String, color: Color) -> void:
 	var label: Label3D = Label3D.new()
 	label.text = text_value
-	label.font_size = 36
-	label.outline_size = 8
+	label.font_size = 48
+	label.outline_size = 11
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	label.modulate = color
 	label.position = world_position
+	label.scale = Vector3(0.82, 0.82, 0.82)
 	_actor_holder.add_child(label)
+
 	var tween: Tween = create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(label, "position", world_position + Vector3(0.0, 0.48, 0.0), 0.55)
-	tween.tween_property(label, "modulate", Color(color.r, color.g, color.b, 0.0), 0.55)
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "position", world_position + Vector3(0.0, 0.70, 0.0), 0.82)
+	tween.tween_property(label, "scale", Vector3(1.10, 1.10, 1.10), 0.20)
+	tween.set_parallel(false)
+	tween.tween_interval(0.22)
+	tween.set_parallel(true)
+	tween.tween_property(label, "modulate", Color(color.r, color.g, color.b, 0.0), 0.28)
+	tween.tween_property(label, "scale", Vector3(0.92, 0.92, 0.92), 0.28)
 	tween.set_parallel(false)
 	tween.tween_callback(Callable(label, "queue_free"))
 
@@ -1285,6 +2454,7 @@ func _on_move_mode_pressed() -> void:
 	input_mode = MODE_MOVE
 	preview_path_cells.clear()
 	_refresh_player_overlays()
+	_log("MOVE — clique une case verte.")
 	_update_ui_text()
 
 
@@ -1295,6 +2465,7 @@ func _on_attack_mode_pressed() -> void:
 	input_mode = MODE_ATTACK
 	preview_path_cells.clear()
 	_refresh_player_overlays()
+	_log("ATTAQUE — clique un ennemi sur une case rouge.")
 	_update_ui_text()
 
 
@@ -1331,24 +2502,184 @@ func _cancel_skill_mode() -> void:
 	_update_ui_text()
 
 
-func _on_face_pressed(turns: int = 1) -> void:
-	_clear_pending_action()
-	if not _player_can_input() or active_actor == null:
+func _open_facing_selector() -> void:
+	if active_actor == null or battle_finished or active_actor.team != "player":
 		return
-	active_actor.rotate_facing_quarter(turns)
-	_log("%s s'oriente vers %s." % [active_actor.display_name, active_actor.facing_name()])
+	if _ui_layer == null:
+		return
+
+	_clear_pending_action()
+	selected_skill_id = ""
+	skill_preview_cells.clear()
+	preview_path_cells.clear()
+	_refresh_player_overlays()
+
+	var root: Control = _ui_layer.get_node_or_null("Root") as Control
+	if root == null:
+		return
+
+	if _facing_panel == null or not is_instance_valid(_facing_panel):
+		_facing_panel = Panel.new()
+		_facing_panel.name = "FacingSelector"
+		_facing_panel.size = Vector2(430.0, 190.0)
+		_facing_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+
+		var style: StyleBoxFlat = StyleBoxFlat.new()
+		style.bg_color = Color(0.045, 0.060, 0.085, 0.97)
+		style.border_color = Color(1.0, 0.78, 0.30, 0.96)
+		style.border_width_left = 2
+		style.border_width_top = 2
+		style.border_width_right = 2
+		style.border_width_bottom = 2
+		style.corner_radius_top_left = 14
+		style.corner_radius_top_right = 14
+		style.corner_radius_bottom_left = 14
+		style.corner_radius_bottom_right = 14
+		_facing_panel.add_theme_stylebox_override("panel", style)
+		root.add_child(_facing_panel)
+
+		var title: Label = Label.new()
+		title.name = "Title"
+		title.position = Vector2(18.0, 12.0)
+		title.size = Vector2(394.0, 26.0)
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title.add_theme_font_size_override("font_size", 17)
+		title.add_theme_color_override("font_color", Color(1.0, 0.84, 0.40, 1.0))
+		title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_facing_panel.add_child(title)
+
+		var help: Label = Label.new()
+		help.position = Vector2(18.0, 41.0)
+		help.size = Vector2(394.0, 34.0)
+		help.text = "Choisis la direction regardée. Le dos et les flancs sont plus vulnérables."
+		help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		help.add_theme_font_size_override("font_size", 11)
+		help.add_theme_color_override("font_color", Color(0.82, 0.87, 0.91, 1.0))
+		help.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_facing_panel.add_child(help)
+
+		var north: Button = Button.new()
+		north.text = "↑ NORD"
+		north.position = Vector2(164.0, 78.0)
+		north.size = Vector2(102.0, 32.0)
+		north.pressed.connect(_choose_facing.bind(Vector2i.UP))
+		_facing_panel.add_child(north)
+
+		var west: Button = Button.new()
+		west.text = "← OUEST"
+		west.position = Vector2(54.0, 112.0)
+		west.size = Vector2(102.0, 32.0)
+		west.pressed.connect(_choose_facing.bind(Vector2i.LEFT))
+		_facing_panel.add_child(west)
+
+		var south: Button = Button.new()
+		south.text = "↓ SUD"
+		south.position = Vector2(164.0, 112.0)
+		south.size = Vector2(102.0, 32.0)
+		south.pressed.connect(_choose_facing.bind(Vector2i.DOWN))
+		_facing_panel.add_child(south)
+
+		var east: Button = Button.new()
+		east.text = "EST →"
+		east.position = Vector2(274.0, 112.0)
+		east.size = Vector2(102.0, 32.0)
+		east.pressed.connect(_choose_facing.bind(Vector2i.RIGHT))
+		_facing_panel.add_child(east)
+
+		var cancel: Button = Button.new()
+		cancel.text = "RETOUR"
+		cancel.position = Vector2(54.0, 151.0)
+		cancel.size = Vector2(140.0, 30.0)
+		cancel.pressed.connect(_close_facing_selector)
+		_facing_panel.add_child(cancel)
+
+		var confirm: Button = Button.new()
+		confirm.text = "TERMINER LE TOUR"
+		confirm.position = Vector2(202.0, 151.0)
+		confirm.size = Vector2(174.0, 30.0)
+		confirm.pressed.connect(_confirm_facing_and_end)
+		_facing_panel.add_child(confirm)
+
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	_facing_panel.position = Vector2(
+		(viewport_size.x - _facing_panel.size.x) * 0.5,
+		viewport_size.y - _facing_panel.size.y - 24.0
+	)
+	_facing_panel.visible = true
+	_facing_selection_active = true
+	player_busy = true
+	_update_facing_selector_title()
+
+
+func _close_facing_selector() -> void:
+	if _facing_panel != null and is_instance_valid(_facing_panel):
+		_facing_panel.visible = false
+	_facing_selection_active = false
+	if not battle_finished:
+		player_busy = false
+	_refresh_player_overlays()
 	_update_ui_text()
 
 
+func _choose_facing(direction: Vector2i) -> void:
+	if not _facing_selection_active or active_actor == null:
+		return
+	active_actor.set_facing(direction)
+	_update_facing_selector_title()
+	_update_ui_text()
+
+
+func _update_facing_selector_title() -> void:
+	if _facing_panel == null or not is_instance_valid(_facing_panel):
+		return
+	var title: Label = _facing_panel.get_node_or_null("Title") as Label
+	if title == null or active_actor == null:
+		return
+	title.text = "ORIENTATION : %s" % active_actor.facing_name().to_upper()
+
+
+func _confirm_facing_and_end() -> void:
+	if not _facing_selection_active or active_actor == null:
+		return
+
+	if _facing_panel != null and is_instance_valid(_facing_panel):
+		_facing_panel.visible = false
+
+	_facing_selection_active = false
+	player_busy = false
+
+	active_actor.waited_this_activation = (
+		not active_actor.moved_this_activation
+		and not active_actor.acted_this_activation
+	)
+
+	var wait_note: String = ""
+	if active_actor.is_casting() and not active_actor.acted_this_activation:
+		wait_note = " • préparation conservée"
+
+	_log(
+		"%s termine son tour • orientation %s%s."
+		% [active_actor.display_name, active_actor.facing_name(), wait_note]
+	)
+	_start_next_activation()
+
+
+func _on_face_pressed(turns: int = 1) -> void:
+	if _facing_selection_active:
+		return
+	if not _player_can_input() or active_actor == null:
+		return
+	_open_facing_selector()
+
+
 func _on_end_activation_pressed() -> void:
-	_clear_pending_action()
+	if _facing_selection_active:
+		_confirm_facing_and_end()
+		return
 	if not _player_can_input():
 		return
-	active_actor.waited_this_activation = not active_actor.moved_this_activation and not active_actor.acted_this_activation
-	var ct_cost: int = CombatMechanics.action_ct_cost(active_actor.moved_this_activation, active_actor.acted_this_activation, false)
-	var wait_note: String = " • cast conservé" if active_actor.is_casting() and not active_actor.acted_this_activation else ""
-	_log("%s termine son activation • face %s • coût CT %d%s." % [active_actor.display_name, active_actor.facing_name(), ct_cost, wait_note])
-	_start_next_activation()
+	_open_facing_selector()
 
 
 func _refresh_player_overlays() -> void:
@@ -1394,6 +2725,11 @@ func _compute_reachable_cells(actor: SporeUnitActor3D) -> void:
 		for obstacle_var: Variant in obstacle_cells_value:
 			if obstacle_var is Vector2i:
 				blocked[obstacle_var] = true
+	for y_door: int in range(map_root.grid_height):
+		for x_door: int in range(map_root.grid_width):
+			var door_cell: Vector2i = Vector2i(x_door, y_door)
+			if _closed_door_at_3d(door_cell):
+				blocked[door_cell] = true
 	var frontier: Array[Vector2i] = []
 	frontier.append(actor.cell)
 	var cost_by_cell: Dictionary = {actor.cell: 0}
@@ -1591,6 +2927,270 @@ func _refresh_skill_preview() -> void:
 	_rebuild_highlights()
 
 
+func _show_action_banner(actor_name: String, action_name: String, category: String = "") -> void:
+	if _ui_layer == null:
+		return
+
+	var root: Control = _ui_layer.get_node_or_null("Root") as Control
+	if root == null:
+		return
+
+	if _action_banner_panel == null or not is_instance_valid(_action_banner_panel):
+		_action_banner_panel = Panel.new()
+		_action_banner_panel.name = "ActionBanner"
+		_action_banner_panel.size = Vector2(420.0, 64.0)
+		_action_banner_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		var style: StyleBoxFlat = StyleBoxFlat.new()
+		style.bg_color = Color(0.04, 0.055, 0.08, 0.94)
+		style.border_color = Color(1.0, 0.78, 0.32, 0.90)
+		style.border_width_left = 1
+		style.border_width_top = 1
+		style.border_width_right = 1
+		style.border_width_bottom = 1
+		style.corner_radius_top_left = 12
+		style.corner_radius_top_right = 12
+		style.corner_radius_bottom_left = 12
+		style.corner_radius_bottom_right = 12
+		_action_banner_panel.add_theme_stylebox_override("panel", style)
+		root.add_child(_action_banner_panel)
+
+		_action_banner_title = _make_label(
+			_action_banner_panel,
+			Vector2(14.0, 7.0),
+			Vector2(392.0, 27.0),
+			18,
+			Color(1.0, 0.84, 0.42, 1.0)
+		)
+		_action_banner_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+		_action_banner_subtitle = _make_label(
+			_action_banner_panel,
+			Vector2(14.0, 34.0),
+			Vector2(392.0, 20.0),
+			11,
+			Color(0.82, 0.88, 0.94, 1.0)
+		)
+		_action_banner_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	_action_banner_panel.position = Vector2(
+		(viewport_size.x - _action_banner_panel.size.x) * 0.5,
+		14.0
+	)
+
+	if _action_banner_tween != null and _action_banner_tween.is_valid():
+		_action_banner_tween.kill()
+
+	_action_banner_panel.visible = true
+	_action_banner_panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	_action_banner_panel.scale = Vector2(0.96, 0.96)
+	_action_banner_panel.pivot_offset = _action_banner_panel.size * 0.5
+
+	_action_banner_title.text = action_name
+	_action_banner_subtitle.text = (
+		actor_name
+		if category.is_empty()
+		else "%s  •  %s" % [actor_name, category]
+	)
+
+	_action_banner_tween = create_tween()
+	_action_banner_tween.set_parallel(true)
+	_action_banner_tween.tween_property(
+		_action_banner_panel,
+		"modulate",
+		Color.WHITE,
+		0.12
+	)
+	_action_banner_tween.tween_property(
+		_action_banner_panel,
+		"scale",
+		Vector2.ONE,
+		0.14
+	)
+	_action_banner_tween.set_parallel(false)
+	_action_banner_tween.tween_interval(0.68)
+	_action_banner_tween.tween_property(
+		_action_banner_panel,
+		"modulate",
+		Color(1.0, 1.0, 1.0, 0.0),
+		0.20
+	)
+	_action_banner_tween.tween_callback(
+		func() -> void:
+			if _action_banner_panel != null:
+				_action_banner_panel.visible = false
+	)
+
+
+func _spawn_feedback_burst(actor: SporeUnitActor3D, color: Color) -> void:
+	if actor == null or _vfx_holder == null:
+		return
+
+	var root: Node3D = Node3D.new()
+	root.name = "FeedbackBurst"
+	_vfx_holder.add_child(root)
+	root.global_position = actor.global_position + Vector3(0.0, 0.62, 0.0)
+
+	var particle_count: int = 8
+	for index: int in range(particle_count):
+		var orb: MeshInstance3D = MeshInstance3D.new()
+		var mesh: SphereMesh = SphereMesh.new()
+		mesh.radius = 0.045
+		mesh.height = 0.09
+		orb.mesh = mesh
+
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.albedo_color = color
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.emission_enabled = true
+		material.emission = Color(color.r, color.g, color.b, 1.0)
+		material.emission_energy_multiplier = 1.3
+		orb.material_override = material
+
+		var angle: float = TAU * float(index) / float(particle_count)
+		var direction: Vector3 = Vector3(
+			cos(angle),
+			0.45 + 0.10 * float(index % 3),
+			sin(angle)
+		).normalized()
+
+		root.add_child(orb)
+		orb.position = Vector3.ZERO
+
+		var tween: Tween = create_tween()
+		tween.set_parallel(true)
+		tween.set_trans(Tween.TRANS_SINE)
+		tween.tween_property(
+			orb,
+			"position",
+			direction * (0.34 + 0.06 * float(index % 2)),
+			0.36
+		)
+		tween.tween_property(
+			orb,
+			"scale",
+			Vector3(0.12, 0.12, 0.12),
+			0.36
+		)
+		tween.tween_property(
+			material,
+			"albedo_color",
+			Color(color.r, color.g, color.b, 0.0),
+			0.36
+		)
+
+	var cleanup: Tween = create_tween()
+	cleanup.tween_interval(0.40)
+	cleanup.tween_callback(Callable(root, "queue_free"))
+
+
+func _play_victory_celebration() -> void:
+	var living: Array[SporeUnitActor3D] = []
+	var focus_sum: Vector3 = Vector3.ZERO
+
+	for actor: SporeUnitActor3D in player_actors:
+		if actor == null or not actor.alive:
+			continue
+		living.append(actor)
+		focus_sum += actor.position
+
+	if living.is_empty():
+		return
+
+	var center: Vector3 = focus_sum / float(living.size())
+	camera_follow_active = false
+	_camera_focus_target = Vector3(center.x, 0.0, center.z)
+	_camera_target_distance = minf(22.0, maxf(_camera_target_distance, 14.0))
+
+	for index: int in range(living.size()):
+		var actor: SporeUnitActor3D = living[index]
+		var delay: float = 0.08 * float(index)
+		var timer: SceneTreeTimer = get_tree().create_timer(delay)
+		timer.timeout.connect(
+			func() -> void:
+				if actor != null and is_instance_valid(actor):
+					actor.play_victory()
+		)
+
+	_spawn_victory_confetti(center)
+
+
+func _spawn_victory_confetti(center: Vector3) -> void:
+	if _vfx_holder == null:
+		return
+
+	var colors: Array[Color] = [
+		Color(1.0, 0.78, 0.24, 1.0),
+		Color(0.40, 0.86, 1.0, 1.0),
+		Color(0.56, 0.94, 0.60, 1.0),
+		Color(0.92, 0.54, 1.0, 1.0)
+	]
+
+	for index: int in range(18):
+		var piece: MeshInstance3D = MeshInstance3D.new()
+		var mesh: BoxMesh = BoxMesh.new()
+		mesh.size = Vector3(0.07, 0.03, 0.11)
+		piece.mesh = mesh
+
+		var color: Color = colors[index % colors.size()]
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.albedo_color = color
+		material.emission_enabled = true
+		material.emission = color
+		material.emission_energy_multiplier = 0.55
+		piece.material_override = material
+
+		_vfx_holder.add_child(piece)
+
+		var angle: float = TAU * float(index) / 18.0
+		var radius: float = 0.5 + 0.07 * float(index % 5)
+		piece.position = center + Vector3(
+			cos(angle) * radius,
+			1.2 + 0.08 * float(index % 4),
+			sin(angle) * radius
+		)
+
+		piece.rotation = Vector3(
+			0.15 * float(index % 3),
+			angle,
+			0.20 * float(index % 4)
+		)
+
+		var outward: Vector3 = Vector3(
+			cos(angle) * (0.7 + 0.05 * float(index % 4)),
+			1.4 + 0.08 * float(index % 3),
+			sin(angle) * (0.7 + 0.05 * float(index % 4))
+		)
+
+		var tween: Tween = create_tween()
+		tween.set_parallel(true)
+		tween.set_trans(Tween.TRANS_SINE)
+		tween.tween_property(
+			piece,
+			"position",
+			piece.position + outward,
+			0.55
+		)
+		tween.tween_property(
+			piece,
+			"rotation",
+			piece.rotation + Vector3(2.2, 2.8, 1.7),
+			0.55
+		)
+		tween.set_parallel(false)
+		tween.set_trans(Tween.TRANS_QUAD)
+		tween.set_ease(Tween.EASE_IN)
+		tween.tween_property(
+			piece,
+			"position:y",
+			center.y + 0.10,
+			0.55
+		)
+		tween.tween_callback(Callable(piece, "queue_free"))
+
+
 func _player_use_skill(anchor_cell: Vector2i) -> void:
 	if active_actor == null or active_actor.acted_this_activation or selected_skill_id.is_empty():
 		return
@@ -1601,6 +3201,11 @@ func _player_use_skill(anchor_cell: Vector2i) -> void:
 	if skill == null:
 		return
 	if SkillCatalog.cast_time_ticks(selected_skill_id) > 0:
+		_show_action_banner(
+			active_actor.display_name,
+			SkillCatalog.display_name(selected_skill_id),
+			"PRÉPARATION"
+		)
 		active_actor.face_cell(anchor_cell)
 		if _queue_cast_3d(active_actor, selected_skill_id, anchor_cell):
 			selected_skill_id = ""
@@ -1613,6 +3218,7 @@ func _player_use_skill(anchor_cell: Vector2i) -> void:
 		return
 	player_busy = true
 	var skill_name: String = String(skill.get("display_name"))
+	_show_action_banner(active_actor.display_name, skill_name, "COMPÉTENCE")
 	var anchor_global: Vector3 = map_root.to_global(map_root.cell_top_local(anchor_cell))
 	active_actor.face_cell(anchor_cell)
 	_begin_action_camera(active_actor.global_position, anchor_global, 0.86, action_camera_zoom_in + 0.25)
@@ -1620,7 +3226,17 @@ func _player_use_skill(anchor_cell: Vector2i) -> void:
 	await get_tree().create_timer(0.06).timeout
 	var tracked_skill_target: SporeUnitActor3D = actors_by_cell.get(anchor_cell, null) as SporeUnitActor3D
 	var tracked_skill_offset: Vector3 = Vector3(0.0, 0.64, 0.0) if tracked_skill_target != null else Vector3.ZERO
-	await _play_action_vfx_to_impact(String(skill.get("vfx_id")), active_actor.global_position + Vector3(0.0, 0.78, 0.0), anchor_global + Vector3(0.0, 0.18, 0.0), true, tracked_skill_target, tracked_skill_offset)
+	_show_skill_name_banner(active_actor, skill)
+	var primary_vfx_kind: String = _skill_primary_vfx_kind(String(skill.get("id")))
+	await _play_action_vfx_to_impact(
+		String(skill.get("vfx_id")),
+		active_actor.global_position + Vector3(0.0, 0.78, 0.0),
+		anchor_global + Vector3(0.0, 0.18, 0.0),
+		false,
+		tracked_skill_target,
+		tracked_skill_offset,
+		primary_vfx_kind
+	)
 	await _play_skill_area_impacts(skill, active_actor, anchor_cell)
 	_skill_hit_cache.clear()
 	var raw_effects: Variant = skill.get("effects")
@@ -1671,7 +3287,7 @@ func _apply_skill_effect(caster: SporeUnitActor3D, skill: Resource, effect: Reso
 				var restored: int = target.revive(caster.revive_hp_bonus + maxi(0, amount))
 				if restored > 0:
 					actors_by_cell[target.cell] = target
-					_show_floating_text(target.position + Vector3(0.0, 1.25, 0.0), "RELEVÉ +%d" % restored, Color(0.48, 0.90, 0.66, 1.0))
+					_show_floating_text(target.position + Vector3(0.0, 1.25, 0.0), "RELEVÉ +%d PV" % restored, Color(0.48, 0.90, 0.66, 1.0))
 					_log("%s relève %s avec %d PV." % [caster.display_name, target.display_name, restored])
 			"damage":
 				var damage_type: String = String(effect.get("damage_type"))
@@ -1700,7 +3316,8 @@ func _apply_skill_effect(caster: SporeUnitActor3D, skill: Resource, effect: Reso
 			"heal":
 				var healed: int = target.heal(maxi(0, amount))
 				if healed > 0:
-					_show_floating_text(target.position + Vector3(0.0, 1.15, 0.0), "+%d" % healed, Color(0.48, 0.90, 0.66, 1.0))
+					_show_floating_text(target.position + Vector3(0.0, 1.15, 0.0), "+%d PV" % healed, Color(0.48, 0.90, 0.66, 1.0))
+					_spawn_feedback_burst(target, Color(0.48, 0.90, 0.66, 1.0))
 			"status":
 				var status_id: String = String(effect.get("status_id"))
 				var formula_modifier: int = int(skill.get("fft_status_modifier"))
@@ -1708,12 +3325,13 @@ func _apply_skill_effect(caster: SporeUnitActor3D, skill: Resource, effect: Reso
 					var compatibility: String = CombatMechanics.zodiac_compatibility(caster.zodiac_sign, target.zodiac_sign, caster.sex, target.sex)
 					var status_chance: int = CombatMechanics.fft_status_success_chance(caster.effective_magic_power(), formula_modifier, caster.faith, target.faith, compatibility, target.statuses.has("shell"), target.support_ability == "magic_defense_up")
 					if not _roll_hit_3d(status_chance):
-						_show_floating_text(target.position + Vector3(0.0, 1.28, 0.0), "STATUS MISS", Color(0.90, 0.90, 0.95, 1.0))
+						_show_floating_text(target.position + Vector3(0.0, 1.28, 0.0), "RÉSISTE", Color(0.90, 0.90, 0.95, 1.0))
 						continue
 				if target.apply_status(status_id):
 					var status_data: Resource = StatusCatalog.definition(status_id)
 					var status_name: String = String(status_data.get("display_name")) if status_data != null else status_id
 					_show_floating_text(target.position + Vector3(0.0, 1.28, 0.0), status_name, Color(0.78, 0.62, 1.0, 1.0))
+					_spawn_feedback_burst(target, Color(0.78, 0.62, 1.0, 1.0))
 			"guard":
 				target.apply_status("guarded")
 				_show_floating_text(target.position + Vector3(0.0, 1.28, 0.0), "GARDE", Color(0.56, 0.88, 0.68, 1.0))
@@ -1830,7 +3448,478 @@ func _process_status_phase(actor: SporeUnitActor3D, phase: String) -> void:
 		elif event_type == "heal":
 			var healed: int = actor.heal(amount)
 			if healed > 0:
-				_show_floating_text(actor.position + Vector3(0.0, 1.15, 0.0), "+%d" % healed, Color(0.48, 0.90, 0.66, 1.0))
+				_show_floating_text(actor.position + Vector3(0.0, 1.15, 0.0), "+%d PV" % healed, Color(0.48, 0.90, 0.66, 1.0))
+				_spawn_feedback_burst(actor, Color(0.48, 0.90, 0.66, 1.0))
+
+
+func _setup_mission_events_3d() -> void:
+	_hazard_cells_3d.clear()
+	_mission_triggers_3d.clear()
+	_fired_trigger_ids_3d.clear()
+	_trigger_queue_3d.clear()
+	_mission_event_busy_3d = false
+
+	if map_root != null:
+		var environment: Dictionary = map_root.to_environment()
+		var hazards_value: Variant = environment.get("hazards", [])
+		if hazards_value is Array:
+			for value: Variant in hazards_value:
+				if value is Vector2i and not _hazard_cells_3d.has(value):
+					_hazard_cells_3d.append(value)
+
+	var mission: Resource = MissionCatalog.definition(mission_index)
+	if mission != null:
+		var triggers_value: Variant = mission.get("battle_triggers")
+		if triggers_value is Array:
+			for value: Variant in triggers_value:
+				if value is Resource:
+					_mission_triggers_3d.append(value as Resource)
+
+	_rebuild_hazard_visuals_3d()
+
+
+func _mission_event_pending_3d() -> bool:
+	return _mission_event_busy_3d or not _trigger_queue_3d.is_empty()
+
+
+func _wait_for_mission_events_3d() -> void:
+	while _mission_event_pending_3d():
+		await get_tree().process_frame
+
+
+func _start_after_initial_mission_events_3d() -> void:
+	await _wait_for_mission_events_3d()
+	if not battle_finished:
+		_start_next_activation()
+
+
+func _resume_after_mission_event_3d() -> void:
+	await _wait_for_mission_events_3d()
+	if not battle_finished:
+		_start_next_activation()
+
+
+func _evaluate_mission_triggers_3d(
+	event_name: String,
+	event_actor: SporeUnitActor3D = null
+) -> void:
+	if battle_finished:
+		return
+
+	for trigger: Resource in _mission_triggers_3d:
+		if trigger == null or not bool(trigger.get("enabled")):
+			continue
+
+		var trigger_id: String = String(trigger.get("id"))
+		var once: bool = bool(trigger.get("once"))
+		if once and not trigger_id.is_empty() and bool(_fired_trigger_ids_3d.get(trigger_id, false)):
+			continue
+
+		if not _mission_trigger_matches_3d(trigger, event_name, event_actor):
+			continue
+
+		if once and not trigger_id.is_empty():
+			_fired_trigger_ids_3d[trigger_id] = true
+		_trigger_queue_3d.append(trigger)
+
+	if not _trigger_queue_3d.is_empty() and not _mission_event_busy_3d:
+		call_deferred("_run_trigger_queue_3d")
+
+
+func _mission_trigger_matches_3d(
+	trigger: Resource,
+	event_name: String,
+	event_actor: SporeUnitActor3D
+) -> bool:
+	var condition_type: String = String(trigger.get("condition_type"))
+	var condition_value: int = int(trigger.get("condition_value"))
+	var condition_unit_id: String = String(trigger.get("condition_unit_id"))
+	var raw_cell: Variant = trigger.get("condition_cell")
+	var condition_cell: Vector2i = raw_cell if raw_cell is Vector2i else Vector2i(-1, -1)
+
+	match condition_type:
+		"round_start":
+			return event_name == "round_start" and round_number == maxi(1, condition_value)
+		"round_end":
+			return event_name == "round_end" and round_number == maxi(1, condition_value)
+		"enemy_count_at_most":
+			return _event_alive_count_3d("enemy") <= maxi(0, condition_value)
+		"player_count_at_most":
+			return _event_alive_count_3d("player") <= maxi(0, condition_value)
+		"unit_hp_at_most":
+			var hp_actor: SporeUnitActor3D = _actor_by_unit_id(condition_unit_id)
+			return hp_actor != null and hp_actor.alive and hp_actor.hp <= condition_value
+		"unit_defeated":
+			var defeated_actor: SporeUnitActor3D = _actor_by_unit_id(condition_unit_id)
+			return defeated_actor == null or not defeated_actor.alive
+		"player_enters_cell":
+			return event_name == "unit_moved" and event_actor != null and event_actor.team == "player" and event_actor.cell == condition_cell
+		"enemy_enters_cell":
+			return event_name == "unit_moved" and event_actor != null and event_actor.team == "enemy" and event_actor.cell == condition_cell
+	return false
+
+
+func _event_alive_count_3d(team_value: String) -> int:
+	var count: int = 0
+	var source: Array[SporeUnitActor3D] = player_actors if team_value == "player" else enemy_actors
+	for actor: SporeUnitActor3D in source:
+		if actor != null and actor.alive:
+			count += 1
+	return count
+
+
+func _run_trigger_queue_3d() -> void:
+	if _mission_event_busy_3d:
+		return
+	if _trigger_queue_3d.is_empty():
+		return
+
+	var raw_trigger: Variant = _trigger_queue_3d.pop_front()
+	if not (raw_trigger is Resource):
+		call_deferred("_run_trigger_queue_3d")
+		return
+
+	_mission_event_busy_3d = true
+	await _run_trigger_actions_3d(raw_trigger as Resource)
+	_mission_event_busy_3d = false
+
+	if not _trigger_queue_3d.is_empty():
+		call_deferred("_run_trigger_queue_3d")
+	elif active_actor != null and active_actor.team == "player" and active_actor.alive and not battle_finished:
+		_refresh_player_overlays()
+		_update_ui_text()
+
+
+func _run_trigger_actions_3d(trigger: Resource) -> void:
+	var actions_value: Variant = trigger.get("actions")
+	if actions_value is Array and not (actions_value as Array).is_empty():
+		for raw_action: Variant in actions_value:
+			if raw_action is Resource:
+				await _execute_mission_action_3d(raw_action as Resource)
+		return
+
+	await _execute_legacy_trigger_3d(trigger)
+
+
+func _execute_legacy_trigger_3d(trigger: Resource) -> void:
+	var raw_cell: Variant = trigger.get("action_cell")
+	var cell_value: Vector2i = raw_cell if raw_cell is Vector2i else Vector2i(-1, -1)
+	await _execute_mission_action_values_3d(
+		String(trigger.get("action_type")),
+		String(trigger.get("message")),
+		cell_value,
+		int(trigger.get("action_value")),
+		String(trigger.get("action_team")),
+		float(0.0)
+	)
+
+
+func _execute_mission_action_3d(action: Resource) -> void:
+	var raw_cell: Variant = action.get("cell")
+	var cell_value: Vector2i = raw_cell if raw_cell is Vector2i else Vector2i(-1, -1)
+	await _execute_mission_action_values_3d(
+		String(action.get("action_type")),
+		String(action.get("message")),
+		cell_value,
+		int(action.get("value")),
+		String(action.get("team")),
+		float(action.get("delay_seconds"))
+	)
+
+
+func _execute_mission_action_values_3d(
+	action_type: String,
+	message: String,
+	cell_value: Vector2i,
+	value: int,
+	team_value: String,
+	delay_seconds: float
+) -> void:
+	match action_type:
+		"message":
+			if not message.is_empty():
+				_show_mission_event_banner_3d(message)
+				_log("ÉVÉNEMENT : %s" % message)
+
+		"wait":
+			if delay_seconds > 0.0:
+				await get_tree().create_timer(delay_seconds).timeout
+
+		"add_hazard":
+			if map_root != null and map_root.is_cell_valid(cell_value) and not _hazard_cells_3d.has(cell_value):
+				_hazard_cells_3d.append(cell_value)
+				_rebuild_hazard_visuals_3d()
+				_show_hazard_spawn_3d(cell_value)
+				_log("Le jardin crée une nouvelle zone de spores.")
+
+		"remove_hazard":
+			if _hazard_cells_3d.has(cell_value):
+				_hazard_cells_3d.erase(cell_value)
+				_rebuild_hazard_visuals_3d()
+
+		"heal_team":
+			var heal_targets: Array[SporeUnitActor3D] = player_actors if team_value == "player" else enemy_actors
+			for target: SporeUnitActor3D in heal_targets:
+				if target != null and target.alive:
+					var healed: int = target.heal(maxi(0, value))
+					if healed > 0:
+						_show_floating_text(
+							target.position + Vector3(0.0, 1.18, 0.0),
+							"+%d PV" % healed,
+							Color(0.48, 0.90, 0.66, 1.0)
+						)
+
+		"damage_team":
+			var damage_targets: Array[SporeUnitActor3D] = player_actors if team_value == "player" else enemy_actors
+			for target: SporeUnitActor3D in damage_targets:
+				if target != null and target.alive:
+					_apply_damage_with_reactions(
+						null,
+						target,
+						maxi(0, value),
+						"événement",
+						false,
+						false,
+						"spore"
+					)
+
+		"grant_focus_team":
+			var focus_targets: Array[SporeUnitActor3D] = player_actors if team_value == "player" else enemy_actors
+			for target: SporeUnitActor3D in focus_targets:
+				if target != null and target.alive:
+					target.change_focus(value)
+					_show_floating_text(
+						target.position + Vector3(0.0, 1.18, 0.0),
+						"%+d MP" % value,
+						Color(0.48, 0.76, 1.0, 1.0)
+					)
+
+		_:
+			if not action_type.is_empty():
+				_log("Événement 3D : action '%s' ignorée pour cette passe." % action_type)
+
+	if action_type != "wait" and delay_seconds > 0.0:
+		await get_tree().create_timer(delay_seconds).timeout
+
+	_check_battle_end()
+
+
+func _show_mission_event_banner_3d(message: String) -> void:
+	if _ui_layer == null:
+		return
+	var root: Control = _ui_layer.get_node_or_null("Root") as Control
+	if root == null:
+		return
+
+	var previous: Node = root.get_node_or_null("MissionEventBanner")
+	if previous != null:
+		previous.queue_free()
+
+	var panel: Panel = Panel.new()
+	panel.name = "MissionEventBanner"
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.size = Vector2(620.0, 92.0)
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	panel.position = Vector2((viewport_size.x - 620.0) * 0.5, 92.0)
+	panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
+
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.045, 0.035, 0.070, 0.96)
+	style.border_color = Color(0.76, 0.58, 1.0, 1.0)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 14
+	style.corner_radius_top_right = 14
+	style.corner_radius_bottom_left = 14
+	style.corner_radius_bottom_right = 14
+	panel.add_theme_stylebox_override("panel", style)
+	root.add_child(panel)
+
+	var title: Label = Label.new()
+	title.position = Vector2(18.0, 9.0)
+	title.size = Vector2(584.0, 22.0)
+	title.text = "ÉVÉNEMENT DE MISSION"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_color_override("font_color", Color(0.82, 0.70, 1.0, 1.0))
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(title)
+
+	var body: Label = Label.new()
+	body.position = Vector2(24.0, 34.0)
+	body.size = Vector2(572.0, 46.0)
+	body.text = message
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_theme_font_size_override("font_size", 15)
+	body.add_theme_color_override("font_color", Color(0.95, 0.93, 1.0, 1.0))
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(body)
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(panel, "modulate", Color.WHITE, 0.18)
+	tween.tween_property(panel, "position:y", 102.0, 0.22)
+	tween.set_parallel(false)
+	tween.tween_interval(1.05)
+	tween.set_parallel(true)
+	tween.tween_property(panel, "modulate", Color(1.0, 1.0, 1.0, 0.0), 0.22)
+	tween.tween_property(panel, "position:y", 94.0, 0.22)
+	tween.set_parallel(false)
+	tween.tween_callback(Callable(panel, "queue_free"))
+
+
+func _rebuild_hazard_visuals_3d() -> void:
+	if map_root == null:
+		return
+
+	if _hazard_visual_root_3d == null or not is_instance_valid(_hazard_visual_root_3d):
+		_hazard_visual_root_3d = Node3D.new()
+		_hazard_visual_root_3d.name = "MissionHazards"
+		add_child(_hazard_visual_root_3d)
+
+	for child: Node in _hazard_visual_root_3d.get_children():
+		child.queue_free()
+
+	for hazard_index: int in range(_hazard_cells_3d.size()):
+		var cell_value: Vector2i = _hazard_cells_3d[hazard_index]
+		if not map_root.is_cell_valid(cell_value):
+			continue
+
+		var root: Node3D = Node3D.new()
+		root.name = "Hazard_%02d_%02d" % [cell_value.x, cell_value.y]
+		root.position = map_root.cell_top_local(cell_value) + Vector3(0.0, 0.07, 0.0)
+		root.set_meta("phase", float(hazard_index) * 0.73)
+		_hazard_visual_root_3d.add_child(root)
+
+		var pool: MeshInstance3D = MeshInstance3D.new()
+		pool.name = "Pool"
+		var pool_mesh: CylinderMesh = CylinderMesh.new()
+		pool_mesh.top_radius = map_root.tile_size * 0.31
+		pool_mesh.bottom_radius = map_root.tile_size * 0.35
+		pool_mesh.height = 0.035
+		pool.mesh = pool_mesh
+
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.albedo_color = Color(0.58, 0.28, 0.78, 0.28)
+		material.emission_enabled = true
+		material.emission = Color(0.66, 0.34, 0.86, 1.0)
+		material.emission_energy_multiplier = 0.30
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		pool.material_override = material
+		root.add_child(pool)
+
+		for spore_index: int in range(5):
+			var spore: MeshInstance3D = MeshInstance3D.new()
+			spore.name = "Spore_%d" % spore_index
+			var spore_mesh: SphereMesh = SphereMesh.new()
+			spore_mesh.radius = 0.035 + 0.008 * float(spore_index % 3)
+			spore_mesh.height = spore_mesh.radius * 2.0
+			spore_mesh.radial_segments = 8
+			spore_mesh.rings = 4
+			spore.mesh = spore_mesh
+
+			var spore_material: StandardMaterial3D = StandardMaterial3D.new()
+			spore_material.albedo_color = Color(0.80, 0.54, 1.0, 0.82)
+			spore_material.emission_enabled = true
+			spore_material.emission = Color(0.80, 0.54, 1.0, 1.0)
+			spore_material.emission_energy_multiplier = 0.50
+			spore_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			spore_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			spore.material_override = spore_material
+
+			var angle: float = TAU * float(spore_index) / 5.0
+			spore.position = Vector3(
+				cos(angle) * map_root.tile_size * 0.19,
+				0.05 + 0.035 * float(spore_index % 2),
+				sin(angle) * map_root.tile_size * 0.19
+			)
+			spore.set_meta("base_angle", angle)
+			spore.set_meta("spore_index", spore_index)
+			root.add_child(spore)
+
+		var label: Label3D = Label3D.new()
+		label.text = "SPORES • -1 PV fin de tour"
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.no_depth_test = true
+		label.font_size = 18
+		label.outline_size = 6
+		label.modulate = Color(0.88, 0.72, 1.0, 0.96)
+		label.position = Vector3(0.0, 0.32, 0.0)
+		root.add_child(label)
+
+
+func _update_hazard_visuals_3d() -> void:
+	if _hazard_visual_root_3d == null or not is_instance_valid(_hazard_visual_root_3d):
+		return
+
+	for child: Node in _hazard_visual_root_3d.get_children():
+		var root: Node3D = child as Node3D
+		if root == null:
+			continue
+
+		var phase: float = float(root.get_meta("phase", 0.0))
+		var pulse: float = 1.0 + sin(_presentation_time * 2.7 + phase) * 0.055
+		var pool: MeshInstance3D = root.get_node_or_null("Pool") as MeshInstance3D
+		if pool != null:
+			pool.scale = Vector3(pulse, 1.0, pulse)
+
+		for spore_child: Node in root.get_children():
+			if not spore_child.name.begins_with("Spore_"):
+				continue
+			var spore: MeshInstance3D = spore_child as MeshInstance3D
+			if spore == null:
+				continue
+
+			var base_angle: float = float(spore.get_meta("base_angle", 0.0))
+			var spore_index: int = int(spore.get_meta("spore_index", 0))
+			var angle: float = base_angle + _presentation_time * (0.22 + float(spore_index) * 0.015)
+			var radius: float = map_root.tile_size * (0.17 + 0.012 * float(spore_index % 2))
+			spore.position.x = cos(angle) * radius
+			spore.position.z = sin(angle) * radius
+			spore.position.y = 0.06 + 0.055 * float(spore_index % 2) + sin(_presentation_time * 2.2 + base_angle) * 0.035
+
+
+func _show_hazard_spawn_3d(cell_value: Vector2i) -> void:
+	if map_root == null or not map_root.is_cell_valid(cell_value):
+		return
+	_show_skill_burst(cell_value, Color(0.70, 0.34, 0.92, 1.0))
+	var position_value: Vector3 = map_root.cell_top_local(cell_value)
+	_show_floating_text(
+		position_value + Vector3(0.0, 0.74, 0.0),
+		"NOUVELLES SPORES !",
+		Color(0.86, 0.64, 1.0, 1.0)
+	)
+
+
+func _apply_terrain_hazard_end_3d(actor: SporeUnitActor3D) -> void:
+	if actor == null or not actor.alive or not _hazard_cells_3d.has(actor.cell):
+		return
+
+	_show_skill_burst(actor.cell, Color(0.72, 0.36, 0.92, 1.0))
+	var result: Dictionary = _apply_damage_with_reactions(
+		null,
+		actor,
+		1,
+		"spores",
+		false,
+		false,
+		"spore"
+	)
+	var applied: int = int(result.get("applied", 0))
+	_show_floating_text(
+		actor.position + Vector3(0.0, 1.34, 0.0),
+		"SPORES -%d PV" % applied,
+		Color(0.86, 0.62, 1.0, 1.0)
+	)
+	_log(
+		"%s subit %d dégât(s) de spores en fin d'activation."
+		% [actor.display_name, applied]
+	)
 
 
 func _start_new_round() -> void:
@@ -1846,6 +3935,7 @@ func _start_new_round() -> void:
 				actor.tick_skill_resources()
 	_advance_persistent_zones_round()
 	_log("— Round %d • CT dynamique —" % round_number)
+	_evaluate_mission_triggers_3d("round_start", null)
 
 
 func _create_persistent_zone(caster: SporeUnitActor3D, skill: Resource, effect: Resource, anchor_cell: Vector2i) -> void:
@@ -1964,7 +4054,8 @@ func _process_persistent_zones_for_actor(actor: SporeUnitActor3D, phase: String)
 			"heal":
 				var healed: int = actor.heal(maxi(0, amount))
 				if healed > 0:
-					_show_floating_text(actor.position + Vector3(0.0, 1.15, 0.0), "+%d" % healed, Color(0.48, 0.90, 0.66, 1.0))
+					_show_floating_text(actor.position + Vector3(0.0, 1.15, 0.0), "+%d PV" % healed, Color(0.48, 0.90, 0.66, 1.0))
+				_spawn_feedback_burst(actor, Color(0.48, 0.90, 0.66, 1.0))
 			"status":
 				var status_id: String = String(zone.get("status_id", ""))
 				if actor.apply_status(status_id):
@@ -2003,11 +4094,255 @@ func _blocked_cells_except(actor: SporeUnitActor3D) -> Dictionary:
 	return blocked
 
 
+func _ensure_enemy_intent_root() -> Node3D:
+	if _enemy_intent_root != null and is_instance_valid(_enemy_intent_root):
+		return _enemy_intent_root
+
+	_enemy_intent_root = Node3D.new()
+	_enemy_intent_root.name = "EnemyIntentPreview"
+	add_child(_enemy_intent_root)
+	return _enemy_intent_root
+
+
+func _clear_enemy_intent_preview() -> void:
+	if _enemy_intent_root == null or not is_instance_valid(_enemy_intent_root):
+		return
+	for child: Node in _enemy_intent_root.get_children():
+		child.queue_free()
+
+
+func _enemy_intent_label(
+	actor: SporeUnitActor3D,
+	text_value: String,
+	color: Color
+) -> Label3D:
+	var root: Node3D = _ensure_enemy_intent_root()
+	var label: Label3D = Label3D.new()
+	label.name = "IntentLabel"
+	label.text = text_value
+	label.font_size = 26
+	label.outline_size = 9
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.modulate = color
+	label.position = actor.position + Vector3(0.0, 1.72, 0.0)
+	label.scale = Vector3(0.78, 0.78, 0.78)
+	root.add_child(label)
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "scale", Vector3.ONE, 0.18)
+	tween.tween_property(
+		label,
+		"position:y",
+		label.position.y + 0.10,
+		0.18
+	)
+	return label
+
+
+func _enemy_intent_ring(
+	cell_value: Vector2i,
+	color: Color,
+	radius_scale: float = 0.30
+) -> MeshInstance3D:
+	var root: Node3D = _ensure_enemy_intent_root()
+	var marker: MeshInstance3D = MeshInstance3D.new()
+	marker.name = "IntentRing_%d_%d" % [cell_value.x, cell_value.y]
+
+	var mesh: CylinderMesh = CylinderMesh.new()
+	mesh.top_radius = map_root.tile_size * radius_scale
+	mesh.bottom_radius = map_root.tile_size * radius_scale
+	mesh.height = 0.035
+	marker.mesh = mesh
+	marker.position = (
+		map_root.cell_top_local(cell_value)
+		+ Vector3(0.0, 0.070, 0.0)
+	)
+
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.emission_enabled = true
+	material.emission = Color(color.r, color.g, color.b, 1.0)
+	material.emission_energy_multiplier = 0.70
+	marker.material_override = material
+
+	root.add_child(marker)
+
+	marker.scale = Vector3(0.55, 1.0, 0.55)
+	var tween: Tween = create_tween()
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(
+		marker,
+		"scale",
+		Vector3.ONE,
+		0.20
+	)
+	return marker
+
+
+func _show_enemy_move_intent(
+	actor: SporeUnitActor3D,
+	target: SporeUnitActor3D,
+	path: Array[Vector2i]
+) -> void:
+	if actor == null or target == null or map_root == null:
+		return
+
+	_clear_enemy_intent_preview()
+	_enemy_intent_label(
+		actor,
+		"SE DÉPLACE  →  %s" % target.display_name,
+		Color(1.0, 0.76, 0.34, 1.0)
+	)
+
+	for index: int in range(1, path.size()):
+		var path_cell: Vector2i = path[index]
+		var color: Color = Color(1.0, 0.76, 0.30, 0.42)
+		if index == path.size() - 1:
+			color = Color(1.0, 0.88, 0.42, 0.78)
+		_enemy_intent_ring(
+			path_cell,
+			color,
+			0.14 if index < path.size() - 1 else 0.25
+		)
+
+	await get_tree().create_timer(0.46).timeout
+	_clear_enemy_intent_preview()
+
+
+func _show_enemy_attack_intent(
+	actor: SporeUnitActor3D,
+	target: SporeUnitActor3D
+) -> void:
+	if actor == null or target == null or not target.alive:
+		return
+
+	_clear_enemy_intent_preview()
+
+	var details: Dictionary = _attack_damage_details(actor, target)
+	var damage: int = maxi(
+		0,
+		int(details.get("damage", 0)) - target.flat_damage_reduction
+	)
+	var chance: int = clampi(
+		int(details.get("hit_chance", 100)),
+		0,
+		100
+	)
+	var arc_name: String = _arc_display_name(
+		String(details.get("arc", "front"))
+	).to_upper()
+
+	var intent_text: String = (
+		"ATTAQUE  →  %s\n%d%%  •  ~%d dégâts  •  %s"
+		% [
+			target.display_name,
+			chance,
+			damage,
+			arc_name
+		]
+	)
+
+	_enemy_intent_label(
+		actor,
+		intent_text,
+		Color(1.0, 0.50, 0.42, 1.0)
+	)
+	_enemy_intent_ring(
+		target.cell,
+		Color(1.0, 0.20, 0.16, 0.78),
+		0.34
+	)
+
+	await get_tree().create_timer(0.50).timeout
+	_clear_enemy_intent_preview()
+
+
+func _show_enemy_skill_intent(
+	actor: SporeUnitActor3D,
+	action: Dictionary
+) -> void:
+	if actor == null or action.is_empty() or map_root == null:
+		return
+
+	var skill_id: String = String(action.get("skill_id", ""))
+	var anchor_value: Variant = action.get("anchor", actor.cell)
+	if skill_id.is_empty() or not (anchor_value is Vector2i):
+		return
+
+	var skill: Resource = SkillCatalog.definition(skill_id)
+	if skill == null:
+		return
+
+	var anchor_cell: Vector2i = anchor_value
+	_clear_enemy_intent_preview()
+
+	var target_actor: SporeUnitActor3D = (
+		actors_by_cell.get(anchor_cell, null)
+		as SporeUnitActor3D
+	)
+	var destination_text: String = "ZONE"
+	if target_actor != null:
+		destination_text = target_actor.display_name
+
+	var cast_ticks: int = int(skill.get("cast_time_ticks"))
+	var timing_text: String = (
+		"préparation %d" % cast_ticks
+		if cast_ticks > 0
+		else "immédiat"
+	)
+
+	_enemy_intent_label(
+		actor,
+		"%s  →  %s\n%s"
+		% [
+			String(skill.get("display_name")).to_upper(),
+			destination_text,
+			timing_text
+		],
+		Color(0.76, 0.58, 1.0, 1.0)
+	)
+
+	var area_cells: Array[Vector2i] = _skill_area_cells(
+		skill,
+		anchor_cell,
+		actor.cell
+	)
+	if area_cells.is_empty():
+		area_cells.append(anchor_cell)
+
+	for area_cell: Vector2i in area_cells:
+		if not map_root.is_cell_valid(area_cell):
+			continue
+		var area_actor: SporeUnitActor3D = (
+			actors_by_cell.get(area_cell, null)
+			as SporeUnitActor3D
+		)
+		var color: Color = Color(0.72, 0.42, 1.0, 0.34)
+		if area_actor != null:
+			color = (
+				Color(1.0, 0.30, 0.26, 0.68)
+				if area_actor.team != actor.team
+				else Color(0.42, 0.88, 0.68, 0.58)
+			)
+		_enemy_intent_ring(area_cell, color, 0.26)
+
+	await get_tree().create_timer(0.54).timeout
+	_clear_enemy_intent_preview()
+
+
 func _execute_enemy_activation() -> void:
 	if battle_finished or active_actor == null or not active_actor.alive or active_actor.team != "enemy":
 		enemy_busy = false
 		return
-	await get_tree().create_timer(0.30).timeout
+	await get_tree().create_timer(0.46).timeout
 	if active_actor.is_casting():
 		active_actor.waited_this_activation = true
 		_log("%s WAIT pour conserver %s." % [active_actor.display_name, SkillCatalog.display_name(String(active_actor.casting.get("skill_id", "")))])
@@ -2024,8 +4359,10 @@ func _execute_enemy_activation() -> void:
 	var skill_action: Dictionary = _best_ai_skill_action(active_actor)
 	var basic_score: float = _ai_basic_attack_score(active_actor, target) if _is_in_attack_range(active_actor, target) else -999.0
 	if not skill_action.is_empty() and float(skill_action.get("score", -999.0)) > basic_score + 0.35:
+		await _show_enemy_skill_intent(active_actor, skill_action)
 		await _enemy_use_skill(skill_action)
 	elif not active_actor.acted_this_activation and _is_in_attack_range(active_actor, target):
+		await _show_enemy_attack_intent(active_actor, target)
 		await _enemy_attack(target)
 
 	# FFT allows Act -> Move as well as Move -> Act. Reposition whenever Move is still available.
@@ -2035,10 +4372,11 @@ func _execute_enemy_activation() -> void:
 			var destination: Vector2i = _best_enemy_destination(active_actor, target)
 			var path: Array[Vector2i] = _reconstruct_path(destination)
 			if destination != active_actor.cell and path.size() >= 2:
+				await _show_enemy_move_intent(active_actor, target, path)
 				var ai_move_start: Vector2i = active_actor.cell
 				actors_by_cell.erase(active_actor.cell)
 				_log("%s avance vers %s." % [active_actor.display_name, target.display_name])
-				await _move_actor_along_path(active_actor, path, 0.12)
+				await _move_actor_along_path(active_actor, path, 0.17)
 				if active_actor.movement_ability == "move_mp_up" and active_actor.cell != ai_move_start:
 					active_actor.change_focus(maxi(1, int(ceil(float(active_actor.max_focus) / 10.0))))
 				if not active_actor.alive:
@@ -2055,8 +4393,10 @@ func _execute_enemy_activation() -> void:
 		target = _best_target_for(active_actor, player_actors)
 		basic_score = _ai_basic_attack_score(active_actor, target) if target != null and _is_in_attack_range(active_actor, target) else -999.0
 		if not skill_action.is_empty() and float(skill_action.get("score", -999.0)) > basic_score + 0.35:
+			await _show_enemy_skill_intent(active_actor, skill_action)
 			await _enemy_use_skill(skill_action)
 		elif target != null and target.alive and _is_in_attack_range(active_actor, target):
+			await _show_enemy_attack_intent(active_actor, target)
 			await _enemy_attack(target)
 		elif target != null and target.alive:
 			active_actor.face_cell(target.cell)
@@ -2072,7 +4412,16 @@ func _enemy_attack(target: SporeUnitActor3D) -> void:
 	active_actor.acted_this_activation = true
 	_begin_action_camera(active_actor.global_position, target.global_position, 0.72, action_camera_zoom_in)
 	active_actor.play_attack(target.position)
-	await _play_action_vfx_to_impact(active_actor.basic_attack_vfx_id, active_actor.global_position + Vector3(0.0, 0.72, 0.0), target.global_position + Vector3(0.0, 0.64, 0.0), true, target, Vector3(0.0, 0.64, 0.0))
+	var enemy_vfx_kind: String = _basic_attack_vfx_kind(active_actor)
+	await _play_action_vfx_to_impact(
+		active_actor.basic_attack_vfx_id,
+		active_actor.global_position + Vector3(0.0, 0.72, 0.0),
+		target.global_position + Vector3(0.0, 0.64, 0.0),
+		false,
+		target,
+		Vector3(0.0, 0.64, 0.0),
+		enemy_vfx_kind
+	)
 	_resolve_attack(active_actor, target)
 	_camera_impact()
 	if vfx_impact_pause > 0.0:
@@ -2104,7 +4453,17 @@ func _enemy_use_skill(action: Dictionary) -> void:
 	await get_tree().create_timer(0.06).timeout
 	var tracked_skill_target: SporeUnitActor3D = actors_by_cell.get(anchor_cell, null) as SporeUnitActor3D
 	var tracked_skill_offset: Vector3 = Vector3(0.0, 0.64, 0.0) if tracked_skill_target != null else Vector3.ZERO
-	await _play_action_vfx_to_impact(String(skill.get("vfx_id")), active_actor.global_position + Vector3(0.0, 0.78, 0.0), anchor_global + Vector3(0.0, 0.18, 0.0), true, tracked_skill_target, tracked_skill_offset)
+	_show_skill_name_banner(active_actor, skill)
+	var primary_vfx_kind: String = _skill_primary_vfx_kind(String(skill.get("id")))
+	await _play_action_vfx_to_impact(
+		String(skill.get("vfx_id")),
+		active_actor.global_position + Vector3(0.0, 0.78, 0.0),
+		anchor_global + Vector3(0.0, 0.18, 0.0),
+		false,
+		tracked_skill_target,
+		tracked_skill_offset,
+		primary_vfx_kind
+	)
 	await _play_skill_area_impacts(skill, active_actor, anchor_cell)
 	_skill_hit_cache.clear()
 	var raw_effects: Variant = skill.get("effects")
@@ -2369,6 +4728,9 @@ func _move_actor_along_path(actor: SporeUnitActor3D, path: Array[Vector2i], dura
 		var chance: int = CombatMechanics.teleport_success_chance(distance, actor.effective_move_range())
 		if battle_rng.randi_range(1, 100) <= chance:
 			actor.place_on_map(map_root, destination)
+			_evaluate_mission_triggers_3d("unit_moved", actor)
+			if _mission_event_pending_3d():
+				await _wait_for_mission_events_3d()
 			_show_floating_text(actor.position + Vector3(0.0, 1.2, 0.0), "TELEPORT", Color(0.70, 0.55, 1.0, 1.0))
 		else:
 			_show_floating_text(actor.position + Vector3(0.0, 1.2, 0.0), "ÉCHEC %d%%" % chance, Color(1.0, 0.55, 0.40, 1.0))
@@ -2383,6 +4745,35 @@ func _move_actor_along_path(actor: SporeUnitActor3D, path: Array[Vector2i], dura
 			return
 		var move_tween: Tween = actor.move_to_cell(map_root, step_cell, duration_per_step)
 		await move_tween.finished
+		_play_terrain_feedback_3d(actor, from_cell, step_cell)
+	if _threat_overlay_enabled:
+		_rebuild_enemy_threat_cache()
+		_rebuild_highlights()
+	_evaluate_mission_triggers_3d("unit_moved", actor)
+	if _mission_event_pending_3d():
+		await _wait_for_mission_events_3d()
+
+
+func _play_terrain_feedback_3d(
+	actor: SporeUnitActor3D,
+	from_cell: Vector2i,
+	to_cell: Vector2i
+) -> void:
+	if map_root == null or actor == null:
+		return
+	var tile: Node = map_root.tile_at(to_cell)
+	var terrain_type: String = String(tile.get("terrain_type")) if tile != null else "ground"
+	var elevation_delta: int = map_root.elevation_at(to_cell) - map_root.elevation_at(from_cell)
+	var world_position: Vector3 = map_root.to_global(map_root.cell_top_local(to_cell))
+	var candidates: Array[Node] = get_tree().get_nodes_in_group("spore_terrain_feedback")
+	for candidate: Node in candidates:
+		if candidate == null or not is_instance_valid(candidate):
+			continue
+		if candidate != map_root and not map_root.is_ancestor_of(candidate):
+			continue
+		if candidate.has_method("play_step_feedback"):
+			candidate.call("play_step_feedback", terrain_type, world_position, elevation_delta, actor.team)
+			return
 
 
 func _check_opportunity_reactions(mover: SporeUnitActor3D, from_cell: Vector2i, to_cell: Vector2i) -> void:
@@ -2680,7 +5071,14 @@ func _cell_distance(a: Vector2i, b: Vector2i) -> int:
 	return absi(a.x - b.x) + absi(a.y - b.y)
 
 
-func _check_battle_end() -> bool:
+func _update_battle_end_presentation() -> void:
+	if not battle_finished or _battle_end_sequence_started:
+		return
+	_battle_end_sequence_started = true
+	call_deferred("_run_battle_end_sequence", _infer_battle_victory())
+
+
+func _infer_battle_victory() -> bool:
 	var living_players: int = 0
 	var living_enemies: int = 0
 	for actor: SporeUnitActor3D in player_actors:
@@ -2689,24 +5087,705 @@ func _check_battle_end() -> bool:
 	for actor: SporeUnitActor3D in enemy_actors:
 		if actor != null and actor.alive:
 			living_enemies += 1
+	if living_players <= 0:
+		return false
 	if living_enemies <= 0:
+		return true
+	# Custom mission objective completed while enemies remain.
+	return true
+
+
+func _run_battle_end_sequence(victory: bool) -> void:
+	_facing_selection_active = false
+	if _facing_panel != null and is_instance_valid(_facing_panel):
+		_facing_panel.visible = false
+
+	enemy_busy = false
+	player_busy = true
+	_clear_overlays()
+
+	var focus_actors: Array[SporeUnitActor3D] = []
+	for actor: SporeUnitActor3D in player_actors:
+		if actor != null and actor.alive:
+			focus_actors.append(actor)
+
+	var focus: Vector3 = Vector3.ZERO
+	if not focus_actors.is_empty():
+		for actor: SporeUnitActor3D in focus_actors:
+			focus += actor.position
+		focus /= float(focus_actors.size())
+	elif active_actor != null:
+		focus = active_actor.position
+
+	_camera_focus_target = Vector3(focus.x, 0.0, focus.z)
+	_action_camera_timer = 0.0
+	_impact_zoom_timer = 0.0
+	_camera_shake_strength = 0.0
+
+	if victory:
+		_camera_target_distance = clampf(camera_distance - 1.8, zoom_min, zoom_max)
+		for actor: SporeUnitActor3D in focus_actors:
+			_spawn_victory_spores(actor.position)
+	else:
+		_camera_target_distance = clampf(camera_distance + 0.8, zoom_min, zoom_max)
+
+	await get_tree().create_timer(0.42).timeout
+	_show_floating_text(
+		focus + Vector3(0.0, 1.75, 0.0),
+		"VICTOIRE !" if victory else "DÉFAITE",
+		Color(1.0, 0.84, 0.34, 1.0) if victory else Color(1.0, 0.42, 0.38, 1.0)
+	)
+	await get_tree().create_timer(0.72).timeout
+	_show_battle_result(victory)
+
+
+func _spawn_victory_spores(origin: Vector3) -> void:
+	if _actor_holder == null:
+		return
+	var root: Node3D = Node3D.new()
+	root.name = "VictorySpores"
+	root.position = origin + Vector3(0.0, 0.25, 0.0)
+	_actor_holder.add_child(root)
+
+	for index: int in range(12):
+		var spark: MeshInstance3D = MeshInstance3D.new()
+		var mesh: SphereMesh = SphereMesh.new()
+		mesh.radius = 0.045 + 0.010 * float(index % 3)
+		mesh.height = mesh.radius * 2.0
+		mesh.radial_segments = 8
+		mesh.rings = 4
+		spark.mesh = mesh
+
+		var color: Color = Color(1.0, 0.82, 0.32, 0.92)
+		if index % 3 == 1:
+			color = Color(0.44, 0.92, 0.62, 0.92)
+		elif index % 3 == 2:
+			color = Color(0.42, 0.82, 1.0, 0.92)
+
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.albedo_color = color
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.emission_enabled = true
+		material.emission = Color(color.r, color.g, color.b, 1.0)
+		material.emission_energy_multiplier = 1.4
+		spark.material_override = material
+
+		var angle: float = TAU * float(index) / 12.0
+		spark.position = Vector3(cos(angle) * 0.18, 0.05, sin(angle) * 0.18)
+		root.add_child(spark)
+
+		var target: Vector3 = Vector3(
+			cos(angle) * (0.70 + 0.10 * float(index % 4)),
+			0.75 + 0.08 * float(index % 5),
+			sin(angle) * (0.70 + 0.10 * float(index % 4))
+		)
+		var tween: Tween = create_tween()
+		tween.set_parallel(true)
+		tween.set_trans(Tween.TRANS_SINE)
+		tween.set_ease(Tween.EASE_OUT)
+		tween.tween_property(spark, "position", target, 0.82)
+		tween.tween_property(spark, "scale", Vector3.ONE * 1.35, 0.36)
+		tween.set_parallel(false)
+		tween.tween_callback(Callable(spark, "queue_free"))
+
+	await get_tree().create_timer(0.95).timeout
+	if is_instance_valid(root):
+		root.queue_free()
+
+
+func _show_battle_result(victory: bool) -> void:
+	if _ui_layer == null:
+		return
+	var root: Control = _ui_layer.get_node_or_null("Root") as Control
+	if root == null:
+		return
+
+	var previous: Node = root.get_node_or_null("BattleResult")
+	if previous != null:
+		previous.queue_free()
+
+	var overlay: ColorRect = ColorRect.new()
+	overlay.name = "BattleResult"
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0.015, 0.022, 0.034, 0.84)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	root.add_child(overlay)
+
+	var panel: Panel = Panel.new()
+	panel.size = Vector2(520.0, 260.0)
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	panel.position = (viewport_size - panel.size) * 0.5
+	panel.pivot_offset = panel.size * 0.5
+	panel.scale = Vector2(0.86, 0.86)
+
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.045, 0.060, 0.085, 0.985)
+	style.border_color = Color(1.0, 0.80, 0.30, 1.0) if victory else Color(1.0, 0.38, 0.34, 1.0)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 18
+	style.corner_radius_top_right = 18
+	style.corner_radius_bottom_left = 18
+	style.corner_radius_bottom_right = 18
+	panel.add_theme_stylebox_override("panel", style)
+	overlay.add_child(panel)
+
+	var title: Label = Label.new()
+	title.position = Vector2(24.0, 24.0)
+	title.size = Vector2(472.0, 50.0)
+	title.text = "VICTOIRE !" if victory else "DÉFAITE"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 34)
+	title.add_theme_color_override(
+		"font_color",
+		Color(1.0, 0.86, 0.38, 1.0) if victory else Color(1.0, 0.50, 0.46, 1.0)
+	)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(title)
+
+	var survivors: int = 0
+	for actor: SporeUnitActor3D in player_actors:
+		if actor != null and actor.alive:
+			survivors += 1
+
+	var body: Label = Label.new()
+	body.position = Vector2(40.0, 88.0)
+	body.size = Vector2(440.0, 78.0)
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_theme_font_size_override("font_size", 16)
+	body.add_theme_color_override("font_color", Color(0.92, 0.94, 0.90, 1.0))
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.text = (
+		"Mission accomplie.\n%d membre(s) de l'escouade encore debout." % survivors
+		if victory
+		else "L'escouade a été mise hors combat.\nAdapte ton placement et retente la mission."
+	)
+	panel.add_child(body)
+
+	var replay: Button = Button.new()
+	replay.text = "REJOUER  [R]"
+	replay.position = Vector2(150.0, 190.0)
+	replay.size = Vector2(220.0, 44.0)
+	replay.add_theme_font_size_override("font_size", 16)
+	replay.pressed.connect(func() -> void: get_tree().reload_current_scene())
+	panel.add_child(replay)
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(overlay, "modulate", Color.WHITE, 0.30)
+	tween.tween_property(panel, "scale", Vector2.ONE, 0.42)
+
+
+func _check_battle_end() -> bool:
+	if battle_finished:
+		return true
+
+	var result: int = _mission_result_3d()
+
+	if result > 0:
 		battle_finished = true
-		_log("VICTOIRE — tous les ennemis sont K.O.")
-	elif living_players <= 0:
+
+		if mission_objective_3d == "crown":
+			_log(
+				"VICTOIRE — la Couronne est extraite ! "
+				+ "Vinyles %d/%d."
+				% [
+					bonus_collected_3d,
+					bonus_target_total_3d
+				]
+			)
+		else:
+			_log("VICTOIRE — objectif de mission accompli !")
+
+	elif result < 0:
 		battle_finished = true
 		_log("DÉFAITE — l'escouade est K.O.")
+
 	if battle_finished:
 		enemy_busy = false
+		player_busy = false
 		_clear_overlays()
+
 		if active_actor != null:
 			active_actor.end_activation()
+
+		_refresh_objective_ui_3d(true)
 		_update_ui_text()
+
+	if (
+		not battle_finished
+		and mission_objective_3d == "crown"
+		and _living_count_3d("enemy") <= 0
+		and not _enemies_cleared_objective_hint_3d
+	):
+		_enemies_cleared_objective_hint_3d = true
+		_log(
+			"Tous les ennemis sont K.O., "
+			+ "mais il faut encore extraire la Couronne."
+		)
+
 	return battle_finished
+
+
+func _cell_player_description(cell_value: Vector2i) -> String:
+	if map_root == null or not map_root.is_cell_valid(cell_value):
+		return "Hors plateau"
+
+	var terrain_name: String = "Forêt"
+	var tile: Node = map_root.tile_at(cell_value)
+	if tile != null:
+		var terrain_type: String = String(tile.get("terrain_type"))
+		match terrain_type:
+			"obstacle":
+				terrain_name = "Obstacle"
+			"cover":
+				terrain_name = "Couvert"
+			"hazard":
+				terrain_name = "Spores dangereuses"
+			"extraction":
+				terrain_name = "Sortie"
+			"bonus":
+				terrain_name = "Vinyle bonus"
+			"crown":
+				terrain_name = "Couronne"
+			_:
+				terrain_name = "Forêt"
+
+	var height_value: int = map_root.elevation_at(cell_value)
+	if height_value > 0:
+		terrain_name += " • hauteur %d" % height_value
+
+	var occupant: SporeUnitActor3D = actors_by_cell.get(cell_value, null) as SporeUnitActor3D
+	if occupant != null and occupant.alive:
+		terrain_name += " • %s" % occupant.display_name
+	return terrain_name
+
+
+func _show_battle_result(victory: bool) -> void:
+	if _ui_layer == null:
+		return
+	var root: Control = _ui_layer.get_node_or_null("Root") as Control
+	if root == null:
+		return
+
+	var previous: Node = root.get_node_or_null("BattleResult")
+	if previous != null:
+		previous.queue_free()
+
+	var overlay: ColorRect = ColorRect.new()
+	overlay.name = "BattleResult"
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0.02, 0.03, 0.045, 0.82)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	root.add_child(overlay)
+
+	var panel: Panel = Panel.new()
+	panel.size = Vector2(500.0, 240.0)
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	panel.position = (viewport_size - panel.size) * 0.5
+	panel.pivot_offset = panel.size * 0.5
+	panel.scale = Vector2(0.84, 0.84)
+
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.055, 0.075, 0.105, 0.98)
+	style.border_color = Color(1.0, 0.78, 0.30, 1.0) if victory else Color(0.90, 0.30, 0.30, 1.0)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 18
+	style.corner_radius_top_right = 18
+	style.corner_radius_bottom_left = 18
+	style.corner_radius_bottom_right = 18
+	panel.add_theme_stylebox_override("panel", style)
+	overlay.add_child(panel)
+
+	var title: Label = _make_label(
+		panel,
+		Vector2(24.0, 24.0),
+		Vector2(452.0, 52.0),
+		34,
+		Color(1.0, 0.84, 0.38, 1.0) if victory else Color(1.0, 0.48, 0.44, 1.0)
+	)
+	title.text = "VICTOIRE !" if victory else "DÉFAITE"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	var body: Label = _make_label(
+		panel,
+		Vector2(32.0, 84.0),
+		Vector2(436.0, 62.0),
+		16,
+		Color(0.92, 0.94, 0.90, 1.0)
+	)
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.text = (
+		"Mission accomplie. L'escouade contrôle le terrain."
+		if victory
+		else
+		"L'escouade a été mise hors combat."
+	)
+
+	var replay: Button = _make_button(
+		panel,
+		"REJOUER [R]",
+		Vector2(150.0, 166.0),
+		Vector2(200.0, 44.0)
+	)
+	replay.pressed.connect(func() -> void: get_tree().reload_current_scene())
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(overlay, "modulate", Color.WHITE, 0.32)
+	tween.tween_property(panel, "scale", Vector2.ONE, 0.42)
+
+
+func _ensure_hover_forecast_label() -> void:
+	if _hover_forecast_label != null and is_instance_valid(_hover_forecast_label):
+		return
+	if _actor_holder == null:
+		return
+
+	_hover_forecast_label = Label3D.new()
+	_hover_forecast_label.name = "HoverForecast"
+	_hover_forecast_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_hover_forecast_label.no_depth_test = true
+	_hover_forecast_label.font_size = 24
+	_hover_forecast_label.outline_size = 8
+	_hover_forecast_label.modulate = Color(1.0, 0.96, 0.78, 1.0)
+	_hover_forecast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hover_forecast_label.visible = false
+	_actor_holder.add_child(_hover_forecast_label)
+
+
+func _update_tactical_hover_forecast() -> void:
+	_ensure_hover_forecast_label()
+	if _hover_forecast_label == null:
+		return
+
+	if (
+		battle_finished
+		or map_root == null
+		or active_actor == null
+		or not map_root.is_cell_valid(hovered_cell)
+	):
+		_hover_forecast_label.visible = false
+		return
+
+	var text_value: String = ""
+	var color: Color = Color(1.0, 0.96, 0.78, 1.0)
+	var world_position: Vector3 = (
+		map_root.cell_top_local(hovered_cell)
+		+ Vector3(0.0, 1.05, 0.0)
+	)
+
+	if input_mode == MODE_ATTACK and not active_actor.acted_this_activation:
+		var target: SporeUnitActor3D = (
+			actors_by_cell.get(hovered_cell, null)
+			as SporeUnitActor3D
+		)
+		if (
+			target != null
+			and target.alive
+			and target.team != active_actor.team
+			and attack_cells.has(hovered_cell)
+		):
+			var details: Dictionary = _attack_damage_details(
+				active_actor,
+				target
+			)
+			var damage: int = maxi(0, int(details.get("damage", 0)))
+			var hit_chance: int = clampi(
+				int(details.get("hit_chance", 0)),
+				0,
+				100
+			)
+			var hp_after: int = maxi(0, target.hp - damage)
+			var arc_text: String = _arc_display_name(
+				String(details.get("arc", "front"))
+			).to_upper()
+
+			text_value = (
+				"%d%%  •  -%d PV  •  %s\n"
+				+ "%s  %d → %d PV%s"
+			) % [
+				hit_chance,
+				damage,
+				arc_text,
+				target.display_name,
+				target.hp,
+				hp_after,
+				"  • K.O." if hp_after <= 0 else ""
+			]
+
+			if int(details.get("cover_reduction", 0)) > 0:
+				text_value += "\nCouvert : dégâts réduits"
+
+			var interceptor: SporeUnitActor3D = _find_interceptor(
+				active_actor,
+				target
+			)
+			if interceptor != null:
+				text_value += "\nInterception : %s" % interceptor.display_name
+
+			color = (
+				Color(1.0, 0.52, 0.46, 1.0)
+				if hp_after > 0
+				else Color(1.0, 0.82, 0.34, 1.0)
+			)
+			world_position = target.position + Vector3(0.0, 1.62, 0.0)
+
+	elif input_mode == MODE_MOVE and not active_actor.moved_this_activation:
+		if reachable_cells.has(hovered_cell):
+			var path: Array[Vector2i] = _reconstruct_path(hovered_cell)
+			var steps: int = maxi(0, path.size() - 1)
+			var terrain: String = _hover_terrain_name(hovered_cell)
+			text_value = "%d case(s)  •  %s" % [steps, terrain]
+			color = Color(0.60, 0.94, 0.72, 1.0)
+
+			if _enemy_threatens_cell(hovered_cell):
+				text_value += "\n⚠ case menacée"
+				color = Color(1.0, 0.78, 0.42, 1.0)
+
+	elif (
+		input_mode == MODE_SKILL
+		and not selected_skill_id.is_empty()
+		and skill_target_cells.has(hovered_cell)
+	):
+		var skill: Resource = SkillCatalog.definition(selected_skill_id)
+		if skill != null:
+			var target_count: int = _skill_preview_actor_count(
+				active_actor,
+				skill,
+				hovered_cell
+			)
+			var cost: int = int(skill.get("focus_cost"))
+			var skill_name: String = String(skill.get("display_name"))
+			text_value = (
+				"%s\n%d MP  •  %d cible(s)"
+				% [skill_name, cost, target_count]
+			)
+			var cast_ticks: int = int(skill.get("cast_time_ticks"))
+			if cast_ticks > 0:
+				text_value += "\nPréparation : %d" % cast_ticks
+			else:
+				text_value += "\nImmédiat"
+			color = Color(0.78, 0.66, 1.0, 1.0)
+
+	else:
+		var hovered_actor: SporeUnitActor3D = (
+			actors_by_cell.get(hovered_cell, null)
+			as SporeUnitActor3D
+		)
+		if hovered_actor != null and hovered_actor.alive:
+			text_value = "%s  •  %d/%d PV" % [
+				hovered_actor.display_name,
+				hovered_actor.hp,
+				hovered_actor.max_hp
+			]
+			color = (
+				Color(0.70, 0.90, 1.0, 1.0)
+				if hovered_actor.team == "player"
+				else Color(1.0, 0.70, 0.62, 1.0)
+			)
+			world_position = (
+				hovered_actor.position
+				+ Vector3(0.0, 1.55, 0.0)
+			)
+		else:
+			text_value = _hover_terrain_name(hovered_cell)
+			color = Color(0.88, 0.90, 0.78, 1.0)
+
+	_hover_forecast_label.text = text_value
+	_hover_forecast_label.modulate = color
+	_hover_forecast_label.position = world_position
+	_hover_forecast_label.visible = not text_value.is_empty()
+
+
+func _hover_terrain_name(cell_value: Vector2i) -> String:
+	if map_root == null or not map_root.is_cell_valid(cell_value):
+		return "Hors plateau"
+
+	var tile: Node = map_root.tile_at(cell_value)
+	if tile == null:
+		return "Terrain"
+
+	var terrain_type: String = String(tile.get("terrain_type"))
+	var result: String = "Forêt"
+
+	match terrain_type:
+		"obstacle":
+			result = "Obstacle"
+		"cover":
+			result = "Couvert"
+		"hazard":
+			result = "Spores dangereuses"
+		"extraction":
+			result = "Sortie"
+		"bonus":
+			result = "Vinyle bonus"
+		"crown":
+			result = "Couronne"
+		_:
+			result = "Forêt"
+
+	var elevation_value: int = map_root.elevation_at(cell_value)
+	if elevation_value > 0:
+		result += " • hauteur %d" % elevation_value
+
+	if terrain_type == "cover":
+		result += " • protège %s" % _cover_facing_name(cell_value)
+
+	return result
+
+
+func _toggle_enemy_threat_overlay() -> void:
+	_threat_overlay_enabled = not _threat_overlay_enabled
+	_rebuild_enemy_threat_cache()
+	_rebuild_highlights()
+
+	var text_value: String = (
+		"MENACES ENNEMIES : ON"
+		if _threat_overlay_enabled
+		else "MENACES ENNEMIES : OFF"
+	)
+	var color: Color = (
+		Color(1.0, 0.62, 0.48, 1.0)
+		if _threat_overlay_enabled
+		else Color(0.78, 0.82, 0.86, 1.0)
+	)
+
+	if active_actor != null:
+		_show_floating_text(
+			active_actor.position + Vector3(0.0, 1.45, 0.0),
+			text_value,
+			color
+		)
+
+
+func _rebuild_enemy_threat_cache() -> void:
+	_threat_cells_cache.clear()
+
+	if not _threat_overlay_enabled or map_root == null:
+		return
+
+	for enemy: SporeUnitActor3D in enemy_actors:
+		if enemy == null or not enemy.alive:
+			continue
+
+		var max_range: int = maxi(
+			1,
+			enemy.attack_range
+			+ enemy.status_modifier("range_delta")
+		)
+
+		for y: int in range(map_root.grid_height):
+			for x: int in range(map_root.grid_width):
+				var cell_value: Vector2i = Vector2i(x, y)
+				var distance: int = _cell_distance(
+					enemy.cell,
+					cell_value
+				)
+
+				if not CombatMechanics.range_allowed(
+					distance,
+					enemy.attack_min_range,
+					max_range
+				):
+					continue
+
+				if (
+					absi(
+						map_root.elevation_at(enemy.cell)
+						- map_root.elevation_at(cell_value)
+					)
+					> height_attack_tolerance
+				):
+					continue
+
+				if not _has_line_of_sight(enemy.cell, cell_value):
+					continue
+
+				var count: int = int(
+					_threat_cells_cache.get(cell_value, 0)
+				)
+				_threat_cells_cache[cell_value] = count + 1
+
+
+func _enemy_threatens_cell(cell_value: Vector2i) -> bool:
+	# Compute on demand even when the global overlay is hidden.
+	if _threat_overlay_enabled:
+		return _threat_cells_cache.has(cell_value)
+
+	if map_root == null:
+		return false
+
+	for enemy: SporeUnitActor3D in enemy_actors:
+		if enemy == null or not enemy.alive:
+			continue
+
+		var max_range: int = maxi(
+			1,
+			enemy.attack_range
+			+ enemy.status_modifier("range_delta")
+		)
+		var distance: int = _cell_distance(enemy.cell, cell_value)
+
+		if not CombatMechanics.range_allowed(
+			distance,
+			enemy.attack_min_range,
+			max_range
+		):
+			continue
+
+		if not _has_line_of_sight(enemy.cell, cell_value):
+			continue
+
+		if (
+			absi(
+				map_root.elevation_at(enemy.cell)
+				- map_root.elevation_at(cell_value)
+			)
+			> height_attack_tolerance
+		):
+			continue
+
+		return true
+
+	return false
 
 
 func _rebuild_highlights() -> void:
 	for child: Node in _highlight_holder.get_children():
 		child.queue_free()
+	if _threat_overlay_enabled:
+		if _threat_cells_cache.is_empty():
+			_rebuild_enemy_threat_cache()
+		for threat_cell_var: Variant in _threat_cells_cache.keys():
+			if not (threat_cell_var is Vector2i):
+				continue
+			var threat_cell: Vector2i = threat_cell_var
+			var threat_count: int = int(
+				_threat_cells_cache.get(threat_cell, 1)
+			)
+			var threat_alpha: float = minf(
+				0.34,
+				0.14 + float(threat_count - 1) * 0.06
+			)
+			_add_cell_highlight(
+				threat_cell,
+				Color(1.0, 0.18, 0.14, threat_alpha),
+				0.36
+			)
 	if not show_reachable_overlay or map_root == null:
 		return
 	if input_mode == MODE_MOVE:
@@ -2821,12 +5900,12 @@ func _update_ui_text() -> void:
 		_turn_label.text = "Manche %d • %s • %s" % [round_number, team_text, active_name]
 		var cell_text: String = "—"
 		if map_root != null and map_root.is_cell_valid(hovered_cell):
-			cell_text = "%d,%d h%d" % [hovered_cell.x, hovered_cell.y, map_root.elevation_at(hovered_cell)]
+			cell_text = _cell_player_description(hovered_cell)
 			if _is_cover_cell(hovered_cell):
-				cell_text += " • couvert %s" % _cover_facing_name(hovered_cell)
+				cell_text += " • protège côté %s" % _cover_facing_name(hovered_cell)
 			var zone_count: int = _persistent_zone_count_at(hovered_cell)
 			if zone_count > 0:
-				cell_text += " • zone x%d" % zone_count
+				cell_text += " • effet au sol x%d" % zone_count
 			if input_mode == MODE_ATTACK and active_actor != null:
 				var effective_range: int = maxi(1, active_actor.attack_range + active_actor.status_modifier("range_delta"))
 				if _cell_distance(active_actor.cell, hovered_cell) <= effective_range and not _has_line_of_sight(active_actor.cell, hovered_cell):
@@ -2842,7 +5921,7 @@ func _update_ui_text() -> void:
 			if input_mode == MODE_ATTACK and hovered_actor != null and hovered_actor.team != active_actor.team:
 				var details: Dictionary = _attack_damage_details(active_actor, hovered_actor)
 				var arc: String = String(details.get("arc", "front"))
-				extra_text = " • %s • dégâts %d • HIT %d%%" % [_arc_display_name(arc), int(details.get("damage", 0)), int(details.get("hit_chance", 0))]
+				extra_text = " • %s • %d dégâts • réussite %d%%" % [_arc_display_name(arc), int(details.get("damage", 0)), int(details.get("hit_chance", 0))]
 				if int(details.get("cover_reduction", 0)) > 0:
 					extra_text += " • couvert -%d" % int(details.get("cover_reduction", 0))
 				if int(details.get("height_bonus", 0)) > 0:
@@ -2865,10 +5944,10 @@ func _update_ui_text() -> void:
 			var cast_suffix: String = ""
 			if active_actor.is_casting():
 				cast_suffix = " • CAST %s %dt" % [SkillCatalog.display_name(String(active_actor.casting.get("skill_id", ""))), maxi(0, int(active_actor.casting.get("remaining_ticks", 0)))]
-			_info_label.text = "%s • HP %d/%d • MP %d/%d • CT %d • VIT %d • PRÉC %+d • ESQ %+d • face %s • %s%s%s%s\nCase : %s%s" % [active_actor.display_name, active_actor.hp, active_actor.max_hp, active_actor.focus, active_actor.max_focus, active_actor.ct, active_actor.effective_speed(), active_actor.effective_accuracy(), active_actor.effective_evasion(), active_actor.facing_name(), mode_text, reaction_suffix, status_suffix, cast_suffix, cell_text, extra_text]
+			_info_label.text = "%s • %d/%d PV • %d/%d MP • Vitesse %d • %s%s\n%s%s" % [active_actor.display_name, active_actor.hp, active_actor.max_hp, active_actor.focus, active_actor.max_focus, active_actor.effective_speed(), mode_text, cast_suffix, cell_text, extra_text]
 		else:
 			_info_label.text = "Case survolée : %s" % cell_text
-	_help_label.text = "Boucle FFT : 1 Move + 1 Act dans l’ordre voulu • F choisit l’orientation • Espace = Wait/Fin • Vert déplacement • Rouge attaque • Violet skill • Entrée confirmer • Échap annuler • Q/E caméra • molette zoom • C recentrer • R recommencer"
+	_help_label.text = "Boucle FFT : 1 Move + 1 Act dans l’ordre voulu • F choisit l’orientation • Espace = Wait/Fin • Vert déplacement • Rouge attaque • Violet skill • Entrée confirmer • Échap annuler • Q/E caméra • molette zoom • C recentrer • T menaces • R recommencer"
 	_refresh_timeline_ui()
 	_refresh_unit_card_ui()
 	_update_skill_buttons()
@@ -2883,7 +5962,7 @@ func _update_ui_text() -> void:
 		_move_button.button_pressed = input_mode == MODE_MOVE
 		_attack_button.button_pressed = input_mode == MODE_ATTACK
 	if _log_label != null:
-		_log_label.text = _recent_log_text(5)
+		_log_label.text = _recent_log_text(3)
 
 
 func _predict_timeline_3d(limit: int = 5) -> Array[SporeUnitActor3D]:
@@ -2969,7 +6048,7 @@ func _refresh_timeline_ui() -> void:
 		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.add_theme_font_size_override("font_size", 9)
 		var timing_text: String = "C%d" % int(actor.casting.get("remaining_ticks", 0)) if actor.is_casting() else "%d/%d" % [actor.ct, actor.effective_speed()]
-		card.text = "%s\n%s" % [actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper(), timing_text]
+		card.text = actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper()
 		card.tooltip_text = "%s • CT %d • VIT %d%s" % [actor.display_name, actor.ct, actor.effective_speed(), " • CAST" if actor.is_casting() else ""]
 		var card_style: StyleBoxFlat = StyleBoxFlat.new()
 		card_style.bg_color = Color(0.16, 0.42, 0.62, 0.92) if actor.team == "player" else Color(0.60, 0.24, 0.22, 0.92)
@@ -3001,33 +6080,66 @@ func _unit_card_actor() -> SporeUnitActor3D:
 func _refresh_unit_card_ui() -> void:
 	if _unit_card_panel == null or _unit_card_title == null or _unit_card_body == null:
 		return
+
 	var actor: SporeUnitActor3D = _unit_card_actor()
 	_unit_card_panel.visible = actor != null
 	if actor == null:
 		return
-	_unit_card_title.text = "%s  •  %s" % [actor.display_name, "ALLIÉ" if actor.team == "player" else "ENNEMI"]
+
+	_unit_card_title.text = "%s  •  %s" % [
+		actor.display_name,
+		"ALLIÉ" if actor.team == "player" else "ENNEMI"
+	]
+
 	if _unit_portrait != null and actor != _unit_card_last_actor:
 		_unit_portrait.texture = actor.portrait_texture()
 	_unit_card_last_actor = actor
+
 	if _unit_hp_bar != null:
 		_unit_hp_bar.max_value = maxi(1, actor.max_hp)
 		_unit_hp_bar.value = actor.hp
-		_unit_hp_bar.tooltip_text = "HP %d/%d" % [actor.hp, actor.max_hp]
+		_unit_hp_bar.tooltip_text = "PV %d / %d" % [actor.hp, actor.max_hp]
+
 	if _unit_focus_bar != null:
 		_unit_focus_bar.max_value = maxi(1, actor.max_focus)
 		_unit_focus_bar.value = actor.focus
-		_unit_focus_bar.tooltip_text = "MP %d/%d" % [actor.focus, actor.max_focus]
-	var primary_name: String = _skill_display_name(actor.primary_skill)
-	var secondary_name: String = _skill_display_name(actor.secondary_skill)
+		_unit_focus_bar.tooltip_text = "MP %d / %d" % [actor.focus, actor.max_focus]
+
+	if _unit_hp_text_label != null:
+		_unit_hp_text_label.text = "PV  %d / %d" % [actor.hp, actor.max_hp]
+	if _unit_mp_text_label != null:
+		_unit_mp_text_label.text = "MP  %d / %d" % [actor.focus, actor.max_focus]
+
 	var status_text: String = actor.status_display_text()
 	if status_text.is_empty():
 		status_text = "Aucun statut"
-	var reaction_text: String = "Aucune" if actor.reaction_type == "none" else actor.reaction_type
-	var ability_text: String = "R:%s • S:%s • M:%s" % [reaction_text, actor.support_ability, actor.movement_ability]
+
 	var casting_text: String = ""
 	if actor.is_casting():
-		casting_text = "\nCAST %s • %dt" % [SkillCatalog.display_name(String(actor.casting.get("skill_id", ""))), maxi(0, int(actor.casting.get("remaining_ticks", 0)))]
-	_unit_card_body.text = "HP %d/%d   MP %d/%d\nPUI.P %d   PUI.M %d   DEF.P %d   DEF.M %d\nMOV %d   RNG %d-%d   VIT %d   CT %d\nPRÉC %+d   ESQ %+d • %s\n%s\nFace %s\nI. %s\nII. %s\n%s%s" % [actor.hp, actor.max_hp, actor.focus, actor.max_focus, actor.effective_physical_power(), actor.effective_magic_power(), actor.effective_physical_defense(), actor.effective_magic_defense(), actor.effective_move_range(), actor.attack_min_range, actor.attack_range, actor.effective_speed(), actor.ct, actor.effective_accuracy(), actor.effective_evasion(), actor.weapon_family.to_upper(), ability_text, actor.facing_name(), primary_name, secondary_name, status_text, casting_text]
+		casting_text = "\nPrépare : %s (%d)" % [
+			SkillCatalog.display_name(String(actor.casting.get("skill_id", ""))),
+			maxi(0, int(actor.casting.get("remaining_ticks", 0)))
+		]
+
+	_unit_card_body.text = (
+		"ATQ phys. %d • mag. %d\n"
+		+ "DEF phys. %d • mag. %d\n"
+		+ "Arme %s • Portée %d-%d\nMVT %d • Vitesse %d\n"
+		+ "Orientation %s • %s%s"
+	) % [
+		actor.effective_physical_power(),
+		actor.effective_magic_power(),
+		actor.effective_physical_defense(),
+		actor.effective_magic_defense(),
+		_weapon_family_display_name(actor.weapon_family),
+		actor.attack_min_range,
+		actor.attack_range,
+		actor.effective_move_range(),
+		actor.effective_speed(),
+		actor.facing_name(),
+		status_text,
+		casting_text
+	]
 
 
 func _skill_display_name(skill_id: String) -> String:
@@ -3058,11 +6170,11 @@ func _skill_button_text(skill_id: String, slot_label: String) -> String:
 	var skill: Resource = SkillCatalog.definition(skill_id)
 	if skill == null:
 		return "%s ?" % slot_label
-	var suffix: String = " %dMP" % int(skill.get("focus_cost"))
-	var cast_ticks: int = int(skill.get("cast_time_ticks"))
-	if cast_ticks > 0:
-		suffix += " C%d" % cast_ticks
-	return "%s %s%s" % [slot_label, String(skill.get("display_name")), suffix]
+	return "%s %s • %d MP" % [
+		slot_label,
+		String(skill.get("display_name")),
+		int(skill.get("focus_cost"))
+	]
 
 
 func _skill_preview_actor_count(caster: SporeUnitActor3D, skill: Resource, anchor_cell: Vector2i) -> int:
@@ -3222,60 +6334,126 @@ func _attack_preview_text(attacker: SporeUnitActor3D, target: SporeUnitActor3D) 
 
 func _skill_preview_text(caster: SporeUnitActor3D, skill: Resource, anchor_cell: Vector2i) -> String:
 	if caster == null or skill == null or map_root == null or not map_root.is_cell_valid(anchor_cell):
-		return "Cible de compétence invalide."
+		return "Cible invalide."
+
 	var lines: PackedStringArray = PackedStringArray()
+	var description: String = String(skill.get("description"))
+	if not description.is_empty():
+		lines.append(description)
+
+	lines.append("Coût : %d MP" % int(skill.get("focus_cost")))
+
 	var cast_ticks: int = int(skill.get("cast_time_ticks"))
-	var timing_suffix: String = " • CAST %d" % cast_ticks if cast_ticks > 0 else " • instantané"
-	var accuracy_suffix: String = " • précision %d" % int(skill.get("accuracy")) if bool(skill.get("uses_accuracy")) else " • garanti"
-	lines.append("%s • coût %d MP%s%s" % [String(skill.get("display_name")), int(skill.get("focus_cost")), timing_suffix, accuracy_suffix])
-	lines.append("Point ciblé : %d,%d h%d • zone %d case(s)" % [anchor_cell.x, anchor_cell.y, map_root.elevation_at(anchor_cell), _skill_area_cells(skill, anchor_cell, caster.cell).size()])
+	if cast_ticks > 0:
+		lines.append(
+			"Déclenchement : différé — la compétence partira après %d temps de préparation."
+			% cast_ticks
+		)
+	else:
+		lines.append("Déclenchement : immédiat.")
+
+	var target_actor: SporeUnitActor3D = actors_by_cell.get(anchor_cell, null) as SporeUnitActor3D
+	var area_cells: Array[Vector2i] = _skill_area_cells(skill, anchor_cell, caster.cell)
+	if target_actor != null:
+		lines.append(
+			"Cible : %s (%s)"
+			% [
+				target_actor.display_name,
+				"allié" if target_actor.team == caster.team else "ennemi"
+			]
+		)
+	elif area_cells.size() > 1:
+		lines.append("Zone visée : %d cases." % area_cells.size())
+	else:
+		lines.append("Case visée : %s." % _cell_player_description(anchor_cell))
+
+	# Explain status effects in human language instead of only displaying the ID/name.
+	var raw_effects: Variant = skill.get("effects")
+	if raw_effects is Array:
+		for effect_var: Variant in raw_effects:
+			if not (effect_var is Resource):
+				continue
+			var effect: Resource = effect_var as Resource
+			if String(effect.get("effect_type")) != "status":
+				continue
+			var status_id: String = String(effect.get("status_id"))
+			var status: Resource = StatusCatalog.definition(status_id)
+			if status == null:
+				continue
+			var status_name: String = String(status.get("display_name"))
+			var status_description: String = String(status.get("description"))
+			lines.append(
+				"Effet : %s%s"
+				% [
+					status_name,
+					" — " + status_description if not status_description.is_empty() else ""
+				]
+			)
+
 	var previews: Dictionary = _skill_target_previews(caster, skill, anchor_cell)
 	var ordered_targets: Array = previews.keys()
-	ordered_targets.sort_custom(func(a: Variant, b: Variant) -> bool: return String((a as SporeUnitActor3D).display_name) < String((b as SporeUnitActor3D).display_name))
+	ordered_targets.sort_custom(
+		func(a: Variant, b: Variant) -> bool:
+			return String((a as SporeUnitActor3D).display_name) < String((b as SporeUnitActor3D).display_name)
+	)
+
 	if ordered_targets.is_empty():
-		lines.append("Aucune unité directement affectée.")
+		lines.append("Aucune unité n'est actuellement affectée.")
+		return "\n".join(lines)
+
 	for target_var: Variant in ordered_targets:
 		var target: SporeUnitActor3D = target_var as SporeUnitActor3D
+		if target == null:
+			continue
 		var data: Dictionary = previews[target]
 		var pieces: PackedStringArray = PackedStringArray()
-		var damage: int = int(data.get("damage", 0))
-		var heal_value: int = int(data.get("heal", 0))
+
 		if target.team != caster.team and bool(skill.get("uses_accuracy")):
-			pieces.append("HIT %d%%" % int(data.get("hit_chance", 100)))
+			pieces.append("%d%% de réussite" % int(data.get("hit_chance", 100)))
+
 		var recipient: SporeUnitActor3D = data.get("recipient", target) as SporeUnitActor3D
 		if recipient == null:
 			recipient = target
+
+		var damage: int = int(data.get("damage", 0))
 		if damage > 0:
 			var after_damage: int = maxi(0, recipient.hp - damage)
-			var recipient_prefix: String = "%s: " % recipient.display_name if recipient != target else ""
-			pieces.append("%s-%d PV (%d→%d%s)" % [recipient_prefix, damage, recipient.hp, after_damage, " K.O." if after_damage <= 0 else ""])
+			pieces.append(
+				"%d dégâts : %d → %d PV%s"
+				% [
+					damage,
+					recipient.hp,
+					after_damage,
+					" • K.O." if after_damage <= 0 else ""
+				]
+			)
+
+		var heal_value: int = int(data.get("heal", 0))
+		if heal_value > 0:
+			var healed_after: int = mini(target.max_hp, target.hp + heal_value)
+			pieces.append("+%d PV : %d → %d" % [healed_after - target.hp, target.hp, healed_after])
+
 		var revive_value: int = int(data.get("revive", 0))
 		if revive_value > 0 and target.downed:
-			pieces.append("RÉANIMATION → %d PV" % revive_value)
-		if heal_value > 0:
-			var preview_start_hp: int = revive_value if target.downed and revive_value > 0 else target.hp
-			var healed_after: int = mini(target.max_hp, preview_start_hp + heal_value)
-			pieces.append("+%d PV (%d→%d)" % [mini(heal_value, target.max_hp - preview_start_hp), preview_start_hp, healed_after])
-		var statuses_value: Variant = data.get("statuses", PackedStringArray())
-		if statuses_value is PackedStringArray and not (statuses_value as PackedStringArray).is_empty():
-			pieces.append("statut: %s" % ", ".join(statuses_value))
+			pieces.append("relève avec %d PV" % revive_value)
+
 		if bool(data.get("guard", false)):
-			pieces.append("Garde")
+			pieces.append("donne Garde")
 		if bool(data.get("reaction", false)):
-			pieces.append("réaction +1")
-		var focus_delta: int = int(data.get("focus", 0))
-		if focus_delta != 0:
-			pieces.append("%+d MP" % focus_delta)
+			pieces.append("réactive la réaction")
+
 		var displacement: String = String(data.get("displacement", ""))
 		if not displacement.is_empty():
 			pieces.append(displacement)
-		var reaction_note: String = String(data.get("reaction_note", ""))
-		if not reaction_note.is_empty():
-			pieces.append(reaction_note)
-		lines.append("• %s [%s] : %s" % [target.display_name, "allié" if target.team == caster.team else "ennemi", ", ".join(pieces) if not pieces.is_empty() else "affecté"])
-	var zone_descriptions: PackedStringArray = _skill_zone_preview_descriptions(skill)
-	for description: String in zone_descriptions:
-		lines.append("• %s" % description)
+
+		lines.append(
+			"• %s : %s"
+			% [
+				target.display_name,
+				", ".join(pieces) if not pieces.is_empty() else "effet appliqué"
+			]
+		)
+
 	return "\n".join(lines)
 
 
@@ -3437,6 +6615,71 @@ func _spawn_action_vfx(
 	return vfx
 
 
+func _skill_primary_vfx_kind(skill_id: String) -> String:
+	match skill_id:
+		"heal":
+			return "heal_bloom_fx"
+		"mist":
+			return "mist_field"
+		"mark":
+			return "mark_target"
+		"taunt":
+			return "taunt_wave"
+		"flare":
+			return "prism_shot"
+		"prism_lance":
+			return "beam"
+		"hat":
+			return "slash"
+	return ""
+
+
+func _skill_area_vfx_kind(skill_id: String) -> String:
+	match skill_id:
+		"mist":
+			return "mist_field"
+		"prism_lance":
+			return "cross"
+		"taunt":
+			return "burst"
+	return "burst"
+
+
+func _show_skill_name_banner(actor: SporeUnitActor3D, skill: Resource) -> void:
+	if actor == null or skill == null or _actor_holder == null:
+		return
+
+	var label: Label3D = Label3D.new()
+	label.text = String(skill.get("display_name"))
+	label.font_size = 32
+	label.outline_size = 9
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.modulate = Color(1.0, 0.88, 0.50, 1.0)
+	label.position = actor.position + Vector3(0.0, 1.72, 0.0)
+	label.scale = Vector3(0.74, 0.74, 0.74)
+	_actor_holder.add_child(label)
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "position:y", label.position.y + 0.22, 0.28)
+	tween.tween_property(label, "scale", Vector3.ONE, 0.22)
+	tween.set_parallel(false)
+	tween.tween_interval(0.30)
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y + 0.18, 0.26)
+	tween.tween_property(
+		label,
+		"modulate",
+		Color(1.0, 0.88, 0.50, 0.0),
+		0.26
+	)
+	tween.set_parallel(false)
+	tween.tween_callback(Callable(label, "queue_free"))
+
+
 func _play_skill_area_impacts(skill: Resource, caster: SporeUnitActor3D, anchor_cell: Vector2i) -> void:
 	if not action_vfx_enabled or not aoe_cell_impacts_enabled or skill == null or caster == null or map_root == null:
 		return
@@ -3467,7 +6710,16 @@ func _play_skill_area_impacts(skill: Resource, caster: SporeUnitActor3D, anchor_
 	var vfx_id: String = String(skill.get("vfx_id"))
 	for cell_value: Vector2i in ordered_cells:
 		var world_position: Vector3 = map_root.to_global(map_root.cell_top_local(cell_value) + Vector3(0.0, 0.14, 0.0))
-		_spawn_action_vfx(vfx_id, world_position, world_position, false, null, Vector3.ZERO, "burst")
+		var area_vfx_kind: String = _skill_area_vfx_kind(String(skill.get("id")))
+		_spawn_action_vfx(
+			vfx_id,
+			world_position,
+			world_position,
+			false,
+			null,
+			Vector3.ZERO,
+			area_vfx_kind
+		)
 		if aoe_cell_impact_stagger > 0.0:
 			await get_tree().create_timer(aoe_cell_impact_stagger).timeout
 
@@ -3475,6 +6727,56 @@ func _play_skill_area_impacts(skill: Resource, caster: SporeUnitActor3D, anchor_
 func _on_action_vfx_finished(vfx: SporeActionVfx3D) -> void:
 	if _projectile_follow_vfx == vfx:
 		_projectile_follow_vfx = null
+
+
+func _update_manual_camera_pan(delta: float) -> void:
+	if _camera_rig == null or map_root == null or battle_finished:
+		return
+	if _action_camera_timer > 0.0:
+		return
+	if projectile_camera_follow and _projectile_follow_vfx != null and is_instance_valid(_projectile_follow_vfx):
+		return
+
+	var horizontal: float = 0.0
+	var vertical: float = 0.0
+	if Input.is_key_pressed(KEY_LEFT):
+		horizontal -= 1.0
+	if Input.is_key_pressed(KEY_RIGHT):
+		horizontal += 1.0
+	if Input.is_key_pressed(KEY_UP):
+		vertical += 1.0
+	if Input.is_key_pressed(KEY_DOWN):
+		vertical -= 1.0
+
+	if is_zero_approx(horizontal) and is_zero_approx(vertical):
+		return
+
+	var yaw: float = deg_to_rad(_camera_target_angle)
+	var screen_right: Vector3 = Vector3(cos(yaw), 0.0, -sin(yaw))
+	var screen_up: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
+	var movement: Vector3 = screen_right * horizontal + screen_up * vertical
+	if movement.length_squared() > 1.0:
+		movement = movement.normalized()
+
+	camera_follow_active = false
+	_camera_focus_target += movement * camera_pan_speed * delta
+
+
+func _focus_camera_on_map_center(immediate: bool = false) -> void:
+	if map_root == null:
+		return
+
+	var center_x: int = maxi(0, map_root.grid_width - 1) / 2
+	var center_y: int = maxi(0, map_root.grid_height - 1) / 2
+	var center_cell: Vector2i = Vector2i(center_x, center_y)
+	var local_center: Vector3 = map_root.cell_top_local(center_cell)
+	var world_center: Vector3 = map_root.to_global(local_center)
+	var board_center: Vector3 = to_local(world_center)
+
+	_camera_focus_target = Vector3(board_center.x, 0.0, board_center.z)
+	if immediate:
+		_camera_focus_current = _camera_focus_target
+		_apply_camera_transform()
 
 
 func _position_camera() -> void:
@@ -3507,26 +6809,38 @@ func _apply_camera_transform() -> void:
 
 
 func _update_action_camera(delta: float) -> void:
+	var action_was_active: bool = _action_camera_timer > 0.0
 	_action_camera_timer = maxf(0.0, _action_camera_timer - delta)
 	_impact_zoom_timer = maxf(0.0, _impact_zoom_timer - delta)
-	_camera_shake_strength = maxf(0.0, _camera_shake_strength - delta * 0.72)
+	_camera_shake_strength = maxf(0.0, _camera_shake_strength - delta * 0.62)
+
+	if action_was_active and _action_camera_timer <= 0.0 and not camera_follow_active:
+		_camera_focus_target = _camera_return_focus
 
 
 func _update_camera_smoothing(delta: float) -> void:
 	if not _camera_initialized:
 		return
-	var following_projectile: bool = projectile_camera_follow and _projectile_follow_vfx != null and is_instance_valid(_projectile_follow_vfx)
+	# CINEMATIC_CAMERA_PRIORITY
+	if _cinematic_camera_active:
+		var cinematic_weight: float = 1.0 - exp(-camera_smoothing * maxf(0.0, delta))
+		_camera_current_angle = lerpf(_camera_current_angle, _camera_target_angle, cinematic_weight)
+		_camera_current_distance = lerpf(_camera_current_distance, _camera_target_distance, cinematic_weight)
+		_camera_focus_current = _camera_focus_current.lerp(_camera_focus_target, cinematic_weight)
+		_apply_camera_transform()
+		return
+	var following_projectile: bool = not _cinematic_camera_active and projectile_camera_follow and _projectile_follow_vfx != null and is_instance_valid(_projectile_follow_vfx)
 	if following_projectile:
 		var projectile_position: Vector3 = _projectile_follow_vfx.follow_position
 		_camera_focus_target = Vector3(projectile_position.x, 0.0, projectile_position.z)
-	elif _action_camera_timer > 0.0:
+	elif not _cinematic_camera_active and _action_camera_timer > 0.0:
 		_camera_focus_target = _action_camera_focus
-	elif camera_follow_active and active_actor != null and active_actor.alive:
+	elif not _cinematic_camera_active and camera_follow_active and active_actor != null and active_actor.alive:
 		_camera_focus_target = Vector3(active_actor.position.x, 0.0, active_actor.position.z)
 	var effective_distance: float = _camera_target_distance
 	if following_projectile:
 		effective_distance = maxf(6.0, effective_distance - projectile_camera_zoom_in)
-	elif _action_camera_timer > 0.0:
+	elif not _cinematic_camera_active and _action_camera_timer > 0.0:
 		effective_distance = maxf(6.0, effective_distance - _action_camera_zoom)
 	if _impact_zoom_timer > 0.0:
 		effective_distance = maxf(6.0, effective_distance - 0.55)
@@ -3540,9 +6854,12 @@ func _update_camera_smoothing(delta: float) -> void:
 func _begin_action_camera(source_global: Vector3, target_global: Vector3, duration: float = -1.0, zoom_in: float = -1.0) -> void:
 	if not action_camera_enabled:
 		return
+
 	var source_local: Vector3 = to_local(source_global)
 	var target_local: Vector3 = to_local(target_global)
 	var midpoint: Vector3 = (source_local + target_local) * 0.5
+
+	_camera_return_focus = _camera_focus_target
 	_action_camera_focus = Vector3(midpoint.x, 0.0, midpoint.z)
 	_action_camera_timer = action_camera_duration if duration < 0.0 else duration
 	_action_camera_zoom = action_camera_zoom_in if zoom_in < 0.0 else zoom_in
@@ -3556,9 +6873,10 @@ func _camera_impact(strength: float = -1.0) -> void:
 
 func _focus_camera_on_active(immediate: bool = false) -> void:
 	if active_actor == null:
-		_camera_focus_target = Vector3.ZERO
-	else:
-		_camera_focus_target = Vector3(active_actor.position.x, 0.0, active_actor.position.z)
+		return
+
+	camera_follow_active = false
+	_camera_focus_target = Vector3(active_actor.position.x, 0.0, active_actor.position.z)
 	if immediate:
 		_camera_focus_current = _camera_focus_target
 		_apply_camera_transform()

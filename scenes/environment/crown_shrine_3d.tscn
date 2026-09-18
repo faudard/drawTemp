@@ -1,0 +1,61 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_living_prop_3d.gd" id="99_living"]
+
+[sub_resource type="StandardMaterial3D" id="MatStone"]
+albedo_color = Color(0.25, 0.28, 0.24, 1)
+roughness = 0.90
+
+[sub_resource type="StandardMaterial3D" id="MatGold"]
+albedo_color = Color(0.72, 0.53, 0.16, 1)
+emission_enabled = true
+emission = Color(0.42, 0.24, 0.04, 1)
+emission_energy_multiplier = 0.42
+roughness = 0.58
+metallic = 0.20
+
+[sub_resource type="CylinderMesh" id="BaseMesh"]
+top_radius = 0.72
+bottom_radius = 0.82
+height = 0.18
+radial_segments = 20
+
+[sub_resource type="CylinderMesh" id="RingMesh"]
+top_radius = 0.46
+bottom_radius = 0.50
+height = 0.08
+radial_segments = 20
+
+[sub_resource type="CylinderMesh" id="PillarMesh"]
+top_radius = 0.12
+bottom_radius = 0.18
+height = 0.52
+radial_segments = 10
+
+[node name="CrownShrine3D" type="Node3D"]
+script = ExtResource("99_living")
+animation_kind = "shrine"
+animation_speed = 0.660
+animation_amplitude = 0.038
+
+[node name="StoneBase" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.09, 0)
+mesh = SubResource("BaseMesh")
+material_override = SubResource("MatStone")
+
+[node name="GlowRing" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.22, 0)
+mesh = SubResource("RingMesh")
+material_override = SubResource("MatGold")
+
+[node name="RearPillar" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.35, -0.56)
+mesh = SubResource("PillarMesh")
+material_override = SubResource("MatStone")
+
+[node name="CrownLight" type="OmniLight3D" parent="."]
+position = Vector3(0, 0.72, 0)
+light_color = Color(1, 0.68, 0.22, 1)
+light_energy = 0.72
+omni_range = 3.4
+shadow_enabled = false

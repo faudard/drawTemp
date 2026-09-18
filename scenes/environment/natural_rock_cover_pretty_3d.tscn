@@ -1,0 +1,60 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="SphereMesh" id="1_rock"]
+radius = 0.38
+height = 0.56
+
+[sub_resource type="StandardMaterial3D" id="2_rock_mat"]
+albedo_color = Color(0.43, 0.43, 0.40, 1)
+roughness = 1.0
+
+[sub_resource type="SphereMesh" id="3_moss"]
+radius = 0.16
+height = 0.12
+
+[sub_resource type="StandardMaterial3D" id="4_moss_mat"]
+albedo_color = Color(0.29, 0.52, 0.34, 1)
+roughness = 0.98
+
+[sub_resource type="SphereMesh" id="5_flower"]
+radius = 0.07
+height = 0.05
+
+[sub_resource type="StandardMaterial3D" id="6_flower_mat"]
+albedo_color = Color(0.62, 0.78, 1.0, 1)
+emission_enabled = true
+emission = Color(0.24, 0.46, 1.0, 1)
+emission_energy_multiplier = 0.18
+roughness = 0.6
+
+[node name="NaturalRockCoverPretty3D" type="Node3D"]
+
+[node name="RockA" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_rock")
+material_override = SubResource("2_rock_mat")
+position = Vector3(-0.20, 0.28, 0)
+scale = Vector3(1.18, 0.96, 0.96)
+
+[node name="RockB" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_rock")
+material_override = SubResource("2_rock_mat")
+position = Vector3(0.24, 0.24, 0.08)
+scale = Vector3(0.98, 0.84, 0.88)
+
+[node name="RockC" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_rock")
+material_override = SubResource("2_rock_mat")
+position = Vector3(0.06, 0.18, -0.18)
+scale = Vector3(0.72, 0.62, 0.68)
+
+[node name="MossCap" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_moss")
+material_override = SubResource("4_moss_mat")
+position = Vector3(-0.04, 0.47, -0.02)
+scale = Vector3(1.8, 0.6, 1.2)
+
+[node name="FlowerA" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_flower")
+material_override = SubResource("6_flower_mat")
+position = Vector3(0.32, 0.39, 0.11)
+scale = Vector3(1.0, 0.55, 1.0)

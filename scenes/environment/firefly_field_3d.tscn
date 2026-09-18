@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_firefly_field_3d.gd" id="1_script"]
+
+[node name="FireflyField3D" type="Node3D"]
+script = ExtResource("1_script")
+amount = 8
+radius = 2.0
+height = 1.65
+drift_speed = 0.55
+drift_amount = 0.20

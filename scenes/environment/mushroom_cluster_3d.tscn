@@ -1,0 +1,97 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_living_prop_3d.gd" id="99_living"]
+
+[sub_resource type="StandardMaterial3D" id="MatStem"]
+albedo_color = Color(0.82, 0.76, 0.61, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="MatRed"]
+albedo_color = Color(0.72, 0.20, 0.22, 1)
+emission_enabled = true
+emission = Color(0.40, 0.06, 0.08, 1)
+emission_energy_multiplier = 0.18
+roughness = 0.80
+
+[sub_resource type="StandardMaterial3D" id="MatBlue"]
+albedo_color = Color(0.22, 0.47, 0.68, 1)
+emission_enabled = true
+emission = Color(0.05, 0.20, 0.38, 1)
+emission_energy_multiplier = 0.20
+roughness = 0.78
+
+[sub_resource type="StandardMaterial3D" id="MatGold"]
+albedo_color = Color(0.74, 0.53, 0.19, 1)
+emission_enabled = true
+emission = Color(0.38, 0.20, 0.04, 1)
+emission_energy_multiplier = 0.15
+roughness = 0.80
+
+[sub_resource type="StandardMaterial3D" id="MatMoss"]
+albedo_color = Color(0.20, 0.35, 0.19, 1)
+roughness = 1.0
+
+[sub_resource type="CylinderMesh" id="StemMesh"]
+top_radius = 0.045
+bottom_radius = 0.072
+height = 0.42
+radial_segments = 8
+
+[sub_resource type="SphereMesh" id="CapMesh"]
+radius = 0.5
+height = 1.0
+radial_segments = 12
+rings = 6
+
+[sub_resource type="SphereMesh" id="MossMesh"]
+radius = 0.5
+height = 1.0
+radial_segments = 10
+rings = 5
+
+[node name="MushroomCluster3D" type="Node3D"]
+script = ExtResource("99_living")
+animation_kind = "mushroom"
+animation_speed = 0.800
+animation_amplitude = 0.040
+
+[node name="Moss" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.035, 0)
+scale = Vector3(0.80, 0.10, 0.64)
+mesh = SubResource("MossMesh")
+material_override = SubResource("MatMoss")
+
+[node name="StemA" type="MeshInstance3D" parent="."]
+position = Vector3(-0.18, 0.21, 0.02)
+mesh = SubResource("StemMesh")
+material_override = SubResource("MatStem")
+
+[node name="CapA" type="MeshInstance3D" parent="."]
+position = Vector3(-0.18, 0.46, 0.02)
+scale = Vector3(0.34, 0.15, 0.34)
+mesh = SubResource("CapMesh")
+material_override = SubResource("MatRed")
+
+[node name="StemB" type="MeshInstance3D" parent="."]
+position = Vector3(0.18, 0.16, -0.10)
+scale = Vector3(0.82, 0.72, 0.82)
+mesh = SubResource("StemMesh")
+material_override = SubResource("MatStem")
+
+[node name="CapB" type="MeshInstance3D" parent="."]
+position = Vector3(0.18, 0.36, -0.10)
+scale = Vector3(0.27, 0.12, 0.27)
+mesh = SubResource("CapMesh")
+material_override = SubResource("MatBlue")
+
+[node name="StemC" type="MeshInstance3D" parent="."]
+position = Vector3(0.04, 0.12, 0.21)
+scale = Vector3(0.62, 0.50, 0.62)
+mesh = SubResource("StemMesh")
+material_override = SubResource("MatStem")
+
+[node name="CapC" type="MeshInstance3D" parent="."]
+position = Vector3(0.04, 0.27, 0.21)
+scale = Vector3(0.22, 0.10, 0.22)
+mesh = SubResource("CapMesh")
+material_override = SubResource("MatGold")

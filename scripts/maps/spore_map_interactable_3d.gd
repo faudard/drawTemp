@@ -119,6 +119,78 @@ func _rebuild_visual() -> void:
 	label.position = Vector3(0.0, 0.92, 0.0)
 
 
+func apply_runtime_state(active: bool, used: bool) -> void:
+	var marker: MeshInstance3D = get_node_or_null("_Marker") as MeshInstance3D
+	var label: Label3D = get_node_or_null("_Label") as Label3D
+	if marker == null:
+		return
+
+	var material: StandardMaterial3D = marker.material_override as StandardMaterial3D
+	if material == null:
+		material = StandardMaterial3D.new()
+		marker.material_override = material
+
+	match object_type:
+		"door":
+			if active:
+				marker.scale = Vector3(1.0, 0.12, 1.0)
+				marker.position.y = 0.10
+				material.albedo_color = Color("#59c987")
+				if label != null:
+					label.text = "PORTE OUVERTE"
+					label.modulate = Color(0.48, 0.92, 0.66, 1.0)
+			else:
+				marker.scale = Vector3.ONE
+				marker.position.y = 0.48
+				material.albedo_color = Color("#d8ac55")
+				if label != null:
+					label.text = "PORTE FERMÉE"
+					label.modulate = Color(1.0, 0.80, 0.42, 1.0)
+
+		"switch":
+			marker.scale = Vector3.ONE * (1.12 if active else 1.0)
+			material.albedo_color = (
+				Color("#6be0a1")
+				if active
+				else Color("#67c8ff")
+			)
+			if label != null:
+				label.text = (
+					"INTERRUPTEUR ACTIVÉ"
+					if active
+					else "INTERRUPTEUR"
+				)
+				label.modulate = (
+					Color(0.48, 0.92, 0.66, 1.0)
+					if active
+					else Color(0.62, 0.84, 1.0, 1.0)
+				)
+
+		"chest":
+			marker.rotation.z = -0.20 if used else 0.0
+			marker.position.y = 0.13 if used else 0.18
+			material.albedo_color = (
+				Color("#77786f")
+				if used
+				else Color("#c99245")
+			)
+			if label != null:
+				label.text = (
+					"COFFRE OUVERT"
+					if used
+					else display_name
+				)
+				label.modulate = (
+					Color(0.68, 0.70, 0.68, 1.0)
+					if used
+					else Color(1.0, 0.82, 0.46, 1.0)
+				)
+
+
+func runtime_object_id() -> String:
+	return object_id
+
+
 func _map_parent() -> SporeMap3D:
 	var node: Node = get_parent()
 	while node != null:

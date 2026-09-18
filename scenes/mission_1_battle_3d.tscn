@@ -1,9 +1,12 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototypes/spore_battle_board_3d.gd" id="1_board"]
+[ext_resource type="PackedScene" path="res://scenes/ui/cinematic_player_3d.tscn" id="2_cinematic"]
 
 [node name="Mission1Battle3D" type="Node3D"]
 script = ExtResource("1_board")
 mission_index = 0
 map_scene_path = "res://maps/mission_1_map.tscn"
 hero_unit_ids = PackedStringArray("momo", "pipo", "luma")
+
+[node name="CinematicPlayer3D" parent="." instance=ExtResource("2_cinematic")]

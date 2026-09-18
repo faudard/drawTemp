@@ -10,6 +10,9 @@ extends Resource
 @export var display_name: String = "Cinematic"
 @export_multiline var description: String = ""
 
+@export_group("Direction")
+@export var director_profile: Resource = preload("res://data/cinematic_directors/jrpg_default.tres")
+
 @export_group("Timeline")
 @export var actions: Array[Resource] = []
 

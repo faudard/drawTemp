@@ -1,0 +1,79 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/environment/vinyl_stack_pretty_3d.tscn" id="1_vinyl"]
+
+[sub_resource type="BoxMesh" id="1_table"]
+size = Vector3(1.4, 0.12, 0.72)
+
+[sub_resource type="StandardMaterial3D" id="2_table_mat"]
+albedo_color = Color(0.40, 0.28, 0.18, 1)
+roughness = 0.92
+
+[sub_resource type="CylinderMesh" id="3_leg"]
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.72
+
+[sub_resource type="BoxMesh" id="4_mixer"]
+size = Vector3(0.58, 0.10, 0.34)
+
+[sub_resource type="StandardMaterial3D" id="5_mixer_mat"]
+albedo_color = Color(0.10, 0.11, 0.13, 1)
+roughness = 0.55
+
+[sub_resource type="BoxMesh" id="6_crate"]
+size = Vector3(0.44, 0.32, 0.34)
+
+[sub_resource type="StandardMaterial3D" id="7_crate_mat"]
+albedo_color = Color(0.56, 0.41, 0.27, 1)
+roughness = 0.88
+
+[node name="DJCampPretty3D" type="Node3D"]
+
+[node name="TableTop" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_table")
+material_override = SubResource("2_table_mat")
+position = Vector3(0, 0.8, 0)
+
+[node name="LegA" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_leg")
+material_override = SubResource("2_table_mat")
+position = Vector3(-0.54, 0.36, -0.24)
+
+[node name="LegB" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_leg")
+material_override = SubResource("2_table_mat")
+position = Vector3(0.54, 0.36, -0.24)
+
+[node name="LegC" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_leg")
+material_override = SubResource("2_table_mat")
+position = Vector3(-0.54, 0.36, 0.24)
+
+[node name="LegD" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_leg")
+material_override = SubResource("2_table_mat")
+position = Vector3(0.54, 0.36, 0.24)
+
+[node name="Mixer" type="MeshInstance3D" parent="."]
+mesh = SubResource("4_mixer")
+material_override = SubResource("5_mixer_mat")
+position = Vector3(0, 0.93, 0)
+
+[node name="CrateLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("6_crate")
+material_override = SubResource("7_crate_mat")
+position = Vector3(-0.78, 0.16, 0.32)
+
+[node name="CrateRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("6_crate")
+material_override = SubResource("7_crate_mat")
+position = Vector3(0.82, 0.16, 0.26)
+
+[node name="VinylLeft" parent="." instance=ExtResource("1_vinyl")]
+position = Vector3(-0.76, 0.33, 0.31)
+rotation = Vector3(0, 0.22, 0)
+
+[node name="VinylRight" parent="." instance=ExtResource("1_vinyl")]
+position = Vector3(0.82, 0.33, 0.25)
+rotation = Vector3(0, -0.32, 0)

@@ -1,0 +1,78 @@
+[gd_scene load_steps=10 format=3]
+
+[sub_resource type="CylinderMesh" id="1_post"]
+top_radius = 0.09
+bottom_radius = 0.12
+height = 1.9
+
+[sub_resource type="CylinderMesh" id="2_arch"]
+top_radius = 0.08
+bottom_radius = 0.08
+height = 1.9
+
+[sub_resource type="StandardMaterial3D" id="3_wood"]
+albedo_color = Color(0.55, 0.40, 0.27, 1)
+roughness = 0.95
+
+[sub_resource type="BoxMesh" id="4_sign"]
+size = Vector3(0.86, 0.24, 0.06)
+
+[sub_resource type="StandardMaterial3D" id="5_sign_mat"]
+albedo_color = Color(0.28, 0.21, 0.14, 1)
+roughness = 0.92
+
+[sub_resource type="SphereMesh" id="6_lantern"]
+radius = 0.08
+height = 0.14
+
+[sub_resource type="StandardMaterial3D" id="7_lantern_mat"]
+albedo_color = Color(0.51, 0.95, 0.69, 1)
+emission_enabled = true
+emission = Color(0.38, 1, 0.70, 1)
+emission_energy_multiplier = 0.9
+roughness = 0.15
+
+[node name="GardenGatePretty3D" type="Node3D"]
+
+[node name="PostLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_post")
+material_override = SubResource("3_wood")
+position = Vector3(-0.78, 0.95, 0)
+
+[node name="PostRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_post")
+material_override = SubResource("3_wood")
+position = Vector3(0.78, 0.95, 0)
+
+[node name="ArchTop" type="MeshInstance3D" parent="."]
+mesh = SubResource("2_arch")
+material_override = SubResource("3_wood")
+position = Vector3(0, 1.75, 0)
+rotation = Vector3(0, 0, 1.5708)
+
+[node name="Sign" type="MeshInstance3D" parent="."]
+mesh = SubResource("4_sign")
+material_override = SubResource("5_sign_mat")
+position = Vector3(0, 1.36, 0.08)
+
+[node name="LanternLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("6_lantern")
+material_override = SubResource("7_lantern_mat")
+position = Vector3(-0.56, 1.48, 0.11)
+
+[node name="LanternRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("6_lantern")
+material_override = SubResource("7_lantern_mat")
+position = Vector3(0.56, 1.48, 0.11)
+
+[node name="LightLeft" type="OmniLight3D" parent="."]
+position = Vector3(-0.56, 1.48, 0.18)
+light_color = Color(0.48, 1, 0.71, 1)
+light_energy = 0.6
+omni_range = 3.2
+
+[node name="LightRight" type="OmniLight3D" parent="."]
+position = Vector3(0.56, 1.48, 0.18)
+light_color = Color(0.48, 1, 0.71, 1)
+light_energy = 0.6
+omni_range = 3.2

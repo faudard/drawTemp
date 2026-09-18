@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SporeCinematicShotDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/cinematic_shot_definition.gd" id="1_shot"]
+
+[resource]
+script = ExtResource("1_shot")
+id = "show_1"
+display_name = "SHOW 1 — Champ"
+description = "Plan dialogue épaule A, sujet légèrement décentré."
+target_anchor = "head"
+camera_distance = 7.7
+camera_height = 7.0
+shoulder_angle_degrees = -18.0
+lateral_offset = 0.34
+depth_offset = 0.0
+instant_cut = true
+transition_seconds = 0.0

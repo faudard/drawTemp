@@ -1,0 +1,62 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_living_prop_3d.gd" id="1_script"]
+
+[sub_resource type="StandardMaterial3D" id="MatStem"]
+albedo_color = Color(0.36, 0.27, 0.18, 1)
+roughness = 0.96
+
+[sub_resource type="StandardMaterial3D" id="MatGlow"]
+albedo_color = Color(0.35, 0.72, 0.38, 1)
+emission_enabled = true
+emission = Color(0.28, 0.84, 0.40, 1)
+emission_energy_multiplier = 0.75
+roughness = 0.78
+
+[sub_resource type="CylinderMesh" id="StemMesh"]
+top_radius = 0.055
+bottom_radius = 0.085
+height = 0.66
+radial_segments = 8
+
+[sub_resource type="SphereMesh" id="CapMesh"]
+radius = 0.5
+height = 1.0
+radial_segments = 12
+rings = 6
+
+[sub_resource type="SphereMesh" id="MossMesh"]
+radius = 0.5
+height = 1.0
+radial_segments = 10
+rings = 5
+
+[node name="GardenLantern3D" type="Node3D"]
+script = ExtResource("1_script")
+animation_kind = "lantern"
+animation_speed = 0.72
+animation_amplitude = 0.045
+
+[node name="Moss" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.025, 0)
+scale = Vector3(0.42, 0.06, 0.34)
+mesh = SubResource("MossMesh")
+material_override = SubResource("MatStem")
+
+[node name="Stem" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.33, 0)
+mesh = SubResource("StemMesh")
+material_override = SubResource("MatStem")
+
+[node name="GlowCap" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.72, 0)
+scale = Vector3(0.34, 0.16, 0.34)
+mesh = SubResource("CapMesh")
+material_override = SubResource("MatGlow")
+
+[node name="LanternLight" type="OmniLight3D" parent="."]
+position = Vector3(0, 0.70, 0)
+light_color = Color(0.44, 1, 0.52, 1)
+light_energy = 0.55
+omni_range = 2.6
+shadow_enabled = false

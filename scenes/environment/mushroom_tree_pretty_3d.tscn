@@ -1,0 +1,58 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_handcrafted_prop_3d.gd" id="1_script"]
+
+[sub_resource type="CylinderMesh" id="1_trunk"]
+top_radius = 0.22
+bottom_radius = 0.36
+height = 2.9
+
+[sub_resource type="StandardMaterial3D" id="2_trunk_mat"]
+albedo_color = Color(0.53, 0.38, 0.26, 1)
+roughness = 0.98
+
+[sub_resource type="SphereMesh" id="3_cap"]
+radius = 0.74
+height = 1.08
+
+[sub_resource type="StandardMaterial3D" id="4_cap_mat"]
+albedo_color = Color(0.37, 0.67, 0.46, 1)
+roughness = 0.88
+
+[sub_resource type="SphereMesh" id="5_small_cap"]
+radius = 0.34
+height = 0.48
+
+[sub_resource type="StandardMaterial3D" id="6_small_cap_mat"]
+albedo_color = Color(0.48, 0.79, 0.56, 1)
+roughness = 0.84
+
+[node name="PrettyMushroomTree3D" type="Node3D"]
+script = ExtResource("1_script")
+bob_amplitude = 0.015
+bob_speed = 1.2
+
+[node name="Trunk" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_trunk")
+material_override = SubResource("2_trunk_mat")
+position = Vector3(0, 1.45, 0)
+
+[node name="MainCap" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_cap")
+material_override = SubResource("4_cap_mat")
+position = Vector3(0, 2.66, 0)
+scale = Vector3(1.18, 0.72, 1.18)
+
+[node name="SideCapA" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_small_cap")
+material_override = SubResource("6_small_cap_mat")
+position = Vector3(0.54, 2.02, 0.16)
+rotation = Vector3(0.08, 0, 0.32)
+scale = Vector3(1.08, 0.76, 1.08)
+
+[node name="SideCapB" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_small_cap")
+material_override = SubResource("6_small_cap_mat")
+position = Vector3(-0.48, 1.86, -0.12)
+rotation = Vector3(-0.04, 0, -0.28)
+scale = Vector3(0.92, 0.68, 0.92)

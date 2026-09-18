@@ -1,0 +1,113 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_handcrafted_prop_3d.gd" id="1_script"]
+
+[sub_resource type="CylinderMesh" id="1_base"]
+top_radius = 0.88
+bottom_radius = 1.05
+height = 0.32
+
+[sub_resource type="StandardMaterial3D" id="2_stone"]
+albedo_color = Color(0.40, 0.42, 0.39, 1)
+roughness = 0.96
+
+[sub_resource type="CylinderMesh" id="3_column"]
+top_radius = 0.12
+bottom_radius = 0.16
+height = 0.88
+
+[sub_resource type="StandardMaterial3D" id="4_wood"]
+albedo_color = Color(0.57, 0.40, 0.28, 1)
+roughness = 0.94
+
+[sub_resource type="SphereMesh" id="5_crown_glow"]
+radius = 0.18
+height = 0.28
+
+[sub_resource type="StandardMaterial3D" id="6_gold_glow"]
+albedo_color = Color(1, 0.82, 0.31, 1)
+emission_enabled = true
+emission = Color(1, 0.75, 0.24, 1)
+emission_energy_multiplier = 1.2
+roughness = 0.15
+
+[sub_resource type="BoxMesh" id="7_speaker"]
+size = Vector3(0.38, 0.62, 0.32)
+
+[sub_resource type="StandardMaterial3D" id="8_speaker_mat"]
+albedo_color = Color(0.16, 0.17, 0.18, 1)
+roughness = 0.72
+
+[sub_resource type="CylinderMesh" id="9_disc"]
+top_radius = 0.10
+bottom_radius = 0.10
+height = 0.03
+
+[sub_resource type="StandardMaterial3D" id="10_disc_mat"]
+albedo_color = Color(0.27, 0.28, 0.30, 1)
+emission_enabled = true
+emission = Color(0.72, 0.29, 1.00, 1)
+emission_energy_multiplier = 0.4
+roughness = 0.48
+
+[node name="FungalShrinePretty3D" type="Node3D"]
+script = ExtResource("1_script")
+pulse_lights = true
+pulse_speed = 1.7
+pulse_energy_min = 0.58
+pulse_energy_max = 0.95
+
+[node name="Base" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_base")
+material_override = SubResource("2_stone")
+position = Vector3(0, 0.16, 0)
+
+[node name="ColumnA" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_column")
+material_override = SubResource("4_wood")
+position = Vector3(-0.44, 0.58, -0.12)
+
+[node name="ColumnB" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_column")
+material_override = SubResource("4_wood")
+position = Vector3(0.44, 0.58, -0.12)
+
+[node name="ColumnC" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_column")
+material_override = SubResource("4_wood")
+position = Vector3(0.0, 0.58, 0.38)
+
+[node name="CrownGlow" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_crown_glow")
+material_override = SubResource("6_gold_glow")
+position = Vector3(0, 0.98, 0.02)
+scale = Vector3(1.35, 1.15, 1.35)
+
+[node name="Light" type="OmniLight3D" parent="."]
+position = Vector3(0, 1.14, 0)
+light_color = Color(1, 0.84, 0.45, 1)
+light_energy = 0.8
+omni_range = 5.8
+shadow_enabled = true
+
+[node name="SpeakerLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("7_speaker")
+material_override = SubResource("8_speaker_mat")
+position = Vector3(-0.92, 0.31, 0.48)
+
+[node name="SpeakerLeftDisc" type="MeshInstance3D" parent="."]
+mesh = SubResource("9_disc")
+material_override = SubResource("10_disc_mat")
+position = Vector3(-0.92, 0.31, 0.645)
+rotation = Vector3(1.5708, 0, 0)
+
+[node name="SpeakerRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("7_speaker")
+material_override = SubResource("8_speaker_mat")
+position = Vector3(0.92, 0.31, 0.48)
+
+[node name="SpeakerRightDisc" type="MeshInstance3D" parent="."]
+mesh = SubResource("9_disc")
+material_override = SubResource("10_disc_mat")
+position = Vector3(0.92, 0.31, 0.645)
+rotation = Vector3(1.5708, 0, 0)

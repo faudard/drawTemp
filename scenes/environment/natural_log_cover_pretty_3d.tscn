@@ -1,0 +1,69 @@
+[gd_scene load_steps=8 format=3]
+
+[sub_resource type="CylinderMesh" id="1_log"]
+top_radius = 0.18
+bottom_radius = 0.22
+height = 1.65
+
+[sub_resource type="StandardMaterial3D" id="2_log_mat"]
+albedo_color = Color(0.53, 0.38, 0.25, 1)
+roughness = 0.94
+
+[sub_resource type="SphereMesh" id="3_moss"]
+radius = 0.22
+height = 0.18
+
+[sub_resource type="StandardMaterial3D" id="4_moss_mat"]
+albedo_color = Color(0.28, 0.52, 0.33, 1)
+roughness = 0.98
+
+[sub_resource type="SphereMesh" id="5_leaf"]
+radius = 0.10
+height = 0.07
+
+[sub_resource type="StandardMaterial3D" id="6_leaf_mat"]
+albedo_color = Color(0.39, 0.76, 0.46, 1)
+roughness = 0.86
+
+[sub_resource type="CylinderMesh" id="7_stump"]
+top_radius = 0.15
+bottom_radius = 0.18
+height = 0.34
+
+[node name="NaturalLogCoverPretty3D" type="Node3D"]
+
+[node name="MainLog" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_log")
+material_override = SubResource("2_log_mat")
+position = Vector3(0, 0.22, 0)
+rotation = Vector3(0, 0, 1.5708)
+
+[node name="StumpLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("7_stump")
+material_override = SubResource("2_log_mat")
+position = Vector3(-0.66, 0.17, 0.07)
+rotation = Vector3(0.14, 0.0, 0.1)
+
+[node name="StumpRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("7_stump")
+material_override = SubResource("2_log_mat")
+position = Vector3(0.68, 0.16, -0.05)
+rotation = Vector3(-0.08, 0.0, -0.16)
+
+[node name="MossTop" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_moss")
+material_override = SubResource("4_moss_mat")
+position = Vector3(0.08, 0.37, -0.02)
+scale = Vector3(1.6, 0.7, 1.0)
+
+[node name="LeafA" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_leaf")
+material_override = SubResource("6_leaf_mat")
+position = Vector3(-0.26, 0.33, 0.13)
+scale = Vector3(1.0, 0.5, 1.6)
+
+[node name="LeafB" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_leaf")
+material_override = SubResource("6_leaf_mat")
+position = Vector3(0.24, 0.34, -0.10)
+scale = Vector3(0.9, 0.5, 1.5)

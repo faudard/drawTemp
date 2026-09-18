@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SporeCinematicShotDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/cinematic_shot_definition.gd" id="1_shot"]
+
+[resource]
+script = ExtResource("1_shot")
+id = "show_wide"
+display_name = "SHOW WIDE — Plan d'ensemble"
+description = "Plan large de respiration ou d'installation."
+target_anchor = "center"
+camera_distance = 11.2
+camera_height = 9.2
+shoulder_angle_degrees = 0.0
+lateral_offset = 0.0
+depth_offset = 0.0
+instant_cut = true
+transition_seconds = 0.0

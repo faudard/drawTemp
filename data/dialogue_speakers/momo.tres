@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SporeDialogueSpeakerProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dialogue_speaker_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+id = "momo"
+display_name = "Momo"
+unit_id = "momo"
+portrait_side = "left"
+accent_color = Color(0.48, 0.88, 0.54, 1)
+name_color = Color(0.78, 1.0, 0.78, 1)
+portrait_path = ""
+text_speed = 43.0
+voice_pitch = 0.88
+blip_every = 2
+blip_volume_db = -16.0

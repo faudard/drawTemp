@@ -1,0 +1,64 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_living_prop_3d.gd" id="99_living"]
+
+[sub_resource type="StandardMaterial3D" id="MatCrystal"]
+albedo_color = Color(0.35, 0.24, 0.72, 1)
+emission_enabled = true
+emission = Color(0.31, 0.18, 0.72, 1)
+emission_energy_multiplier = 0.75
+roughness = 0.38
+
+[sub_resource type="StandardMaterial3D" id="MatBase"]
+albedo_color = Color(0.22, 0.28, 0.22, 1)
+roughness = 0.96
+
+[sub_resource type="CylinderMesh" id="CrystalMesh"]
+top_radius = 0.025
+bottom_radius = 0.11
+height = 0.58
+radial_segments = 6
+
+[sub_resource type="SphereMesh" id="BaseMesh"]
+radius = 0.5
+height = 1.0
+radial_segments = 10
+rings = 5
+
+[node name="SporeCrystal3D" type="Node3D"]
+script = ExtResource("99_living")
+animation_kind = "crystal"
+animation_speed = 0.720
+animation_amplitude = 0.035
+
+[node name="Base" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.03, 0)
+scale = Vector3(0.62, 0.08, 0.50)
+mesh = SubResource("BaseMesh")
+material_override = SubResource("MatBase")
+
+[node name="CrystalA" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.29, 0)
+mesh = SubResource("CrystalMesh")
+material_override = SubResource("MatCrystal")
+
+[node name="CrystalB" type="MeshInstance3D" parent="."]
+position = Vector3(-0.16, 0.20, 0.04)
+rotation = Vector3(0, 0, -0.18)
+scale = Vector3(0.72, 0.72, 0.72)
+mesh = SubResource("CrystalMesh")
+material_override = SubResource("MatCrystal")
+
+[node name="CrystalC" type="MeshInstance3D" parent="."]
+position = Vector3(0.16, 0.17, -0.02)
+rotation = Vector3(0, 0, 0.22)
+scale = Vector3(0.58, 0.58, 0.58)
+mesh = SubResource("CrystalMesh")
+material_override = SubResource("MatCrystal")
+
+[node name="Glow" type="OmniLight3D" parent="."]
+position = Vector3(0, 0.48, 0)
+light_color = Color(0.48, 0.34, 1, 1)
+light_energy = 0.42
+omni_range = 2.4
+shadow_enabled = false

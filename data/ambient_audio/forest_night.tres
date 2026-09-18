@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SporeAmbientAudioProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ambient_audio_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+id = "forest_night"
+display_name = "Forêt nocturne"
+fallback_kind = "forest"
+volume_db = -31.0
+max_distance = 18.0
+unit_size = 5.0
+fallback_base_frequency = 68.0
+fallback_motion = 0.32
+fallback_noise = 0.18

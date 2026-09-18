@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SporeCinematicShotSetDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/cinematic_shot_set_definition.gd" id="1_set"]
+[ext_resource type="Resource" path="res://data/cinematic_shots/show_1.tres" id="2_a"]
+[ext_resource type="Resource" path="res://data/cinematic_shots/show_2.tres" id="3_b"]
+[ext_resource type="Resource" path="res://data/cinematic_shots/show_wide.tres" id="4_wide"]
+
+[resource]
+script = ExtResource("1_set")
+id = "dialogue_default"
+display_name = "Dialogue — champ / contrechamp"
+shot_a = ExtResource("2_a")
+shot_b = ExtResource("3_b")
+wide_shot = ExtResource("4_wide")
+alternate_when_speaker_changes = true
+use_wide_for_first_line = false
+pre_dialogue_hold = 0.06

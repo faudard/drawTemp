@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SporeAmbientAudioProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ambient_audio_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+id = "spore_hum"
+display_name = "Bourdonnement des spores"
+fallback_kind = "spores"
+volume_db = -29.0
+max_distance = 7.5
+unit_size = 2.5
+fallback_base_frequency = 82.0
+fallback_motion = 0.30
+fallback_noise = 0.12

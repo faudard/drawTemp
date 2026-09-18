@@ -45,6 +45,11 @@ func configure(vfx: Resource, source: Vector3, target: Vector3, kind_override: S
 	radius_world = clampf(radius_px / 42.0, 0.24, 1.35)
 	trail_width_world = clampf(trail_px / 70.0, 0.035, 0.22)
 	arc_height = 0.42 + minf(0.75, source.distance_to(target) * 0.045)
+	if kind == "bullet":
+		duration = clampf(duration * 0.72, 0.22, 0.34)
+		arc_height = 0.0
+		radius_world = minf(radius_world, 0.36)
+		trail_width_world = minf(trail_width_world, 0.055)
 	global_position = source_world
 	follow_position = source_world
 
@@ -54,6 +59,18 @@ func start() -> void:
 		return
 	started = true
 	match kind:
+		"heal_bloom_fx":
+			_build_heal_bloom_fx()
+		"mist_field":
+			_build_mist_field()
+		"mark_target":
+			_build_mark_target()
+		"taunt_wave":
+			_build_taunt_wave()
+		"prism_shot":
+			_build_prism_shot()
+		"bullet":
+			_build_bullet()
 		"projectile":
 			_build_projectile()
 		"beam":
@@ -79,6 +96,18 @@ func _process(delta: float) -> void:
 	elapsed += delta
 	var t: float = clampf(elapsed / duration, 0.0, 1.0)
 	match kind:
+		"heal_bloom_fx":
+			_update_heal_bloom_fx(t)
+		"mist_field":
+			_update_mist_field(t)
+		"mark_target":
+			_update_mark_target(t)
+		"taunt_wave":
+			_update_taunt_wave(t)
+		"prism_shot":
+			_update_prism_shot(delta, t)
+		"bullet":
+			_update_bullet(delta, t)
 		"projectile":
 			_update_projectile(delta, t)
 		"beam":
@@ -103,6 +132,8 @@ func _process(delta: float) -> void:
 
 
 func _impact_fraction_reached(t: float) -> bool:
+	if kind == "bullet":
+		return t >= 0.82
 	if kind == "projectile":
 		return t >= 0.78
 	if kind == "beam":
@@ -110,6 +141,335 @@ func _impact_fraction_reached(t: float) -> bool:
 	if kind == "slash":
 		return t >= 0.34
 	return t >= 0.28
+
+
+func _build_bullet() -> void:
+	_body = MeshInstance3D.new()
+	_body.name = "BulletTracer"
+
+	var tracer_mesh: BoxMesh = BoxMesh.new()
+	tracer_mesh.size = Vector3(
+		maxf(0.025, trail_width_world * 0.65),
+		maxf(0.025, trail_width_world * 0.65),
+		maxf(0.20, radius_world * 0.72)
+	)
+	_body.mesh = tracer_mesh
+	_body.material_override = _material(Color(1.0, 0.90, 0.52, 1.0), true, 2.4)
+	add_child(_body)
+
+	var core: MeshInstance3D = MeshInstance3D.new()
+	core.name = "BulletCore"
+	var core_mesh: BoxMesh = BoxMesh.new()
+	core_mesh.size = Vector3(
+		maxf(0.012, trail_width_world * 0.26),
+		maxf(0.012, trail_width_world * 0.26),
+		maxf(0.23, radius_world * 0.82)
+	)
+	core.mesh = core_mesh
+	core.material_override = _material(Color.WHITE, true, 3.1)
+	_body.add_child(core)
+
+	var direction: Vector3 = target_world - source_world
+	if direction.length_squared() > 0.0001:
+		look_at(target_world, Vector3.UP, true)
+
+
+func _update_bullet(delta: float, t: float) -> void:
+	const TRAVEL_END: float = 0.82
+	var travel_t: float = clampf(t / TRAVEL_END, 0.0, 1.0)
+	var eased: float = smoothstep(0.0, 1.0, travel_t)
+
+	global_position = source_world.lerp(target_world, eased)
+	follow_position = global_position
+
+	if travel_t < 1.0:
+		if _body != null:
+			var pulse: float = 1.0 + sin(elapsed * 52.0) * 0.08
+			_body.scale = Vector3(1.0, 1.0, pulse)
+
+		_trail_accumulator += delta
+		if _trail_accumulator >= 0.025:
+			_trail_accumulator = 0.0
+			_spawn_trail_point()
+	else:
+		global_position = target_world
+		follow_position = target_world
+		if _body != null:
+			_body.visible = false
+		if not _projectile_burst_spawned:
+			_projectile_burst_spawned = true
+			_spawn_projectile_impact_sparks()
+
+		var impact_t: float = clampf(
+			(t - TRAVEL_END) / (1.0 - TRAVEL_END),
+			0.0,
+			1.0
+		)
+		_update_projectile_impact(impact_t)
+
+
+func _build_heal_bloom_fx() -> void:
+	global_position = target_world
+
+	_body = MeshInstance3D.new()
+	_body.name = "HealRing"
+	var ring_mesh: CylinderMesh = CylinderMesh.new()
+	ring_mesh.top_radius = radius_world * 0.34
+	ring_mesh.bottom_radius = radius_world * 0.42
+	ring_mesh.height = 0.035
+	_body.mesh = ring_mesh
+	_body.material_override = _material(
+		Color(0.36, 0.95, 0.58, 0.70),
+		true,
+		1.4
+	)
+	add_child(_body)
+
+	for index: int in range(8):
+		var spark: MeshInstance3D = MeshInstance3D.new()
+		var mesh: SphereMesh = SphereMesh.new()
+		mesh.radius = 0.045
+		mesh.height = 0.09
+		spark.mesh = mesh
+		spark.material_override = _material(
+			Color(0.82, 1.0, 0.72, 0.92) if index % 2 == 0 else Color(1.0, 0.88, 0.48, 0.92),
+			true,
+			1.8
+		)
+		var angle: float = TAU * float(index) / 8.0
+		spark.position = Vector3(
+			cos(angle) * radius_world * 0.30,
+			0.06,
+			sin(angle) * radius_world * 0.30
+		)
+		spark.set_meta("heal_angle", angle)
+		spark.set_meta("heal_index", index)
+		add_child(spark)
+		_aux_nodes.append(spark)
+
+
+func _update_heal_bloom_fx(t: float) -> void:
+	if _body != null:
+		var ring_scale: float = 0.35 + t * 1.65
+		_body.scale = Vector3(ring_scale, 1.0, ring_scale)
+
+	for node: Node3D in _aux_nodes:
+		if node == null:
+			continue
+		var angle: float = float(node.get_meta("heal_angle", 0.0))
+		var index: int = int(node.get_meta("heal_index", 0))
+		var orbit: float = radius_world * (0.26 + t * 0.20)
+		node.position.x = cos(angle + t * 1.8) * orbit
+		node.position.z = sin(angle + t * 1.8) * orbit
+		node.position.y = 0.08 + t * (0.68 + 0.04 * float(index % 3))
+		var pulse: float = 0.72 + sin(t * PI * 4.0 + float(index)) * 0.16
+		node.scale = Vector3.ONE * pulse
+
+
+func _build_mist_field() -> void:
+	global_position = target_world
+
+	for index: int in range(10):
+		var cloud: MeshInstance3D = MeshInstance3D.new()
+		var mesh: SphereMesh = SphereMesh.new()
+		mesh.radius = 0.24
+		mesh.height = 0.34
+		mesh.radial_segments = 10
+		mesh.rings = 5
+		cloud.mesh = mesh
+
+		var cloud_color: Color = Color(0.50, 0.88, 0.78, 0.26)
+		if index % 2 != 0:
+			cloud_color = Color(0.66, 0.82, 0.96, 0.22)
+
+		cloud.material_override = _material(cloud_color, true, 0.55)
+
+		var angle: float = TAU * float(index) / 10.0
+		var radius_value: float = 0.18 + 0.06 * float(index % 4)
+		cloud.position = Vector3(
+			cos(angle) * radius_value,
+			0.10 + 0.03 * float(index % 3),
+			sin(angle) * radius_value
+		)
+		cloud.set_meta("mist_angle", angle)
+		cloud.set_meta("mist_radius", radius_value)
+		cloud.set_meta("mist_index", index)
+		add_child(cloud)
+		_aux_nodes.append(cloud)
+
+
+func _update_mist_field(t: float) -> void:
+	for node: Node3D in _aux_nodes:
+		if node == null:
+			continue
+
+		var angle: float = float(node.get_meta("mist_angle", 0.0))
+		var base_radius: float = float(node.get_meta("mist_radius", 0.2))
+		var index: int = int(node.get_meta("mist_index", 0))
+		var spread: float = base_radius + t * radius_world * 0.55
+
+		node.position.x = cos(angle + t * 0.65) * spread
+		node.position.z = sin(angle + t * 0.65) * spread
+		node.position.y = 0.10 + sin(t * PI + float(index) * 0.5) * 0.08
+
+		var cloud_scale: float = 0.42 + sin(t * PI) * 1.10
+		node.scale = Vector3(
+			cloud_scale * 1.25,
+			cloud_scale * 0.65,
+			cloud_scale
+		)
+
+
+func _build_mark_target() -> void:
+	global_position = target_world
+
+	for index: int in range(4):
+		var bracket: MeshInstance3D = MeshInstance3D.new()
+		var mesh: BoxMesh = BoxMesh.new()
+		mesh.size = Vector3(0.26, 0.045, 0.055)
+		bracket.mesh = mesh
+		bracket.material_override = _material(
+			Color(0.42, 0.82, 1.0, 0.92),
+			true,
+			2.0
+		)
+
+		var angle: float = TAU * float(index) / 4.0
+		bracket.position = Vector3(
+			cos(angle) * 0.40,
+			0.55,
+			sin(angle) * 0.40
+		)
+		bracket.rotation.y = -angle
+		bracket.set_meta("mark_angle", angle)
+		add_child(bracket)
+		_aux_nodes.append(bracket)
+
+	_body = MeshInstance3D.new()
+	_body.name = "MarkCore"
+	var core_mesh: SphereMesh = SphereMesh.new()
+	core_mesh.radius = 0.08
+	core_mesh.height = 0.16
+	_body.mesh = core_mesh
+	_body.position = Vector3(0.0, 0.85, 0.0)
+	_body.material_override = _material(Color.WHITE, true, 2.8)
+	add_child(_body)
+
+
+func _update_mark_target(t: float) -> void:
+	var lock_radius: float = lerpf(0.72, 0.32, minf(1.0, t * 1.25))
+
+	for node: Node3D in _aux_nodes:
+		if node == null:
+			continue
+		var angle: float = float(node.get_meta("mark_angle", 0.0))
+		node.position.x = cos(angle + t * 1.2) * lock_radius
+		node.position.z = sin(angle + t * 1.2) * lock_radius
+		node.position.y = 0.54 + sin(t * PI * 2.0 + angle) * 0.05
+		node.rotation.y = -(angle + t * 1.2)
+
+	if _body != null:
+		var pulse: float = 0.65 + sin(t * PI * 4.0) * 0.20
+		_body.scale = Vector3.ONE * pulse
+		_body.position.y = 0.82 + sin(t * PI * 2.0) * 0.08
+
+
+func _build_taunt_wave() -> void:
+	global_position = target_world
+
+	_body = MeshInstance3D.new()
+	_body.name = "TauntWave"
+
+	var mesh: CylinderMesh = CylinderMesh.new()
+	mesh.top_radius = 0.34
+	mesh.bottom_radius = 0.42
+	mesh.height = 0.035
+	_body.mesh = mesh
+	_body.material_override = _material(
+		Color(1.0, 0.70, 0.24, 0.65),
+		true,
+		1.8
+	)
+	add_child(_body)
+
+	var inner: MeshInstance3D = MeshInstance3D.new()
+	var inner_mesh: CylinderMesh = CylinderMesh.new()
+	inner_mesh.top_radius = 0.22
+	inner_mesh.bottom_radius = 0.28
+	inner_mesh.height = 0.045
+	inner.mesh = inner_mesh
+	inner.material_override = _material(
+		Color(1.0, 0.34, 0.24, 0.58),
+		true,
+		1.6
+	)
+	add_child(inner)
+	_aux_nodes.append(inner)
+
+
+func _update_taunt_wave(t: float) -> void:
+	var outer_scale: float = 0.32 + t * 3.0
+	if _body != null:
+		_body.scale = Vector3(outer_scale, 1.0, outer_scale)
+
+	for node: Node3D in _aux_nodes:
+		if node == null:
+			continue
+		var inner_scale: float = 0.26 + t * 2.25
+		node.scale = Vector3(inner_scale, 1.0, inner_scale)
+
+
+func _build_prism_shot() -> void:
+	_body = MeshInstance3D.new()
+	_body.name = "PrismShot"
+
+	var mesh: BoxMesh = BoxMesh.new()
+	mesh.size = Vector3(0.05, 0.05, 0.42)
+	_body.mesh = mesh
+	_body.material_override = _material(
+		Color(0.38, 0.84, 1.0, 1.0),
+		true,
+		2.6
+	)
+	add_child(_body)
+
+	var core: MeshInstance3D = MeshInstance3D.new()
+	var core_mesh: BoxMesh = BoxMesh.new()
+	core_mesh.size = Vector3(0.018, 0.018, 0.48)
+	core.mesh = core_mesh
+	core.material_override = _material(Color.WHITE, true, 3.2)
+	_body.add_child(core)
+
+	var direction: Vector3 = target_world - source_world
+	if direction.length_squared() > 0.0001:
+		look_at(target_world, Vector3.UP, true)
+
+
+func _update_prism_shot(delta: float, t: float) -> void:
+	const TRAVEL_END: float = 0.82
+	var travel_t: float = clampf(t / TRAVEL_END, 0.0, 1.0)
+	var eased: float = ease(travel_t, -0.18)
+
+	var base: Vector3 = source_world.lerp(target_world, eased)
+	base.y += sin(PI * travel_t) * 0.10
+	global_position = base
+	follow_position = base
+
+	if travel_t < 1.0:
+		if _body != null:
+			var pulse: float = 1.0 + sin(elapsed * 40.0) * 0.10
+			_body.scale = Vector3(pulse, pulse, 1.0)
+
+		_trail_accumulator += delta
+		if _trail_accumulator >= 0.030:
+			_trail_accumulator = 0.0
+			_spawn_trail_point()
+	else:
+		if _body != null:
+			_body.visible = false
+		if not _projectile_burst_spawned:
+			_projectile_burst_spawned = true
+			_spawn_projectile_impact_sparks()
 
 
 func _build_projectile() -> void:

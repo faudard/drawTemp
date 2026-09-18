@@ -27,6 +27,7 @@ extends Resource
 	"dialogue",
 	"camera_focus_cell",
 	"camera_focus_unit",
+	"camera_shot",
 	"camera_zoom",
 	"camera_reset",
 	"camera_shake",
@@ -54,6 +55,16 @@ extends Resource
 @export_enum("left", "right") var portrait_side: String = "left"
 @export var wait_for_input: bool = true
 @export_range(0.0, 30.0, 0.1) var auto_advance_seconds: float = 0.0
+
+@export_group("Dialogue Presentation")
+@export var dialogue_profile_id: String = ""
+@export var override_dialogue_profile: bool = false
+@export_range(10.0, 120.0, 1.0) var text_speed: float = 46.0
+@export_range(0.55, 1.75, 0.05) var voice_pitch: float = 1.0
+@export_range(1, 8, 1) var blip_every: int = 2
+@export var shot_preset_id: String = "auto"
+
+@export_group("Cinematic Camera")
 @export_range(0.25, 3.0, 0.05) var camera_zoom: float = 1.0
 @export_range(0.0, 5.0, 0.05) var camera_duration: float = 0.35
 @export_file("*.ogg", "*.wav", "*.mp3") var audio_path: String = ""

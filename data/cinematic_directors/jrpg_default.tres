@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="SporeCinematicDirectorProfile" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/cinematic_director_profile.gd" id="1_profile"]
+[ext_resource type="Resource" path="res://data/cinematic_shots/dialogue_default_set.tres" id="2_set"]
+
+[resource]
+script = ExtResource("1_profile")
+id = "jrpg_default"
+display_name = "JRPG — champ / contrechamp"
+description = "Plan large d'installation, champ/contrechamp sur changement de locuteur, plan conservé quand le même personnage continue."
+shot_set = ExtResource("2_set")
+establish_first_exchange = true
+establish_new_participant = true
+keep_same_speaker_shot = true
+alternate_on_speaker_change = true
+establishing_hold = 0.16
+cut_hold = 0.05
+max_consecutive_lines_same_shot = 4
+return_to_wide_after_exchange = false
+end_wide_hold = 0.15

@@ -1,0 +1,55 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_living_prop_3d.gd" id="1_script"]
+
+[sub_resource type="StandardMaterial3D" id="MatBody"]
+albedo_color = Color(0.08, 0.07, 0.12, 1)
+roughness = 0.72
+
+[sub_resource type="StandardMaterial3D" id="MatGlow"]
+albedo_color = Color(0.40, 0.16, 0.58, 1)
+emission_enabled = true
+emission = Color(0.38, 0.10, 0.62, 1)
+emission_energy_multiplier = 0.72
+roughness = 0.52
+
+[sub_resource type="BoxMesh" id="BodyMesh"]
+size = Vector3(0.52, 1.02, 0.42)
+
+[sub_resource type="CylinderMesh" id="ConeMesh"]
+top_radius = 0.12
+bottom_radius = 0.15
+height = 0.045
+radial_segments = 18
+
+[sub_resource type="BoxMesh" id="FootMesh"]
+size = Vector3(0.40, 0.08, 0.34)
+
+[node name="BeatboxSpeaker3D" type="Node3D"]
+script = ExtResource("1_script")
+animation_kind = "speaker"
+animation_speed = 1.0
+animation_amplitude = 0.055
+
+[node name="Body" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.51, 0)
+mesh = SubResource("BodyMesh")
+material_override = SubResource("MatBody")
+
+[node name="Glow" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.63, 0.235)
+rotation = Vector3(1.5708, 0, 0)
+mesh = SubResource("ConeMesh")
+material_override = SubResource("MatGlow")
+
+[node name="Foot" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.04, 0)
+mesh = SubResource("FootMesh")
+material_override = SubResource("MatBody")
+
+[node name="BeatLight" type="OmniLight3D" parent="."]
+position = Vector3(0, 0.63, 0.34)
+light_color = Color(0.62, 0.25, 1, 1)
+light_energy = 0.24
+omni_range = 1.9
+shadow_enabled = false

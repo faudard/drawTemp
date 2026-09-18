@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_ground_detail_patch_3d.gd" id="1_script"]
+
+[node name="GroundDetailPatch3D" type="Node3D"]
+script = ExtResource("1_script")

@@ -1,0 +1,152 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_stage_deco_wobble_3d.gd" id="1_script"]
+
+[sub_resource type="PlaneMesh" id="1_plane"]
+size = Vector2(23, 10.5)
+
+[sub_resource type="StandardMaterial3D" id="2_plane_mat"]
+albedo_color = Color(0.12, 0.17, 0.22, 1)
+cull_mode = 2
+roughness = 1.0
+
+[sub_resource type="SphereMesh" id="3_moon"]
+radius = 0.78
+height = 1.0
+
+[sub_resource type="StandardMaterial3D" id="4_moon_mat"]
+albedo_color = Color(0.76, 0.92, 1, 1)
+emission_enabled = true
+emission = Color(0.62, 0.86, 1, 1)
+emission_energy_multiplier = 0.8
+roughness = 0.12
+
+[sub_resource type="BoxMesh" id="5_hill"]
+size = Vector3(4.4, 2.0, 0.35)
+
+[sub_resource type="StandardMaterial3D" id="6_hill_mat"]
+albedo_color = Color(0.10, 0.15, 0.16, 1)
+roughness = 1.0
+
+[sub_resource type="CylinderMesh" id="7_trunk"]
+top_radius = 0.07
+bottom_radius = 0.10
+height = 2.2
+
+[sub_resource type="SphereMesh" id="8_canopy"]
+radius = 0.42
+height = 0.72
+
+[sub_resource type="StandardMaterial3D" id="9_tree_mat"]
+albedo_color = Color(0.07, 0.11, 0.12, 1)
+roughness = 1.0
+
+[sub_resource type="PlaneMesh" id="10_fog"]
+size = Vector2(23, 2.6)
+
+[sub_resource type="StandardMaterial3D" id="11_fog_mat"]
+albedo_color = Color(0.34, 0.48, 0.54, 0.30)
+transparency = 1
+cull_mode = 2
+roughness = 1.0
+
+[sub_resource type="StandardMaterial3D" id="12_glow_mat"]
+albedo_color = Color(0.47, 0.86, 0.66, 1)
+emission_enabled = true
+emission = Color(0.28, 0.78, 0.54, 1)
+emission_energy_multiplier = 0.55
+roughness = 0.18
+
+[node name="Mission1BackdropPretty3D" type="Node3D"]
+
+[node name="BackdropPlane" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_plane")
+material_override = SubResource("2_plane_mat")
+position = Vector3(0, 3.2, -10.4)
+
+[node name="Moon" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_moon")
+material_override = SubResource("4_moon_mat")
+position = Vector3(5.6, 7.4, -9.9)
+
+[node name="MoonLight" type="OmniLight3D" parent="."]
+position = Vector3(5.6, 7.4, -9.2)
+light_color = Color(0.60, 0.84, 1.0, 1)
+light_energy = 0.28
+omni_range = 7.5
+
+[node name="HillLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_hill")
+material_override = SubResource("6_hill_mat")
+position = Vector3(-6.4, 0.6, -9.7)
+rotation = Vector3(0, 0.16, 0)
+scale = Vector3(1.05, 1.0, 1.0)
+
+[node name="HillCenter" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_hill")
+material_override = SubResource("6_hill_mat")
+position = Vector3(-0.4, 0.72, -9.9)
+scale = Vector3(1.50, 1.12, 1.0)
+
+[node name="HillRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("5_hill")
+material_override = SubResource("6_hill_mat")
+position = Vector3(6.0, 0.62, -9.8)
+rotation = Vector3(0, -0.12, 0)
+scale = Vector3(1.14, 1.0, 1.0)
+
+[node name="TreeSilhouettes" type="Node3D" parent="."]
+script = ExtResource("1_script")
+sway_amount_degrees = 0.7
+sway_speed = 0.35
+bob_amount = 0.0
+
+[node name="TrunkA" type="MeshInstance3D" parent="TreeSilhouettes"]
+mesh = SubResource("7_trunk")
+material_override = SubResource("9_tree_mat")
+position = Vector3(-4.7, 1.1, -9.2)
+
+[node name="CanopyA" type="MeshInstance3D" parent="TreeSilhouettes"]
+mesh = SubResource("8_canopy")
+material_override = SubResource("9_tree_mat")
+position = Vector3(-4.7, 2.35, -9.2)
+scale = Vector3(1.85, 1.0, 1.25)
+
+[node name="TrunkB" type="MeshInstance3D" parent="TreeSilhouettes"]
+mesh = SubResource("7_trunk")
+material_override = SubResource("9_tree_mat")
+position = Vector3(-0.8, 1.0, -9.1)
+
+[node name="CanopyB" type="MeshInstance3D" parent="TreeSilhouettes"]
+mesh = SubResource("8_canopy")
+material_override = SubResource("9_tree_mat")
+position = Vector3(-0.8, 2.18, -9.1)
+scale = Vector3(2.05, 1.0, 1.30)
+
+[node name="TrunkC" type="MeshInstance3D" parent="TreeSilhouettes"]
+mesh = SubResource("7_trunk")
+material_override = SubResource("9_tree_mat")
+position = Vector3(3.2, 1.08, -9.15)
+
+[node name="CanopyC" type="MeshInstance3D" parent="TreeSilhouettes"]
+mesh = SubResource("8_canopy")
+material_override = SubResource("9_tree_mat")
+position = Vector3(3.2, 2.28, -9.15)
+scale = Vector3(1.95, 1.0, 1.28)
+
+[node name="FogBand" type="MeshInstance3D" parent="."]
+mesh = SubResource("10_fog")
+material_override = SubResource("11_fog_mat")
+position = Vector3(0, 1.0, -9.25)
+
+[node name="GlowOrbA" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_moon")
+material_override = SubResource("12_glow_mat")
+position = Vector3(-5.8, 1.6, -8.6)
+scale = Vector3(0.18, 0.18, 0.18)
+
+[node name="GlowOrbB" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_moon")
+material_override = SubResource("12_glow_mat")
+position = Vector3(4.6, 1.7, -8.9)
+scale = Vector3(0.14, 0.14, 0.14)

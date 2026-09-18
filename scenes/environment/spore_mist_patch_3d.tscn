@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_mist_patch_3d.gd" id="1_script"]
+
+[node name="SporeMistPatch3D" type="Node3D"]
+script = ExtResource("1_script")
+width = 1.15
+height = 0.17
+drift_speed = 0.26
+drift_amount = 0.08

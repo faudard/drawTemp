@@ -1,0 +1,156 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Script" path="res://scripts/environment/spore_hero_prop_pulse_3d.gd" id="1_script"]
+
+[sub_resource type="BoxMesh" id="1_table"]
+size = Vector3(1.72, 0.14, 0.86)
+
+[sub_resource type="StandardMaterial3D" id="2_wood_mat"]
+albedo_color = Color(0.42, 0.28, 0.18, 1)
+roughness = 0.93
+
+[sub_resource type="CylinderMesh" id="3_leg"]
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.72
+
+[sub_resource type="BoxMesh" id="4_mixer"]
+size = Vector3(0.78, 0.12, 0.46)
+
+[sub_resource type="StandardMaterial3D" id="5_mixer_mat"]
+albedo_color = Color(0.10, 0.11, 0.13, 1)
+roughness = 0.52
+
+[sub_resource type="BoxMesh" id="6_speaker"]
+size = Vector3(0.44, 0.82, 0.36)
+
+[sub_resource type="StandardMaterial3D" id="7_speaker_mat"]
+albedo_color = Color(0.12, 0.12, 0.14, 1)
+roughness = 0.66
+
+[sub_resource type="CylinderMesh" id="8_disc"]
+top_radius = 0.12
+bottom_radius = 0.12
+height = 0.03
+
+[sub_resource type="StandardMaterial3D" id="9_disc_mat"]
+albedo_color = Color(0.32, 0.30, 0.36, 1)
+emission_enabled = true
+emission = Color(0.74, 0.32, 1.0, 1)
+emission_energy_multiplier = 0.35
+roughness = 0.40
+
+[sub_resource type="BoxMesh" id="10_crate"]
+size = Vector3(0.52, 0.34, 0.40)
+
+[sub_resource type="StandardMaterial3D" id="11_crate_mat"]
+albedo_color = Color(0.58, 0.41, 0.26, 1)
+roughness = 0.88
+
+[sub_resource type="CylinderMesh" id="12_vinyl"]
+top_radius = 0.19
+bottom_radius = 0.19
+height = 0.02
+
+[sub_resource type="StandardMaterial3D" id="13_vinyl_mat"]
+albedo_color = Color(0.10, 0.10, 0.12, 1)
+roughness = 0.18
+
+[node name="DJHeroCamp3D" type="Node3D"]
+script = ExtResource("1_script")
+pulse_speed = 1.8
+light_min = 0.15
+light_max = 0.30
+bob_amount = 0.0
+
+[node name="TableTop" type="MeshInstance3D" parent="."]
+mesh = SubResource("1_table")
+material_override = SubResource("2_wood_mat")
+position = Vector3(0, 0.86, 0)
+
+[node name="LegA" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_leg")
+material_override = SubResource("2_wood_mat")
+position = Vector3(-0.66, 0.36, -0.28)
+
+[node name="LegB" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_leg")
+material_override = SubResource("2_wood_mat")
+position = Vector3(0.66, 0.36, -0.28)
+
+[node name="LegC" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_leg")
+material_override = SubResource("2_wood_mat")
+position = Vector3(-0.66, 0.36, 0.28)
+
+[node name="LegD" type="MeshInstance3D" parent="."]
+mesh = SubResource("3_leg")
+material_override = SubResource("2_wood_mat")
+position = Vector3(0.66, 0.36, 0.28)
+
+[node name="Mixer" type="MeshInstance3D" parent="."]
+mesh = SubResource("4_mixer")
+material_override = SubResource("5_mixer_mat")
+position = Vector3(0, 0.99, 0)
+
+[node name="SpeakerLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("6_speaker")
+material_override = SubResource("7_speaker_mat")
+position = Vector3(-1.04, 0.41, 0.06)
+
+[node name="SpeakerLeftTop" type="MeshInstance3D" parent="."]
+mesh = SubResource("8_disc")
+material_override = SubResource("9_disc_mat")
+position = Vector3(-1.04, 0.60, 0.19)
+rotation = Vector3(1.5708, 0, 0)
+
+[node name="SpeakerLeftBottom" type="MeshInstance3D" parent="."]
+mesh = SubResource("8_disc")
+material_override = SubResource("9_disc_mat")
+position = Vector3(-1.04, 0.30, 0.19)
+rotation = Vector3(1.5708, 0, 0)
+
+[node name="SpeakerRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("6_speaker")
+material_override = SubResource("7_speaker_mat")
+position = Vector3(1.04, 0.41, 0.06)
+
+[node name="SpeakerRightTop" type="MeshInstance3D" parent="."]
+mesh = SubResource("8_disc")
+material_override = SubResource("9_disc_mat")
+position = Vector3(1.04, 0.60, 0.19)
+rotation = Vector3(1.5708, 0, 0)
+
+[node name="SpeakerRightBottom" type="MeshInstance3D" parent="."]
+mesh = SubResource("8_disc")
+material_override = SubResource("9_disc_mat")
+position = Vector3(1.04, 0.30, 0.19)
+rotation = Vector3(1.5708, 0, 0)
+
+[node name="CrateLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("10_crate")
+material_override = SubResource("11_crate_mat")
+position = Vector3(-0.82, 0.17, 0.56)
+
+[node name="CrateRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("10_crate")
+material_override = SubResource("11_crate_mat")
+position = Vector3(0.84, 0.17, 0.54)
+
+[node name="VinylA" type="MeshInstance3D" parent="."]
+mesh = SubResource("12_vinyl")
+material_override = SubResource("13_vinyl_mat")
+position = Vector3(-0.18, 1.06, -0.06)
+rotation = Vector3(1.5708, 0, 0.18)
+
+[node name="VinylB" type="MeshInstance3D" parent="."]
+mesh = SubResource("12_vinyl")
+material_override = SubResource("13_vinyl_mat")
+position = Vector3(0.20, 1.06, 0.04)
+rotation = Vector3(1.5708, 0, -0.28)
+
+[node name="AccentLight" type="OmniLight3D" parent="."]
+position = Vector3(0, 1.36, 0.22)
+light_color = Color(0.84, 0.36, 1.0, 1)
+light_energy = 0.22
+omni_range = 3.6

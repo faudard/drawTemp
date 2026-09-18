@@ -1,0 +1,92 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/environment/painterly_ground_patch_3d.tscn" id="1_ground"]
+[ext_resource type="PackedScene" path="res://scenes/environment/natural_log_cover_pretty_3d.tscn" id="2_log"]
+[ext_resource type="PackedScene" path="res://scenes/environment/natural_rock_cover_pretty_3d.tscn" id="3_rock"]
+[ext_resource type="PackedScene" path="res://scenes/environment/crystal_lantern_cluster_pretty_3d.tscn" id="4_cluster"]
+
+[node name="Mission1PainterlyPolish3D" type="Node3D"]
+
+[node name="GroundPaint" type="Node3D" parent="."]
+
+[node name="PathStart" parent="GroundPaint" instance=ExtResource("1_ground")]
+position = Vector3(-3.7, 0.0, 2.7)
+rotation = Vector3(0, 0.28, 0)
+scale = Vector3(1.5, 1.0, 1.1)
+
+[node name="PathMidA" parent="GroundPaint" instance=ExtResource("1_ground")]
+position = Vector3(-2.5, 0.0, 1.8)
+rotation = Vector3(0, -0.08, 0)
+scale = Vector3(1.65, 1.0, 1.15)
+
+[node name="PathMidB" parent="GroundPaint" instance=ExtResource("1_ground")]
+position = Vector3(-1.3, 0.0, 0.8)
+rotation = Vector3(0, 0.24, 0)
+scale = Vector3(1.75, 1.0, 1.16)
+
+[node name="PathGate" parent="GroundPaint" instance=ExtResource("1_ground")]
+position = Vector3(-0.3, 0.0, -0.05)
+rotation = Vector3(0, 0.18, 0)
+scale = Vector3(1.54, 1.0, 1.10)
+
+[node name="PathCrownA" parent="GroundPaint" instance=ExtResource("1_ground")]
+position = Vector3(1.0, 0.0, -0.95)
+rotation = Vector3(0, -0.12, 0)
+scale = Vector3(1.74, 1.0, 1.18)
+
+[node name="PathCrownB" parent="GroundPaint" instance=ExtResource("1_ground")]
+position = Vector3(2.2, 0.0, -1.85)
+rotation = Vector3(0, 0.22, 0)
+scale = Vector3(1.54, 1.0, 1.06)
+
+[node name="MossNW" parent="GroundPaint" instance=ExtResource("1_ground")]
+position = Vector3(-3.9, 0.0, -1.4)
+rotation = Vector3(0, 0.54, 0)
+scale = Vector3(1.42, 1.0, 1.0)
+
+[node name="MossSE" parent="GroundPaint" instance=ExtResource("1_ground")]
+position = Vector3(3.6, 0.0, 2.0)
+rotation = Vector3(0, -0.42, 0)
+scale = Vector3(1.35, 1.0, 0.94)
+
+[node name="PrettyCovers" type="Node3D" parent="."]
+
+[node name="LogCoverA" parent="PrettyCovers" instance=ExtResource("2_log")]
+position = Vector3(-2.1, 0.0, 0.4)
+rotation = Vector3(0, 0.35, 0)
+scale = Vector3(0.95, 0.95, 0.95)
+
+[node name="LogCoverB" parent="PrettyCovers" instance=ExtResource("2_log")]
+position = Vector3(0.65, 0.0, -1.55)
+rotation = Vector3(0, -0.55, 0)
+scale = Vector3(1.0, 1.0, 1.0)
+
+[node name="RockCoverA" parent="PrettyCovers" instance=ExtResource("3_rock")]
+position = Vector3(2.25, 0.0, 0.10)
+rotation = Vector3(0, 0.2, 0)
+scale = Vector3(1.1, 1.1, 1.1)
+
+[node name="RockCoverB" parent="PrettyCovers" instance=ExtResource("3_rock")]
+position = Vector3(-0.95, 0.0, 2.0)
+rotation = Vector3(0, -0.34, 0)
+scale = Vector3(0.94, 0.94, 0.94)
+
+[node name="AccentClusters" type="Node3D" parent="."]
+
+[node name="ClusterGate" parent="AccentClusters" instance=ExtResource("4_cluster")]
+position = Vector3(-1.4, 0.0, 1.1)
+rotation = Vector3(0, 0.65, 0)
+
+[node name="ClusterCrownLeft" parent="AccentClusters" instance=ExtResource("4_cluster")]
+position = Vector3(1.85, 0.0, -2.35)
+rotation = Vector3(0, -0.35, 0)
+scale = Vector3(1.05, 1.05, 1.05)
+
+[node name="ClusterCrownRight" parent="AccentClusters" instance=ExtResource("4_cluster")]
+position = Vector3(3.55, 0.0, -2.10)
+rotation = Vector3(0, 0.22, 0)
+scale = Vector3(1.10, 1.10, 1.10)
+
+[node name="ClusterExit" parent="AccentClusters" instance=ExtResource("4_cluster")]
+position = Vector3(-3.95, 0.0, 3.05)
+rotation = Vector3(0, 0.52, 0)
