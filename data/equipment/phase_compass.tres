@@ -18,3 +18,5 @@ end_ct_bonus = 5
 magic_power_bonus = 1
 start_status_id = ""
 resistances = Array[Resource]([])
+physical_accessory_evasion = 4
+magic_accessory_evasion = 4

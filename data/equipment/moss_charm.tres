@@ -24,3 +24,5 @@ revive_hp_bonus = 1
 magic_defense_bonus = 1
 start_status_id = ""
 resistances = Array[Resource]([SubResource("Res_1")])
+physical_accessory_evasion = 5
+magic_accessory_evasion = 8

@@ -78,6 +78,8 @@ static func apply_to_unit(unit: Dictionary, equipment_id: String) -> void:
 	unit["revive_hp_bonus"] = int(unit.get("revive_hp_bonus", 0)) + int(data.revive_hp_bonus)
 	if String(data.weapon_family) != "none":
 		unit["weapon_family"] = String(data.weapon_family)
+		if int(data.weapon_power) > 0:
+			unit["weapon_power"] = int(data.weapon_power)
 		var default_max: int = maxi(1, int(unit.get("range", 1)))
 		unit["attack_min_range"] = maxi(1, int(data.attack_min_range) if int(data.attack_min_range) > 0 else 1)
 		unit["attack_max_range"] = maxi(int(unit["attack_min_range"]), int(data.attack_max_range) if int(data.attack_max_range) > 0 else default_max)
@@ -88,6 +90,11 @@ static func apply_to_unit(unit: Dictionary, equipment_id: String) -> void:
 		unit["basic_attack_damage_type"] = String(data.basic_attack_damage_type)
 	unit["shield_block_chance"] = clampi(int(unit.get("shield_block_chance", 0)) + int(data.shield_block_chance), 0, 100)
 	unit["shield_block_reduction"] = maxi(0, int(unit.get("shield_block_reduction", 0)) + int(data.shield_block_reduction))
+	unit["physical_shield_evasion"] = clampi(int(unit.get("physical_shield_evasion", 0)) + int(data.physical_shield_evasion), 0, 100)
+	unit["magic_shield_evasion"] = clampi(int(unit.get("magic_shield_evasion", 0)) + int(data.magic_shield_evasion), 0, 100)
+	unit["physical_accessory_evasion"] = clampi(int(unit.get("physical_accessory_evasion", 0)) + int(data.physical_accessory_evasion), 0, 100)
+	unit["magic_accessory_evasion"] = clampi(int(unit.get("magic_accessory_evasion", 0)) + int(data.magic_accessory_evasion), 0, 100)
+	unit["physical_weapon_evasion"] = clampi(int(unit.get("physical_weapon_evasion", 0)) + int(data.physical_weapon_evasion), 0, 100)
 	unit["resistances"] = unit.get("resistances", {}).duplicate(true)
 	for entry in data.resistances:
 		if entry != null and not String(entry.damage_type).is_empty():

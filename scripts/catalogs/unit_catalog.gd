@@ -79,6 +79,12 @@ static func make_unit(
 	unit["focus"] = max_focus
 	unit["ai_profile"] = ai_profile
 	unit["visual_id"] = String(data.visual_id) if data != null and not String(data.visual_id).is_empty() else id
+	if data != null:
+		unit["reaction_type"] = String(data.reaction_type)
+		unit["reaction_range"] = int(data.reaction_range)
+		unit["reaction_damage_bonus"] = int(data.reaction_damage_bonus)
+		unit["support_ability"] = String(data.support_ability)
+		unit["movement_ability"] = String(data.movement_ability)
 	unit["template_id"] = id
 	return unit
 

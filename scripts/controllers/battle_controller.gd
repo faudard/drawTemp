@@ -325,7 +325,7 @@ func build_ui() -> void:
 	)
 	secondary_button.pressed.connect(_on_secondary_pressed)
 
-	end_turn_button = add_button(panel, "Terminer l'activation", Vector2(24.0, 434.0), Vector2(382.0, 39.0))
+	end_turn_button = add_button(panel, "WAIT / FIN [ESPACE]", Vector2(24.0, 434.0), Vector2(382.0, 39.0))
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 
 	var restart_button := add_button(
@@ -1060,7 +1060,7 @@ func apply_difficulty_to_enemy(unit: Dictionary) -> void:
 func mission_buff_name(buff_id: String) -> String:
 	match buff_id:
 		"focus":
-			return "+1 Focus max au prochain combat"
+			return "+1 MP max au prochain combat"
 		"guard":
 			return "GARDE au déploiement"
 		_:
@@ -1427,9 +1427,7 @@ func make_hero(hero_id: String, position: Vector2i) -> Dictionary:
 		String(campaign.hero_jobs.get(hero_id, UnitCatalog.default_job(hero_id))),
 		campaign.hero_job_xp.get(hero_id, {}),
 		campaign.hero_equipment_slots.get(hero_id, {}),
-		campaign.job_nodes(hero_id, String(campaign.hero_jobs.get(hero_id, UnitCatalog.default_job(hero_id)))),
-		campaign.loadout_for(hero_id),
-		campaign.hero_job_nodes.get(hero_id, {})
+		campaign.job_nodes(hero_id, String(campaign.hero_jobs.get(hero_id, UnitCatalog.default_job(hero_id))))
 	)
 
 
@@ -1495,8 +1493,19 @@ func can_use_skill(unit: Dictionary, skill_id: String) -> bool:
 	return SkillCatalog.can_use(unit, skill_id)
 
 
+func spend_skill_resource_only(unit: Dictionary, skill_id: String) -> bool:
+	var cost: int = skill_cost(skill_id)
+	if int(unit.get("focus", 0)) < cost:
+		return false
+	unit["focus"] = maxi(0, int(unit.get("focus", 0)) - cost)
+	if unit.has("cooldowns"):
+		unit["cooldowns"] = {}
+	return true
+
+
 func spend_skill(unit: Dictionary, skill_id: String) -> void:
-	SkillCatalog.spend(unit, skill_id)
+	if spend_skill_resource_only(unit, skill_id):
+		unit["has_acted"] = true
 
 
 func tick_round_resources(unit: Dictionary) -> void:
@@ -1542,7 +1551,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key_event.pressed and not key_event.echo:
 			if key_event.keycode == KEY_R:
 				reset_battle()
-			elif key_event.keycode == KEY_ENTER:
+			elif key_event.keycode == KEY_ENTER or key_event.keycode == KEY_SPACE:
 				_on_end_turn_pressed()
 			elif key_event.keycode == KEY_M:
 				sound_enabled = not sound_enabled
@@ -1644,7 +1653,16 @@ func _reaction_available(unit: Dictionary, expected_type: String = "") -> bool:
 	var reaction_type := String(unit.get("reaction_type", "none"))
 	if reaction_type == "none" or (not expected_type.is_empty() and reaction_type != expected_type):
 		return false
-	return not bool(unit.get("reaction_used", false))
+	return not StatusCatalog.prevents_reaction(unit)
+
+
+func _reaction_triggers(unit: Dictionary) -> bool:
+	if not _reaction_available(unit):
+		return false
+	if bool(unit.get("reaction_ready", false)):
+		unit["reaction_ready"] = false
+		return true
+	return battle_rng.randi_range(1, 100) <= CombatMechanics.reaction_chance(int(unit.get("brave", CombatMechanics.DEFAULT_BRAVE)))
 
 
 func _find_interceptor(attacker: Dictionary, protected_target: Dictionary) -> Dictionary:
@@ -1660,11 +1678,18 @@ func _find_interceptor(attacker: Dictionary, protected_target: Dictionary) -> Di
 		if int(candidate.get("hp", 0)) > best_hp:
 			best_hp = int(candidate["hp"])
 			best = candidate
+	# Choose the eligible protector before rolling Brave so AI queries and
+	# non-selected candidates never consume reaction state.
+	if not best.is_empty() and not _reaction_triggers(best):
+		return {}
 	return best
 
 
 func _try_counter_reaction(reactor: Dictionary, attacker: Dictionary) -> void:
 	if not _reaction_available(reactor, "counter") or int(attacker.get("hp", 0)) <= 0:
+		return
+	if not _reaction_triggers(reactor):
+		log_message("RÉACTION : %s ne déclenche pas CONTRE (%d Brave)." % [reactor["name"], int(reactor.get("brave", 70))])
 		return
 	var counter_distance: int = manhattan(reactor["pos"], attacker["pos"])
 	var counter_max: int = mini(int(reactor.get("reaction_range", effective_range(reactor))), effective_range(reactor))
@@ -1672,7 +1697,7 @@ func _try_counter_reaction(reactor: Dictionary, attacker: Dictionary) -> void:
 		return
 	if not has_line_of_sight(reactor["pos"], attacker["pos"], String(reactor["id"]), String(attacker["id"])):
 		return
-	reactor["reaction_used"] = true
+	reactor["reaction_used"] = false
 	reactor["facing"] = direction_from_to(reactor["pos"], attacker["pos"])
 	StatusCatalog.remove_on_attack(reactor)
 	var counter_hit := hit_profile(reactor, attacker, 80)
@@ -1680,7 +1705,9 @@ func _try_counter_reaction(reactor: Dictionary, attacker: Dictionary) -> void:
 		spawn_floating_text(attacker["pos"], "CONTRE MISS", TEXT_SOFT)
 		log_message("CONTRE : %s rate %s (%d%%)." % [reactor["name"], attacker["name"], int(counter_hit["chance"])])
 		return
-	var counter_damage := maxi(1, status_adjusted_direct_damage(effective_basic_attack_power(reactor) + int(reactor.get("reaction_damage_bonus", 0)), attacker, reactor, String(reactor.get("basic_attack_damage_type", "physical"))))
+	var compatibility: String = CombatMechanics.zodiac_compatibility(String(reactor.get("zodiac_sign", "none")), String(attacker.get("zodiac_sign", "none")), String(reactor.get("sex", "monster")), String(attacker.get("sex", "monster")))
+	var counter_raw: int = CombatMechanics.fft_weapon_damage(effective_physical_power(reactor), effective_magic_power(reactor), effective_initiative(reactor), int(reactor.get("brave", 70)), int(reactor.get("weapon_power", 1)), String(reactor.get("weapon_family", "unarmed")), compatibility) + int(reactor.get("reaction_damage_bonus", 0))
+	var counter_damage := maxi(1, status_adjusted_direct_damage(counter_raw, attacker, reactor, String(reactor.get("basic_attack_damage_type", "physical"))))
 	var counter_block: Dictionary = _apply_shield_block(attacker, counter_damage)
 	counter_damage = int(counter_block["damage"])
 	spawn_damage_feedback(reactor, attacker, counter_damage, GOLD)
@@ -1689,6 +1716,7 @@ func _try_counter_reaction(reactor: Dictionary, attacker: Dictionary) -> void:
 
 
 func perform_attack(attacker: Dictionary, target: Dictionary) -> void:
+	_cancel_cast_for_action(attacker, "ATTAQUE")
 	var chance_profile := hit_profile(attacker, target)
 	attacker["facing"] = direction_from_to(attacker["pos"], target["pos"])
 	attacker["has_acted"] = true
@@ -1755,7 +1783,7 @@ func _on_secondary_pressed() -> void:
 
 func _activate_player_skill(unit: Dictionary, skill_id: String) -> void:
 	if not can_use_skill(unit, skill_id):
-		log_message("%s indisponible : Focus %d/%d • cooldown %d." % [skill_name(skill_id), int(unit.get("focus", 0)), skill_cost(skill_id), cooldown_left(unit, skill_id)])
+		log_message("%s indisponible : MP %d/%d ou action déjà consommée." % [skill_name(skill_id), int(unit.get("focus", 0)), skill_cost(skill_id)])
 		update_ui()
 		return
 	if not SkillCatalog.has_effects(skill_id):
@@ -1836,10 +1864,22 @@ func handle_special_target_click(cell: Vector2i) -> void:
 	_commit_skill(unit, skill_id, {}, cell)
 
 
+func _cancel_cast_for_action(unit: Dictionary, command_name: String) -> void:
+	if unit.is_empty() or not _unit_is_casting(unit):
+		return
+	var casting: Dictionary = unit.get("casting", {})
+	var old_skill_id: String = String(casting.get("skill_id", ""))
+	unit["casting"] = {}
+	if not old_skill_id.is_empty():
+		log_message("%s annule %s en choisissant %s." % [unit["name"], skill_name(old_skill_id), command_name])
+		spawn_floating_text(unit["pos"], "CAST ANNULÉ", CORAL)
+
+
 func _commit_skill(source: Dictionary, skill_id: String, primary_target: Dictionary, anchor_cell: Vector2i) -> void:
+	_cancel_cast_for_action(source, skill_name(skill_id))
 	if skill_id.is_empty() or not SkillCatalog.has_effects(skill_id):
 		return
-	var cast_ticks: int = SkillCatalog.cast_time_ticks(skill_id)
+	var cast_ticks: int = CombatMechanics.short_charge_ticks(SkillCatalog.cast_time_ticks(skill_id), String(source.get("support_ability", "none")))
 	if cast_ticks <= 0:
 		_execute_composed_skill(source, skill_id, primary_target, anchor_cell, true)
 		return
@@ -1857,7 +1897,7 @@ func _commit_skill(source: Dictionary, skill_id: String, primary_target: Diction
 		"remaining_ticks": cast_ticks,
 		"interrupt_on_damage": SkillCatalog.interrupt_on_damage(skill_id),
 	}
-	spend_skill(source, skill_id)
+	source["has_acted"] = true
 	StatusCatalog.remove_on_attack(source)
 	special_targeting = false
 	special_target_skill_id = ""
@@ -1880,6 +1920,10 @@ func _resolve_due_cast(caster_id: String) -> void:
 	source["casting"] = {}
 	if skill_id.is_empty() or int(source.get("hp", 0)) <= 0:
 		return
+	if not spend_skill_resource_only(source, skill_id):
+		log_message("NO MP : %s ne peut pas libérer %s." % [source["name"], skill_name(skill_id)])
+		spawn_floating_text(source["pos"], "NO MP", SKY)
+		return
 	var target: Dictionary = {}
 	if not target_id.is_empty():
 		target = unit_by_id(target_id)
@@ -1897,7 +1941,7 @@ func _interrupt_cast_if_needed(target: Dictionary, damage: int) -> void:
 	if damage <= 0 or target.is_empty() or not _unit_is_casting(target):
 		return
 	var casting: Dictionary = target.get("casting", {})
-	if not bool(casting.get("interrupt_on_damage", true)):
+	if not bool(casting.get("interrupt_on_damage", false)):
 		return
 	var skill_id := String(casting.get("skill_id", ""))
 	target["casting"] = {}
@@ -1924,9 +1968,10 @@ func _execute_composed_skill(source: Dictionary, skill_id: String, primary_targe
 		var targets := _targets_for_skill_effect(source, primary_target, anchor_cell, effect)
 		for target in targets:
 			var target_id := String(target.get("id", ""))
-			if SkillCatalog.uses_accuracy(skill_id) and target.get("team", "") != source.get("team", ""):
+			var uses_status_formula: bool = String(effect.effect_type) == "status" and SkillCatalog.fft_status_modifier(skill_id) > 0
+			if SkillCatalog.uses_accuracy(skill_id) and target.get("team", "") != source.get("team", "") and not uses_status_formula:
 				if not hit_results.has(target_id):
-					var profile := hit_profile(source, target, SkillCatalog.accuracy(skill_id), SkillCatalog.has_tag(skill_id, "ignore_cover"))
+					var profile := skill_hit_profile(source, target, skill_id)
 					hit_results[target_id] = _roll_hit(int(profile["chance"]))
 					if not bool(hit_results[target_id]):
 						missed_targets[target_id] = true
@@ -1992,12 +2037,20 @@ func _cell_in_effect_area(cell: Vector2i, center: Vector2i, radius: int, shape: 
 	return manhattan(cell, center) <= radius
 
 
-func _skill_effect_amount(source: Dictionary, skill_id: String, effect: Resource) -> int:
-	var amount := int(effect.amount)
-	if bool(effect.use_attack_stat):
-		amount += effective_physical_power(source) if String(effect.damage_type) == "physical" else effective_magic_power(source)
-	amount += _skill_power_bonus(source, skill_id)
-	return amount
+func _skill_effect_amount(source: Dictionary, skill_id: String, effect: Resource, target: Dictionary = {}) -> int:
+	var amount: int = int(effect.amount)
+	if not bool(effect.use_attack_stat):
+		return amount
+	var damage_type: String = String(effect.damage_type)
+	if target.is_empty():
+		return amount + (effective_physical_power(source) if damage_type == "physical" else effective_magic_power(source))
+	var compatibility: String = CombatMechanics.zodiac_compatibility(String(source.get("zodiac_sign", "none")), String(target.get("zodiac_sign", "none")), String(source.get("sex", "monster")), String(target.get("sex", "monster")))
+	if damage_type == "physical":
+		return amount + CombatMechanics.zodiac_adjust(effective_physical_power(source), compatibility)
+	var spell_q: int = int(effect.get("fft_spell_power_q"))
+	if spell_q <= 0:
+		spell_q = maxi(1, amount + 3)
+	return CombatMechanics.fft_magic_damage(effective_magic_power(source), spell_q, int(source.get("faith", 60)), int(target.get("faith", 60)), compatibility)
 
 
 func _skill_power_bonus(unit: Dictionary, skill_id: String) -> int:
@@ -2031,7 +2084,7 @@ func _apply_skill_effect(source: Dictionary, target: Dictionary, anchor_cell: Ve
 	var effect_type := String(effect.effect_type)
 	if int(target.get("hp", 0)) <= 0 and not (effect_type == "revive" and _unit_is_downed(target)):
 		return
-	var amount := _skill_effect_amount(source, skill_id, effect)
+	var amount := _skill_effect_amount(source, skill_id, effect, target)
 	var feedback_color := _skill_feedback_color(skill_id, effect_type)
 	match effect_type:
 		"damage":
@@ -2057,6 +2110,13 @@ func _apply_skill_effect(source: Dictionary, target: Dictionary, anchor_cell: Ve
 				play_feedback_tone("heal")
 		"status":
 			if not String(effect.status_id).is_empty():
+				var formula_modifier: int = SkillCatalog.fft_status_modifier(skill_id)
+				if formula_modifier > 0 and String(target.get("team", "")) != String(source.get("team", "")):
+					var compatibility: String = CombatMechanics.zodiac_compatibility(String(source.get("zodiac_sign", "none")), String(target.get("zodiac_sign", "none")), String(source.get("sex", "monster")), String(target.get("sex", "monster")))
+					var status_chance: int = CombatMechanics.fft_status_success_chance(effective_magic_power(source), formula_modifier, int(source.get("faith", 60)), int(target.get("faith", 60)), compatibility, has_status(target, "shell"), String(target.get("support_ability", "none")) == "magic_defense_up")
+					if not _roll_hit(status_chance):
+						spawn_floating_text(target["pos"], "STATUS MISS", TEXT_MUTED)
+						return
 				add_status(target, String(effect.status_id))
 				spawn_particles(target["pos"], feedback_color, 6)
 		"guard":
@@ -2104,6 +2164,11 @@ func run_enemy_activation(enemy: Dictionary) -> void:
 	if game_over or int(enemy["hp"]) <= 0:
 		return
 	log_message("%s entre dans la timeline. Personne n'avait demandé ça." % enemy["name"])
+	if _unit_is_casting(enemy):
+		var casting: Dictionary = enemy.get("casting", {})
+		log_message("CHARGING : %s conserve %s et choisit WAIT." % [enemy["name"], skill_name(String(casting.get("skill_id", "")))])
+		resolve_end_of_activation(enemy)
+		return
 	apply_enemy_archetype_start(enemy)
 	var destination := choose_enemy_destination(enemy)
 	if destination != enemy["pos"]:
@@ -2191,19 +2256,17 @@ func apply_enemy_attack_trait(enemy: Dictionary, target: Dictionary) -> void:
 		"comptable":
 			if int(target.get("focus", 0)) > 0:
 				target["focus"] = int(target["focus"]) - 1
-				log_message("ARCHÉTYPE FISCAL : 1 Focus est taxé à %s." % target["name"])
+				log_message("ARCHÉTYPE FISCAL : 1 MP est taxé à %s." % target["name"])
 
 
-func enemy_skill_ready(enemy: Dictionary, skill_id: String, cost: int = 1) -> bool:
-	var cooldowns: Dictionary = enemy.get("cooldowns", {})
-	return int(enemy.get("focus", 0)) >= cost and int(cooldowns.get(skill_id, 0)) <= 0
+func enemy_skill_ready(enemy: Dictionary, _skill_id: String, cost: int = 1) -> bool:
+	return int(enemy.get("focus", 0)) >= cost and not bool(enemy.get("has_acted", false))
 
 
-func spend_enemy_skill(enemy: Dictionary, skill_id: String, cost: int = 1, cooldown: int = 2) -> void:
+func spend_enemy_skill(enemy: Dictionary, _skill_id: String, cost: int = 1, _cooldown: int = 0) -> void:
 	enemy["focus"] = max(0, int(enemy.get("focus", 0)) - cost)
-	var cooldowns: Dictionary = enemy.get("cooldowns", {})
-	cooldowns[skill_id] = cooldown
-	enemy["cooldowns"] = cooldowns
+	if enemy.has("cooldowns"):
+		enemy["cooldowns"] = {}
 	enemy["has_acted"] = true
 
 
@@ -2333,6 +2396,8 @@ func choose_enemy_destination(enemy: Dictionary) -> Vector2i:
 
 
 func reaction_risk_for_move(mover: Dictionary, origin: Vector2i, destination: Vector2i) -> int:
+	# AI preview must be pure: never roll/consume a reaction while merely scoring
+	# candidate movement. A possible Brave-based reaction counts as tactical risk.
 	var risk := 0
 	for reactor in units:
 		if reactor["team"] == mover["team"] or int(reactor["hp"]) <= 0:
@@ -3171,7 +3236,9 @@ func resolve_reactions_on_move(mover: Dictionary, origin: Vector2i, destination:
 		var destination_distance: int = manhattan(reactor["pos"], destination)
 		if not threatens_distance(reactor, origin_distance) or threatens_distance(reactor, destination_distance):
 			continue
-		reactor["reaction_used"] = true
+		if not _reaction_triggers(reactor):
+			continue
+		reactor["reaction_used"] = false
 		reactor["facing"] = direction_from_to(reactor["pos"], destination)
 		var reaction_hit := hit_profile(reactor, mover, 80)
 		StatusCatalog.remove_on_attack(reactor)
@@ -3179,7 +3246,9 @@ func resolve_reactions_on_move(mover: Dictionary, origin: Vector2i, destination:
 			spawn_floating_text(mover["pos"], "RÉACTION MISS", TEXT_SOFT)
 			log_message("RÉACTION : %s rate %s en désengagement (%d%%)." % [reactor["name"], mover["name"], int(reaction_hit["chance"])])
 			continue
-		var reaction_damage: int = maxi(1, status_adjusted_direct_damage(effective_basic_attack_power(reactor) - 1, mover, reactor, String(reactor.get("basic_attack_damage_type", "physical"))))
+		var compatibility: String = CombatMechanics.zodiac_compatibility(String(reactor.get("zodiac_sign", "none")), String(mover.get("zodiac_sign", "none")), String(reactor.get("sex", "monster")), String(mover.get("sex", "monster")))
+		var reaction_raw: int = CombatMechanics.fft_weapon_damage(effective_physical_power(reactor), effective_magic_power(reactor), effective_initiative(reactor), int(reactor.get("brave", 70)), int(reactor.get("weapon_power", 1)), String(reactor.get("weapon_family", "unarmed")), compatibility) - 1
+		var reaction_damage: int = maxi(1, status_adjusted_direct_damage(reaction_raw, mover, reactor, String(reactor.get("basic_attack_damage_type", "physical"))))
 		var reaction_block: Dictionary = _apply_shield_block(mover, reaction_damage)
 		reaction_damage = int(reaction_block["damage"])
 		spawn_damage_feedback(reactor, mover, reaction_damage, GOLD)
@@ -3271,10 +3340,10 @@ func _begin_round_timeline() -> void:
 			unit["ct"] = 0
 		if not unit.has("casting"):
 			unit["casting"] = {}
-		# Seed the opening timeline once. Later rounds keep their real CT state.
-		if battle_clock_ticks == 0 and int(unit.get("ct", 0)) <= 0:
-			unit["ct"] = mini(90, effective_initiative(unit) * 8)
-	log_message("MANCHE %d : CT dynamique actif • Move+Act=0 • action seule=20 • Wait=40." % current_turn)
+		# FFT starts combat at 0 CT; Speed alone decides who reaches 100 first.
+		if battle_clock_ticks == 0:
+			unit["ct"] = 0
+	log_message("MANCHE %d : CT FFT actif • coût Move+Act 100 • Move/Act seul 80 • Wait 60." % current_turn)
 	advance_activation()
 
 
@@ -3286,9 +3355,9 @@ func _unit_is_casting(unit: Dictionary) -> bool:
 func _next_unit_ready_ticks() -> int:
 	var best: int = 999999
 	for unit in units:
-		if not _unit_is_battle_present(unit) or _unit_is_casting(unit):
+		if not _unit_is_battle_present(unit):
 			continue
-		best = mini(best, CombatMechanics.ticks_until_ready(int(unit.get("ct", 0)), effective_initiative(unit)))
+		best = mini(best, CombatMechanics.ticks_until_ready(int(unit.get("ct", 0)), ct_gain_per_tick(unit)))
 	return best
 
 
@@ -3302,6 +3371,15 @@ func _next_cast_ready_ticks() -> int:
 	return best
 
 
+func _next_status_ready_ticks() -> int:
+	var best: int = 999999
+	for unit in units:
+		if not _unit_is_battle_present(unit):
+			continue
+		best = mini(best, StatusCatalog.next_clock_expiry_ticks(unit))
+	return best
+
+
 func _advance_battle_clock(step_ticks: int) -> void:
 	if step_ticks <= 0:
 		return
@@ -3310,13 +3388,18 @@ func _advance_battle_clock(step_ticks: int) -> void:
 	for unit in units:
 		if not _unit_is_battle_present(unit):
 			continue
-		unit["ct"] = mini(199, int(unit.get("ct", 0)) + effective_initiative(unit) * step_ticks)
+		unit["ct"] = mini(199, int(unit.get("ct", 0)) + ct_gain_per_tick(unit) * step_ticks)
 		if _unit_is_casting(unit):
 			var casting: Dictionary = unit.get("casting", {}).duplicate(true)
 			casting["remaining_ticks"] = int(casting.get("remaining_ticks", 0)) - step_ticks
 			unit["casting"] = casting
 			if int(casting["remaining_ticks"]) <= 0:
 				due_casts.append(String(unit["id"]))
+		var expired_clock_statuses: PackedStringArray = StatusCatalog.tick_clock(unit, step_ticks)
+		for expired_id: String in expired_clock_statuses:
+			var expired_data: Resource = StatusCatalog.definition(expired_id)
+			var expired_name: String = String(expired_data.display_name) if expired_data != null else expired_id
+			log_message("%s : %s se dissipe (clocktick)." % [unit["name"], expired_name])
 	for caster_id: String in due_casts:
 		_resolve_due_cast(caster_id)
 
@@ -3331,14 +3414,15 @@ func _advance_clock_until_unit_ready() -> bool:
 			continue
 		var has_ready := false
 		for unit in units:
-			if int(unit.get("hp", 0)) > 0 and not _unit_is_casting(unit) and int(unit.get("ct", 0)) >= CombatMechanics.CT_THRESHOLD:
+			if int(unit.get("hp", 0)) > 0 and not StatusCatalog.freezes_ct(unit) and int(unit.get("ct", 0)) >= CombatMechanics.CT_THRESHOLD:
 				has_ready = true
 				break
 		if has_ready:
 			return true
 		var unit_ticks := _next_unit_ready_ticks()
 		var cast_ticks := _next_cast_ready_ticks()
-		var step_ticks: int = mini(unit_ticks, cast_ticks)
+		var status_ticks := _next_status_ready_ticks()
+		var step_ticks: int = mini(unit_ticks, mini(cast_ticks, status_ticks))
 		if step_ticks == 999999:
 			return false
 		if step_ticks <= 0:
@@ -3359,23 +3443,14 @@ func _advance_clock_until_unit_ready() -> bool:
 
 
 func _ready_unit_before(a: Dictionary, b: Dictionary) -> bool:
-	var a_ct := int(a.get("ct", 0))
-	var b_ct := int(b.get("ct", 0))
-	if a_ct != b_ct:
-		return a_ct > b_ct
-	var a_speed := effective_initiative(a)
-	var b_speed := effective_initiative(b)
-	if a_speed != b_speed:
-		return a_speed > b_speed
-	if a["team"] != b["team"]:
-		return a["team"] == "player"
-	return String(a["name"]) < String(b["name"])
+	# FFT natural AT ties are resolved by the stable unit list, not by overflow CT/Speed.
+	return units.find(a) < units.find(b)
 
 
 func _select_ready_unit() -> Dictionary:
 	var ready: Array = []
 	for unit in units:
-		if int(unit.get("hp", 0)) <= 0 or _unit_is_casting(unit):
+		if int(unit.get("hp", 0)) <= 0 or StatusCatalog.freezes_ct(unit):
 			continue
 		if int(unit.get("ct", 0)) >= CombatMechanics.CT_THRESHOLD:
 			ready.append(unit)
@@ -3386,67 +3461,53 @@ func _select_ready_unit() -> Dictionary:
 
 
 func _predict_dynamic_timeline(limit: int = 7) -> Array:
+	# Slow-action CTR is independent from Active Turns: a caster can receive another AT
+	# while the spell is still Charging. This preview therefore models ATs only.
 	var result: Array = []
 	var sim: Dictionary = {}
-	for unit in units:
+	var roster_index: Dictionary = {}
+	for index: int in range(units.size()):
+		var unit: Dictionary = units[index]
 		if int(unit.get("hp", 0)) <= 0:
 			continue
-		var casting: Dictionary = unit.get("casting", {}) if _unit_is_casting(unit) else {}
-		sim[String(unit["id"])] = {
+		var unit_id: String = String(unit["id"])
+		sim[unit_id] = {
 			"ct": int(unit.get("ct", 0)),
-			"speed": effective_initiative(unit),
-			"casting": not casting.is_empty(),
-			"cast_ticks": maxi(0, int(casting.get("remaining_ticks", 0))) if not casting.is_empty() else 0,
-			"team": String(unit["team"]),
-			"name": String(unit["name"]),
+			"speed": ct_gain_per_tick(unit),
 		}
+		roster_index[unit_id] = index
 	if not active_unit_id.is_empty() and sim.has(active_unit_id):
 		result.append(active_unit_id)
 		var current: Dictionary = sim[active_unit_id]
-		current["ct"] = CombatMechanics.CT_AFTER_FULL_TURN
+		current["ct"] = CombatMechanics.action_end_ct(int(current["ct"]), true, true)
 		sim[active_unit_id] = current
 	for _guard: int in range(64):
 		if result.size() >= limit or sim.is_empty():
 			break
 		var best_ticks: int = 999999
-		for id in sim.keys():
+		for id: Variant in sim.keys():
 			var state: Dictionary = sim[id]
-			if bool(state.get("casting", false)):
-				best_ticks = mini(best_ticks, int(state.get("cast_ticks", 0)))
-			else:
-				best_ticks = mini(best_ticks, CombatMechanics.ticks_until_ready(int(state["ct"]), int(state["speed"])))
+			best_ticks = mini(best_ticks, CombatMechanics.ticks_until_ready(int(state["ct"]), int(state["speed"])))
 		if best_ticks == 999999:
 			break
-		for id in sim.keys():
+		for id: Variant in sim.keys():
 			var state: Dictionary = sim[id]
 			state["ct"] = mini(199, int(state["ct"]) + int(state["speed"]) * best_ticks)
-			if bool(state.get("casting", false)):
-				state["cast_ticks"] = maxi(0, int(state.get("cast_ticks", 0)) - best_ticks)
-				if int(state["cast_ticks"]) <= 0:
-					state["casting"] = false
 			sim[id] = state
-		var ready_ids: Array = []
-		for id in sim.keys():
+		var ready_ids: Array[String] = []
+		for id: Variant in sim.keys():
 			var state: Dictionary = sim[id]
-			if not bool(state.get("casting", false)) and int(state["ct"]) >= CombatMechanics.CT_THRESHOLD:
+			if int(state["ct"]) >= CombatMechanics.CT_THRESHOLD:
 				ready_ids.append(String(id))
 		if ready_ids.is_empty():
 			continue
 		ready_ids.sort_custom(func(a_id: String, b_id: String) -> bool:
-			var a: Dictionary = sim[a_id]
-			var b: Dictionary = sim[b_id]
-			if int(a["ct"]) != int(b["ct"]):
-				return int(a["ct"]) > int(b["ct"])
-			if int(a["speed"]) != int(b["speed"]):
-				return int(a["speed"]) > int(b["speed"])
-			if String(a["team"]) != String(b["team"]):
-				return String(a["team"]) == "player"
-			return String(a["name"]) < String(b["name"])
+			return int(roster_index.get(a_id, 999999)) < int(roster_index.get(b_id, 999999))
 		)
-		var chosen_id: String = String(ready_ids[0])
+		var chosen_id: String = ready_ids[0]
 		result.append(chosen_id)
 		var chosen: Dictionary = sim[chosen_id]
-		chosen["ct"] = CombatMechanics.CT_AFTER_FULL_TURN
+		chosen["ct"] = CombatMechanics.action_end_ct(int(chosen["ct"]), true, true)
 		sim[chosen_id] = chosen
 	return result
 
@@ -3477,14 +3538,18 @@ func advance_activation() -> void:
 		if not game_over:
 			_finalize_activation_timing(unit, true)
 		return
+	if StatusCatalog.prevents_movement(unit):
+		unit["has_moved"] = true
 	if StatusCatalog.prevents_action(unit):
-		log_message("%s est bloqué par un statut et perd son activation." % unit["name"] )
-		spawn_floating_text(unit["pos"], "ÉTOURDI", GOLD)
+		unit["has_acted"] = true
+	if bool(unit.get("has_moved", false)) and bool(unit.get("has_acted", false)):
+		log_message("%s ne peut ni bouger ni agir pendant cette activation." % unit["name"] )
+		spawn_floating_text(unit["pos"], "BLOQUÉ", GOLD)
 		resolve_end_of_activation(unit)
 		refresh_all()
 		check_mission_end()
 		if not game_over:
-			_finalize_activation_timing(unit, true)
+			_finalize_activation_timing(unit, false)
 		return
 	if unit["team"] == "player":
 		enemy_phase = false
@@ -3510,7 +3575,9 @@ func _all_alive_units_activated_this_round() -> bool:
 func _finalize_activation_timing(unit: Dictionary, forced_skip: bool = false) -> void:
 	if unit.is_empty():
 		return
-	var end_ct: int = CombatMechanics.action_end_ct(bool(unit.get("has_moved", false)), bool(unit.get("has_acted", false)), forced_skip)
+	var paid_move: bool = bool(unit.get("has_moved", false)) or StatusCatalog.treat_as_moved_for_ct(unit)
+	var paid_act: bool = bool(unit.get("has_acted", false)) or StatusCatalog.treat_as_acted_for_ct(unit)
+	var end_ct: int = CombatMechanics.action_end_ct(int(unit.get("ct", 0)), paid_move, paid_act, forced_skip)
 	end_ct = CombatMechanics.apply_end_ct_bonus(end_ct, int(unit.get("end_ct_bonus", 0)))
 	unit["ct"] = end_ct
 	activation_count_in_round += 1
@@ -3682,7 +3749,7 @@ func update_ui() -> void:
 			var casting: Dictionary = unit.get("casting", {})
 			cast_text = " • CAST %s (%dt)" % [skill_name(String(casting.get("skill_id", ""))), maxi(0, int(casting.get("remaining_ticks", 0)))]
 		selected_label.text = (
-			"%s — %s\nPV %d/%d • Focus %d/%d • MVT %d • Portée %d%s • VIT %d • CT %d\nPRÉC %+d • ESQ %+d • %s • face %s • %s / %s%s%s"
+			"%s — %s\nPV %d/%d • MP %d/%d • MVT %d • Portée %d%s • VIT %d • CT %d\nPRÉC %+d • ESQ %+d • %s • face %s • %s / %s%s%s"
 			% [
 				unit["name"], role_text, int(unit["hp"]), int(unit["max_hp"]), int(unit["focus"]), int(unit["max_focus"]), effective_move(unit),
 				effective_range(unit), range_bonus_label(unit), effective_initiative(unit), int(unit.get("ct", 0)), effective_accuracy(unit), effective_evasion(unit), terrain_text,
@@ -3691,14 +3758,12 @@ func update_ui() -> void:
 		)
 		var primary_id := str(unit["special"])
 		var secondary_id := str(unit.get("secondary", ""))
-		var primary_cd := cooldown_left(unit, primary_id)
-		var secondary_cd := cooldown_left(unit, secondary_id)
 		var primary_cast := SkillCatalog.cast_time_ticks(primary_id)
 		var secondary_cast := SkillCatalog.cast_time_ticks(secondary_id)
 		var primary_cast_text := " • CAST %d" % primary_cast if primary_cast > 0 else ""
 		var secondary_cast_text := " • CAST %d" % secondary_cast if secondary_cast > 0 else ""
-		special_button.text = "%s • F%d • CD %s%s" % [skill_name(primary_id), skill_cost(primary_id), ("prêt" if primary_cd <= 0 else str(primary_cd)), primary_cast_text]
-		secondary_button.text = "%s • F%d • CD %s%s" % [skill_name(secondary_id), skill_cost(secondary_id), ("prêt" if secondary_cd <= 0 else str(secondary_cd)), secondary_cast_text]
+		special_button.text = "%s • F%d%s" % [skill_name(primary_id), skill_cost(primary_id), primary_cast_text]
+		secondary_button.text = "%s • F%d%s" % [skill_name(secondary_id), skill_cost(secondary_id), secondary_cast_text]
 		if special_targeting:
 			special_button.text = "Annuler Spore Funk"
 		special_button.disabled = not can_use_skill(unit, primary_id) and not special_targeting
@@ -3882,6 +3947,8 @@ func movement_cost(from_cell: Vector2i, to_cell: Vector2i) -> int:
 
 
 func can_step_height(unit: Dictionary, from_cell: Vector2i, to_cell: Vector2i) -> bool:
+	if String(unit.get("movement_ability", "none")) in ["ignore_height", "teleport"]:
+		return true
 	var delta: int = terrain_height(to_cell) - terrain_height(from_cell)
 	var jump_up: int = 1 + maxi(0, int(unit.get("jump_up_bonus", 0)))
 	var jump_down: int = 2 + maxi(0, int(unit.get("jump_down_bonus", 0)))
@@ -4021,15 +4088,15 @@ func short_name(value: String) -> String:
 func effective_move(unit: Dictionary) -> int:
 	if StatusCatalog.prevents_movement(unit):
 		return 0
-	return max(0, int(unit["move"]) + StatusCatalog.modifier(unit, "movement_delta"))
+	return max(0, int(unit["move"]) + StatusCatalog.modifier(unit, "movement_delta") + CombatMechanics.movement_bonus(String(unit.get("movement_ability", "none"))))
 
 
 func effective_physical_power(unit: Dictionary) -> int:
-	return maxi(0, int(unit.get("physical_power", unit.get("attack", 0))) + StatusCatalog.modifier(unit, "attack_delta"))
+	return CombatMechanics.support_attack_multiplier(maxi(0, int(unit.get("physical_power", unit.get("attack", 0))) + StatusCatalog.modifier(unit, "attack_delta")), String(unit.get("support_ability", "none")), false)
 
 
 func effective_magic_power(unit: Dictionary) -> int:
-	return maxi(0, int(unit.get("magic_power", 0)) + StatusCatalog.modifier(unit, "magic_power_delta"))
+	return CombatMechanics.support_attack_multiplier(maxi(0, int(unit.get("magic_power", 0)) + StatusCatalog.modifier(unit, "magic_power_delta")), String(unit.get("support_ability", "none")), true)
 
 
 func effective_physical_defense(unit: Dictionary) -> int:
@@ -4052,6 +4119,12 @@ func effective_initiative(unit: Dictionary) -> int:
 	return CombatMechanics.speed_from_initiative(max(0, int(unit["initiative"]) + StatusCatalog.modifier(unit, "initiative_delta")))
 
 
+func ct_gain_per_tick(unit: Dictionary) -> int:
+	if StatusCatalog.freezes_ct(unit):
+		return 0
+	return CombatMechanics.ct_gain_per_tick(effective_initiative(unit), has_status(unit, "haste"), has_status(unit, "slowed"))
+
+
 func effective_accuracy(unit: Dictionary) -> int:
 	return int(unit.get("accuracy", 0)) + StatusCatalog.modifier(unit, "accuracy_delta")
 
@@ -4069,13 +4142,26 @@ func attack_arc(attacker: Dictionary, target: Dictionary) -> String:
 
 
 func hit_profile(attacker: Dictionary, target: Dictionary, base_accuracy: int = CombatMechanics.BASIC_ATTACK_ACCURACY, ignore_cover: bool = false) -> Dictionary:
-	var arc := attack_arc(attacker, target)
-	var height_advantage := terrain_height(Vector2i(attacker["pos"])) > terrain_height(Vector2i(target["pos"]))
-	var covered := not ignore_cover and int(attacker.get("range", 1)) > 1 and cover_cells.has(target["pos"])
+	var arc: String = attack_arc(attacker, target)
+	var height_advantage: bool = terrain_height(Vector2i(attacker["pos"])) > terrain_height(Vector2i(target["pos"]))
+	var covered: bool = not ignore_cover and int(attacker.get("range", 1)) > 1 and cover_cells.has(target["pos"])
 	var adjusted_base_accuracy: int = base_accuracy
 	if base_accuracy == CombatMechanics.BASIC_ATTACK_ACCURACY:
 		adjusted_base_accuracy += int(attacker.get("basic_attack_accuracy_bonus", 0))
-	var chance := CombatMechanics.hit_chance(adjusted_base_accuracy, effective_accuracy(attacker), effective_evasion(target), arc, height_advantage, covered)
+	var class_evade: int = int(target.get("physical_class_evasion", target.get("evasion", 0))) + StatusCatalog.modifier(target, "evasion_delta")
+	var target_cannot_evade: bool = StatusCatalog.prevents_evasion(target)
+	var no_equipment_evade: bool = target_cannot_evade or String(attacker.get("support_ability", "none")) == "concentrate"
+	var chance: int = CombatMechanics.fft_physical_hit_chance(
+		adjusted_base_accuracy,
+		effective_accuracy(attacker),
+		0 if no_equipment_evade else clampi(class_evade, 0, 100),
+		0 if no_equipment_evade else int(target.get("physical_shield_evasion", 0)),
+		0 if no_equipment_evade else int(target.get("physical_accessory_evasion", 0)),
+		0 if no_equipment_evade else int(target.get("physical_weapon_evasion", 0)),
+		arc,
+		_unit_is_casting(target)
+	)
+	chance = CombatMechanics.blade_grasp_hit_chance(chance, int(target.get("brave", 70)), String(target.get("reaction_type", "none")) == "blade_grasp" and _reaction_available(target) and not target_cannot_evade)
 	return {
 		"chance": chance,
 		"arc": arc,
@@ -4084,8 +4170,40 @@ func hit_profile(attacker: Dictionary, target: Dictionary, base_accuracy: int = 
 	}
 
 
+func _skill_accuracy_kind(skill_id: String) -> String:
+	var skill: Resource = SkillCatalog.definition(skill_id)
+	if skill == null:
+		return "physical"
+	var configured: String = String(skill.get("accuracy_kind"))
+	if configured == "physical" or configured == "magical":
+		return configured
+	var raw_effects: Variant = skill.get("effects")
+	if raw_effects is Array:
+		for effect_var: Variant in raw_effects:
+			if not (effect_var is Resource):
+				continue
+			var effect: Resource = effect_var as Resource
+			if String(effect.get("effect_type")) == "damage":
+				return "physical" if String(effect.get("damage_type")) == "physical" else "magical"
+	return "magical"
+
+
+func skill_hit_profile(attacker: Dictionary, target: Dictionary, skill_id: String) -> Dictionary:
+	var profile: Dictionary = hit_profile(attacker, target, SkillCatalog.accuracy(skill_id), SkillCatalog.has_tag(skill_id, "ignore_cover"))
+	if _skill_accuracy_kind(skill_id) == "magical":
+		var no_magic_evade: bool = StatusCatalog.prevents_evasion(target)
+		profile["chance"] = CombatMechanics.fft_magic_hit_chance(
+			SkillCatalog.accuracy(skill_id),
+			effective_accuracy(attacker),
+			0 if no_magic_evade else int(target.get("magic_shield_evasion", 0)),
+			0 if no_magic_evade else int(target.get("magic_accessory_evasion", 0)),
+			_unit_is_casting(target)
+		)
+	return profile
+
+
 func _roll_hit(chance: int) -> bool:
-	return battle_rng.randi_range(1, 100) <= clampi(chance, 5, 100)
+	return battle_rng.randi_range(1, 100) <= clampi(chance, 0, 100)
 
 
 func add_status(unit: Dictionary, status_id: String) -> void:
@@ -4186,21 +4304,26 @@ func status_adjusted_direct_damage(raw_amount: int, target: Dictionary, source: 
 		defense = effective_physical_defense(target) if damage_type == "physical" else effective_magic_defense(target)
 	var after_defense: int = CombatMechanics.damage_after_defense(maxi(0, raw_amount + delta), defense, 1)
 	var resisted: int = apply_resistance(after_defense, target, damage_type)
-	return maxi(0, resisted - int(target.get("flat_damage_reduction", 0)))
+	var final_damage: int = maxi(0, resisted - int(target.get("flat_damage_reduction", 0)))
+	if damage_type == "physical":
+		final_damage = CombatMechanics.apply_charging_physical_vulnerability(final_damage, _unit_is_casting(target))
+	final_damage = CombatMechanics.defensive_ability_damage(final_damage, damage_type, has_status(target, "protect"), has_status(target, "shell"), String(target.get("support_ability", "none")))
+	return final_damage
 
 
 func damage_profile(
 	attacker: Dictionary, target: Dictionary, base_override: int = -1, ignore_cover: bool = false
 ) -> Dictionary:
-	var base_damage: int = effective_basic_attack_power(attacker) if base_override < 0 else base_override
+	var compatibility: String = CombatMechanics.zodiac_compatibility(String(attacker.get("zodiac_sign", "none")), String(target.get("zodiac_sign", "none")), String(attacker.get("sex", "monster")), String(target.get("sex", "monster")))
+	var base_damage: int = base_override
 	if base_override < 0:
+		base_damage = CombatMechanics.fft_weapon_damage(effective_physical_power(attacker), effective_magic_power(attacker), effective_initiative(attacker), int(attacker.get("brave", 70)), int(attacker.get("weapon_power", 1)), String(attacker.get("weapon_family", "unarmed")), compatibility)
 		base_damage += int(attacker.get("basic_attack_damage_bonus", 0))
-	var height_bonus: int = 1 if terrain_height(Vector2i(attacker["pos"])) > terrain_height(Vector2i(target["pos"])) else 0
-	var back_bonus: int = 2 if is_back_attack(attacker, target) else 0
-	var side_bonus: int = 1 if not is_back_attack(attacker, target) and is_side_attack(attacker, target) else 0
+	# FFT facing modifies evasion, not flat weapon damage; height/cover remain tactical LOS/range concerns.
+	var height_bonus: int = 0
+	var back_bonus: int = 0
+	var side_bonus: int = 0
 	var cover_penalty: int = 0
-	if not ignore_cover and int(attacker["range"]) > 1 and cover_cells.has(target["pos"]):
-		cover_penalty = 1
 	var outgoing_status: int = StatusCatalog.modifier(attacker, "outgoing_damage_delta")
 	var incoming_status: int = StatusCatalog.modifier(target, "incoming_damage_delta")
 	var guard_penalty: int = maxi(0, -StatusCatalog.status_modifier(target, "guarded", "incoming_damage_delta"))
@@ -4338,10 +4461,24 @@ func _apply_shield_block(target: Dictionary, damage: int) -> Dictionary:
 
 func apply_damage(target: Dictionary, amount: int) -> void:
 	var was_alive := int(target["hp"]) > 0
-	target["hp"] = max(0, int(target["hp"]) - amount)
-	_interrupt_cast_if_needed(target, amount)
+	var reaction_was_blocked: bool = StatusCatalog.prevents_reaction(target)
+	var hp_damage: int = maxi(0, amount)
+	if hp_damage > 0 and String(target.get("reaction_type", "none")) == "mp_switch" and int(target.get("focus", 0)) > 0 and _reaction_available(target, "mp_switch") and _reaction_triggers(target):
+		var mp_before: int = int(target.get("focus", 0))
+		var mp_lost: int = mini(mp_before, hp_damage)
+		target["focus"] = maxi(0, mp_before - hp_damage)
+		hp_damage = 0
+		spawn_floating_text(target["pos"], "MP SWITCH -%d MP" % mp_lost, SKY)
+	target["hp"] = max(0, int(target["hp"]) - hp_damage)
+	_interrupt_cast_if_needed(target, hp_damage)
 	# A zero-damage hit can still consume one-hit statuses such as GARDE/BALISÉ.
 	StatusCatalog.remove_on_damage_taken(target)
+	if hp_damage > 0 and not reaction_was_blocked and int(target.get("hp", 0)) > 0 and String(target.get("reaction_type", "none")) == "auto_potion" and _reaction_available(target, "auto_potion") and _reaction_triggers(target):
+		var potion_heal: int = maxi(1, int(floor(float(int(target.get("max_hp", 1))) / 4.0)))
+		var healed: int = mini(potion_heal, int(target.get("max_hp", 1)) - int(target.get("hp", 0)))
+		target["hp"] = int(target.get("hp", 0)) + healed
+		if healed > 0:
+			spawn_floating_text(target["pos"], "AUTO-POTION +%d" % healed, MINT)
 	if str(target.get("template_id", target["id"])) == "archiviste" and int(target["hp"]) > 0:
 		update_archivist_phase(target)
 	if was_alive and int(target["hp"]) <= 0:
@@ -4370,7 +4507,7 @@ func update_archivist_phase(boss: Dictionary) -> void:
 		boss["attack_max_range"] = int(boss.get("attack_max_range", boss["range"] - 1)) + 1
 		boss["focus"] = int(boss.get("max_focus", 2))
 		spawn_particles(boss["pos"], GOLD, 22)
-		log_message("BOSS — PHASE 3 : INDEX INTERDIT. +1 ATQ, +1 portée, Focus restauré.")
+		log_message("BOSS — PHASE 3 : INDEX INTERDIT. +1 ATQ, +1 portée, MP restauré.")
 
 
 func closest_enemy_in_range(source: Dictionary, range_value: int) -> Dictionary:

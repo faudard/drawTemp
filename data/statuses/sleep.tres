@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="SporeStatusDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/status_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sleep"
+display_name = "Sleep"
+description = "CT gelé; aucune action, mouvement, esquive ou réaction. Retiré par dégâts."
+color = Color(0.48, 0.58, 0.95, 1.0)
+duration_clockticks = 60
+duration_activations = 0
+ct_rate_percent = 0
+opposed_status_id = ""
+tick_phase = "none"
+tick_heal = 0
+prevents_movement = true
+prevents_action = true
+prevents_reaction = true
+prevents_evasion = true
+freezes_ct = true
+silences_magic = false
+treat_as_moved_for_ct = false
+treat_as_acted_for_ct = false
+remove_on_damage_taken = true

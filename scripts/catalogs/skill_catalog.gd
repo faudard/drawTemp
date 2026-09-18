@@ -27,13 +27,18 @@ static func display_name(skill_id: String) -> String:
 
 
 static func focus_cost(skill_id: String) -> int:
+	# Legacy serialized name. In the FFT ruleset this value is treated as MP.
 	var data := definition(skill_id)
 	return int(data.focus_cost) if data != null else 1
 
 
-static func cooldown_rounds(skill_id: String) -> int:
-	var data := definition(skill_id)
-	return int(data.cooldown_rounds) if data != null else 2
+static func mp_cost(skill_id: String) -> int:
+	return focus_cost(skill_id)
+
+
+static func cooldown_rounds(_skill_id: String) -> int:
+	# Compatibility API only. Cooldowns are deliberately disabled in the FFT loop.
+	return 0
 
 
 static func skill_range(skill_id: String) -> int:
@@ -46,26 +51,6 @@ static func target_mode(skill_id: String) -> String:
 	return String(data.target_mode) if data != null else "enemy"
 
 
-static func vfx_id(skill_id: String) -> String:
-	var data := definition(skill_id)
-	return String(data.vfx_id) if data != null else "default_hit"
-
-
-static func has_tag(skill_id: String, tag: String) -> bool:
-	var data := definition(skill_id)
-	return data != null and not tag.is_empty() and data.effect_tags.has(tag)
-
-
-static func cast_time_ticks(skill_id: String) -> int:
-	var data := definition(skill_id)
-	return maxi(0, int(data.cast_time_ticks)) if data != null else 0
-
-
-static func interrupt_on_damage(skill_id: String) -> bool:
-	var data := definition(skill_id)
-	return bool(data.interrupt_on_damage) if data != null else true
-
-
 static func uses_accuracy(skill_id: String) -> bool:
 	var data := definition(skill_id)
 	return bool(data.uses_accuracy) if data != null else false
@@ -73,7 +58,22 @@ static func uses_accuracy(skill_id: String) -> bool:
 
 static func accuracy(skill_id: String) -> int:
 	var data := definition(skill_id)
-	return clampi(int(data.accuracy), 0, 100) if data != null else 100
+	return int(data.accuracy) if data != null else 90
+
+
+static func cast_time_ticks(skill_id: String) -> int:
+	var data := definition(skill_id)
+	return int(data.cast_time_ticks) if data != null else 0
+
+
+static func interrupt_on_damage(skill_id: String) -> bool:
+	var data := definition(skill_id)
+	return bool(data.interrupt_on_damage) if data != null else false
+
+
+static func vfx_id(skill_id: String) -> String:
+	var data := definition(skill_id)
+	return String(data.vfx_id) if data != null else "default_hit"
 
 
 static func effects(skill_id: String) -> Array:
@@ -83,35 +83,54 @@ static func effects(skill_id: String) -> Array:
 	return data.effects
 
 
+static func has_tag(skill_id: String, tag: String) -> bool:
+	var data := definition(skill_id)
+	return data != null and data.effect_tags.has(tag)
+
+
 static func has_effects(skill_id: String) -> bool:
 	return not effects(skill_id).is_empty()
 
 
-static func cooldown_left(unit: Dictionary, skill_id: String) -> int:
-	var cooldowns: Dictionary = unit.get("cooldowns", {})
-	return int(cooldowns.get(skill_id, 0))
+static func cooldown_left(_unit: Dictionary, _skill_id: String) -> int:
+	return 0
 
 
 static func can_use(unit: Dictionary, skill_id: String) -> bool:
-	return (
-		not skill_id.is_empty()
-		and int(unit.get("focus", 0)) >= focus_cost(skill_id)
-		and cooldown_left(unit, skill_id) <= 0
-		and not bool(unit["has_acted"])
-	)
+	if skill_id.is_empty() or bool(unit["has_acted"]):
+		return false
+	if silence_affected(skill_id):
+		var statuses: Dictionary = unit.get("statuses", {})
+		if statuses.has("silence"):
+			return false
+	if cast_time_ticks(skill_id) > 0:
+		return true
+	return int(unit.get("focus", 0)) >= focus_cost(skill_id)
 
 
 static func spend(unit: Dictionary, skill_id: String) -> void:
 	unit["focus"] = max(0, int(unit.get("focus", 0)) - focus_cost(skill_id))
-	var cooldowns: Dictionary = unit.get("cooldowns", {})
-	cooldowns[skill_id] = cooldown_rounds(skill_id)
-	unit["cooldowns"] = cooldowns
+	# One Act per Active Turn is the only per-turn skill gate, like FFT.
 	unit["has_acted"] = true
+	# Purge stale cooldown state from older saves/runtime dictionaries.
+	if unit.has("cooldowns"):
+		unit["cooldowns"] = {}
 
 
 static func tick_round(unit: Dictionary) -> void:
-	unit["focus"] = min(int(unit.get("max_focus", 2)), int(unit.get("focus", 0)) + 1 + int(unit.get("focus_regen_bonus", 0)))
-	var cooldowns: Dictionary = unit.get("cooldowns", {})
-	for key in cooldowns.keys():
-		cooldowns[key] = max(0, int(cooldowns[key]) - 1)
-	unit["cooldowns"] = cooldowns
+	# FFT MP does not regenerate for free each round. Explicit equipment/passive
+	# regeneration remains supported through focus_regen_bonus for Sporebound content.
+	var regen: int = maxi(0, int(unit.get("focus_regen_bonus", 0)))
+	if regen > 0:
+		unit["focus"] = min(int(unit.get("max_focus", 2)), int(unit.get("focus", 0)) + regen)
+	if unit.has("cooldowns"):
+		unit["cooldowns"] = {}
+
+static func silence_affected(skill_id: String) -> bool:
+	var data := definition(skill_id)
+	return bool(data.silence_affected) if data != null else false
+
+
+static func fft_status_modifier(skill_id: String) -> int:
+	var data := definition(skill_id)
+	return int(data.fft_status_modifier) if data != null else 0

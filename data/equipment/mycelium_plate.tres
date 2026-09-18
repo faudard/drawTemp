@@ -27,3 +27,5 @@ shield_block_chance = 25
 shield_block_reduction = 2
 start_status_id = "guarded"
 resistances = Array[Resource]([SubResource("Res_1")])
+physical_shield_evasion = 15
+magic_shield_evasion = 10

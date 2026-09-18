@@ -3,7 +3,7 @@ class_name SporeStatusDefinition
 extends Resource
 
 ## Data-driven status definition edited by Sporebound Studio V1.3.
-## Durations are counted in activations of the affected unit. A value of 0 means persistent.
+## V1.30 supports FFT-style clocktick durations. duration_activations remains as a legacy fallback.
 
 @export_group("Identity")
 @export var id: String = "status"
@@ -13,7 +13,10 @@ extends Resource
 @export var vfx_id: String = ""
 
 @export_group("Lifetime")
+@export_range(0, 200, 1) var duration_clockticks: int = 0
 @export_range(0, 20, 1) var duration_activations: int = 1
+@export_range(0, 200, 1) var ct_rate_percent: int = 100
+@export var opposed_status_id: String = ""
 @export_range(1, 8, 1) var max_stacks: int = 1
 @export_enum("refresh", "stack", "replace") var stack_mode: String = "refresh"
 @export var remove_on_damage_taken: bool = false
@@ -41,11 +44,20 @@ extends Resource
 @export_group("Locks")
 @export var prevents_movement: bool = false
 @export var prevents_action: bool = false
+@export var prevents_reaction: bool = false
+@export var prevents_evasion: bool = false
+@export var freezes_ct: bool = false
+@export var silences_magic: bool = false
+## FFT Don't Move/Don't Act still pay the corresponding CT cost at AT end.
+@export var treat_as_moved_for_ct: bool = false
+@export var treat_as_acted_for_ct: bool = false
 
 
 func summary() -> String:
 	var parts: Array[String] = []
-	if duration_activations > 0:
+	if duration_clockticks > 0:
+		parts.append("%d ticks" % duration_clockticks)
+	elif duration_activations > 0:
 		parts.append("%d act." % duration_activations)
 	else:
 		parts.append("persistant")
@@ -77,4 +89,14 @@ func summary() -> String:
 		parts.append("immobilise")
 	if prevents_action:
 		parts.append("bloque action")
+	if prevents_reaction:
+		parts.append("bloque réaction")
+	if prevents_evasion:
+		parts.append("sans esquive")
+	if freezes_ct:
+		parts.append("CT gelé")
+	if silences_magic:
+		parts.append("silence magie")
+	if ct_rate_percent != 100:
+		parts.append("CT %d%%" % ct_rate_percent)
 	return " • ".join(parts)

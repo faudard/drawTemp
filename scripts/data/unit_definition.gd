@@ -23,10 +23,28 @@ extends Resource
 @export_range(0, 30, 1) var initiative: int = 5
 @export_range(-50, 50, 1) var accuracy: int = 0
 @export_range(-50, 50, 1) var evasion: int = 0
+
+@export_group("FFT Character")
+@export_range(1, 100, 1) var brave: int = 70
+@export_range(0, 100, 1) var faith: int = 60
+@export_enum("none", "aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces", "serpentarius") var zodiac_sign: String = "none"
+@export_enum("male", "female", "monster") var sex: String = "monster"
+
+@export_group("FFT Evasion")
+## When left at 0, physical_class_evasion falls back to the legacy `evasion` stat.
+@export_range(0, 100, 1) var physical_class_evasion: int = 0
+@export_range(0, 100, 1) var physical_shield_evasion: int = 0
+@export_range(0, 100, 1) var physical_accessory_evasion: int = 0
+@export_range(0, 100, 1) var physical_weapon_evasion: int = 0
+@export_range(0, 100, 1) var magic_shield_evasion: int = 0
+@export_range(0, 100, 1) var magic_accessory_evasion: int = 0
+
+@export_group("MP (legacy storage: Focus)")
 @export_range(0, 20, 1) var max_focus: int = 2
 
 @export_group("Basic weapon")
 @export_enum("unarmed", "melee", "spear", "ranged", "focus") var weapon_family: String = "unarmed"
+@export_range(1, 40, 1) var weapon_power: int = 1
 @export_range(1, 8, 1) var attack_min_range: int = 1
 @export_range(1, 8, 1) var threat_min_range: int = 1
 @export_range(1, 8, 1) var threat_max_range: int = 1
@@ -38,8 +56,10 @@ extends Resource
 @export var secondary_skill: String = ""
 @export var ai_profile: String = "default"
 
-@export_group("Reactions")
-@export_enum("none", "counter", "opportunity", "intercept") var reaction_type: String = "none"
+@export_group("FFT Ability Slots")
+@export_enum("none", "counter", "opportunity", "intercept", "blade_grasp", "auto_potion", "mp_switch") var reaction_type: String = "none"
+@export_enum("none", "attack_up", "magic_attack_up", "defense_up", "magic_defense_up", "concentrate", "short_charge") var support_ability: String = "none"
+@export_enum("none", "move_plus_1", "move_plus_2", "ignore_height", "teleport", "move_mp_up") var movement_ability: String = "none"
 @export_range(1, 6, 1) var reaction_range: int = 1
 @export_range(0, 6, 1) var reaction_damage_bonus: int = 0
 
@@ -71,6 +91,7 @@ func to_runtime_dict(position: Vector2i, team_override: String = "") -> Dictiona
 		"threat_min_range": threat_min_range,
 		"threat_max_range": threat_max_range,
 		"weapon_family": weapon_family,
+		"weapon_power": weapon_power,
 		"can_opportunity_attack": can_opportunity_attack,
 		"basic_attack_damage_type": basic_attack_damage_type,
 		"shield_block_chance": 0,
@@ -81,6 +102,16 @@ func to_runtime_dict(position: Vector2i, team_override: String = "") -> Dictiona
 		"initiative": initiative,
 		"accuracy": accuracy,
 		"evasion": evasion,
+		"brave": brave,
+		"faith": faith,
+		"zodiac_sign": zodiac_sign,
+		"sex": sex,
+		"physical_class_evasion": physical_class_evasion if physical_class_evasion > 0 else maxi(0, evasion),
+		"physical_shield_evasion": physical_shield_evasion,
+		"physical_accessory_evasion": physical_accessory_evasion,
+		"physical_weapon_evasion": physical_weapon_evasion,
+		"magic_shield_evasion": magic_shield_evasion,
+		"magic_accessory_evasion": magic_accessory_evasion,
 		"ct": 0,
 		"casting": {},
 		"downed": false,
@@ -101,8 +132,11 @@ func to_runtime_dict(position: Vector2i, team_override: String = "") -> Dictiona
 		"has_acted": false,
 		"reaction_used": false,
 		"reaction_type": reaction_type,
+		"support_ability": support_ability,
+		"movement_ability": movement_ability,
 		"reaction_range": reaction_range,
 		"reaction_damage_bonus": reaction_damage_bonus,
+		"reaction_ready": false,
 		"max_focus": max_focus,
 		"focus": max_focus,
 		"cooldowns": {},

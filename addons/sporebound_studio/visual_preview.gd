@@ -76,8 +76,19 @@ func _draw() -> void:
 		draw_string(ThemeDB.fallback_font, Vector2(18, 30), "Aucun visuel sélectionné", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
 		return
 	var center: Vector2 = Vector2(size.x * 0.42, size.y * 0.52)
+	var current_render_mode: String = String(visual.get("render_mode"))
+	if current_render_mode.is_empty():
+		current_render_mode = "auto"
 	var texture: Texture2D = _texture(String(visual.get("sprite_sheet_path")))
-	if bool(visual.get("use_sprite_sheet")) and texture != null:
+	var portrait_path: String = String(visual.get("portrait_path"))
+	if current_render_mode == "portrait_billboard" and state == "attack" and not String(visual.get("attack_pose_path")).is_empty():
+		portrait_path = String(visual.get("attack_pose_path"))
+	elif current_render_mode == "portrait_billboard" and state == "cast" and not String(visual.get("cast_pose_path")).is_empty():
+		portrait_path = String(visual.get("cast_pose_path"))
+	var portrait_texture: Texture2D = _texture(portrait_path, true)
+	if current_render_mode == "portrait_billboard" and portrait_texture != null:
+		_draw_portrait_billboard_preview(portrait_texture, center)
+	elif current_render_mode in ["auto", "sprite_sheet"] and bool(visual.get("use_sprite_sheet")) and texture != null:
 		_draw_sprite_preview(texture, center)
 	else:
 		_draw_fallback(center)
@@ -91,6 +102,23 @@ func _draw() -> void:
 		14,
 		Color("#dce8f5")
 	)
+
+
+func _draw_portrait_billboard_preview(texture: Texture2D, center: Vector2) -> void:
+	var source_size: Vector2 = texture.get_size()
+	if source_size.x <= 0.0 or source_size.y <= 0.0:
+		return
+	var max_size: Vector2 = Vector2(270.0, 270.0)
+	var ratio: float = minf(max_size.x / source_size.x, max_size.y / source_size.y)
+	var dest_size: Vector2 = source_size * ratio
+	var raw_offset: Variant = visual.get("sprite_offset")
+	var offset: Vector2 = raw_offset if raw_offset is Vector2 else Vector2.ZERO
+	# Runtime offsets are authored for 192px tactical cells. Keep only a
+	# softened preview offset so the editor remains easy to read.
+	offset *= 0.35
+	var dest: Rect2 = Rect2(center - dest_size * 0.5 + offset, dest_size)
+	draw_texture_rect(texture, dest, false)
+	draw_rect(dest, Color(1, 1, 1, 0.18), false, 1.0)
 
 
 func _draw_sprite_preview(texture: Texture2D, center: Vector2) -> void:

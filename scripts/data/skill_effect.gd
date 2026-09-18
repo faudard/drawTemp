@@ -8,6 +8,7 @@ extends Resource
 @export_enum("damage", "heal", "status", "push", "pull", "focus", "guard", "reaction", "zone") var effect_type: String = "damage"
 @export_range(-20, 20, 1) var amount: int = 1
 @export var use_attack_stat: bool = false
+@export_range(0, 60, 1) var fft_spell_power_q: int = 0
 @export var damage_type: String = "physical"
 @export var status_id: String = ""
 @export_range(0, 8, 1) var radius: int = 0

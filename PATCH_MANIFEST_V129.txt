@@ -1,0 +1,26 @@
+Sporebound Tactics V1.29.0 — FFT Magic / Charging / Evasion
+Base: V1.28.0 FFT Turn Loop
+
+Changed files:
+- CHANGELOG.md
+- FFT_MAGIC_CHARGE_V1_29.md
+- data/skills/corrode.tres
+- data/skills/flare.tres
+- data/skills/funk.tres
+- data/skills/hat.tres
+- data/skills/heal.tres
+- data/skills/mark.tres
+- data/skills/mist.tres
+- data/skills/prism_lance.tres
+- data/skills/spore_field.tres
+- data/skills/spore_orbit.tres
+- data/skills/taunt.tres
+- project.godot
+- scripts/catalogs/skill_catalog.gd
+- scripts/controllers/battle_controller.gd
+- scripts/core/combat_mechanics.gd
+- scripts/data/skill_definition.gd
+- scripts/data/unit_definition.gd
+- scripts/maps/spore_unit_actor_3d.gd
+- scripts/prototypes/spore_battle_board_3d.gd
+- tests/test_fft_magic_charge_v129.gd

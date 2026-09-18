@@ -26,6 +26,7 @@ const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
 @export var threat_min_range: int = 1
 @export var threat_max_range: int = 1
 @export var weapon_family: String = "unarmed"
+@export var weapon_power: int = 1
 @export var can_opportunity_attack: bool = true
 @export var basic_attack_damage_type: String = "physical"
 @export_range(0, 100, 1) var shield_block_chance: int = 0
@@ -33,12 +34,28 @@ const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
 @export var initiative: int = 5
 @export var accuracy: int = 0
 @export var evasion: int = 0
+@export_group("FFT Character")
+@export_range(1, 100, 1) var brave: int = 70
+@export_range(0, 100, 1) var faith: int = 60
+@export var zodiac_sign: String = "none"
+@export var sex: String = "monster"
+@export_group("FFT Evasion")
+@export_range(0, 100, 1) var physical_class_evasion: int = 0
+@export_range(0, 100, 1) var physical_shield_evasion: int = 0
+@export_range(0, 100, 1) var physical_accessory_evasion: int = 0
+@export_range(0, 100, 1) var physical_weapon_evasion: int = 0
+@export_range(0, 100, 1) var magic_shield_evasion: int = 0
+@export_range(0, 100, 1) var magic_accessory_evasion: int = 0
+
+@export_group("MP (legacy storage: Focus)")
 @export var max_focus: int = 2
 @export var focus: int = 2
 @export var primary_skill: String = ""
 @export var secondary_skill: String = ""
 @export var facing: Vector2i = Vector2i.DOWN
-@export_enum("none", "counter", "opportunity", "intercept") var reaction_type: String = "none"
+@export_enum("none", "counter", "opportunity", "intercept", "blade_grasp", "auto_potion", "mp_switch") var reaction_type: String = "none"
+@export_enum("none", "attack_up", "magic_attack_up", "defense_up", "magic_defense_up", "concentrate", "short_charge") var support_ability: String = "none"
+@export_enum("none", "move_plus_1", "move_plus_2", "ignore_height", "teleport", "move_mp_up") var movement_ability: String = "none"
 @export_range(1, 6, 1) var reaction_range: int = 1
 @export_range(0, 6, 1) var reaction_damage_bonus: int = 0
 @export var end_ct_bonus: int = 0
@@ -76,7 +93,6 @@ var removed_from_battle: bool = false
 var _sprite: Sprite3D
 var _label: Label3D
 var _shadow: MeshInstance3D
-var _team_disc: MeshInstance3D
 var _selection_disc: MeshInstance3D
 var _turn_marker: MeshInstance3D
 var _facing_marker: MeshInstance3D
@@ -93,7 +109,7 @@ var _visual_definition: Resource = null
 var _sprite_sheet_texture: Texture2D = null
 var _sprite_frame_texture: AtlasTexture = null
 var _uses_sprite_sheet: bool = false
-var _uses_portrait_sprite: bool = false
+var _uses_portrait_billboard: bool = false
 var _animation_state: String = "idle"
 var _animation_elapsed: float = 0.0
 var _last_sprite_frame: Vector2i = Vector2i(-999, -999)
@@ -121,10 +137,6 @@ func _process(delta: float) -> void:
 		_sprite.position = Vector3(base_position.x, base_position.y + bob, base_position.z)
 		var breathe: float = 1.0 + sin(_presentation_time * 2.1 + _idle_phase) * 0.012
 		_sprite.scale = Vector3(_sprite_art_scale * breathe, _sprite_art_scale * breathe, _sprite_art_scale)
-	if _team_disc != null and _team_disc.visible:
-		var base_pulse: float = 1.0 + sin(_presentation_time * 2.8 + _idle_phase) * 0.04
-		var focus_boost: float = 0.10 if (_selected or _turn_active) else 0.0
-		_team_disc.scale = Vector3(base_pulse + focus_boost, 1.0, base_pulse + focus_boost)
 	if _selection_disc != null and _selection_disc.visible:
 		var selected_pulse: float = 1.0 + sin(_presentation_time * 5.2) * 0.07
 		_selection_disc.scale = Vector3(selected_pulse, 1.0, selected_pulse)
@@ -158,15 +170,32 @@ func configure_from_unit_data(
 		threat_min_range = maxi(1, int(unit_data.get("threat_min_range")))
 		threat_max_range = maxi(threat_min_range, int(unit_data.get("threat_max_range")))
 		weapon_family = String(unit_data.get("weapon_family"))
+		weapon_power = maxi(1, int(unit_data.get("weapon_power")))
 		can_opportunity_attack = bool(unit_data.get("can_opportunity_attack"))
 		basic_attack_damage_type = String(unit_data.get("basic_attack_damage_type"))
 		initiative = int(unit_data.get("initiative"))
 		accuracy = int(unit_data.get("accuracy"))
 		evasion = int(unit_data.get("evasion"))
+		brave = int(unit_data.get("brave"))
+		faith = int(unit_data.get("faith"))
+		zodiac_sign = String(unit_data.get("zodiac_sign"))
+		sex = String(unit_data.get("sex"))
+		# Existing content only has one evade stat: map it to FFT class evasion.
+		# New content can define the individual layers directly.
+		physical_class_evasion = int(unit_data.get("physical_class_evasion"))
+		if physical_class_evasion <= 0:
+			physical_class_evasion = maxi(0, evasion)
+		physical_shield_evasion = int(unit_data.get("physical_shield_evasion"))
+		physical_accessory_evasion = int(unit_data.get("physical_accessory_evasion"))
+		physical_weapon_evasion = int(unit_data.get("physical_weapon_evasion"))
+		magic_shield_evasion = int(unit_data.get("magic_shield_evasion"))
+		magic_accessory_evasion = int(unit_data.get("magic_accessory_evasion"))
 		max_focus = int(unit_data.get("max_focus"))
 		primary_skill = String(unit_data.get("primary_skill"))
 		secondary_skill = String(unit_data.get("secondary_skill"))
 		reaction_type = String(unit_data.get("reaction_type"))
+		support_ability = String(unit_data.get("support_ability"))
+		movement_ability = String(unit_data.get("movement_ability"))
 		reaction_range = maxi(1, int(unit_data.get("reaction_range")))
 		reaction_damage_bonus = maxi(0, int(unit_data.get("reaction_damage_bonus")))
 		visual_id = String(unit_data.get("visual_id"))
@@ -208,6 +237,11 @@ func configure_from_unit_data(
 	threat_min_range = maxi(1, int(overrides.get("threat_min_range", threat_min_range)))
 	threat_max_range = maxi(threat_min_range, int(overrides.get("threat_max_range", threat_max_range)))
 	weapon_family = String(overrides.get("weapon_family", weapon_family))
+	weapon_power = maxi(1, int(overrides.get("weapon_power", weapon_power)))
+	brave = clampi(int(overrides.get("brave", brave)), 1, 100)
+	faith = clampi(int(overrides.get("faith", faith)), 0, 100)
+	zodiac_sign = String(overrides.get("zodiac_sign", zodiac_sign))
+	sex = String(overrides.get("sex", sex))
 	can_opportunity_attack = bool(overrides.get("can_opportunity_attack", can_opportunity_attack))
 	basic_attack_damage_type = String(overrides.get("basic_attack_damage_type", basic_attack_damage_type))
 	shield_block_chance = clampi(int(overrides.get("shield_block_chance", 0)), 0, 100)
@@ -218,6 +252,13 @@ func configure_from_unit_data(
 		accuracy = int(overrides.get("accuracy", accuracy))
 	if overrides.has("evasion"):
 		evasion = int(overrides.get("evasion", evasion))
+		physical_class_evasion = maxi(0, evasion)
+	physical_class_evasion = clampi(int(overrides.get("physical_class_evasion", physical_class_evasion)), 0, 100)
+	physical_shield_evasion = clampi(int(overrides.get("physical_shield_evasion", physical_shield_evasion)), 0, 100)
+	physical_accessory_evasion = clampi(int(overrides.get("physical_accessory_evasion", physical_accessory_evasion)), 0, 100)
+	physical_weapon_evasion = clampi(int(overrides.get("physical_weapon_evasion", physical_weapon_evasion)), 0, 100)
+	magic_shield_evasion = clampi(int(overrides.get("magic_shield_evasion", magic_shield_evasion)), 0, 100)
+	magic_accessory_evasion = clampi(int(overrides.get("magic_accessory_evasion", magic_accessory_evasion)), 0, 100)
 	if overrides.has("max_focus"):
 		max_focus = maxi(0, int(overrides.get("max_focus", max_focus)))
 	if overrides.has("primary_skill"):
@@ -226,6 +267,10 @@ func configure_from_unit_data(
 		secondary_skill = String(overrides.get("secondary_skill", secondary_skill))
 	if overrides.has("reaction_type"):
 		reaction_type = String(overrides.get("reaction_type", reaction_type))
+	if overrides.has("support_ability"):
+		support_ability = String(overrides.get("support_ability", support_ability))
+	if overrides.has("movement_ability"):
+		movement_ability = String(overrides.get("movement_ability", movement_ability))
 	if overrides.has("reaction_range"):
 		reaction_range = maxi(1, int(overrides.get("reaction_range", reaction_range)))
 	if overrides.has("reaction_damage_bonus"):
@@ -272,11 +317,25 @@ func begin_activation() -> void:
 
 
 func effective_physical_power() -> int:
-	return maxi(0, attack_power + status_modifier("attack_delta"))
+	var value: int = maxi(0, attack_power + status_modifier("attack_delta"))
+	return CombatMechanics.support_attack_multiplier(value, support_ability, false)
 
 
 func effective_magic_power() -> int:
-	return maxi(0, magic_power + status_modifier("magic_power_delta"))
+	var value: int = maxi(0, magic_power + status_modifier("magic_power_delta"))
+	return CombatMechanics.support_attack_multiplier(value, support_ability, true)
+
+
+func effective_move_range() -> int:
+	return maxi(0, move_range + status_modifier("movement_delta") + CombatMechanics.movement_bonus(movement_ability))
+
+
+func ignores_height_for_movement() -> bool:
+	return movement_ability in ["ignore_height", "teleport"]
+
+
+func uses_teleport() -> bool:
+	return movement_ability == "teleport"
 
 
 func effective_physical_defense() -> int:
@@ -299,6 +358,14 @@ func effective_speed() -> int:
 	return CombatMechanics.speed_from_initiative(initiative + status_modifier("initiative_delta"))
 
 
+func ct_gain_per_tick() -> int:
+	if _status_flag("freezes_ct"):
+		return 0
+	var haste_active: bool = statuses.has("haste")
+	var slow_active: bool = statuses.has("slowed")
+	return CombatMechanics.ct_gain_per_tick(effective_speed(), haste_active, slow_active)
+
+
 func effective_accuracy() -> int:
 	return accuracy + status_modifier("accuracy_delta")
 
@@ -312,7 +379,7 @@ func is_casting() -> bool:
 
 
 func interrupt_cast() -> String:
-	if casting.is_empty() or not bool(casting.get("interrupt_on_damage", true)):
+	if casting.is_empty() or not bool(casting.get("interrupt_on_damage", false)):
 		return ""
 	var skill_id: String = String(casting.get("skill_id", ""))
 	casting.clear()
@@ -333,14 +400,15 @@ func reset_round_reaction() -> void:
 
 
 func reaction_available() -> bool:
-	return alive and reaction_type != "none" and (not reaction_used_this_round or reaction_ready)
+	return alive and reaction_type != "none" and not status_prevents_reaction()
 
 
 func consume_reaction() -> void:
-	if reaction_used_this_round and reaction_ready:
+	# FFT reactions are not limited to one use per round. reaction_ready is a
+	# Sporebound one-shot guarantee granted by some skills and is consumed first.
+	if reaction_ready:
 		reaction_ready = false
-	else:
-		reaction_used_this_round = true
+	reaction_used_this_round = false
 	_refresh_label()
 
 
@@ -426,12 +494,18 @@ func facing_name() -> String:
 
 
 func can_use_skill(skill_id: String) -> bool:
-	if not alive or skill_id.is_empty():
+	if not alive or skill_id.is_empty() or acted_this_activation:
 		return false
 	var skill: Resource = SkillCatalog.definition(skill_id)
 	if skill == null:
 		return false
-	return focus >= int(skill.get("focus_cost")) and int(cooldowns.get(skill_id, 0)) <= 0 and not acted_this_activation
+	if silenced() and bool(skill.get("silence_affected")):
+		return false
+	# FFT slow actions pay MP when they resolve, so they may begin even if MP is
+	# currently insufficient (MP can be restored before resolution).
+	if int(skill.get("cast_time_ticks")) > 0:
+		return true
+	return focus >= int(skill.get("focus_cost"))
 
 
 func spend_skill(skill_id: String) -> void:
@@ -439,21 +513,34 @@ func spend_skill(skill_id: String) -> void:
 	if skill == null:
 		return
 	focus = maxi(0, focus - int(skill.get("focus_cost")))
-	cooldowns[skill_id] = int(skill.get("cooldown_rounds"))
+	cooldowns.clear()
 	acted_this_activation = true
 	_refresh_label()
 
 
+func spend_skill_resource_only(skill_id: String) -> bool:
+	var skill: Resource = SkillCatalog.definition(skill_id)
+	if skill == null:
+		return false
+	var cost: int = maxi(0, int(skill.get("focus_cost")))
+	if focus < cost:
+		return false
+	focus -= cost
+	_refresh_label()
+	return true
+
+
 func tick_skill_resources() -> void:
-	focus = mini(max_focus, focus + maxi(0, 1 + focus_regen_bonus))
-	for skill_key: Variant in cooldowns.keys():
-		var skill_id: String = String(skill_key)
-		cooldowns[skill_id] = maxi(0, int(cooldowns.get(skill_id, 0)) - 1)
+	# No free MP refill in FFT. Only explicit passive/equipment regeneration applies.
+	var regen: int = maxi(0, focus_regen_bonus)
+	if regen > 0:
+		focus = mini(max_focus, focus + regen)
+	cooldowns.clear()
 	_refresh_label()
 
 
-func skill_cooldown(skill_id: String) -> int:
-	return int(cooldowns.get(skill_id, 0))
+func skill_cooldown(_skill_id: String) -> int:
+	return 0
 
 
 func heal(amount: int) -> int:
@@ -479,6 +566,10 @@ func apply_status(status_id: String, duration_override: int = -1, stacks_to_add:
 	if data == null:
 		return false
 	var duration: int = duration_override if duration_override >= 0 else int(data.get("duration_activations"))
+	var clockticks: int = int(data.get("duration_clockticks"))
+	var opposed_status_id: String = String(data.get("opposed_status_id"))
+	if not opposed_status_id.is_empty():
+		statuses.erase(opposed_status_id)
 	var max_stacks_value: int = maxi(1, int(data.get("max_stacks")))
 	var stack_mode: String = String(data.get("stack_mode"))
 	var state: Dictionary = {}
@@ -494,7 +585,7 @@ func apply_status(status_id: String, duration_override: int = -1, stacks_to_add:
 			stacks = clampi(stacks_to_add, 1, max_stacks_value)
 		else:
 			stacks = maxi(previous_stacks, clampi(stacks_to_add, 1, max_stacks_value))
-	statuses[status_id] = {"remaining": duration, "stacks": stacks}
+	statuses[status_id] = {"remaining": duration, "remaining_clockticks": clockticks, "stacks": stacks}
 	_sync_status_vfx()
 	_refresh_label()
 	return true
@@ -535,6 +626,14 @@ func status_modifier(property_name: String) -> int:
 	return total
 
 
+func _status_flag(property_name: String) -> bool:
+	for status_key: Variant in statuses.keys():
+		var data: Resource = StatusCatalog.definition(String(status_key))
+		if data != null and bool(data.get(property_name)):
+			return true
+	return false
+
+
 func status_prevents_movement() -> bool:
 	for status_key: Variant in statuses.keys():
 		var data: Resource = StatusCatalog.definition(String(status_key))
@@ -551,6 +650,30 @@ func status_prevents_action() -> bool:
 	return false
 
 
+func status_prevents_reaction() -> bool:
+	return _status_flag("prevents_reaction")
+
+
+func status_prevents_evasion() -> bool:
+	return _status_flag("prevents_evasion")
+
+
+func status_freezes_ct() -> bool:
+	return _status_flag("freezes_ct")
+
+
+func status_treats_as_moved_for_ct() -> bool:
+	return _status_flag("treat_as_moved_for_ct")
+
+
+func status_treats_as_acted_for_ct() -> bool:
+	return _status_flag("treat_as_acted_for_ct")
+
+
+func silenced() -> bool:
+	return _status_flag("silences_magic")
+
+
 func status_display_text() -> String:
 	var labels: Array[String] = []
 	for status_key: Variant in statuses.keys():
@@ -561,10 +684,13 @@ func status_display_text() -> String:
 		if state_value is Dictionary:
 			var state: Dictionary = state_value as Dictionary
 			var stacks: int = int(state.get("stacks", 1))
+			var remaining_ticks: int = int(state.get("remaining_clockticks", 0))
 			var remaining: int = int(state.get("remaining", 0))
 			if stacks > 1:
 				label += " x%d" % stacks
-			if remaining > 0:
+			if remaining_ticks > 0:
+				label += "[%dt]" % remaining_ticks
+			elif remaining > 0:
 				label += "[%d]" % remaining
 		labels.append(label)
 	labels.sort()
@@ -583,9 +709,15 @@ func phase_status_events(phase: String) -> Array[Dictionary]:
 		if state_value is Dictionary:
 			stacks = maxi(1, int((state_value as Dictionary).get("stacks", 1)))
 		if int(data.get("tick_damage")) > 0:
-			result.append({"type": "damage", "amount": int(data.get("tick_damage")) * stacks, "status_id": status_id})
+			var tick_amount: int = int(data.get("tick_damage")) * stacks
+			if status_id == "poisoned":
+				tick_amount = maxi(1, int(floor(float(max_hp) / 8.0))) * stacks
+			result.append({"type": "damage", "amount": tick_amount, "status_id": status_id})
 		if int(data.get("tick_heal")) > 0:
-			result.append({"type": "heal", "amount": int(data.get("tick_heal")) * stacks, "status_id": status_id})
+			var heal_amount: int = int(data.get("tick_heal")) * stacks
+			if status_id == "regen":
+				heal_amount = maxi(1, int(floor(float(max_hp) / 8.0))) * stacks
+			result.append({"type": "heal", "amount": heal_amount, "status_id": status_id})
 	return result
 
 
@@ -597,6 +729,8 @@ func finish_status_activation() -> PackedStringArray:
 		if not (state_value is Dictionary):
 			continue
 		var state: Dictionary = (state_value as Dictionary).duplicate(true)
+		if int(state.get("remaining_clockticks", 0)) > 0:
+			continue
 		var remaining: int = int(state.get("remaining", 0))
 		if remaining <= 0:
 			continue
@@ -609,6 +743,45 @@ func finish_status_activation() -> PackedStringArray:
 			statuses[status_id] = state
 	_sync_status_vfx()
 	_refresh_label()
+	return expired
+
+
+
+
+func next_status_expiry_ticks() -> int:
+	var best: int = 999999
+	for status_key: Variant in statuses.keys():
+		var state_value: Variant = statuses.get(status_key, {})
+		if state_value is Dictionary:
+			var remaining_ticks: int = int((state_value as Dictionary).get("remaining_clockticks", 0))
+			if remaining_ticks > 0:
+				best = mini(best, remaining_ticks)
+	return best
+
+
+func tick_status_clock(ticks: int) -> PackedStringArray:
+	var expired: PackedStringArray = PackedStringArray()
+	if ticks <= 0:
+		return expired
+	for status_key: Variant in statuses.keys():
+		var status_id: String = String(status_key)
+		var state_value: Variant = statuses.get(status_id, {})
+		if not (state_value is Dictionary):
+			continue
+		var state: Dictionary = (state_value as Dictionary).duplicate(true)
+		var remaining_ticks: int = int(state.get("remaining_clockticks", 0))
+		if remaining_ticks <= 0:
+			continue
+		remaining_ticks -= ticks
+		if remaining_ticks <= 0:
+			statuses.erase(status_id)
+			expired.append(status_id)
+		else:
+			state["remaining_clockticks"] = remaining_ticks
+			statuses[status_id] = state
+	if not expired.is_empty():
+		_sync_status_vfx()
+		_refresh_label()
 	return expired
 
 
@@ -725,7 +898,7 @@ func label_text() -> String:
 	var reaction_text: String = ""
 	if reaction_type != "none":
 		reaction_text = "R:%s%s" % [reaction_type.to_upper(), "+" if reaction_ready else ""]
-	var base: String = "%s  HP %d/%d  FP %d/%d\nPUI.P %d • PUI.M %d • DEF.P %d • DEF.M %d\nMOV %d • RNG %d-%d • CT %d" % [display_name, hp, max_hp, focus, max_focus, effective_physical_power(), effective_magic_power(), effective_physical_defense(), effective_magic_defense(), move_range, attack_min_range, attack_range, ct]
+	var base: String = "%s  HP %d/%d  MP %d/%d\nPUI.P %d • PUI.M %d • DEF.P %d • DEF.M %d\nMOV %d • RNG %d-%d • CT %d" % [display_name, hp, max_hp, focus, max_focus, effective_physical_power(), effective_magic_power(), effective_physical_defense(), effective_magic_defense(), move_range, attack_min_range, attack_range, ct]
 	var extras: PackedStringArray = PackedStringArray()
 	if downed:
 		extras.append("K.O. %d" % downed_countdown)
@@ -864,27 +1037,6 @@ func _ensure_visual_nodes() -> void:
 		_sprite.no_depth_test = false
 		_sprite.position = _sprite_base_position()
 
-	if _team_disc == null:
-		_team_disc = get_node_or_null("TeamDisc") as MeshInstance3D
-	if _team_disc == null:
-		_team_disc = MeshInstance3D.new()
-		_team_disc.name = "TeamDisc"
-		add_child(_team_disc)
-		var team_mesh: CylinderMesh = CylinderMesh.new()
-		team_mesh.top_radius = 0.34
-		team_mesh.bottom_radius = 0.42
-		team_mesh.height = 0.016
-		_team_disc.mesh = team_mesh
-		_team_disc.position = Vector3(0.0, 0.012, 0.0)
-		var team_material: StandardMaterial3D = StandardMaterial3D.new()
-		team_material.albedo_color = Color(0.36, 0.82, 1.0, 0.24) if team == "player" else Color(1.0, 0.42, 0.38, 0.22)
-		team_material.emission_enabled = true
-		team_material.emission = Color(0.36, 0.82, 1.0, 1.0) if team == "player" else Color(1.0, 0.42, 0.38, 1.0)
-		team_material.emission_energy_multiplier = 0.12
-		team_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		team_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_team_disc.material_override = team_material
-
 	if _selection_disc == null:
 		_selection_disc = get_node_or_null("SelectionDisc") as MeshInstance3D
 	if _selection_disc == null:
@@ -984,7 +1136,7 @@ func _refresh_visuals() -> void:
 
 func _configure_sprite_source() -> void:
 	_uses_sprite_sheet = false
-	_uses_portrait_sprite = false
+	_uses_portrait_billboard = false
 	_sprite_sheet_texture = null
 	_sprite_frame_texture = null
 	_last_sprite_frame = Vector2i(-999, -999)
@@ -994,10 +1146,20 @@ func _configure_sprite_source() -> void:
 		var raw_offset: Variant = _visual_definition.get("sprite_offset")
 		if raw_offset is Vector2:
 			_sprite_art_offset = raw_offset
+		var render_mode: String = String(_visual_definition.get("render_mode"))
+		if render_mode.is_empty():
+			render_mode = "auto"
+		var portrait_path: String = String(_visual_definition.get("portrait_path"))
+		if render_mode == "portrait_billboard" and not portrait_path.is_empty() and ResourceLoader.exists(portrait_path):
+			var loaded_portrait: Resource = load(portrait_path)
+			if loaded_portrait is Texture2D:
+				_sprite.texture = loaded_portrait as Texture2D
+				_uses_portrait_billboard = true
 		var sheet_path: String = String(_visual_definition.get("sprite_sheet_path"))
 		var fw: int = int(_visual_definition.get("frame_width"))
 		var fh: int = int(_visual_definition.get("frame_height"))
-		if bool(_visual_definition.get("use_sprite_sheet")) and fw > 0 and fh > 0 and not sheet_path.is_empty() and ResourceLoader.exists(sheet_path):
+		var allow_sheet: bool = render_mode in ["auto", "sprite_sheet"]
+		if not _uses_portrait_billboard and allow_sheet and bool(_visual_definition.get("use_sprite_sheet")) and fw > 0 and fh > 0 and not sheet_path.is_empty() and ResourceLoader.exists(sheet_path):
 			var loaded_sheet: Resource = load(sheet_path)
 			if loaded_sheet is Texture2D:
 				_sprite_sheet_texture = loaded_sheet as Texture2D
@@ -1005,23 +1167,34 @@ func _configure_sprite_source() -> void:
 				_sprite_frame_texture.atlas = _sprite_sheet_texture
 				_sprite.texture = _sprite_frame_texture
 				_uses_sprite_sheet = true
-		if not _uses_sprite_sheet:
-			var portrait_path: String = String(_visual_definition.get("portrait_path"))
-			if not portrait_path.is_empty() and ResourceLoader.exists(portrait_path):
-				var loaded_portrait: Resource = load(portrait_path)
-				if loaded_portrait is Texture2D:
-					var portrait_texture: Texture2D = loaded_portrait as Texture2D
-					_sprite.texture = portrait_texture
-					_uses_portrait_sprite = true
-					var texture_height: float = maxf(1.0, float(portrait_texture.get_height()))
-					_sprite_art_scale *= 128.0 / texture_height
+	if _uses_portrait_billboard:
+		_apply_portrait_billboard_state_texture()
 	_sprite.position = _sprite_base_position()
 	_sprite.scale = Vector3.ONE * _sprite_art_scale
 	_sprite.modulate = _sprite_base_modulate()
 	if _uses_sprite_sheet:
 		_update_sprite_animation(true)
-	elif not _uses_portrait_sprite:
+	elif not _uses_portrait_billboard:
 		_sprite.texture = _build_texture(_last_view_direction)
+
+
+func _apply_portrait_billboard_state_texture() -> void:
+	if not _uses_portrait_billboard or _sprite == null or _visual_definition == null:
+		return
+	var path: String = String(_visual_definition.get("portrait_path"))
+	if _animation_state == "attack":
+		var attack_path: String = String(_visual_definition.get("attack_pose_path"))
+		if not attack_path.is_empty():
+			path = attack_path
+	elif _animation_state == "cast":
+		var cast_path: String = String(_visual_definition.get("cast_pose_path"))
+		if not cast_path.is_empty():
+			path = cast_path
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return
+	var loaded: Resource = load(path)
+	if loaded is Texture2D:
+		_sprite.texture = loaded as Texture2D
 
 
 func _set_animation_state(state: String, restart: bool = true) -> void:
@@ -1033,6 +1206,8 @@ func _set_animation_state(state: String, restart: bool = true) -> void:
 	if restart:
 		_animation_elapsed = 0.0
 	_last_sprite_frame = Vector2i(-999, -999)
+	if _uses_portrait_billboard:
+		_apply_portrait_billboard_state_texture()
 	_update_sprite_animation(true)
 
 
@@ -1076,6 +1251,11 @@ func _update_directional_sprite() -> void:
 	_last_sprite_frame = Vector2i(-999, -999)
 	if _uses_sprite_sheet:
 		_update_sprite_animation(true)
+	elif _uses_portrait_billboard:
+		# Library portraits are camera-facing presentation art. They deliberately
+		# stay unchanged when the tactical facing changes until a true 4-way
+		# sprite sheet is authored for that character.
+		return
 	elif _sprite != null:
 		_sprite.texture = _build_texture(direction_name)
 
@@ -1112,8 +1292,7 @@ func _view_direction_name() -> String:
 
 func _sprite_base_position() -> Vector3:
 	const PIXEL_TO_WORLD: float = 0.016
-	var base_y: float = 1.02 if _uses_portrait_sprite else 0.58
-	return Vector3(_sprite_art_offset.x * PIXEL_TO_WORLD, base_y - _sprite_art_offset.y * PIXEL_TO_WORLD, 0.0)
+	return Vector3(_sprite_art_offset.x * PIXEL_TO_WORLD, 0.58 - _sprite_art_offset.y * PIXEL_TO_WORLD, 0.0)
 
 
 func _sprite_base_modulate() -> Color:
@@ -1261,20 +1440,6 @@ func _refresh_label() -> void:
 
 
 func _update_selection_visuals() -> void:
-	if _team_disc != null:
-		_team_disc.visible = alive
-		var team_material: StandardMaterial3D = _team_disc.material_override as StandardMaterial3D
-		if team_material != null:
-			var base_color: Color = Color(0.36, 0.82, 1.0, 0.24) if team == "player" else Color(1.0, 0.42, 0.38, 0.22)
-			if _turn_active:
-				base_color = base_color.lightened(0.24)
-				base_color.a = 0.40
-			elif _selected:
-				base_color = base_color.lightened(0.12)
-				base_color.a = 0.32
-			team_material.albedo_color = base_color
-			team_material.emission = Color(base_color.r, base_color.g, base_color.b, 1.0)
-			team_material.emission_energy_multiplier = 0.26 if (_selected or _turn_active) else 0.12
 	if _selection_disc != null:
 		_selection_disc.visible = _selected and alive
 	if _turn_marker != null:
@@ -1285,12 +1450,7 @@ func _update_selection_visuals() -> void:
 		_vitals_sprite.visible = alive
 	if _sprite != null and alive:
 		var base_modulate: Color = _sprite_base_modulate()
-		if _turn_active:
-			_sprite.modulate = base_modulate.lightened(0.20)
-		elif _selected:
-			_sprite.modulate = base_modulate.lightened(0.12)
-		else:
-			_sprite.modulate = base_modulate
+		_sprite.modulate = base_modulate.lightened(0.12) if _selected else base_modulate
 
 
 func _update_facing_visual() -> void:

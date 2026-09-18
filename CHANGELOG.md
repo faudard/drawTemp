@@ -1,26 +1,44 @@
-# Mission 1 3D — Objective Beacons & Team Auras
+# V1.31 — FFT Abilities & Statuses
 
-- Balises 3D ajoutées pour la zone d’extraction et les vinyles optionnels.
-- Animation légère de la Couronne runtime pour mieux l’identifier.
-- Aura d’équipe permanente sous chaque unité, renforcée sur la sélection et l’unité active.
-- Passe purement visuelle / lisibilité, sans changement des règles.
+- Reaction/Support/Movement ability slots.
+- Blade Grasp, Auto-Potion, MP Switch.
+- Attack/Magic Attack/Defense/Magic Defense Up, Concentrate, Short Charge.
+- Move+1/+2, Ignore Height, Teleport, Move-MP Up.
+- Protect/Shell/Regen/Silence/Sleep/Stop/Don't Move/Don't Act.
+- FFT Faith/MA status success hook.
+- Sleep/Stop CT freeze and FFT forced CT costs for Don't Move/Don't Act.
 
-# Mission 1 3D — UX / Tactical Readability Pass
+# V1.30 — FFT Core Combat
+- Brave/Faith/Zodiac/WP
+- Brave-based repeatable reactions
+- FFT-style weapon and Faith magic formulas
+- Haste/Slow CT-rate and clocktick status durations
+- Poison 1/8 MaxHP/AT
 
-- Timeline d’initiative restylée avec portraits compacts des prochaines activations.
-- Nouveau panneau **OBJECTIF** : mission, statut de la Couronne, vinyles, ennemis restants et état des interactables.
-- Nouveau panneau **CASE** : coordonnées, hauteur, type de terrain, rôle de la case, occupant et estimation d’attaque/déplacement.
-- Cette passe reste purement présentation / lisibilité : aucune règle de gameplay de la mission 1 n’est modifiée.
+# V1.29.0 — FFT Magic / Charging / Evasion
 
-# Mission 1 3D — Design Pass
+- MP semantics replace the visible Focus economy without breaking serialized content.
+- Removed automatic +1 MP/Focus round regeneration.
+- Casters continue accumulating unit CT during slow-action charge.
+- Move/WAIT keep Charging; choosing another Action cancels it.
+- Slow actions pay/check MP at resolution, matching FFT.
+- Ordinary damage no longer interrupts Charging; only a new Action or explicit interruption does.
+- Charging sets evade to zero and takes x3/2 physical damage.
+- Added layered FFT-style front/side/rear physical evasion.
+- Basic ATTACK accuracy base changed to 100 before evasion.
+- Added `tests/test_fft_magic_charge_v129.gd`.
 
-- Nouveau diorama forestier runtime autour de la grille 3D, sans collision ni impact gameplay.
-- Cases stylisées : mousse/terre, obstacles rocheux, couvertures bois, spores, extraction, vinyles et Couronne.
-- Porte, interrupteur et coffre redessinés en 3D low-poly.
-- Éclairage, brume, palette HUD et boutons harmonisés.
-- Les portraits transparents peuvent servir de billboard runtime quand aucune spritesheet n’est fournie.
-- Six illustrations de la bibliothèque Sporebound raccordées provisoirement à Pipo, Luma et aux ennemis de la mission 1.
-- Marqueurs runtime Couronne et nouvelles flaques de spores alignés avec la nouvelle direction artistique.
+# V1.27 — Library Art Runtime
+
+- Nouveau `render_mode` dans `SporeUnitVisualDefinition` : `auto`, `procedural`, `sprite_sheet`, `portrait_billboard`.
+- `SporeUnitActor3D` peut afficher directement les portraits transparents de la bibliothèque comme billboards 3D de combat.
+- Les 10 unités actuelles sont associées à des personnages Sporebound de la bibliothèque.
+- 39 skins `lib_*` ajoutés au catalogue Visuals pour rendre toute la bibliothèque sélectionnable depuis Sporebound Studio.
+- 12 poses d’attaque runtime 512×512 extraites des action strips ; changement automatique de texture pendant Attack/Cast en mode billboard.
+- Visual Editor : choix du mode de rendu et prévisualisation réelle des portraits bibliothèque.
+- Catalogue enrichi avec tags de rôle et associations unité -> asset.
+- Les 8 icônes de statut restent indexées pour le futur HUD d’états altérés.
+- Nouveau smoke test `tests/test_library_assets_v127.gd`.
 
 # V1.22.0 — Weapon & Defense Mechanics
 

@@ -2,7 +2,7 @@ class_name SporeStatusCatalog
 extends RefCounted
 
 ## Runtime access to data/statuses/*.tres. Status state is stored in unit["statuses"] as
-## { status_id: {"remaining": int, "stacks": int} }. Legacy bool entries are tolerated.
+## { status_id: {"remaining": int, "remaining_clockticks": int, "stacks": int} }. Legacy entries are tolerated.
 
 const STATUS_DIR := "res://data/statuses/"
 
@@ -44,6 +44,7 @@ static func state(unit: Dictionary, status_id: String) -> Dictionary:
 	var data := definition(status_id)
 	return {
 		"remaining": int(data.duration_activations) if data != null else 0,
+		"remaining_clockticks": int(data.duration_clockticks) if data != null else 0,
 		"stacks": 1,
 	}
 
@@ -56,6 +57,9 @@ static func apply(unit: Dictionary, status_id: String, duration_override: int = 
 	var duration := duration_override
 	if duration < 0:
 		duration = int(data.duration_activations) if data != null else 1
+	var clockticks: int = int(data.duration_clockticks) if data != null else 0
+	if data != null and not String(data.opposed_status_id).is_empty():
+		statuses.erase(String(data.opposed_status_id))
 	var max_stacks := int(data.max_stacks) if data != null else 1
 	var mode := String(data.stack_mode) if data != null else "refresh"
 	var existing := state(unit, status_id)
@@ -68,7 +72,7 @@ static func apply(unit: Dictionary, status_id: String, duration_override: int = 
 			stacks = min(max_stacks, max(1, stacks_to_add))
 		else:
 			stacks = max(stacks, min(max_stacks, max(1, stacks_to_add)))
-	statuses[status_id] = {"remaining": duration, "stacks": stacks}
+	statuses[status_id] = {"remaining": duration, "remaining_clockticks": clockticks, "stacks": stacks}
 	unit["statuses"] = statuses
 
 
@@ -95,6 +99,60 @@ static func stacks(unit: Dictionary, status_id: String) -> int:
 static func remaining(unit: Dictionary, status_id: String) -> int:
 	var status_state := state(unit, status_id)
 	return int(status_state.get("remaining", 0)) if not status_state.is_empty() else 0
+
+
+static func remaining_clockticks(unit: Dictionary, status_id: String) -> int:
+	var status_state := state(unit, status_id)
+	return int(status_state.get("remaining_clockticks", 0)) if not status_state.is_empty() else 0
+
+
+static func ct_rate_percent(unit: Dictionary) -> int:
+	var rate: int = 100
+	for status_id in active_ids(unit):
+		var data := definition(status_id)
+		if data != null and int(data.ct_rate_percent) != 100:
+			rate = int(data.ct_rate_percent)
+	return clampi(rate, 0, 200)
+
+
+static func prevents_reaction(unit: Dictionary) -> bool:
+	for status_id in active_ids(unit):
+		var data := definition(status_id)
+		if data != null and bool(data.prevents_reaction):
+			return true
+	return false
+
+
+
+
+static func next_clock_expiry_ticks(unit: Dictionary) -> int:
+	var best: int = 999999
+	for status_id in active_ids(unit):
+		var remaining_ticks: int = remaining_clockticks(unit, status_id)
+		if remaining_ticks > 0:
+			best = mini(best, remaining_ticks)
+	return best
+
+
+static func tick_clock(unit: Dictionary, ticks: int) -> PackedStringArray:
+	var expired := PackedStringArray()
+	if ticks <= 0:
+		return expired
+	var statuses: Dictionary = unit.get("statuses", {})
+	for status_id in active_ids(unit):
+		var status_state := state(unit, status_id)
+		var remaining_ticks: int = int(status_state.get("remaining_clockticks", 0))
+		if remaining_ticks <= 0:
+			continue
+		remaining_ticks -= ticks
+		if remaining_ticks <= 0:
+			statuses.erase(status_id)
+			expired.append(status_id)
+		else:
+			status_state["remaining_clockticks"] = remaining_ticks
+			statuses[status_id] = status_state
+	unit["statuses"] = statuses
+	return expired
 
 
 static func status_modifier(unit: Dictionary, status_id: String, property_name: String) -> int:
@@ -166,10 +224,13 @@ static func display_text(unit: Dictionary) -> String:
 		var data := definition(status_id)
 		var label := String(data.display_name).to_upper() if data != null else status_id.to_upper()
 		var count := stacks(unit, status_id)
+		var remain_ticks: int = remaining_clockticks(unit, status_id)
 		var remain := remaining(unit, status_id)
 		if count > 1:
 			label += " x%d" % count
-		if remain > 0:
+		if remain_ticks > 0:
+			label += "[%dt]" % remain_ticks
+		elif remain > 0:
 			label += "[%d]" % remain
 		labels.append(label)
 	return ", ".join(labels)
@@ -183,15 +244,21 @@ static func phase_events(unit: Dictionary, phase: String) -> Array[Dictionary]:
 			continue
 		var count := stacks(unit, status_id)
 		if int(data.tick_damage) > 0:
+			var tick_amount: int = int(data.tick_damage) * count
+			if status_id == "poisoned":
+				tick_amount = maxi(1, int(floor(float(int(unit.get("max_hp", 1))) / 8.0))) * count
 			result.append({
 				"type": "damage",
-				"amount": int(data.tick_damage) * count,
+				"amount": tick_amount,
 				"damage_type": String(data.tick_damage_type),
 				"status_id": status_id,
 				"color": data.color
 			})
 		if int(data.tick_heal) > 0:
-			result.append({"type": "heal", "amount": int(data.tick_heal) * count, "status_id": status_id, "color": data.color})
+			var heal_amount: int = int(data.tick_heal) * count
+			if status_id == "regen":
+				heal_amount = maxi(1, int(floor(float(int(unit.get("max_hp", 1))) / 8.0))) * count
+			result.append({"type": "heal", "amount": heal_amount, "status_id": status_id, "color": data.color})
 	return result
 
 
@@ -203,6 +270,8 @@ static func finish_activation(unit: Dictionary) -> PackedStringArray:
 		if data == null:
 			continue
 		var status_state := state(unit, status_id)
+		if int(status_state.get("remaining_clockticks", 0)) > 0:
+			continue
 		var remaining_value := int(status_state.get("remaining", 0))
 		if remaining_value <= 0:
 			continue
@@ -235,3 +304,42 @@ static func remove_on_attack(unit: Dictionary) -> PackedStringArray:
 			remove(unit, status_id)
 			removed.append(status_id)
 	return removed
+
+static func prevents_evasion(unit: Dictionary) -> bool:
+	for status_id in active_ids(unit):
+		var data := definition(status_id)
+		if data != null and bool(data.prevents_evasion):
+			return true
+	return false
+
+
+static func freezes_ct(unit: Dictionary) -> bool:
+	for status_id in active_ids(unit):
+		var data := definition(status_id)
+		if data != null and bool(data.freezes_ct):
+			return true
+	return false
+
+
+static func silences_magic(unit: Dictionary) -> bool:
+	for status_id in active_ids(unit):
+		var data := definition(status_id)
+		if data != null and bool(data.silences_magic):
+			return true
+	return false
+
+
+static func treat_as_moved_for_ct(unit: Dictionary) -> bool:
+	for status_id in active_ids(unit):
+		var data := definition(status_id)
+		if data != null and bool(data.treat_as_moved_for_ct):
+			return true
+	return false
+
+
+static func treat_as_acted_for_ct(unit: Dictionary) -> bool:
+	for status_id in active_ids(unit):
+		var data := definition(status_id)
+		if data != null and bool(data.treat_as_acted_for_ct):
+			return true
+	return false

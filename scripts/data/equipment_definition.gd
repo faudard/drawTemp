@@ -26,6 +26,7 @@ extends Resource
 
 @export_group("Weapon profile")
 @export_enum("none", "melee", "spear", "ranged", "focus") var weapon_family: String = "none"
+@export_range(0, 40, 1) var weapon_power: int = 0
 @export_range(0, 8, 1) var attack_min_range: int = 0
 @export_range(0, 12, 1) var attack_max_range: int = 0
 @export_range(0, 8, 1) var threat_min_range: int = 0
@@ -34,6 +35,12 @@ extends Resource
 @export var basic_attack_damage_type: String = "physical"
 @export_range(0, 100, 1) var shield_block_chance: int = 0
 @export_range(0, 8, 1) var shield_block_reduction: int = 0
+@export_group("FFT Evasion")
+@export_range(0, 100, 1) var physical_shield_evasion: int = 0
+@export_range(0, 100, 1) var magic_shield_evasion: int = 0
+@export_range(0, 100, 1) var physical_accessory_evasion: int = 0
+@export_range(0, 100, 1) var magic_accessory_evasion: int = 0
+@export_range(0, 100, 1) var physical_weapon_evasion: int = 0
 
 @export_group("Tactical modifiers")
 @export_range(-6, 6, 1) var basic_attack_damage_bonus: int = 0
@@ -86,6 +93,8 @@ func short_description() -> String:
 	if revive_hp_bonus != 0:
 		parts.append("%+d PV réanimation" % revive_hp_bonus)
 	if weapon_family != "none":
+		if weapon_power > 0:
+			parts.append("WP %d" % weapon_power)
 		var min_text: int = attack_min_range if attack_min_range > 0 else 1
 		var max_text: int = attack_max_range if attack_max_range > 0 else min_text
 		parts.append("%s %d-%d" % [weapon_family.to_upper(), min_text, max_text])

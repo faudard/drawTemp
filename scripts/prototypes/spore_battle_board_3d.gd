@@ -7,7 +7,6 @@ const SkillCatalog = preload("res://scripts/catalogs/skill_catalog.gd")
 const StatusCatalog = preload("res://scripts/catalogs/status_catalog.gd")
 const VfxCatalog = preload("res://scripts/catalogs/vfx_catalog.gd")
 const ActionVfxScript = preload("res://scripts/prototypes/spore_action_vfx_3d.gd")
-const MissionDressingScript = preload("res://scripts/presentation/spore_mission_dressing_3d.gd")
 const UnitActorScript = preload("res://scripts/maps/spore_unit_actor_3d.gd")
 const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
 
@@ -79,20 +78,6 @@ var selected_skill_id: String = ""
 var path_parents: Dictionary = {}
 var preview_path_cells: Array[Vector2i] = []
 var battle_finished: bool = false
-var mission_victory: bool = false
-var mission_definition: Resource = null
-var mission_objective: String = "eliminate"
-var mission_brief: String = ""
-var extraction_cells: Array[Vector2i] = []
-var bonus_cells: Array[Vector2i] = []
-var mission_hazard_cells: Array[Vector2i] = []
-var bonus_collected: int = 0
-var bonus_target_total: int = 0
-var crown_cell: Vector2i = Vector2i(-9, -9)
-var crown_carrier_id: String = ""
-var interactable_states: Dictionary = {}
-var mission_trigger_fired: Dictionary = {}
-var enemies_cleared_logged: bool = false
 var enemy_busy: bool = false
 var player_busy: bool = false
 var battle_log: Array[String] = []
@@ -109,15 +94,11 @@ var _skill_hit_cache: Dictionary = {}
 var _camera_rig: Node3D
 var _camera: Camera3D
 var _light: DirectionalLight3D
-var _fill_light: OmniLight3D
-var _world_environment: WorldEnvironment
-var _dressing_root: Node3D
 var _map_holder: Node3D
 var _actor_holder: Node3D
 var _highlight_holder: Node3D
 var _zone_holder: Node3D
 var _vfx_holder: Node3D
-var _mission_runtime_holder: Node3D
 var _cursor_mesh: MeshInstance3D
 var _ui_layer: CanvasLayer
 var _info_label: Label
@@ -137,10 +118,6 @@ var _preview_confirm_button: Button
 var _preview_cancel_button: Button
 var _timeline_panel: Panel
 var _timeline_bar: HBoxContainer
-var _objective_panel: Panel
-var _objective_body: Label
-var _cell_panel: Panel
-var _cell_body: Label
 var _unit_card_panel: Panel
 var _unit_card_title: Label
 var _unit_card_body: Label
@@ -177,7 +154,6 @@ var _projectile_follow_vfx: SporeActionVfx3D = null
 func _ready() -> void:
 	_ensure_runtime_nodes()
 	_load_map()
-	_setup_mission_runtime()
 	_spawn_runtime_units()
 	_build_turn_order()
 	_start_next_activation()
@@ -185,11 +161,7 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _camera == null or map_root == null:
-		return
-	if battle_finished:
-		if event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_R:
-			get_tree().reload_current_scene()
+	if _camera == null or map_root == null or battle_finished:
 		return
 	if event is InputEventMouseMotion:
 		var next_hovered: Vector2i = _screen_to_cell((event as InputEventMouseMotion).position)
@@ -253,7 +225,6 @@ func _process(delta: float) -> void:
 	_update_cursor_animation()
 	_update_cursor()
 	_update_action_wheel()
-	_update_mission_runtime_animation()
 
 
 func _ensure_runtime_nodes() -> void:
@@ -282,34 +253,6 @@ func _ensure_runtime_nodes() -> void:
 		_vfx_holder = Node3D.new()
 		_vfx_holder.name = "ActionVFX"
 		add_child(_vfx_holder)
-	_mission_runtime_holder = get_node_or_null("MissionRuntime") as Node3D
-	if _mission_runtime_holder == null:
-		_mission_runtime_holder = Node3D.new()
-		_mission_runtime_holder.name = "MissionRuntime"
-		add_child(_mission_runtime_holder)
-	_dressing_root = get_node_or_null("MissionDressing") as Node3D
-	if _dressing_root == null:
-		_dressing_root = MissionDressingScript.new() as Node3D
-		_dressing_root.name = "MissionDressing"
-		add_child(_dressing_root)
-
-	_world_environment = get_node_or_null("WorldEnvironment") as WorldEnvironment
-	if _world_environment == null:
-		_world_environment = WorldEnvironment.new()
-		_world_environment.name = "WorldEnvironment"
-		add_child(_world_environment)
-	var environment: Environment = _world_environment.environment
-	if environment == null:
-		environment = Environment.new()
-		_world_environment.environment = environment
-	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color("#17211b")
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color("#b9c6af")
-	environment.ambient_light_energy = 0.68
-	environment.fog_enabled = true
-	environment.fog_light_color = Color("#60705e")
-	environment.fog_density = 0.008
 
 	_camera_rig = get_node_or_null("CameraRig") as Node3D
 	if _camera_rig == null:
@@ -327,21 +270,8 @@ func _ensure_runtime_nodes() -> void:
 	if _light == null:
 		_light = DirectionalLight3D.new()
 		_light.name = "DirectionalLight3D"
+		_light.light_energy = 1.3
 		_camera_rig.add_child(_light)
-	_light.light_color = Color("#ffe4bd")
-	_light.light_energy = 1.15
-	_light.shadow_enabled = true
-	_light.rotation_degrees = Vector3(-54.0, -38.0, 0.0)
-	_fill_light = get_node_or_null("FillLight") as OmniLight3D
-	if _fill_light == null:
-		_fill_light = OmniLight3D.new()
-		_fill_light.name = "FillLight"
-		add_child(_fill_light)
-	_fill_light.light_color = Color("#89a7d8")
-	_fill_light.light_energy = 0.75
-	_fill_light.omni_range = 18.0
-	_fill_light.position = Vector3(-5.0, 7.0, 4.0)
-	_fill_light.shadow_enabled = false
 	_position_camera()
 
 	_cursor_mesh = get_node_or_null("Cursor") as MeshInstance3D
@@ -381,8 +311,8 @@ func _build_ui() -> void:
 	panel.position = Vector2(18.0, 18.0)
 	panel.size = Vector2(520.0, 258.0)
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.045, 0.055, 0.070, 0.94)
-	style.border_color = Color(0.40, 0.56, 0.45, 0.96)
+	style.bg_color = Color(0.08, 0.11, 0.16, 0.92)
+	style.border_color = Color(0.31, 0.43, 0.56, 1.0)
 	style.border_width_left = 1
 	style.border_width_top = 1
 	style.border_width_right = 1
@@ -401,7 +331,7 @@ func _build_ui() -> void:
 	_move_button.toggle_mode = true
 	_attack_button.toggle_mode = true
 	_face_button = _make_button(panel, "FACE [F]", Vector2(268.0, 101.0), Vector2(104.0, 34.0))
-	_end_button = _make_button(panel, "FIN [ESPACE]", Vector2(380.0, 101.0), Vector2(124.0, 34.0))
+	_end_button = _make_button(panel, "WAIT / FIN [ESPACE]", Vector2(380.0, 101.0), Vector2(124.0, 34.0))
 	_primary_skill_button = _make_button(panel, "SKILL I [1]", Vector2(16.0, 142.0), Vector2(238.0, 34.0))
 	_secondary_skill_button = _make_button(panel, "SKILL II [2]", Vector2(266.0, 142.0), Vector2(238.0, 34.0))
 	_move_button.pressed.connect(_on_move_mode_pressed)
@@ -439,38 +369,16 @@ func _build_ui() -> void:
 	_timeline_panel = Panel.new()
 	_timeline_panel.name = "InitiativeTimeline"
 	_timeline_panel.position = Vector2(550.0, 18.0)
-	_timeline_panel.size = Vector2(224.0, 106.0)
+	_timeline_panel.size = Vector2(224.0, 92.0)
 	_timeline_panel.add_theme_stylebox_override("panel", style)
 	root.add_child(_timeline_panel)
 	var timeline_title: Label = _make_label(_timeline_panel, Vector2(10.0, 7.0), Vector2(204.0, 22.0), 12, Color(0.68, 0.79, 0.87, 1.0))
 	timeline_title.text = "INITIATIVE"
 	_timeline_bar = HBoxContainer.new()
 	_timeline_bar.position = Vector2(10.0, 31.0)
-	_timeline_bar.size = Vector2(204.0, 64.0)
-	_timeline_bar.add_theme_constant_override("separation", 4)
+	_timeline_bar.size = Vector2(204.0, 50.0)
+	_timeline_bar.add_theme_constant_override("separation", 3)
 	_timeline_panel.add_child(_timeline_bar)
-
-	_objective_panel = Panel.new()
-	_objective_panel.name = "ObjectivePanel"
-	_objective_panel.position = Vector2(550.0, 132.0)
-	_objective_panel.size = Vector2(224.0, 126.0)
-	_objective_panel.add_theme_stylebox_override("panel", style)
-	root.add_child(_objective_panel)
-	var objective_title: Label = _make_label(_objective_panel, Vector2(10.0, 7.0), Vector2(204.0, 22.0), 12, Color(0.68, 0.79, 0.87, 1.0))
-	objective_title.text = "OBJECTIF"
-	_objective_body = _make_label(_objective_panel, Vector2(12.0, 30.0), Vector2(200.0, 88.0), 12, Color(0.95, 0.94, 0.87, 1.0))
-	_objective_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-
-	_cell_panel = Panel.new()
-	_cell_panel.name = "CellPanel"
-	_cell_panel.position = Vector2(550.0, 272.0)
-	_cell_panel.size = Vector2(224.0, 132.0)
-	_cell_panel.add_theme_stylebox_override("panel", style)
-	root.add_child(_cell_panel)
-	var cell_title: Label = _make_label(_cell_panel, Vector2(10.0, 7.0), Vector2(204.0, 22.0), 12, Color(0.68, 0.79, 0.87, 1.0))
-	cell_title.text = "CASE"
-	_cell_body = _make_label(_cell_panel, Vector2(12.0, 30.0), Vector2(200.0, 92.0), 12, Color(0.95, 0.94, 0.87, 1.0))
-	_cell_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	_unit_card_panel = Panel.new()
 	_unit_card_panel.name = "UnitCard"
@@ -519,7 +427,7 @@ func _build_ui() -> void:
 	_wheel_primary_button = _make_button(_action_wheel, "S1", Vector2(168.0, 55.0), Vector2(76.0, 32.0))
 	_wheel_secondary_button = _make_button(_action_wheel, "S2", Vector2(8.0, 111.0), Vector2(76.0, 32.0))
 	_wheel_face_button = _make_button(_action_wheel, "FACE", Vector2(168.0, 111.0), Vector2(76.0, 32.0))
-	_wheel_end_button = _make_button(_action_wheel, "FIN", Vector2(78.0, 150.0), Vector2(96.0, 32.0))
+	_wheel_end_button = _make_button(_action_wheel, "WAIT / FIN", Vector2(78.0, 150.0), Vector2(96.0, 32.0))
 	_wheel_move_button.pressed.connect(_on_move_mode_pressed)
 	_wheel_attack_button.pressed.connect(_on_attack_mode_pressed)
 	_wheel_primary_button.pressed.connect(_on_skill_pressed.bind(1))
@@ -554,32 +462,8 @@ func _make_button(parent: Control, title: String, pos: Vector2, size_value: Vect
 	button.position = pos
 	button.size = size_value
 	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 12)
-	button.add_theme_color_override("font_color", Color("#f1ecd9"))
-	button.add_theme_color_override("font_hover_color", Color.WHITE)
-	button.add_theme_color_override("font_pressed_color", Color("#fff0b5"))
-	button.add_theme_color_override("font_disabled_color", Color(0.55, 0.57, 0.58, 0.72))
-	button.add_theme_stylebox_override("normal", _button_style(Color("#1c2c2a"), Color("#48645a")))
-	button.add_theme_stylebox_override("hover", _button_style(Color("#284039"), Color("#70a27d")))
-	button.add_theme_stylebox_override("pressed", _button_style(Color("#334936"), Color("#e1bd62")))
-	button.add_theme_stylebox_override("disabled", _button_style(Color(0.09, 0.11, 0.12, 0.72), Color(0.25, 0.29, 0.28, 0.65)))
 	parent.add_child(button)
 	return button
-
-
-func _button_style(background: Color, border: Color) -> StyleBoxFlat:
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = background
-	style.border_color = border
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-	return style
 
 
 func _update_action_wheel() -> void:
@@ -648,578 +532,6 @@ func _load_map() -> void:
 	if preview != null:
 		preview.queue_free()
 	_hide_spawn_markers()
-	_rebuild_mission_dressing()
-
-
-func _rebuild_mission_dressing() -> void:
-	if _dressing_root == null or map_root == null:
-		return
-	if _dressing_root.has_method("build_for_map"):
-		_dressing_root.call("build_for_map", map_root)
-
-
-func _setup_mission_runtime() -> void:
-	mission_definition = MissionCatalog.definition(mission_index)
-	mission_objective = "eliminate"
-	mission_brief = ""
-	extraction_cells.clear()
-	bonus_cells.clear()
-	mission_hazard_cells.clear()
-	bonus_collected = 0
-	bonus_target_total = 0
-	crown_cell = Vector2i(-9, -9)
-	crown_carrier_id = ""
-	interactable_states.clear()
-	mission_trigger_fired.clear()
-	enemies_cleared_logged = false
-	mission_victory = false
-	if mission_definition != null:
-		mission_objective = String(mission_definition.get("objective"))
-		mission_brief = String(mission_definition.get("brief"))
-	if map_root == null:
-		return
-	var environment: Dictionary = map_root.to_environment()
-	_copy_vector2i_cells(environment.get("extraction", []), extraction_cells)
-	_copy_vector2i_cells(environment.get("bonus", []), bonus_cells)
-	_copy_vector2i_cells(environment.get("hazards", []), mission_hazard_cells)
-	var crown_value: Variant = environment.get("crown", Vector2i(-9, -9))
-	if crown_value is Vector2i:
-		crown_cell = crown_value
-	bonus_target_total = bonus_cells.size()
-	var object_defs: Array[Resource] = map_root.interactable_definitions()
-	if object_defs.is_empty():
-		object_defs = MissionCatalog.interactables(mission_index)
-	for definition: Resource in object_defs:
-		if definition == null:
-			continue
-		var object_id: String = String(definition.get("id"))
-		if object_id.is_empty():
-			continue
-		interactable_states[object_id] = {
-			"definition": definition,
-			"active": bool(definition.get("starts_active")),
-			"used": false,
-		}
-	_refresh_interactable_visuals()
-	_refresh_crown_runtime_marker()
-	_refresh_objective_world_markers()
-	if not mission_brief.is_empty():
-		_log("MISSION — %s" % mission_brief)
-	if bonus_target_total > 0:
-		_log("CONTRAT — récupérer %d vinyle(s) optionnel(s)." % bonus_target_total)
-
-
-func _copy_vector2i_cells(source: Variant, destination: Array[Vector2i]) -> void:
-	if not (source is Array):
-		return
-	for cell_var: Variant in source:
-		if cell_var is Vector2i:
-			destination.append(cell_var)
-
-
-func _mission_interactable_state(object_id: String) -> Dictionary:
-	var value: Variant = interactable_states.get(object_id, {})
-	return value as Dictionary if value is Dictionary else {}
-
-
-func _closed_mission_door_at(cell_value: Vector2i) -> bool:
-	for state_var: Variant in interactable_states.values():
-		if not (state_var is Dictionary):
-			continue
-		var state: Dictionary = state_var as Dictionary
-		var definition: Resource = state.get("definition", null) as Resource
-		if definition == null or String(definition.get("object_type")) != "door":
-			continue
-		var object_cell: Variant = definition.get("cell")
-		if object_cell is Vector2i and object_cell == cell_value:
-			return not bool(state.get("active", false))
-	return false
-
-
-func _closed_mission_door_cells() -> Array[Vector2i]:
-	var result: Array[Vector2i] = []
-	for state_var: Variant in interactable_states.values():
-		if not (state_var is Dictionary):
-			continue
-		var state: Dictionary = state_var as Dictionary
-		var definition: Resource = state.get("definition", null) as Resource
-		if definition == null or String(definition.get("object_type")) != "door" or bool(state.get("active", false)):
-			continue
-		var object_cell: Variant = definition.get("cell")
-		if object_cell is Vector2i:
-			result.append(object_cell)
-	return result
-
-
-func _set_mission_interactable_active(object_id: String, active: bool) -> void:
-	var state: Dictionary = _mission_interactable_state(object_id)
-	if state.is_empty():
-		return
-	state["active"] = active
-	var definition: Resource = state.get("definition", null) as Resource
-	if definition != null:
-		_log("%s : %s." % [String(definition.get("display_name")).to_upper(), "OUVERT" if active else "FERMÉ"])
-	_refresh_interactable_visuals()
-
-
-func _toggle_mission_switch(object_id: String) -> void:
-	var state: Dictionary = _mission_interactable_state(object_id)
-	if state.is_empty():
-		return
-	var definition: Resource = state.get("definition", null) as Resource
-	if definition == null or String(definition.get("object_type")) != "switch":
-		return
-	state["active"] = not bool(state.get("active", false))
-	_log("INTERRUPTEUR : %s." % ("ACTIVÉ" if bool(state["active"]) else "DÉSACTIVÉ"))
-	var linked_id: String = String(definition.get("linked_object_id"))
-	if not linked_id.is_empty():
-		_set_mission_interactable_active(linked_id, bool(state["active"]))
-	else:
-		_refresh_interactable_visuals()
-
-
-func _apply_mission_reward(reward_type: String, reward_value: int, reward_team: String) -> void:
-	var candidates: Array[SporeUnitActor3D] = player_actors if reward_team == "player" else enemy_actors
-	for actor: SporeUnitActor3D in candidates:
-		if actor == null or not actor.alive:
-			continue
-		if reward_type == "heal_team":
-			var healed: int = actor.heal(maxi(0, reward_value))
-			if healed > 0:
-				_show_floating_text(actor.position + Vector3(0.0, 1.18, 0.0), "+%d PV" % healed, Color(0.48, 0.90, 0.66, 1.0))
-		elif reward_type == "focus_team":
-			var focus_gain: int = actor.change_focus(maxi(0, reward_value))
-			if focus_gain > 0:
-				_show_floating_text(actor.position + Vector3(0.0, 1.18, 0.0), "+%d FP" % focus_gain, Color(0.42, 0.72, 1.0, 1.0))
-
-
-func _open_mission_chest(object_id: String) -> void:
-	var state: Dictionary = _mission_interactable_state(object_id)
-	if state.is_empty() or bool(state.get("used", false)):
-		return
-	var definition: Resource = state.get("definition", null) as Resource
-	if definition == null or String(definition.get("object_type")) != "chest":
-		return
-	state["used"] = true
-	state["active"] = true
-	_apply_mission_reward(String(definition.get("reward_type")), int(definition.get("reward_value")), String(definition.get("reward_team")))
-	_log("COFFRE : %s ouvert." % String(definition.get("display_name")))
-	_refresh_interactable_visuals()
-
-
-func _handle_mission_interactable_entry(actor: SporeUnitActor3D) -> void:
-	if actor == null or not actor.alive or actor.team != "player":
-		return
-	for object_id_var: Variant in interactable_states.keys():
-		var object_id: String = String(object_id_var)
-		var state: Dictionary = _mission_interactable_state(object_id)
-		var definition: Resource = state.get("definition", null) as Resource
-		if definition == null:
-			continue
-		var object_cell: Variant = definition.get("cell")
-		if not (object_cell is Vector2i) or object_cell != actor.cell:
-			continue
-		var object_type: String = String(definition.get("object_type"))
-		if object_type == "switch":
-			if not bool(definition.get("one_shot")) or not bool(state.get("used", false)):
-				state["used"] = true
-				_toggle_mission_switch(object_id)
-		elif object_type == "chest":
-			_open_mission_chest(object_id)
-
-
-func _handle_mission_cell_entry(actor: SporeUnitActor3D) -> void:
-	if actor == null or not actor.alive:
-		return
-	if actor.team == "player":
-		if mission_objective == "crown" and crown_carrier_id.is_empty() and actor.cell == crown_cell:
-			crown_carrier_id = actor.unit_id
-			_refresh_crown_runtime_marker()
-			_refresh_objective_world_markers()
-			_show_floating_text(actor.position + Vector3(0.0, 1.36, 0.0), "COURONNE !", Color(1.0, 0.82, 0.32, 1.0))
-			_log("%s récupère la COURONNE BEATBOX. Retourne dans la zone verte !" % actor.display_name)
-		if bonus_cells.has(actor.cell):
-			bonus_cells.erase(actor.cell)
-			bonus_collected += 1
-			_refresh_objective_world_markers()
-			var healed: int = actor.heal(1)
-			_set_tile_terrain_prop_visible(actor.cell, false)
-			_show_floating_text(actor.position + Vector3(0.0, 1.30, 0.0), "+1 VINYLE", Color(0.38, 0.78, 1.0, 1.0))
-			_log("%s récupère un VINYLE VOLÉ (%d/%d)%s." % [actor.display_name, bonus_collected, bonus_target_total, " et regagne %d PV" % healed if healed > 0 else ""])
-		_handle_mission_interactable_entry(actor)
-
-
-func _set_tile_terrain_prop_visible(cell_value: Vector2i, visible_value: bool) -> void:
-	if map_root == null:
-		return
-	var tile: Node = map_root.tile_at(cell_value)
-	if tile == null:
-		return
-	var prop: Node3D = tile.get_node_or_null("_EditorProp") as Node3D
-	if prop != null:
-		prop.visible = visible_value
-	var special_root: Node3D = tile.get_node_or_null("_EditorSpecialRoot") as Node3D
-	if special_root != null:
-		special_root.visible = visible_value
-
-
-func _refresh_crown_runtime_marker() -> void:
-	if _mission_runtime_holder == null or map_root == null:
-		return
-	var previous: Node = _mission_runtime_holder.get_node_or_null("CrownMarker")
-	if previous != null:
-		_mission_runtime_holder.remove_child(previous)
-		previous.queue_free()
-	# The authored crown prop is hidden; the runtime marker follows drops/pickups.
-	var authored_environment: Dictionary = map_root.to_environment()
-	var authored_crown: Variant = authored_environment.get("crown", Vector2i(-9, -9))
-	if authored_crown is Vector2i:
-		_set_tile_terrain_prop_visible(authored_crown, false)
-	if not crown_carrier_id.is_empty() or not map_root.is_cell_valid(crown_cell):
-		return
-	var marker: Node3D = Node3D.new()
-	marker.name = "CrownMarker"
-	_mission_runtime_holder.add_child(marker)
-	marker.position = map_root.cell_top_local(crown_cell)
-
-	var glow_disc: MeshInstance3D = MeshInstance3D.new()
-	var glow_mesh: CylinderMesh = CylinderMesh.new()
-	glow_mesh.top_radius = 0.42
-	glow_mesh.bottom_radius = 0.42
-	glow_mesh.height = 0.024
-	glow_mesh.radial_segments = 24
-	glow_disc.mesh = glow_mesh
-	glow_disc.position.y = 0.025
-	glow_disc.material_override = _mission_material(Color(1.0, 0.76, 0.25, 0.26), 0.45, true, true)
-	marker.add_child(glow_disc)
-
-	var pedestal: MeshInstance3D = MeshInstance3D.new()
-	var pedestal_mesh: CylinderMesh = CylinderMesh.new()
-	pedestal_mesh.top_radius = 0.18
-	pedestal_mesh.bottom_radius = 0.28
-	pedestal_mesh.height = 0.18
-	pedestal_mesh.radial_segments = 10
-	pedestal.mesh = pedestal_mesh
-	pedestal.position.y = 0.13
-	pedestal.material_override = _mission_material(Color("#d6a845"), 0.40, true)
-	marker.add_child(pedestal)
-
-	var band: MeshInstance3D = MeshInstance3D.new()
-	var band_mesh: CylinderMesh = CylinderMesh.new()
-	band_mesh.top_radius = 0.23
-	band_mesh.bottom_radius = 0.23
-	band_mesh.height = 0.11
-	band_mesh.radial_segments = 12
-	band.mesh = band_mesh
-	band.position.y = 0.27
-	band.material_override = _mission_material(Color("#ffd86a"), 0.32, true)
-	marker.add_child(band)
-
-	for spike_index: int in range(5):
-		var angle: float = TAU * float(spike_index) / 5.0
-		var spike: MeshInstance3D = MeshInstance3D.new()
-		var spike_mesh: CylinderMesh = CylinderMesh.new()
-		spike_mesh.top_radius = 0.015
-		spike_mesh.bottom_radius = 0.075
-		spike_mesh.height = 0.27
-		spike_mesh.radial_segments = 6
-		spike.mesh = spike_mesh
-		spike.position = Vector3(cos(angle) * 0.15, 0.445, sin(angle) * 0.15)
-		spike.material_override = _mission_material(Color("#ffe484"), 0.30, true)
-		marker.add_child(spike)
-
-	var jewel: MeshInstance3D = MeshInstance3D.new()
-	var jewel_mesh: SphereMesh = SphereMesh.new()
-	jewel_mesh.radius = 0.07
-	jewel_mesh.height = 0.14
-	jewel_mesh.radial_segments = 10
-	jewel_mesh.rings = 5
-	jewel.mesh = jewel_mesh
-	jewel.position = Vector3(0.0, 0.37, -0.16)
-	jewel.material_override = _mission_material(Color("#60d2e8"), 0.24, true)
-	marker.add_child(jewel)
-
-	var label: Label3D = Label3D.new()
-	label.text = "COURONNE"
-	label.font_size = 22
-	label.outline_size = 8
-	label.modulate = Color("#ffe8a0")
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.position = Vector3(0.0, 0.88, 0.0)
-	marker.add_child(label)
-
-
-func _refresh_objective_world_markers() -> void:
-	if _mission_runtime_holder == null or map_root == null:
-		return
-	var previous: Node = _mission_runtime_holder.get_node_or_null("ObjectiveMarkers")
-	if previous != null:
-		_mission_runtime_holder.remove_child(previous)
-		previous.queue_free()
-	var root: Node3D = Node3D.new()
-	root.name = "ObjectiveMarkers"
-	_mission_runtime_holder.add_child(root)
-	for cell_value: Vector2i in extraction_cells:
-		root.add_child(_build_objective_marker(cell_value, "extraction"))
-	for cell_value: Vector2i in bonus_cells:
-		root.add_child(_build_objective_marker(cell_value, "bonus"))
-
-
-func _build_objective_marker(cell_value: Vector2i, marker_kind: String) -> Node3D:
-	var root: Node3D = Node3D.new()
-	root.name = "%s_%d_%d" % [marker_kind.capitalize(), cell_value.x, cell_value.y]
-	root.position = map_root.cell_top_local(cell_value)
-	root.set_meta("marker_kind", marker_kind)
-	root.set_meta("base_y", 0.0)
-	root.set_meta("phase", float(cell_value.x * 5 + cell_value.y * 7) * 0.21)
-
-	var disc: MeshInstance3D = MeshInstance3D.new()
-	var disc_mesh: CylinderMesh = CylinderMesh.new()
-	disc_mesh.top_radius = 0.36 if marker_kind == "extraction" else 0.28
-	disc_mesh.bottom_radius = 0.40 if marker_kind == "extraction" else 0.32
-	disc_mesh.height = 0.024
-	disc_mesh.radial_segments = 24
-	disc.mesh = disc_mesh
-	disc.position.y = 0.035
-	var base_color: Color = Color(0.34, 0.94, 0.54, 0.24) if marker_kind == "extraction" else Color(0.36, 0.86, 1.0, 0.22)
-	disc.material_override = _mission_material(base_color, 0.25, true, true)
-	root.add_child(disc)
-
-	var pillar: MeshInstance3D = MeshInstance3D.new()
-	var pillar_mesh: CylinderMesh = CylinderMesh.new()
-	pillar_mesh.top_radius = 0.07 if marker_kind == "extraction" else 0.05
-	pillar_mesh.bottom_radius = 0.11 if marker_kind == "extraction" else 0.08
-	pillar_mesh.height = 0.70 if marker_kind == "extraction" else 0.50
-	pillar_mesh.radial_segments = 10
-	pillar.mesh = pillar_mesh
-	pillar.position.y = 0.38 if marker_kind == "extraction" else 0.28
-	pillar.material_override = _mission_material(Color(0.54, 1.0, 0.70, 0.90) if marker_kind == "extraction" else Color(0.55, 0.92, 1.0, 0.88), 0.18, true, true)
-	pillar.set_meta("marker_part", "pillar")
-	root.add_child(pillar)
-
-	var topper: MeshInstance3D = MeshInstance3D.new()
-	var topper_mesh: SphereMesh = SphereMesh.new()
-	topper_mesh.radius = 0.09 if marker_kind == "extraction" else 0.07
-	topper_mesh.height = topper_mesh.radius * 2.0
-	topper.mesh = topper_mesh
-	topper.position.y = 0.78 if marker_kind == "extraction" else 0.57
-	topper.material_override = _mission_material(Color(0.74, 1.0, 0.82, 0.95) if marker_kind == "extraction" else Color(0.82, 0.96, 1.0, 0.95), 0.15, true, true)
-	topper.set_meta("marker_part", "topper")
-	root.add_child(topper)
-
-	var label: Label3D = Label3D.new()
-	label.text = "SORTIE" if marker_kind == "extraction" else "VINYLE"
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.font_size = 24
-	label.outline_size = 6
-	label.position = Vector3(0.0, 0.98 if marker_kind == "extraction" else 0.76, 0.0)
-	label.modulate = Color(0.80, 1.0, 0.88, 1.0) if marker_kind == "extraction" else Color(0.84, 0.96, 1.0, 1.0)
-	label.set_meta("marker_part", "label")
-	root.add_child(label)
-	return root
-
-
-func _update_mission_runtime_animation() -> void:
-	if _mission_runtime_holder == null:
-		return
-	for child: Node in _mission_runtime_holder.get_children():
-		var root: Node3D = child as Node3D
-		if root == null:
-			continue
-		if root.name == "ObjectiveMarkers":
-			for marker_node: Node in root.get_children():
-				var marker: Node3D = marker_node as Node3D
-				if marker == null:
-					continue
-				var kind: String = String(marker.get_meta("marker_kind", ""))
-				var phase: float = float(marker.get_meta("phase", 0.0))
-				var bob: float = sin(_presentation_time * (2.3 if kind == "extraction" else 3.1) + phase) * (0.035 if kind == "extraction" else 0.05)
-				marker.position = map_root.cell_top_local(_marker_cell_from_name(marker.name)) + Vector3(0.0, bob, 0.0)
-				for part: Node in marker.get_children():
-					var part3d: Node3D = part as Node3D
-					if part3d != null and String(part3d.get_meta("marker_part", "")) in ["pillar", "topper"]:
-						part3d.rotate_y(0.0)
-						part3d.scale = Vector3.ONE * (1.0 + sin(_presentation_time * 2.0 + phase) * 0.04)
-		elif root.name == "CrownMarker":
-			var crown_bob: float = sin(_presentation_time * 2.6) * 0.04
-			root.position = map_root.cell_top_local(crown_cell) + Vector3(0.0, crown_bob, 0.0)
-			root.rotation.y = _presentation_time * 0.75
-
-
-func _marker_cell_from_name(marker_name: String) -> Vector2i:
-	var parts: PackedStringArray = marker_name.split("_")
-	if parts.size() < 3:
-		return Vector2i.ZERO
-	return Vector2i(int(parts[1]), int(parts[2]))
-
-
-func _refresh_interactable_visuals() -> void:
-	if map_root == null:
-		return
-	for node: Node in _descendants(map_root):
-		if not node.has_method("spore_map_role") or String(node.call("spore_map_role")) != "interactable":
-			continue
-		var object_id: String = String(node.get("object_id"))
-		var state: Dictionary = _mission_interactable_state(object_id)
-		if state.is_empty():
-			continue
-		var definition: Resource = state.get("definition", null) as Resource
-		if definition == null:
-			continue
-		var object_type: String = String(definition.get("object_type"))
-		if object_type == "door":
-			node.set("visible", not bool(state.get("active", false)))
-		elif object_type == "chest":
-			node.set("visible", not bool(state.get("used", false)))
-
-
-func _add_mission_hazard(cell_value: Vector2i) -> void:
-	if map_root == null or not map_root.is_cell_valid(cell_value) or mission_hazard_cells.has(cell_value):
-		return
-	mission_hazard_cells.append(cell_value)
-	var root: Node3D = Node3D.new()
-	root.name = "Hazard_%d_%d" % [cell_value.x, cell_value.y]
-	root.position = map_root.cell_top_local(cell_value)
-	_mission_runtime_holder.add_child(root)
-
-	var puddle: MeshInstance3D = MeshInstance3D.new()
-	var mesh: CylinderMesh = CylinderMesh.new()
-	mesh.top_radius = map_root.tile_size * 0.30
-	mesh.bottom_radius = map_root.tile_size * 0.36
-	mesh.height = 0.075
-	mesh.radial_segments = 20
-	puddle.mesh = mesh
-	puddle.position.y = 0.045
-	puddle.material_override = _mission_material(Color(0.72, 0.36, 1.0, 0.72), 0.42, true, true)
-	root.add_child(puddle)
-
-	for orb_index: int in range(4):
-		var angle: float = TAU * float(orb_index) / 4.0 + float(cell_value.x * 3 + cell_value.y) * 0.19
-		var orb: MeshInstance3D = MeshInstance3D.new()
-		var orb_mesh: SphereMesh = SphereMesh.new()
-		orb_mesh.radius = 0.05
-		orb_mesh.height = 0.10
-		orb_mesh.radial_segments = 10
-		orb_mesh.rings = 5
-		orb.mesh = orb_mesh
-		orb.position = Vector3(cos(angle) * map_root.tile_size * 0.22, 0.14 + float(orb_index % 2) * 0.06, sin(angle) * map_root.tile_size * 0.22)
-		orb.material_override = _mission_material(Color("#d798ff"), 0.28, true)
-		root.add_child(orb)
-	_log("Une nouvelle flaque de spores apparaît en %d,%d." % [cell_value.x, cell_value.y])
-
-
-func _mission_material(color: Color, roughness: float, emissive: bool = false, transparent: bool = false) -> StandardMaterial3D:
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = roughness
-	if emissive:
-		material.emission_enabled = true
-		material.emission = Color(color.r, color.g, color.b, 1.0)
-		material.emission_energy_multiplier = 0.22
-	if transparent:
-		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	return material
-
-
-func _process_mission_hazard(actor: SporeUnitActor3D) -> void:
-	if actor == null or not actor.alive or not mission_hazard_cells.has(actor.cell):
-		return
-	var result: Dictionary = _apply_damage_with_reactions(null, actor, 1, "spores", false, false, "spore")
-	var applied: int = int(result.get("applied", 0))
-	if applied > 0:
-		_log("%s subit %d dégât de spores en fin d'activation." % [actor.display_name, applied])
-
-
-func _process_mission_round_start_triggers() -> void:
-	if mission_definition == null:
-		return
-	var triggers_value: Variant = mission_definition.get("battle_triggers")
-	if not (triggers_value is Array):
-		return
-	for trigger_var: Variant in triggers_value:
-		if not (trigger_var is Resource):
-			continue
-		var trigger: Resource = trigger_var as Resource
-		if not bool(trigger.get("enabled")) or String(trigger.get("condition_type")) != "round_start":
-			continue
-		if int(trigger.get("condition_value")) != round_number:
-			continue
-		var trigger_id: String = String(trigger.get("id"))
-		if bool(trigger.get("once")) and mission_trigger_fired.has(trigger_id):
-			continue
-		mission_trigger_fired[trigger_id] = true
-		var actions_value: Variant = trigger.get("actions")
-		if not (actions_value is Array):
-			continue
-		for action_var: Variant in actions_value:
-			if not (action_var is Resource):
-				continue
-			_execute_mission_action(action_var as Resource)
-
-
-func _execute_mission_action(action: Resource) -> void:
-	if action == null:
-		return
-	var action_type: String = String(action.get("action_type"))
-	match action_type:
-		"message":
-			var message: String = String(action.get("message"))
-			if not message.is_empty():
-				_log("ÉVÉNEMENT — %s" % message)
-		"add_hazard":
-			var cell_value: Variant = action.get("cell")
-			if cell_value is Vector2i:
-				_add_mission_hazard(cell_value)
-		"heal_team":
-			_apply_mission_reward("heal_team", int(action.get("value")), String(action.get("team")))
-		"grant_focus_team":
-			_apply_mission_reward("focus_team", int(action.get("value")), String(action.get("team")))
-		"open_door":
-			_set_mission_interactable_active(String(action.get("object_id")), true)
-		"close_door":
-			_set_mission_interactable_active(String(action.get("object_id")), false)
-		"toggle_switch":
-			_toggle_mission_switch(String(action.get("object_id")))
-		"open_chest":
-			_open_mission_chest(String(action.get("object_id")))
-		_:
-			# wait/cinematic actions are intentionally presentation-only in this 3D runtime.
-			pass
-
-
-func _mission_status_text() -> String:
-	if mission_objective == "crown":
-		if crown_carrier_id.is_empty():
-			return "OBJECTIF : récupérer ♛ en %d,%d puis rejoindre la zone verte • Vinyles %d/%d" % [crown_cell.x, crown_cell.y, bonus_collected, bonus_target_total]
-		var carrier: SporeUnitActor3D = _actor_by_unit_id(crown_carrier_id)
-		var carrier_name: String = carrier.display_name if carrier != null else crown_carrier_id
-		return "COURONNE : %s • rejoindre la zone verte • Vinyles %d/%d" % [carrier_name, bonus_collected, bonus_target_total]
-	return "OBJECTIF : neutraliser les ennemis • Vinyles %d/%d" % [bonus_collected, bonus_target_total]
-
-
-func _mission_cell_hint(cell_value: Vector2i) -> String:
-	var hints: PackedStringArray = PackedStringArray()
-	if crown_carrier_id.is_empty() and cell_value == crown_cell:
-		hints.append("♛ COURONNE")
-	if extraction_cells.has(cell_value):
-		hints.append("SORTIE")
-	if bonus_cells.has(cell_value):
-		hints.append("VINYLE")
-	if mission_hazard_cells.has(cell_value):
-		hints.append("SPORES")
-	for state_var: Variant in interactable_states.values():
-		if not (state_var is Dictionary):
-			continue
-		var state: Dictionary = state_var as Dictionary
-		var definition: Resource = state.get("definition", null) as Resource
-		if definition == null:
-			continue
-		var object_cell: Variant = definition.get("cell")
-		if object_cell is Vector2i and object_cell == cell_value:
-			hints.append(String(definition.get("display_name")))
-	return " • ".join(hints)
 
 
 func _hide_spawn_markers() -> void:
@@ -1335,7 +647,8 @@ func _build_turn_order() -> void:
 	for actor: SporeUnitActor3D in enemy_actors:
 		if actor.alive:
 			turn_order.append(actor)
-	turn_order.sort_custom(_initiative_before)
+	# Keep roster enumeration stable. Speed changes how fast CT fills; it does not
+	# become a tie-breaker when several units are ready on the same clocktick.
 	turn_index = -1
 	round_number = 1
 	battle_clock_ticks = 0
@@ -1344,7 +657,7 @@ func _build_turn_order() -> void:
 	activated_this_round.clear()
 	battle_rng.seed = 0x5F0A300D + mission_index
 	for actor: SporeUnitActor3D in turn_order:
-		actor.ct = mini(90, actor.effective_speed() * 8)
+		actor.ct = 0
 		actor.casting.clear()
 		actor.refresh_mechanics_label()
 
@@ -1375,9 +688,10 @@ func _actor_by_unit_id(unit_id: String) -> SporeUnitActor3D:
 func _next_ready_ticks_3d() -> int:
 	var best: int = 999999
 	for actor: SporeUnitActor3D in turn_order:
-		if actor == null or not actor.battle_present() or actor.is_casting():
+		if actor == null or not actor.battle_present():
 			continue
-		best = mini(best, CombatMechanics.ticks_until_ready(actor.ct, actor.effective_speed()))
+		# In FFT a caster keeps gaining unit CT while the slow action has its own CTR.
+		best = mini(best, CombatMechanics.ticks_until_ready(actor.ct, actor.ct_gain_per_tick()))
 	return best
 
 
@@ -1390,6 +704,15 @@ func _next_cast_ticks_3d() -> int:
 	return best
 
 
+func _next_status_ticks_3d() -> int:
+	var best: int = 999999
+	for actor: SporeUnitActor3D in turn_order:
+		if actor == null or not actor.battle_present():
+			continue
+		best = mini(best, actor.next_status_expiry_ticks())
+	return best
+
+
 func _advance_battle_clock_3d(step_ticks: int) -> void:
 	if step_ticks <= 0:
 		return
@@ -1398,11 +721,14 @@ func _advance_battle_clock_3d(step_ticks: int) -> void:
 	for actor: SporeUnitActor3D in turn_order:
 		if actor == null or not actor.battle_present():
 			continue
-		actor.ct = mini(199, actor.ct + actor.effective_speed() * step_ticks)
+		actor.ct = mini(199, actor.ct + actor.ct_gain_per_tick() * step_ticks)
 		if actor.is_casting():
 			actor.casting["remaining_ticks"] = int(actor.casting.get("remaining_ticks", 0)) - step_ticks
 			if int(actor.casting.get("remaining_ticks", 0)) <= 0:
 				due_casts.append(actor)
+		var expired_clock_statuses: PackedStringArray = actor.tick_status_clock(step_ticks)
+		if not expired_clock_statuses.is_empty():
+			_log("%s : fin de %s (clocktick)." % [actor.display_name, ", ".join(expired_clock_statuses)])
 		actor.refresh_mechanics_label()
 	for caster: SporeUnitActor3D in due_casts:
 		_resolve_due_cast_3d(caster)
@@ -1434,11 +760,12 @@ func _advance_clock_until_ready_3d() -> bool:
 				return false
 			continue
 		for actor: SporeUnitActor3D in turn_order:
-			if actor != null and actor.alive and not actor.is_casting() and actor.ct >= CombatMechanics.CT_THRESHOLD:
+			if actor != null and actor.alive and not actor.status_freezes_ct() and actor.ct >= CombatMechanics.CT_THRESHOLD:
 				return true
 		var unit_ticks: int = _next_ready_ticks_3d()
 		var cast_ticks: int = _next_cast_ticks_3d()
-		var step_ticks: int = mini(unit_ticks, cast_ticks)
+		var status_ticks: int = _next_status_ticks_3d()
+		var step_ticks: int = mini(unit_ticks, mini(cast_ticks, status_ticks))
 		if step_ticks == 999999:
 			return false
 		if step_ticks <= 0:
@@ -1455,19 +782,15 @@ func _advance_clock_until_ready_3d() -> bool:
 
 
 func _ready_actor_before(a: SporeUnitActor3D, b: SporeUnitActor3D) -> bool:
-	if a.ct != b.ct:
-		return a.ct > b.ct
-	if a.effective_speed() != b.effective_speed():
-		return a.effective_speed() > b.effective_speed()
-	if a.team != b.team:
-		return a.team == "player"
-	return a.display_name < b.display_name
+	# FFT resolves simultaneous natural ATs by unit-list enumeration, not by
+	# overflowing CT or Speed. `turn_order` is our stable battle roster.
+	return turn_order.find(a) < turn_order.find(b)
 
 
 func _select_ready_actor_3d() -> SporeUnitActor3D:
 	var ready: Array[SporeUnitActor3D] = []
 	for actor: SporeUnitActor3D in turn_order:
-		if actor != null and actor.alive and not actor.is_casting() and actor.ct >= CombatMechanics.CT_THRESHOLD:
+		if actor != null and actor.alive and not actor.status_freezes_ct() and actor.ct >= CombatMechanics.CT_THRESHOLD:
 			ready.append(actor)
 	if ready.is_empty():
 		return null
@@ -1487,10 +810,10 @@ func _all_alive_actors_activated_this_round() -> bool:
 func _finalize_actor_timing(actor: SporeUnitActor3D) -> void:
 	if actor == null:
 		return
-	if actor.waited_this_activation:
-		actor.ct = CombatMechanics.apply_end_ct_bonus(CombatMechanics.CT_AFTER_WAIT, actor.end_ct_bonus)
-	else:
-		actor.ct = CombatMechanics.apply_end_ct_bonus(CombatMechanics.action_end_ct(actor.moved_this_activation, actor.acted_this_activation, false), actor.end_ct_bonus)
+	var paid_move: bool = actor.moved_this_activation or actor.status_treats_as_moved_for_ct()
+	var paid_act: bool = actor.acted_this_activation or actor.status_treats_as_acted_for_ct()
+	var end_ct: int = CombatMechanics.action_end_ct(actor.ct, paid_move, paid_act, false)
+	actor.ct = CombatMechanics.apply_end_ct_bonus(end_ct, actor.end_ct_bonus)
 	actor.refresh_mechanics_label()
 	activation_count_in_round += 1
 	activated_this_round[actor.unit_id] = true
@@ -1505,7 +828,7 @@ func _finalize_actor_timing(actor: SporeUnitActor3D) -> void:
 func _queue_cast_3d(caster: SporeUnitActor3D, skill_id: String, anchor_cell: Vector2i) -> bool:
 	if caster == null or not caster.alive or not caster.can_use_skill(skill_id):
 		return false
-	var cast_ticks: int = SkillCatalog.cast_time_ticks(skill_id)
+	var cast_ticks: int = CombatMechanics.short_charge_ticks(SkillCatalog.cast_time_ticks(skill_id), caster.support_ability)
 	if cast_ticks <= 0:
 		return false
 	var tracked_target: SporeUnitActor3D = actors_by_cell.get(anchor_cell, null) as SporeUnitActor3D
@@ -1516,7 +839,8 @@ func _queue_cast_3d(caster: SporeUnitActor3D, skill_id: String, anchor_cell: Vec
 		"remaining_ticks": cast_ticks,
 		"interrupt_on_damage": SkillCatalog.interrupt_on_damage(skill_id),
 	}
-	caster.spend_skill(skill_id)
+	# Starting a slow action consumes Act, but MP is paid only at resolution.
+	caster.acted_this_activation = true
 	caster.remove_statuses_on_attack()
 	caster.refresh_mechanics_label()
 	_log("%s prépare %s • lancement dans %d tick(s) CT." % [caster.display_name, SkillCatalog.display_name(skill_id), cast_ticks])
@@ -1533,6 +857,10 @@ func _resolve_due_cast_3d(caster: SporeUnitActor3D) -> void:
 	var skill_id: String = String(casting.get("skill_id", ""))
 	var skill: Resource = SkillCatalog.definition(skill_id)
 	if skill == null:
+		return
+	if not caster.spend_skill_resource_only(skill_id):
+		_log("NO MP : %s ne peut pas libérer %s." % [caster.display_name, SkillCatalog.display_name(skill_id)])
+		_show_floating_text(caster.position + Vector3(0.0, 1.28, 0.0), "NO MP", Color(0.48, 0.72, 1.0, 1.0))
 		return
 	var anchor_value: Variant = casting.get("anchor_cell", caster.cell)
 	var anchor_cell: Vector2i = anchor_value if anchor_value is Vector2i else caster.cell
@@ -1568,6 +896,17 @@ func _interrupt_cast_3d(target: SporeUnitActor3D, damage: int) -> void:
 	_log("INTERRUPTION : %s perd %s après avoir subi des dégâts." % [target.display_name, SkillCatalog.display_name(skill_id)])
 
 
+func _cancel_cast_for_command_3d(actor: SporeUnitActor3D, command_name: String) -> void:
+	if actor == null or not actor.is_casting():
+		return
+	var skill_id: String = String(actor.casting.get("skill_id", ""))
+	actor.casting.clear()
+	actor.refresh_mechanics_label()
+	if not skill_id.is_empty():
+		_log("%s annule %s en choisissant %s." % [actor.display_name, SkillCatalog.display_name(skill_id), command_name])
+		_show_floating_text(actor.position + Vector3(0.0, 1.30, 0.0), "CAST ANNULÉ", Color(1.0, 0.60, 0.34, 1.0))
+
+
 func _start_next_activation() -> void:
 	if battle_finished:
 		return
@@ -1579,8 +918,6 @@ func _start_next_activation() -> void:
 		return
 	if active_actor != null:
 		_process_persistent_zones_for_actor(active_actor, "activation_end")
-		if active_actor.alive:
-			_process_mission_hazard(active_actor)
 		if active_actor.alive:
 			_process_status_phase(active_actor, "activation_end")
 		var expired_statuses: PackedStringArray = active_actor.finish_status_activation()
@@ -1616,6 +953,8 @@ func _start_next_activation() -> void:
 	if active_actor.status_prevents_action():
 		active_actor.acted_this_activation = true
 	_log("Tour de %s • CT %d • VIT %d." % [active_actor.display_name, active_actor.ct, active_actor.effective_speed()])
+	if active_actor.is_casting():
+		_log("CHARGING : %s conserve %s en se déplaçant ou en WAIT ; une nouvelle Action annule le cast." % [active_actor.display_name, SkillCatalog.display_name(String(active_actor.casting.get("skill_id", "")))])
 	if active_actor.moved_this_activation and active_actor.acted_this_activation:
 		_log("%s ne peut pas agir pendant cette activation." % active_actor.display_name)
 		call_deferred("_start_next_activation")
@@ -1664,19 +1003,30 @@ func _player_move_to(cell: Vector2i) -> void:
 	_rebuild_highlights()
 	var start_cell: Vector2i = active_actor.cell
 	actors_by_cell.erase(start_cell)
-	await _move_actor_along_path(active_actor, path, 0.13)
+	if active_actor.uses_teleport():
+		var distance: int = _cell_distance(start_cell, cell)
+		var chance: int = CombatMechanics.teleport_success_chance(distance, active_actor.effective_move_range())
+		if battle_rng.randi_range(1, 100) <= chance:
+			active_actor.place_on_map(map_root, cell)
+			_show_floating_text(active_actor.position + Vector3(0.0, 1.2, 0.0), "TELEPORT", Color(0.70, 0.55, 1.0, 1.0))
+		else:
+			active_actor.place_on_map(map_root, start_cell)
+			_show_floating_text(active_actor.position + Vector3(0.0, 1.2, 0.0), "ÉCHEC %d%%" % chance, Color(1.0, 0.55, 0.40, 1.0))
+			_log("%s rate sa téléportation (%d%%)." % [active_actor.display_name, chance])
+	else:
+		await _move_actor_along_path(active_actor, path, 0.13)
 	if active_actor.alive:
 		actors_by_cell[active_actor.cell] = active_actor
 	active_actor.moved_this_activation = true
+	if active_actor.movement_ability == "move_mp_up" and active_actor.cell != start_cell:
+		var restored_mp: int = maxi(1, int(ceil(float(active_actor.max_focus) / 10.0)))
+		active_actor.change_focus(restored_mp)
 	player_busy = false
 	if not active_actor.alive:
 		_check_battle_end()
 		call_deferred("_start_next_activation")
 		return
 	_log("%s se déplace en %d,%d (%d pas)." % [active_actor.display_name, active_actor.cell.x, active_actor.cell.y, path.size() - 1])
-	_handle_mission_cell_entry(active_actor)
-	if _check_battle_end():
-		return
 	if not active_actor.acted_this_activation:
 		input_mode = MODE_ATTACK
 	selected_skill_id = ""
@@ -1690,6 +1040,7 @@ func _player_move_to(cell: Vector2i) -> void:
 func _player_attack(target: SporeUnitActor3D) -> void:
 	if active_actor == null or active_actor.acted_this_activation or target == null or not target.alive:
 		return
+	_cancel_cast_for_command_3d(active_actor, "Attack")
 	player_busy = true
 	active_actor.acted_this_activation = true
 	_begin_action_camera(active_actor.global_position, target.global_position, 0.72, action_camera_zoom_in)
@@ -1779,20 +1130,44 @@ func _apply_damage_with_reactions(
 			intercepted = true
 			_show_floating_text(interceptor.position + Vector3(0.0, 1.34, 0.0), "INTERCEPTION", Color(0.50, 0.86, 1.0, 1.0))
 			_log("%s intercepte %s destiné à %s." % [interceptor.display_name, source_label, target.display_name])
+	var reaction_was_blocked: bool = recipient.status_prevents_reaction()
 	var mitigated_damage: int = maxi(0, damage - recipient.flat_damage_reduction)
 	if mitigated_damage > 0 and recipient.shield_block_chance > 0 and recipient.shield_block_reduction > 0 and battle_rng.randi_range(1, 100) <= recipient.shield_block_chance:
 		var blocked: int = mini(mitigated_damage, recipient.shield_block_reduction)
 		mitigated_damage = maxi(0, mitigated_damage - blocked)
 		_show_floating_text(recipient.position + Vector3(0.0, 1.42, 0.0), "BLOC -%d" % blocked, Color(0.50, 0.86, 1.0, 1.0))
+	if mitigated_damage > 0 and recipient.reaction_type == "mp_switch" and recipient.reaction_available() and recipient.focus > 0 and _reaction_triggers_3d(recipient):
+		var mp_before: int = recipient.focus
+		var mp_lost: int = mini(mp_before, mitigated_damage)
+		recipient.change_focus(-mitigated_damage)
+		mitigated_damage = 0
+		_show_floating_text(recipient.position + Vector3(0.0, 1.34, 0.0), "MP SWITCH -%d MP" % mp_lost, Color(0.45, 0.75, 1.0, 1.0))
 	var applied: int = recipient.take_damage(mitigated_damage)
 	_interrupt_cast_3d(recipient, applied)
 	recipient.remove_statuses_on_damage_taken()
 	_show_floating_text(recipient.position + Vector3(0.0, 1.15, 0.0), "-%d" % applied, Color(1.0, 0.42, 0.36, 1.0))
 	if not recipient.alive:
 		_handle_actor_ko(recipient, source_label)
-	elif allow_counter and attacker != null and attacker.alive:
-		_try_counter_reaction(recipient, attacker)
+	else:
+		if applied > 0 and not reaction_was_blocked and recipient.reaction_type == "auto_potion" and recipient.reaction_available() and _reaction_triggers_3d(recipient):
+			var potion_heal: int = maxi(1, int(floor(float(recipient.max_hp) / 4.0)))
+			var healed: int = recipient.heal(potion_heal)
+			_show_floating_text(recipient.position + Vector3(0.0, 1.34, 0.0), "AUTO-POTION +%d" % healed, Color(0.48, 0.90, 0.66, 1.0))
+		if allow_counter and not reaction_was_blocked and attacker != null and attacker.alive:
+			_try_counter_reaction(recipient, attacker)
 	return {"target": recipient, "applied": applied, "intercepted": intercepted}
+
+
+func _reaction_triggers_3d(reactor: SporeUnitActor3D) -> bool:
+	if reactor == null or not reactor.reaction_available():
+		return false
+	if reactor.reaction_ready:
+		# Sporebound can grant a one-shot guaranteed reaction. Consume that
+		# guarantee here even for passive reactions such as MP Switch / Auto-Potion.
+		reactor.reaction_ready = false
+		reactor.refresh_mechanics_label()
+		return true
+	return battle_rng.randi_range(1, 100) <= CombatMechanics.reaction_chance(reactor.brave)
 
 
 func _find_interceptor(attacker: SporeUnitActor3D, protected_target: SporeUnitActor3D) -> SporeUnitActor3D:
@@ -1811,6 +1186,11 @@ func _find_interceptor(attacker: SporeUnitActor3D, protected_target: SporeUnitAc
 		if candidate.hp > best_hp:
 			best = candidate
 			best_hp = candidate.hp
+	# Intercept is a Sporebound reaction: select the eligible protector first,
+	# then roll Brave once. This prevents failed/non-selected candidates from
+	# consuming a one-shot reaction_ready proc.
+	if best != null and not _reaction_triggers_3d(best):
+		return null
 	return best
 
 
@@ -1824,6 +1204,9 @@ func _try_counter_reaction(reactor: SporeUnitActor3D, attacker: SporeUnitActor3D
 	if not CombatMechanics.range_allowed(counter_distance, reactor.attack_min_range, counter_max):
 		return
 	if map_root != null and not _has_line_of_sight(reactor.cell, attacker.cell):
+		return
+	if not _reaction_triggers_3d(reactor):
+		_log("RÉACTION : %s ne déclenche pas CONTRE (%d Brave)." % [reactor.display_name, reactor.brave])
 		return
 	_perform_reaction_attack(reactor, attacker, "CONTRE", 0)
 
@@ -1842,9 +1225,14 @@ func _perform_reaction_attack(reactor: SporeUnitActor3D, target: SporeUnitActor3
 		_log("%s déclenche %s sur %s mais rate • %d%% HIT." % [reactor.display_name, reaction_label.to_lower(), target.display_name, int(hit["chance"])])
 		reactor.remove_statuses_on_attack()
 		return
-	var reaction_raw: int = reactor.effective_basic_attack_power() + reactor.status_modifier("outgoing_damage_delta") + target.status_modifier("incoming_damage_delta") + reactor.reaction_damage_bonus - damage_penalty
+	var compatibility: String = CombatMechanics.zodiac_compatibility(reactor.zodiac_sign, target.zodiac_sign, reactor.sex, target.sex)
+	var reaction_raw: int = CombatMechanics.fft_weapon_damage(
+		reactor.effective_physical_power(), reactor.effective_magic_power(), reactor.effective_speed(), reactor.brave, reactor.weapon_power, reactor.weapon_family, compatibility
+	) + reactor.status_modifier("outgoing_damage_delta") + target.status_modifier("incoming_damage_delta") + reactor.reaction_damage_bonus - damage_penalty
 	var reaction_defense: int = target.effective_physical_defense() if reactor.basic_attack_damage_type == "physical" else target.effective_magic_defense()
 	var damage: int = CombatMechanics.damage_after_defense(reaction_raw, reaction_defense, 1)
+	if reactor.basic_attack_damage_type == "physical":
+		damage = CombatMechanics.apply_charging_physical_vulnerability(damage, target.is_casting())
 	_log("%s déclenche %s sur %s • %d%% HIT." % [reactor.display_name, reaction_label.to_lower(), target.display_name, int(hit["chance"])])
 	_apply_damage_with_reactions(reactor, target, damage, reaction_label.to_lower(), false, false, reactor.basic_attack_damage_type)
 	reactor.remove_statuses_on_attack()
@@ -1857,11 +1245,6 @@ func _handle_actor_ko(actor: SporeUnitActor3D, source_label: String = "") -> voi
 	actors_by_cell[actor.cell] = actor
 	var suffix: String = "" if source_label.is_empty() else " via %s" % source_label
 	_log("%s est K.O.%s." % [actor.display_name, suffix])
-	if actor.unit_id == crown_carrier_id:
-		crown_carrier_id = ""
-		crown_cell = actor.cell
-		_refresh_crown_runtime_marker()
-		_log("La COURONNE tombe en %d,%d !" % [crown_cell.x, crown_cell.y])
 
 
 func _show_floating_text(world_position: Vector3, text_value: String, color: Color) -> void:
@@ -1886,7 +1269,13 @@ func _finish_activation_if_complete() -> void:
 	if active_actor == null or battle_finished:
 		return
 	if active_actor.moved_this_activation and active_actor.acted_this_activation:
-		call_deferred("_start_next_activation")
+		# FFT still lets the player validate the final facing before the Active Turn ends.
+		_clear_pending_action()
+		selected_skill_id = ""
+		skill_preview_cells.clear()
+		preview_path_cells.clear()
+		_refresh_player_overlays()
+		_update_ui_text()
 
 
 func _on_move_mode_pressed() -> void:
@@ -1920,8 +1309,7 @@ func _on_skill_pressed(slot: int) -> void:
 	if not active_actor.can_use_skill(skill_id):
 		var skill: Resource = SkillCatalog.definition(skill_id)
 		var cost: int = int(skill.get("focus_cost")) if skill != null else 0
-		var cooldown: int = active_actor.skill_cooldown(skill_id)
-		_log("%s indisponible • Focus %d/%d • CD %d." % [SkillCatalog.display_name(skill_id), active_actor.focus, cost, cooldown])
+		_log("%s indisponible • MP %d/%d ou action déjà consommée." % [SkillCatalog.display_name(skill_id), active_actor.focus, cost])
 		return
 	selected_skill_id = skill_id
 	input_mode = MODE_SKILL
@@ -1957,7 +1345,9 @@ func _on_end_activation_pressed() -> void:
 	if not _player_can_input():
 		return
 	active_actor.waited_this_activation = not active_actor.moved_this_activation and not active_actor.acted_this_activation
-	_log("%s termine son activation%s." % [active_actor.display_name, " • WAIT = 40 CT" if active_actor.waited_this_activation else ""])
+	var ct_cost: int = CombatMechanics.action_ct_cost(active_actor.moved_this_activation, active_actor.acted_this_activation, false)
+	var wait_note: String = " • cast conservé" if active_actor.is_casting() and not active_actor.acted_this_activation else ""
+	_log("%s termine son activation • face %s • coût CT %d%s." % [active_actor.display_name, active_actor.facing_name(), ct_cost, wait_note])
 	_start_next_activation()
 
 
@@ -1986,14 +1376,24 @@ func _compute_reachable_cells(actor: SporeUnitActor3D) -> void:
 	if actor.status_prevents_movement():
 		return
 	var blocked: Dictionary = _blocked_cells_except(actor)
+	if actor.uses_teleport():
+		var max_distance: int = actor.effective_move_range() + 9
+		for y: int in range(map_root.grid_height):
+			for x: int in range(map_root.grid_width):
+				var teleport_cell: Vector2i = Vector2i(x, y)
+				if teleport_cell == actor.cell or blocked.has(teleport_cell):
+					continue
+				var teleport_distance: int = _cell_distance(actor.cell, teleport_cell)
+				if teleport_distance <= max_distance and CombatMechanics.teleport_success_chance(teleport_distance, actor.effective_move_range()) > 0:
+					reachable_cells[teleport_cell] = teleport_distance
+					path_parents[teleport_cell] = actor.cell
+		return
 	var environment: Dictionary = map_root.to_environment()
 	var obstacle_cells_value: Variant = environment.get("obstacles", [])
 	if obstacle_cells_value is Array:
 		for obstacle_var: Variant in obstacle_cells_value:
 			if obstacle_var is Vector2i:
 				blocked[obstacle_var] = true
-	for door_cell: Vector2i in _closed_mission_door_cells():
-		blocked[door_cell] = true
 	var frontier: Array[Vector2i] = []
 	frontier.append(actor.cell)
 	var cost_by_cell: Dictionary = {actor.cell: 0}
@@ -2010,7 +1410,7 @@ func _compute_reachable_cells(actor: SporeUnitActor3D) -> void:
 			if not _can_step_between(current, next_cell, actor):
 				continue
 			var next_cost: int = current_cost + 1
-			var effective_move: int = maxi(0, actor.move_range + actor.status_modifier("movement_delta"))
+			var effective_move: int = actor.effective_move_range()
 			if next_cost > effective_move:
 				continue
 			if cost_by_cell.has(next_cell) and int(cost_by_cell[next_cell]) <= next_cost:
@@ -2196,6 +1596,7 @@ func _player_use_skill(anchor_cell: Vector2i) -> void:
 		return
 	if not skill_target_cells.has(anchor_cell) or not active_actor.can_use_skill(selected_skill_id):
 		return
+	_cancel_cast_for_command_3d(active_actor, "une nouvelle action")
 	var skill: Resource = SkillCatalog.definition(selected_skill_id)
 	if skill == null:
 		return
@@ -2238,7 +1639,7 @@ func _player_use_skill(anchor_cell: Vector2i) -> void:
 		return
 	active_actor.spend_skill(selected_skill_id)
 	active_actor.remove_statuses_on_attack()
-	_log("%s utilise %s • Focus %d/%d • CD %d." % [active_actor.display_name, skill_name, active_actor.focus, active_actor.max_focus, active_actor.skill_cooldown(selected_skill_id)])
+	_log("%s utilise %s • MP %d/%d." % [active_actor.display_name, skill_name, active_actor.focus, active_actor.max_focus])
 	selected_skill_id = ""
 	skill_preview_cells.clear()
 	if not active_actor.moved_this_activation and active_actor.alive:
@@ -2260,7 +1661,8 @@ func _apply_skill_effect(caster: SporeUnitActor3D, skill: Resource, effect: Reso
 			continue
 		if not target.alive and not (effect_type == "revive" and target.downed and not target.removed_from_battle):
 			continue
-		var hostile_roll_effect: bool = effect_type in ["damage", "status", "push", "pull"] and target.team != caster.team
+		var uses_status_formula: bool = effect_type == "status" and int(skill.get("fft_status_modifier")) > 0
+		var hostile_roll_effect: bool = effect_type in ["damage", "status", "push", "pull"] and target.team != caster.team and not uses_status_formula
 		if hostile_roll_effect and not _skill_hits_target_3d(caster, skill, target):
 			continue
 		var amount: int = int(effect.get("amount"))
@@ -2272,17 +1674,27 @@ func _apply_skill_effect(caster: SporeUnitActor3D, skill: Resource, effect: Reso
 					_show_floating_text(target.position + Vector3(0.0, 1.25, 0.0), "RELEVÉ +%d" % restored, Color(0.48, 0.90, 0.66, 1.0))
 					_log("%s relève %s avec %d PV." % [caster.display_name, target.display_name, restored])
 			"damage":
+				var damage_type: String = String(effect.get("damage_type"))
 				var damage: int = amount
 				if bool(effect.get("use_attack_stat")):
-					damage += caster.effective_physical_power() if String(effect.get("damage_type")) == "physical" else caster.effective_magic_power()
+					var compatibility: String = CombatMechanics.zodiac_compatibility(caster.zodiac_sign, target.zodiac_sign, caster.sex, target.sex)
+					if damage_type == "physical":
+						damage = CombatMechanics.zodiac_adjust(caster.effective_physical_power(), compatibility) + amount
+					else:
+						var spell_q: int = int(effect.get("fft_spell_power_q"))
+						if spell_q <= 0:
+							spell_q = maxi(1, amount + 3)
+						damage = CombatMechanics.fft_magic_damage(caster.effective_magic_power(), spell_q, caster.faith, target.faith, compatibility)
 				damage += caster.status_modifier("outgoing_damage_delta") + target.status_modifier("incoming_damage_delta")
-				if map_root.elevation_at(caster.cell) > map_root.elevation_at(target.cell):
-					damage += 1
-				if _cell_distance(caster.cell, target.cell) > 1 and not _skill_has_tag(skill, "ignore_cover") and _cover_protects_from(caster.cell, target.cell):
-					damage -= ranged_cover_reduction
-				var damage_type: String = String(effect.get("damage_type"))
+				# FFT: elevation/terrain do not add flat damage here; height remains a
+				# targeting/range concern and the formula owns the damage result.
 				var defense: int = target.effective_physical_defense() if damage_type == "physical" else target.effective_magic_defense()
 				damage = CombatMechanics.damage_after_defense(damage, defense, 1)
+				if damage_type == "physical":
+					damage = CombatMechanics.apply_charging_physical_vulnerability(damage, target.is_casting())
+					if target.statuses.has("sleep"):
+						damage = CombatMechanics.apply_charging_physical_vulnerability(damage, true)
+				damage = CombatMechanics.defensive_ability_damage(damage, damage_type, target.statuses.has("protect"), target.statuses.has("shell"), target.support_ability)
 				var single_target: bool = int(effect.get("radius")) <= 0 and String(effect.get("target_scope")) == "target"
 				_apply_damage_with_reactions(caster, target, damage, String(skill.get("display_name")), true, single_target, String(effect.get("damage_type")))
 			"heal":
@@ -2291,6 +1703,13 @@ func _apply_skill_effect(caster: SporeUnitActor3D, skill: Resource, effect: Reso
 					_show_floating_text(target.position + Vector3(0.0, 1.15, 0.0), "+%d" % healed, Color(0.48, 0.90, 0.66, 1.0))
 			"status":
 				var status_id: String = String(effect.get("status_id"))
+				var formula_modifier: int = int(skill.get("fft_status_modifier"))
+				if formula_modifier > 0 and target.team != caster.team:
+					var compatibility: String = CombatMechanics.zodiac_compatibility(caster.zodiac_sign, target.zodiac_sign, caster.sex, target.sex)
+					var status_chance: int = CombatMechanics.fft_status_success_chance(caster.effective_magic_power(), formula_modifier, caster.faith, target.faith, compatibility, target.statuses.has("shell"), target.support_ability == "magic_defense_up")
+					if not _roll_hit_3d(status_chance):
+						_show_floating_text(target.position + Vector3(0.0, 1.28, 0.0), "STATUS MISS", Color(0.90, 0.90, 0.95, 1.0))
+						continue
 				if target.apply_status(status_id):
 					var status_data: Resource = StatusCatalog.definition(status_id)
 					var status_name: String = String(status_data.get("display_name")) if status_data != null else status_id
@@ -2300,7 +1719,7 @@ func _apply_skill_effect(caster: SporeUnitActor3D, skill: Resource, effect: Reso
 				_show_floating_text(target.position + Vector3(0.0, 1.28, 0.0), "GARDE", Color(0.56, 0.88, 0.68, 1.0))
 			"focus":
 				var focus_delta: int = target.change_focus(amount)
-				_show_floating_text(target.position + Vector3(0.0, 1.28, 0.0), "%+d FP" % focus_delta, Color(0.42, 0.78, 1.0, 1.0))
+				_show_floating_text(target.position + Vector3(0.0, 1.28, 0.0), "%+d MP" % focus_delta, Color(0.42, 0.78, 1.0, 1.0))
 			"reaction":
 				target.reaction_ready = true
 				_show_floating_text(target.position + Vector3(0.0, 1.28, 0.0), "RÉACTION", Color(1.0, 0.82, 0.40, 1.0))
@@ -2347,7 +1766,7 @@ func _try_displace_actor(target: SporeUnitActor3D, source_cell: Vector2i, distan
 		return
 	for _step: int in range(distance):
 		var next_cell: Vector2i = target.cell + direction
-		if not map_root.is_cell_valid(next_cell) or actors_by_cell.has(next_cell) or _closed_mission_door_at(next_cell):
+		if not map_root.is_cell_valid(next_cell) or actors_by_cell.has(next_cell):
 			break
 		var tile: Node = map_root.tile_at(next_cell)
 		if tile != null and String(tile.get("terrain_type")) == "obstacle":
@@ -2357,8 +1776,6 @@ func _try_displace_actor(target: SporeUnitActor3D, source_cell: Vector2i, distan
 		actors_by_cell.erase(target.cell)
 		target.move_to_cell(map_root, next_cell, 0.13)
 		actors_by_cell[next_cell] = target
-	if target.alive:
-		_handle_mission_cell_entry(target)
 
 
 func _show_skill_burst(cell_value: Vector2i, color: Color) -> void:
@@ -2402,13 +1819,13 @@ func _process_status_phase(actor: SporeUnitActor3D, phase: String) -> void:
 			if not tick_vfx_id.is_empty():
 				_spawn_action_vfx(tick_vfx_id, actor.global_position + Vector3(0.0, 0.42, 0.0), actor.global_position + Vector3(0.0, 0.42, 0.0), false, actor, Vector3(0.0, 0.42, 0.0))
 		if event_type == "damage":
-			var applied: int = actor.take_damage(amount)
-			_interrupt_cast_3d(actor, applied)
-			actor.remove_statuses_on_damage_taken()
-			_show_floating_text(actor.position + Vector3(0.0, 1.15, 0.0), "-%d" % applied, Color(1.0, 0.48, 0.30, 1.0))
+			var result: Dictionary = _apply_damage_with_reactions(null, actor, amount, status_name, false, false, String(event.get("damage_type", "physical")))
+			var applied: int = int(result.get("applied", 0))
 			_log("%s subit %d via %s." % [actor.display_name, applied, status_name])
 			if not actor.alive:
-				_handle_actor_ko(actor, status_name)
+				actor.play_ko()
+				actors_by_cell[actor.cell] = actor
+				_log("%s est K.O." % actor.display_name)
 				return
 		elif event_type == "heal":
 			var healed: int = actor.heal(amount)
@@ -2428,7 +1845,6 @@ func _start_new_round() -> void:
 			if actor.alive:
 				actor.tick_skill_resources()
 	_advance_persistent_zones_round()
-	_process_mission_round_start_triggers()
 	_log("— Round %d • CT dynamique —" % round_number)
 
 
@@ -2592,6 +2008,12 @@ func _execute_enemy_activation() -> void:
 		enemy_busy = false
 		return
 	await get_tree().create_timer(0.30).timeout
+	if active_actor.is_casting():
+		active_actor.waited_this_activation = true
+		_log("%s WAIT pour conserver %s." % [active_actor.display_name, SkillCatalog.display_name(String(active_actor.casting.get("skill_id", "")))])
+		enemy_busy = false
+		_start_next_activation()
+		return
 	var target: SporeUnitActor3D = _best_target_for(active_actor, player_actors)
 	if target == null:
 		enemy_busy = false
@@ -2606,22 +2028,27 @@ func _execute_enemy_activation() -> void:
 	elif not active_actor.acted_this_activation and _is_in_attack_range(active_actor, target):
 		await _enemy_attack(target)
 
-	# If no action was possible yet, move, then evaluate skills again from the new position.
-	if active_actor.alive and not active_actor.acted_this_activation and not active_actor.moved_this_activation:
-		var destination: Vector2i = _best_enemy_destination(active_actor, target)
-		var path: Array[Vector2i] = _reconstruct_path(destination)
-		if destination != active_actor.cell and path.size() >= 2:
-			actors_by_cell.erase(active_actor.cell)
-			_log("%s avance vers %s." % [active_actor.display_name, target.display_name])
-			await _move_actor_along_path(active_actor, path, 0.12)
-			if not active_actor.alive:
-				enemy_busy = false
-				if not _check_battle_end():
-					_start_next_activation()
-				return
-			actors_by_cell[active_actor.cell] = active_actor
-			active_actor.moved_this_activation = true
-			await get_tree().create_timer(0.15).timeout
+	# FFT allows Act -> Move as well as Move -> Act. Reposition whenever Move is still available.
+	if active_actor.alive and not active_actor.moved_this_activation:
+		target = _best_target_for(active_actor, player_actors)
+		if target != null:
+			var destination: Vector2i = _best_enemy_destination(active_actor, target)
+			var path: Array[Vector2i] = _reconstruct_path(destination)
+			if destination != active_actor.cell and path.size() >= 2:
+				var ai_move_start: Vector2i = active_actor.cell
+				actors_by_cell.erase(active_actor.cell)
+				_log("%s avance vers %s." % [active_actor.display_name, target.display_name])
+				await _move_actor_along_path(active_actor, path, 0.12)
+				if active_actor.movement_ability == "move_mp_up" and active_actor.cell != ai_move_start:
+					active_actor.change_focus(maxi(1, int(ceil(float(active_actor.max_focus) / 10.0))))
+				if not active_actor.alive:
+					enemy_busy = false
+					if not _check_battle_end():
+						_start_next_activation()
+					return
+				actors_by_cell[active_actor.cell] = active_actor
+				active_actor.moved_this_activation = true
+				await get_tree().create_timer(0.15).timeout
 
 	if active_actor.alive and not active_actor.acted_this_activation:
 		skill_action = _best_ai_skill_action(active_actor)
@@ -2706,6 +2133,8 @@ func _best_ai_skill_action(actor: SporeUnitActor3D) -> Dictionary:
 			continue
 		var skill: Resource = SkillCatalog.definition(skill_id)
 		if skill == null:
+			continue
+		if int(skill.get("cast_time_ticks")) > 0 and actor.focus < int(skill.get("focus_cost")):
 			continue
 		_compute_skill_target_cells(actor, skill_id)
 		for anchor_var: Variant in skill_target_cells.keys():
@@ -2934,6 +2363,16 @@ func _reconstruct_path(destination: Vector2i) -> Array[Vector2i]:
 func _move_actor_along_path(actor: SporeUnitActor3D, path: Array[Vector2i], duration_per_step: float) -> void:
 	if actor == null or map_root == null or path.size() < 2:
 		return
+	if actor.uses_teleport():
+		var destination: Vector2i = path[path.size() - 1]
+		var distance: int = _cell_distance(actor.cell, destination)
+		var chance: int = CombatMechanics.teleport_success_chance(distance, actor.effective_move_range())
+		if battle_rng.randi_range(1, 100) <= chance:
+			actor.place_on_map(map_root, destination)
+			_show_floating_text(actor.position + Vector3(0.0, 1.2, 0.0), "TELEPORT", Color(0.70, 0.55, 1.0, 1.0))
+		else:
+			_show_floating_text(actor.position + Vector3(0.0, 1.2, 0.0), "ÉCHEC %d%%" % chance, Color(1.0, 0.55, 0.40, 1.0))
+		return
 	for index: int in range(1, path.size()):
 		if not actor.alive:
 			return
@@ -2960,6 +2399,8 @@ func _check_opportunity_reactions(mover: SporeUnitActor3D, from_cell: Vector2i, 
 		if not was_in_reach or still_in_reach:
 			continue
 		if map_root != null and not _has_line_of_sight(reactor.cell, from_cell):
+			continue
+		if not _reaction_triggers_3d(reactor):
 			continue
 		_perform_reaction_attack(reactor, mover, "OPPORTUNITÉ", opportunity_damage_penalty)
 		await get_tree().create_timer(0.14).timeout
@@ -3028,6 +2469,8 @@ func _is_cover_cell(cell_value: Vector2i) -> bool:
 
 
 func _can_step_between(from_cell: Vector2i, to_cell: Vector2i, actor: SporeUnitActor3D = null) -> bool:
+	if actor != null and actor.ignores_height_for_movement():
+		return true
 	if map_root == null:
 		return true
 	var delta: int = map_root.elevation_at(to_cell) - map_root.elevation_at(from_cell)
@@ -3076,8 +2519,21 @@ func _hit_profile_3d(attacker: SporeUnitActor3D, target: SporeUnitActor3D, base_
 	var adjusted_base_accuracy: int = base_accuracy
 	if base_accuracy == CombatMechanics.BASIC_ATTACK_ACCURACY:
 		adjusted_base_accuracy += attacker.basic_attack_accuracy_bonus
+	var target_cannot_evade: bool = target.status_prevents_evasion()
+	var no_equipment_evade: bool = target_cannot_evade or attacker.support_ability == "concentrate"
+	var chance: int = CombatMechanics.fft_physical_hit_chance(
+		adjusted_base_accuracy,
+		attacker.effective_accuracy(),
+		0 if no_equipment_evade else clampi(target.physical_class_evasion + target.status_modifier("evasion_delta"), 0, 100),
+		0 if no_equipment_evade else target.physical_shield_evasion,
+		0 if no_equipment_evade else target.physical_accessory_evasion,
+		0 if no_equipment_evade else target.physical_weapon_evasion,
+		arc,
+		target.is_casting()
+	)
+	chance = CombatMechanics.blade_grasp_hit_chance(chance, target.brave, target.reaction_type == "blade_grasp" and target.reaction_available() and not target_cannot_evade)
 	return {
-		"chance": CombatMechanics.hit_chance(adjusted_base_accuracy, attacker.effective_accuracy(), target.effective_evasion(), arc, height_advantage, covered),
+		"chance": chance,
 		"arc": arc,
 		"height_advantage": height_advantage,
 		"covered": covered,
@@ -3085,7 +2541,26 @@ func _hit_profile_3d(attacker: SporeUnitActor3D, target: SporeUnitActor3D, base_
 
 
 func _roll_hit_3d(chance: int) -> bool:
-	return battle_rng.randi_range(1, 100) <= clampi(chance, 5, 100)
+	return battle_rng.randi_range(1, 100) <= clampi(chance, 0, 100)
+
+
+func _skill_accuracy_kind_3d(skill: Resource) -> String:
+	if skill == null:
+		return "physical"
+	var configured: String = String(skill.get("accuracy_kind"))
+	if configured == "physical" or configured == "magical":
+		return configured
+	var raw_effects: Variant = skill.get("effects")
+	if raw_effects is Array:
+		for effect_var: Variant in raw_effects:
+			if not (effect_var is Resource):
+				continue
+			var effect: Resource = effect_var as Resource
+			if String(effect.get("effect_type")) != "damage":
+				continue
+			return "physical" if String(effect.get("damage_type")) == "physical" else "magical"
+	# Accuracy-using status/control skills behave like magical evasion by default.
+	return "magical"
 
 
 func _skill_hits_target_3d(caster: SporeUnitActor3D, skill: Resource, target: SporeUnitActor3D) -> bool:
@@ -3098,6 +2573,15 @@ func _skill_hits_target_3d(caster: SporeUnitActor3D, skill: Resource, target: Sp
 		return bool(_skill_hit_cache[cache_key])
 	var ignore_cover: bool = _skill_has_tag(skill, "ignore_cover")
 	var hit: Dictionary = _hit_profile_3d(caster, target, int(skill.get("accuracy")), ignore_cover)
+	if _skill_accuracy_kind_3d(skill) == "magical":
+		var no_magic_evade: bool = target.status_prevents_evasion()
+		hit["chance"] = CombatMechanics.fft_magic_hit_chance(
+			int(skill.get("accuracy")),
+			caster.effective_accuracy(),
+			0 if no_magic_evade else target.magic_shield_evasion,
+			0 if no_magic_evade else target.magic_accessory_evasion,
+			target.is_casting()
+		)
 	var landed: bool = _roll_hit_3d(int(hit["chance"]))
 	_skill_hit_cache[cache_key] = landed
 	if not landed:
@@ -3121,11 +2605,24 @@ func _attack_damage_details(attacker: SporeUnitActor3D, target: SporeUnitActor3D
 	elif arc == "side":
 		positional_bonus = side_attack_bonus
 	var hit: Dictionary = _hit_profile_3d(attacker, target, CombatMechanics.BASIC_ATTACK_ACCURACY, false)
+	# Facing affects evasion in FFT; height/back/cover do not add flat weapon damage.
+	height_bonus = 0
+	positional_bonus = 0
+	cover_reduction = 0
 	var damage_type: String = attacker.basic_attack_damage_type
-	var raw_damage: int = attacker.effective_basic_attack_power() + attacker.basic_attack_damage_bonus + attacker.status_modifier("outgoing_damage_delta") + target.status_modifier("incoming_damage_delta") + height_bonus + positional_bonus - cover_reduction
+	var compatibility: String = CombatMechanics.zodiac_compatibility(attacker.zodiac_sign, target.zodiac_sign, attacker.sex, target.sex)
+	var raw_damage: int = CombatMechanics.fft_weapon_damage(
+		attacker.effective_physical_power(), attacker.effective_magic_power(), attacker.effective_speed(), attacker.brave, attacker.weapon_power, attacker.weapon_family, compatibility
+	) + attacker.basic_attack_damage_bonus + attacker.status_modifier("outgoing_damage_delta") + target.status_modifier("incoming_damage_delta")
 	var defense: int = target.effective_physical_defense() if damage_type == "physical" else target.effective_magic_defense()
+	var final_damage: int = CombatMechanics.damage_after_defense(raw_damage, defense, 1)
+	if damage_type == "physical":
+		final_damage = CombatMechanics.apply_charging_physical_vulnerability(final_damage, target.is_casting())
+		if target.statuses.has("sleep"):
+			final_damage = CombatMechanics.apply_charging_physical_vulnerability(final_damage, true)
+	final_damage = CombatMechanics.defensive_ability_damage(final_damage, damage_type, target.statuses.has("protect"), target.statuses.has("shell"), target.support_ability)
 	return {
-		"damage": CombatMechanics.damage_after_defense(raw_damage, defense, 1),
+		"damage": final_damage,
 		"defense": defense,
 		"damage_type": damage_type,
 		"hit_chance": int(hit["chance"]),
@@ -3184,8 +2681,6 @@ func _cell_distance(a: Vector2i, b: Vector2i) -> int:
 
 
 func _check_battle_end() -> bool:
-	if battle_finished:
-		return true
 	var living_players: int = 0
 	var living_enemies: int = 0
 	for actor: SporeUnitActor3D in player_actors:
@@ -3194,33 +2689,19 @@ func _check_battle_end() -> bool:
 	for actor: SporeUnitActor3D in enemy_actors:
 		if actor != null and actor.alive:
 			living_enemies += 1
-	if living_players <= 0:
-		_finish_mission_3d(false, "DÉFAITE — l'escouade est K.O. avant d'avoir rempli l'objectif.")
-	elif mission_objective == "crown":
-		if not crown_carrier_id.is_empty():
-			var carrier: SporeUnitActor3D = _actor_by_unit_id(crown_carrier_id)
-			if carrier != null and carrier.alive and extraction_cells.has(carrier.cell):
-				_finish_mission_3d(true, "VICTOIRE — la Couronne Beatbox est extraite ! Vinyles %d/%d." % [bonus_collected, bonus_target_total])
-		elif living_enemies <= 0 and not enemies_cleared_logged:
-			enemies_cleared_logged = true
-			_log("Tous les ennemis sont K.O. — il faut quand même récupérer et extraire la Couronne.")
-	elif living_enemies <= 0:
-		_finish_mission_3d(true, "VICTOIRE — tous les ennemis sont K.O.")
-	return battle_finished
-
-
-func _finish_mission_3d(victory: bool, message: String) -> void:
+	if living_enemies <= 0:
+		battle_finished = true
+		_log("VICTOIRE — tous les ennemis sont K.O.")
+	elif living_players <= 0:
+		battle_finished = true
+		_log("DÉFAITE — l'escouade est K.O.")
 	if battle_finished:
-		return
-	battle_finished = true
-	mission_victory = victory
-	enemy_busy = false
-	player_busy = false
-	_clear_overlays()
-	if active_actor != null:
-		active_actor.end_activation()
-	_log(message)
-	_update_ui_text()
+		enemy_busy = false
+		_clear_overlays()
+		if active_actor != null:
+			active_actor.end_activation()
+		_update_ui_text()
+	return battle_finished
 
 
 func _rebuild_highlights() -> void:
@@ -3332,8 +2813,8 @@ func _update_ui_text() -> void:
 	if _info_label == null or _help_label == null or _turn_label == null:
 		return
 	if battle_finished:
-		_turn_label.text = "MISSION ACCOMPLIE" if mission_victory else "MISSION ÉCHOUÉE"
-		_info_label.text = battle_log[battle_log.size() - 1] if not battle_log.is_empty() else "Mission terminée."
+		_turn_label.text = "COMBAT TERMINÉ"
+		_info_label.text = battle_log[battle_log.size() - 1] if not battle_log.is_empty() else "Combat terminé."
 	else:
 		var active_name: String = active_actor.display_name if active_actor != null else "—"
 		var team_text: String = "JOUEUR" if active_actor != null and active_actor.team == "player" else "ENNEMI"
@@ -3341,9 +2822,6 @@ func _update_ui_text() -> void:
 		var cell_text: String = "—"
 		if map_root != null and map_root.is_cell_valid(hovered_cell):
 			cell_text = "%d,%d h%d" % [hovered_cell.x, hovered_cell.y, map_root.elevation_at(hovered_cell)]
-			var mission_hint: String = _mission_cell_hint(hovered_cell)
-			if not mission_hint.is_empty():
-				cell_text += " • " + mission_hint
 			if _is_cover_cell(hovered_cell):
 				cell_text += " • couvert %s" % _cover_facing_name(hovered_cell)
 			var zone_count: int = _persistent_zone_count_at(hovered_cell)
@@ -3387,16 +2865,11 @@ func _update_ui_text() -> void:
 			var cast_suffix: String = ""
 			if active_actor.is_casting():
 				cast_suffix = " • CAST %s %dt" % [SkillCatalog.display_name(String(active_actor.casting.get("skill_id", ""))), maxi(0, int(active_actor.casting.get("remaining_ticks", 0)))]
-			_info_label.text = "%s • HP %d/%d • FP %d/%d • CT %d • VIT %d • PRÉC %+d • ESQ %+d • face %s • %s%s%s%s\nCase : %s%s" % [active_actor.display_name, active_actor.hp, active_actor.max_hp, active_actor.focus, active_actor.max_focus, active_actor.ct, active_actor.effective_speed(), active_actor.effective_accuracy(), active_actor.effective_evasion(), active_actor.facing_name(), mode_text, reaction_suffix, status_suffix, cast_suffix, cell_text, extra_text]
+			_info_label.text = "%s • HP %d/%d • MP %d/%d • CT %d • VIT %d • PRÉC %+d • ESQ %+d • face %s • %s%s%s%s\nCase : %s%s" % [active_actor.display_name, active_actor.hp, active_actor.max_hp, active_actor.focus, active_actor.max_focus, active_actor.ct, active_actor.effective_speed(), active_actor.effective_accuracy(), active_actor.effective_evasion(), active_actor.facing_name(), mode_text, reaction_suffix, status_suffix, cast_suffix, cell_text, extra_text]
 		else:
 			_info_label.text = "Case survolée : %s" % cell_text
-	if battle_finished:
-		_help_label.text = _mission_status_text() + "\n[R] recommencer la mission"
-	else:
-		_help_label.text = _mission_status_text() + "\n[M] déplacement • [A] attaque • [1/2] skills • [F] orientation • [Espace] fin • Q/E caméra • R recommencer"
+	_help_label.text = "Boucle FFT : 1 Move + 1 Act dans l’ordre voulu • F choisit l’orientation • Espace = Wait/Fin • Vert déplacement • Rouge attaque • Violet skill • Entrée confirmer • Échap annuler • Q/E caméra • molette zoom • C recentrer • R recommencer"
 	_refresh_timeline_ui()
-	_refresh_objective_panel_ui()
-	_refresh_cell_info_ui()
 	_refresh_unit_card_ui()
 	_update_skill_buttons()
 	if not pending_action.is_empty():
@@ -3430,7 +2903,7 @@ func _predict_timeline_3d(limit: int = 5) -> Array[SporeUnitActor3D]:
 		result.append(active_actor)
 		for state: Dictionary in states:
 			if state["actor"] == active_actor:
-				state["ct"] = CombatMechanics.CT_AFTER_FULL_TURN
+				state["ct"] = CombatMechanics.action_end_ct(int(state["ct"]), true, true)
 				break
 	for _guard: int in range(64):
 		if result.size() >= limit or states.is_empty():
@@ -3468,7 +2941,7 @@ func _predict_timeline_3d(limit: int = 5) -> Array[SporeUnitActor3D]:
 		)
 		var chosen: Dictionary = ready[0]
 		result.append(chosen["actor"] as SporeUnitActor3D)
-		chosen["ct"] = CombatMechanics.CT_AFTER_FULL_TURN
+		chosen["ct"] = CombatMechanics.action_end_ct(int(chosen["ct"]), true, true)
 	return result
 
 
@@ -3489,8 +2962,14 @@ func _refresh_timeline_ui() -> void:
 	for actor: SporeUnitActor3D in predicted:
 		if actor == null or not actor.alive:
 			continue
-		var card: Panel = Panel.new()
-		card.custom_minimum_size = Vector2(38.0, 62.0)
+		var card: Button = Button.new()
+		card.custom_minimum_size = Vector2(44.0, 48.0)
+		card.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		card.focus_mode = Control.FOCUS_NONE
+		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_theme_font_size_override("font_size", 9)
+		var timing_text: String = "C%d" % int(actor.casting.get("remaining_ticks", 0)) if actor.is_casting() else "%d/%d" % [actor.ct, actor.effective_speed()]
+		card.text = "%s\n%s" % [actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper(), timing_text]
 		card.tooltip_text = "%s • CT %d • VIT %d%s" % [actor.display_name, actor.ct, actor.effective_speed(), " • CAST" if actor.is_casting() else ""]
 		var card_style: StyleBoxFlat = StyleBoxFlat.new()
 		card_style.bg_color = Color(0.16, 0.42, 0.62, 0.92) if actor.team == "player" else Color(0.60, 0.24, 0.22, 0.92)
@@ -3498,152 +2977,16 @@ func _refresh_timeline_ui() -> void:
 		card_style.corner_radius_top_right = 7
 		card_style.corner_radius_bottom_left = 7
 		card_style.corner_radius_bottom_right = 7
-		card_style.border_width_left = 1
-		card_style.border_width_top = 1
-		card_style.border_width_right = 1
-		card_style.border_width_bottom = 1
-		card_style.border_color = Color(0.08, 0.08, 0.10, 0.95)
 		if actor == active_actor:
 			card_style.border_width_left = 2
 			card_style.border_width_top = 2
 			card_style.border_width_right = 2
 			card_style.border_width_bottom = 2
 			card_style.border_color = Color(1.0, 0.82, 0.40, 1.0)
-		card.add_theme_stylebox_override("panel", card_style)
-		var portrait: TextureRect = TextureRect.new()
-		portrait.position = Vector2(5.0, 4.0)
-		portrait.size = Vector2(28.0, 28.0)
-		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		portrait.texture = actor.portrait_texture()
-		card.add_child(portrait)
-		var name_label: Label = Label.new()
-		name_label.position = Vector2(4.0, 34.0)
-		name_label.size = Vector2(30.0, 12.0)
-		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_label.add_theme_font_size_override("font_size", 8)
-		name_label.add_theme_color_override("font_color", Color(1.0, 0.96, 0.92, 1.0))
-		name_label.text = actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper()
-		card.add_child(name_label)
-		var timing_label: Label = Label.new()
-		timing_label.position = Vector2(3.0, 46.0)
-		timing_label.size = Vector2(32.0, 12.0)
-		timing_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		timing_label.add_theme_font_size_override("font_size", 8)
-		timing_label.add_theme_color_override("font_color", Color(0.90, 0.92, 0.96, 1.0))
-		timing_label.text = "C%d" % int(actor.casting.get("remaining_ticks", 0)) if actor.is_casting() else "%d/%d" % [actor.ct, actor.effective_speed()]
-		card.add_child(timing_label)
+		card.add_theme_stylebox_override("normal", card_style)
+		card.add_theme_stylebox_override("hover", card_style)
+		card.add_theme_stylebox_override("pressed", card_style)
 		_timeline_bar.add_child(card)
-
-
-func _refresh_objective_panel_ui() -> void:
-	if _objective_body == null:
-		return
-	var lines: PackedStringArray = PackedStringArray()
-	lines.append("Mission : %s" % mission_brief if not mission_brief.is_empty() else "Mission tactique")
-	if mission_objective == "crown":
-		if crown_carrier_id.is_empty():
-			lines.append("• Couronne au sol : %d,%d" % [crown_cell.x, crown_cell.y])
-			lines.append("• Étape suivante : la récupérer")
-		else:
-			var carrier: SporeUnitActor3D = _actor_by_unit_id(crown_carrier_id)
-			var carrier_name: String = carrier.display_name if carrier != null else crown_carrier_id
-			lines.append("• Couronne portée par %s" % carrier_name)
-			lines.append("• Étape suivante : atteindre la sortie")
-		lines.append("• Sortie : %d case(s)" % extraction_cells.size())
-	else:
-		lines.append("• Objectif : éliminer les ennemis")
-	lines.append("• Vinyles : %d/%d" % [bonus_collected, bonus_target_total])
-	lines.append("• Ennemis restants : %d" % _alive_team_count("enemy"))
-	var interactable_lines: PackedStringArray = _interactable_status_lines()
-	for line: String in interactable_lines:
-		lines.append("• %s" % line)
-	_objective_body.text = "\n".join(lines)
-
-
-func _refresh_cell_info_ui() -> void:
-	if _cell_body == null:
-		return
-	if map_root == null or not map_root.is_cell_valid(hovered_cell):
-		_cell_body.text = "Survole une case pour voir\nsa hauteur, ses rôles et\nles occupants éventuels."
-		return
-	var lines: PackedStringArray = PackedStringArray()
-	lines.append("Coordonnées : %d,%d" % [hovered_cell.x, hovered_cell.y])
-	lines.append("Hauteur : %d" % map_root.elevation_at(hovered_cell))
-	var tile: Node = map_root.tile_at(hovered_cell)
-	var terrain_type: String = String(tile.get("terrain_type")) if tile != null else "ground"
-	var terrain_label: String = _terrain_display_name(terrain_type)
-	if _is_cover_cell(hovered_cell):
-		terrain_label += " (%s)" % _cover_facing_name(hovered_cell)
-	lines.append("Terrain : %s" % terrain_label)
-	var mission_hint: String = _mission_cell_hint(hovered_cell)
-	if not mission_hint.is_empty():
-		lines.append("Rôle : %s" % mission_hint)
-	var occupant: SporeUnitActor3D = actors_by_cell.get(hovered_cell, null) as SporeUnitActor3D
-	if occupant != null:
-		lines.append("Occupant : %s" % occupant.display_name)
-		lines.append("PV/FP : %d/%d • %d/%d" % [occupant.hp, occupant.max_hp, occupant.focus, occupant.max_focus])
-	else:
-		lines.append("Occupant : —")
-	var zone_count: int = _persistent_zone_count_at(hovered_cell)
-	if zone_count > 0:
-		lines.append("Zone persistante : x%d" % zone_count)
-	if active_actor != null and input_mode == MODE_MOVE and reachable_cells.has(hovered_cell):
-		var path_len: int = maxi(0, preview_path_cells.size() - 1)
-		if path_len > 0:
-			lines.append("Déplacement prévu : %d pas" % path_len)
-	if active_actor != null and input_mode == MODE_ATTACK:
-		var target: SporeUnitActor3D = actors_by_cell.get(hovered_cell, null) as SporeUnitActor3D
-		if target != null and target.team != active_actor.team:
-			var details: Dictionary = _attack_damage_details(active_actor, target)
-			lines.append("Attaque : %d dég. • %d%%" % [int(details.get("damage", 0)), int(details.get("hit_chance", 0))])
-	_cell_body.text = "\n".join(lines)
-
-
-func _interactable_status_lines() -> PackedStringArray:
-	var lines: PackedStringArray = PackedStringArray()
-	for state_var: Variant in interactable_states.values():
-		if not (state_var is Dictionary):
-			continue
-		var state: Dictionary = state_var as Dictionary
-		var definition: Resource = state.get("definition", null) as Resource
-		if definition == null:
-			continue
-		var object_type: String = String(definition.get("object_type"))
-		var display_name: String = String(definition.get("display_name"))
-		if object_type == "door":
-			lines.append("%s : %s" % [display_name, "ouverte" if bool(state.get("active", false)) else "fermée"])
-		elif object_type == "switch":
-			lines.append("%s : %s" % [display_name, "activé" if bool(state.get("used", false)) else "intact"])
-		elif object_type == "chest":
-			lines.append("%s : %s" % [display_name, "ouvert" if bool(state.get("used", false)) else "fermé"])
-	return lines
-
-
-func _terrain_display_name(terrain_type: String) -> String:
-	match terrain_type:
-		"cover":
-			return "Couvert"
-		"obstacle":
-			return "Obstacle"
-		"hazard":
-			return "Spore"
-		"extraction":
-			return "Sortie"
-		"bonus":
-			return "Bonus"
-		"crown":
-			return "Couronne"
-	return "Sol"
-
-
-func _alive_team_count(team_name: String) -> int:
-	var total: int = 0
-	var source: Array[SporeUnitActor3D] = player_actors if team_name == "player" else enemy_actors
-	for actor: SporeUnitActor3D in source:
-		if actor != null and actor.alive:
-			total += 1
-	return total
 
 
 func _unit_card_actor() -> SporeUnitActor3D:
@@ -3673,17 +3016,18 @@ func _refresh_unit_card_ui() -> void:
 	if _unit_focus_bar != null:
 		_unit_focus_bar.max_value = maxi(1, actor.max_focus)
 		_unit_focus_bar.value = actor.focus
-		_unit_focus_bar.tooltip_text = "Focus %d/%d" % [actor.focus, actor.max_focus]
+		_unit_focus_bar.tooltip_text = "MP %d/%d" % [actor.focus, actor.max_focus]
 	var primary_name: String = _skill_display_name(actor.primary_skill)
 	var secondary_name: String = _skill_display_name(actor.secondary_skill)
 	var status_text: String = actor.status_display_text()
 	if status_text.is_empty():
 		status_text = "Aucun statut"
-	var reaction_text: String = "Aucune" if actor.reaction_type == "none" else "%s (%s)" % [actor.reaction_type, "prête" if actor.reaction_available() else "utilisée"]
+	var reaction_text: String = "Aucune" if actor.reaction_type == "none" else actor.reaction_type
+	var ability_text: String = "R:%s • S:%s • M:%s" % [reaction_text, actor.support_ability, actor.movement_ability]
 	var casting_text: String = ""
 	if actor.is_casting():
 		casting_text = "\nCAST %s • %dt" % [SkillCatalog.display_name(String(actor.casting.get("skill_id", ""))), maxi(0, int(actor.casting.get("remaining_ticks", 0)))]
-	_unit_card_body.text = "HP %d/%d   Focus %d/%d\nPUI.P %d   PUI.M %d   DEF.P %d   DEF.M %d\nMOV %d   RNG %d-%d   VIT %d   CT %d\nPRÉC %+d   ESQ %+d • %s\nFace %s • Réaction %s\nI. %s\nII. %s\n%s%s" % [actor.hp, actor.max_hp, actor.focus, actor.max_focus, actor.effective_physical_power(), actor.effective_magic_power(), actor.effective_physical_defense(), actor.effective_magic_defense(), actor.move_range, actor.attack_min_range, actor.attack_range, actor.effective_speed(), actor.ct, actor.effective_accuracy(), actor.effective_evasion(), actor.weapon_family.to_upper(), actor.facing_name(), reaction_text, primary_name, secondary_name, status_text, casting_text]
+	_unit_card_body.text = "HP %d/%d   MP %d/%d\nPUI.P %d   PUI.M %d   DEF.P %d   DEF.M %d\nMOV %d   RNG %d-%d   VIT %d   CT %d\nPRÉC %+d   ESQ %+d • %s\n%s\nFace %s\nI. %s\nII. %s\n%s%s" % [actor.hp, actor.max_hp, actor.focus, actor.max_focus, actor.effective_physical_power(), actor.effective_magic_power(), actor.effective_physical_defense(), actor.effective_magic_defense(), actor.effective_move_range(), actor.attack_min_range, actor.attack_range, actor.effective_speed(), actor.ct, actor.effective_accuracy(), actor.effective_evasion(), actor.weapon_family.to_upper(), ability_text, actor.facing_name(), primary_name, secondary_name, status_text, casting_text]
 
 
 func _skill_display_name(skill_id: String) -> String:
@@ -3714,8 +3058,7 @@ func _skill_button_text(skill_id: String, slot_label: String) -> String:
 	var skill: Resource = SkillCatalog.definition(skill_id)
 	if skill == null:
 		return "%s ?" % slot_label
-	var cooldown: int = active_actor.skill_cooldown(skill_id)
-	var suffix: String = " CD%d" % cooldown if cooldown > 0 else " %dFP" % int(skill.get("focus_cost"))
+	var suffix: String = " %dMP" % int(skill.get("focus_cost"))
 	var cast_ticks: int = int(skill.get("cast_time_ticks"))
 	if cast_ticks > 0:
 		suffix += " C%d" % cast_ticks
@@ -3884,7 +3227,7 @@ func _skill_preview_text(caster: SporeUnitActor3D, skill: Resource, anchor_cell:
 	var cast_ticks: int = int(skill.get("cast_time_ticks"))
 	var timing_suffix: String = " • CAST %d" % cast_ticks if cast_ticks > 0 else " • instantané"
 	var accuracy_suffix: String = " • précision %d" % int(skill.get("accuracy")) if bool(skill.get("uses_accuracy")) else " • garanti"
-	lines.append("%s • coût %d FP • CD %d%s%s" % [String(skill.get("display_name")), int(skill.get("focus_cost")), int(skill.get("cooldown_rounds")), timing_suffix, accuracy_suffix])
+	lines.append("%s • coût %d MP%s%s" % [String(skill.get("display_name")), int(skill.get("focus_cost")), timing_suffix, accuracy_suffix])
 	lines.append("Point ciblé : %d,%d h%d • zone %d case(s)" % [anchor_cell.x, anchor_cell.y, map_root.elevation_at(anchor_cell), _skill_area_cells(skill, anchor_cell, caster.cell).size()])
 	var previews: Dictionary = _skill_target_previews(caster, skill, anchor_cell)
 	var ordered_targets: Array = previews.keys()
@@ -3922,7 +3265,7 @@ func _skill_preview_text(caster: SporeUnitActor3D, skill: Resource, anchor_cell:
 			pieces.append("réaction +1")
 		var focus_delta: int = int(data.get("focus", 0))
 		if focus_delta != 0:
-			pieces.append("%+d FP" % focus_delta)
+			pieces.append("%+d MP" % focus_delta)
 		var displacement: String = String(data.get("displacement", ""))
 		if not displacement.is_empty():
 			pieces.append(displacement)
