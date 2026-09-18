@@ -6,6 +6,7 @@
 script = ExtResource("1")
 hero_id = "preset"
 target_visual_id = "preset"
+authoring_mode = "free"
 display_name = "Colosse gardien"
 presentation_style = "masculine"
 archetype_style = "warrior"

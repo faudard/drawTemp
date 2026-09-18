@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" format=3 uid="uid://cyrolc2s7pkm6"]
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" format=3 uid="uid://bxx507pf3tbvv"]
 
 [ext_resource type="Script" uid="uid://clpjjfnx66wg4" path="res://scripts/data/hero_appearance_definition.gd" id="1_appearance"]
 
@@ -12,9 +12,9 @@ body_style = "rugged"
 head_shape_style = "mutant"
 ears_style = "pointed"
 horns_style = "short"
-eyes_style = "narrow"
+eyes_style = "big"
 iris_style = "glow"
-pupil_style = "slit"
+pupil_style = "diamond"
 teeth_style = "single_fang"
 skin_spots_style = "freckles"
 mark_style = "scar_left"

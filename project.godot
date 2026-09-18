@@ -1,20 +1,14 @@
 ; Engine configuration file.
-; It's best edited using the editor UI and not directly,
-; since the parameters that go here are not all obvious.
-;
-; Format:
-;   [section] ; section goes between []
-;   param=value ; assign values to parameters
+; Sporebound Tactics - gameplay-first prototype
 
 config_version=5
 
 [application]
 
-config/name="Sporebound Tactics - V1.29 FFT Magic Charge"
-run/main_scene="res://main.tscn"
+config/name="Sporebound Tactics - V1.28 Guided Kit Library"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="SporeboundTactics"
-config/features=PackedStringArray("4.7")
+run/main_scene="res://main.tscn"
 
 [display]
 
@@ -24,15 +18,16 @@ window/size/window_width_override=1280
 window/size/window_height_override=760
 window/stretch/mode="canvas_items"
 
-[editor_plugins]
+[rendering]
 
-enabled=PackedStringArray("res://addons/sporebound_studio/plugin.cfg")
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
 
 [gui]
 
 theme/default_font_multichannel_signed_distance_field=true
 
-[rendering]
+[editor_plugins]
 
-renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
+enabled=PackedStringArray("res://addons/sporebound_studio/plugin.cfg")

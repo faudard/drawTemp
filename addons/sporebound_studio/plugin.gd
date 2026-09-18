@@ -1,7 +1,7 @@
 @tool
 extends EditorPlugin
 
-## V1.26.2: Hero Creator is isolated from the rest of Sporebound Studio.
+## V1.28: Library-Grounded Hero Creator remains isolated from the rest of Sporebound Studio.
 ## The plugin can therefore start even if an optional editor tool has a parser error.
 
 const HERO_CREATOR_SCRIPT_PATH := "res://addons/sporebound_studio/hero_customizer_editor.gd"

@@ -15,6 +15,10 @@ const EXPORT_DIR := "res://data/hero_exports/"
 const PALETTE_DIR := "res://data/hero_palettes/"
 const FAVORITES_CONFIG := "user://sporebound_hero_creator_favorites.cfg"
 const HISTORY_LIMIT := 30
+const AUTHORING_MODES := [
+	["Guidé — rendu bibliothèque", "guided"],
+	["Libre — couches modulaires", "free"],
+]
 const OPTIONAL_CATEGORIES := ["head_pattern", "ears", "horns", "hair", "iris", "pupil", "brows", "nose", "mouth", "teeth", "facial_hair", "skin_spots", "mark", "mark_2", "mark_3", "earrings", "jewelry", "accessory", "accessory_2", "accessory_3", "weapon"]
 const PART_SPECS := [
 	["body", "Corps"],
@@ -189,10 +193,18 @@ const FRIENDLY_NAMES := {
 	"vest": "Gilet", "hoodie": "Sweat", "armor": "Armure", "poncho": "Poncho", "shorts": "Short", "trousers": "Pantalon", "kilt": "Kilt",
 	"scarf": "Écharpe", "goggles": "Lunettes", "badge": "Badge", "backpack": "Sac à dos",
 	"sword": "Épée", "rifle": "Fusil", "wand": "Baguette", "hammer": "Marteau", "none": "Aucun",
+	"forest_scout": "Scout forestier", "forest_guardian": "Gardien nature", "nature_mage": "Mage nature",
 }
 
 var hero_select: OptionButton
 var display_name_edit: LineEdit
+var authoring_mode_select: OptionButton
+var library_kit_select: OptionButton
+var guided_tint_check: CheckBox
+var auto_fix_check: CheckBox
+var mode_note_label: Label
+var kit_info_label: Label
+var kit_thumbnail_rect: TextureRect
 var presentation_select: OptionButton
 var archetype_select: OptionButton
 var size_preset_select: OptionButton
@@ -243,7 +255,7 @@ var loading: bool = false
 
 
 func _ready() -> void:
-	name = "Hero Creator Expressions & Profiles"
+	name = "Hero Creator Library-Grounded"
 	_load_favorites()
 	_build_ui()
 	refresh()
@@ -260,6 +272,7 @@ func save_external_data() -> void:
 func refresh() -> void:
 	if dirty:
 		_save_definition(false)
+	_refresh_kits()
 	_refresh_heroes()
 	_refresh_presets()
 	_refresh_exports()
@@ -279,11 +292,11 @@ func _build_ui() -> void:
 	split.add_child(left)
 
 	var title: Label = Label.new()
-	title.text = "HERO CREATOR EXPRESSIONS & PROFILES — V1.26"
+	title.text = "HERO CREATOR LIBRARY-GROUNDED — V1.28"
 	title.add_theme_font_size_override("font_size", 18)
 	left.add_child(title)
 	var intro: Label = Label.new()
-	intro.text = "V1.26 donne une vraie personnalité animée au héros : expressions différentes pour Idle/Move/Attack/Cast/Hit/KO, portrait configurable, silhouettes fortes, verrou de proportions et profils de palette réutilisables."
+	intro.text = "V1.28 étend le mode guidé avec une vraie bibliothèque de kits artistiques cohérents et un suivi de complétude des états. Le mode Libre conserve les couches modulaires pour les expérimentations."
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	left.add_child(intro)
 
@@ -417,7 +430,7 @@ func _build_ui() -> void:
 	preview.group_reset_requested.connect(_reset_edit_group)
 	right.add_child(preview)
 	var help: Label = Label.new()
-	help.text = "ÉDITION DIRECTE : clique/glisse pour déplacer, poignées pour resize/rotation. V1.26 : sélectionne aussi Idle/Move/Attack/Cast/Hit/KO pour prévisualiser l’expression réellement bake dans chaque colonne de l’atlas."
+	help.text = "MODE GUIDÉ : le kit bibliothèque est déjà proportionné et ancré. MODE LIBRE : clique/glisse pour déplacer les couches et utilise les poignées de resize/rotation."
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(help)
 
@@ -427,6 +440,38 @@ func _build_identity_tab(tabs: TabContainer) -> void:
 	var grid: GridContainer = GridContainer.new()
 	grid.columns = 2
 	panel.add_child(grid)
+	_add_label(grid, "Mode de création")
+	authoring_mode_select = _metadata_option(AUTHORING_MODES)
+	authoring_mode_select.item_selected.connect(_on_authoring_mode_changed)
+	grid.add_child(authoring_mode_select)
+	_add_label(grid, "Kit bibliothèque")
+	library_kit_select = OptionButton.new()
+	library_kit_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	library_kit_select.item_selected.connect(_on_library_kit_changed)
+	grid.add_child(library_kit_select)
+	var kit_info_row: HBoxContainer = HBoxContainer.new()
+	panel.add_child(kit_info_row)
+	kit_thumbnail_rect = TextureRect.new()
+	kit_thumbnail_rect.custom_minimum_size = Vector2(112.0, 112.0)
+	kit_thumbnail_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	kit_thumbnail_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	kit_info_row.add_child(kit_thumbnail_rect)
+	kit_info_label = Label.new()
+	kit_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	kit_info_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	kit_info_label.custom_minimum_size.y = 92.0
+	kit_info_row.add_child(kit_info_label)
+	_add_label(grid, "Teinte globale du kit")
+	guided_tint_check = CheckBox.new()
+	guided_tint_check.text = "Autoriser (désactivé par défaut)"
+	guided_tint_check.toggled.connect(_on_live_changed)
+	grid.add_child(guided_tint_check)
+	_add_label(grid, "Sécurité à la génération")
+	auto_fix_check = CheckBox.new()
+	auto_fix_check.text = "Auto-Fix avant génération"
+	auto_fix_check.button_pressed = true
+	auto_fix_check.toggled.connect(_on_live_changed)
+	grid.add_child(auto_fix_check)
 	_add_label(grid, "Présentation")
 	presentation_select = _metadata_option(PRESENTATIONS)
 	presentation_select.item_selected.connect(_on_presentation_changed)
@@ -435,10 +480,14 @@ func _build_identity_tab(tabs: TabContainer) -> void:
 	archetype_select = _metadata_option(ARCHETYPES)
 	archetype_select.item_selected.connect(_on_archetype_changed)
 	grid.add_child(archetype_select)
-	var note: Label = Label.new()
-	note.text = "Présentation et style appliquent un preset visible, mais ne verrouillent rien : tu peux ensuite changer librement le corps, les yeux, la barbe, les proportions ou l'équipement."
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	panel.add_child(note)
+	var auto_fix_button: Button = Button.new()
+	auto_fix_button.text = "AUTO-FIX LOOK — revenir à un rendu propre"
+	auto_fix_button.pressed.connect(_auto_fix_look)
+	panel.add_child(auto_fix_button)
+	mode_note_label = Label.new()
+	mode_note_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(mode_note_label)
+	_update_mode_note()
 
 
 func _build_expressions_tab(tabs: TabContainer) -> void:
@@ -950,6 +999,10 @@ func _new_appearance(hero_id: String) -> Resource:
 	appearance.set("hero_id", hero_id)
 	appearance.set("target_visual_id", hero_id)
 	appearance.set("display_name", "%s personnalisé" % hero_id.capitalize())
+	appearance.set("authoring_mode", "guided")
+	appearance.set("library_kit_id", "forest_scout")
+	appearance.set("guided_apply_global_tint", false)
+	appearance.set("auto_fix_on_generate", true)
 	appearance.set("generated_sprite_sheet_path", "res://assets/generated/heroes/%s_custom.png" % hero_id)
 	appearance.set("generated_portrait_path", "res://assets/generated/heroes/%s_custom_portrait.png" % hero_id)
 	return appearance
@@ -1051,6 +1104,13 @@ func _load_current_into_ui() -> void:
 		return
 	loading = true
 	display_name_edit.text = String(current.get("display_name"))
+	_select_metadata(authoring_mode_select, _string_resource_property(current, "authoring_mode", "guided"))
+	_refresh_kits()
+	_select_metadata(library_kit_select, _string_resource_property(current, "library_kit_id", "forest_scout"))
+	if guided_tint_check != null:
+		guided_tint_check.button_pressed = _bool_resource_property(current, "guided_apply_global_tint", false)
+	if auto_fix_check != null:
+		auto_fix_check.button_pressed = _bool_resource_property(current, "auto_fix_on_generate", true)
 	_select_metadata(presentation_select, String(current.get("presentation_style")))
 	_select_metadata(archetype_select, String(current.get("archetype_style")))
 	_select_metadata(size_preset_select, String(current.get("size_preset")))
@@ -1128,15 +1188,25 @@ func _load_current_into_ui() -> void:
 	_sync_all_galleries()
 	preview.set_appearance(current)
 	_sync_preview_locks()
+	_update_mode_note()
+	_update_mode_controls()
 	if edit_group_select != null:
 		preview.set_selected_edit_group(_selected_metadata(edit_group_select))
-	_set_status("Prêt — V1.26. Expressions par état, portraits, silhouettes fortes et palettes réutilisables sont actifs.", false)
+	_set_status("Prêt — V1.28. Le mode guidé privilégie un rendu cohérent avec la bibliothèque ; le mode libre conserve la personnalisation couche par couche.", false)
 
 
 func _write_ui_to_current() -> void:
 	if current == null:
 		return
 	current.set("display_name", display_name_edit.text.strip_edges())
+	if authoring_mode_select != null:
+		current.set("authoring_mode", _selected_metadata(authoring_mode_select))
+	if library_kit_select != null and library_kit_select.item_count > 0 and library_kit_select.selected >= 0:
+		current.set("library_kit_id", _selected_metadata(library_kit_select))
+	if guided_tint_check != null:
+		current.set("guided_apply_global_tint", guided_tint_check.button_pressed)
+	if auto_fix_check != null:
+		current.set("auto_fix_on_generate", auto_fix_check.button_pressed)
 	current.set("presentation_style", _selected_metadata(presentation_select))
 	current.set("archetype_style", _selected_metadata(archetype_select))
 	current.set("size_preset", _selected_metadata(size_preset_select))
@@ -1237,6 +1307,208 @@ func _on_live_changed(_value: Variant = null) -> void:
 	preview.set_appearance(current)
 	_sync_preview_locks()
 	_set_status("Modifications non enregistrées.", false)
+
+
+func _refresh_kits() -> void:
+	if library_kit_select == null:
+		return
+	var wanted: String = "forest_scout"
+	if library_kit_select.item_count > 0 and library_kit_select.selected >= 0:
+		wanted = String(library_kit_select.get_item_metadata(library_kit_select.selected))
+	library_kit_select.clear()
+	var kit_ids: PackedStringArray = HERO_COMPOSITOR_SCRIPT.available_kit_ids()
+	for kit_id: String in kit_ids:
+		var metadata: Dictionary = HERO_COMPOSITOR_SCRIPT.kit_metadata(kit_id)
+		var display_name: String = String(metadata.get("display_name", _friendly_name(kit_id)))
+		library_kit_select.add_item(display_name)
+		library_kit_select.set_item_metadata(library_kit_select.item_count - 1, kit_id)
+	var wanted_index: int = _metadata_index(library_kit_select, wanted)
+	if wanted_index < 0:
+		wanted_index = _metadata_index(library_kit_select, "forest_scout")
+	if wanted_index < 0 and library_kit_select.item_count > 0:
+		wanted_index = 0
+	if wanted_index >= 0:
+		library_kit_select.select(wanted_index)
+	_update_kit_info()
+
+
+func _on_authoring_mode_changed(_index: int) -> void:
+	if loading:
+		return
+	_update_mode_note()
+	_update_mode_controls()
+	if _selected_metadata(authoring_mode_select) == "guided":
+		_apply_guided_safe_values(false)
+	_on_live_changed()
+
+
+func _on_library_kit_changed(_index: int) -> void:
+	if loading:
+		return
+	_update_kit_info()
+	_on_live_changed()
+
+
+func _update_kit_info() -> void:
+	if kit_info_label == null:
+		return
+	if library_kit_select == null or library_kit_select.item_count == 0 or library_kit_select.selected < 0:
+		kit_info_label.text = "Aucun kit artistique complet disponible."
+		return
+	var kit_id: String = String(library_kit_select.get_item_metadata(library_kit_select.selected))
+	var metadata: Dictionary = HERO_COMPOSITOR_SCRIPT.kit_metadata(kit_id)
+	var role: String = String(metadata.get("role", "adventurer")).replace("_", " ").capitalize()
+	var description: String = String(metadata.get("description", ""))
+	var tags_text: String = ""
+	var raw_tags: Variant = metadata.get("tags", [])
+	if raw_tags is Array:
+		var tags: Array = raw_tags
+		var tag_strings: PackedStringArray = PackedStringArray()
+		for tag_value: Variant in tags:
+			tag_strings.append(String(tag_value))
+		tags_text = ", ".join(tag_strings)
+	if kit_thumbnail_rect != null:
+		var thumbnail_image: Image = HERO_COMPOSITOR_SCRIPT.compose_kit_thumbnail(kit_id, "front")
+		kit_thumbnail_rect.texture = ImageTexture.create_from_image(thumbnail_image)
+	var dedicated_count: int = int(metadata.get("dedicated_state_count", 0))
+	var state_note: String = "%d/%d états avec dessin dédié" % [dedicated_count, HERO_COMPOSITOR_SCRIPT.STATES.size()]
+	if dedicated_count < HERO_COMPOSITOR_SCRIPT.STATES.size():
+		state_note += " — autres états = fallback Idle"
+	kit_info_label.text = "%s • %s%s\n%s" % [role, state_note, (" • " + tags_text) if not tags_text.is_empty() else "", description]
+
+
+func _update_mode_note() -> void:
+	if mode_note_label == null:
+		return
+	var mode: String = _selected_metadata(authoring_mode_select) if authoring_mode_select != null and authoring_mode_select.item_count > 0 else "guided"
+	if mode == "guided":
+		mode_note_label.text = "GUIDÉ : le personnage vient d’un kit artistique complet 4-directions. Les couches libres ne sont jamais empilées dessus. Les états sans image dédiée utilisent volontairement l’Idle du kit au lieu d’inventer une animation dégradée."
+	else:
+		mode_note_label.text = "LIBRE : toutes les couches V1.26 sont actives. Ce mode est volontairement permissif et peut produire des combinaisons incohérentes ; utilise Auto-Fix pour revenir au mode guidé."
+
+
+func _update_mode_controls() -> void:
+	var guided: bool = authoring_mode_select != null and _selected_metadata(authoring_mode_select) == "guided"
+	if library_kit_select != null:
+		library_kit_select.disabled = not guided
+	if guided_tint_check != null:
+		guided_tint_check.disabled = not guided
+	if presentation_select != null:
+		presentation_select.disabled = guided
+	if archetype_select != null:
+		archetype_select.disabled = guided
+	if asymmetry_check != null:
+		asymmetry_check.disabled = guided
+	if expressions_enabled_check != null:
+		expressions_enabled_check.disabled = guided
+	for raw_expression: Variant in expression_controls.values():
+		var expression_option: OptionButton = raw_expression as OptionButton
+		if expression_option != null:
+			expression_option.disabled = guided
+	for raw_option: Variant in part_controls.values():
+		var option: OptionButton = raw_option as OptionButton
+		if option != null:
+			option.disabled = guided
+	for property_name: String in color_controls.keys():
+		var picker: ColorPickerButton = color_controls.get(property_name) as ColorPickerButton
+		if picker != null:
+			picker.disabled = guided and property_name != "global_tint"
+	for property_name: String in morph_controls.keys():
+		var morph_spin: SpinBox = morph_controls.get(property_name) as SpinBox
+		if morph_spin != null:
+			morph_spin.editable = not guided or property_name == "global_scale"
+	for property_name: String in offset_controls.keys():
+		var offset_pair: Dictionary = offset_controls.get(property_name, {})
+		var x_spin: SpinBox = offset_pair.get("x") as SpinBox
+		var y_spin: SpinBox = offset_pair.get("y") as SpinBox
+		var offset_enabled: bool = not guided or property_name == "body_offset"
+		if x_spin != null:
+			x_spin.editable = offset_enabled
+		if y_spin != null:
+			y_spin.editable = offset_enabled
+	for raw_controls: Variant in direct_transform_controls.values():
+		if raw_controls is Dictionary:
+			var controls: Dictionary = raw_controls
+			var scale_spin: SpinBox = controls.get("scale") as SpinBox
+			var rotation_spin: SpinBox = controls.get("rotation") as SpinBox
+			var lock_check: CheckBox = controls.get("lock") as CheckBox
+			if scale_spin != null:
+				scale_spin.editable = not guided
+			if rotation_spin != null:
+				rotation_spin.editable = not guided
+			if lock_check != null:
+				lock_check.disabled = guided
+	for raw_expression: Variant in expression_controls.values():
+		var expression_option: OptionButton = raw_expression as OptionButton
+		if expression_option != null:
+			expression_option.disabled = guided
+	if expressions_enabled_check != null:
+		expressions_enabled_check.disabled = guided
+	if edit_group_select != null:
+		edit_group_select.disabled = guided
+		if guided:
+			_select_metadata(edit_group_select, "body")
+			if preview != null:
+				preview.set_selected_edit_group("body")
+
+
+func _apply_guided_safe_values(mark_dirty: bool = true) -> void:
+	var was_loading: bool = loading
+	loading = true
+	if authoring_mode_select != null:
+		_select_metadata(authoring_mode_select, "guided")
+	_refresh_kits()
+	if library_kit_select != null and library_kit_select.item_count > 0 and library_kit_select.selected < 0:
+		_select_metadata(library_kit_select, "forest_scout")
+	_select_metadata(size_preset_select, "medium")
+	_select_metadata(silhouette_preset_select, "balanced")
+	var guided_default_scale: float = 1.0
+	if library_kit_select != null and library_kit_select.item_count > 0 and library_kit_select.selected >= 0:
+		var selected_kit_id: String = String(library_kit_select.get_item_metadata(library_kit_select.selected))
+		var selected_kit_metadata: Dictionary = HERO_COMPOSITOR_SCRIPT.kit_metadata(selected_kit_id)
+		guided_default_scale = clampf(float(selected_kit_metadata.get("default_scale", 1.0)), 0.90, 1.10)
+		var preferred_portrait: String = String(selected_kit_metadata.get("preferred_portrait_direction", "front"))
+		if portrait_direction_select != null:
+			_select_metadata(portrait_direction_select, preferred_portrait)
+	_set_morph_value("global_scale", guided_default_scale)
+	_set_morph_value("body_width_scale", 1.0)
+	_set_morph_value("body_height_scale", 1.0)
+	_set_morph_value("head_scale", 1.0)
+	_set_morph_value("head_width_scale", 1.0)
+	_reset_offsets(false)
+	_reset_direct_transforms(false)
+	if asymmetry_check != null:
+		asymmetry_check.button_pressed = false
+	if guided_tint_check != null:
+		guided_tint_check.button_pressed = false
+	if scale_edit != null:
+		scale_edit.value = 0.5
+	loading = was_loading
+	_update_mode_note()
+	_update_mode_controls()
+	if mark_dirty and not loading:
+		_on_live_changed()
+
+
+func _auto_fix_look() -> void:
+	if current == null:
+		return
+	_push_undo_snapshot()
+	_apply_guided_safe_values(true)
+	_set_status("Auto-Fix V1.28 appliqué : mode guidé, proportions sûres, offsets et transforms remis à zéro.", false)
+
+
+func _bool_resource_property(resource: Resource, property_name: String, fallback: bool) -> bool:
+	var value: Variant = resource.get(property_name)
+	return fallback if value == null else bool(value)
+
+
+func _string_resource_property(resource: Resource, property_name: String, fallback: String) -> String:
+	var value: Variant = resource.get(property_name)
+	if value == null:
+		return fallback
+	var text: String = String(value)
+	return fallback if text.is_empty() else text
 
 
 func _on_presentation_changed(index: int) -> void:
@@ -1500,6 +1772,8 @@ func _sync_preview_locks() -> void:
 func _save_definition(generate: bool = false) -> void:
 	if current == null or current_path.is_empty():
 		return
+	if generate and authoring_mode_select != null and _selected_metadata(authoring_mode_select) == "guided" and auto_fix_check != null and auto_fix_check.button_pressed:
+		_apply_guided_safe_values(false)
 	_write_ui_to_current()
 	var absolute_dir: String = ProjectSettings.globalize_path(APPEARANCE_DIR)
 	if not DirAccess.dir_exists_absolute(absolute_dir):
@@ -1510,7 +1784,7 @@ func _save_definition(generate: bool = false) -> void:
 		return
 	dirty = false
 	if not generate:
-		_set_status("Apparence V1.26 enregistrée dans %s" % current_path, false)
+		_set_status("Apparence V1.28 enregistrée dans %s" % current_path, false)
 		return
 	var result: Dictionary = HERO_COMPOSITOR_SCRIPT.apply_to_visual(current)
 	if not bool(result.get("ok", false)):
@@ -1531,12 +1805,23 @@ func _save_definition(generate: bool = false) -> void:
 				filesystem.reimport_files(generated_paths)
 			else:
 				filesystem.scan()
-	_set_status("Héros généré : look V1.26 appliqué au visuel '%s'." % String(current.get("target_visual_id")), false)
+	_set_status("Héros généré : look V1.28 appliqué au visuel '%s'." % String(current.get("target_visual_id")), false)
 	library_changed.emit()
 
 
 func _randomize() -> void:
 	if current == null:
+		return
+	if authoring_mode_select != null and _selected_metadata(authoring_mode_select) == "guided":
+		_push_undo_snapshot()
+		loading = true
+		_refresh_kits()
+		if library_kit_select != null and library_kit_select.item_count > 0:
+			library_kit_select.select(randi_range(0, library_kit_select.item_count - 1))
+		_apply_guided_safe_values(false)
+		loading = false
+		_on_live_changed()
+		_set_status("Mode guidé : kit bibliothèque cohérent sélectionné et proportions sécurisées.", false)
 		return
 	loading = true
 	presentation_select.select(randi_range(0, presentation_select.item_count - 1))
@@ -1640,7 +1925,7 @@ func _randomize() -> void:
 	loading = false
 	_sync_all_galleries()
 	_on_live_changed()
-	_set_status("Look aléatoire V1.26 généré : visage détaillé, silhouette, expressions et palette restent modifiables.", false)
+	_set_status("Look aléatoire V1.28 généré. En mode guidé, seuls des kits artistiques cohérents sont choisis ; en mode libre, toutes les couches restent disponibles.", false)
 
 
 func _random_select_part(category: String, allow_none: bool, none_probability: float = 0.0) -> void:
@@ -1675,7 +1960,7 @@ func _reset_current() -> void:
 	_populate_part_options()
 	_load_current_into_ui()
 	dirty = true
-	_set_status("Valeurs V1.26 par défaut restaurées — non enregistrées.", false)
+	_set_status("Valeurs V1.28 par défaut restaurées — non enregistrées.", false)
 
 
 func _select_part(category: String, part_id: String) -> void:

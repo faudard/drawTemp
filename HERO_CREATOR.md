@@ -1,57 +1,59 @@
-# Sporebound Studio — Hero Creator Expressions & Profiles (V1.26)
+# Sporebound Hero Creator — V1.28 Library-Grounded
 
-V1.26 conserve toute la personnalisation V1.25 et rend enfin les six colonnes de l’atlas visuellement distinctes. Le runtime de combat reste inchangé : le Hero Creator bake toujours un atlas standard 4 directions × 6 états.
+V1.28 change la priorité du créateur : le rendu doit d'abord rester cohérent avec la direction artistique Sporebound.
 
-## Nouveautés V1.26
+## Deux modes
 
-- expressions indépendantes pour **Idle, Move, Attack, Cast, Hit et KO** ;
-- neuf profils d’expression : Base, Joyeux, Concentré, Agressif, Mystique, Blessé, KO, Héroïque et Malicieux ;
-- aperçu direct de chaque état dans le panneau de droite ;
-- portrait avec expression, direction, zoom et décalage choisis indépendamment ;
-- presets de silhouette : Équilibré, Chibi, Colosse, Élancé, Gros spore et Tank ;
-- verrou de proportions pour lier largeur/hauteur du corps et taille/largeur du spore ;
-- profils de palette séparés du look : recolorer sans toucher aux pièces, à la morphologie ou à l’identité ;
-- quatre palettes fournies : Écarlate & Or, Arcanique violette, Mousse forestière et Cuivre toxique ;
-- randomizer mis à jour avec silhouette et expressions cohérentes.
+### Guidé — rendu bibliothèque
 
-## Expressions et atlas
+Le héros est rendu depuis un **kit artistique complet** en quatre directions. Les anciennes couches modulaires ne sont pas empilées dessus, ce qui évite les yeux/barbes/cornes/armes mal ancrés et l'effet « stickers ».
 
-Les overrides d’expression ne remplacent que les couches du visage concernées (yeux, iris, pupilles, sourcils, bouche et éventuellement dents). Les cheveux, cornes, cicatrices, équipement et morphologie restent identiques.
+Le kit fourni est **Scout forestier** (`forest_scout`). Il reprend le langage visuel défini pour Momo : chapeau rouge-orangé à taches crème, corps compact, foulard/feuilles, cuir/bois et lance.
 
-Par défaut :
+Le mode guidé conserve uniquement les réglages sûrs :
 
-- Idle : Héroïque
-- Move : Concentré
-- Attack : Agressif
-- Cast : Mystique
-- Hit : Blessé
-- KO : KO
-- Portrait : Joyeux
+- kit bibliothèque ;
+- Petit / Moyen / Grand ;
+- échelle globale limitée par le compositeur ;
+- léger décalage global du personnage ;
+- portrait et échelle runtime ;
+- teinte globale optionnelle, désactivée par défaut.
 
-Désactiver **Expressions animées** remet toutes les colonnes sur l’apparence de base.
+Le bouton **AUTO-FIX LOOK** revient immédiatement à ces valeurs sûres.
 
-## Workflow conseillé
+### Libre — couches modulaires
 
-1. Construire le héros normalement dans les onglets Tête, Visage et Corps.
-2. Choisir une silhouette forte dans **Morphologie**.
-3. Ouvrir **Expressions / États** et régler les six états.
-4. Dans l’aperçu, sélectionner successivement Idle/Move/Attack/Cast/Hit/KO.
-5. Choisir l’expression et la direction du portrait.
-6. Optionnel : appliquer un profil couleur sans toucher au reste du look.
-7. Sauver puis **Générer / appliquer au héros**.
+Le workflow V1.26 reste disponible : tête, yeux, iris, barbe, marques, vêtements, trois accessoires, arme, asymétrie, offsets, resize et rotation. Ce mode est volontairement permissif.
 
-## Compatibilité
+## Ajouter un kit de la bibliothèque
 
-Les apparences V1.19 à V1.25 restent chargeables. Les nouveaux champs disposent de valeurs par défaut et le format du `SporeUnitVisualDefinition` n’est pas modifié.
+Créer `assets/hero_kits/<kit_id>/` avec :
 
-## V1.26.1 — chargement du plugin
+- `front.png`
+- `right.png`
+- `back.png`
+- `left.png`
 
-Le bootstrap de Sporebound Studio est désormais tolérant aux erreurs des modules optionnels.
+Format recommandé : PNG RGBA 192×192, personnage centré et ancré vers le bas du cadre.
 
-1. Ouvrir le projet avec Godot 4.7.1.
-2. Aller dans **Projet > Paramètres du projet > Plugins**.
-3. Activer **Sporebound Studio 1.26.1**.
-4. Le bouton **Sporebound Studio** apparaît dans le panneau inférieur de l'éditeur.
-5. Le Studio complet est chargé si tous ses modules sont valides. Si un module optionnel échoue, le plugin tente automatiquement d'ouvrir **Hero Creator** seul.
+Des variantes d'état sont facultatives : `front_attack.png`, `right_cast.png`, `back_ko.png`, etc. Si une variante n'existe pas, le compositeur reprend automatiquement la vue directionnelle générique.
 
-Le plugin ne doit plus être entièrement désactivé par une erreur d'un outil de map ou d'inspecteur.
+Les dossiers valides apparaissent automatiquement dans **Kit bibliothèque** : aucune modification GDScript n'est nécessaire.
+
+## Génération
+
+Le format runtime ne change pas :
+
+- portrait : 192×192 ;
+- atlas : 1152×768 ;
+- 6 colonnes : Idle, Move, Attack, Cast, Hit, KO ;
+- 4 lignes : Front, Right, Back, Left.
+
+Le `SporeUnitVisualDefinition` existant reste compatible.
+
+
+## V1.28 — Guided Kit Library
+
+The guided mode now exposes an actual kit library with a thumbnail and metadata. Bundled kits are Scout forestier, Gardien nature, and Mage nature. Each kit is validated for all four directions. The editor reports how many combat states have dedicated drawings; missing states explicitly reuse Idle so the renderer never invents a distorted modular composite.
+
+Add a new kit by creating `assets/hero_kits/<id>/front.png`, `right.png`, `back.png`, `left.png`, optionally `thumbnail.png` and `kit.json`. State-specific art follows `<direction>_<state>.png`.

@@ -6,11 +6,8 @@
 script = ExtResource("1")
 id = "slowed"
 display_name = "Ralenti"
-description = "CT divisé par deux pendant 24 clockticks."
+description = "-1 MVT pendant une activation."
 color = Color(0.55, 0.76, 0.96, 1)
 vfx_id = "spore_burst"
-duration_activations = 0
-movement_delta = 0
-duration_clockticks = 24
-ct_rate_percent = 50
-opposed_status_id = "haste"
+duration_activations = 1
+movement_delta = -1

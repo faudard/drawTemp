@@ -6,11 +6,8 @@
 script = ExtResource("1")
 id = "haste"
 display_name = "Tempo+"
-description = "CT +50% pendant 32 clockticks."
+description = "+1 MVT pendant 2 activations."
 color = Color(0.43, 0.92, 0.93, 1)
 vfx_id = "spore_burst"
-duration_activations = 0
-movement_delta = 0
-duration_clockticks = 32
-ct_rate_percent = 150
-opposed_status_id = "slowed"
+duration_activations = 2
+movement_delta = 1

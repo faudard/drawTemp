@@ -3,6 +3,7 @@ class_name SporeHeroCompositor
 extends RefCounted
 
 const PART_ROOT := "res://assets/hero_parts/"
+const KIT_ROOT := "res://assets/hero_kits/"
 const VISUAL_DIR := "res://data/visuals/units/"
 const FRAME_SIZE := Vector2i(192, 192)
 const DIRECTIONS := ["front", "right", "back", "left"]
@@ -45,6 +46,118 @@ const ACCESSORY_ANCHOR := Vector2(96.0, 112.0)
 const WEAPON_ANCHOR := Vector2(96.0, 128.0)
 const GLOBAL_ANCHOR := Vector2(96.0, 126.0)
 static var _thumbnail_cache: Dictionary = {}
+static var _kit_metadata_cache: Dictionary = {}
+
+
+static func available_kit_ids() -> PackedStringArray:
+	var result := PackedStringArray()
+	var directory: DirAccess = DirAccess.open(KIT_ROOT)
+	if directory == null:
+		return result
+	for directory_name: String in directory.get_directories():
+		if kit_has_all_directions(directory_name):
+			result.append(directory_name)
+	result.sort()
+	return result
+
+
+static func kit_has_all_directions(kit_id: String) -> bool:
+	if kit_id.is_empty():
+		return false
+	for direction: String in DIRECTIONS:
+		if not FileAccess.file_exists("%s%s/%s.png" % [KIT_ROOT, kit_id, direction]):
+			return false
+	return true
+
+
+static func kit_metadata(kit_id: String) -> Dictionary:
+	if kit_id.is_empty():
+		return {}
+	if _kit_metadata_cache.has(kit_id):
+		var cached: Variant = _kit_metadata_cache[kit_id]
+		if cached is Dictionary:
+			var cached_dictionary: Dictionary = cached
+			return cached_dictionary.duplicate(true)
+	var metadata: Dictionary = {
+		"id": kit_id,
+		"display_name": kit_id.replace("_", " ").capitalize(),
+		"role": "adventurer",
+		"description": "",
+		"tags": [],
+		"art_family": "sporebound",
+		"default_scale": 1.0,
+		"preferred_portrait_direction": "front",
+	}
+	var metadata_path: String = "%s%s/kit.json" % [KIT_ROOT, kit_id]
+	if FileAccess.file_exists(metadata_path):
+		var raw_text: String = FileAccess.get_file_as_string(metadata_path)
+		var parsed: Variant = JSON.parse_string(raw_text)
+		if parsed is Dictionary:
+			var parsed_dictionary: Dictionary = parsed
+			metadata.merge(parsed_dictionary, true)
+	metadata["directions_complete"] = kit_has_all_directions(kit_id)
+	metadata["supported_states"] = Array(kit_supported_states(kit_id))
+	metadata["dedicated_state_count"] = kit_dedicated_state_count(kit_id)
+	_kit_metadata_cache[kit_id] = metadata.duplicate(true)
+	return metadata
+
+
+static func kit_supported_states(kit_id: String) -> PackedStringArray:
+	var result := PackedStringArray(["idle"])
+	for state: String in STATES:
+		if state == "idle":
+			continue
+		var complete: bool = true
+		for direction: String in DIRECTIONS:
+			if not FileAccess.file_exists("%s%s/%s_%s.png" % [KIT_ROOT, kit_id, direction, state]):
+				complete = false
+				break
+		if complete:
+			result.append(state)
+	return result
+
+
+static func kit_dedicated_state_count(kit_id: String) -> int:
+	var count: int = 1 if kit_has_all_directions(kit_id) else 0
+	for state: String in STATES:
+		if state == "idle":
+			continue
+		var complete: bool = true
+		for direction: String in DIRECTIONS:
+			var expected_path: String = "%s%s/%s_%s.png" % [KIT_ROOT, kit_id, direction, state]
+			if not FileAccess.file_exists(expected_path):
+				complete = false
+				break
+		if complete:
+			count += 1
+	return count
+
+
+static func guided_kit_path(kit_id: String, direction: String, state: String = "idle") -> String:
+	if kit_id.is_empty():
+		return ""
+	var state_path: String = "%s%s/%s_%s.png" % [KIT_ROOT, kit_id, direction, state]
+	if FileAccess.file_exists(state_path):
+		return state_path
+	var direction_path: String = "%s%s/%s.png" % [KIT_ROOT, kit_id, direction]
+	if FileAccess.file_exists(direction_path):
+		return direction_path
+	return ""
+
+
+static func compose_kit_thumbnail(kit_id: String, direction: String = "front") -> Image:
+	var thumbnail: Image = Image.create(96, 96, false, Image.FORMAT_RGBA8)
+	thumbnail.fill(Color(0.0, 0.0, 0.0, 0.0))
+	var explicit_thumbnail: String = "%s%s/thumbnail.png" % [KIT_ROOT, kit_id]
+	var path: String = explicit_thumbnail if FileAccess.file_exists(explicit_thumbnail) else guided_kit_path(kit_id, direction, "idle")
+	if path.is_empty():
+		return thumbnail
+	var source: Image = _load_image(path)
+	if source == null:
+		return thumbnail
+	thumbnail = source.duplicate()
+	thumbnail.resize(96, 96, Image.INTERPOLATE_LANCZOS)
+	return thumbnail
 
 
 static func part_path(category: String, part_id: String, direction: String) -> String:
@@ -111,6 +224,8 @@ static func compose_frame(appearance: Resource, direction: String = "front", sta
 	if appearance == null:
 		return output
 	_prepare_appearance(appearance)
+	if _is_guided_mode(appearance):
+		return _compose_guided_frame(appearance, direction, state)
 	for category: String in LAYER_ORDER:
 		var layer: Image = _compose_category(appearance, category, direction, state)
 		if layer == null:
@@ -124,6 +239,8 @@ static func compose_edit_group(appearance: Resource, edit_group: String, directi
 	if appearance == null or not EDIT_GROUPS.has(edit_group):
 		return output
 	_prepare_appearance(appearance)
+	if _is_guided_mode(appearance):
+		return _compose_guided_frame(appearance, direction, state) if edit_group == "body" else output
 	for category: String in LAYER_ORDER:
 		if edit_group_for_category(category) != edit_group:
 			continue
@@ -186,7 +303,7 @@ static func compose_atlas(appearance: Resource) -> Image:
 			var state: String = STATES[column]
 			var state_frame: Image = compose_frame(appearance, direction, state)
 			var destination: Vector2i = Vector2i(column * FRAME_SIZE.x, row * FRAME_SIZE.y)
-			var offset: Vector2i = _state_offset(state, direction)
+			var offset: Vector2i = Vector2i.ZERO if _is_guided_mode(appearance) else _state_offset(state, direction)
 			atlas.blend_rect(state_frame, Rect2i(Vector2i.ZERO, FRAME_SIZE), destination + offset)
 	return atlas
 
@@ -310,6 +427,42 @@ static func _compose_category(appearance: Resource, category: String, direction:
 	return _transform_part(_tint_image(source, tint), category, appearance)
 
 
+static func _is_guided_mode(appearance: Resource) -> bool:
+	if appearance == null:
+		return false
+	if appearance.has_method("is_guided_mode"):
+		return bool(appearance.call("is_guided_mode"))
+	return _string_property(appearance, "authoring_mode", "free") == "guided"
+
+
+static func _compose_guided_frame(appearance: Resource, direction: String, state: String) -> Image:
+	var kit_id: String = _string_property(appearance, "library_kit_id", "forest_scout")
+	var path: String = guided_kit_path(kit_id, direction, state)
+	if path.is_empty():
+		# A missing kit must never crash the editor: fall back to the modular renderer.
+		var fallback: Image = _blank_frame()
+		for category: String in LAYER_ORDER:
+			var layer: Image = _compose_category(appearance, category, direction, state)
+			if layer != null:
+				fallback.blend_rect(layer, Rect2i(Vector2i.ZERO, layer.get_size()), Vector2i.ZERO)
+		return _apply_global_render(fallback, appearance)
+	var source: Image = _load_image(path)
+	if source == null:
+		return _blank_frame()
+	var output: Image = source.duplicate()
+	# Guided kits are already art-directed. Keep only uniform size/placement controls.
+	var global_factor: float = _size_preset_factor(_string_property(appearance, "size_preset", "medium")) * clampf(_float_property(appearance, "global_scale", 1.0), 0.90, 1.10)
+	if not is_equal_approx(global_factor, 1.0):
+		output = _scale_about_anchor(output, Vector2(global_factor, global_factor), GLOBAL_ANCHOR)
+	output = _offset_image(output, _vector2_property(appearance, "body_offset"))
+	if _bool_property(appearance, "guided_apply_global_tint", false):
+		var tint_value: Variant = appearance.get("global_tint")
+		if tint_value is Color:
+			var guided_tint: Color = tint_value
+			output = _multiply_image(output, guided_tint)
+	return output
+
+
 static func _apply_global_render(source: Image, appearance: Resource) -> Image:
 	var output: Image = source
 	var global_factor: float = _size_preset_factor(String(appearance.get("size_preset"))) * float(appearance.get("global_scale"))
@@ -391,6 +544,13 @@ static func _string_property(appearance: Resource, property_name: String, fallba
 		return fallback
 	var result: String = String(value)
 	return fallback if result.is_empty() else result
+
+
+static func _bool_property(appearance: Resource, property_name: String, fallback: bool) -> bool:
+	var value: Variant = appearance.get(property_name)
+	if value == null:
+		return fallback
+	return bool(value)
 
 
 static func _vector2_property(appearance: Resource, property_name: String) -> Vector2:

@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_appearance")
 hero_id = "preset"
+authoring_mode = "free"
 display_name = "Mystique violet"
 target_visual_id = "preset"
 presentation_style = "feminine"
