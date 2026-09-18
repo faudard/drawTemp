@@ -17,7 +17,10 @@ var current_path := ""
 var dirty := false
 var name_edit: LineEdit
 var unit_select: OptionButton
+var render_mode: OptionButton
 var portrait_edit: LineEdit
+var attack_pose_edit: LineEdit
+var cast_pose_edit: LineEdit
 var sprite_edit: LineEdit
 var use_sprite: CheckBox
 var frame_w: SpinBox
@@ -101,7 +104,14 @@ func _build_ui() -> void:
 	_add_label(left, "Unité associée")
 	unit_select = OptionButton.new()
 	left.add_child(unit_select)
+	_add_label(left, "Mode de rendu")
+	render_mode = OptionButton.new()
+	for value: String in ["auto", "procedural", "sprite_sheet", "portrait_billboard"]:
+		render_mode.add_item(value)
+	left.add_child(render_mode)
 	portrait_edit = _path_row(left, "Portrait", "portrait")
+	attack_pose_edit = _path_row(left, "Pose attaque (portrait billboard)", "attack_pose")
+	cast_pose_edit = _path_row(left, "Pose cast (portrait billboard)", "cast_pose")
 	sprite_edit = _path_row(left, "Spritesheet", "sprite")
 	use_sprite = CheckBox.new()
 	use_sprite.text = "Utiliser le spritesheet au runtime"
@@ -212,7 +222,7 @@ func _build_ui() -> void:
 	preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right.add_child(preview)
 	var help := Label.new()
-	help.text = "Sans spritesheet, le jeu conserve son rendu procédural directionnel. En mode rows : une ligne = une direction et Start désigne une colonne. En mode blocks : chaque direction occupe un bloc de frames consécutives."
+	help.text = "portrait_billboard affiche directement le portrait de bibliothèque dans la carte 3D. sprite_sheet utilise l’atlas directionnel. procedural conserve le rendu généré. En mode rows : une ligne = une direction."
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(help)
 
@@ -258,6 +268,8 @@ func _refresh_units() -> void:
 		return
 	var wanted = unit_select.get_item_metadata(unit_select.selected) if unit_select.item_count > 0 else ""
 	unit_select.clear()
+	unit_select.add_item("(Aucune — skin bibliothèque)")
+	unit_select.set_item_metadata(0, "")
 	for path in _resource_files(UNIT_DIR):
 		var data := load(path)
 		unit_select.add_item("%s [%s]" % [String(data.display_name), String(data.id)])
@@ -289,7 +301,10 @@ func _on_selected(index: int) -> void:
 	loading = true
 	name_edit.text = String(current.display_name)
 	_select_metadata(unit_select, String(current.unit_id))
+	_select_text(render_mode, String(current.render_mode))
 	portrait_edit.text = String(current.portrait_path)
+	attack_pose_edit.text = String(current.attack_pose_path)
+	cast_pose_edit.text = String(current.cast_pose_path)
 	sprite_edit.text = String(current.sprite_sheet_path)
 	use_sprite.button_pressed = bool(current.use_sprite_sheet)
 	frame_w.value = int(current.frame_width)
@@ -328,7 +343,10 @@ func _apply_fields() -> void:
 		return
 	current.display_name = name_edit.text.strip_edges()
 	current.unit_id = String(unit_select.get_item_metadata(unit_select.selected)) if unit_select.item_count > 0 else ""
+	current.render_mode = render_mode.get_item_text(render_mode.selected)
 	current.portrait_path = portrait_edit.text.strip_edges()
+	current.attack_pose_path = attack_pose_edit.text.strip_edges()
+	current.cast_pose_path = cast_pose_edit.text.strip_edges()
 	current.sprite_sheet_path = sprite_edit.text.strip_edges()
 	current.use_sprite_sheet = use_sprite.button_pressed
 	current.frame_width = int(frame_w.value)
@@ -414,20 +432,33 @@ func _validate() -> void:
 	if current == null:
 		return
 	var issues: Array[String] = []
-	if String(current.unit_id).is_empty() or not ResourceLoader.exists(UNIT_DIR + String(current.unit_id) + ".tres"):
+	var visual_id: String = String(current.id)
+	var unit_id: String = String(current.unit_id)
+	if not unit_id.is_empty() and not ResourceLoader.exists(UNIT_DIR + unit_id + ".tres"):
 		issues.append("Unité associée inconnue")
-	if bool(current.use_sprite_sheet):
+	elif unit_id.is_empty() and not visual_id.begins_with("lib_"):
+		issues.append("Unité associée requise hors skin bibliothèque")
+	var current_render_mode: String = String(current.render_mode)
+	if current_render_mode == "portrait_billboard":
+		if String(current.portrait_path).is_empty() or not ResourceLoader.exists(String(current.portrait_path)):
+			issues.append("Mode portrait_billboard : portrait requis")
+	if current_render_mode == "sprite_sheet" or (current_render_mode == "auto" and bool(current.use_sprite_sheet)):
 		if String(current.sprite_sheet_path).is_empty() or not ResourceLoader.exists(String(current.sprite_sheet_path)):
 			issues.append("Spritesheet activé mais ressource introuvable")
 		if int(current.frame_width) <= 0 or int(current.frame_height) <= 0:
 			issues.append("Définis la taille des frames")
 	if not String(current.portrait_path).is_empty() and not ResourceLoader.exists(String(current.portrait_path)):
 		issues.append("Portrait introuvable")
+	if not String(current.attack_pose_path).is_empty() and not ResourceLoader.exists(String(current.attack_pose_path)):
+		issues.append("Pose attaque introuvable")
+	if not String(current.cast_pose_path).is_empty() and not ResourceLoader.exists(String(current.cast_pose_path)):
+		issues.append("Pose cast introuvable")
 	if String(current.direction_mode) == "4_way" and String(current.four_direction_order).split(",").size() != 4:
 		issues.append("Ordre 4 directions : 4 noms requis")
 	if String(current.direction_mode) == "8_way" and String(current.eight_direction_order).split(",").size() != 8:
 		issues.append("Ordre 8 directions : 8 noms requis")
-	validation.text = "✓ Visuel valide — fallback procédural actif si aucun sprite." if issues.is_empty() else "⚠ " + " • ".join(issues)
+	var mode_label: String = String(current.render_mode)
+	validation.text = "✓ Visuel valide — mode %s." % mode_label if issues.is_empty() else "⚠ " + " • ".join(issues)
 	validation.add_theme_color_override("font_color", Color("#8fe0ad") if issues.is_empty() else Color("#ffb36b"))
 
 
@@ -442,9 +473,9 @@ func _on_preview_direction(index: int) -> void:
 
 
 func _wire_signals() -> void:
-	for edit in [name_edit, portrait_edit, sprite_edit, four_order, eight_order]:
+	for edit in [name_edit, portrait_edit, attack_pose_edit, cast_pose_edit, sprite_edit, four_order, eight_order]:
 		edit.text_changed.connect(_live_changed)
-	for option in [unit_select, shape_select, basic_vfx, direction_mode, direction_layout]:
+	for option in [unit_select, render_mode, shape_select, basic_vfx, direction_mode, direction_layout]:
 		option.item_selected.connect(_live_changed)
 	for check in [use_sprite, flip_facing, tint_sprite]:
 		check.toggled.connect(_live_changed)
@@ -488,6 +519,10 @@ func _browse(target: String) -> void:
 func _on_file_selected(path: String) -> void:
 	if file_target == "portrait":
 		portrait_edit.text = path
+	elif file_target == "attack_pose":
+		attack_pose_edit.text = path
+	elif file_target == "cast_pose":
+		cast_pose_edit.text = path
 	elif file_target == "sprite":
 		sprite_edit.text = path
 	_apply_fields()

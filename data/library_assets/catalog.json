@@ -1,0 +1,1171 @@
+{
+  "schema_version": 1,
+  "project": "Sporebound Tactics",
+  "generated_for": "Godot 4.7.1 / V19 project asset organization",
+  "rules": {
+    "runtime_portrait_folder": "res://assets/portraits/library/",
+    "runtime_status_icon_folder": "res://assets/status_icons/library/",
+    "source_art_folder": "res://assets/source_art/library/",
+    "source_art_godot_imported": false,
+    "canonical_sprite_contract": {
+      "frame_size": [
+        192,
+        192
+      ],
+      "direction_mode": "4_way",
+      "direction_order": [
+        "front",
+        "right",
+        "back",
+        "left"
+      ],
+      "direction_layout": "rows",
+      "states": [
+        "idle",
+        "move",
+        "attack",
+        "cast",
+        "hit",
+        "ko"
+      ]
+    }
+  },
+  "counts": {
+    "runtime_character_portraits": 39,
+    "runtime_status_icons": 8,
+    "action_strips": 14,
+    "directional_reference_sheets": 3,
+    "status_reference_sheets": 4,
+    "concept_boards": 2,
+    "library_source_images": 62,
+    "runtime_action_poses": 12
+  },
+  "character_portraits": [
+    {
+      "id": "aqua_mage",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/aqua_mage.png",
+      "runtime_path": "res://assets/portraits/library/aqua_mage.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "magic",
+        "water",
+        "support"
+      ],
+      "visual_id": "lib_aqua_mage"
+    },
+    {
+      "id": "aqua_spirit",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/aqua_spirit.png",
+      "runtime_path": "res://assets/portraits/library/aqua_spirit.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "spirit",
+        "water",
+        "summon"
+      ],
+      "visual_id": "lib_aqua_spirit"
+    },
+    {
+      "id": "blue_oracle",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/blue_oracle.png",
+      "runtime_path": "res://assets/portraits/library/blue_oracle.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "magic",
+        "oracle",
+        "control"
+      ],
+      "visual_id": "lib_blue_oracle"
+    },
+    {
+      "id": "bombardier_artillery",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/bombardier_artillery.png",
+      "runtime_path": "res://assets/portraits/library/bombardier_artillery.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "ranged",
+        "artillery",
+        "aoe"
+      ],
+      "visual_id": "lib_bombardier_artillery"
+    },
+    {
+      "id": "bracket_colossus",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/bracket_colossus.png",
+      "runtime_path": "res://assets/portraits/library/bracket_colossus.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "tank",
+        "colossus",
+        "guard"
+      ],
+      "visual_id": "lib_bracket_colossus"
+    },
+    {
+      "id": "chanterelle_banner_mage",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/chanterelle_banner_mage.png",
+      "runtime_path": "res://assets/portraits/library/chanterelle_banner_mage.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "support",
+        "banner",
+        "magic"
+      ],
+      "visual_id": "lib_chanterelle_banner_mage"
+    },
+    {
+      "id": "coral_monk",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/coral_monk.png",
+      "runtime_path": "res://assets/portraits/library/coral_monk.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "melee",
+        "monk",
+        "support"
+      ],
+      "visual_id": "lib_coral_monk"
+    },
+    {
+      "id": "coral_tank",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/coral_tank.png",
+      "runtime_path": "res://assets/portraits/library/coral_tank.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "tank",
+        "coral",
+        "frontline"
+      ],
+      "visual_id": "lib_coral_tank"
+    },
+    {
+      "id": "crystal_fighter",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/crystal_fighter.png",
+      "runtime_path": "res://assets/portraits/library/crystal_fighter.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "melee",
+        "crystal",
+        "burst"
+      ],
+      "visual_id": "lib_crystal_fighter"
+    },
+    {
+      "id": "crystal_fungal_rider",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/crystal_fungal_rider.png",
+      "runtime_path": "res://assets/portraits/library/crystal_fungal_rider.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "mounted",
+        "crystal",
+        "scout"
+      ],
+      "visual_id": "lib_crystal_fungal_rider"
+    },
+    {
+      "id": "crystal_miner",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/crystal_miner.png",
+      "runtime_path": "res://assets/portraits/library/crystal_miner.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "melee",
+        "crystal",
+        "utility"
+      ],
+      "visual_id": "lib_crystal_miner"
+    },
+    {
+      "id": "drillcap_mechanic",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/drillcap_mechanic.png",
+      "runtime_path": "res://assets/portraits/library/drillcap_mechanic.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "mech",
+        "melee",
+        "engineer"
+      ],
+      "visual_id": "lib_drillcap_mechanic"
+    },
+    {
+      "id": "flower_healer",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/flower_healer.png",
+      "runtime_path": "res://assets/portraits/library/flower_healer.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "healer",
+        "nature",
+        "support"
+      ],
+      "visual_id": "lib_flower_healer"
+    },
+    {
+      "id": "fungal_fortress",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/fungal_fortress.png",
+      "runtime_path": "res://assets/portraits/library/fungal_fortress.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "tank",
+        "fortress",
+        "colossus"
+      ],
+      "visual_id": "lib_fungal_fortress"
+    },
+    {
+      "id": "lichen_nature_mage",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/lichen_nature_mage.png",
+      "runtime_path": "res://assets/portraits/library/lichen_nature_mage.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "magic",
+        "nature",
+        "support"
+      ],
+      "visual_id": "lib_lichen_nature_mage"
+    },
+    {
+      "id": "mech_cannon",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/mech_cannon.png",
+      "runtime_path": "res://assets/portraits/library/mech_cannon.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "mech",
+        "ranged",
+        "artillery"
+      ],
+      "visual_id": "lib_mech_cannon"
+    },
+    {
+      "id": "morel_guard",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/morel_guard.png",
+      "runtime_path": "res://assets/portraits/library/morel_guard.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "guard",
+        "melee",
+        "defense"
+      ],
+      "visual_id": "lib_morel_guard"
+    },
+    {
+      "id": "morel_lancer",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/morel_lancer.png",
+      "runtime_path": "res://assets/portraits/library/morel_lancer.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "lancer",
+        "reach",
+        "melee"
+      ],
+      "visual_id": "lib_morel_lancer"
+    },
+    {
+      "id": "moss_guardian",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/moss_guardian.png",
+      "runtime_path": "res://assets/portraits/library/moss_guardian.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "tank",
+        "nature",
+        "frontline"
+      ],
+      "visual_id": "lib_moss_guardian"
+    },
+    {
+      "id": "muscle_brawler",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/muscle_brawler.png",
+      "runtime_path": "res://assets/portraits/library/muscle_brawler.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "brawler",
+        "melee",
+        "power"
+      ],
+      "visual_id": "lib_muscle_brawler"
+    },
+    {
+      "id": "mushroom_duelist",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/mushroom_duelist.png",
+      "runtime_path": "res://assets/portraits/library/mushroom_duelist.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "duelist",
+        "melee",
+        "evasion"
+      ],
+      "visual_id": "lib_mushroom_duelist"
+    },
+    {
+      "id": "puffball_gatherer",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/puffball_gatherer.png",
+      "runtime_path": "res://assets/portraits/library/puffball_gatherer.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "starter",
+        "utility",
+        "support"
+      ],
+      "visual_id": "lib_puffball_gatherer"
+    },
+    {
+      "id": "puffball_scout",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/puffball_scout.png",
+      "runtime_path": "res://assets/portraits/library/puffball_scout.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "scout",
+        "mobility",
+        "utility"
+      ],
+      "visual_id": "lib_puffball_scout"
+    },
+    {
+      "id": "rifle_ranger",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/rifle_ranger.png",
+      "runtime_path": "res://assets/portraits/library/rifle_ranger.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "ranged",
+        "rifle",
+        "scout"
+      ],
+      "visual_id": "lib_rifle_ranger"
+    },
+    {
+      "id": "ruby_royal_mage",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/ruby_royal_mage.png",
+      "runtime_path": "res://assets/portraits/library/ruby_royal_mage.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "magic",
+        "royal",
+        "burst"
+      ],
+      "visual_id": "lib_ruby_royal_mage"
+    },
+    {
+      "id": "shadow_duelist",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/shadow_duelist.png",
+      "runtime_path": "res://assets/portraits/library/shadow_duelist.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "shadow",
+        "duelist",
+        "boss"
+      ],
+      "visual_id": "lib_shadow_duelist"
+    },
+    {
+      "id": "shelf_shield_fighter",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/shelf_shield_fighter.png",
+      "runtime_path": "res://assets/portraits/library/shelf_shield_fighter.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "shield",
+        "guard",
+        "melee"
+      ],
+      "visual_id": "lib_shelf_shield_fighter"
+    },
+    {
+      "id": "shield_guard",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/shield_guard.png",
+      "runtime_path": "res://assets/portraits/library/shield_guard.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "shield",
+        "guard",
+        "starter"
+      ],
+      "visual_id": "lib_shield_guard"
+    },
+    {
+      "id": "slinger",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/slinger.png",
+      "runtime_path": "res://assets/portraits/library/slinger.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "ranged",
+        "slinger",
+        "starter"
+      ],
+      "visual_id": "lib_slinger"
+    },
+    {
+      "id": "sniper_scout",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/sniper_scout.png",
+      "runtime_path": "res://assets/portraits/library/sniper_scout.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "ranged",
+        "sniper",
+        "scout"
+      ],
+      "visual_id": "lib_sniper_scout"
+    },
+    {
+      "id": "spear_scout",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/spear_scout.png",
+      "runtime_path": "res://assets/portraits/library/spear_scout.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "spear",
+        "scout",
+        "starter"
+      ],
+      "visual_id": "lib_spear_scout"
+    },
+    {
+      "id": "spike_fighter",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/spike_fighter.png",
+      "runtime_path": "res://assets/portraits/library/spike_fighter.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "melee",
+        "spike",
+        "fighter"
+      ],
+      "visual_id": "lib_spike_fighter"
+    },
+    {
+      "id": "spore_alchemist",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/spore_alchemist.png",
+      "runtime_path": "res://assets/portraits/library/spore_alchemist.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "alchemy",
+        "support",
+        "ranged"
+      ],
+      "visual_id": "lib_spore_alchemist"
+    },
+    {
+      "id": "spore_gunslinger",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/spore_gunslinger.png",
+      "runtime_path": "res://assets/portraits/library/spore_gunslinger.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "ranged",
+        "gunslinger",
+        "burst"
+      ],
+      "visual_id": "lib_spore_gunslinger"
+    },
+    {
+      "id": "spore_shepherd",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/spore_shepherd.png",
+      "runtime_path": "res://assets/portraits/library/spore_shepherd.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "support",
+        "summon",
+        "nature"
+      ],
+      "visual_id": "lib_spore_shepherd"
+    },
+    {
+      "id": "starter_scout",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/starter_scout.png",
+      "runtime_path": "res://assets/portraits/library/starter_scout.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "starter",
+        "scout",
+        "melee"
+      ],
+      "visual_id": "lib_starter_scout"
+    },
+    {
+      "id": "starter_spearman",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/starter_spearman.png",
+      "runtime_path": "res://assets/portraits/library/starter_spearman.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "starter",
+        "spear",
+        "melee"
+      ],
+      "visual_id": "lib_starter_spearman"
+    },
+    {
+      "id": "teal_spore_shaman",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/teal_spore_shaman.png",
+      "runtime_path": "res://assets/portraits/library/teal_spore_shaman.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "shaman",
+        "magic",
+        "support"
+      ],
+      "visual_id": "lib_teal_spore_shaman"
+    },
+    {
+      "id": "toxic_mage",
+      "kind": "character_portrait",
+      "source_path": "res://assets/source_art/library/portraits_highres/toxic_mage.png",
+      "runtime_path": "res://assets/portraits/library/toxic_mage.png",
+      "runtime_size": [
+        512,
+        512
+      ],
+      "alpha": true,
+      "readiness": "runtime_portrait_ready",
+      "sprite_readiness": "not_directional_sprite_ready",
+      "tags": [
+        "toxic",
+        "magic",
+        "debuff"
+      ],
+      "visual_id": "lib_toxic_mage"
+    }
+  ],
+  "status_icons": [
+    {
+      "id": "sick",
+      "kind": "status_icon",
+      "runtime_path": "res://assets/status_icons/library/sick.png",
+      "runtime_size": [
+        128,
+        128
+      ],
+      "source_reference": "res://assets/source_art/library/status_effects/lichen_mage_status_reference.png",
+      "readiness": "runtime_ui_ready"
+    },
+    {
+      "id": "electrified",
+      "kind": "status_icon",
+      "runtime_path": "res://assets/status_icons/library/electrified.png",
+      "runtime_size": [
+        128,
+        128
+      ],
+      "source_reference": "res://assets/source_art/library/status_effects/lichen_mage_status_reference.png",
+      "readiness": "runtime_ui_ready"
+    },
+    {
+      "id": "burning",
+      "kind": "status_icon",
+      "runtime_path": "res://assets/status_icons/library/burning.png",
+      "runtime_size": [
+        128,
+        128
+      ],
+      "source_reference": "res://assets/source_art/library/status_effects/lichen_mage_status_reference.png",
+      "readiness": "runtime_ui_ready"
+    },
+    {
+      "id": "cursed",
+      "kind": "status_icon",
+      "runtime_path": "res://assets/status_icons/library/cursed.png",
+      "runtime_size": [
+        128,
+        128
+      ],
+      "source_reference": "res://assets/source_art/library/status_effects/lichen_mage_status_reference.png",
+      "readiness": "runtime_ui_ready"
+    },
+    {
+      "id": "controlled",
+      "kind": "status_icon",
+      "runtime_path": "res://assets/status_icons/library/controlled.png",
+      "runtime_size": [
+        128,
+        128
+      ],
+      "source_reference": "res://assets/source_art/library/status_effects/lichen_mage_status_reference.png",
+      "readiness": "runtime_ui_ready"
+    },
+    {
+      "id": "poisoned",
+      "kind": "status_icon",
+      "runtime_path": "res://assets/status_icons/library/poisoned.png",
+      "runtime_size": [
+        128,
+        128
+      ],
+      "source_reference": "res://assets/source_art/library/status_effects/lichen_mage_status_reference.png",
+      "readiness": "runtime_ui_ready"
+    },
+    {
+      "id": "frozen",
+      "kind": "status_icon",
+      "runtime_path": "res://assets/status_icons/library/frozen.png",
+      "runtime_size": [
+        128,
+        128
+      ],
+      "source_reference": "res://assets/source_art/library/status_effects/lichen_mage_status_reference.png",
+      "readiness": "runtime_ui_ready"
+    },
+    {
+      "id": "sleep",
+      "kind": "status_icon",
+      "runtime_path": "res://assets/status_icons/library/sleep.png",
+      "runtime_size": [
+        128,
+        128
+      ],
+      "source_reference": "res://assets/source_art/library/status_effects/lichen_mage_status_reference.png",
+      "readiness": "runtime_ui_ready"
+    }
+  ],
+  "action_strips": [
+    {
+      "id": "bombardier_artillery_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/bombardier_artillery_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "bombardier_artillery",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/bombardier_artillery_attack.png"
+    },
+    {
+      "id": "crystal_guardian_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/crystal_guardian_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "crystal_fighter",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/crystal_fighter_attack.png"
+    },
+    {
+      "id": "dragon_fungus_fire_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/dragon_fungus_fire_strip.png",
+      "readiness": "source_only",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path."
+    },
+    {
+      "id": "drillcap_mechanic_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/drillcap_mechanic_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "drillcap_mechanic",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/drillcap_mechanic_attack.png"
+    },
+    {
+      "id": "lichen_nature_mage_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/lichen_nature_mage_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "lichen_nature_mage",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/lichen_nature_mage_attack.png"
+    },
+    {
+      "id": "mech_cannon_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/mech_cannon_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "mech_cannon",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/mech_cannon_attack.png"
+    },
+    {
+      "id": "mindseer_control_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/mindseer_control_strip.png",
+      "readiness": "source_only",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path."
+    },
+    {
+      "id": "rifle_ranger_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/rifle_ranger_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "rifle_ranger",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/rifle_ranger_attack.png"
+    },
+    {
+      "id": "ruby_royal_mage_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/ruby_royal_mage_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "ruby_royal_mage",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/ruby_royal_mage_attack.png"
+    },
+    {
+      "id": "shieldcap_guard_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/shieldcap_guard_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "shield_guard",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/shield_guard_attack.png"
+    },
+    {
+      "id": "sniper_scout_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/sniper_scout_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "sniper_scout",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/sniper_scout_attack.png"
+    },
+    {
+      "id": "spikeback_fighter_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/spikeback_fighter_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "spike_fighter",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/spike_fighter_attack.png"
+    },
+    {
+      "id": "spore_gunslinger_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/spore_gunslinger_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "spore_gunslinger",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/spore_gunslinger_attack.png"
+    },
+    {
+      "id": "toxic_mage_strip",
+      "kind": "action_strip",
+      "source_path": "res://assets/source_art/library/action_strips/toxic_mage_strip.png",
+      "readiness": "runtime_attack_pose_ready",
+      "note": "Transparent multi-pose strip; not a fixed 4-way/6-state atlas. Convert before assigning to sprite_sheet_path.",
+      "paired_portrait_id": "toxic_mage",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/toxic_mage_attack.png"
+    }
+  ],
+  "directional_reference_sheets": [
+    {
+      "id": "heroic_mushrooms_pixel_sheet",
+      "kind": "directional_reference_sheet",
+      "source_path": "res://assets/source_art/library/directional_reference/heroic_mushrooms_pixel_sheet.png",
+      "readiness": "reference_only",
+      "note": "Composite/reference sheet. Useful for art direction and manual extraction; not directly compatible with SporeUnitVisualDefinition atlas layout."
+    },
+    {
+      "id": "lichen_mage_sprite_sheet",
+      "kind": "directional_reference_sheet",
+      "source_path": "res://assets/source_art/library/directional_reference/lichen_mage_sprite_sheet.png",
+      "readiness": "reference_only",
+      "note": "Composite/reference sheet. Useful for art direction and manual extraction; not directly compatible with SporeUnitVisualDefinition atlas layout."
+    },
+    {
+      "id": "warrior_mushroom_character_sheet",
+      "kind": "directional_reference_sheet",
+      "source_path": "res://assets/source_art/library/directional_reference/warrior_mushroom_character_sheet.png",
+      "readiness": "reference_only",
+      "note": "Composite/reference sheet. Useful for art direction and manual extraction; not directly compatible with SporeUnitVisualDefinition atlas layout."
+    }
+  ],
+  "status_reference_sheets": [
+    {
+      "id": "dreamspore_oracle_status_reference",
+      "kind": "status_reference_sheet",
+      "source_path": "res://assets/source_art/library/status_effects/dreamspore_oracle_status_reference.png",
+      "readiness": "reference_only",
+      "note": "Full character status reference board. The eight reusable UI icons are separately extracted under assets/status_icons/library."
+    },
+    {
+      "id": "glowcap_ranger_status_reference",
+      "kind": "status_reference_sheet",
+      "source_path": "res://assets/source_art/library/status_effects/glowcap_ranger_status_reference.png",
+      "readiness": "reference_only",
+      "note": "Full character status reference board. The eight reusable UI icons are separately extracted under assets/status_icons/library."
+    },
+    {
+      "id": "lichen_mage_status_reference",
+      "kind": "status_reference_sheet",
+      "source_path": "res://assets/source_art/library/status_effects/lichen_mage_status_reference.png",
+      "readiness": "reference_only",
+      "note": "Full character status reference board. The eight reusable UI icons are separately extracted under assets/status_icons/library."
+    },
+    {
+      "id": "mossblade_guardian_status_reference",
+      "kind": "status_reference_sheet",
+      "source_path": "res://assets/source_art/library/status_effects/mossblade_guardian_status_reference.png",
+      "readiness": "reference_only",
+      "note": "Full character status reference board. The eight reusable UI icons are separately extracted under assets/status_icons/library."
+    }
+  ],
+  "concept_boards": [
+    {
+      "id": "spore_forms_bestiary",
+      "kind": "concept_board",
+      "source_path": "res://assets/source_art/library/concepts/spore_forms_bestiary.png",
+      "readiness": "reference_only",
+      "note": "Concept/bestiary board for class/evolution selection and future production assets."
+    },
+    {
+      "id": "tactical_mushroom_unit_concepts",
+      "kind": "concept_board",
+      "source_path": "res://assets/source_art/library/concepts/tactical_mushroom_unit_concepts.png",
+      "readiness": "reference_only",
+      "note": "Concept/bestiary board for class/evolution selection and future production assets."
+    }
+  ],
+  "existing_project_asset_inventory": {
+    "hero_parts_png": 572,
+    "generated_hero_atlases_png": 2,
+    "hero_part_canvas": [
+      192,
+      192
+    ],
+    "hero_part_directions": [
+      "front",
+      "right",
+      "back",
+      "left"
+    ],
+    "note": "Existing assets/hero_parts remain the production-ready modular Hero Creator source."
+  },
+  "unit_bindings": [
+    {
+      "unit_id": "momo",
+      "asset_id": "shield_guard",
+      "role": "frontline_guard",
+      "render_mode": "portrait_billboard",
+      "runtime_path": "res://assets/portraits/library/shield_guard.png",
+      "status": "active_runtime_binding",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/shield_guard_attack.png"
+    },
+    {
+      "unit_id": "pipo",
+      "asset_id": "flower_healer",
+      "role": "support_healer",
+      "render_mode": "portrait_billboard",
+      "runtime_path": "res://assets/portraits/library/flower_healer.png",
+      "status": "active_runtime_binding"
+    },
+    {
+      "unit_id": "luma",
+      "asset_id": "rifle_ranger",
+      "role": "prism_ranger",
+      "render_mode": "portrait_billboard",
+      "runtime_path": "res://assets/portraits/library/rifle_ranger.png",
+      "status": "active_runtime_binding",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/rifle_ranger_attack.png"
+    },
+    {
+      "unit_id": "ziggy",
+      "asset_id": "spore_gunslinger",
+      "role": "mobile_gunner",
+      "render_mode": "portrait_billboard",
+      "runtime_path": "res://assets/portraits/library/spore_gunslinger.png",
+      "status": "active_runtime_binding",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/spore_gunslinger_attack.png"
+    },
+    {
+      "unit_id": "grincheux",
+      "asset_id": "spike_fighter",
+      "role": "aggressive_melee",
+      "render_mode": "portrait_billboard",
+      "runtime_path": "res://assets/portraits/library/spike_fighter.png",
+      "status": "active_runtime_binding",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/spike_fighter_attack.png"
+    },
+    {
+      "unit_id": "baveux",
+      "asset_id": "toxic_mage",
+      "role": "toxic_caster",
+      "render_mode": "portrait_billboard",
+      "runtime_path": "res://assets/portraits/library/toxic_mage.png",
+      "status": "active_runtime_binding",
+      "runtime_attack_pose_path": "res://assets/action_poses/library/toxic_mage_attack.png"
+    },
+    {
+      "unit_id": "comptable",
+      "asset_id": "spore_alchemist",
+      "role": "ranged_support",
+      "render_mode": "portrait_billboard",
+      "runtime_path": "res://assets/portraits/library/spore_alchemist.png",
+      "status": "active_runtime_binding"
+    },
+    {
+      "unit_id": "dj_morille",
+      "asset_id": "coral_monk",
+      "role": "tempo_support",
+      "render_mode": "portrait_billboard",
+      "runtime_path": "res://assets/portraits/library/coral_monk.png",
+      "status": "active_runtime_binding"
+    },
+    {
+      "unit_id": "choriste",
+      "asset_id": "spore_shepherd",
+      "role": "support_caster",
+      "render_mode": "portrait_billboard",
+      "runtime_path": "res://assets/portraits/library/spore_shepherd.png",
+      "status": "active_runtime_binding"
+    },
+    {
+      "unit_id": "archiviste",
+      "asset_id": "shadow_duelist",
+      "role": "boss_controller",
+      "render_mode": "portrait_billboard",
+      "runtime_path": "res://assets/portraits/library/shadow_duelist.png",
+      "status": "active_runtime_binding"
+    }
+  ]
+}

@@ -13,7 +13,10 @@ extends Resource
 @export var unit_id: String = ""
 
 @export_group("Assets")
+@export_enum("auto", "procedural", "sprite_sheet", "portrait_billboard") var render_mode: String = "auto"
 @export_file("*.png", "*.jpg", "*.jpeg", "*.webp", "*.svg") var portrait_path: String = ""
+@export_file("*.png", "*.jpg", "*.jpeg", "*.webp") var attack_pose_path: String = ""
+@export_file("*.png", "*.jpg", "*.jpeg", "*.webp") var cast_pose_path: String = ""
 @export_file("*.png", "*.jpg", "*.jpeg", "*.webp") var sprite_sheet_path: String = ""
 @export var use_sprite_sheet: bool = false
 @export_range(0, 1024, 1) var frame_width: int = 0

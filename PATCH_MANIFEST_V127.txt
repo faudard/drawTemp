@@ -1,0 +1,35 @@
+Sporebound Tactics V1.27 - Library Art Runtime
+
+Runtime
+- Added UnitVisualDefinition.render_mode: auto / procedural / sprite_sheet / portrait_billboard.
+- Added attack_pose_path and cast_pose_path for portrait billboard presentation.
+- SporeUnitActor3D now renders high-quality library portraits directly on 3D tactical billboards.
+- Attack/Cast can swap to a dedicated transparent action pose, then return to idle portrait.
+
+Active bindings
+- momo -> shield_guard
+- pipo -> flower_healer
+- luma -> rifle_ranger
+- ziggy -> spore_gunslinger
+- grincheux -> spike_fighter
+- baveux -> toxic_mage
+- comptable -> spore_alchemist
+- dj_morille -> coral_monk
+- choriste -> spore_shepherd
+- archiviste -> shadow_duelist
+
+Library
+- 39 runtime portraits in assets/portraits/library/.
+- 39 selectable lib_* visual resources in data/visuals/units/.
+- 12 extracted 512x512 attack poses in assets/action_poses/library/.
+- 8 status icons in assets/status_icons/library/.
+- data/library_assets/catalog.json contains tags, visual IDs, active unit bindings and action-pose paths.
+
+Studio
+- Visuals tab exposes render mode.
+- Visuals tab exposes attack/cast pose paths.
+- portrait_billboard is previewed with the real library art.
+- Library-only lib_* skins can intentionally have no unit binding.
+
+Tests
+- Added tests/test_library_assets_v127.gd.

@@ -92,6 +92,7 @@ var _visual_definition: Resource = null
 var _sprite_sheet_texture: Texture2D = null
 var _sprite_frame_texture: AtlasTexture = null
 var _uses_sprite_sheet: bool = false
+var _uses_portrait_billboard: bool = false
 var _animation_state: String = "idle"
 var _animation_elapsed: float = 0.0
 var _last_sprite_frame: Vector2i = Vector2i(-999, -999)
@@ -957,6 +958,7 @@ func _refresh_visuals() -> void:
 
 func _configure_sprite_source() -> void:
 	_uses_sprite_sheet = false
+	_uses_portrait_billboard = false
 	_sprite_sheet_texture = null
 	_sprite_frame_texture = null
 	_last_sprite_frame = Vector2i(-999, -999)
@@ -966,10 +968,20 @@ func _configure_sprite_source() -> void:
 		var raw_offset: Variant = _visual_definition.get("sprite_offset")
 		if raw_offset is Vector2:
 			_sprite_art_offset = raw_offset
+		var render_mode: String = String(_visual_definition.get("render_mode"))
+		if render_mode.is_empty():
+			render_mode = "auto"
+		var portrait_path: String = String(_visual_definition.get("portrait_path"))
+		if render_mode == "portrait_billboard" and not portrait_path.is_empty() and ResourceLoader.exists(portrait_path):
+			var loaded_portrait: Resource = load(portrait_path)
+			if loaded_portrait is Texture2D:
+				_sprite.texture = loaded_portrait as Texture2D
+				_uses_portrait_billboard = true
 		var sheet_path: String = String(_visual_definition.get("sprite_sheet_path"))
 		var fw: int = int(_visual_definition.get("frame_width"))
 		var fh: int = int(_visual_definition.get("frame_height"))
-		if bool(_visual_definition.get("use_sprite_sheet")) and fw > 0 and fh > 0 and not sheet_path.is_empty() and ResourceLoader.exists(sheet_path):
+		var allow_sheet: bool = render_mode in ["auto", "sprite_sheet"]
+		if not _uses_portrait_billboard and allow_sheet and bool(_visual_definition.get("use_sprite_sheet")) and fw > 0 and fh > 0 and not sheet_path.is_empty() and ResourceLoader.exists(sheet_path):
 			var loaded_sheet: Resource = load(sheet_path)
 			if loaded_sheet is Texture2D:
 				_sprite_sheet_texture = loaded_sheet as Texture2D
@@ -977,13 +989,34 @@ func _configure_sprite_source() -> void:
 				_sprite_frame_texture.atlas = _sprite_sheet_texture
 				_sprite.texture = _sprite_frame_texture
 				_uses_sprite_sheet = true
+	if _uses_portrait_billboard:
+		_apply_portrait_billboard_state_texture()
 	_sprite.position = _sprite_base_position()
 	_sprite.scale = Vector3.ONE * _sprite_art_scale
 	_sprite.modulate = _sprite_base_modulate()
 	if _uses_sprite_sheet:
 		_update_sprite_animation(true)
-	else:
+	elif not _uses_portrait_billboard:
 		_sprite.texture = _build_texture(_last_view_direction)
+
+
+func _apply_portrait_billboard_state_texture() -> void:
+	if not _uses_portrait_billboard or _sprite == null or _visual_definition == null:
+		return
+	var path: String = String(_visual_definition.get("portrait_path"))
+	if _animation_state == "attack":
+		var attack_path: String = String(_visual_definition.get("attack_pose_path"))
+		if not attack_path.is_empty():
+			path = attack_path
+	elif _animation_state == "cast":
+		var cast_path: String = String(_visual_definition.get("cast_pose_path"))
+		if not cast_path.is_empty():
+			path = cast_path
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return
+	var loaded: Resource = load(path)
+	if loaded is Texture2D:
+		_sprite.texture = loaded as Texture2D
 
 
 func _set_animation_state(state: String, restart: bool = true) -> void:
@@ -995,6 +1028,8 @@ func _set_animation_state(state: String, restart: bool = true) -> void:
 	if restart:
 		_animation_elapsed = 0.0
 	_last_sprite_frame = Vector2i(-999, -999)
+	if _uses_portrait_billboard:
+		_apply_portrait_billboard_state_texture()
 	_update_sprite_animation(true)
 
 
@@ -1038,6 +1073,11 @@ func _update_directional_sprite() -> void:
 	_last_sprite_frame = Vector2i(-999, -999)
 	if _uses_sprite_sheet:
 		_update_sprite_animation(true)
+	elif _uses_portrait_billboard:
+		# Library portraits are camera-facing presentation art. They deliberately
+		# stay unchanged when the tactical facing changes until a true 4-way
+		# sprite sheet is authored for that character.
+		return
 	elif _sprite != null:
 		_sprite.texture = _build_texture(direction_name)
 

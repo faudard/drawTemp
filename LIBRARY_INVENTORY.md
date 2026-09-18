@@ -1,0 +1,65 @@
+# Inventaire trié
+
+- 39 portraits haute résolution + versions runtime 512×512
+- 14 planches d’actions
+- 3 planches directionnelles / sprite references
+- 4 planches de statuts
+- 8 icônes de statut extraites
+- 2 planches de concepts / bestiaire
+
+## Portraits
+- `aqua_mage` → `res://assets/portraits/library/aqua_mage.png`
+- `aqua_spirit` → `res://assets/portraits/library/aqua_spirit.png`
+- `blue_oracle` → `res://assets/portraits/library/blue_oracle.png`
+- `bombardier_artillery` → `res://assets/portraits/library/bombardier_artillery.png`
+- `bracket_colossus` → `res://assets/portraits/library/bracket_colossus.png`
+- `chanterelle_banner_mage` → `res://assets/portraits/library/chanterelle_banner_mage.png`
+- `coral_monk` → `res://assets/portraits/library/coral_monk.png`
+- `coral_tank` → `res://assets/portraits/library/coral_tank.png`
+- `crystal_fighter` → `res://assets/portraits/library/crystal_fighter.png`
+- `crystal_fungal_rider` → `res://assets/portraits/library/crystal_fungal_rider.png`
+- `crystal_miner` → `res://assets/portraits/library/crystal_miner.png`
+- `drillcap_mechanic` → `res://assets/portraits/library/drillcap_mechanic.png`
+- `flower_healer` → `res://assets/portraits/library/flower_healer.png`
+- `fungal_fortress` → `res://assets/portraits/library/fungal_fortress.png`
+- `lichen_nature_mage` → `res://assets/portraits/library/lichen_nature_mage.png`
+- `mech_cannon` → `res://assets/portraits/library/mech_cannon.png`
+- `morel_guard` → `res://assets/portraits/library/morel_guard.png`
+- `morel_lancer` → `res://assets/portraits/library/morel_lancer.png`
+- `moss_guardian` → `res://assets/portraits/library/moss_guardian.png`
+- `muscle_brawler` → `res://assets/portraits/library/muscle_brawler.png`
+- `mushroom_duelist` → `res://assets/portraits/library/mushroom_duelist.png`
+- `puffball_gatherer` → `res://assets/portraits/library/puffball_gatherer.png`
+- `puffball_scout` → `res://assets/portraits/library/puffball_scout.png`
+- `rifle_ranger` → `res://assets/portraits/library/rifle_ranger.png`
+- `ruby_royal_mage` → `res://assets/portraits/library/ruby_royal_mage.png`
+- `shadow_duelist` → `res://assets/portraits/library/shadow_duelist.png`
+- `shelf_shield_fighter` → `res://assets/portraits/library/shelf_shield_fighter.png`
+- `shield_guard` → `res://assets/portraits/library/shield_guard.png`
+- `slinger` → `res://assets/portraits/library/slinger.png`
+- `sniper_scout` → `res://assets/portraits/library/sniper_scout.png`
+- `spear_scout` → `res://assets/portraits/library/spear_scout.png`
+- `spike_fighter` → `res://assets/portraits/library/spike_fighter.png`
+- `spore_alchemist` → `res://assets/portraits/library/spore_alchemist.png`
+- `spore_gunslinger` → `res://assets/portraits/library/spore_gunslinger.png`
+- `spore_shepherd` → `res://assets/portraits/library/spore_shepherd.png`
+- `starter_scout` → `res://assets/portraits/library/starter_scout.png`
+- `starter_spearman` → `res://assets/portraits/library/starter_spearman.png`
+- `teal_spore_shaman` → `res://assets/portraits/library/teal_spore_shaman.png`
+- `toxic_mage` → `res://assets/portraits/library/toxic_mage.png`
+
+## Action strips
+- `bombardier_artillery_strip` ↔ portrait `bombardier_artillery`
+- `crystal_guardian_strip` ↔ portrait `crystal_fighter`
+- `dragon_fungus_fire_strip`
+- `drillcap_mechanic_strip` ↔ portrait `drillcap_mechanic`
+- `lichen_nature_mage_strip` ↔ portrait `lichen_nature_mage`
+- `mech_cannon_strip` ↔ portrait `mech_cannon`
+- `mindseer_control_strip`
+- `rifle_ranger_strip` ↔ portrait `rifle_ranger`
+- `ruby_royal_mage_strip` ↔ portrait `ruby_royal_mage`
+- `shieldcap_guard_strip` ↔ portrait `shield_guard`
+- `sniper_scout_strip` ↔ portrait `sniper_scout`
+- `spikeback_fighter_strip` ↔ portrait `spike_fighter`
+- `spore_gunslinger_strip` ↔ portrait `spore_gunslinger`
+- `toxic_mage_strip` ↔ portrait `toxic_mage`

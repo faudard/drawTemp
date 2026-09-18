@@ -1,0 +1,86 @@
+diff --git a/scripts/controllers/battle_controller.gd b/scripts/controllers/battle_controller.gd
+--- a/scripts/controllers/battle_controller.gd
++++ b/scripts/controllers/battle_controller.gd
+@@ -1332,10 +1332,8 @@ func make_hero(hero_id: String, position: Vector2i) -> Dictionary:
+ 		String(campaign.hero_jobs.get(hero_id, UnitCatalog.default_job(hero_id))),
+ 		campaign.hero_job_xp.get(hero_id, {}),
+ 		campaign.hero_equipment_slots.get(hero_id, {}),
+-		campaign.job_nodes(hero_id, String(campaign.hero_jobs.get(hero_id, UnitCatalog.default_job(hero_id)))),
+-		campaign.loadout_for(hero_id),
+-		campaign.hero_job_nodes.get(hero_id, {})
++		campaign.job_nodes(hero_id, String(campaign.hero_jobs.get(hero_id, UnitCatalog.default_job(hero_id))))
+ 	)
+
+ func apply_equipment_to_hero(unit: Dictionary, equipment_id: String) -> void:
+@@ -3482,8 +3480,8 @@ func update_ui() -> void:
+ 		var secondary_id := str(unit.get("secondary", ""))
+ 		var primary_cd := cooldown_left(unit, primary_id)
+ 		var secondary_cd := cooldown_left(unit, secondary_id)
+-		var primary_cast := SkillCatalog.cast_time_ticks(primary_id)
+-		var secondary_cast := SkillCatalog.cast_time_ticks(secondary_id)
++		var primary_cast: int = SkillCatalog.cast_time_ticks(primary_id)
++		var secondary_cast: int = SkillCatalog.cast_time_ticks(secondary_id)
+ 		var primary_cast_text := " • CAST %d" % primary_cast if primary_cast > 0 else ""
+ 		var secondary_cast_text := " • CAST %d" % secondary_cast if secondary_cast > 0 else ""
+ 		special_button.text = "%s • F%d • CD %s%s" % [skill_name(primary_id), skill_cost(primary_id), ("prêt" if primary_cd <= 0 else str(primary_cd)), primary_cast_text]
+
+diff --git a/scripts/data/skill_definition.gd b/scripts/data/skill_definition.gd
+--- a/scripts/data/skill_definition.gd
++++ b/scripts/data/skill_definition.gd
+@@ -15,6 +15,13 @@ extends Resource
+ @export_group("Effects")
+ @export var effects: Array[Resource] = []
+ @export var effect_tags: PackedStringArray = PackedStringArray()
+
++@export_group("Tactical Resolution")
++## Existing skills preserve their previous guaranteed-hit behavior unless enabled explicitly.
++@export var uses_accuracy: bool = false
++@export_range(5, 100, 1) var accuracy: int = 100
++@export_range(0, 20, 1) var cast_time_ticks: int = 0
++@export var interrupt_on_damage: bool = true
++
+ @export_group("Presentation")
+ @export var vfx_id: String = "default_hit"
+
+
+diff --git a/scripts/catalogs/skill_catalog.gd b/scripts/catalogs/skill_catalog.gd
+--- a/scripts/catalogs/skill_catalog.gd
++++ b/scripts/catalogs/skill_catalog.gd
+@@ -54,6 +54,35 @@ static func effects(skill_id: String) -> Array:
+
+ static func has_effects(skill_id: String) -> bool:
+ 	return not effects(skill_id).is_empty()
+
++
++static func has_tag(skill_id: String, tag: String) -> bool:
++	var data := definition(skill_id)
++	if data == null or tag.is_empty():
++		return false
++	return data.effect_tags.has(tag)
++
++
++static func uses_accuracy(skill_id: String) -> bool:
++	var data := definition(skill_id)
++	return bool(data.uses_accuracy) if data != null else false
++
++
++static func accuracy(skill_id: String) -> int:
++	var data := definition(skill_id)
++	if data == null:
++		return 100
++	return clampi(int(data.accuracy), 5, 100)
++
++
++static func cast_time_ticks(skill_id: String) -> int:
++	var data := definition(skill_id)
++	return maxi(0, int(data.cast_time_ticks)) if data != null else 0
++
++
++static func interrupt_on_damage(skill_id: String) -> bool:
++	var data := definition(skill_id)
++	return bool(data.interrupt_on_damage) if data != null else true
++
++
+ static func cooldown_left(unit: Dictionary, skill_id: String) -> int:
+ 	var cooldowns: Dictionary = unit.get("cooldowns", {})
+ 	return int(cooldowns.get(skill_id, 0))

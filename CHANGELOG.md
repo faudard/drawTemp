@@ -1,3 +1,15 @@
+# V1.27 — Library Art Runtime
+
+- Nouveau `render_mode` dans `SporeUnitVisualDefinition` : `auto`, `procedural`, `sprite_sheet`, `portrait_billboard`.
+- `SporeUnitActor3D` peut afficher directement les portraits transparents de la bibliothèque comme billboards 3D de combat.
+- Les 10 unités actuelles sont associées à des personnages Sporebound de la bibliothèque.
+- 39 skins `lib_*` ajoutés au catalogue Visuals pour rendre toute la bibliothèque sélectionnable depuis Sporebound Studio.
+- 12 poses d’attaque runtime 512×512 extraites des action strips ; changement automatique de texture pendant Attack/Cast en mode billboard.
+- Visual Editor : choix du mode de rendu et prévisualisation réelle des portraits bibliothèque.
+- Catalogue enrichi avec tags de rôle et associations unité -> asset.
+- Les 8 icônes de statut restent indexées pour le futur HUD d’états altérés.
+- Nouveau smoke test `tests/test_library_assets_v127.gd`.
+
 # V1.22.0 — Weapon & Defense Mechanics
 
 - Profils d’armes mécaniques : mêlée, lance, distance et focus.
