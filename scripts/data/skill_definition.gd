@@ -15,16 +15,15 @@ extends Resource
 @export_range(0, 12, 1) var range: int = 1
 @export_enum("self", "ally", "enemy", "unit", "ground") var target_mode: String = "enemy"
 
+@export_group("Timing / Accuracy")
+@export_range(0, 20, 1) var cast_time_ticks: int = 0
+@export var interrupt_on_damage: bool = true
+@export var uses_accuracy: bool = false
+@export_range(0, 100, 1) var accuracy: int = 100
+
 @export_group("Effects")
 @export var effects: Array[Resource] = []
 @export var effect_tags: PackedStringArray = PackedStringArray()
-
-@export_group("Tactical Resolution")
-## Existing skills preserve their previous guaranteed-hit behavior unless enabled explicitly.
-@export var uses_accuracy: bool = false
-@export_range(5, 100, 1) var accuracy: int = 100
-@export_range(0, 20, 1) var cast_time_ticks: int = 0
-@export var interrupt_on_damage: bool = true
 
 @export_group("Presentation")
 @export var vfx_id: String = "default_hit"

@@ -1,14 +1,26 @@
-# V1.27 — Library Art Runtime
+# Mission 1 3D — Objective Beacons & Team Auras
 
-- Nouveau `render_mode` dans `SporeUnitVisualDefinition` : `auto`, `procedural`, `sprite_sheet`, `portrait_billboard`.
-- `SporeUnitActor3D` peut afficher directement les portraits transparents de la bibliothèque comme billboards 3D de combat.
-- Les 10 unités actuelles sont associées à des personnages Sporebound de la bibliothèque.
-- 39 skins `lib_*` ajoutés au catalogue Visuals pour rendre toute la bibliothèque sélectionnable depuis Sporebound Studio.
-- 12 poses d’attaque runtime 512×512 extraites des action strips ; changement automatique de texture pendant Attack/Cast en mode billboard.
-- Visual Editor : choix du mode de rendu et prévisualisation réelle des portraits bibliothèque.
-- Catalogue enrichi avec tags de rôle et associations unité -> asset.
-- Les 8 icônes de statut restent indexées pour le futur HUD d’états altérés.
-- Nouveau smoke test `tests/test_library_assets_v127.gd`.
+- Balises 3D ajoutées pour la zone d’extraction et les vinyles optionnels.
+- Animation légère de la Couronne runtime pour mieux l’identifier.
+- Aura d’équipe permanente sous chaque unité, renforcée sur la sélection et l’unité active.
+- Passe purement visuelle / lisibilité, sans changement des règles.
+
+# Mission 1 3D — UX / Tactical Readability Pass
+
+- Timeline d’initiative restylée avec portraits compacts des prochaines activations.
+- Nouveau panneau **OBJECTIF** : mission, statut de la Couronne, vinyles, ennemis restants et état des interactables.
+- Nouveau panneau **CASE** : coordonnées, hauteur, type de terrain, rôle de la case, occupant et estimation d’attaque/déplacement.
+- Cette passe reste purement présentation / lisibilité : aucune règle de gameplay de la mission 1 n’est modifiée.
+
+# Mission 1 3D — Design Pass
+
+- Nouveau diorama forestier runtime autour de la grille 3D, sans collision ni impact gameplay.
+- Cases stylisées : mousse/terre, obstacles rocheux, couvertures bois, spores, extraction, vinyles et Couronne.
+- Porte, interrupteur et coffre redessinés en 3D low-poly.
+- Éclairage, brume, palette HUD et boutons harmonisés.
+- Les portraits transparents peuvent servir de billboard runtime quand aucune spritesheet n’est fournie.
+- Six illustrations de la bibliothèque Sporebound raccordées provisoirement à Pipo, Luma et aux ennemis de la mission 1.
+- Marqueurs runtime Couronne et nouvelles flaques de spores alignés avec la nouvelle direction artistique.
 
 # V1.22.0 — Weapon & Defense Mechanics
 

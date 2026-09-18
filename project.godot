@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Sporebound Tactics - V1.26.2 Hero Creator Plugin Fix"
-run/main_scene="res://main.tscn"
+run/main_scene="res://scenes/mission_1_battle_3d.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="SporeboundTactics"
 config/features=PackedStringArray("4.7")

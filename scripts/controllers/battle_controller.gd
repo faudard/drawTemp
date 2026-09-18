@@ -1427,7 +1427,9 @@ func make_hero(hero_id: String, position: Vector2i) -> Dictionary:
 		String(campaign.hero_jobs.get(hero_id, UnitCatalog.default_job(hero_id))),
 		campaign.hero_job_xp.get(hero_id, {}),
 		campaign.hero_equipment_slots.get(hero_id, {}),
-		campaign.job_nodes(hero_id, String(campaign.hero_jobs.get(hero_id, UnitCatalog.default_job(hero_id))))
+		campaign.job_nodes(hero_id, String(campaign.hero_jobs.get(hero_id, UnitCatalog.default_job(hero_id)))),
+		campaign.loadout_for(hero_id),
+		campaign.hero_job_nodes.get(hero_id, {})
 	)
 
 
@@ -3691,8 +3693,8 @@ func update_ui() -> void:
 		var secondary_id := str(unit.get("secondary", ""))
 		var primary_cd := cooldown_left(unit, primary_id)
 		var secondary_cd := cooldown_left(unit, secondary_id)
-		var primary_cast: int = SkillCatalog.cast_time_ticks(primary_id)
-		var secondary_cast: int = SkillCatalog.cast_time_ticks(secondary_id)
+		var primary_cast := SkillCatalog.cast_time_ticks(primary_id)
+		var secondary_cast := SkillCatalog.cast_time_ticks(secondary_id)
 		var primary_cast_text := " • CAST %d" % primary_cast if primary_cast > 0 else ""
 		var secondary_cast_text := " • CAST %d" % secondary_cast if secondary_cast > 0 else ""
 		special_button.text = "%s • F%d • CD %s%s" % [skill_name(primary_id), skill_cost(primary_id), ("prêt" if primary_cd <= 0 else str(primary_cd)), primary_cast_text]

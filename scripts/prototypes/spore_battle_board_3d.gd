@@ -7,6 +7,7 @@ const SkillCatalog = preload("res://scripts/catalogs/skill_catalog.gd")
 const StatusCatalog = preload("res://scripts/catalogs/status_catalog.gd")
 const VfxCatalog = preload("res://scripts/catalogs/vfx_catalog.gd")
 const ActionVfxScript = preload("res://scripts/prototypes/spore_action_vfx_3d.gd")
+const MissionDressingScript = preload("res://scripts/presentation/spore_mission_dressing_3d.gd")
 const UnitActorScript = preload("res://scripts/maps/spore_unit_actor_3d.gd")
 const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
 
@@ -78,6 +79,20 @@ var selected_skill_id: String = ""
 var path_parents: Dictionary = {}
 var preview_path_cells: Array[Vector2i] = []
 var battle_finished: bool = false
+var mission_victory: bool = false
+var mission_definition: Resource = null
+var mission_objective: String = "eliminate"
+var mission_brief: String = ""
+var extraction_cells: Array[Vector2i] = []
+var bonus_cells: Array[Vector2i] = []
+var mission_hazard_cells: Array[Vector2i] = []
+var bonus_collected: int = 0
+var bonus_target_total: int = 0
+var crown_cell: Vector2i = Vector2i(-9, -9)
+var crown_carrier_id: String = ""
+var interactable_states: Dictionary = {}
+var mission_trigger_fired: Dictionary = {}
+var enemies_cleared_logged: bool = false
 var enemy_busy: bool = false
 var player_busy: bool = false
 var battle_log: Array[String] = []
@@ -94,11 +109,15 @@ var _skill_hit_cache: Dictionary = {}
 var _camera_rig: Node3D
 var _camera: Camera3D
 var _light: DirectionalLight3D
+var _fill_light: OmniLight3D
+var _world_environment: WorldEnvironment
+var _dressing_root: Node3D
 var _map_holder: Node3D
 var _actor_holder: Node3D
 var _highlight_holder: Node3D
 var _zone_holder: Node3D
 var _vfx_holder: Node3D
+var _mission_runtime_holder: Node3D
 var _cursor_mesh: MeshInstance3D
 var _ui_layer: CanvasLayer
 var _info_label: Label
@@ -118,6 +137,10 @@ var _preview_confirm_button: Button
 var _preview_cancel_button: Button
 var _timeline_panel: Panel
 var _timeline_bar: HBoxContainer
+var _objective_panel: Panel
+var _objective_body: Label
+var _cell_panel: Panel
+var _cell_body: Label
 var _unit_card_panel: Panel
 var _unit_card_title: Label
 var _unit_card_body: Label
@@ -154,6 +177,7 @@ var _projectile_follow_vfx: SporeActionVfx3D = null
 func _ready() -> void:
 	_ensure_runtime_nodes()
 	_load_map()
+	_setup_mission_runtime()
 	_spawn_runtime_units()
 	_build_turn_order()
 	_start_next_activation()
@@ -161,7 +185,11 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _camera == null or map_root == null or battle_finished:
+	if _camera == null or map_root == null:
+		return
+	if battle_finished:
+		if event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_R:
+			get_tree().reload_current_scene()
 		return
 	if event is InputEventMouseMotion:
 		var next_hovered: Vector2i = _screen_to_cell((event as InputEventMouseMotion).position)
@@ -225,6 +253,7 @@ func _process(delta: float) -> void:
 	_update_cursor_animation()
 	_update_cursor()
 	_update_action_wheel()
+	_update_mission_runtime_animation()
 
 
 func _ensure_runtime_nodes() -> void:
@@ -253,6 +282,34 @@ func _ensure_runtime_nodes() -> void:
 		_vfx_holder = Node3D.new()
 		_vfx_holder.name = "ActionVFX"
 		add_child(_vfx_holder)
+	_mission_runtime_holder = get_node_or_null("MissionRuntime") as Node3D
+	if _mission_runtime_holder == null:
+		_mission_runtime_holder = Node3D.new()
+		_mission_runtime_holder.name = "MissionRuntime"
+		add_child(_mission_runtime_holder)
+	_dressing_root = get_node_or_null("MissionDressing") as Node3D
+	if _dressing_root == null:
+		_dressing_root = MissionDressingScript.new() as Node3D
+		_dressing_root.name = "MissionDressing"
+		add_child(_dressing_root)
+
+	_world_environment = get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if _world_environment == null:
+		_world_environment = WorldEnvironment.new()
+		_world_environment.name = "WorldEnvironment"
+		add_child(_world_environment)
+	var environment: Environment = _world_environment.environment
+	if environment == null:
+		environment = Environment.new()
+		_world_environment.environment = environment
+	environment.background_mode = Environment.BG_COLOR
+	environment.background_color = Color("#17211b")
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color("#b9c6af")
+	environment.ambient_light_energy = 0.68
+	environment.fog_enabled = true
+	environment.fog_light_color = Color("#60705e")
+	environment.fog_density = 0.008
 
 	_camera_rig = get_node_or_null("CameraRig") as Node3D
 	if _camera_rig == null:
@@ -270,8 +327,21 @@ func _ensure_runtime_nodes() -> void:
 	if _light == null:
 		_light = DirectionalLight3D.new()
 		_light.name = "DirectionalLight3D"
-		_light.light_energy = 1.3
 		_camera_rig.add_child(_light)
+	_light.light_color = Color("#ffe4bd")
+	_light.light_energy = 1.15
+	_light.shadow_enabled = true
+	_light.rotation_degrees = Vector3(-54.0, -38.0, 0.0)
+	_fill_light = get_node_or_null("FillLight") as OmniLight3D
+	if _fill_light == null:
+		_fill_light = OmniLight3D.new()
+		_fill_light.name = "FillLight"
+		add_child(_fill_light)
+	_fill_light.light_color = Color("#89a7d8")
+	_fill_light.light_energy = 0.75
+	_fill_light.omni_range = 18.0
+	_fill_light.position = Vector3(-5.0, 7.0, 4.0)
+	_fill_light.shadow_enabled = false
 	_position_camera()
 
 	_cursor_mesh = get_node_or_null("Cursor") as MeshInstance3D
@@ -311,8 +381,8 @@ func _build_ui() -> void:
 	panel.position = Vector2(18.0, 18.0)
 	panel.size = Vector2(520.0, 258.0)
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.11, 0.16, 0.92)
-	style.border_color = Color(0.31, 0.43, 0.56, 1.0)
+	style.bg_color = Color(0.045, 0.055, 0.070, 0.94)
+	style.border_color = Color(0.40, 0.56, 0.45, 0.96)
 	style.border_width_left = 1
 	style.border_width_top = 1
 	style.border_width_right = 1
@@ -369,16 +439,38 @@ func _build_ui() -> void:
 	_timeline_panel = Panel.new()
 	_timeline_panel.name = "InitiativeTimeline"
 	_timeline_panel.position = Vector2(550.0, 18.0)
-	_timeline_panel.size = Vector2(224.0, 92.0)
+	_timeline_panel.size = Vector2(224.0, 106.0)
 	_timeline_panel.add_theme_stylebox_override("panel", style)
 	root.add_child(_timeline_panel)
 	var timeline_title: Label = _make_label(_timeline_panel, Vector2(10.0, 7.0), Vector2(204.0, 22.0), 12, Color(0.68, 0.79, 0.87, 1.0))
 	timeline_title.text = "INITIATIVE"
 	_timeline_bar = HBoxContainer.new()
 	_timeline_bar.position = Vector2(10.0, 31.0)
-	_timeline_bar.size = Vector2(204.0, 50.0)
-	_timeline_bar.add_theme_constant_override("separation", 3)
+	_timeline_bar.size = Vector2(204.0, 64.0)
+	_timeline_bar.add_theme_constant_override("separation", 4)
 	_timeline_panel.add_child(_timeline_bar)
+
+	_objective_panel = Panel.new()
+	_objective_panel.name = "ObjectivePanel"
+	_objective_panel.position = Vector2(550.0, 132.0)
+	_objective_panel.size = Vector2(224.0, 126.0)
+	_objective_panel.add_theme_stylebox_override("panel", style)
+	root.add_child(_objective_panel)
+	var objective_title: Label = _make_label(_objective_panel, Vector2(10.0, 7.0), Vector2(204.0, 22.0), 12, Color(0.68, 0.79, 0.87, 1.0))
+	objective_title.text = "OBJECTIF"
+	_objective_body = _make_label(_objective_panel, Vector2(12.0, 30.0), Vector2(200.0, 88.0), 12, Color(0.95, 0.94, 0.87, 1.0))
+	_objective_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	_cell_panel = Panel.new()
+	_cell_panel.name = "CellPanel"
+	_cell_panel.position = Vector2(550.0, 272.0)
+	_cell_panel.size = Vector2(224.0, 132.0)
+	_cell_panel.add_theme_stylebox_override("panel", style)
+	root.add_child(_cell_panel)
+	var cell_title: Label = _make_label(_cell_panel, Vector2(10.0, 7.0), Vector2(204.0, 22.0), 12, Color(0.68, 0.79, 0.87, 1.0))
+	cell_title.text = "CASE"
+	_cell_body = _make_label(_cell_panel, Vector2(12.0, 30.0), Vector2(200.0, 92.0), 12, Color(0.95, 0.94, 0.87, 1.0))
+	_cell_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	_unit_card_panel = Panel.new()
 	_unit_card_panel.name = "UnitCard"
@@ -462,8 +554,32 @@ func _make_button(parent: Control, title: String, pos: Vector2, size_value: Vect
 	button.position = pos
 	button.size = size_value
 	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_font_size_override("font_size", 12)
+	button.add_theme_color_override("font_color", Color("#f1ecd9"))
+	button.add_theme_color_override("font_hover_color", Color.WHITE)
+	button.add_theme_color_override("font_pressed_color", Color("#fff0b5"))
+	button.add_theme_color_override("font_disabled_color", Color(0.55, 0.57, 0.58, 0.72))
+	button.add_theme_stylebox_override("normal", _button_style(Color("#1c2c2a"), Color("#48645a")))
+	button.add_theme_stylebox_override("hover", _button_style(Color("#284039"), Color("#70a27d")))
+	button.add_theme_stylebox_override("pressed", _button_style(Color("#334936"), Color("#e1bd62")))
+	button.add_theme_stylebox_override("disabled", _button_style(Color(0.09, 0.11, 0.12, 0.72), Color(0.25, 0.29, 0.28, 0.65)))
 	parent.add_child(button)
 	return button
+
+
+func _button_style(background: Color, border: Color) -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = background
+	style.border_color = border
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+	return style
 
 
 func _update_action_wheel() -> void:
@@ -532,6 +648,578 @@ func _load_map() -> void:
 	if preview != null:
 		preview.queue_free()
 	_hide_spawn_markers()
+	_rebuild_mission_dressing()
+
+
+func _rebuild_mission_dressing() -> void:
+	if _dressing_root == null or map_root == null:
+		return
+	if _dressing_root.has_method("build_for_map"):
+		_dressing_root.call("build_for_map", map_root)
+
+
+func _setup_mission_runtime() -> void:
+	mission_definition = MissionCatalog.definition(mission_index)
+	mission_objective = "eliminate"
+	mission_brief = ""
+	extraction_cells.clear()
+	bonus_cells.clear()
+	mission_hazard_cells.clear()
+	bonus_collected = 0
+	bonus_target_total = 0
+	crown_cell = Vector2i(-9, -9)
+	crown_carrier_id = ""
+	interactable_states.clear()
+	mission_trigger_fired.clear()
+	enemies_cleared_logged = false
+	mission_victory = false
+	if mission_definition != null:
+		mission_objective = String(mission_definition.get("objective"))
+		mission_brief = String(mission_definition.get("brief"))
+	if map_root == null:
+		return
+	var environment: Dictionary = map_root.to_environment()
+	_copy_vector2i_cells(environment.get("extraction", []), extraction_cells)
+	_copy_vector2i_cells(environment.get("bonus", []), bonus_cells)
+	_copy_vector2i_cells(environment.get("hazards", []), mission_hazard_cells)
+	var crown_value: Variant = environment.get("crown", Vector2i(-9, -9))
+	if crown_value is Vector2i:
+		crown_cell = crown_value
+	bonus_target_total = bonus_cells.size()
+	var object_defs: Array[Resource] = map_root.interactable_definitions()
+	if object_defs.is_empty():
+		object_defs = MissionCatalog.interactables(mission_index)
+	for definition: Resource in object_defs:
+		if definition == null:
+			continue
+		var object_id: String = String(definition.get("id"))
+		if object_id.is_empty():
+			continue
+		interactable_states[object_id] = {
+			"definition": definition,
+			"active": bool(definition.get("starts_active")),
+			"used": false,
+		}
+	_refresh_interactable_visuals()
+	_refresh_crown_runtime_marker()
+	_refresh_objective_world_markers()
+	if not mission_brief.is_empty():
+		_log("MISSION — %s" % mission_brief)
+	if bonus_target_total > 0:
+		_log("CONTRAT — récupérer %d vinyle(s) optionnel(s)." % bonus_target_total)
+
+
+func _copy_vector2i_cells(source: Variant, destination: Array[Vector2i]) -> void:
+	if not (source is Array):
+		return
+	for cell_var: Variant in source:
+		if cell_var is Vector2i:
+			destination.append(cell_var)
+
+
+func _mission_interactable_state(object_id: String) -> Dictionary:
+	var value: Variant = interactable_states.get(object_id, {})
+	return value as Dictionary if value is Dictionary else {}
+
+
+func _closed_mission_door_at(cell_value: Vector2i) -> bool:
+	for state_var: Variant in interactable_states.values():
+		if not (state_var is Dictionary):
+			continue
+		var state: Dictionary = state_var as Dictionary
+		var definition: Resource = state.get("definition", null) as Resource
+		if definition == null or String(definition.get("object_type")) != "door":
+			continue
+		var object_cell: Variant = definition.get("cell")
+		if object_cell is Vector2i and object_cell == cell_value:
+			return not bool(state.get("active", false))
+	return false
+
+
+func _closed_mission_door_cells() -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	for state_var: Variant in interactable_states.values():
+		if not (state_var is Dictionary):
+			continue
+		var state: Dictionary = state_var as Dictionary
+		var definition: Resource = state.get("definition", null) as Resource
+		if definition == null or String(definition.get("object_type")) != "door" or bool(state.get("active", false)):
+			continue
+		var object_cell: Variant = definition.get("cell")
+		if object_cell is Vector2i:
+			result.append(object_cell)
+	return result
+
+
+func _set_mission_interactable_active(object_id: String, active: bool) -> void:
+	var state: Dictionary = _mission_interactable_state(object_id)
+	if state.is_empty():
+		return
+	state["active"] = active
+	var definition: Resource = state.get("definition", null) as Resource
+	if definition != null:
+		_log("%s : %s." % [String(definition.get("display_name")).to_upper(), "OUVERT" if active else "FERMÉ"])
+	_refresh_interactable_visuals()
+
+
+func _toggle_mission_switch(object_id: String) -> void:
+	var state: Dictionary = _mission_interactable_state(object_id)
+	if state.is_empty():
+		return
+	var definition: Resource = state.get("definition", null) as Resource
+	if definition == null or String(definition.get("object_type")) != "switch":
+		return
+	state["active"] = not bool(state.get("active", false))
+	_log("INTERRUPTEUR : %s." % ("ACTIVÉ" if bool(state["active"]) else "DÉSACTIVÉ"))
+	var linked_id: String = String(definition.get("linked_object_id"))
+	if not linked_id.is_empty():
+		_set_mission_interactable_active(linked_id, bool(state["active"]))
+	else:
+		_refresh_interactable_visuals()
+
+
+func _apply_mission_reward(reward_type: String, reward_value: int, reward_team: String) -> void:
+	var candidates: Array[SporeUnitActor3D] = player_actors if reward_team == "player" else enemy_actors
+	for actor: SporeUnitActor3D in candidates:
+		if actor == null or not actor.alive:
+			continue
+		if reward_type == "heal_team":
+			var healed: int = actor.heal(maxi(0, reward_value))
+			if healed > 0:
+				_show_floating_text(actor.position + Vector3(0.0, 1.18, 0.0), "+%d PV" % healed, Color(0.48, 0.90, 0.66, 1.0))
+		elif reward_type == "focus_team":
+			var focus_gain: int = actor.change_focus(maxi(0, reward_value))
+			if focus_gain > 0:
+				_show_floating_text(actor.position + Vector3(0.0, 1.18, 0.0), "+%d FP" % focus_gain, Color(0.42, 0.72, 1.0, 1.0))
+
+
+func _open_mission_chest(object_id: String) -> void:
+	var state: Dictionary = _mission_interactable_state(object_id)
+	if state.is_empty() or bool(state.get("used", false)):
+		return
+	var definition: Resource = state.get("definition", null) as Resource
+	if definition == null or String(definition.get("object_type")) != "chest":
+		return
+	state["used"] = true
+	state["active"] = true
+	_apply_mission_reward(String(definition.get("reward_type")), int(definition.get("reward_value")), String(definition.get("reward_team")))
+	_log("COFFRE : %s ouvert." % String(definition.get("display_name")))
+	_refresh_interactable_visuals()
+
+
+func _handle_mission_interactable_entry(actor: SporeUnitActor3D) -> void:
+	if actor == null or not actor.alive or actor.team != "player":
+		return
+	for object_id_var: Variant in interactable_states.keys():
+		var object_id: String = String(object_id_var)
+		var state: Dictionary = _mission_interactable_state(object_id)
+		var definition: Resource = state.get("definition", null) as Resource
+		if definition == null:
+			continue
+		var object_cell: Variant = definition.get("cell")
+		if not (object_cell is Vector2i) or object_cell != actor.cell:
+			continue
+		var object_type: String = String(definition.get("object_type"))
+		if object_type == "switch":
+			if not bool(definition.get("one_shot")) or not bool(state.get("used", false)):
+				state["used"] = true
+				_toggle_mission_switch(object_id)
+		elif object_type == "chest":
+			_open_mission_chest(object_id)
+
+
+func _handle_mission_cell_entry(actor: SporeUnitActor3D) -> void:
+	if actor == null or not actor.alive:
+		return
+	if actor.team == "player":
+		if mission_objective == "crown" and crown_carrier_id.is_empty() and actor.cell == crown_cell:
+			crown_carrier_id = actor.unit_id
+			_refresh_crown_runtime_marker()
+			_refresh_objective_world_markers()
+			_show_floating_text(actor.position + Vector3(0.0, 1.36, 0.0), "COURONNE !", Color(1.0, 0.82, 0.32, 1.0))
+			_log("%s récupère la COURONNE BEATBOX. Retourne dans la zone verte !" % actor.display_name)
+		if bonus_cells.has(actor.cell):
+			bonus_cells.erase(actor.cell)
+			bonus_collected += 1
+			_refresh_objective_world_markers()
+			var healed: int = actor.heal(1)
+			_set_tile_terrain_prop_visible(actor.cell, false)
+			_show_floating_text(actor.position + Vector3(0.0, 1.30, 0.0), "+1 VINYLE", Color(0.38, 0.78, 1.0, 1.0))
+			_log("%s récupère un VINYLE VOLÉ (%d/%d)%s." % [actor.display_name, bonus_collected, bonus_target_total, " et regagne %d PV" % healed if healed > 0 else ""])
+		_handle_mission_interactable_entry(actor)
+
+
+func _set_tile_terrain_prop_visible(cell_value: Vector2i, visible_value: bool) -> void:
+	if map_root == null:
+		return
+	var tile: Node = map_root.tile_at(cell_value)
+	if tile == null:
+		return
+	var prop: Node3D = tile.get_node_or_null("_EditorProp") as Node3D
+	if prop != null:
+		prop.visible = visible_value
+	var special_root: Node3D = tile.get_node_or_null("_EditorSpecialRoot") as Node3D
+	if special_root != null:
+		special_root.visible = visible_value
+
+
+func _refresh_crown_runtime_marker() -> void:
+	if _mission_runtime_holder == null or map_root == null:
+		return
+	var previous: Node = _mission_runtime_holder.get_node_or_null("CrownMarker")
+	if previous != null:
+		_mission_runtime_holder.remove_child(previous)
+		previous.queue_free()
+	# The authored crown prop is hidden; the runtime marker follows drops/pickups.
+	var authored_environment: Dictionary = map_root.to_environment()
+	var authored_crown: Variant = authored_environment.get("crown", Vector2i(-9, -9))
+	if authored_crown is Vector2i:
+		_set_tile_terrain_prop_visible(authored_crown, false)
+	if not crown_carrier_id.is_empty() or not map_root.is_cell_valid(crown_cell):
+		return
+	var marker: Node3D = Node3D.new()
+	marker.name = "CrownMarker"
+	_mission_runtime_holder.add_child(marker)
+	marker.position = map_root.cell_top_local(crown_cell)
+
+	var glow_disc: MeshInstance3D = MeshInstance3D.new()
+	var glow_mesh: CylinderMesh = CylinderMesh.new()
+	glow_mesh.top_radius = 0.42
+	glow_mesh.bottom_radius = 0.42
+	glow_mesh.height = 0.024
+	glow_mesh.radial_segments = 24
+	glow_disc.mesh = glow_mesh
+	glow_disc.position.y = 0.025
+	glow_disc.material_override = _mission_material(Color(1.0, 0.76, 0.25, 0.26), 0.45, true, true)
+	marker.add_child(glow_disc)
+
+	var pedestal: MeshInstance3D = MeshInstance3D.new()
+	var pedestal_mesh: CylinderMesh = CylinderMesh.new()
+	pedestal_mesh.top_radius = 0.18
+	pedestal_mesh.bottom_radius = 0.28
+	pedestal_mesh.height = 0.18
+	pedestal_mesh.radial_segments = 10
+	pedestal.mesh = pedestal_mesh
+	pedestal.position.y = 0.13
+	pedestal.material_override = _mission_material(Color("#d6a845"), 0.40, true)
+	marker.add_child(pedestal)
+
+	var band: MeshInstance3D = MeshInstance3D.new()
+	var band_mesh: CylinderMesh = CylinderMesh.new()
+	band_mesh.top_radius = 0.23
+	band_mesh.bottom_radius = 0.23
+	band_mesh.height = 0.11
+	band_mesh.radial_segments = 12
+	band.mesh = band_mesh
+	band.position.y = 0.27
+	band.material_override = _mission_material(Color("#ffd86a"), 0.32, true)
+	marker.add_child(band)
+
+	for spike_index: int in range(5):
+		var angle: float = TAU * float(spike_index) / 5.0
+		var spike: MeshInstance3D = MeshInstance3D.new()
+		var spike_mesh: CylinderMesh = CylinderMesh.new()
+		spike_mesh.top_radius = 0.015
+		spike_mesh.bottom_radius = 0.075
+		spike_mesh.height = 0.27
+		spike_mesh.radial_segments = 6
+		spike.mesh = spike_mesh
+		spike.position = Vector3(cos(angle) * 0.15, 0.445, sin(angle) * 0.15)
+		spike.material_override = _mission_material(Color("#ffe484"), 0.30, true)
+		marker.add_child(spike)
+
+	var jewel: MeshInstance3D = MeshInstance3D.new()
+	var jewel_mesh: SphereMesh = SphereMesh.new()
+	jewel_mesh.radius = 0.07
+	jewel_mesh.height = 0.14
+	jewel_mesh.radial_segments = 10
+	jewel_mesh.rings = 5
+	jewel.mesh = jewel_mesh
+	jewel.position = Vector3(0.0, 0.37, -0.16)
+	jewel.material_override = _mission_material(Color("#60d2e8"), 0.24, true)
+	marker.add_child(jewel)
+
+	var label: Label3D = Label3D.new()
+	label.text = "COURONNE"
+	label.font_size = 22
+	label.outline_size = 8
+	label.modulate = Color("#ffe8a0")
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.position = Vector3(0.0, 0.88, 0.0)
+	marker.add_child(label)
+
+
+func _refresh_objective_world_markers() -> void:
+	if _mission_runtime_holder == null or map_root == null:
+		return
+	var previous: Node = _mission_runtime_holder.get_node_or_null("ObjectiveMarkers")
+	if previous != null:
+		_mission_runtime_holder.remove_child(previous)
+		previous.queue_free()
+	var root: Node3D = Node3D.new()
+	root.name = "ObjectiveMarkers"
+	_mission_runtime_holder.add_child(root)
+	for cell_value: Vector2i in extraction_cells:
+		root.add_child(_build_objective_marker(cell_value, "extraction"))
+	for cell_value: Vector2i in bonus_cells:
+		root.add_child(_build_objective_marker(cell_value, "bonus"))
+
+
+func _build_objective_marker(cell_value: Vector2i, marker_kind: String) -> Node3D:
+	var root: Node3D = Node3D.new()
+	root.name = "%s_%d_%d" % [marker_kind.capitalize(), cell_value.x, cell_value.y]
+	root.position = map_root.cell_top_local(cell_value)
+	root.set_meta("marker_kind", marker_kind)
+	root.set_meta("base_y", 0.0)
+	root.set_meta("phase", float(cell_value.x * 5 + cell_value.y * 7) * 0.21)
+
+	var disc: MeshInstance3D = MeshInstance3D.new()
+	var disc_mesh: CylinderMesh = CylinderMesh.new()
+	disc_mesh.top_radius = 0.36 if marker_kind == "extraction" else 0.28
+	disc_mesh.bottom_radius = 0.40 if marker_kind == "extraction" else 0.32
+	disc_mesh.height = 0.024
+	disc_mesh.radial_segments = 24
+	disc.mesh = disc_mesh
+	disc.position.y = 0.035
+	var base_color: Color = Color(0.34, 0.94, 0.54, 0.24) if marker_kind == "extraction" else Color(0.36, 0.86, 1.0, 0.22)
+	disc.material_override = _mission_material(base_color, 0.25, true, true)
+	root.add_child(disc)
+
+	var pillar: MeshInstance3D = MeshInstance3D.new()
+	var pillar_mesh: CylinderMesh = CylinderMesh.new()
+	pillar_mesh.top_radius = 0.07 if marker_kind == "extraction" else 0.05
+	pillar_mesh.bottom_radius = 0.11 if marker_kind == "extraction" else 0.08
+	pillar_mesh.height = 0.70 if marker_kind == "extraction" else 0.50
+	pillar_mesh.radial_segments = 10
+	pillar.mesh = pillar_mesh
+	pillar.position.y = 0.38 if marker_kind == "extraction" else 0.28
+	pillar.material_override = _mission_material(Color(0.54, 1.0, 0.70, 0.90) if marker_kind == "extraction" else Color(0.55, 0.92, 1.0, 0.88), 0.18, true, true)
+	pillar.set_meta("marker_part", "pillar")
+	root.add_child(pillar)
+
+	var topper: MeshInstance3D = MeshInstance3D.new()
+	var topper_mesh: SphereMesh = SphereMesh.new()
+	topper_mesh.radius = 0.09 if marker_kind == "extraction" else 0.07
+	topper_mesh.height = topper_mesh.radius * 2.0
+	topper.mesh = topper_mesh
+	topper.position.y = 0.78 if marker_kind == "extraction" else 0.57
+	topper.material_override = _mission_material(Color(0.74, 1.0, 0.82, 0.95) if marker_kind == "extraction" else Color(0.82, 0.96, 1.0, 0.95), 0.15, true, true)
+	topper.set_meta("marker_part", "topper")
+	root.add_child(topper)
+
+	var label: Label3D = Label3D.new()
+	label.text = "SORTIE" if marker_kind == "extraction" else "VINYLE"
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.font_size = 24
+	label.outline_size = 6
+	label.position = Vector3(0.0, 0.98 if marker_kind == "extraction" else 0.76, 0.0)
+	label.modulate = Color(0.80, 1.0, 0.88, 1.0) if marker_kind == "extraction" else Color(0.84, 0.96, 1.0, 1.0)
+	label.set_meta("marker_part", "label")
+	root.add_child(label)
+	return root
+
+
+func _update_mission_runtime_animation() -> void:
+	if _mission_runtime_holder == null:
+		return
+	for child: Node in _mission_runtime_holder.get_children():
+		var root: Node3D = child as Node3D
+		if root == null:
+			continue
+		if root.name == "ObjectiveMarkers":
+			for marker_node: Node in root.get_children():
+				var marker: Node3D = marker_node as Node3D
+				if marker == null:
+					continue
+				var kind: String = String(marker.get_meta("marker_kind", ""))
+				var phase: float = float(marker.get_meta("phase", 0.0))
+				var bob: float = sin(_presentation_time * (2.3 if kind == "extraction" else 3.1) + phase) * (0.035 if kind == "extraction" else 0.05)
+				marker.position = map_root.cell_top_local(_marker_cell_from_name(marker.name)) + Vector3(0.0, bob, 0.0)
+				for part: Node in marker.get_children():
+					var part3d: Node3D = part as Node3D
+					if part3d != null and String(part3d.get_meta("marker_part", "")) in ["pillar", "topper"]:
+						part3d.rotate_y(0.0)
+						part3d.scale = Vector3.ONE * (1.0 + sin(_presentation_time * 2.0 + phase) * 0.04)
+		elif root.name == "CrownMarker":
+			var crown_bob: float = sin(_presentation_time * 2.6) * 0.04
+			root.position = map_root.cell_top_local(crown_cell) + Vector3(0.0, crown_bob, 0.0)
+			root.rotation.y = _presentation_time * 0.75
+
+
+func _marker_cell_from_name(marker_name: String) -> Vector2i:
+	var parts: PackedStringArray = marker_name.split("_")
+	if parts.size() < 3:
+		return Vector2i.ZERO
+	return Vector2i(int(parts[1]), int(parts[2]))
+
+
+func _refresh_interactable_visuals() -> void:
+	if map_root == null:
+		return
+	for node: Node in _descendants(map_root):
+		if not node.has_method("spore_map_role") or String(node.call("spore_map_role")) != "interactable":
+			continue
+		var object_id: String = String(node.get("object_id"))
+		var state: Dictionary = _mission_interactable_state(object_id)
+		if state.is_empty():
+			continue
+		var definition: Resource = state.get("definition", null) as Resource
+		if definition == null:
+			continue
+		var object_type: String = String(definition.get("object_type"))
+		if object_type == "door":
+			node.set("visible", not bool(state.get("active", false)))
+		elif object_type == "chest":
+			node.set("visible", not bool(state.get("used", false)))
+
+
+func _add_mission_hazard(cell_value: Vector2i) -> void:
+	if map_root == null or not map_root.is_cell_valid(cell_value) or mission_hazard_cells.has(cell_value):
+		return
+	mission_hazard_cells.append(cell_value)
+	var root: Node3D = Node3D.new()
+	root.name = "Hazard_%d_%d" % [cell_value.x, cell_value.y]
+	root.position = map_root.cell_top_local(cell_value)
+	_mission_runtime_holder.add_child(root)
+
+	var puddle: MeshInstance3D = MeshInstance3D.new()
+	var mesh: CylinderMesh = CylinderMesh.new()
+	mesh.top_radius = map_root.tile_size * 0.30
+	mesh.bottom_radius = map_root.tile_size * 0.36
+	mesh.height = 0.075
+	mesh.radial_segments = 20
+	puddle.mesh = mesh
+	puddle.position.y = 0.045
+	puddle.material_override = _mission_material(Color(0.72, 0.36, 1.0, 0.72), 0.42, true, true)
+	root.add_child(puddle)
+
+	for orb_index: int in range(4):
+		var angle: float = TAU * float(orb_index) / 4.0 + float(cell_value.x * 3 + cell_value.y) * 0.19
+		var orb: MeshInstance3D = MeshInstance3D.new()
+		var orb_mesh: SphereMesh = SphereMesh.new()
+		orb_mesh.radius = 0.05
+		orb_mesh.height = 0.10
+		orb_mesh.radial_segments = 10
+		orb_mesh.rings = 5
+		orb.mesh = orb_mesh
+		orb.position = Vector3(cos(angle) * map_root.tile_size * 0.22, 0.14 + float(orb_index % 2) * 0.06, sin(angle) * map_root.tile_size * 0.22)
+		orb.material_override = _mission_material(Color("#d798ff"), 0.28, true)
+		root.add_child(orb)
+	_log("Une nouvelle flaque de spores apparaît en %d,%d." % [cell_value.x, cell_value.y])
+
+
+func _mission_material(color: Color, roughness: float, emissive: bool = false, transparent: bool = false) -> StandardMaterial3D:
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = roughness
+	if emissive:
+		material.emission_enabled = true
+		material.emission = Color(color.r, color.g, color.b, 1.0)
+		material.emission_energy_multiplier = 0.22
+	if transparent:
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	return material
+
+
+func _process_mission_hazard(actor: SporeUnitActor3D) -> void:
+	if actor == null or not actor.alive or not mission_hazard_cells.has(actor.cell):
+		return
+	var result: Dictionary = _apply_damage_with_reactions(null, actor, 1, "spores", false, false, "spore")
+	var applied: int = int(result.get("applied", 0))
+	if applied > 0:
+		_log("%s subit %d dégât de spores en fin d'activation." % [actor.display_name, applied])
+
+
+func _process_mission_round_start_triggers() -> void:
+	if mission_definition == null:
+		return
+	var triggers_value: Variant = mission_definition.get("battle_triggers")
+	if not (triggers_value is Array):
+		return
+	for trigger_var: Variant in triggers_value:
+		if not (trigger_var is Resource):
+			continue
+		var trigger: Resource = trigger_var as Resource
+		if not bool(trigger.get("enabled")) or String(trigger.get("condition_type")) != "round_start":
+			continue
+		if int(trigger.get("condition_value")) != round_number:
+			continue
+		var trigger_id: String = String(trigger.get("id"))
+		if bool(trigger.get("once")) and mission_trigger_fired.has(trigger_id):
+			continue
+		mission_trigger_fired[trigger_id] = true
+		var actions_value: Variant = trigger.get("actions")
+		if not (actions_value is Array):
+			continue
+		for action_var: Variant in actions_value:
+			if not (action_var is Resource):
+				continue
+			_execute_mission_action(action_var as Resource)
+
+
+func _execute_mission_action(action: Resource) -> void:
+	if action == null:
+		return
+	var action_type: String = String(action.get("action_type"))
+	match action_type:
+		"message":
+			var message: String = String(action.get("message"))
+			if not message.is_empty():
+				_log("ÉVÉNEMENT — %s" % message)
+		"add_hazard":
+			var cell_value: Variant = action.get("cell")
+			if cell_value is Vector2i:
+				_add_mission_hazard(cell_value)
+		"heal_team":
+			_apply_mission_reward("heal_team", int(action.get("value")), String(action.get("team")))
+		"grant_focus_team":
+			_apply_mission_reward("focus_team", int(action.get("value")), String(action.get("team")))
+		"open_door":
+			_set_mission_interactable_active(String(action.get("object_id")), true)
+		"close_door":
+			_set_mission_interactable_active(String(action.get("object_id")), false)
+		"toggle_switch":
+			_toggle_mission_switch(String(action.get("object_id")))
+		"open_chest":
+			_open_mission_chest(String(action.get("object_id")))
+		_:
+			# wait/cinematic actions are intentionally presentation-only in this 3D runtime.
+			pass
+
+
+func _mission_status_text() -> String:
+	if mission_objective == "crown":
+		if crown_carrier_id.is_empty():
+			return "OBJECTIF : récupérer ♛ en %d,%d puis rejoindre la zone verte • Vinyles %d/%d" % [crown_cell.x, crown_cell.y, bonus_collected, bonus_target_total]
+		var carrier: SporeUnitActor3D = _actor_by_unit_id(crown_carrier_id)
+		var carrier_name: String = carrier.display_name if carrier != null else crown_carrier_id
+		return "COURONNE : %s • rejoindre la zone verte • Vinyles %d/%d" % [carrier_name, bonus_collected, bonus_target_total]
+	return "OBJECTIF : neutraliser les ennemis • Vinyles %d/%d" % [bonus_collected, bonus_target_total]
+
+
+func _mission_cell_hint(cell_value: Vector2i) -> String:
+	var hints: PackedStringArray = PackedStringArray()
+	if crown_carrier_id.is_empty() and cell_value == crown_cell:
+		hints.append("♛ COURONNE")
+	if extraction_cells.has(cell_value):
+		hints.append("SORTIE")
+	if bonus_cells.has(cell_value):
+		hints.append("VINYLE")
+	if mission_hazard_cells.has(cell_value):
+		hints.append("SPORES")
+	for state_var: Variant in interactable_states.values():
+		if not (state_var is Dictionary):
+			continue
+		var state: Dictionary = state_var as Dictionary
+		var definition: Resource = state.get("definition", null) as Resource
+		if definition == null:
+			continue
+		var object_cell: Variant = definition.get("cell")
+		if object_cell is Vector2i and object_cell == cell_value:
+			hints.append(String(definition.get("display_name")))
+	return " • ".join(hints)
 
 
 func _hide_spawn_markers() -> void:
@@ -572,7 +1260,7 @@ func _spawn_runtime_units() -> void:
 		var actor: SporeUnitActor3D = UnitActorScript.new() as SporeUnitActor3D
 		actor.name = "%sActor" % unit_id.capitalize()
 		_actor_holder.add_child(actor)
-		var runtime_unit: Dictionary = UnitCatalog.make_hero(unit_id, hero_starts[index], 1, UnitCatalog.default_job(unit_id), {}, {}, PackedStringArray(), UnitCatalog.default_loadout(unit_id), {})
+		var runtime_unit: Dictionary = UnitCatalog.make_hero(unit_id, hero_starts[index], 1, UnitCatalog.default_job(unit_id), {}, {}, PackedStringArray())
 		var runtime_overrides: Dictionary = {
 			"hp": int(runtime_unit.get("max_hp", unit_data.get("max_hp"))),
 			"attack": int(runtime_unit.get("attack", unit_data.get("attack"))),
@@ -892,6 +1580,8 @@ func _start_next_activation() -> void:
 	if active_actor != null:
 		_process_persistent_zones_for_actor(active_actor, "activation_end")
 		if active_actor.alive:
+			_process_mission_hazard(active_actor)
+		if active_actor.alive:
 			_process_status_phase(active_actor, "activation_end")
 		var expired_statuses: PackedStringArray = active_actor.finish_status_activation()
 		if not expired_statuses.is_empty():
@@ -984,6 +1674,9 @@ func _player_move_to(cell: Vector2i) -> void:
 		call_deferred("_start_next_activation")
 		return
 	_log("%s se déplace en %d,%d (%d pas)." % [active_actor.display_name, active_actor.cell.x, active_actor.cell.y, path.size() - 1])
+	_handle_mission_cell_entry(active_actor)
+	if _check_battle_end():
+		return
 	if not active_actor.acted_this_activation:
 		input_mode = MODE_ATTACK
 	selected_skill_id = ""
@@ -1164,6 +1857,11 @@ func _handle_actor_ko(actor: SporeUnitActor3D, source_label: String = "") -> voi
 	actors_by_cell[actor.cell] = actor
 	var suffix: String = "" if source_label.is_empty() else " via %s" % source_label
 	_log("%s est K.O.%s." % [actor.display_name, suffix])
+	if actor.unit_id == crown_carrier_id:
+		crown_carrier_id = ""
+		crown_cell = actor.cell
+		_refresh_crown_runtime_marker()
+		_log("La COURONNE tombe en %d,%d !" % [crown_cell.x, crown_cell.y])
 
 
 func _show_floating_text(world_position: Vector3, text_value: String, color: Color) -> void:
@@ -1294,6 +1992,8 @@ func _compute_reachable_cells(actor: SporeUnitActor3D) -> void:
 		for obstacle_var: Variant in obstacle_cells_value:
 			if obstacle_var is Vector2i:
 				blocked[obstacle_var] = true
+	for door_cell: Vector2i in _closed_mission_door_cells():
+		blocked[door_cell] = true
 	var frontier: Array[Vector2i] = []
 	frontier.append(actor.cell)
 	var cost_by_cell: Dictionary = {actor.cell: 0}
@@ -1647,7 +2347,7 @@ func _try_displace_actor(target: SporeUnitActor3D, source_cell: Vector2i, distan
 		return
 	for _step: int in range(distance):
 		var next_cell: Vector2i = target.cell + direction
-		if not map_root.is_cell_valid(next_cell) or actors_by_cell.has(next_cell):
+		if not map_root.is_cell_valid(next_cell) or actors_by_cell.has(next_cell) or _closed_mission_door_at(next_cell):
 			break
 		var tile: Node = map_root.tile_at(next_cell)
 		if tile != null and String(tile.get("terrain_type")) == "obstacle":
@@ -1657,6 +2357,8 @@ func _try_displace_actor(target: SporeUnitActor3D, source_cell: Vector2i, distan
 		actors_by_cell.erase(target.cell)
 		target.move_to_cell(map_root, next_cell, 0.13)
 		actors_by_cell[next_cell] = target
+	if target.alive:
+		_handle_mission_cell_entry(target)
 
 
 func _show_skill_burst(cell_value: Vector2i, color: Color) -> void:
@@ -1706,9 +2408,7 @@ func _process_status_phase(actor: SporeUnitActor3D, phase: String) -> void:
 			_show_floating_text(actor.position + Vector3(0.0, 1.15, 0.0), "-%d" % applied, Color(1.0, 0.48, 0.30, 1.0))
 			_log("%s subit %d via %s." % [actor.display_name, applied, status_name])
 			if not actor.alive:
-				actor.play_ko()
-				actors_by_cell[actor.cell] = actor
-				_log("%s est K.O." % actor.display_name)
+				_handle_actor_ko(actor, status_name)
 				return
 		elif event_type == "heal":
 			var healed: int = actor.heal(amount)
@@ -1728,6 +2428,7 @@ func _start_new_round() -> void:
 			if actor.alive:
 				actor.tick_skill_resources()
 	_advance_persistent_zones_round()
+	_process_mission_round_start_triggers()
 	_log("— Round %d • CT dynamique —" % round_number)
 
 
@@ -2483,6 +3184,8 @@ func _cell_distance(a: Vector2i, b: Vector2i) -> int:
 
 
 func _check_battle_end() -> bool:
+	if battle_finished:
+		return true
 	var living_players: int = 0
 	var living_enemies: int = 0
 	for actor: SporeUnitActor3D in player_actors:
@@ -2491,19 +3194,33 @@ func _check_battle_end() -> bool:
 	for actor: SporeUnitActor3D in enemy_actors:
 		if actor != null and actor.alive:
 			living_enemies += 1
-	if living_enemies <= 0:
-		battle_finished = true
-		_log("VICTOIRE — tous les ennemis sont K.O.")
-	elif living_players <= 0:
-		battle_finished = true
-		_log("DÉFAITE — l'escouade est K.O.")
-	if battle_finished:
-		enemy_busy = false
-		_clear_overlays()
-		if active_actor != null:
-			active_actor.end_activation()
-		_update_ui_text()
+	if living_players <= 0:
+		_finish_mission_3d(false, "DÉFAITE — l'escouade est K.O. avant d'avoir rempli l'objectif.")
+	elif mission_objective == "crown":
+		if not crown_carrier_id.is_empty():
+			var carrier: SporeUnitActor3D = _actor_by_unit_id(crown_carrier_id)
+			if carrier != null and carrier.alive and extraction_cells.has(carrier.cell):
+				_finish_mission_3d(true, "VICTOIRE — la Couronne Beatbox est extraite ! Vinyles %d/%d." % [bonus_collected, bonus_target_total])
+		elif living_enemies <= 0 and not enemies_cleared_logged:
+			enemies_cleared_logged = true
+			_log("Tous les ennemis sont K.O. — il faut quand même récupérer et extraire la Couronne.")
+	elif living_enemies <= 0:
+		_finish_mission_3d(true, "VICTOIRE — tous les ennemis sont K.O.")
 	return battle_finished
+
+
+func _finish_mission_3d(victory: bool, message: String) -> void:
+	if battle_finished:
+		return
+	battle_finished = true
+	mission_victory = victory
+	enemy_busy = false
+	player_busy = false
+	_clear_overlays()
+	if active_actor != null:
+		active_actor.end_activation()
+	_log(message)
+	_update_ui_text()
 
 
 func _rebuild_highlights() -> void:
@@ -2615,8 +3332,8 @@ func _update_ui_text() -> void:
 	if _info_label == null or _help_label == null or _turn_label == null:
 		return
 	if battle_finished:
-		_turn_label.text = "COMBAT TERMINÉ"
-		_info_label.text = battle_log[battle_log.size() - 1] if not battle_log.is_empty() else "Combat terminé."
+		_turn_label.text = "MISSION ACCOMPLIE" if mission_victory else "MISSION ÉCHOUÉE"
+		_info_label.text = battle_log[battle_log.size() - 1] if not battle_log.is_empty() else "Mission terminée."
 	else:
 		var active_name: String = active_actor.display_name if active_actor != null else "—"
 		var team_text: String = "JOUEUR" if active_actor != null and active_actor.team == "player" else "ENNEMI"
@@ -2624,6 +3341,9 @@ func _update_ui_text() -> void:
 		var cell_text: String = "—"
 		if map_root != null and map_root.is_cell_valid(hovered_cell):
 			cell_text = "%d,%d h%d" % [hovered_cell.x, hovered_cell.y, map_root.elevation_at(hovered_cell)]
+			var mission_hint: String = _mission_cell_hint(hovered_cell)
+			if not mission_hint.is_empty():
+				cell_text += " • " + mission_hint
 			if _is_cover_cell(hovered_cell):
 				cell_text += " • couvert %s" % _cover_facing_name(hovered_cell)
 			var zone_count: int = _persistent_zone_count_at(hovered_cell)
@@ -2670,8 +3390,13 @@ func _update_ui_text() -> void:
 			_info_label.text = "%s • HP %d/%d • FP %d/%d • CT %d • VIT %d • PRÉC %+d • ESQ %+d • face %s • %s%s%s%s\nCase : %s%s" % [active_actor.display_name, active_actor.hp, active_actor.max_hp, active_actor.focus, active_actor.max_focus, active_actor.ct, active_actor.effective_speed(), active_actor.effective_accuracy(), active_actor.effective_evasion(), active_actor.facing_name(), mode_text, reaction_suffix, status_suffix, cast_suffix, cell_text, extra_text]
 		else:
 			_info_label.text = "Case survolée : %s" % cell_text
-	_help_label.text = "Menu près du héros = actions • Vert déplacement • Rouge attaque • Violet skill • clic cible = PRÉVISION • Entrée confirmer • Échap annuler • Q/E caméra • molette zoom • F orientation • C recentrer • R recommencer"
+	if battle_finished:
+		_help_label.text = _mission_status_text() + "\n[R] recommencer la mission"
+	else:
+		_help_label.text = _mission_status_text() + "\n[M] déplacement • [A] attaque • [1/2] skills • [F] orientation • [Espace] fin • Q/E caméra • R recommencer"
 	_refresh_timeline_ui()
+	_refresh_objective_panel_ui()
+	_refresh_cell_info_ui()
 	_refresh_unit_card_ui()
 	_update_skill_buttons()
 	if not pending_action.is_empty():
@@ -2764,14 +3489,8 @@ func _refresh_timeline_ui() -> void:
 	for actor: SporeUnitActor3D in predicted:
 		if actor == null or not actor.alive:
 			continue
-		var card: Button = Button.new()
-		card.custom_minimum_size = Vector2(44.0, 48.0)
-		card.alignment = HORIZONTAL_ALIGNMENT_CENTER
-		card.focus_mode = Control.FOCUS_NONE
-		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_theme_font_size_override("font_size", 9)
-		var timing_text: String = "C%d" % int(actor.casting.get("remaining_ticks", 0)) if actor.is_casting() else "%d/%d" % [actor.ct, actor.effective_speed()]
-		card.text = "%s\n%s" % [actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper(), timing_text]
+		var card: Panel = Panel.new()
+		card.custom_minimum_size = Vector2(38.0, 62.0)
 		card.tooltip_text = "%s • CT %d • VIT %d%s" % [actor.display_name, actor.ct, actor.effective_speed(), " • CAST" if actor.is_casting() else ""]
 		var card_style: StyleBoxFlat = StyleBoxFlat.new()
 		card_style.bg_color = Color(0.16, 0.42, 0.62, 0.92) if actor.team == "player" else Color(0.60, 0.24, 0.22, 0.92)
@@ -2779,16 +3498,152 @@ func _refresh_timeline_ui() -> void:
 		card_style.corner_radius_top_right = 7
 		card_style.corner_radius_bottom_left = 7
 		card_style.corner_radius_bottom_right = 7
+		card_style.border_width_left = 1
+		card_style.border_width_top = 1
+		card_style.border_width_right = 1
+		card_style.border_width_bottom = 1
+		card_style.border_color = Color(0.08, 0.08, 0.10, 0.95)
 		if actor == active_actor:
 			card_style.border_width_left = 2
 			card_style.border_width_top = 2
 			card_style.border_width_right = 2
 			card_style.border_width_bottom = 2
 			card_style.border_color = Color(1.0, 0.82, 0.40, 1.0)
-		card.add_theme_stylebox_override("normal", card_style)
-		card.add_theme_stylebox_override("hover", card_style)
-		card.add_theme_stylebox_override("pressed", card_style)
+		card.add_theme_stylebox_override("panel", card_style)
+		var portrait: TextureRect = TextureRect.new()
+		portrait.position = Vector2(5.0, 4.0)
+		portrait.size = Vector2(28.0, 28.0)
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		portrait.texture = actor.portrait_texture()
+		card.add_child(portrait)
+		var name_label: Label = Label.new()
+		name_label.position = Vector2(4.0, 34.0)
+		name_label.size = Vector2(30.0, 12.0)
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_label.add_theme_font_size_override("font_size", 8)
+		name_label.add_theme_color_override("font_color", Color(1.0, 0.96, 0.92, 1.0))
+		name_label.text = actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper()
+		card.add_child(name_label)
+		var timing_label: Label = Label.new()
+		timing_label.position = Vector2(3.0, 46.0)
+		timing_label.size = Vector2(32.0, 12.0)
+		timing_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		timing_label.add_theme_font_size_override("font_size", 8)
+		timing_label.add_theme_color_override("font_color", Color(0.90, 0.92, 0.96, 1.0))
+		timing_label.text = "C%d" % int(actor.casting.get("remaining_ticks", 0)) if actor.is_casting() else "%d/%d" % [actor.ct, actor.effective_speed()]
+		card.add_child(timing_label)
 		_timeline_bar.add_child(card)
+
+
+func _refresh_objective_panel_ui() -> void:
+	if _objective_body == null:
+		return
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append("Mission : %s" % mission_brief if not mission_brief.is_empty() else "Mission tactique")
+	if mission_objective == "crown":
+		if crown_carrier_id.is_empty():
+			lines.append("• Couronne au sol : %d,%d" % [crown_cell.x, crown_cell.y])
+			lines.append("• Étape suivante : la récupérer")
+		else:
+			var carrier: SporeUnitActor3D = _actor_by_unit_id(crown_carrier_id)
+			var carrier_name: String = carrier.display_name if carrier != null else crown_carrier_id
+			lines.append("• Couronne portée par %s" % carrier_name)
+			lines.append("• Étape suivante : atteindre la sortie")
+		lines.append("• Sortie : %d case(s)" % extraction_cells.size())
+	else:
+		lines.append("• Objectif : éliminer les ennemis")
+	lines.append("• Vinyles : %d/%d" % [bonus_collected, bonus_target_total])
+	lines.append("• Ennemis restants : %d" % _alive_team_count("enemy"))
+	var interactable_lines: PackedStringArray = _interactable_status_lines()
+	for line: String in interactable_lines:
+		lines.append("• %s" % line)
+	_objective_body.text = "\n".join(lines)
+
+
+func _refresh_cell_info_ui() -> void:
+	if _cell_body == null:
+		return
+	if map_root == null or not map_root.is_cell_valid(hovered_cell):
+		_cell_body.text = "Survole une case pour voir\nsa hauteur, ses rôles et\nles occupants éventuels."
+		return
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append("Coordonnées : %d,%d" % [hovered_cell.x, hovered_cell.y])
+	lines.append("Hauteur : %d" % map_root.elevation_at(hovered_cell))
+	var tile: Node = map_root.tile_at(hovered_cell)
+	var terrain_type: String = String(tile.get("terrain_type")) if tile != null else "ground"
+	var terrain_label: String = _terrain_display_name(terrain_type)
+	if _is_cover_cell(hovered_cell):
+		terrain_label += " (%s)" % _cover_facing_name(hovered_cell)
+	lines.append("Terrain : %s" % terrain_label)
+	var mission_hint: String = _mission_cell_hint(hovered_cell)
+	if not mission_hint.is_empty():
+		lines.append("Rôle : %s" % mission_hint)
+	var occupant: SporeUnitActor3D = actors_by_cell.get(hovered_cell, null) as SporeUnitActor3D
+	if occupant != null:
+		lines.append("Occupant : %s" % occupant.display_name)
+		lines.append("PV/FP : %d/%d • %d/%d" % [occupant.hp, occupant.max_hp, occupant.focus, occupant.max_focus])
+	else:
+		lines.append("Occupant : —")
+	var zone_count: int = _persistent_zone_count_at(hovered_cell)
+	if zone_count > 0:
+		lines.append("Zone persistante : x%d" % zone_count)
+	if active_actor != null and input_mode == MODE_MOVE and reachable_cells.has(hovered_cell):
+		var path_len: int = maxi(0, preview_path_cells.size() - 1)
+		if path_len > 0:
+			lines.append("Déplacement prévu : %d pas" % path_len)
+	if active_actor != null and input_mode == MODE_ATTACK:
+		var target: SporeUnitActor3D = actors_by_cell.get(hovered_cell, null) as SporeUnitActor3D
+		if target != null and target.team != active_actor.team:
+			var details: Dictionary = _attack_damage_details(active_actor, target)
+			lines.append("Attaque : %d dég. • %d%%" % [int(details.get("damage", 0)), int(details.get("hit_chance", 0))])
+	_cell_body.text = "\n".join(lines)
+
+
+func _interactable_status_lines() -> PackedStringArray:
+	var lines: PackedStringArray = PackedStringArray()
+	for state_var: Variant in interactable_states.values():
+		if not (state_var is Dictionary):
+			continue
+		var state: Dictionary = state_var as Dictionary
+		var definition: Resource = state.get("definition", null) as Resource
+		if definition == null:
+			continue
+		var object_type: String = String(definition.get("object_type"))
+		var display_name: String = String(definition.get("display_name"))
+		if object_type == "door":
+			lines.append("%s : %s" % [display_name, "ouverte" if bool(state.get("active", false)) else "fermée"])
+		elif object_type == "switch":
+			lines.append("%s : %s" % [display_name, "activé" if bool(state.get("used", false)) else "intact"])
+		elif object_type == "chest":
+			lines.append("%s : %s" % [display_name, "ouvert" if bool(state.get("used", false)) else "fermé"])
+	return lines
+
+
+func _terrain_display_name(terrain_type: String) -> String:
+	match terrain_type:
+		"cover":
+			return "Couvert"
+		"obstacle":
+			return "Obstacle"
+		"hazard":
+			return "Spore"
+		"extraction":
+			return "Sortie"
+		"bonus":
+			return "Bonus"
+		"crown":
+			return "Couronne"
+	return "Sol"
+
+
+func _alive_team_count(team_name: String) -> int:
+	var total: int = 0
+	var source: Array[SporeUnitActor3D] = player_actors if team_name == "player" else enemy_actors
+	for actor: SporeUnitActor3D in source:
+		if actor != null and actor.alive:
+			total += 1
+	return total
 
 
 func _unit_card_actor() -> SporeUnitActor3D:

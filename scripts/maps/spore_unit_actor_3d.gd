@@ -76,6 +76,7 @@ var removed_from_battle: bool = false
 var _sprite: Sprite3D
 var _label: Label3D
 var _shadow: MeshInstance3D
+var _team_disc: MeshInstance3D
 var _selection_disc: MeshInstance3D
 var _turn_marker: MeshInstance3D
 var _facing_marker: MeshInstance3D
@@ -92,7 +93,7 @@ var _visual_definition: Resource = null
 var _sprite_sheet_texture: Texture2D = null
 var _sprite_frame_texture: AtlasTexture = null
 var _uses_sprite_sheet: bool = false
-var _uses_portrait_billboard: bool = false
+var _uses_portrait_sprite: bool = false
 var _animation_state: String = "idle"
 var _animation_elapsed: float = 0.0
 var _last_sprite_frame: Vector2i = Vector2i(-999, -999)
@@ -120,6 +121,10 @@ func _process(delta: float) -> void:
 		_sprite.position = Vector3(base_position.x, base_position.y + bob, base_position.z)
 		var breathe: float = 1.0 + sin(_presentation_time * 2.1 + _idle_phase) * 0.012
 		_sprite.scale = Vector3(_sprite_art_scale * breathe, _sprite_art_scale * breathe, _sprite_art_scale)
+	if _team_disc != null and _team_disc.visible:
+		var base_pulse: float = 1.0 + sin(_presentation_time * 2.8 + _idle_phase) * 0.04
+		var focus_boost: float = 0.10 if (_selected or _turn_active) else 0.0
+		_team_disc.scale = Vector3(base_pulse + focus_boost, 1.0, base_pulse + focus_boost)
 	if _selection_disc != null and _selection_disc.visible:
 		var selected_pulse: float = 1.0 + sin(_presentation_time * 5.2) * 0.07
 		_selection_disc.scale = Vector3(selected_pulse, 1.0, selected_pulse)
@@ -859,6 +864,27 @@ func _ensure_visual_nodes() -> void:
 		_sprite.no_depth_test = false
 		_sprite.position = _sprite_base_position()
 
+	if _team_disc == null:
+		_team_disc = get_node_or_null("TeamDisc") as MeshInstance3D
+	if _team_disc == null:
+		_team_disc = MeshInstance3D.new()
+		_team_disc.name = "TeamDisc"
+		add_child(_team_disc)
+		var team_mesh: CylinderMesh = CylinderMesh.new()
+		team_mesh.top_radius = 0.34
+		team_mesh.bottom_radius = 0.42
+		team_mesh.height = 0.016
+		_team_disc.mesh = team_mesh
+		_team_disc.position = Vector3(0.0, 0.012, 0.0)
+		var team_material: StandardMaterial3D = StandardMaterial3D.new()
+		team_material.albedo_color = Color(0.36, 0.82, 1.0, 0.24) if team == "player" else Color(1.0, 0.42, 0.38, 0.22)
+		team_material.emission_enabled = true
+		team_material.emission = Color(0.36, 0.82, 1.0, 1.0) if team == "player" else Color(1.0, 0.42, 0.38, 1.0)
+		team_material.emission_energy_multiplier = 0.12
+		team_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		team_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_team_disc.material_override = team_material
+
 	if _selection_disc == null:
 		_selection_disc = get_node_or_null("SelectionDisc") as MeshInstance3D
 	if _selection_disc == null:
@@ -958,7 +984,7 @@ func _refresh_visuals() -> void:
 
 func _configure_sprite_source() -> void:
 	_uses_sprite_sheet = false
-	_uses_portrait_billboard = false
+	_uses_portrait_sprite = false
 	_sprite_sheet_texture = null
 	_sprite_frame_texture = null
 	_last_sprite_frame = Vector2i(-999, -999)
@@ -968,20 +994,10 @@ func _configure_sprite_source() -> void:
 		var raw_offset: Variant = _visual_definition.get("sprite_offset")
 		if raw_offset is Vector2:
 			_sprite_art_offset = raw_offset
-		var render_mode: String = String(_visual_definition.get("render_mode"))
-		if render_mode.is_empty():
-			render_mode = "auto"
-		var portrait_path: String = String(_visual_definition.get("portrait_path"))
-		if render_mode == "portrait_billboard" and not portrait_path.is_empty() and ResourceLoader.exists(portrait_path):
-			var loaded_portrait: Resource = load(portrait_path)
-			if loaded_portrait is Texture2D:
-				_sprite.texture = loaded_portrait as Texture2D
-				_uses_portrait_billboard = true
 		var sheet_path: String = String(_visual_definition.get("sprite_sheet_path"))
 		var fw: int = int(_visual_definition.get("frame_width"))
 		var fh: int = int(_visual_definition.get("frame_height"))
-		var allow_sheet: bool = render_mode in ["auto", "sprite_sheet"]
-		if not _uses_portrait_billboard and allow_sheet and bool(_visual_definition.get("use_sprite_sheet")) and fw > 0 and fh > 0 and not sheet_path.is_empty() and ResourceLoader.exists(sheet_path):
+		if bool(_visual_definition.get("use_sprite_sheet")) and fw > 0 and fh > 0 and not sheet_path.is_empty() and ResourceLoader.exists(sheet_path):
 			var loaded_sheet: Resource = load(sheet_path)
 			if loaded_sheet is Texture2D:
 				_sprite_sheet_texture = loaded_sheet as Texture2D
@@ -989,34 +1005,23 @@ func _configure_sprite_source() -> void:
 				_sprite_frame_texture.atlas = _sprite_sheet_texture
 				_sprite.texture = _sprite_frame_texture
 				_uses_sprite_sheet = true
-	if _uses_portrait_billboard:
-		_apply_portrait_billboard_state_texture()
+		if not _uses_sprite_sheet:
+			var portrait_path: String = String(_visual_definition.get("portrait_path"))
+			if not portrait_path.is_empty() and ResourceLoader.exists(portrait_path):
+				var loaded_portrait: Resource = load(portrait_path)
+				if loaded_portrait is Texture2D:
+					var portrait_texture: Texture2D = loaded_portrait as Texture2D
+					_sprite.texture = portrait_texture
+					_uses_portrait_sprite = true
+					var texture_height: float = maxf(1.0, float(portrait_texture.get_height()))
+					_sprite_art_scale *= 128.0 / texture_height
 	_sprite.position = _sprite_base_position()
 	_sprite.scale = Vector3.ONE * _sprite_art_scale
 	_sprite.modulate = _sprite_base_modulate()
 	if _uses_sprite_sheet:
 		_update_sprite_animation(true)
-	elif not _uses_portrait_billboard:
+	elif not _uses_portrait_sprite:
 		_sprite.texture = _build_texture(_last_view_direction)
-
-
-func _apply_portrait_billboard_state_texture() -> void:
-	if not _uses_portrait_billboard or _sprite == null or _visual_definition == null:
-		return
-	var path: String = String(_visual_definition.get("portrait_path"))
-	if _animation_state == "attack":
-		var attack_path: String = String(_visual_definition.get("attack_pose_path"))
-		if not attack_path.is_empty():
-			path = attack_path
-	elif _animation_state == "cast":
-		var cast_path: String = String(_visual_definition.get("cast_pose_path"))
-		if not cast_path.is_empty():
-			path = cast_path
-	if path.is_empty() or not ResourceLoader.exists(path):
-		return
-	var loaded: Resource = load(path)
-	if loaded is Texture2D:
-		_sprite.texture = loaded as Texture2D
 
 
 func _set_animation_state(state: String, restart: bool = true) -> void:
@@ -1028,8 +1033,6 @@ func _set_animation_state(state: String, restart: bool = true) -> void:
 	if restart:
 		_animation_elapsed = 0.0
 	_last_sprite_frame = Vector2i(-999, -999)
-	if _uses_portrait_billboard:
-		_apply_portrait_billboard_state_texture()
 	_update_sprite_animation(true)
 
 
@@ -1073,11 +1076,6 @@ func _update_directional_sprite() -> void:
 	_last_sprite_frame = Vector2i(-999, -999)
 	if _uses_sprite_sheet:
 		_update_sprite_animation(true)
-	elif _uses_portrait_billboard:
-		# Library portraits are camera-facing presentation art. They deliberately
-		# stay unchanged when the tactical facing changes until a true 4-way
-		# sprite sheet is authored for that character.
-		return
 	elif _sprite != null:
 		_sprite.texture = _build_texture(direction_name)
 
@@ -1114,7 +1112,8 @@ func _view_direction_name() -> String:
 
 func _sprite_base_position() -> Vector3:
 	const PIXEL_TO_WORLD: float = 0.016
-	return Vector3(_sprite_art_offset.x * PIXEL_TO_WORLD, 0.58 - _sprite_art_offset.y * PIXEL_TO_WORLD, 0.0)
+	var base_y: float = 1.02 if _uses_portrait_sprite else 0.58
+	return Vector3(_sprite_art_offset.x * PIXEL_TO_WORLD, base_y - _sprite_art_offset.y * PIXEL_TO_WORLD, 0.0)
 
 
 func _sprite_base_modulate() -> Color:
@@ -1262,6 +1261,20 @@ func _refresh_label() -> void:
 
 
 func _update_selection_visuals() -> void:
+	if _team_disc != null:
+		_team_disc.visible = alive
+		var team_material: StandardMaterial3D = _team_disc.material_override as StandardMaterial3D
+		if team_material != null:
+			var base_color: Color = Color(0.36, 0.82, 1.0, 0.24) if team == "player" else Color(1.0, 0.42, 0.38, 0.22)
+			if _turn_active:
+				base_color = base_color.lightened(0.24)
+				base_color.a = 0.40
+			elif _selected:
+				base_color = base_color.lightened(0.12)
+				base_color.a = 0.32
+			team_material.albedo_color = base_color
+			team_material.emission = Color(base_color.r, base_color.g, base_color.b, 1.0)
+			team_material.emission_energy_multiplier = 0.26 if (_selected or _turn_active) else 0.12
 	if _selection_disc != null:
 		_selection_disc.visible = _selected and alive
 	if _turn_marker != null:
@@ -1272,7 +1285,12 @@ func _update_selection_visuals() -> void:
 		_vitals_sprite.visible = alive
 	if _sprite != null and alive:
 		var base_modulate: Color = _sprite_base_modulate()
-		_sprite.modulate = base_modulate.lightened(0.12) if _selected else base_modulate
+		if _turn_active:
+			_sprite.modulate = base_modulate.lightened(0.20)
+		elif _selected:
+			_sprite.modulate = base_modulate.lightened(0.12)
+		else:
+			_sprite.modulate = base_modulate
 
 
 func _update_facing_visual() -> void:

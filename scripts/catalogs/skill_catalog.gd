@@ -51,34 +51,9 @@ static func vfx_id(skill_id: String) -> String:
 	return String(data.vfx_id) if data != null else "default_hit"
 
 
-static func effects(skill_id: String) -> Array:
-	var data := definition(skill_id)
-	if data == null:
-		return []
-	return data.effects
-
-
-static func has_effects(skill_id: String) -> bool:
-	return not effects(skill_id).is_empty()
-
-
 static func has_tag(skill_id: String, tag: String) -> bool:
 	var data := definition(skill_id)
-	if data == null or tag.is_empty():
-		return false
-	return data.effect_tags.has(tag)
-
-
-static func uses_accuracy(skill_id: String) -> bool:
-	var data := definition(skill_id)
-	return bool(data.uses_accuracy) if data != null else false
-
-
-static func accuracy(skill_id: String) -> int:
-	var data := definition(skill_id)
-	if data == null:
-		return 100
-	return clampi(int(data.accuracy), 5, 100)
+	return data != null and not tag.is_empty() and data.effect_tags.has(tag)
 
 
 static func cast_time_ticks(skill_id: String) -> int:
@@ -89,6 +64,27 @@ static func cast_time_ticks(skill_id: String) -> int:
 static func interrupt_on_damage(skill_id: String) -> bool:
 	var data := definition(skill_id)
 	return bool(data.interrupt_on_damage) if data != null else true
+
+
+static func uses_accuracy(skill_id: String) -> bool:
+	var data := definition(skill_id)
+	return bool(data.uses_accuracy) if data != null else false
+
+
+static func accuracy(skill_id: String) -> int:
+	var data := definition(skill_id)
+	return clampi(int(data.accuracy), 0, 100) if data != null else 100
+
+
+static func effects(skill_id: String) -> Array:
+	var data := definition(skill_id)
+	if data == null:
+		return []
+	return data.effects
+
+
+static func has_effects(skill_id: String) -> bool:
+	return not effects(skill_id).is_empty()
 
 
 static func cooldown_left(unit: Dictionary, skill_id: String) -> int:

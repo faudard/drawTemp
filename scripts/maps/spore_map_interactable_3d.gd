@@ -83,28 +83,24 @@ func _rebuild_visual() -> void:
 		marker = MeshInstance3D.new()
 		marker.name = "_Marker"
 		add_child(marker, false, Node.INTERNAL_MODE_BACK)
+	var details: Node3D = get_node_or_null("_Details") as Node3D
+	if details == null:
+		details = Node3D.new()
+		details.name = "_Details"
+		add_child(details, false, Node.INTERNAL_MODE_BACK)
+	for child: Node in details.get_children():
+		child.free()
 
-	var color: Color = Color("#ffd166")
-	if object_type == "switch":
-		var switch_mesh: CylinderMesh = CylinderMesh.new()
-		switch_mesh.top_radius = 0.22
-		switch_mesh.bottom_radius = 0.30
-		switch_mesh.height = 0.10
-		marker.mesh = switch_mesh
-		color = Color("#67c8ff")
-	elif object_type == "chest":
-		var chest_mesh: BoxMesh = BoxMesh.new()
-		chest_mesh.size = Vector3(0.55, 0.30, 0.38)
-		marker.mesh = chest_mesh
-		color = Color("#c99245")
-	else:
-		var door_mesh: BoxMesh = BoxMesh.new()
-		door_mesh.size = Vector3(0.16, 0.95, 0.85)
-		marker.mesh = door_mesh
-	marker.position.y = 0.18 if object_type != "door" else 0.48
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = color
-	marker.material_override = material
+	marker.rotation = Vector3.ZERO
+	marker.scale = Vector3.ONE
+	marker.position = Vector3.ZERO
+	match object_type:
+		"switch":
+			_build_switch(marker, details)
+		"chest":
+			_build_chest(marker, details)
+		_:
+			_build_gate(marker, details)
 
 	var label: Label3D = get_node_or_null("_Label") as Label3D
 	if label == null:
@@ -116,7 +112,93 @@ func _rebuild_visual() -> void:
 		label.outline_size = 7
 		add_child(label, false, Node.INTERNAL_MODE_BACK)
 	label.text = display_name
-	label.position = Vector3(0.0, 0.92, 0.0)
+	label.position = Vector3(0.0, 1.12, 0.0)
+	label.visible = Engine.is_editor_hint()
+
+
+func _build_gate(marker: MeshInstance3D, details: Node3D) -> void:
+	var beam_mesh: BoxMesh = BoxMesh.new()
+	beam_mesh.size = Vector3(0.16, 0.92, 0.82)
+	marker.mesh = beam_mesh
+	marker.position = Vector3(0.0, 0.48, 0.0)
+	marker.material_override = _material(Color("#604a37"), 0.98)
+	for side_value: Variant in [-1, 1]:
+		var side: int = int(side_value)
+		var cap: MeshInstance3D = _box(Vector3(0.24, 0.13, 0.26), Color("#8b6a43"), 0.94)
+		cap.position = Vector3(0.0, 0.88, float(side) * 0.30)
+		details.add_child(cap)
+	var rune: MeshInstance3D = _sphere(Vector3(0.12, 0.12, 0.06), Color("#efc764"), 0.35, true)
+	rune.position = Vector3(-0.10, 0.56, 0.0)
+	details.add_child(rune)
+
+
+func _build_switch(marker: MeshInstance3D, details: Node3D) -> void:
+	var stem_mesh: CylinderMesh = CylinderMesh.new()
+	stem_mesh.top_radius = 0.09
+	stem_mesh.bottom_radius = 0.13
+	stem_mesh.height = 0.28
+	stem_mesh.radial_segments = 10
+	marker.mesh = stem_mesh
+	marker.position = Vector3(0.0, 0.14, 0.0)
+	marker.material_override = _material(Color("#d8caa3"), 0.96)
+	var cap: MeshInstance3D = _sphere(Vector3(0.26, 0.11, 0.26), Color("#55bfe9"), 0.45, true)
+	cap.position = Vector3(0.0, 0.34, 0.0)
+	details.add_child(cap)
+	var center: MeshInstance3D = _sphere(Vector3(0.07, 0.035, 0.07), Color("#d8f7ff"), 0.30, true)
+	center.position = Vector3(0.0, 0.44, 0.0)
+	details.add_child(center)
+
+
+func _build_chest(marker: MeshInstance3D, details: Node3D) -> void:
+	var chest_mesh: BoxMesh = BoxMesh.new()
+	chest_mesh.size = Vector3(0.58, 0.28, 0.40)
+	marker.mesh = chest_mesh
+	marker.position = Vector3(0.0, 0.17, 0.0)
+	marker.material_override = _material(Color("#966640"), 0.96)
+	var lid: MeshInstance3D = _box(Vector3(0.60, 0.13, 0.42), Color("#b67d49"), 0.93)
+	lid.position = Vector3(0.0, 0.37, 0.0)
+	details.add_child(lid)
+	for side_value: Variant in [-1, 1]:
+		var side: int = int(side_value)
+		var band: MeshInstance3D = _box(Vector3(0.07, 0.45, 0.44), Color("#d6ae58"), 0.48)
+		band.position = Vector3(float(side) * 0.20, 0.23, 0.0)
+		details.add_child(band)
+	var lock: MeshInstance3D = _box(Vector3(0.10, 0.12, 0.04), Color("#f0cb67"), 0.36, true)
+	lock.position = Vector3(0.0, 0.25, -0.22)
+	details.add_child(lock)
+
+
+func _box(size_value: Vector3, color: Color, roughness: float, emissive: bool = false) -> MeshInstance3D:
+	var instance: MeshInstance3D = MeshInstance3D.new()
+	var mesh: BoxMesh = BoxMesh.new()
+	mesh.size = size_value
+	instance.mesh = mesh
+	instance.material_override = _material(color, roughness, emissive)
+	return instance
+
+
+func _sphere(scale_value: Vector3, color: Color, roughness: float, emissive: bool = false) -> MeshInstance3D:
+	var instance: MeshInstance3D = MeshInstance3D.new()
+	var mesh: SphereMesh = SphereMesh.new()
+	mesh.radius = 0.5
+	mesh.height = 1.0
+	mesh.radial_segments = 12
+	mesh.rings = 6
+	instance.mesh = mesh
+	instance.scale = scale_value * 2.0
+	instance.material_override = _material(color, roughness, emissive)
+	return instance
+
+
+func _material(color: Color, roughness: float, emissive: bool = false) -> StandardMaterial3D:
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = roughness
+	if emissive:
+		material.emission_enabled = true
+		material.emission = color
+		material.emission_energy_multiplier = 0.24
+	return material
 
 
 func _map_parent() -> SporeMap3D:
