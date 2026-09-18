@@ -1,0 +1,15 @@
+{
+  "id": "forest_scout",
+  "display_name": "Scout forestier",
+  "role": "scout",
+  "description": "Aventurier forestier léger avec lance, foulard de feuilles et sac organique.",
+  "tags": [
+    "nature",
+    "spear",
+    "scout",
+    "adventurer"
+  ],
+  "art_family": "sporebound_nature",
+  "default_scale": 1.0,
+  "preferred_portrait_direction": "front"
+}

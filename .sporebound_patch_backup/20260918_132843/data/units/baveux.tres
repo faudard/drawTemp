@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="SporeUnitDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/unit_definition.gd" id="1_unit"]
+
+[resource]
+script = ExtResource("1_unit")
+id = "baveux"
+visual_id = "baveux"
+display_name = "Baveux"
+role = "Gluant"
+team = "enemy"
+color = Color(0.952941, 0.650980, 0.352941, 1)
+max_hp = 7
+attack = 2
+movement = 3
+attack_range = 1
+initiative = 6
+max_focus = 2
+ai_profile = "aggressive"
+primary_skill = "corrode"
+secondary_skill = "spore_field"
+reaction_type = "opportunity"
+reaction_range = 1
+reaction_damage_bonus = 0

@@ -2115,7 +2115,7 @@ func _apply_skill_effect(source: Dictionary, target: Dictionary, anchor_cell: Ve
 					var compatibility: String = CombatMechanics.zodiac_compatibility(String(source.get("zodiac_sign", "none")), String(target.get("zodiac_sign", "none")), String(source.get("sex", "monster")), String(target.get("sex", "monster")))
 					var status_chance: int = CombatMechanics.fft_status_success_chance(effective_magic_power(source), formula_modifier, int(source.get("faith", 60)), int(target.get("faith", 60)), compatibility, has_status(target, "shell"), String(target.get("support_ability", "none")) == "magic_defense_up")
 					if not _roll_hit(status_chance):
-						spawn_floating_text(target["pos"], "STATUS MISS", TEXT_MUTED)
+						spawn_floating_text(target["pos"], "STATUS MISS", TEXT_SOFT)
 						return
 				add_status(target, String(effect.status_id))
 				spawn_particles(target["pos"], feedback_color, 6)

@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="SporeUnitDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/unit_definition.gd" id="1_unit"]
+
+[resource]
+script = ExtResource("1_unit")
+id = "luma"
+visual_id = "luma"
+display_name = "Luma"
+role = "Éclaireuse prismatique"
+team = "player"
+color = Color(0.466667, 0.717647, 1.000000, 1)
+max_hp = 9
+attack = 2
+movement = 4
+attack_range = 3
+initiative = 7
+max_focus = 2
+primary_skill = "flare"
+secondary_skill = "prism_lance"
+ai_profile = "default"
+reaction_type = "counter"
+reaction_range = 3
+reaction_damage_bonus = 0
+default_job_id = "prism_ranger"
+available_job_ids = PackedStringArray("prism_ranger", "flare_gunner")
+starting_level = 1

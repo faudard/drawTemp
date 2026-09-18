@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="SporeHeroAppearanceDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hero_appearance_definition.gd" id="1_appearance"]
+
+[resource]
+script = ExtResource("1_appearance")
+hero_id = "preset"
+display_name = "Bibliothèque — Gardien nature"
+target_visual_id = "momo"
+authoring_mode = "guided"
+library_kit_id = "forest_guardian"
+guided_apply_global_tint = false
+auto_fix_on_generate = true
+presentation_style = "neutral"
+archetype_style = "warrior"
+size_preset = "medium"
+global_scale = 1.0
+body_width_scale = 1.0
+body_height_scale = 1.0
+head_scale = 1.0
+head_width_scale = 1.0
+silhouette_preset = "balanced"
+body_offset = Vector2(0, 0)
+head_offset = Vector2(0, 0)
+face_offset = Vector2(0, 0)
+accessory_offset = Vector2(0, 0)
+weapon_offset = Vector2(0, 0)
+generated_sprite_sheet_path = "res://assets/generated/heroes/momo_custom.png"
+generated_portrait_path = "res://assets/generated/heroes/momo_custom_portrait.png"
+sprite_scale = 0.5
+sprite_offset = Vector2(0, 0)

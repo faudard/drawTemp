@@ -1,3 +1,8 @@
+
+## V1.27 — Library Art Runtime
+
+La mission 1 utilise maintenant directement les personnages haute qualité de la bibliothèque Sporebound grâce au mode `portrait_billboard`. Les 39 personnages sont disponibles comme skins `lib_*` dans **Sporebound Studio > Visuals**. Ce rendu remplace le fallback procédural pour les unités associées, sans attendre la production des atlas 4 directions définitifs. Voir `LIBRARY_ASSETS.md`.
+
 # Sporebound Tactics — V1.9.6 First Tactical 2.5D Map
 
 ## Première map 2.5D / 3D

@@ -1,0 +1,137 @@
+[gd_resource type="Resource" script_class="SporeJobDefinition" load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_definition.gd" id="1_job"]
+[ext_resource type="Script" path="res://scripts/data/job_skill_unlock.gd" id="2_unlock"]
+[ext_resource type="Script" path="res://scripts/data/resistance_entry.gd" id="3_res"]
+[ext_resource type="Script" path="res://scripts/data/progression_node_definition.gd" id="4_node"]
+
+[sub_resource type="Resource" id="Unlock_1"]
+script = ExtResource("2_unlock")
+skill_id = "flare"
+required_level = 1
+
+[sub_resource type="Resource" id="Unlock_2"]
+script = ExtResource("2_unlock")
+skill_id = "mark"
+required_level = 2
+
+[sub_resource type="Resource" id="Res_1"]
+script = ExtResource("3_res")
+damage_type = "fire"
+percent = 20
+
+[sub_resource type="Resource" id="Res_2"]
+script = ExtResource("3_res")
+damage_type = "prism"
+percent = 10
+
+[sub_resource type="Resource" id="Tree_1"]
+script = ExtResource("4_node")
+id = "skill_flare"
+display_name = "Tir prismatique"
+description = "Tir lourd de Luma."
+node_type = "skill"
+editor_position = Vector2(40, 170)
+cost = 0
+required_level = 1
+auto_unlock = true
+skill_id = "flare"
+
+[sub_resource type="Resource" id="Tree_2"]
+script = ExtResource("4_node")
+id = "skill_mark"
+display_name = "Balise prismatique"
+description = "Prépare la cible."
+node_type = "skill"
+editor_position = Vector2(280, 170)
+cost = 0
+required_level = 2
+auto_unlock = true
+required_node_ids = PackedStringArray("skill_flare")
+skill_id = "mark"
+
+[sub_resource type="Resource" id="Tree_3"]
+script = ExtResource("4_node")
+id = "hot_barrel"
+display_name = "Canon chaud"
+description = "Branche de spécialisation."
+node_type = "stat"
+editor_position = Vector2(520, 80)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_mark")
+exclusive_group = "path"
+stat_type = "attack"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_4"]
+script = ExtResource("4_node")
+id = "flare_overload"
+display_name = "Surcharge flare"
+description = "Aboutissement de la branche."
+node_type = "passive"
+editor_position = Vector2(780, 80)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("hot_barrel")
+passive_type = "skill_power"
+passive_target = "flare"
+passive_value = 1
+
+[sub_resource type="Resource" id="Tree_5"]
+script = ExtResource("4_node")
+id = "battery_pack"
+display_name = "Batterie annexe"
+description = "Branche alternative exclusive."
+node_type = "stat"
+editor_position = Vector2(520, 260)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_mark")
+exclusive_group = "path"
+stat_type = "focus"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_6"]
+script = ExtResource("4_node")
+id = "heat_shield"
+display_name = "Écran thermique"
+description = "Aboutissement de la branche alternative."
+node_type = "passive"
+editor_position = Vector2(780, 260)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("battery_pack")
+passive_type = "resistance"
+passive_target = "fire"
+passive_value = 15
+
+[resource]
+script = ExtResource("1_job")
+id = "flare_gunner"
+display_name = "Artilleuse flare"
+description = "Luma échange de la portée contre une puissance directe supérieure."
+unlock_from_job_id = "prism_ranger"
+unlock_level = 3
+next_job_ids = PackedStringArray()
+hp_bonus = 1
+attack_bonus = 1
+movement_bonus = 0
+range_bonus = 0
+initiative_bonus = 1
+focus_bonus = 1
+hp_growth = 0.45
+attack_growth = 0.25
+initiative_growth = 0.15
+starting_tree_points = 1
+tree_points_per_level = 1
+progression_nodes = Array[Resource]([SubResource("Tree_1"), SubResource("Tree_2"), SubResource("Tree_3"), SubResource("Tree_4"), SubResource("Tree_5"), SubResource("Tree_6")])
+skill_unlocks = Array[Resource]([SubResource("Unlock_1"), SubResource("Unlock_2")])
+resistances = Array[Resource]([SubResource("Res_1"), SubResource("Res_2")])
+skill_power_skill_id = "flare"
+skill_power_bonus = 1
+guard_after_skill_id = ""

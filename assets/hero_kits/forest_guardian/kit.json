@@ -1,0 +1,15 @@
+{
+  "id": "forest_guardian",
+  "display_name": "Gardien nature",
+  "role": "guardian",
+  "description": "Défenseur robuste au bouclier de bois et à la lance, inspiré des assets nature de la bibliothèque.",
+  "tags": [
+    "nature",
+    "shield",
+    "spear",
+    "tank"
+  ],
+  "art_family": "sporebound_nature",
+  "default_scale": 1.0,
+  "preferred_portrait_direction": "front"
+}

@@ -1,0 +1,137 @@
+[gd_resource type="Resource" script_class="SporeJobDefinition" load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_definition.gd" id="1_job"]
+[ext_resource type="Script" path="res://scripts/data/job_skill_unlock.gd" id="2_unlock"]
+[ext_resource type="Script" path="res://scripts/data/resistance_entry.gd" id="3_res"]
+[ext_resource type="Script" path="res://scripts/data/progression_node_definition.gd" id="4_node"]
+
+[sub_resource type="Resource" id="Unlock_1"]
+script = ExtResource("2_unlock")
+skill_id = "heal"
+required_level = 1
+
+[sub_resource type="Resource" id="Unlock_2"]
+script = ExtResource("2_unlock")
+skill_id = "mist"
+required_level = 2
+
+[sub_resource type="Resource" id="Res_1"]
+script = ExtResource("3_res")
+damage_type = "physical"
+percent = 15
+
+[sub_resource type="Resource" id="Res_2"]
+script = ExtResource("3_res")
+damage_type = "spore"
+percent = 20
+
+[sub_resource type="Resource" id="Tree_1"]
+script = ExtResource("4_node")
+id = "skill_heal"
+display_name = "Sauvetage élastique"
+description = "Soin ciblé."
+node_type = "skill"
+editor_position = Vector2(40, 170)
+cost = 0
+required_level = 1
+auto_unlock = true
+skill_id = "heal"
+
+[sub_resource type="Resource" id="Tree_2"]
+script = ExtResource("4_node")
+id = "skill_mist"
+display_name = "Brume tonique"
+description = "Protection de zone."
+node_type = "skill"
+editor_position = Vector2(280, 170)
+cost = 0
+required_level = 2
+auto_unlock = true
+required_node_ids = PackedStringArray("skill_heal")
+skill_id = "mist"
+
+[sub_resource type="Resource" id="Tree_3"]
+script = ExtResource("4_node")
+id = "moss_padding"
+display_name = "Mousse épaisse"
+description = "Branche de spécialisation."
+node_type = "stat"
+editor_position = Vector2(520, 80)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_mist")
+exclusive_group = "path"
+stat_type = "hp"
+stat_value = 2
+
+[sub_resource type="Resource" id="Tree_4"]
+script = ExtResource("4_node")
+id = "care_guard"
+display_name = "Soin gardien"
+description = "Aboutissement de la branche."
+node_type = "passive"
+editor_position = Vector2(780, 80)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("moss_padding")
+passive_type = "guard_after_skill"
+passive_target = "heal"
+passive_value = 1
+
+[sub_resource type="Resource" id="Tree_5"]
+script = ExtResource("4_node")
+id = "spore_reserve"
+display_name = "Réserve mycélienne"
+description = "Branche alternative exclusive."
+node_type = "stat"
+editor_position = Vector2(520, 260)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_mist")
+exclusive_group = "path"
+stat_type = "focus"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_6"]
+script = ExtResource("4_node")
+id = "moss_filter"
+display_name = "Filtre mousse"
+description = "Aboutissement de la branche alternative."
+node_type = "passive"
+editor_position = Vector2(780, 260)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("spore_reserve")
+passive_type = "resistance"
+passive_target = "spore"
+passive_value = 15
+
+[resource]
+script = ExtResource("1_job")
+id = "moss_warden"
+display_name = "Gardien mousse"
+description = "Pipo protège l’équipe et se couvre après ses soins."
+unlock_from_job_id = "field_medic"
+unlock_level = 3
+next_job_ids = PackedStringArray()
+hp_bonus = 2
+attack_bonus = 0
+movement_bonus = 0
+range_bonus = 0
+initiative_bonus = 0
+focus_bonus = 1
+hp_growth = 0.8
+attack_growth = 0.05
+initiative_growth = 0.1
+starting_tree_points = 1
+tree_points_per_level = 1
+progression_nodes = Array[Resource]([SubResource("Tree_1"), SubResource("Tree_2"), SubResource("Tree_3"), SubResource("Tree_4"), SubResource("Tree_5"), SubResource("Tree_6")])
+skill_unlocks = Array[Resource]([SubResource("Unlock_1"), SubResource("Unlock_2")])
+resistances = Array[Resource]([SubResource("Res_1"), SubResource("Res_2")])
+skill_power_skill_id = ""
+skill_power_bonus = 0
+guard_after_skill_id = "heal"

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="SporeStatusDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/status_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "haste"
+display_name = "Tempo+"
+description = "+1 MVT pendant 2 activations."
+color = Color(0.43, 0.92, 0.93, 1)
+vfx_id = "spore_burst"
+duration_activations = 2
+movement_delta = 1

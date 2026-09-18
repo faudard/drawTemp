@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="SporeEquipmentDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/equipment_definition.gd" id="1_eq"]
+[ext_resource type="Script" path="res://scripts/data/resistance_entry.gd" id="2_res"]
+
+[sub_resource type="Resource" id="Res_1"]
+script = ExtResource("2_res")
+damage_type = "physical"
+percent = 15
+
+[resource]
+script = ExtResource("1_eq")
+id = "mycelium_plate"
+display_name = "Plaque mycélienne"
+description = "+2 PV et GARDE au départ"
+slot = "armor"
+hp_bonus = 2
+attack_bonus = 0
+movement_bonus = 0
+range_bonus = 0
+initiative_bonus = 0
+focus_bonus = 0
+start_status_id = "guarded"
+resistances = Array[Resource]([SubResource("Res_1")])

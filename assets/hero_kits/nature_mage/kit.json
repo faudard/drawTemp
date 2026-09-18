@@ -1,0 +1,15 @@
+{
+  "id": "nature_mage",
+  "display_name": "Mage nature",
+  "role": "mage",
+  "description": "Mage forestier au bâton vivant et à l’orbe verte, avec cape de feuilles et équipement organique.",
+  "tags": [
+    "nature",
+    "magic",
+    "staff",
+    "support"
+  ],
+  "art_family": "sporebound_nature",
+  "default_scale": 1.0,
+  "preferred_portrait_direction": "front"
+}

@@ -6,8 +6,9 @@
 script = ExtResource("1")
 id = "weakened"
 display_name = "Affaibli"
-description = "-1 dégât infligé pendant une activation."
+description = "-1 dégât infligé pendant 24 clockticks."
 color = Color(0.75, 0.57, 0.9, 1)
 vfx_id = "corrode_wave"
-duration_activations = 1
+duration_activations = 0
 outgoing_damage_delta = -1
+duration_clockticks = 24

@@ -6,10 +6,13 @@
 script = ExtResource("1")
 id = "poisoned"
 display_name = "Poison"
-description = "Subit 1 dégât en fin d’activation pendant 3 activations."
+description = "Poison FFT : dégâts en fin d’AT, durée 36 clockticks."
 color = Color(0.48, 0.85, 0.42, 1)
 vfx_id = "poison_aura"
-duration_activations = 3
+duration_activations = 0
 tick_phase = "activation_end"
 tick_damage_type = "toxin"
 tick_damage = 1
+duration_clockticks = 36
+
+opposed_status_id = "regen"

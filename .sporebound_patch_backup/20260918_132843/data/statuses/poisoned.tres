@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SporeStatusDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/status_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "poisoned"
+display_name = "Poison"
+description = "Subit 1 dégât en fin d’activation pendant 3 activations."
+color = Color(0.48, 0.85, 0.42, 1)
+vfx_id = "poison_aura"
+duration_activations = 3
+tick_phase = "activation_end"
+tick_damage_type = "toxin"
+tick_damage = 1

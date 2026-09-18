@@ -1,0 +1,137 @@
+[gd_resource type="Resource" script_class="SporeJobDefinition" load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_definition.gd" id="1_job"]
+[ext_resource type="Script" path="res://scripts/data/job_skill_unlock.gd" id="2_unlock"]
+[ext_resource type="Script" path="res://scripts/data/resistance_entry.gd" id="3_res"]
+[ext_resource type="Script" path="res://scripts/data/progression_node_definition.gd" id="4_node"]
+
+[sub_resource type="Resource" id="Unlock_1"]
+script = ExtResource("2_unlock")
+skill_id = "corrode"
+required_level = 1
+
+[sub_resource type="Resource" id="Unlock_2"]
+script = ExtResource("2_unlock")
+skill_id = "funk"
+required_level = 2
+
+[sub_resource type="Resource" id="Res_1"]
+script = ExtResource("3_res")
+damage_type = "spore"
+percent = 15
+
+[sub_resource type="Resource" id="Res_2"]
+script = ExtResource("3_res")
+damage_type = "physical"
+percent = 5
+
+[sub_resource type="Resource" id="Tree_1"]
+script = ExtResource("4_node")
+id = "skill_corrode"
+display_name = "Basse corrosive"
+description = "Contrôle mobile."
+node_type = "skill"
+editor_position = Vector2(40, 170)
+cost = 0
+required_level = 1
+auto_unlock = true
+skill_id = "corrode"
+
+[sub_resource type="Resource" id="Tree_2"]
+script = ExtResource("4_node")
+id = "skill_funk"
+display_name = "Spore Funk"
+description = "Zone de spores."
+node_type = "skill"
+editor_position = Vector2(280, 170)
+cost = 0
+required_level = 2
+auto_unlock = true
+required_node_ids = PackedStringArray("skill_corrode")
+skill_id = "funk"
+
+[sub_resource type="Resource" id="Tree_3"]
+script = ExtResource("4_node")
+id = "funky_stride"
+display_name = "Foulée funky"
+description = "Branche de spécialisation."
+node_type = "stat"
+editor_position = Vector2(520, 80)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_funk")
+exclusive_group = "path"
+stat_type = "movement"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_4"]
+script = ExtResource("4_node")
+id = "acid_bass"
+display_name = "Basse acide"
+description = "Aboutissement de la branche."
+node_type = "passive"
+editor_position = Vector2(780, 80)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("funky_stride")
+passive_type = "skill_power"
+passive_target = "corrode"
+passive_value = 1
+
+[sub_resource type="Resource" id="Tree_5"]
+script = ExtResource("4_node")
+id = "tempo_rush"
+display_name = "Tempo Rush"
+description = "Branche alternative exclusive."
+node_type = "stat"
+editor_position = Vector2(520, 260)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_funk")
+exclusive_group = "path"
+stat_type = "initiative"
+stat_value = 2
+
+[sub_resource type="Resource" id="Tree_6"]
+script = ExtResource("4_node")
+id = "encore"
+display_name = "Encore !"
+description = "Aboutissement de la branche alternative."
+node_type = "passive"
+editor_position = Vector2(780, 260)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("tempo_rush")
+passive_type = "focus_regen"
+passive_target = ""
+passive_value = 1
+
+[resource]
+script = ExtResource("1_job")
+id = "groove_runner"
+display_name = "Groove Runner"
+description = "Spécialisation mobile de Ziggy pour contrôler la carte."
+unlock_from_job_id = "spore_maestro"
+unlock_level = 3
+next_job_ids = PackedStringArray()
+hp_bonus = 0
+attack_bonus = 0
+movement_bonus = 1
+range_bonus = 0
+initiative_bonus = 3
+focus_bonus = 0
+hp_growth = 0.4
+attack_growth = 0.1
+initiative_growth = 0.35
+starting_tree_points = 1
+tree_points_per_level = 1
+progression_nodes = Array[Resource]([SubResource("Tree_1"), SubResource("Tree_2"), SubResource("Tree_3"), SubResource("Tree_4"), SubResource("Tree_5"), SubResource("Tree_6")])
+skill_unlocks = Array[Resource]([SubResource("Unlock_1"), SubResource("Unlock_2")])
+resistances = Array[Resource]([SubResource("Res_1"), SubResource("Res_2")])
+skill_power_skill_id = ""
+skill_power_bonus = 0
+guard_after_skill_id = ""

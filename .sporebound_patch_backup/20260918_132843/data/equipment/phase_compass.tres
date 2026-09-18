@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SporeEquipmentDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/equipment_definition.gd" id="1_eq"]
+
+[resource]
+script = ExtResource("1_eq")
+id = "phase_compass"
+display_name = "Compas de phase"
+description = "+1 portée à distance et +1 INIT"
+slot = "accessory"
+hp_bonus = 0
+attack_bonus = 0
+movement_bonus = 0
+range_bonus = 1
+initiative_bonus = 1
+focus_bonus = 0
+start_status_id = ""
+resistances = Array[Resource]([])

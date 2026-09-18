@@ -1,0 +1,132 @@
+[gd_resource type="Resource" script_class="SporeJobDefinition" load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_definition.gd" id="1_job"]
+[ext_resource type="Script" path="res://scripts/data/job_skill_unlock.gd" id="2_unlock"]
+[ext_resource type="Script" path="res://scripts/data/resistance_entry.gd" id="3_res"]
+[ext_resource type="Script" path="res://scripts/data/progression_node_definition.gd" id="4_node"]
+
+[sub_resource type="Resource" id="Unlock_1"]
+script = ExtResource("2_unlock")
+skill_id = "heal"
+required_level = 1
+
+[sub_resource type="Resource" id="Unlock_2"]
+script = ExtResource("2_unlock")
+skill_id = "mist"
+required_level = 2
+
+[sub_resource type="Resource" id="Res_1"]
+script = ExtResource("3_res")
+damage_type = "toxin"
+percent = 20
+
+[sub_resource type="Resource" id="Tree_1"]
+script = ExtResource("4_node")
+id = "skill_heal"
+display_name = "Sauvetage élastique"
+description = "Soin ciblé de Pipo."
+node_type = "skill"
+editor_position = Vector2(40, 170)
+cost = 0
+required_level = 1
+auto_unlock = true
+skill_id = "heal"
+
+[sub_resource type="Resource" id="Tree_2"]
+script = ExtResource("4_node")
+id = "skill_mist"
+display_name = "Brume tonique"
+description = "Soin et garde de zone."
+node_type = "skill"
+editor_position = Vector2(280, 170)
+cost = 0
+required_level = 2
+auto_unlock = true
+required_node_ids = PackedStringArray("skill_heal")
+skill_id = "mist"
+
+[sub_resource type="Resource" id="Tree_3"]
+script = ExtResource("4_node")
+id = "reserve_bag"
+display_name = "Sac de réserve"
+description = "Branche de spécialisation."
+node_type = "stat"
+editor_position = Vector2(520, 80)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_mist")
+exclusive_group = "path"
+stat_type = "focus"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_4"]
+script = ExtResource("4_node")
+id = "expert_care"
+display_name = "Soin expert"
+description = "Aboutissement de la branche."
+node_type = "passive"
+editor_position = Vector2(780, 80)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("reserve_bag")
+passive_type = "skill_power"
+passive_target = "heal"
+passive_value = 1
+
+[sub_resource type="Resource" id="Tree_5"]
+script = ExtResource("4_node")
+id = "quick_triage"
+display_name = "Triage rapide"
+description = "Branche alternative exclusive."
+node_type = "stat"
+editor_position = Vector2(520, 260)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_mist")
+exclusive_group = "path"
+stat_type = "initiative"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_6"]
+script = ExtResource("4_node")
+id = "antitoxin"
+display_name = "Antitoxines"
+description = "Aboutissement de la branche alternative."
+node_type = "passive"
+editor_position = Vector2(780, 260)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("quick_triage")
+passive_type = "resistance"
+passive_target = "toxin"
+passive_value = 15
+
+[resource]
+script = ExtResource("1_job")
+id = "field_medic"
+display_name = "Médecin de terrain"
+description = "Pipo privilégie les soins puissants et la récupération."
+unlock_from_job_id = ""
+unlock_level = 1
+next_job_ids = PackedStringArray("moss_warden")
+hp_bonus = 0
+attack_bonus = 0
+movement_bonus = 0
+range_bonus = 0
+initiative_bonus = 1
+focus_bonus = 1
+hp_growth = 0.55
+attack_growth = 0.05
+initiative_growth = 0.15
+starting_tree_points = 1
+tree_points_per_level = 1
+progression_nodes = Array[Resource]([SubResource("Tree_1"), SubResource("Tree_2"), SubResource("Tree_3"), SubResource("Tree_4"), SubResource("Tree_5"), SubResource("Tree_6")])
+skill_unlocks = Array[Resource]([SubResource("Unlock_1"), SubResource("Unlock_2")])
+resistances = Array[Resource]([SubResource("Res_1")])
+skill_power_skill_id = "heal"
+skill_power_bonus = 1
+guard_after_skill_id = ""

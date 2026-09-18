@@ -1,0 +1,132 @@
+[gd_resource type="Resource" script_class="SporeJobDefinition" load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_definition.gd" id="1_job"]
+[ext_resource type="Script" path="res://scripts/data/job_skill_unlock.gd" id="2_unlock"]
+[ext_resource type="Script" path="res://scripts/data/resistance_entry.gd" id="3_res"]
+[ext_resource type="Script" path="res://scripts/data/progression_node_definition.gd" id="4_node"]
+
+[sub_resource type="Resource" id="Unlock_1"]
+script = ExtResource("2_unlock")
+skill_id = "funk"
+required_level = 1
+
+[sub_resource type="Resource" id="Unlock_2"]
+script = ExtResource("2_unlock")
+skill_id = "corrode"
+required_level = 2
+
+[sub_resource type="Resource" id="Res_1"]
+script = ExtResource("3_res")
+damage_type = "spore"
+percent = 25
+
+[sub_resource type="Resource" id="Tree_1"]
+script = ExtResource("4_node")
+id = "skill_funk"
+display_name = "Spore Funk"
+description = "Explosion de spores en zone."
+node_type = "skill"
+editor_position = Vector2(40, 170)
+cost = 0
+required_level = 1
+auto_unlock = true
+skill_id = "funk"
+
+[sub_resource type="Resource" id="Tree_2"]
+script = ExtResource("4_node")
+id = "skill_corrode"
+display_name = "Basse corrosive"
+description = "Affaiblit la cible."
+node_type = "skill"
+editor_position = Vector2(280, 170)
+cost = 0
+required_level = 2
+auto_unlock = true
+required_node_ids = PackedStringArray("skill_funk")
+skill_id = "corrode"
+
+[sub_resource type="Resource" id="Tree_3"]
+script = ExtResource("4_node")
+id = "amp_gain"
+display_name = "Gain ampli"
+description = "Branche de spécialisation."
+node_type = "stat"
+editor_position = Vector2(520, 80)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_corrode")
+exclusive_group = "path"
+stat_type = "attack"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_4"]
+script = ExtResource("4_node")
+id = "funk_overdrive"
+display_name = "Funk Overdrive"
+description = "Aboutissement de la branche."
+node_type = "passive"
+editor_position = Vector2(780, 80)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("amp_gain")
+passive_type = "skill_power"
+passive_target = "funk"
+passive_value = 1
+
+[sub_resource type="Resource" id="Tree_5"]
+script = ExtResource("4_node")
+id = "deep_groove"
+display_name = "Groove profond"
+description = "Branche alternative exclusive."
+node_type = "stat"
+editor_position = Vector2(520, 260)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_corrode")
+exclusive_group = "path"
+stat_type = "focus"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_6"]
+script = ExtResource("4_node")
+id = "spore_skin"
+display_name = "Peau sporée"
+description = "Aboutissement de la branche alternative."
+node_type = "passive"
+editor_position = Vector2(780, 260)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("deep_groove")
+passive_type = "resistance"
+passive_target = "spore"
+passive_value = 15
+
+[resource]
+script = ExtResource("1_job")
+id = "spore_maestro"
+display_name = "Maestro des spores"
+description = "Ziggy maximise les dégâts et zones de Spore Funk."
+unlock_from_job_id = ""
+unlock_level = 1
+next_job_ids = PackedStringArray("groove_runner")
+hp_bonus = 0
+attack_bonus = 0
+movement_bonus = 0
+range_bonus = 0
+initiative_bonus = 2
+focus_bonus = 1
+hp_growth = 0.45
+attack_growth = 0.1
+initiative_growth = 0.25
+starting_tree_points = 1
+tree_points_per_level = 1
+progression_nodes = Array[Resource]([SubResource("Tree_1"), SubResource("Tree_2"), SubResource("Tree_3"), SubResource("Tree_4"), SubResource("Tree_5"), SubResource("Tree_6")])
+skill_unlocks = Array[Resource]([SubResource("Unlock_1"), SubResource("Unlock_2")])
+resistances = Array[Resource]([SubResource("Res_1")])
+skill_power_skill_id = "funk"
+skill_power_bonus = 1
+guard_after_skill_id = ""

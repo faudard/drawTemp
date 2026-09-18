@@ -6,10 +6,11 @@
 script = ExtResource("1")
 id = "burning"
 display_name = "Brûlure"
-description = "Subit 2 dégâts en fin d’activation pendant 2 activations."
+description = "Subit 2 dégâts en fin d’AT pendant 24 clockticks."
 color = Color(1, 0.52, 0.26, 1)
 vfx_id = "burn_aura"
-duration_activations = 2
+duration_activations = 0
 tick_phase = "activation_end"
 tick_damage_type = "fire"
 tick_damage = 2
+duration_clockticks = 24

@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="SporeSkillDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/skill_definition.gd" id="1_skill"]
+[ext_resource type="Script" path="res://scripts/data/skill_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="EffectZone"]
+script = ExtResource("2_effect")
+effect_type = "zone"
+amount = 1
+use_attack_stat = false
+damage_type = "spore"
+status_id = ""
+radius = 1
+area_shape = "circle"
+target_scope = "enemies"
+zone_tick_type = "damage"
+zone_tick_phase = "activation_start"
+zone_duration_rounds = 3
+
+[resource]
+script = ExtResource("1_skill")
+id = "spore_field"
+display_name = "Flaque corrosive"
+description = "Crée une zone de spores corrosives qui blesse les ennemis au début de leur activation pendant plusieurs rounds."
+focus_cost = 1
+cooldown_rounds = 3
+range = 3
+target_mode = "ground"
+effects = Array[Resource]([SubResource("EffectZone")])
+effect_tags = PackedStringArray("persistent_zone")
+vfx_id = "corrode_wave"

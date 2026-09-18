@@ -1,0 +1,132 @@
+[gd_resource type="Resource" script_class="SporeJobDefinition" load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/job_definition.gd" id="1_job"]
+[ext_resource type="Script" path="res://scripts/data/job_skill_unlock.gd" id="2_unlock"]
+[ext_resource type="Script" path="res://scripts/data/resistance_entry.gd" id="3_res"]
+[ext_resource type="Script" path="res://scripts/data/progression_node_definition.gd" id="4_node"]
+
+[sub_resource type="Resource" id="Unlock_1"]
+script = ExtResource("2_unlock")
+skill_id = "hat"
+required_level = 1
+
+[sub_resource type="Resource" id="Unlock_2"]
+script = ExtResource("2_unlock")
+skill_id = "taunt"
+required_level = 2
+
+[sub_resource type="Resource" id="Res_1"]
+script = ExtResource("3_res")
+damage_type = "physical"
+percent = 10
+
+[sub_resource type="Resource" id="Tree_1"]
+script = ExtResource("4_node")
+id = "skill_hat"
+display_name = "Coup de chapeau"
+description = "Attaque signature de Momo."
+node_type = "skill"
+editor_position = Vector2(40, 170)
+cost = 0
+required_level = 1
+auto_unlock = true
+skill_id = "hat"
+
+[sub_resource type="Resource" id="Tree_2"]
+script = ExtResource("4_node")
+id = "skill_taunt"
+display_name = "Provocation myco"
+description = "Contrôle et garde."
+node_type = "skill"
+editor_position = Vector2(280, 170)
+cost = 0
+required_level = 2
+auto_unlock = true
+required_node_ids = PackedStringArray("skill_hat")
+skill_id = "taunt"
+
+[sub_resource type="Resource" id="Tree_3"]
+script = ExtResource("4_node")
+id = "heavy_fists"
+display_name = "Poings lourds"
+description = "Branche de spécialisation."
+node_type = "stat"
+editor_position = Vector2(520, 80)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_taunt")
+exclusive_group = "path"
+stat_type = "attack"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_4"]
+script = ExtResource("4_node")
+id = "royal_impact"
+display_name = "Impact royal"
+description = "Aboutissement de la branche."
+node_type = "passive"
+editor_position = Vector2(780, 80)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("heavy_fists")
+passive_type = "skill_power"
+passive_target = "hat"
+passive_value = 1
+
+[sub_resource type="Resource" id="Tree_5"]
+script = ExtResource("4_node")
+id = "spring_step"
+display_name = "Pas rebond"
+description = "Branche alternative exclusive."
+node_type = "stat"
+editor_position = Vector2(520, 260)
+cost = 1
+required_level = 2
+auto_unlock = false
+required_node_ids = PackedStringArray("skill_taunt")
+exclusive_group = "path"
+stat_type = "movement"
+stat_value = 1
+
+[sub_resource type="Resource" id="Tree_6"]
+script = ExtResource("4_node")
+id = "stage_shell"
+display_name = "Carapace de scène"
+description = "Aboutissement de la branche alternative."
+node_type = "passive"
+editor_position = Vector2(780, 260)
+cost = 2
+required_level = 4
+auto_unlock = false
+required_node_ids = PackedStringArray("spring_step")
+passive_type = "resistance"
+passive_target = "physical"
+passive_value = 15
+
+[resource]
+script = ExtResource("1_job")
+id = "brave"
+display_name = "Brave"
+description = "Combattant frontal : ATQ, PV et contrôle par poussée."
+unlock_from_job_id = ""
+unlock_level = 1
+next_job_ids = PackedStringArray("bulwark")
+hp_bonus = 1
+attack_bonus = 1
+movement_bonus = 0
+range_bonus = 0
+initiative_bonus = 0
+focus_bonus = 0
+hp_growth = 0.7
+attack_growth = 0.2
+initiative_growth = 0.1
+starting_tree_points = 1
+tree_points_per_level = 1
+progression_nodes = Array[Resource]([SubResource("Tree_1"), SubResource("Tree_2"), SubResource("Tree_3"), SubResource("Tree_4"), SubResource("Tree_5"), SubResource("Tree_6")])
+skill_unlocks = Array[Resource]([SubResource("Unlock_1"), SubResource("Unlock_2")])
+resistances = Array[Resource]([SubResource("Res_1")])
+skill_power_skill_id = ""
+skill_power_bonus = 0
+guard_after_skill_id = ""

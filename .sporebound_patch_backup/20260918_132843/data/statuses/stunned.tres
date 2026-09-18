@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SporeStatusDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/status_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "stunned"
+display_name = "Étourdi"
+description = "Impossible de se déplacer ou d’agir pendant une activation."
+color = Color(1, 0.85, 0.35, 1)
+vfx_id = "stun_ring"
+duration_activations = 1
+prevents_movement = true
+prevents_action = true

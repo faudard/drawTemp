@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="SporeUnitDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/unit_definition.gd" id="1_unit"]
+
+[resource]
+script = ExtResource("1_unit")
+id = "momo"
+visual_id = "momo"
+display_name = "Momo"
+role = "Brave"
+team = "player"
+color = Color(0.949020, 0.482353, 0.447059, 1)
+max_hp = 13
+attack = 3
+movement = 4
+attack_range = 1
+initiative = 5
+max_focus = 2
+primary_skill = "hat"
+secondary_skill = "taunt"
+ai_profile = "default"
+reaction_type = "intercept"
+reaction_range = 1
+reaction_damage_bonus = 0
+default_job_id = "brave"
+available_job_ids = PackedStringArray("brave", "bulwark")
+starting_level = 1
