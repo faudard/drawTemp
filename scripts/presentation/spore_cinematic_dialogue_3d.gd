@@ -28,6 +28,10 @@ signal advance_requested
 @onready var advance_pulse: Label = $DialoguePanel/Margin/Row/TextColumn/Footer/AdvancePulse
 @onready var fade_rect: ColorRect = $FadeRect
 @onready var typewriter_audio: AudioStreamPlayer = $TypewriterAudio
+@onready var cutin_left: Panel = $CutinLeft
+@onready var cutin_right: Panel = $CutinRight
+@onready var cutin_left_portrait: TextureRect = $CutinLeft/Portrait
+@onready var cutin_right_portrait: TextureRect = $CutinRight/Portrait
 
 var _full_text: String = ""
 var _char_index: int = 0
@@ -118,6 +122,7 @@ func present_line(
 	dialogue_panel.visible = true
 	_apply_accent(accent)
 	_set_portrait(portrait, portrait_side)
+	_animate_cutin(portrait_side)
 
 	speaker_label.text = speaker if not speaker.is_empty() else "Narrateur"
 	_full_text = text_value
@@ -222,6 +227,8 @@ func hide_all() -> void:
 	_typing = false
 	_waiting = false
 	dialogue_panel.visible = false
+	cutin_left.visible = false
+	cutin_right.visible = false
 	letterbox_top.visible = false
 	letterbox_bottom.visible = false
 	dimmer.visible = false
@@ -236,6 +243,8 @@ func _hide_dialogue_panel() -> void:
 	tween.tween_property(dialogue_panel, "scale", Vector2(0.99, 0.96), panel_exit_seconds)
 	await tween.finished
 	dialogue_panel.visible = false
+	cutin_left.visible = false
+	cutin_right.visible = false
 	letterbox_top.visible = false
 	letterbox_bottom.visible = false
 	dimmer.visible = false
@@ -282,18 +291,45 @@ func _finish_typing() -> void:
 
 
 func _set_portrait(texture: Texture2D, side: String) -> void:
+	# Legacy in-panel portraits remain available for compatibility, but the comic
+	# presentation uses large side cut-ins so dialogue does not feel like a HUD form.
 	portrait_left.texture = null
 	portrait_right.texture = null
 	portrait_left.visible = false
 	portrait_right.visible = false
+
+	cutin_left_portrait.texture = null
+	cutin_right_portrait.texture = null
+	cutin_left.visible = false
+	cutin_right.visible = false
+
 	if texture == null:
 		return
+
 	if side == "right":
-		portrait_right.texture = texture
-		portrait_right.visible = true
+		cutin_right_portrait.texture = texture
+		cutin_right.visible = true
 	else:
-		portrait_left.texture = texture
-		portrait_left.visible = true
+		cutin_left_portrait.texture = texture
+		cutin_left.visible = true
+
+
+func _animate_cutin(side: String) -> void:
+	var panel: Panel = cutin_right if side == "right" else cutin_left
+	if panel == null or not panel.visible:
+		return
+
+	var target_position: Vector2 = panel.position
+	var direction: float = 1.0 if side == "right" else -1.0
+	panel.position = target_position + Vector2(34.0 * direction, 18.0)
+	panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	panel.scale = Vector2(0.94, 0.94)
+
+	var tween := create_tween().set_parallel(true)
+	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(panel, "position", target_position, panel_enter_seconds * 1.15)
+	tween.tween_property(panel, "modulate", Color.WHITE, panel_enter_seconds)
+	tween.tween_property(panel, "scale", Vector2.ONE, panel_enter_seconds * 1.15)
 
 
 func _apply_accent(accent: String) -> void:
@@ -328,6 +364,22 @@ func _apply_accent(accent: String) -> void:
 	style.content_margin_top = 10.0
 	style.content_margin_bottom = 10.0
 	dialogue_panel.add_theme_stylebox_override("panel", style)
+
+	var cutin_style := StyleBoxFlat.new()
+	cutin_style.bg_color = Color(0.01, 0.01, 0.012, 0.97)
+	cutin_style.border_color = accent_color
+	cutin_style.border_width_left = 5
+	cutin_style.border_width_top = 5
+	cutin_style.border_width_right = 5
+	cutin_style.border_width_bottom = 5
+	cutin_style.corner_radius_top_left = 2
+	cutin_style.corner_radius_top_right = 2
+	cutin_style.corner_radius_bottom_left = 2
+	cutin_style.corner_radius_bottom_right = 2
+	cutin_style.shadow_color = Color(0.0, 0.0, 0.0, 0.82)
+	cutin_style.shadow_size = 16
+	cutin_left.add_theme_stylebox_override("panel", cutin_style)
+	cutin_right.add_theme_stylebox_override("panel", cutin_style)
 
 
 func _setup_blip_audio() -> void:

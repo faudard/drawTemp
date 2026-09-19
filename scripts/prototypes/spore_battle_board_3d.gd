@@ -146,6 +146,8 @@ var _action_banner_panel: Panel
 var _action_banner_title: Label
 var _action_banner_subtitle: Label
 var _action_banner_tween: Tween
+var _comic_stamp_label: Label = null
+var _comic_stamp_tween: Tween = null
 var _timeline_panel: Panel
 var _timeline_bar: HBoxContainer
 var _unit_card_panel: Panel
@@ -3022,6 +3024,7 @@ func _show_action_banner(actor_name: String, action_name: String, category: Stri
 		if category.is_empty()
 		else "%s  •  %s" % [actor_name, category]
 	)
+	_show_comic_stamp(action_name, category)
 
 	_action_banner_tween = create_tween()
 	_action_banner_tween.set_parallel(true)
@@ -3051,6 +3054,70 @@ func _show_action_banner(actor_name: String, action_name: String, category: Stri
 				_action_banner_panel.visible = false
 	)
 
+
+
+func _show_comic_stamp(action_name: String, category: String) -> void:
+	if category not in ["ATTAQUE", "COMPÉTENCE", "PRÉPARATION"]:
+		return
+	if _ui_layer == null:
+		return
+	var root := _ui_layer.get_node_or_null("Root") as Control
+	if root == null:
+		return
+
+	if _comic_stamp_label == null or not is_instance_valid(_comic_stamp_label):
+		_comic_stamp_label = Label.new()
+		_comic_stamp_label.name = "ComicActionStamp"
+		_comic_stamp_label.size = Vector2(520.0, 100.0)
+		_comic_stamp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_comic_stamp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_comic_stamp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_comic_stamp_label.add_theme_font_size_override("font_size", 44)
+		_comic_stamp_label.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.02, 1.0))
+		_comic_stamp_label.add_theme_constant_override("outline_size", 11)
+		_comic_stamp_label.rotation = deg_to_rad(-4.0)
+		root.add_child(_comic_stamp_label)
+
+	var viewport_size := get_viewport().get_visible_rect().size
+	_comic_stamp_label.position = Vector2(
+		(viewport_size.x - _comic_stamp_label.size.x) * 0.5 + 42.0,
+		viewport_size.y * 0.19
+	)
+	_comic_stamp_label.text = action_name.to_upper()
+
+	var accent := Color(1.0, 0.80, 0.16, 1.0)
+	if category == "ATTAQUE":
+		accent = Color(0.96, 0.20, 0.16, 1.0)
+	elif category == "COMPÉTENCE":
+		accent = Color(0.57, 0.36, 0.94, 1.0)
+	_comic_stamp_label.add_theme_color_override("font_color", accent)
+
+	if _comic_stamp_tween != null and _comic_stamp_tween.is_valid():
+		_comic_stamp_tween.kill()
+
+	_comic_stamp_label.visible = true
+	_comic_stamp_label.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	_comic_stamp_label.scale = Vector2(0.72, 0.72)
+	_comic_stamp_label.pivot_offset = _comic_stamp_label.size * 0.5
+
+	_comic_stamp_tween = create_tween()
+	_comic_stamp_tween.set_parallel(true)
+	_comic_stamp_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_comic_stamp_tween.tween_property(_comic_stamp_label, "modulate", Color.WHITE, 0.10)
+	_comic_stamp_tween.tween_property(_comic_stamp_label, "scale", Vector2.ONE, 0.16)
+	_comic_stamp_tween.set_parallel(false)
+	_comic_stamp_tween.tween_interval(0.38)
+	_comic_stamp_tween.tween_property(
+		_comic_stamp_label,
+		"modulate",
+		Color(1.0, 1.0, 1.0, 0.0),
+		0.18
+	)
+	_comic_stamp_tween.tween_callback(
+		func() -> void:
+			if _comic_stamp_label != null:
+				_comic_stamp_label.visible = false
+	)
 
 func _spawn_feedback_burst(actor: SporeUnitActor3D, color: Color) -> void:
 	if actor == null or _vfx_holder == null:

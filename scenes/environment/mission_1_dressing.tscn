@@ -44,6 +44,7 @@ rotation = Vector3(0, 0.35, 0)
 scale = Vector3(1.22, 1.22, 1.22)
 
 [node name="HeroPathProps" type="Node3D" parent="."]
+visible = false
 
 [node name="GateArch" parent="HeroPathProps" instance=ExtResource("3_gate")]
 position = Vector3(-0.5, 0, -0.1)
@@ -58,6 +59,7 @@ position = Vector3(-3.45, 0.02, 3.25)
 rotation = Vector3(0, 0.45, 0)
 
 [node name="CrownZone" type="Node3D" parent="."]
+visible = false
 
 [node name="CrownShrine" parent="CrownZone" instance=ExtResource("2_shrine")]
 position = Vector3(2.8, 0, -2.3)

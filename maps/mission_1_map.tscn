@@ -12,6 +12,7 @@
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_diorama_base_pretty_3d.tscn" id="4"]
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_backdrop_pretty_3d.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_stage_lighting_pretty_3d.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/environment/mission1_comic_dressing_3d.tscn" id="7_comic"]
 
 [node name="Mission1Map3D" type="Node3D"]
 script = ExtResource("1_map")
@@ -464,6 +465,7 @@ reward_value = 1
 reward_team = "player"
 
 [node name="Dressing" parent="." instance=ExtResource("6_dressing")]
+scale = Vector3(1.4, 1.0, 1.4)
 
 [node name="PreviewRig" type="Node3D" parent="."]
 
@@ -480,6 +482,7 @@ light_energy = 1.08
 shadow_enabled = true
 
 [node name="TileMaterialField" parent="." instance=ExtResource("1")]
+scale = Vector3(1.4, 1.0, 1.4)
 
 
 [node name="HeroArtPolish" parent="." instance=ExtResource("2")]
@@ -496,3 +499,5 @@ shadow_enabled = true
 
 [node name="StageLighting" parent="." instance=ExtResource("6")]
 
+
+[node name="ComicDressing" parent="." instance=ExtResource("7_comic")]
