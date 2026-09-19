@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/environment/spore_hero_prop_pulse_3d.gd" id="1_script"]
 [ext_resource type="Material" path="res://assets/materials/comic_ink.tres" id="2_ink"]
@@ -35,6 +35,20 @@ radius = 0.075
 height = 0.12
 radial_segments = 10
 rings = 5
+
+[sub_resource type="CylinderMesh" id="BeamMesh"]
+top_radius = 0.12
+bottom_radius = 0.18
+height = 3.8
+radial_segments = 16
+
+[sub_resource type="StandardMaterial3D" id="BeamMaterial"]
+transparency = 1
+albedo_color = Color(1, 0.78, 0.20, 0.13)
+emission_enabled = true
+emission = Color(1, 0.70, 0.12, 1)
+emission_energy_multiplier = 0.46
+roughness = 0.35
 
 [node name="CrownHeroLandmark3D" type="Node3D"]
 script = ExtResource("1_script")
@@ -94,9 +108,15 @@ position = Vector3(0, 0.50, 0)
 mesh = SubResource("JewelMesh")
 material_override = ExtResource("5_gold")
 
+[node name="ObjectiveBeam" type="MeshInstance3D" parent="."]
+position = Vector3(0, 2.38, 0)
+mesh = SubResource("BeamMesh")
+material_override = SubResource("BeamMaterial")
+cast_shadow = 0
+
 [node name="Light" type="OmniLight3D" parent="."]
 position = Vector3(0, 1.12, 0)
 light_color = Color(1, 0.80, 0.34, 1)
-light_energy = 0.48
-omni_range = 4.6
+light_energy = 0.58
+omni_range = 5.2
 shadow_enabled = true

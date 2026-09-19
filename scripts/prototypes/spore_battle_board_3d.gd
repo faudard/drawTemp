@@ -50,8 +50,8 @@ const ACTION_SKILL: String = "skill"
 @export_range(0, 10, 1) var mp_regen_end_activation: int = 1
 
 @export_group("Camera")
-@export var camera_distance: float = 12.5
-@export var camera_height: float = 11.0
+@export var camera_distance: float = 11.8
+@export var camera_height: float = 10.6
 @export var camera_angle_degrees: float = -38.0
 @export var zoom_min: float = 5.0
 @export var zoom_max: float = 18.0
@@ -137,7 +137,7 @@ var _ui_layer: CanvasLayer
 var _cinematic_player_3d: SporeCinematicPlayer3D = null
 var _cinematic_camera_active: bool = false
 var _cinematic_camera_saved_focus: Vector3 = Vector3.ZERO
-var _cinematic_camera_saved_distance: float = 12.5
+var _cinematic_camera_saved_distance: float = 11.8
 var _cinematic_end_started: bool = false
 var _info_label: Label
 var _help_label: Label
@@ -169,6 +169,10 @@ var _unit_hp_bar: ProgressBar
 var _unit_focus_bar: ProgressBar
 var _unit_hp_text_label: Label
 var _unit_mp_text_label: Label
+var _hero_splash_panel: Panel = null
+var _hero_splash_portrait: TextureRect = null
+var _hero_splash_name: Label = null
+var _hero_splash_last_actor: SporeUnitActor3D = null
 var _action_wheel: Panel
 var _action_wheel_label: Label
 var _wheel_move_button: Button
@@ -179,8 +183,8 @@ var _wheel_face_button: Button
 var _wheel_end_button: Button
 var _camera_current_angle: float = 0.0
 var _camera_target_angle: float = 0.0
-var _camera_current_distance: float = 12.5
-var _camera_target_distance: float = 12.5
+var _camera_current_distance: float = 11.8
+var _camera_target_distance: float = 11.8
 var _camera_focus_current: Vector3 = Vector3.ZERO
 var _camera_focus_target: Vector3 = Vector3.ZERO
 var _camera_initialized: bool = false
@@ -357,7 +361,7 @@ func _ensure_runtime_nodes() -> void:
 		_light.name = "DirectionalLight3D"
 		# IMMERSIVE_GARDEN_LIGHTING
 		_light.light_color = Color(1.0, 0.90, 0.78, 1.0)
-		_light.light_energy = 1.08
+		_light.light_energy = 0.82
 		_light.shadow_enabled = true
 		_camera_rig.add_child(_light)
 	_position_camera()
@@ -427,6 +431,10 @@ func _build_ui() -> void:
 	_unit_focus_bar = root.get_node_or_null("UnitCard/MpBar") as ProgressBar
 	_unit_mp_text_label = root.get_node_or_null("UnitCard/MpText") as Label
 	_unit_card_body = root.get_node_or_null("UnitCard/Body") as Label
+
+	_hero_splash_panel = root.get_node_or_null("HeroSplash") as Panel
+	_hero_splash_portrait = root.get_node_or_null("HeroSplash/Portrait") as TextureRect
+	_hero_splash_name = root.get_node_or_null("HeroSplash/Name") as Label
 
 	_objective_panel_3d = root.get_node_or_null("MissionObjectivePanel") as Panel
 	_objective_title_3d = root.get_node_or_null("MissionObjectivePanel/Title") as Label
@@ -5206,6 +5214,7 @@ func _update_ui_text() -> void:
 	_help_label.text = "Boucle FFT : 1 Move + 1 Act dans l’ordre voulu • F choisit l’orientation • Espace = Wait/Fin • Vert déplacement • Rouge attaque • Violet skill • Entrée confirmer • Échap annuler • Q/E caméra • molette zoom • C recentrer • T menaces • R recommencer"
 	_refresh_timeline_ui()
 	_refresh_unit_card_ui()
+	_refresh_hero_splash_ui()
 	_update_skill_buttons()
 	if not pending_action.is_empty():
 		_update_pending_preview_panel()
@@ -5313,6 +5322,25 @@ func _unit_card_actor() -> SporeUnitActor3D:
 	if selected_actor != null and selected_actor.alive:
 		return selected_actor
 	return active_actor if active_actor != null and active_actor.alive else null
+
+
+func _refresh_hero_splash_ui() -> void:
+	if _hero_splash_panel == null:
+		return
+
+	var actor: SporeUnitActor3D = null
+	if active_actor != null and active_actor.alive:
+		actor = active_actor
+	_hero_splash_panel.visible = actor != null
+	if actor == null:
+		_hero_splash_last_actor = null
+		return
+
+	if _hero_splash_portrait != null and actor != _hero_splash_last_actor:
+		_hero_splash_portrait.texture = actor.portrait_texture()
+	if _hero_splash_name != null:
+		_hero_splash_name.text = actor.display_name.to_upper()
+	_hero_splash_last_actor = actor
 
 
 func _refresh_unit_card_ui() -> void:

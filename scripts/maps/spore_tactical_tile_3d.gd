@@ -75,7 +75,7 @@ func _rebuild_visual(map: SporeMap3D) -> void:
 		top.name = "_EditorTop"
 		add_child(top, false, Node.INTERNAL_MODE_BACK)
 
-	var total_height: float = 0.22 + float(elevation) * map.elevation_step
+	var total_height: float = 0.34 + float(elevation) * map.elevation_step
 	var body_mesh: BoxMesh = BoxMesh.new()
 	body_mesh.size = Vector3(map.tile_size * 0.94, total_height, map.tile_size * 0.94)
 	body.mesh = body_mesh
@@ -83,9 +83,9 @@ func _rebuild_visual(map: SporeMap3D) -> void:
 	body.material_override = _surface_material(_side_color(), 0.022, 0.0)
 
 	var top_mesh: BoxMesh = BoxMesh.new()
-	top_mesh.size = Vector3(map.tile_size * 0.90, 0.08, map.tile_size * 0.90)
+	top_mesh.size = Vector3(map.tile_size * 0.90, 0.10, map.tile_size * 0.90)
 	top.mesh = top_mesh
-	top.position = Vector3(0.0, -0.04, 0.0)
+	top.position = Vector3(0.0, -0.05, 0.0)
 	top.material_override = _surface_material(_top_color(), 0.050, _surface_emission())
 
 	var rim: MeshInstance3D = get_node_or_null("_EditorRim") as MeshInstance3D
@@ -318,31 +318,31 @@ func _material(color: Color) -> StandardMaterial3D:
 func _top_color() -> Color:
 	match terrain_type:
 		"obstacle":
-			return Color("#57584f")
+			return Color("#3c3d39")
 		"cover":
-			return Color("#6f5a3c")
+			return Color("#4d4234")
 		"hazard":
-			return Color("#684775")
+			return Color("#503b5b")
 		"extraction":
-			return Color("#356c59")
+			return Color("#275140")
 		"bonus":
-			return Color("#426b78")
+			return Color("#315566")
 		"crown":
-			return Color("#9a7938")
+			return Color("#745f31")
 		_:
 			var elevation_light: float = minf(0.055, float(elevation) * 0.018)
 			var hash_value: int = absi(cell.x * 92821 + cell.y * 68917)
 			var variation: float = float(hash_value % 5) * 0.007 - 0.014
 			return Color(
-				0.245 + elevation_light + variation,
-				0.365 + elevation_light + variation,
-				0.225 + elevation_light + variation * 0.5,
+				0.170 + elevation_light + variation,
+				0.205 + elevation_light + variation,
+				0.170 + elevation_light + variation * 0.5,
 				1.0
 			)
 
 
 func _side_color() -> Color:
-	return _top_color().darkened(0.26)
+	return _top_color().darkened(0.34)
 
 
 func _map_parent() -> SporeMap3D:

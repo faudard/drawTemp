@@ -9,6 +9,6 @@ size = 10.5
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-48, 28, 0)
-light_color = Color(1, 0.90, 0.78, 1)
-light_energy = 1.08
+light_color = Color(0.98, 0.95, 0.90, 1)
+light_energy = 0.82
 shadow_enabled = true
