@@ -10,17 +10,17 @@
 [node name="CrownSetpiece" parent="." instance=ExtResource("1_crown")]
 position = Vector3(6.30, 0.0, -4.90)
 rotation = Vector3(0, -0.34, 0)
-scale = Vector3(0.92, 0.92, 0.92)
+scale = Vector3(1.08, 1.08, 1.08)
 
 [node name="ExitSetpiece" parent="." instance=ExtResource("2_exit")]
 position = Vector3(-5.85, 0.0, 4.25)
 rotation = Vector3(0, 0.02, 0)
-scale = Vector3(0.86, 0.86, 0.86)
+scale = Vector3(0.92, 0.92, 0.92)
 
 [node name="DJSetpiece" parent="." instance=ExtResource("3_dj")]
 position = Vector3(6.30, 0.0, 0.70)
 rotation = Vector3(0, 2.46, 0)
-scale = Vector3(0.82, 0.82, 0.82)
+scale = Vector3(0.88, 0.88, 0.88)
 
 [node name="StoryPropsDJ" parent="." instance=ExtResource("4_story")]
 position = Vector3(5.85, 0.0, 0.45)
