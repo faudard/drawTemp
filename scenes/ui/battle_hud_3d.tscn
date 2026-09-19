@@ -187,7 +187,7 @@ mouse_filter = 2
 clip_contents = true
 theme_override_styles/panel = SubResource("HeroFrame")
 
-[node name="Portrait" type="TextureRect" parent="Root/HeroPanel"]
+[node name="HeroPortrait" type="TextureRect" parent="Root/HeroPanel"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
