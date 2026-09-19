@@ -1,9 +1,8 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Theme" path="res://assets/themes/comic_battle_theme.tres" id="1_theme"]
 [ext_resource type="PackedScene" path="res://scenes/ui/battle_result_overlay.tscn" id="2_result"]
 [ext_resource type="Shader" path="res://assets/shaders/comic_portrait_selective.gdshader" id="3_portrait_shader"]
-[ext_resource type="Script" path="res://scripts/ui/spore_battle_hud.gd" id="4_hud_script"]
 
 [sub_resource type="StyleBoxFlat" id="InkPanel"]
 bg_color = Color(0.008, 0.009, 0.011, 0.965)
@@ -113,7 +112,6 @@ shader_parameter/accent_strength = 0.95
 
 [node name="BattleHUD" type="CanvasLayer"]
 layer = 20
-script = ExtResource("4_hud_script")
 
 [node name="Root" type="Control" parent="."]
 layout_mode = 3
