@@ -19,15 +19,13 @@ The stable composition is:
 
 `scenes/ui/battle_hud_3d.tscn` owns composition, anchors, proportions, styles and decorative elements.
 
-`scripts/ui/spore_battle_hud.gd` is a typed facade over the authored scene. It exposes functional controls through unique node names.
+`scripts/prototypes/spore_battle_board_3d.gd` loads the HUD scene at runtime and binds functional controls only through Godot unique node names (`%TurnLabel`, `%MoveButton`, etc.). It does not depend on a custom HUD global class or on deep hierarchy paths.
 
-`scripts/prototypes/spore_battle_board_3d.gd` binds gameplay state and signals only. It must not know the HUD's internal node hierarchy.
-
-This means the HUD can be rearranged in the Godot editor without rewriting battle logic.
+This avoids parse-time coupling between the battle controller and the HUD scene while keeping the HUD freely rearrangeable in the Godot editor.
 
 ## Functional node contract
 
-The following nodes are unique names in the HUD scene and are referenced only by the HUD facade:
+The following nodes are unique names in the HUD scene and form the runtime binding contract:
 
 - TurnLabel, InfoLabel, HelpLabel
 - MoveButton, AttackButton, FaceButton, EndButton
@@ -41,7 +39,7 @@ The following nodes are unique names in the HUD scene and are referenced only by
 - ActionBanner, ActionBannerTitle, ActionBannerSubtitle
 - FacingSelector and the six facing controls
 
-Do not reintroduce hard-coded deep paths into `SporeBattleBoard3D`.
+Do not reintroduce hard-coded deep hierarchy paths or a parse-time preload of the HUD scene into `SporeBattleBoard3D`.
 
 ## World composition
 
