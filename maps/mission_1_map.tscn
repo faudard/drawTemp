@@ -11,7 +11,7 @@
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_painterly_polish_3d.tscn" id="3"]
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_diorama_base_pretty_3d.tscn" id="4"]
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_backdrop_pretty_3d.tscn" id="5"]
-[ext_resource type="PackedScene" path="res://scenes/environment/mission1_stage_lighting_pretty_3d.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/environment/mission1_stage_lighting_pretty_3d.tscn" id="6"]\n[ext_resource type="PackedScene" path="res://scenes/environment/mission1_comic_dressing_3d.tscn" id="7_comic"]
 
 [node name="Mission1Map3D" type="Node3D"]
 script = ExtResource("1_map")
@@ -496,3 +496,4 @@ shadow_enabled = true
 
 [node name="StageLighting" parent="." instance=ExtResource("6")]
 
+\n[node name="ComicDressing" parent="." instance=ExtResource("7_comic")]\n
