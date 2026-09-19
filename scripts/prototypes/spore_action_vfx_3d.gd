@@ -534,6 +534,7 @@ func _build_burst() -> void:
 	_body.mesh = mesh
 	_body.material_override = _material(primary_color, true, 1.2)
 	add_child(_body)
+	_spawn_comic_radial_lines(10, radius_world * 1.45, 0.42, primary_color)
 	var count: int = clampi(int(definition.get("particle_count")) if definition != null else 8, 4, 18)
 	for index: int in range(count):
 		var spark: MeshInstance3D = MeshInstance3D.new()
@@ -565,6 +566,8 @@ func _build_slash() -> void:
 	second.rotation_degrees = Vector3(0.0, 38.0, 32.0)
 	add_child(second)
 	_aux_nodes.append(second)
+	_spawn_comic_radial_lines(8, radius_world * 1.15, 0.52, primary_color)
+	_spawn_comic_onomatopoeia("TCHAK !", primary_color, 0.98)
 
 
 func _build_ring() -> void:
@@ -653,6 +656,7 @@ func _update_projectile(delta: float, t: float) -> void:
 
 
 func _spawn_projectile_impact_sparks() -> void:
+	_spawn_comic_radial_lines(8, radius_world * 1.05, 0.36, secondary_color)
 	var count: int = clampi(int(definition.get("particle_count")) if definition != null else 7, 5, 14)
 	for index: int in range(count):
 		var spark: MeshInstance3D = MeshInstance3D.new()
@@ -764,6 +768,71 @@ func _update_cross(t: float) -> void:
 	for node: Node3D in _aux_nodes:
 		if node != null:
 			node.scale = Vector3(0.2 + wave * 1.25, 1.0, 0.5 + wave * 0.5)
+
+
+
+func _spawn_comic_radial_lines(
+	count: int,
+	radius_value: float,
+	height_value: float,
+	accent: Color
+) -> void:
+	var resolved_count: int = maxi(4, count)
+	for index: int in range(resolved_count):
+		var line := MeshInstance3D.new()
+		line.name = "ComicImpactLine_%d" % index
+		var mesh := BoxMesh.new()
+		var length: float = radius_value * (0.72 + 0.10 * float(index % 4))
+		mesh.size = Vector3(0.025 + 0.008 * float(index % 2), 0.025, length)
+		line.mesh = mesh
+		var color := Color(0.02, 0.02, 0.02, 0.94)
+		if index % 5 == 0:
+			color = Color(accent.r, accent.g, accent.b, 0.88)
+		line.material_override = _material(color, index % 5 == 0, 0.9 if index % 5 == 0 else 0.0)
+		var angle: float = TAU * float(index) / float(resolved_count)
+		line.rotation.y = -angle
+		line.rotation.z = deg_to_rad(-18.0 + 9.0 * float(index % 5))
+		line.position = Vector3(
+			cos(angle) * radius_value * 0.34,
+			height_value + 0.035 * float(index % 3),
+			sin(angle) * radius_value * 0.34
+		)
+		line.scale = Vector3(0.22, 1.0, 0.22)
+		add_child(line)
+
+		var tween := create_tween()
+		tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(line, "scale", Vector3.ONE, 0.12 + 0.012 * float(index % 3))
+		tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		tween.tween_property(line, "scale", Vector3(0.08, 1.0, 0.08), 0.18)
+
+
+func _spawn_comic_onomatopoeia(text_value: String, accent: Color, height_value: float) -> void:
+	var label := Label3D.new()
+	label.name = "ComicOnomatopoeia"
+	label.text = text_value
+	label.font_size = 34
+	label.outline_size = 10
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.modulate = accent
+	label.outline_modulate = Color(0.02, 0.02, 0.02, 1.0)
+	label.position = Vector3(0.18, height_value, 0.0)
+	label.rotation.z = deg_to_rad(-8.0)
+	label.scale = Vector3(0.58, 0.58, 0.58)
+	add_child(label)
+
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "scale", Vector3.ONE, 0.14)
+	tween.tween_property(label, "position:y", height_value + 0.22, 0.18)
+	tween.set_parallel(false)
+	tween.tween_interval(0.10)
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.tween_property(label, "scale", Vector3(0.72, 0.72, 0.72), 0.16)
+	tween.tween_property(label, "modulate", Color(accent.r, accent.g, accent.b, 0.0), 0.16)
 
 
 func _material(color: Color, emission: bool, energy: float) -> StandardMaterial3D:
