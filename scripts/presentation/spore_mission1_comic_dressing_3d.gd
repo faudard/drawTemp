@@ -77,7 +77,7 @@ func _build_crown_focus(map: SporeMap3D) -> void:
 		var fin := _box(
 			"InkFin%d" % index,
 			Vector3(0.08, 1.55 + 0.18 * index, 0.18),
-			center + Vector3(-0.58 + index * 0.58, 0.68, -0.62 - 0.08 * abs(index - 1)),
+			center + Vector3(-0.58 + index * 0.58, 0.68, -0.62 - 0.08 * absi(index - 1)),
 			INK
 		)
 		fin.rotation.z = deg_to_rad(-8.0 + 8.0 * index)
@@ -115,7 +115,7 @@ func _build_ink_frame(map: SporeMap3D) -> void:
 	var half_x := float(map.grid_width) * map.tile_size * 0.5
 	var half_z := float(map.grid_height) * map.tile_size * 0.5
 
-	var positions := [
+	var positions: Array[Vector3] = [
 		Vector3(-half_x - 0.9, 0.0, -half_z + 0.9),
 		Vector3(half_x + 0.9, 0.0, half_z - 1.2),
 		Vector3(-half_x - 0.8, 0.0, half_z - 2.0),
@@ -138,7 +138,7 @@ func _build_ruin_accents(map: SporeMap3D) -> void:
 	root.name = "_ComicRuins"
 	add_child(root)
 
-	var cells := [
+	var cells: Array[Vector2i] = [
 		Vector2i(6, 1),
 		Vector2i(7, 2),
 		Vector2i(5, 4),
