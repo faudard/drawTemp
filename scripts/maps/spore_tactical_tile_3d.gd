@@ -77,13 +77,13 @@ func _rebuild_visual(map: SporeMap3D) -> void:
 
 	var total_height: float = 0.34 + float(elevation) * map.elevation_step
 	var body_mesh: BoxMesh = BoxMesh.new()
-	body_mesh.size = Vector3(map.tile_size * 0.94, total_height, map.tile_size * 0.94)
+	body_mesh.size = Vector3(map.tile_size * 0.975, total_height, map.tile_size * 0.975)
 	body.mesh = body_mesh
 	body.position = Vector3(0.0, -total_height * 0.5 - 0.02, 0.0)
 	body.material_override = _surface_material(_side_color(), 0.022, 0.0)
 
 	var top_mesh: BoxMesh = BoxMesh.new()
-	top_mesh.size = Vector3(map.tile_size * 0.90, 0.10, map.tile_size * 0.90)
+	top_mesh.size = Vector3(map.tile_size * 0.955, 0.10, map.tile_size * 0.955)
 	top.mesh = top_mesh
 	top.position = Vector3(0.0, -0.05, 0.0)
 	top.material_override = _surface_material(_top_color(), 0.050, _surface_emission())
@@ -94,7 +94,7 @@ func _rebuild_visual(map: SporeMap3D) -> void:
 		rim.name = "_EditorRim"
 		add_child(rim, false, Node.INTERNAL_MODE_BACK)
 	var rim_mesh: BoxMesh = BoxMesh.new()
-	rim_mesh.size = Vector3(map.tile_size * 0.925, 0.035, map.tile_size * 0.925)
+	rim_mesh.size = Vector3(map.tile_size * 0.965, 0.035, map.tile_size * 0.965)
 	rim.mesh = rim_mesh
 	rim.position = Vector3(0.0, -0.092, 0.0)
 	rim.material_override = _material(_side_color().darkened(0.10))
@@ -262,12 +262,16 @@ render_mode diffuse_burley, specular_schlick_ggx;
 uniform vec4 base_color : source_color = vec4(0.3, 0.45, 0.3, 1.0);
 uniform float variation = 0.04;
 uniform float emission_strength = 0.0;
+uniform float pattern_phase = 0.0;
 
 void fragment() {
-	float broad = sin(UV.x * 8.0 + UV.y * 5.0) * 0.5 + 0.5;
-	float fine = sin(UV.x * 31.0 - UV.y * 23.0) * 0.5 + 0.5;
+	float broad = sin(UV.x * 8.0 + UV.y * 5.0 + pattern_phase) * 0.5 + 0.5;
+	float fine = sin(UV.x * 31.0 - UV.y * 23.0 + pattern_phase * 1.7) * 0.5 + 0.5;
 	float grain = ((broad - 0.5) * 0.65 + (fine - 0.5) * 0.35) * variation;
-	vec3 c = clamp(base_color.rgb * (1.0 + grain), vec3(0.0), vec3(1.0));
+	float hatch_a = smoothstep(0.965, 1.0, sin((UV.x + UV.y) * 34.0 + pattern_phase) * 0.5 + 0.5);
+	float hatch_b = smoothstep(0.975, 1.0, sin((UV.x - UV.y) * 49.0 - pattern_phase * 0.7) * 0.5 + 0.5);
+	float ink_wear = hatch_a * 0.075 + hatch_b * 0.045;
+	vec3 c = clamp(base_color.rgb * (1.0 + grain) - vec3(ink_wear), vec3(0.0), vec3(1.0));
 	ALBEDO = c;
 	ROUGHNESS = 0.94;
 	METALLIC = 0.0;
@@ -284,6 +288,8 @@ func _surface_material(color: Color, variation: float, emission_strength: float)
 	material.set_shader_parameter("base_color", color)
 	material.set_shader_parameter("variation", variation)
 	material.set_shader_parameter("emission_strength", emission_strength)
+	var cell_hash: int = absi(cell.x * 193 + cell.y * 389)
+	material.set_shader_parameter("pattern_phase", float(cell_hash % 19) * 0.73)
 	return material
 
 
