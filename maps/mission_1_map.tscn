@@ -5,10 +5,7 @@
 [ext_resource type="Script" uid="uid://b6vlwgbdjyo3q" path="res://scripts/maps/spore_hero_spawn_3d.gd" id="3_hero"]
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_tile_material_field_3d.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_hero_art_polish_3d.tscn" id="2"]
-[ext_resource type="PackedScene" path="res://scenes/environment/mission1_painterly_polish_3d.tscn" id="3"]
-[ext_resource type="PackedScene" path="res://scenes/environment/mission1_diorama_base_pretty_3d.tscn" id="4"]
 [ext_resource type="Script" uid="uid://ci4ow6j43edf8" path="res://scripts/maps/spore_enemy_spawn_3d.gd" id="4_enemy"]
-[ext_resource type="PackedScene" path="res://scenes/environment/mission1_backdrop_pretty_3d.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_stage_lighting_pretty_3d.tscn" id="6"]
 [ext_resource type="Script" uid="uid://dpdcl2i4c5y0" path="res://scripts/maps/spore_map_interactable_3d.gd" id="5_object"]
 [ext_resource type="PackedScene" path="res://scenes/environment/mission_1_dressing.tscn" id="6_dressing"]
@@ -531,7 +528,6 @@ reward_type = "focus_team"
 reward_value = 1
 
 [node name="Dressing" parent="." unique_id=536067388 instance=ExtResource("6_dressing")]
-scale = Vector3(1.4, 1.0, 1.4)
 
 [node name="PreviewRig" type="Node3D" parent="." unique_id=1985816818]
 
@@ -554,13 +550,10 @@ scale = Vector3(1.4, 1.0, 1.4)
 [node name="HeroArtPolish" parent="." instance=ExtResource("2")]
 
 
-[node name="PainterlyPolish" parent="." instance=ExtResource("3")]
 
 
-[node name="StageDioramaBase" parent="." instance=ExtResource("4")]
 
 
-[node name="StageBackdrop" parent="." instance=ExtResource("5")]
 
 
 [node name="StageLighting" parent="." instance=ExtResource("6")]

@@ -1,72 +1,42 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=2 format=3]
 
-[ext_resource type="PackedScene" path="res://scenes/environment/mushroom_tree_pretty_3d.tscn" id="1_tree"]
-[ext_resource type="PackedScene" path="res://scenes/environment/fungal_shrine_pretty_3d.tscn" id="2_shrine"]
-[ext_resource type="PackedScene" path="res://scenes/environment/garden_gate_pretty_3d.tscn" id="3_gate"]
-[ext_resource type="PackedScene" path="res://scenes/environment/dj_camp_pretty_3d.tscn" id="4_djcamp"]
-[ext_resource type="PackedScene" path="res://scenes/environment/vinyl_stack_pretty_3d.tscn" id="5_vinyl"]
+[ext_resource type="PackedScene" path="res://scenes/environment/comic_mushroom_tree_3d.tscn" id="1_tree"]
 
 [node name="Mission1Dressing" type="Node3D"]
 
 [node name="ForestRing" type="Node3D" parent="."]
 
 [node name="TreeNW" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(-4.2, 0, -3.2)
+position = Vector3(-7.15, 0, -5.55)
 rotation = Vector3(0, 0.45, 0)
-scale = Vector3(1.08, 1.08, 1.08)
+scale = Vector3(0.72, 0.72, 0.72)
 
 [node name="TreeN" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(0.2, 0, -3.6)
-rotation = Vector3(0, -0.3, 0)
-scale = Vector3(1.18, 1.18, 1.18)
+position = Vector3(-2.60, 0, -5.75)
+rotation = Vector3(0, -0.30, 0)
+scale = Vector3(0.66, 0.66, 0.66)
 
 [node name="TreeNE" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(4.3, 0, -2.9)
+position = Vector3(5.15, 0, -5.60)
 rotation = Vector3(0, 0.66, 0)
+scale = Vector3(0.68, 0.68, 0.68)
 
 [node name="TreeW" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(-4.6, 0, 1.1)
-rotation = Vector3(0, 1.1, 0)
-scale = Vector3(1.12, 1.12, 1.12)
+position = Vector3(-7.30, 0, -0.65)
+rotation = Vector3(0, 1.10, 0)
+scale = Vector3(0.62, 0.62, 0.62)
 
 [node name="TreeE" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(4.7, 0, 0.6)
-rotation = Vector3(0, -0.8, 0)
-scale = Vector3(1.04, 1.04, 1.04)
+position = Vector3(7.25, 0, 0.10)
+rotation = Vector3(0, -0.80, 0)
+scale = Vector3(0.60, 0.60, 0.60)
 
 [node name="TreeSW" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(-3.8, 0, 4.0)
-rotation = Vector3(0, -0.2, 0)
+position = Vector3(-6.95, 0, 5.70)
+rotation = Vector3(0, -0.20, 0)
+scale = Vector3(0.68, 0.68, 0.68)
 
 [node name="TreeSE" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(3.8, 0, 4.3)
+position = Vector3(6.90, 0, 5.65)
 rotation = Vector3(0, 0.35, 0)
-scale = Vector3(1.22, 1.22, 1.22)
-
-[node name="HeroPathProps" type="Node3D" parent="."]
-visible = false
-
-[node name="GateArch" parent="HeroPathProps" instance=ExtResource("3_gate")]
-position = Vector3(-0.5, 0, -0.1)
-scale = Vector3(1.0, 1.0, 1.0)
-
-[node name="VinylNearGate" parent="HeroPathProps" instance=ExtResource("5_vinyl")]
-position = Vector3(-1.55, 0.02, 1.18)
-rotation = Vector3(0, -0.28, 0)
-
-[node name="VinylNearExit" parent="HeroPathProps" instance=ExtResource("5_vinyl")]
-position = Vector3(-3.45, 0.02, 3.25)
-rotation = Vector3(0, 0.45, 0)
-
-[node name="CrownZone" type="Node3D" parent="."]
-visible = false
-
-[node name="CrownShrine" parent="CrownZone" instance=ExtResource("2_shrine")]
-position = Vector3(2.8, 0, -2.3)
-rotation = Vector3(0, -0.38, 0)
-scale = Vector3(1.08, 1.08, 1.08)
-
-[node name="DJCamp" parent="CrownZone" instance=ExtResource("4_djcamp")]
-position = Vector3(1.75, 0, -1.15)
-rotation = Vector3(0, 2.55, 0)
-scale = Vector3(0.9, 0.9, 0.9)
+scale = Vector3(0.70, 0.70, 0.70)

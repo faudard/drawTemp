@@ -1,7 +1,27 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scripts/presentation/spore_comic_visual_layer.gd" id="1_script"]
+[ext_resource type="Shader" path="res://assets/shaders/comic_selective_color.gdshader" id="1_shader"]
+
+[sub_resource type="ShaderMaterial" id="ComicMaterial"]
+shader = ExtResource("1_shader")
+shader_parameter/grayscale_strength = 0.90
+shader_parameter/ink_strength = 0.56
+shader_parameter/poster_levels = 7.0
+shader_parameter/grain_strength = 0.012
+shader_parameter/selective_color_strength = 1.0
+shader_parameter/halftone_strength = 0.055
+shader_parameter/halftone_scale = 5.0
 
 [node name="ComicVisualLayer" type="CanvasLayer"]
 layer = 0
-script = ExtResource("1_script")
+
+[node name="ComicSelectiveColorPass" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+material = SubResource("ComicMaterial")
+color = Color(1, 1, 1, 1)

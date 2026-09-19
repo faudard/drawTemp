@@ -1,6 +1,116 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=11 format=3]
 
-[ext_resource type="Script" path="res://scripts/presentation/spore_mission1_comic_dressing_3d.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/environment/comic_world_sign_3d.tscn" id="1_sign"]
+
+[sub_resource type="CylinderMesh" id="RingMesh"]
+top_radius = 0.44
+bottom_radius = 0.50
+height = 0.025
+radial_segments = 32
+
+[sub_resource type="CylinderMesh" id="VinylDiscMesh"]
+top_radius = 0.24
+bottom_radius = 0.24
+height = 0.028
+radial_segments = 28
+
+[sub_resource type="StandardMaterial3D" id="GoldMaterial"]
+albedo_color = Color(0.96, 0.74, 0.18, 0.78)
+transparency = 1
+emission_enabled = true
+emission = Color(0.96, 0.74, 0.18, 1)
+emission_energy_multiplier = 0.28
+roughness = 0.72
+
+[sub_resource type="StandardMaterial3D" id="GreenMaterial"]
+albedo_color = Color(0.30, 0.82, 0.58, 0.70)
+transparency = 1
+emission_enabled = true
+emission = Color(0.30, 0.82, 0.58, 1)
+emission_energy_multiplier = 0.18
+roughness = 0.80
+
+[sub_resource type="StandardMaterial3D" id="CyanMaterial"]
+albedo_color = Color(0.24, 0.66, 0.92, 0.72)
+transparency = 1
+emission_enabled = true
+emission = Color(0.24, 0.66, 0.92, 1)
+emission_energy_multiplier = 0.20
+roughness = 0.76
+
+[sub_resource type="StandardMaterial3D" id="PurpleMaterial"]
+albedo_color = Color(0.56, 0.32, 0.82, 0.58)
+transparency = 1
+emission_enabled = true
+emission = Color(0.56, 0.32, 0.82, 1)
+emission_energy_multiplier = 0.18
+roughness = 0.84
+
+[sub_resource type="BoxMesh" id="RuinMeshA"]
+size = Vector3(0.46, 0.34, 0.38)
+
+[sub_resource type="BoxMesh" id="RuinMeshB"]
+size = Vector3(0.34, 0.54, 0.34)
+
+[sub_resource type="StandardMaterial3D" id="RuinMaterial"]
+albedo_color = Color(0.31, 0.31, 0.30, 1)
+roughness = 1.0
 
 [node name="Mission1ComicDressing3D" type="Node3D"]
-script = ExtResource("1_script")
+
+[node name="ObjectiveMarkers" type="Node3D" parent="."]
+
+[node name="CrownRing" type="MeshInstance3D" parent="ObjectiveMarkers"]
+position = Vector3(6.3, 0.08, -4.9)
+mesh = SubResource("RingMesh")
+material_override = SubResource("GoldMaterial")
+
+[node name="ExitRing" type="MeshInstance3D" parent="ObjectiveMarkers"]
+position = Vector3(-5.6, 0.08, 4.25)
+scale = Vector3(1.25, 1.0, 1.25)
+mesh = SubResource("RingMesh")
+material_override = SubResource("GreenMaterial")
+
+[node name="VinylDisc" type="MeshInstance3D" parent="ObjectiveMarkers"]
+position = Vector3(3.5, 0.13, 4.9)
+rotation = Vector3(1.5708, 0, 0)
+mesh = SubResource("VinylDiscMesh")
+material_override = SubResource("CyanMaterial")
+
+[node name="GateAccent" type="MeshInstance3D" parent="ObjectiveMarkers"]
+position = Vector3(0.7, 0.08, 3.5)
+scale = Vector3(0.90, 1.0, 0.90)
+mesh = SubResource("RingMesh")
+material_override = SubResource("PurpleMaterial")
+
+[node name="CrownSign" parent="." instance=ExtResource("1_sign")]
+position = Vector3(5.15, 0.0, -4.15)
+rotation = Vector3(0, -0.24, 0)
+label_text = "COURONNE"
+accent_color = Color(0.96, 0.74, 0.18, 1)
+
+[node name="ExitSign" parent="." instance=ExtResource("1_sign")]
+position = Vector3(-5.55, 0.0, 4.05)
+rotation = Vector3(0, 0.34, 0)
+label_text = "SORTIE"
+accent_color = Color(0.30, 0.82, 0.58, 1)
+
+[node name="Ruins" type="Node3D" parent="."]
+
+[node name="RuinA" type="MeshInstance3D" parent="Ruins"]
+position = Vector3(3.95, 0.18, -3.30)
+rotation = Vector3(0.08, 0.32, -0.06)
+mesh = SubResource("RuinMeshA")
+material_override = SubResource("RuinMaterial")
+
+[node name="RuinB" type="MeshInstance3D" parent="Ruins"]
+position = Vector3(2.72, 0.26, -1.92)
+rotation = Vector3(-0.04, -0.18, 0.08)
+mesh = SubResource("RuinMeshB")
+material_override = SubResource("RuinMaterial")
+
+[node name="RuinC" type="MeshInstance3D" parent="Ruins"]
+position = Vector3(-3.88, 0.18, -1.92)
+rotation = Vector3(0.02, 0.48, -0.05)
+mesh = SubResource("RuinMeshA")
+material_override = SubResource("RuinMaterial")

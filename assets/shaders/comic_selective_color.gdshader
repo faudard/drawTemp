@@ -27,12 +27,12 @@ float keep_color(vec3 c) {
 
 	float red = smoothstep(0.10, 0.34, c.r - max(c.g, c.b) * 0.92) * smoothstep(0.36, 0.66, c.r);
 	float gold = smoothstep(0.40, 0.72, c.r) * smoothstep(0.28, 0.62, c.g) * (1.0 - smoothstep(0.32, 0.58, c.b));
-	float green = smoothstep(0.08, 0.28, c.g - max(c.r, c.b) * 1.02) * smoothstep(0.46, 0.72, c.g);
+	float green = smoothstep(0.16, 0.34, c.g - max(c.r, c.b) * 1.05) * smoothstep(0.58, 0.82, c.g);
 	float purple = smoothstep(0.06, 0.24, min(c.r, c.b) - c.g * 0.92) * smoothstep(0.34, 0.62, max(c.r, c.b));
 	float cyan = smoothstep(0.04, 0.20, min(c.g, c.b) - c.r * 0.92) * smoothstep(0.44, 0.70, max(c.g, c.b));
 
 	float accent = max(max(red, gold), max(green, max(purple, cyan)));
-	accent *= smoothstep(0.14, 0.38, sat);
+	accent *= smoothstep(0.20, 0.42, sat);
 	return clamp(accent, 0.0, 1.0);
 }
 
