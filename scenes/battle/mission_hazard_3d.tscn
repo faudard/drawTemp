@@ -1,0 +1,73 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/presentation/spore_mission_hazard_3d.gd" id="1_script"]
+
+[sub_resource type="CylinderMesh" id="PoolMesh"]
+top_radius = 1.0
+bottom_radius = 1.12
+height = 0.035
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="PoolMaterial"]
+albedo_color = Color(0.58, 0.28, 0.78, 0.24)
+transparency = 1
+shading_mode = 0
+emission_enabled = true
+emission = Color(0.66, 0.34, 0.86, 1)
+emission_energy_multiplier = 0.28
+roughness = 0.82
+
+[sub_resource type="StandardMaterial3D" id="SporeMaterial"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_color = Color(1, 1, 1, 1)
+roughness = 0.9
+
+[sub_resource type="SphereMesh" id="SporeMesh"]
+material = SubResource("SporeMaterial")
+radius = 0.045
+height = 0.09
+radial_segments = 8
+rings = 4
+
+[sub_resource type="ParticleProcessMaterial" id="SporeProcess"]
+emission_shape = 3
+emission_box_extents = Vector3(0.42, 0.04, 0.42)
+direction = Vector3(0, 1, 0)
+spread = 32.0
+initial_velocity_min = 0.12
+initial_velocity_max = 0.28
+gravity = Vector3(0, 0.04, 0)
+scale_min = 0.65
+scale_max = 1.15
+color = Color(0.82, 0.62, 1, 0.82)
+
+[node name="MissionHazard3D" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Pool" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.02, 0)
+mesh = SubResource("PoolMesh")
+material_override = SubResource("PoolMaterial")
+
+[node name="SporeParticles" type="GPUParticles3D" parent="."]
+position = Vector3(0, 0.06, 0)
+amount = 8
+lifetime = 1.6
+preprocess = 1.6
+randomness = 0.35
+process_material = SubResource("SporeProcess")
+draw_pass_1 = SubResource("SporeMesh")
+
+[node name="Label" type="Label3D" parent="."]
+position = Vector3(0, 0.30, 0)
+billboard = 1
+no_depth_test = true
+fixed_size = false
+font_size = 16
+outline_size = 5
+pixel_size = 0.0042
+text = "SPORES"
+modulate = Color(0.88, 0.72, 1, 0.96)
+outline_modulate = Color(0.02, 0.02, 0.025, 1)

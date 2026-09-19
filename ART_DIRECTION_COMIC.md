@@ -57,3 +57,15 @@ Les éléments temporaires de combat doivent aussi utiliser des scènes réutili
 - les scripts ne changent que le contenu, la couleur, l'état et l'animation.
 
 Les textes flottants restent petits et ancrés dans le monde : pas de `fixed_size` et pas de gros texte écran pour les dégâts, objets ou compétences.
+
+
+### Marqueurs tactiques
+
+Les marqueurs temporaires du plateau suivent désormais la même règle scene-first :
+
+- `tactical_marker_3d.tscn` sert pour objectifs, cases de déplacement, danger, preview d'IA, zones persistantes et hover tactique ;
+- `mission_hazard_3d.tscn` porte le rendu des spores/hazards via `GPUParticles3D` ;
+- aucune logique de gameplay ne doit recréer un `Label3D`, un anneau, ses matériaux et ses meshes à chaque usage ;
+- les labels du monde utilisent `fixed_size = false` et un `pixel_size` contrôlé pour rester proportionnés à la caméra.
+
+Les scripts ne fournissent plus que : texte, couleur, rayon, position et durée.
