@@ -1,8 +1,12 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototypes/spore_battle_board_3d.gd" id="1_board"]
 [ext_resource type="PackedScene" path="res://scenes/ui/cinematic_player_3d.tscn" id="2_cinematic"]
 [ext_resource type="PackedScene" path="res://scenes/ui/comic_visual_layer.tscn" id="3_comic"]
+[ext_resource type="PackedScene" path="res://scenes/ui/battle_hud_3d.tscn" id="4_hud"]
+[ext_resource type="PackedScene" path="res://scenes/battle/battle_camera_rig_3d.tscn" id="5_camera"]
+[ext_resource type="PackedScene" path="res://scenes/battle/battle_cursor_3d.tscn" id="6_cursor"]
+[ext_resource type="PackedScene" path="res://maps/mission_1_map.tscn" id="7_map"]
 
 [node name="Mission1Battle3D" type="Node3D"]
 script = ExtResource("1_board")
@@ -10,6 +14,26 @@ mission_index = 0
 map_scene_path = "res://maps/mission_1_map.tscn"
 hero_unit_ids = PackedStringArray("momo", "pipo", "luma")
 
+
+[node name="MapRoot" type="Node3D" parent="."]
+
+[node name="Mission1Map3D" parent="MapRoot" instance=ExtResource("7_map")]
+preview_camera_enabled = false
+
+[node name="Actors" type="Node3D" parent="."]
+
+[node name="Highlights" type="Node3D" parent="."]
+
+[node name="PersistentZones" type="Node3D" parent="."]
+
+[node name="ActionVFX" type="Node3D" parent="."]
+
+[node name="CameraRig" parent="." instance=ExtResource("5_camera")]
+
+[node name="Cursor" parent="." instance=ExtResource("6_cursor")]
+
 [node name="CinematicPlayer3D" parent="." instance=ExtResource("2_cinematic")]
 
 [node name="ComicVisualLayer" parent="." instance=ExtResource("3_comic")]
+
+[node name="UI" parent="." instance=ExtResource("4_hud")]

@@ -33,3 +33,15 @@ La composition visuelle doit être **éditable dans l'éditeur Godot** :
 - éviter de générer en GDScript des arbres complets de `Control`, `MeshInstance3D` ou de décor statique quand Godot peut les sérialiser dans une scène ;
 - aucun `Label3D.fixed_size` décoratif dans la carte : les indications du monde doivent conserver une taille physique cohérente avec la caméra ;
 - les décors de fond ne doivent pas être des plans fixes dans le monde si la caméra peut tourner. Utiliser `WorldEnvironment` ou des éléments périphériques réellement 3D.
+
+
+### Prévisualisation complète
+
+`scenes/mission_1_battle_3d.tscn` doit montrer le niveau utile directement dans l'éditeur :
+
+- la map est instanciée sous `MapRoot` au lieu d'être uniquement chargée par code au lancement ;
+- le HUD est une instance de `battle_hud_3d.tscn` visible/modifiable en 2D ;
+- caméra et curseur sont des scènes réutilisables ;
+- le code runtime réutilise les instances présentes et ne crée des fallbacks que si elles manquent.
+
+Le but est qu'un level designer puisse déplacer le décor dans la vue 3D et ajuster l'UI dans la vue 2D sans modifier `spore_battle_board_3d.gd`.
