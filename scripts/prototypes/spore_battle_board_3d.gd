@@ -587,10 +587,10 @@ func _make_button(parent: Control, title: String, pos: Vector2, size_value: Vect
 	normal.corner_radius_top_right = 2
 	normal.corner_radius_bottom_left = 2
 	normal.corner_radius_bottom_right = 2
-	var hover: StyleBoxFlat = normal.duplicate()
+	var hover := normal.duplicate() as StyleBoxFlat
 	hover.bg_color = Color(1.0, 0.82, 0.18, 1.0)
 	hover.border_color = Color(1.0, 0.94, 0.64, 1.0)
-	var pressed: StyleBoxFlat = normal.duplicate()
+	var pressed := normal.duplicate() as StyleBoxFlat
 	pressed.bg_color = Color(0.92, 0.18, 0.12, 1.0)
 	pressed.border_color = Color(1.0, 0.86, 0.72, 1.0)
 	button.add_theme_stylebox_override("normal", normal)
