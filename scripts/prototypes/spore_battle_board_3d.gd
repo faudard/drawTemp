@@ -428,6 +428,8 @@ func _build_ui() -> void:
 	_action_banner_title = root.get_node_or_null("ActionBanner/Title") as Label
 	_action_banner_subtitle = root.get_node_or_null("ActionBanner/Subtitle") as Label
 
+	_facing_panel = root.get_node_or_null("FacingSelector") as Panel
+
 	if _move_button != null and not _move_button.pressed.is_connected(_on_move_mode_pressed):
 		_move_button.pressed.connect(_on_move_mode_pressed)
 	if _attack_button != null and not _attack_button.pressed.is_connected(_on_attack_mode_pressed):
@@ -447,6 +449,30 @@ func _build_ui() -> void:
 		_preview_confirm_button.pressed.connect(_confirm_pending_action)
 	if _preview_cancel_button != null and not _preview_cancel_button.pressed.is_connected(_cancel_pending_action):
 		_preview_cancel_button.pressed.connect(_cancel_pending_action)
+
+	if _facing_panel != null:
+		var north := _facing_panel.get_node_or_null("North") as Button
+		var west := _facing_panel.get_node_or_null("West") as Button
+		var south := _facing_panel.get_node_or_null("South") as Button
+		var east := _facing_panel.get_node_or_null("East") as Button
+		var cancel := _facing_panel.get_node_or_null("Cancel") as Button
+		var confirm := _facing_panel.get_node_or_null("Confirm") as Button
+		var north_callable: Callable = _choose_facing.bind(Vector2i.UP)
+		var west_callable: Callable = _choose_facing.bind(Vector2i.LEFT)
+		var south_callable: Callable = _choose_facing.bind(Vector2i.DOWN)
+		var east_callable: Callable = _choose_facing.bind(Vector2i.RIGHT)
+		if north != null and not north.pressed.is_connected(north_callable):
+			north.pressed.connect(north_callable)
+		if west != null and not west.pressed.is_connected(west_callable):
+			west.pressed.connect(west_callable)
+		if south != null and not south.pressed.is_connected(south_callable):
+			south.pressed.connect(south_callable)
+		if east != null and not east.pressed.is_connected(east_callable):
+			east.pressed.connect(east_callable)
+		if cancel != null and not cancel.pressed.is_connected(_close_facing_selector):
+			cancel.pressed.connect(_close_facing_selector)
+		if confirm != null and not confirm.pressed.is_connected(_confirm_facing_and_end):
+			confirm.pressed.connect(_confirm_facing_and_end)
 
 	# The old floating ActionWheel duplicated commands and covered tactical cells.
 	_action_wheel = null
@@ -2370,7 +2396,9 @@ func _cancel_skill_mode() -> void:
 func _open_facing_selector() -> void:
 	if active_actor == null or battle_finished or active_actor.team != "player":
 		return
-	if _ui_layer == null:
+	if _facing_panel == null:
+		_build_ui()
+	if _facing_panel == null:
 		return
 
 	_clear_pending_action()
@@ -2379,98 +2407,6 @@ func _open_facing_selector() -> void:
 	preview_path_cells.clear()
 	_refresh_player_overlays()
 
-	var root: Control = _ui_layer.get_node_or_null("Root") as Control
-	if root == null:
-		return
-
-	if _facing_panel == null or not is_instance_valid(_facing_panel):
-		_facing_panel = Panel.new()
-		_facing_panel.name = "FacingSelector"
-		_facing_panel.size = Vector2(430.0, 190.0)
-		_facing_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-
-		var style: StyleBoxFlat = StyleBoxFlat.new()
-		style.bg_color = Color(0.045, 0.060, 0.085, 0.97)
-		style.border_color = Color(1.0, 0.78, 0.30, 0.96)
-		style.border_width_left = 2
-		style.border_width_top = 2
-		style.border_width_right = 2
-		style.border_width_bottom = 2
-		style.corner_radius_top_left = 14
-		style.corner_radius_top_right = 14
-		style.corner_radius_bottom_left = 14
-		style.corner_radius_bottom_right = 14
-		_facing_panel.add_theme_stylebox_override("panel", style)
-		root.add_child(_facing_panel)
-
-		var title: Label = Label.new()
-		title.name = "Title"
-		title.position = Vector2(18.0, 12.0)
-		title.size = Vector2(394.0, 26.0)
-		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		title.add_theme_font_size_override("font_size", 17)
-		title.add_theme_color_override("font_color", Color(1.0, 0.84, 0.40, 1.0))
-		title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_facing_panel.add_child(title)
-
-		var help: Label = Label.new()
-		help.position = Vector2(18.0, 41.0)
-		help.size = Vector2(394.0, 34.0)
-		help.text = "Choisis la direction regardée. Le dos et les flancs sont plus vulnérables."
-		help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		help.add_theme_font_size_override("font_size", 11)
-		help.add_theme_color_override("font_color", Color(0.82, 0.87, 0.91, 1.0))
-		help.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_facing_panel.add_child(help)
-
-		var north: Button = Button.new()
-		north.text = "↑ NORD"
-		north.position = Vector2(164.0, 78.0)
-		north.size = Vector2(102.0, 32.0)
-		north.pressed.connect(_choose_facing.bind(Vector2i.UP))
-		_facing_panel.add_child(north)
-
-		var west: Button = Button.new()
-		west.text = "← OUEST"
-		west.position = Vector2(54.0, 112.0)
-		west.size = Vector2(102.0, 32.0)
-		west.pressed.connect(_choose_facing.bind(Vector2i.LEFT))
-		_facing_panel.add_child(west)
-
-		var south: Button = Button.new()
-		south.text = "↓ SUD"
-		south.position = Vector2(164.0, 112.0)
-		south.size = Vector2(102.0, 32.0)
-		south.pressed.connect(_choose_facing.bind(Vector2i.DOWN))
-		_facing_panel.add_child(south)
-
-		var east: Button = Button.new()
-		east.text = "EST →"
-		east.position = Vector2(274.0, 112.0)
-		east.size = Vector2(102.0, 32.0)
-		east.pressed.connect(_choose_facing.bind(Vector2i.RIGHT))
-		_facing_panel.add_child(east)
-
-		var cancel: Button = Button.new()
-		cancel.text = "RETOUR"
-		cancel.position = Vector2(54.0, 151.0)
-		cancel.size = Vector2(140.0, 30.0)
-		cancel.pressed.connect(_close_facing_selector)
-		_facing_panel.add_child(cancel)
-
-		var confirm: Button = Button.new()
-		confirm.text = "TERMINER LE TOUR"
-		confirm.position = Vector2(202.0, 151.0)
-		confirm.size = Vector2(174.0, 30.0)
-		confirm.pressed.connect(_confirm_facing_and_end)
-		_facing_panel.add_child(confirm)
-
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	_facing_panel.position = Vector2(
-		(viewport_size.x - _facing_panel.size.x) * 0.5,
-		viewport_size.y - _facing_panel.size.y - 24.0
-	)
 	_facing_panel.visible = true
 	_facing_selection_active = true
 	player_busy = true
