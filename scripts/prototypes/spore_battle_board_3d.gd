@@ -11,6 +11,8 @@ const UnitActorScript = preload("res://scripts/maps/spore_unit_actor_3d.gd")
 const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
 const CinematicPlayerScene = preload("res://scenes/ui/cinematic_player_3d.tscn")
 const ComicActionCutinScene = preload("res://scenes/ui/comic_action_cutin.tscn")
+const BattleHudScene = preload("res://scenes/ui/battle_hud_3d.tscn")
+const TimelineActorCardScene = preload("res://scenes/ui/timeline_actor_card.tscn")
 
 const MODE_MOVE: String = "move"
 const MODE_ATTACK: String = "attack"
@@ -148,8 +150,6 @@ var _action_banner_panel: Panel
 var _action_banner_title: Label
 var _action_banner_subtitle: Label
 var _action_banner_tween: Tween
-var _comic_stamp_label: Label = null
-var _comic_stamp_tween: Tween = null
 var _comic_action_cutin: SporeComicActionCutin = null
 var _timeline_panel: Panel
 var _timeline_bar: HBoxContainer
@@ -377,170 +377,73 @@ func _ensure_runtime_nodes() -> void:
 
 func _build_ui() -> void:
 	_ui_layer = get_node_or_null("UI") as CanvasLayer
-	if _ui_layer != null:
+	if _ui_layer == null:
+		var hud_node: Node = BattleHudScene.instantiate()
+		if not (hud_node is CanvasLayer):
+			hud_node.queue_free()
+			return
+		hud_node.name = "UI"
+		add_child(hud_node)
+		_ui_layer = hud_node as CanvasLayer
+
+	var root := _ui_layer.get_node_or_null("Root") as Control
+	if root == null:
 		return
-	_ui_layer = CanvasLayer.new()
-	_ui_layer.name = "UI"
-	add_child(_ui_layer)
 
-	var root: Control = Control.new()
-	root.name = "Root"
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	# Critical: the full-screen HUD must not swallow board clicks.
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ui_layer.add_child(root)
+	_turn_label = root.get_node_or_null("CommandPanel/TurnLabel") as Label
+	_info_label = root.get_node_or_null("CommandPanel/InfoLabel") as Label
+	_help_label = root.get_node_or_null("CommandPanel/HelpLabel") as Label
+	_move_button = root.get_node_or_null("CommandPanel/MoveButton") as Button
+	_attack_button = root.get_node_or_null("CommandPanel/AttackButton") as Button
+	_face_button = root.get_node_or_null("CommandPanel/FaceButton") as Button
+	_end_button = root.get_node_or_null("CommandPanel/EndButton") as Button
+	_primary_skill_button = root.get_node_or_null("CommandPanel/PrimarySkillButton") as Button
+	_secondary_skill_button = root.get_node_or_null("CommandPanel/SecondarySkillButton") as Button
 
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.018, 0.020, 0.024, 0.94)
-	style.border_color = Color(0.93, 0.91, 0.84, 0.98)
-	style.border_width_left = 3
-	style.border_width_top = 3
-	style.border_width_right = 3
-	style.border_width_bottom = 3
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	style.shadow_color = Color(0.0, 0.0, 0.0, 0.72)
-	style.shadow_size = 7
+	_timeline_panel = root.get_node_or_null("InitiativeTimeline") as Panel
+	_timeline_bar = root.get_node_or_null("InitiativeTimeline/Bar") as HBoxContainer
 
-	var panel: Panel = Panel.new()
-	panel.name = "CommandPanel"
-	panel.position = Vector2(14.0, 14.0)
-	panel.size = Vector2(430.0, 174.0)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_theme_stylebox_override("panel", style)
-	root.add_child(panel)
+	_log_label = root.get_node_or_null("BattleLog/LogLabel") as Label
 
-	_turn_label = _make_label(panel, Vector2(14.0, 8.0), Vector2(402.0, 28.0), 20, Color(1.0, 0.80, 0.16, 1.0))
-	_info_label = _make_label(panel, Vector2(14.0, 38.0), Vector2(402.0, 44.0), 12, Color(0.96, 0.95, 0.90, 1.0))
-	_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_preview_panel = root.get_node_or_null("CombatPreview") as Panel
+	_preview_title = root.get_node_or_null("CombatPreview/Title") as Label
+	_preview_body = root.get_node_or_null("CombatPreview/Body") as Label
+	_preview_confirm_button = root.get_node_or_null("CombatPreview/ConfirmButton") as Button
+	_preview_cancel_button = root.get_node_or_null("CombatPreview/CancelButton") as Button
 
-	_move_button = _make_button(panel, "MOVE [M]", Vector2(14.0, 87.0), Vector2(94.0, 32.0))
-	_attack_button = _make_button(panel, "ATTAQUE [A]", Vector2(114.0, 87.0), Vector2(104.0, 32.0))
-	_face_button = _make_button(panel, "ORIENT. [F]", Vector2(224.0, 87.0), Vector2(82.0, 32.0))
-	_face_button.tooltip_text = "Orientation : frapper de dos ou de flanc est plus efficace."
-	_end_button = _make_button(panel, "FIN [ESPACE]", Vector2(312.0, 87.0), Vector2(104.0, 32.0))
-	_move_button.toggle_mode = true
-	_attack_button.toggle_mode = true
+	_unit_card_panel = root.get_node_or_null("UnitCard") as Panel
+	_unit_portrait = root.get_node_or_null("UnitCard/Portrait") as TextureRect
+	_unit_card_title = root.get_node_or_null("UnitCard/Title") as Label
+	_unit_hp_bar = root.get_node_or_null("UnitCard/HpBar") as ProgressBar
+	_unit_hp_text_label = root.get_node_or_null("UnitCard/HpText") as Label
+	_unit_focus_bar = root.get_node_or_null("UnitCard/MpBar") as ProgressBar
+	_unit_mp_text_label = root.get_node_or_null("UnitCard/MpText") as Label
+	_unit_card_body = root.get_node_or_null("UnitCard/Body") as Label
 
-	_primary_skill_button = _make_button(panel, "I [1]", Vector2(14.0, 126.0), Vector2(198.0, 32.0))
-	_secondary_skill_button = _make_button(panel, "II [2]", Vector2(218.0, 126.0), Vector2(198.0, 32.0))
+	_objective_panel_3d = root.get_node_or_null("MissionObjectivePanel") as Panel
+	_objective_title_3d = root.get_node_or_null("MissionObjectivePanel/Title") as Label
+	_objective_body_3d = root.get_node_or_null("MissionObjectivePanel/Body") as Label
 
-	_move_button.pressed.connect(_on_move_mode_pressed)
-	_attack_button.pressed.connect(_on_attack_mode_pressed)
-	_face_button.pressed.connect(_on_face_pressed.bind(1))
-	_end_button.pressed.connect(_on_end_activation_pressed)
-	_primary_skill_button.pressed.connect(_on_skill_pressed.bind(1))
-	_secondary_skill_button.pressed.connect(_on_skill_pressed.bind(2))
+	_action_banner_panel = root.get_node_or_null("ActionBanner") as Panel
+	_action_banner_title = root.get_node_or_null("ActionBanner/Title") as Label
+	_action_banner_subtitle = root.get_node_or_null("ActionBanner/Subtitle") as Label
 
-	_help_label = _make_label(panel, Vector2.ZERO, Vector2.ZERO, 10, Color.WHITE)
-	_help_label.visible = false
-
-	_timeline_panel = Panel.new()
-	_timeline_panel.name = "InitiativeTimeline"
-	_timeline_panel.position = Vector2(458.0, 14.0)
-	_timeline_panel.size = Vector2(292.0, 82.0)
-	_timeline_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_timeline_panel.add_theme_stylebox_override("panel", style)
-	root.add_child(_timeline_panel)
-	var timeline_title: Label = _make_label(_timeline_panel, Vector2(10.0, 6.0), Vector2(272.0, 18.0), 11, Color(0.68, 0.79, 0.87, 1.0))
-	timeline_title.text = "INITIATIVE"
-	timeline_title.add_theme_color_override("font_color", Color(0.98, 0.96, 0.90, 1.0))
-	timeline_title.add_theme_font_size_override("font_size", 13)
-	_timeline_bar = HBoxContainer.new()
-	_timeline_bar.position = Vector2(10.0, 27.0)
-	_timeline_bar.size = Vector2(272.0, 48.0)
-	_timeline_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_timeline_bar.add_theme_constant_override("separation", 4)
-	_timeline_panel.add_child(_timeline_bar)
-
-	var log_panel: Panel = Panel.new()
-	log_panel.name = "BattleLog"
-	log_panel.position = Vector2(14.0, 650.0)
-	log_panel.size = Vector2(420.0, 88.0)
-	log_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	log_panel.add_theme_stylebox_override("panel", style)
-	root.add_child(log_panel)
-	_log_label = _make_label(log_panel, Vector2(12.0, 9.0), Vector2(396.0, 70.0), 11, Color(0.49, 0.87, 1.0, 1.0))
-	_log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-
-	_preview_panel = Panel.new()
-	_preview_panel.name = "CombatPreview"
-	_preview_panel.position = Vector2(820.0, 14.0)
-	_preview_panel.size = Vector2(420.0, 300.0)
-	_preview_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_preview_panel.add_theme_stylebox_override("panel", style)
-	_preview_panel.visible = false
-	root.add_child(_preview_panel)
-	_preview_title = _make_label(_preview_panel, Vector2(16.0, 12.0), Vector2(388.0, 28.0), 18, Color(1.0, 0.82, 0.40, 1.0))
-	_preview_body = _make_label(_preview_panel, Vector2(16.0, 45.0), Vector2(388.0, 198.0), 12, Color(0.94, 0.94, 0.88, 1.0))
-	_preview_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_preview_confirm_button = _make_button(_preview_panel, "CONFIRMER [ENTRÉE]", Vector2(16.0, 252.0), Vector2(220.0, 34.0))
-	_preview_cancel_button = _make_button(_preview_panel, "ANNULER [ÉCHAP]", Vector2(244.0, 252.0), Vector2(160.0, 34.0))
-	_preview_confirm_button.pressed.connect(_confirm_pending_action)
-	_preview_cancel_button.pressed.connect(_cancel_pending_action)
-
-	_unit_card_panel = Panel.new()
-	_unit_card_panel.name = "UnitCard"
-	_unit_card_panel.position = Vector2(880.0, 568.0)
-	_unit_card_panel.size = Vector2(372.0, 192.0)
-	_unit_card_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_unit_card_panel.add_theme_stylebox_override("panel", style)
-	root.add_child(_unit_card_panel)
-
-	_unit_portrait = TextureRect.new()
-	_unit_portrait.position = Vector2(14.0, 14.0)
-	_unit_portrait.size = Vector2(88.0, 112.0)
-	_unit_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_unit_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_unit_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_unit_card_panel.add_child(_unit_portrait)
-
-	_unit_card_title = _make_label(_unit_card_panel, Vector2(104.0, 10.0), Vector2(244.0, 25.0), 18, Color(1.0, 0.80, 0.16, 1.0))
-
-	_unit_hp_bar = ProgressBar.new()
-	_unit_hp_bar.position = Vector2(114.0, 42.0)
-	_unit_hp_bar.size = Vector2(244.0, 16.0)
-	_unit_hp_bar.show_percentage = false
-	_unit_hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_unit_hp_bar.add_theme_stylebox_override("background", _progress_style(Color(0.07, 0.08, 0.10, 0.95), 4))
-	_unit_hp_bar.add_theme_stylebox_override("fill", _progress_style(Color(0.31, 0.82, 0.42, 1.0), 4))
-	_unit_card_panel.add_child(_unit_hp_bar)
-	_unit_hp_text_label = _make_label(
-		_unit_card_panel,
-		_unit_hp_bar.position,
-		_unit_hp_bar.size,
-		11,
-		Color.WHITE
-	)
-	_unit_hp_text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_unit_hp_text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_unit_hp_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	_unit_focus_bar = ProgressBar.new()
-	_unit_focus_bar.position = Vector2(114.0, 64.0)
-	_unit_focus_bar.size = Vector2(244.0, 16.0)
-	_unit_focus_bar.show_percentage = false
-	_unit_focus_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_unit_focus_bar.add_theme_stylebox_override("background", _progress_style(Color(0.07, 0.08, 0.10, 0.95), 3))
-	_unit_focus_bar.add_theme_stylebox_override("fill", _progress_style(Color(0.34, 0.64, 1.0, 1.0), 3))
-	_unit_card_panel.add_child(_unit_focus_bar)
-	_unit_mp_text_label = _make_label(
-		_unit_card_panel,
-		_unit_focus_bar.position,
-		_unit_focus_bar.size,
-		10,
-		Color.WHITE
-	)
-	_unit_mp_text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_unit_mp_text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_unit_mp_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	_unit_card_body = _make_label(_unit_card_panel, Vector2(114.0, 90.0), Vector2(244.0, 92.0), 10, Color(0.92, 0.93, 0.88, 1.0))
-	_unit_card_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_unit_card_body.clip_contents = false
-	_unit_card_body.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	if _move_button != null:
+		_move_button.pressed.connect(_on_move_mode_pressed)
+	if _attack_button != null:
+		_attack_button.pressed.connect(_on_attack_mode_pressed)
+	if _face_button != null:
+		_face_button.pressed.connect(_on_face_pressed.bind(1))
+	if _end_button != null:
+		_end_button.pressed.connect(_on_end_activation_pressed)
+	if _primary_skill_button != null:
+		_primary_skill_button.pressed.connect(_on_skill_pressed.bind(1))
+	if _secondary_skill_button != null:
+		_secondary_skill_button.pressed.connect(_on_skill_pressed.bind(2))
+	if _preview_confirm_button != null:
+		_preview_confirm_button.pressed.connect(_confirm_pending_action)
+	if _preview_cancel_button != null:
+		_preview_cancel_button.pressed.connect(_cancel_pending_action)
 
 	# The old floating ActionWheel duplicated commands and covered tactical cells.
 	_action_wheel = null
@@ -552,60 +455,8 @@ func _build_ui() -> void:
 	_wheel_face_button = null
 	_wheel_end_button = null
 
-func _progress_style(color: Color, radius: int) -> StyleBoxFlat:
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = color
-	style.corner_radius_top_left = radius
-	style.corner_radius_top_right = radius
-	style.corner_radius_bottom_left = radius
-	style.corner_radius_bottom_right = radius
-	return style
 
 
-func _make_label(parent: Control, pos: Vector2, size_value: Vector2, font_size: int, color: Color) -> Label:
-	var label: Label = Label.new()
-	label.position = pos
-	label.size = size_value
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(label)
-	return label
-
-
-func _make_button(parent: Control, title: String, pos: Vector2, size_value: Vector2) -> Button:
-	var button: Button = Button.new()
-	button.text = title
-	button.position = pos
-	button.size = size_value
-	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 13)
-	button.add_theme_color_override("font_color", Color(0.96, 0.95, 0.90, 1.0))
-	button.add_theme_color_override("font_hover_color", Color(0.06, 0.06, 0.06, 1.0))
-	button.add_theme_color_override("font_pressed_color", Color(0.06, 0.06, 0.06, 1.0))
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.035, 0.038, 0.045, 0.96)
-	normal.border_color = Color(0.88, 0.86, 0.79, 0.95)
-	normal.border_width_left = 2
-	normal.border_width_top = 2
-	normal.border_width_right = 2
-	normal.border_width_bottom = 2
-	normal.corner_radius_top_left = 2
-	normal.corner_radius_top_right = 2
-	normal.corner_radius_bottom_left = 2
-	normal.corner_radius_bottom_right = 2
-	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color = Color(1.0, 0.82, 0.18, 1.0)
-	hover.border_color = Color(1.0, 0.94, 0.64, 1.0)
-	var pressed := normal.duplicate() as StyleBoxFlat
-	pressed.bg_color = Color(0.92, 0.18, 0.12, 1.0)
-	pressed.border_color = Color(1.0, 0.86, 0.72, 1.0)
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", hover)
-	parent.add_child(button)
-	return button
 
 
 func _update_action_wheel() -> void:
@@ -1209,80 +1060,20 @@ func _mission_result_3d() -> int:
 
 
 func _ensure_objective_ui_3d() -> void:
+	if _objective_panel_3d != null and _objective_body_3d != null:
+		return
+	if _ui_layer == null:
+		_build_ui()
 	if _ui_layer == null:
 		return
 
-	var root: Control = _ui_layer.get_node_or_null("Root") as Control
+	var root := _ui_layer.get_node_or_null("Root") as Control
 	if root == null:
 		return
 
-	_objective_panel_3d = root.get_node_or_null(
-		"MissionObjectivePanel"
-	) as Panel
-
-	if _objective_panel_3d == null:
-		_objective_panel_3d = Panel.new()
-		_objective_panel_3d.name = "MissionObjectivePanel"
-		_objective_panel_3d.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_objective_panel_3d.set_anchors_preset(
-			Control.PRESET_TOP_RIGHT
-		)
-		_objective_panel_3d.offset_left = -382.0
-		_objective_panel_3d.offset_top = 14.0
-		_objective_panel_3d.offset_right = -14.0
-		_objective_panel_3d.offset_bottom = 132.0
-
-		var style: StyleBoxFlat = StyleBoxFlat.new()
-		style.bg_color = Color(0.018, 0.020, 0.024, 0.95)
-		style.border_color = Color(0.93, 0.91, 0.84, 0.98)
-		style.border_width_left = 3
-		style.border_width_top = 3
-		style.border_width_right = 3
-		style.border_width_bottom = 3
-		style.corner_radius_top_left = 3
-		style.corner_radius_top_right = 3
-		style.corner_radius_bottom_left = 3
-		style.corner_radius_bottom_right = 3
-		_objective_panel_3d.add_theme_stylebox_override(
-			"panel",
-			style
-		)
-		root.add_child(_objective_panel_3d)
-
-		_objective_title_3d = Label.new()
-		_objective_title_3d.position = Vector2(14.0, 9.0)
-		_objective_title_3d.size = Vector2(340.0, 24.0)
-		_objective_title_3d.text = "OBJECTIF"
-		_objective_title_3d.add_theme_font_size_override(
-			"font_size",
-			15
-		)
-		_objective_title_3d.add_theme_color_override(
-			"font_color",
-			Color(1.0, 0.80, 0.16, 1.0)
-		)
-		_objective_title_3d.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_objective_panel_3d.add_child(_objective_title_3d)
-
-		_objective_body_3d = Label.new()
-		_objective_body_3d.position = Vector2(14.0, 35.0)
-		_objective_body_3d.size = Vector2(340.0, 72.0)
-		_objective_body_3d.autowrap_mode = (
-			TextServer.AUTOWRAP_WORD_SMART
-		)
-		_objective_body_3d.add_theme_font_size_override(
-			"font_size",
-			12
-		)
-		_objective_body_3d.add_theme_color_override(
-			"font_color",
-			Color(0.91, 0.93, 0.88, 1.0)
-		)
-		_objective_body_3d.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_objective_panel_3d.add_child(_objective_body_3d)
-	else:
-		_objective_title_3d = _objective_panel_3d.get_child(0) as Label
-		_objective_body_3d = _objective_panel_3d.get_child(1) as Label
+	_objective_panel_3d = root.get_node_or_null("MissionObjectivePanel") as Panel
+	_objective_title_3d = root.get_node_or_null("MissionObjectivePanel/Title") as Label
+	_objective_body_3d = root.get_node_or_null("MissionObjectivePanel/Body") as Label
 
 
 func _objective_status_text_3d() -> String:
@@ -3028,64 +2819,13 @@ func _show_actor_comic_cutin(
 
 
 func _show_action_banner(actor_name: String, action_name: String, category: String = "") -> void:
-	if _ui_layer == null:
+	if _action_banner_panel == null or _action_banner_title == null or _action_banner_subtitle == null:
+		_build_ui()
+	if _action_banner_panel == null or _action_banner_title == null or _action_banner_subtitle == null:
 		return
-
-	var root: Control = _ui_layer.get_node_or_null("Root") as Control
-	if root == null:
-		return
-
-	if _action_banner_panel == null or not is_instance_valid(_action_banner_panel):
-		_action_banner_panel = Panel.new()
-		_action_banner_panel.name = "ActionBanner"
-		_action_banner_panel.size = Vector2(420.0, 64.0)
-		_action_banner_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-		var style: StyleBoxFlat = StyleBoxFlat.new()
-		style.bg_color = Color(0.01, 0.01, 0.012, 0.96)
-		style.border_color = Color(0.96, 0.94, 0.88, 0.98)
-		style.border_width_left = 3
-		style.border_width_top = 3
-		style.border_width_right = 3
-		style.border_width_bottom = 3
-		style.corner_radius_top_left = 2
-		style.corner_radius_top_right = 2
-		style.corner_radius_bottom_left = 2
-		style.corner_radius_bottom_right = 2
-		_action_banner_panel.add_theme_stylebox_override("panel", style)
-		root.add_child(_action_banner_panel)
-
-		_action_banner_title = _make_label(
-			_action_banner_panel,
-			Vector2(14.0, 7.0),
-			Vector2(392.0, 27.0),
-			18,
-			Color(1.0, 0.84, 0.42, 1.0)
-		)
-		_action_banner_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-		_action_banner_subtitle = _make_label(
-			_action_banner_panel,
-			Vector2(14.0, 34.0),
-			Vector2(392.0, 20.0),
-			11,
-			Color(0.82, 0.88, 0.94, 1.0)
-		)
-		_action_banner_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	_action_banner_panel.position = Vector2(
-		(viewport_size.x - _action_banner_panel.size.x) * 0.5,
-		14.0
-	)
 
 	if _action_banner_tween != null and _action_banner_tween.is_valid():
 		_action_banner_tween.kill()
-
-	_action_banner_panel.visible = true
-	_action_banner_panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
-	_action_banner_panel.scale = Vector2(0.96, 0.96)
-	_action_banner_panel.pivot_offset = _action_banner_panel.size * 0.5
 
 	_action_banner_title.text = action_name
 	_action_banner_subtitle.text = (
@@ -3093,29 +2833,24 @@ func _show_action_banner(actor_name: String, action_name: String, category: Stri
 		if category.is_empty()
 		else "%s  •  %s" % [actor_name, category]
 	)
-	_show_comic_stamp(action_name, category)
+
+	_action_banner_panel.visible = true
+	_action_banner_panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	_action_banner_panel.scale = Vector2(0.97, 0.97)
+	_action_banner_panel.pivot_offset = _action_banner_panel.size * 0.5
 
 	_action_banner_tween = create_tween()
 	_action_banner_tween.set_parallel(true)
-	_action_banner_tween.tween_property(
-		_action_banner_panel,
-		"modulate",
-		Color.WHITE,
-		0.12
-	)
-	_action_banner_tween.tween_property(
-		_action_banner_panel,
-		"scale",
-		Vector2.ONE,
-		0.14
-	)
+	_action_banner_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_action_banner_tween.tween_property(_action_banner_panel, "modulate", Color.WHITE, 0.10)
+	_action_banner_tween.tween_property(_action_banner_panel, "scale", Vector2.ONE, 0.12)
 	_action_banner_tween.set_parallel(false)
-	_action_banner_tween.tween_interval(0.68)
+	_action_banner_tween.tween_interval(0.54)
 	_action_banner_tween.tween_property(
 		_action_banner_panel,
 		"modulate",
 		Color(1.0, 1.0, 1.0, 0.0),
-		0.20
+		0.16
 	)
 	_action_banner_tween.tween_callback(
 		func() -> void:
@@ -3124,69 +2859,6 @@ func _show_action_banner(actor_name: String, action_name: String, category: Stri
 	)
 
 
-
-func _show_comic_stamp(action_name: String, category: String) -> void:
-	if category not in ["ATTAQUE", "COMPÉTENCE", "PRÉPARATION"]:
-		return
-	if _ui_layer == null:
-		return
-	var root := _ui_layer.get_node_or_null("Root") as Control
-	if root == null:
-		return
-
-	if _comic_stamp_label == null or not is_instance_valid(_comic_stamp_label):
-		_comic_stamp_label = Label.new()
-		_comic_stamp_label.name = "ComicActionStamp"
-		_comic_stamp_label.size = Vector2(520.0, 100.0)
-		_comic_stamp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_comic_stamp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_comic_stamp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_comic_stamp_label.add_theme_font_size_override("font_size", 44)
-		_comic_stamp_label.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.02, 1.0))
-		_comic_stamp_label.add_theme_constant_override("outline_size", 11)
-		_comic_stamp_label.rotation = deg_to_rad(-4.0)
-		root.add_child(_comic_stamp_label)
-
-	var viewport_size := get_viewport().get_visible_rect().size
-	_comic_stamp_label.position = Vector2(
-		(viewport_size.x - _comic_stamp_label.size.x) * 0.5 + 42.0,
-		viewport_size.y * 0.19
-	)
-	_comic_stamp_label.text = action_name.to_upper()
-
-	var accent := Color(1.0, 0.80, 0.16, 1.0)
-	if category == "ATTAQUE":
-		accent = Color(0.96, 0.20, 0.16, 1.0)
-	elif category == "COMPÉTENCE":
-		accent = Color(0.57, 0.36, 0.94, 1.0)
-	_comic_stamp_label.add_theme_color_override("font_color", accent)
-
-	if _comic_stamp_tween != null and _comic_stamp_tween.is_valid():
-		_comic_stamp_tween.kill()
-
-	_comic_stamp_label.visible = true
-	_comic_stamp_label.modulate = Color(1.0, 1.0, 1.0, 0.0)
-	_comic_stamp_label.scale = Vector2(0.72, 0.72)
-	_comic_stamp_label.pivot_offset = _comic_stamp_label.size * 0.5
-
-	_comic_stamp_tween = create_tween()
-	_comic_stamp_tween.set_parallel(true)
-	_comic_stamp_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_comic_stamp_tween.tween_property(_comic_stamp_label, "modulate", Color.WHITE, 0.10)
-	_comic_stamp_tween.tween_property(_comic_stamp_label, "scale", Vector2.ONE, 0.16)
-	_comic_stamp_tween.set_parallel(false)
-	_comic_stamp_tween.tween_interval(0.38)
-	_comic_stamp_tween.tween_property(
-		_comic_stamp_label,
-		"modulate",
-		Color(1.0, 1.0, 1.0, 0.0),
-		0.18
-	)
-	_comic_stamp_tween.tween_callback(
-		func() -> void:
-			if _comic_stamp_label != null:
-				_comic_stamp_label.visible = false
-	)
 
 func _spawn_feedback_burst(actor: SporeUnitActor3D, color: Color) -> void:
 	if actor == null or _vfx_holder == null:
@@ -6133,63 +5805,18 @@ func _refresh_timeline_ui() -> void:
 	_timeline_signature = signature
 
 	for child: Node in _timeline_bar.get_children():
-		child.free()
+		child.queue_free()
 
 	var predicted: Array[SporeUnitActor3D] = _predict_timeline_3d(5)
 	for actor: SporeUnitActor3D in predicted:
 		if actor == null or not actor.alive:
 			continue
+		var card_node: Node = TimelineActorCardScene.instantiate()
+		_timeline_bar.add_child(card_node)
+		var card := card_node as SporeTimelineActorCard
+		if card != null:
+			card.bind_actor(actor, actor == active_actor)
 
-		var card := Panel.new()
-		card.custom_minimum_size = Vector2(50.0, 48.0)
-		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-		var card_style := StyleBoxFlat.new()
-		card_style.bg_color = Color(0.035, 0.038, 0.045, 0.98)
-		card_style.border_width_left = 2
-		card_style.border_width_top = 2
-		card_style.border_width_right = 2
-		card_style.border_width_bottom = 2
-		card_style.border_color = Color(0.12, 0.58, 0.92, 1.0) if actor.team == "player" else Color(0.88, 0.18, 0.15, 1.0)
-		if actor == active_actor:
-			card_style.border_width_left = 3
-			card_style.border_width_top = 3
-			card_style.border_width_right = 3
-			card_style.border_width_bottom = 3
-			card_style.border_color = Color(1.0, 0.80, 0.16, 1.0)
-		card_style.corner_radius_top_left = 2
-		card_style.corner_radius_top_right = 2
-		card_style.corner_radius_bottom_left = 2
-		card_style.corner_radius_bottom_right = 2
-		card.add_theme_stylebox_override("panel", card_style)
-
-		var portrait := TextureRect.new()
-		portrait.position = Vector2(7.0, 3.0)
-		portrait.size = Vector2(36.0, 29.0)
-		portrait.texture = actor.portrait_texture()
-		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(portrait)
-
-		var name_label := Label.new()
-		name_label.position = Vector2(2.0, 31.0)
-		name_label.size = Vector2(46.0, 15.0)
-		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		name_label.add_theme_font_size_override("font_size", 9)
-		name_label.add_theme_color_override("font_color", Color(0.98, 0.97, 0.92, 1.0))
-		name_label.text = actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper()
-		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(name_label)
-
-		card.tooltip_text = "%s • CT %d • VIT %d%s" % [
-			actor.display_name,
-			actor.ct,
-			actor.effective_speed(),
-			" • CAST" if actor.is_casting() else ""
-		]
-		_timeline_bar.add_child(card)
 
 func _unit_card_actor() -> SporeUnitActor3D:
 	var hovered_actor: SporeUnitActor3D = actors_by_cell.get(hovered_cell, null) as SporeUnitActor3D
