@@ -1,6 +1,7 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Theme" path="res://assets/themes/comic_battle_theme.tres" id="1_theme"]
+[ext_resource type="PackedScene" path="res://scenes/ui/battle_result_overlay.tscn" id="2_result"]
 
 [sub_resource type="StyleBoxFlat" id="ProgressBackground"]
 bg_color = Color(0.07, 0.08, 0.10, 0.95)
@@ -493,3 +494,5 @@ offset_right = 376.0
 offset_bottom = 181.0
 text = "TERMINER LE TOUR"
 focus_mode = 0
+
+[node name="BattleResult" parent="Root" instance=ExtResource("2_result")]
