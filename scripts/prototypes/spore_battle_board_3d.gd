@@ -15,6 +15,7 @@ const BattleHudScene = preload("res://scenes/ui/battle_hud_3d.tscn")
 const TimelineActorCardScene = preload("res://scenes/ui/timeline_actor_card.tscn")
 const CombatFloatingTextScene = preload("res://scenes/battle/combat_floating_text_3d.tscn")
 const CombatFeedbackBurstScene = preload("res://scenes/battle/combat_feedback_burst_3d.tscn")
+const TacticalMarkerScene = preload("res://scenes/battle/tactical_marker_3d.tscn")
 
 const MODE_MOVE: String = "move"
 const MODE_ATTACK: String = "attack"
@@ -1220,9 +1221,9 @@ func _rebuild_objective_markers_3d() -> void:
 	if map_root == null:
 		return
 
-	if _objective_markers_3d == null or not is_instance_valid(
-		_objective_markers_3d
-	):
+	if _objective_markers_3d == null or not is_instance_valid(_objective_markers_3d):
+		_objective_markers_3d = get_node_or_null("MissionObjectiveMarkers") as Node3D
+	if _objective_markers_3d == null:
 		_objective_markers_3d = Node3D.new()
 		_objective_markers_3d.name = "MissionObjectiveMarkers"
 		add_child(_objective_markers_3d)
@@ -1237,7 +1238,7 @@ func _rebuild_objective_markers_3d() -> void:
 	):
 		_add_objective_marker_3d(
 			crown_cell_3d,
-			"♛ COURONNE",
+			"COURONNE",
 			Color(1.0, 0.80, 0.28, 1.0)
 		)
 
@@ -1269,43 +1270,23 @@ func _add_objective_marker_3d(
 	):
 		return
 
-	var label: Label3D = Label3D.new()
-	label.text = text_value
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.font_size = 22
-	label.outline_size = 7
-	label.modulate = color
-	label.position = (
-		map_root.cell_top_local(cell_value)
-		+ Vector3(0.0, 0.76, 0.0)
-	)
-	_objective_markers_3d.add_child(label)
-
-	var ring: MeshInstance3D = MeshInstance3D.new()
-	var mesh: CylinderMesh = CylinderMesh.new()
-	mesh.top_radius = map_root.tile_size * 0.26
-	mesh.bottom_radius = map_root.tile_size * 0.26
-	mesh.height = 0.025
-	ring.mesh = mesh
-	ring.position = (
-		map_root.cell_top_local(cell_value)
-		+ Vector3(0.0, 0.058, 0.0)
-	)
-
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(
-		color.r,
-		color.g,
-		color.b,
+	var node: Node = TacticalMarkerScene.instantiate()
+	var marker := node as SporeTacticalMarker3D
+	if marker == null:
+		node.queue_free()
+		return
+	_objective_markers_3d.add_child(marker)
+	marker.position = map_root.cell_top_local(cell_value)
+	marker.configure(
+		text_value,
+		color,
+		map_root.tile_size * 0.26,
+		0.62,
+		true,
+		true,
+		16,
 		0.20
 	)
-	material.emission_enabled = true
-	material.emission = Color(color.r, color.g, color.b, 1.0)
-	material.emission_energy_multiplier = 0.32
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	ring.material_override = material
-	_objective_markers_3d.add_child(ring)
 
 
 func _ensure_cinematic_player_3d() -> void:
@@ -3862,9 +3843,11 @@ func _ensure_enemy_intent_root() -> Node3D:
 	if _enemy_intent_root != null and is_instance_valid(_enemy_intent_root):
 		return _enemy_intent_root
 
-	_enemy_intent_root = Node3D.new()
-	_enemy_intent_root.name = "EnemyIntentPreview"
-	add_child(_enemy_intent_root)
+	_enemy_intent_root = get_node_or_null("EnemyIntentPreview") as Node3D
+	if _enemy_intent_root == null:
+		_enemy_intent_root = Node3D.new()
+		_enemy_intent_root.name = "EnemyIntentPreview"
+		add_child(_enemy_intent_root)
 	return _enemy_intent_root
 
 
@@ -3881,31 +3864,16 @@ func _enemy_intent_label(
 	color: Color
 ) -> Label3D:
 	var root: Node3D = _ensure_enemy_intent_root()
-	var label: Label3D = Label3D.new()
-	label.name = "IntentLabel"
-	label.text = text_value
-	label.font_size = 26
-	label.outline_size = 9
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.modulate = color
-	label.position = actor.position + Vector3(0.0, 1.72, 0.0)
-	label.scale = Vector3(0.78, 0.78, 0.78)
-	root.add_child(label)
-
-	var tween: Tween = create_tween()
-	tween.set_parallel(true)
-	tween.set_trans(Tween.TRANS_BACK)
-	tween.set_ease(Tween.EASE_OUT)
-	tween.tween_property(label, "scale", Vector3.ONE, 0.18)
-	tween.tween_property(
-		label,
-		"position:y",
-		label.position.y + 0.10,
-		0.18
-	)
-	return label
+	var node: Node = TacticalMarkerScene.instantiate()
+	var marker := node as SporeTacticalMarker3D
+	if marker == null:
+		node.queue_free()
+		return null
+	root.add_child(marker)
+	marker.position = actor.position + Vector3(0.0, 0.98, 0.0)
+	marker.configure(text_value, color, 0.0, 0.56, false, true, 18, 0.0)
+	marker.animate_in()
+	return marker.label
 
 
 func _enemy_intent_ring(
@@ -3914,41 +3882,16 @@ func _enemy_intent_ring(
 	radius_scale: float = 0.30
 ) -> MeshInstance3D:
 	var root: Node3D = _ensure_enemy_intent_root()
-	var marker: MeshInstance3D = MeshInstance3D.new()
-	marker.name = "IntentRing_%d_%d" % [cell_value.x, cell_value.y]
-
-	var mesh: CylinderMesh = CylinderMesh.new()
-	mesh.top_radius = map_root.tile_size * radius_scale
-	mesh.bottom_radius = map_root.tile_size * radius_scale
-	mesh.height = 0.035
-	marker.mesh = mesh
-	marker.position = (
-		map_root.cell_top_local(cell_value)
-		+ Vector3(0.0, 0.070, 0.0)
-	)
-
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = color
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.emission_enabled = true
-	material.emission = Color(color.r, color.g, color.b, 1.0)
-	material.emission_energy_multiplier = 0.70
-	marker.material_override = material
-
+	var node: Node = TacticalMarkerScene.instantiate()
+	var marker := node as SporeTacticalMarker3D
+	if marker == null:
+		node.queue_free()
+		return null
 	root.add_child(marker)
-
-	marker.scale = Vector3(0.55, 1.0, 0.55)
-	var tween: Tween = create_tween()
-	tween.set_trans(Tween.TRANS_BACK)
-	tween.set_ease(Tween.EASE_OUT)
-	tween.tween_property(
-		marker,
-		"scale",
-		Vector3.ONE,
-		0.20
-	)
-	return marker
+	marker.position = map_root.cell_top_local(cell_value)
+	marker.configure("", color, map_root.tile_size * radius_scale, 0.0, true, false, 16, color.a)
+	marker.animate_in()
+	return marker.ring
 
 
 func _show_enemy_move_intent(
@@ -5144,16 +5087,25 @@ func _ensure_hover_forecast_label() -> void:
 	if _actor_holder == null:
 		return
 
-	_hover_forecast_label = Label3D.new()
-	_hover_forecast_label.name = "HoverForecast"
-	_hover_forecast_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_hover_forecast_label.no_depth_test = true
-	_hover_forecast_label.font_size = 24
-	_hover_forecast_label.outline_size = 8
-	_hover_forecast_label.modulate = Color(1.0, 0.96, 0.78, 1.0)
-	_hover_forecast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var node: Node = TacticalMarkerScene.instantiate()
+	var marker := node as SporeTacticalMarker3D
+	if marker == null:
+		node.queue_free()
+		return
+	marker.name = "HoverForecastMarker"
+	_actor_holder.add_child(marker)
+	marker.configure(
+		"",
+		Color(1.0, 0.96, 0.78, 1.0),
+		0.0,
+		0.0,
+		false,
+		true,
+		17,
+		0.0
+	)
+	_hover_forecast_label = marker.label
 	_hover_forecast_label.visible = false
-	_actor_holder.add_child(_hover_forecast_label)
 
 
 func _update_tactical_hover_forecast() -> void:
@@ -5511,22 +5463,17 @@ func _rebuild_highlights() -> void:
 
 
 func _add_cell_highlight(cell_value: Vector2i, color: Color, radius_scale: float = 0.25) -> void:
-	var marker: MeshInstance3D = MeshInstance3D.new()
-	marker.name = "Highlight_%d_%d" % [cell_value.x, cell_value.y]
-	var mesh: CylinderMesh = CylinderMesh.new()
-	mesh.top_radius = map_root.tile_size * radius_scale
-	mesh.bottom_radius = map_root.tile_size * radius_scale
-	mesh.height = 0.04
-	marker.mesh = mesh
-	marker.position = map_root.cell_top_local(cell_value) + Vector3(0.0, 0.045, 0.0)
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = Color(color.r, color.g, color.b, 1.0)
-	material.emission_energy_multiplier = 0.24
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	marker.material_override = material
+	if map_root == null or _highlight_holder == null:
+		return
+	var node: Node = TacticalMarkerScene.instantiate()
+	var marker := node as SporeTacticalMarker3D
+	if marker == null:
+		node.queue_free()
+		return
 	_highlight_holder.add_child(marker)
+	marker.name = "Highlight_%d_%d" % [cell_value.x, cell_value.y]
+	marker.position = map_root.cell_top_local(cell_value)
+	marker.configure("", color, map_root.tile_size * radius_scale, 0.0, true, false, 16, color.a)
 
 
 func _clear_overlays() -> void:
