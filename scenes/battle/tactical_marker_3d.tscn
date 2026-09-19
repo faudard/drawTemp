@@ -1,0 +1,41 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/presentation/spore_tactical_marker_3d.gd" id="1_script"]
+
+[sub_resource type="CylinderMesh" id="RingMesh"]
+top_radius = 1.0
+bottom_radius = 1.0
+height = 0.026
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="RingMaterial"]
+resource_local_to_scene = true
+albedo_color = Color(1, 0.8, 0.2, 0.34)
+transparency = 1
+shading_mode = 0
+emission_enabled = true
+emission = Color(1, 0.8, 0.2, 1)
+emission_energy_multiplier = 0.26
+roughness = 0.82
+
+[node name="TacticalMarker3D" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Ring" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.045, 0)
+mesh = SubResource("RingMesh")
+material_override = SubResource("RingMaterial")
+
+[node name="Label" type="Label3D" parent="."]
+position = Vector3(0, 0.72, 0)
+billboard = 1
+no_depth_test = true
+fixed_size = false
+font_size = 18
+outline_size = 5
+pixel_size = 0.0045
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "MARKER"
+modulate = Color(1, 0.8, 0.2, 1)
+outline_modulate = Color(0.02, 0.02, 0.025, 1)
