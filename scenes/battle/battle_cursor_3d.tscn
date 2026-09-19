@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="CylinderMesh" id="CursorMesh"]
+top_radius = 0.56
+bottom_radius = 0.56
+height = 0.026
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="CursorMaterial"]
+albedo_color = Color(1, 1, 0.82, 0.34)
+transparency = 1
+emission_enabled = true
+emission = Color(1, 1, 0.82, 1)
+emission_energy_multiplier = 0.28
+roughness = 0.70
+
+[node name="Cursor" type="MeshInstance3D"]
+mesh = SubResource("CursorMesh")
+material_override = SubResource("CursorMaterial")
