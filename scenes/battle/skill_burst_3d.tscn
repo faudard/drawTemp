@@ -1,0 +1,59 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/presentation/spore_skill_burst_3d.gd" id="1_script"]
+
+[sub_resource type="CylinderMesh" id="RingMesh"]
+top_radius = 0.18
+bottom_radius = 0.18
+height = 0.045
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="RingMaterial"]
+resource_local_to_scene = true
+albedo_color = Color(0.72, 0.45, 1, 0.70)
+transparency = 1
+shading_mode = 0
+emission_enabled = true
+emission = Color(0.72, 0.45, 1, 1)
+emission_energy_multiplier = 0.62
+roughness = 0.78
+
+[sub_resource type="StandardMaterial3D" id="ParticleMaterial"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_color = Color(1, 1, 1, 1)
+roughness = 0.86
+
+[sub_resource type="BoxMesh" id="ParticleMesh"]
+material = SubResource("ParticleMaterial")
+size = Vector3(0.025, 0.025, 0.12)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcess"]
+direction = Vector3(0, 1, 0)
+spread = 92.0
+initial_velocity_min = 0.75
+initial_velocity_max = 1.35
+gravity = Vector3(0, -1.4, 0)
+scale_min = 0.55
+scale_max = 1.0
+color = Color(0.72, 0.45, 1, 0.90)
+
+[node name="SkillBurst3D" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Ring" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.11, 0)
+mesh = SubResource("RingMesh")
+material_override = SubResource("RingMaterial")
+
+[node name="AccentParticles" type="GPUParticles3D" parent="."]
+position = Vector3(0, 0.16, 0)
+emitting = false
+amount = 9
+lifetime = 0.42
+one_shot = true
+explosiveness = 0.92
+randomness = 0.34
+process_material = SubResource("ParticleProcess")
+draw_pass_1 = SubResource("ParticleMesh")
