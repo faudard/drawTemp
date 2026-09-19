@@ -5328,11 +5328,9 @@ func _refresh_hero_splash_ui() -> void:
 	if _hero_splash_panel == null:
 		return
 
-	var actor: SporeUnitActor3D = (
-		active_actor
-		if active_actor != null and active_actor.alive
-		else null
-	)
+	var actor: SporeUnitActor3D = null
+	if active_actor != null and active_actor.alive:
+		actor = active_actor
 	_hero_splash_panel.visible = actor != null
 	if actor == null:
 		_hero_splash_last_actor = null
