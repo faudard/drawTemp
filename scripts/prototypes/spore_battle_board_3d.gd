@@ -7,7 +7,7 @@ const SkillCatalog = preload("res://scripts/catalogs/skill_catalog.gd")
 const StatusCatalog = preload("res://scripts/catalogs/status_catalog.gd")
 const VfxCatalog = preload("res://scripts/catalogs/vfx_catalog.gd")
 const ActionVfxScript = preload("res://scripts/prototypes/spore_action_vfx_3d.gd")
-const UnitActorScript = preload("res://scripts/maps/spore_unit_actor_3d.gd")
+const UnitActorScene = preload("res://scenes/battle/unit_actor_3d.tscn")
 const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
 const CinematicPlayerScene = preload("res://scenes/ui/cinematic_player_3d.tscn")
 const ComicActionCutinScene = preload("res://scenes/ui/comic_action_cutin.tscn")
@@ -609,7 +609,7 @@ func _spawn_runtime_units() -> void:
 		var unit_data: Resource = UnitCatalog.definition(unit_id)
 		if unit_data == null:
 			continue
-		var actor: SporeUnitActor3D = UnitActorScript.new() as SporeUnitActor3D
+		var actor: SporeUnitActor3D = UnitActorScene.instantiate() as SporeUnitActor3D
 		actor.name = "%sActor" % unit_id.capitalize()
 		_actor_holder.add_child(actor)
 		var runtime_unit: Dictionary = UnitCatalog.make_hero(unit_id, hero_starts[index], 1, UnitCatalog.default_job(unit_id), {}, {}, PackedStringArray())
@@ -665,7 +665,7 @@ func _spawn_runtime_units() -> void:
 		if not (enemy_cell_value is Vector2i):
 			continue
 		var enemy_cell: Vector2i = enemy_cell_value
-		var enemy_actor: SporeUnitActor3D = UnitActorScript.new() as SporeUnitActor3D
+		var enemy_actor: SporeUnitActor3D = UnitActorScene.instantiate() as SporeUnitActor3D
 		enemy_actor.name = "%sEnemy" % enemy_id.capitalize()
 		_actor_holder.add_child(enemy_actor)
 		var overrides: Dictionary = {
