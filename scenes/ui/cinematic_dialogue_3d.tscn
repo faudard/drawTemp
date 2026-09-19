@@ -3,32 +3,32 @@
 [ext_resource type="Script" path="res://scripts/presentation/spore_cinematic_dialogue_3d.gd" id="1_script"]
 
 [sub_resource type="StyleBoxFlat" id="Style_dialogue"]
-bg_color = Color(0.015, 0.015, 0.018, 0.985)
-border_width_left = 4
-border_width_top = 4
-border_width_right = 4
-border_width_bottom = 4
-border_color = Color(0.95, 0.93, 0.86, 1)
+bg_color = Color(0.018, 0.020, 0.024, 0.94)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.93, 0.91, 0.84, 0.98)
 corner_radius_top_left = 3
 corner_radius_top_right = 3
 corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
-shadow_color = Color(0, 0, 0, 0.72)
-shadow_size = 14
+shadow_color = Color(0, 0, 0, 0.54)
+shadow_size = 8
 
 [sub_resource type="StyleBoxFlat" id="Style_cutin"]
-bg_color = Color(0.01, 0.01, 0.012, 0.97)
-border_width_left = 5
-border_width_top = 5
-border_width_right = 5
-border_width_bottom = 5
-border_color = Color(0.95, 0.93, 0.86, 1)
+bg_color = Color(0.01, 0.01, 0.012, 0.60)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.93, 0.91, 0.84, 0.95)
 corner_radius_top_left = 2
 corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
-shadow_color = Color(0, 0, 0, 0.82)
-shadow_size = 16
+shadow_color = Color(0, 0, 0, 0.58)
+shadow_size = 8
 
 [node name="CinematicDialogue3D" type="Control"]
 layout_mode = 3
@@ -48,41 +48,38 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.0, 0.0, 0.0, 0.18)
+color = Color(0.0, 0.0, 0.0, 0.10)
 
 [node name="LetterboxTop" type="ColorRect" parent="."]
 layout_mode = 1
-anchors_preset = 10
 anchor_right = 1.0
-offset_bottom = 28.0
+offset_bottom = 14.0
 grow_horizontal = 2
 mouse_filter = 2
-color = Color(0, 0, 0, 0.88)
+color = Color(0, 0, 0, 0.72)
 
 [node name="LetterboxBottom" type="ColorRect" parent="."]
 layout_mode = 1
-anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -28.0
+offset_top = -14.0
 grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
-color = Color(0, 0, 0, 0.88)
+color = Color(0, 0, 0, 0.72)
 
 [node name="DialoguePanel" type="Panel" parent="."]
 layout_mode = 1
-anchors_preset = 12
-anchor_left = 0.205
+anchor_left = 0.18
 anchor_top = 1.0
-anchor_right = 0.795
+anchor_right = 0.82
 anchor_bottom = 1.0
-offset_top = -248.0
-offset_bottom = -42.0
+offset_top = -188.0
+offset_bottom = -28.0
 grow_horizontal = 2
 grow_vertical = 0
-pivot_offset = Vector2(378, 103)
+pivot_offset = Vector2(410, 80)
 theme_override_styles/panel = SubResource("Style_dialogue")
 
 [node name="Margin" type="MarginContainer" parent="DialoguePanel"]
@@ -90,23 +87,20 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = 14.0
-offset_right = -20.0
-offset_bottom = -14.0
+offset_left = 18.0
+offset_top = 12.0
+offset_right = -18.0
+offset_bottom = -12.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 2
-theme_override_constants/margin_top = 2
-theme_override_constants/margin_right = 2
-theme_override_constants/margin_bottom = 2
 
 [node name="Row" type="HBoxContainer" parent="DialoguePanel/Margin"]
 layout_mode = 2
-theme_override_constants/separation = 22
+theme_override_constants/separation = 0
 
 [node name="PortraitLeft" type="TextureRect" parent="DialoguePanel/Margin/Row"]
-custom_minimum_size = Vector2(188, 196)
+visible = false
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
@@ -115,20 +109,20 @@ mouse_filter = 2
 [node name="TextColumn" type="VBoxContainer" parent="DialoguePanel/Margin/Row"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 6
+theme_override_constants/separation = 4
 
 [node name="SpeakerName" type="Label" parent="DialoguePanel/Margin/Row/TextColumn"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.8, 0.16, 1)
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 18
 text = "Locuteur"
 
 [node name="Message" type="Label" parent="DialoguePanel/Margin/Row/TextColumn"]
-custom_minimum_size = Vector2(0, 112)
+custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_colors/font_color = Color(0.97, 0.96, 0.91, 1)
-theme_override_font_sizes/font_size = 23
+theme_override_font_sizes/font_size = 18
 text = "Dialogue"
 autowrap_mode = 2
 vertical_alignment = 1
@@ -139,55 +133,58 @@ layout_mode = 2
 [node name="Hint" type="Label" parent="DialoguePanel/Margin/Row/TextColumn/Footer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.52, 0.85, 1, 1)
-theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.58, 0.78, 0.90, 1)
+theme_override_font_sizes/font_size = 10
 text = "Entrée / Espace / clic"
 
 [node name="AdvancePulse" type="Label" parent="DialoguePanel/Margin/Row/TextColumn/Footer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.8, 0.16, 1)
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 14
 text = "▼"
 
 [node name="Continue" type="Button" parent="DialoguePanel/Margin/Row/TextColumn/Footer"]
-custom_minimum_size = Vector2(170, 32)
+custom_minimum_size = Vector2(132, 28)
 layout_mode = 2
+theme_override_font_sizes/font_size = 11
 text = "CONTINUER  ▸"
 focus_mode = 0
 
 [node name="PortraitRight" type="TextureRect" parent="DialoguePanel/Margin/Row"]
-custom_minimum_size = Vector2(126, 150)
+visible = false
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 mouse_filter = 2
 
-
 [node name="CutinLeft" type="Panel" parent="."]
+visible = false
 layout_mode = 1
-anchors_preset = 12
+anchor_left = 0.0
 anchor_top = 1.0
+anchor_right = 0.0
 anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = -438.0
-offset_right = 284.0
-offset_bottom = -48.0
+offset_left = 18.0
+offset_top = -330.0
+offset_right = 258.0
+offset_bottom = -34.0
+grow_horizontal = 1
 grow_vertical = 0
-pivot_offset = Vector2(132, 195)
-rotation = -0.035
+pivot_offset = Vector2(120, 148)
+rotation = -0.025
 mouse_filter = 2
 theme_override_styles/panel = SubResource("Style_cutin")
-visible = false
 
 [node name="Portrait" type="TextureRect" parent="CutinLeft"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 10.0
-offset_top = 10.0
-offset_right = -10.0
-offset_bottom = -10.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
 grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
@@ -195,33 +192,32 @@ stretch_mode = 5
 mouse_filter = 2
 
 [node name="CutinRight" type="Panel" parent="."]
+visible = false
 layout_mode = 1
-anchors_preset = 13
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -284.0
-offset_top = -438.0
-offset_right = -20.0
-offset_bottom = -48.0
+offset_left = -258.0
+offset_top = -330.0
+offset_right = -18.0
+offset_bottom = -34.0
 grow_horizontal = 0
 grow_vertical = 0
-pivot_offset = Vector2(132, 195)
-rotation = 0.035
+pivot_offset = Vector2(120, 148)
+rotation = 0.025
 mouse_filter = 2
 theme_override_styles/panel = SubResource("Style_cutin")
-visible = false
 
 [node name="Portrait" type="TextureRect" parent="CutinRight"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 10.0
-offset_top = 10.0
-offset_right = -10.0
-offset_bottom = -10.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
 grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
