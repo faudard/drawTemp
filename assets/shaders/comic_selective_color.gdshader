@@ -9,6 +9,10 @@ uniform float grain_strength : hint_range(0.0, 0.12) = 0.022;
 uniform float selective_color_strength : hint_range(0.0, 1.0) = 1.0;
 uniform float halftone_strength : hint_range(0.0, 0.35) = 0.11;
 uniform float halftone_scale : hint_range(2.0, 10.0) = 4.0;
+uniform float contrast : hint_range(0.8, 1.6) = 1.16;
+uniform float paper_tint_strength : hint_range(0.0, 0.5) = 0.18;
+uniform vec3 paper_tint : source_color = vec3(1.0, 0.96, 0.86);
+uniform float vignette_strength : hint_range(0.0, 0.35) = 0.08;
 
 float luma(vec3 c) {
 	return dot(c, vec3(0.299, 0.587, 0.114));
@@ -59,11 +63,17 @@ void fragment() {
 	float midtone = smoothstep(0.12, 0.42, lum) * (1.0 - smoothstep(0.58, 0.90, lum));
 	float halftone = dot_pattern * midtone * halftone_strength;
 
-	vec3 mono = vec3(clamp(poster - ink - halftone + grain, 0.0, 1.0));
+	float mono_value = clamp((poster - 0.5) * contrast + 0.5 - ink - halftone + grain, 0.0, 1.0);
+	vec3 mono = vec3(mono_value);
+	mono = mix(mono, mono * paper_tint, paper_tint_strength);
 
 	float preserve = keep_color(src) * selective_color_strength;
 	vec3 colored = mix(mono, src, preserve);
 	vec3 final_color = mix(src, colored, grayscale_strength);
+
+	float edge_distance = distance(uv, vec2(0.5));
+	float vignette = smoothstep(0.22, 0.72, edge_distance) * vignette_strength;
+	final_color *= 1.0 - vignette;
 
 	COLOR = vec4(final_color, 1.0);
 }
