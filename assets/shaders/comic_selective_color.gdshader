@@ -11,7 +11,7 @@ uniform float halftone_strength : hint_range(0.0, 0.35) = 0.11;
 uniform float halftone_scale : hint_range(2.0, 10.0) = 4.0;
 uniform float contrast : hint_range(0.8, 1.6) = 1.16;
 uniform float paper_tint_strength : hint_range(0.0, 0.5) = 0.18;
-uniform vec3 paper_tint : source_color = vec3(1.0, 0.96, 0.86);
+uniform vec3 paper_tint = vec3(1.0, 0.96, 0.86);
 uniform float vignette_strength : hint_range(0.0, 0.35) = 0.08;
 
 float luma(vec3 c) {
