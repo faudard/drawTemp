@@ -18,6 +18,7 @@ var _tween: Tween
 func _ready() -> void:
 	layer = 26
 	_build_ui()
+	_root.visible = false
 
 
 func show_action(
@@ -120,6 +121,7 @@ func _build_ui() -> void:
 	_dimmer.name = "Dimmer"
 	_dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dimmer.color = Color(0.0, 0.0, 0.0, 0.0)
 	_root.add_child(_dimmer)
 
 	_speed_lines = Control.new()
