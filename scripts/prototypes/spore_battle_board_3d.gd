@@ -386,16 +386,18 @@ func _build_ui() -> void:
 	_ui_layer.add_child(root)
 
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.055, 0.075, 0.105, 0.90)
-	style.border_color = Color(0.25, 0.38, 0.50, 0.92)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 12
-	style.corner_radius_top_right = 12
-	style.corner_radius_bottom_left = 12
-	style.corner_radius_bottom_right = 12
+	style.bg_color = Color(0.018, 0.020, 0.024, 0.94)
+	style.border_color = Color(0.93, 0.91, 0.84, 0.98)
+	style.border_width_left = 3
+	style.border_width_top = 3
+	style.border_width_right = 3
+	style.border_width_bottom = 3
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.shadow_color = Color(0.0, 0.0, 0.0, 0.72)
+	style.shadow_size = 7
 
 	var panel: Panel = Panel.new()
 	panel.name = "CommandPanel"
@@ -405,15 +407,15 @@ func _build_ui() -> void:
 	panel.add_theme_stylebox_override("panel", style)
 	root.add_child(panel)
 
-	_turn_label = _make_label(panel, Vector2(14.0, 9.0), Vector2(402.0, 26.0), 18, Color(1.0, 0.82, 0.40, 1.0))
-	_info_label = _make_label(panel, Vector2(14.0, 36.0), Vector2(402.0, 46.0), 12, Color(0.95, 0.94, 0.87, 1.0))
+	_turn_label = _make_label(panel, Vector2(14.0, 8.0), Vector2(402.0, 28.0), 20, Color(1.0, 0.80, 0.16, 1.0))
+	_info_label = _make_label(panel, Vector2(14.0, 38.0), Vector2(402.0, 44.0), 12, Color(0.96, 0.95, 0.90, 1.0))
 	_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	_move_button = _make_button(panel, "MOVE [M]", Vector2(14.0, 87.0), Vector2(94.0, 32.0))
 	_attack_button = _make_button(panel, "ATTAQUE [A]", Vector2(114.0, 87.0), Vector2(104.0, 32.0))
 	_face_button = _make_button(panel, "ORIENT. [F]", Vector2(224.0, 87.0), Vector2(82.0, 32.0))
 	_face_button.tooltip_text = "Orientation : frapper de dos ou de flanc est plus efficace."
-	_end_button = _make_button(panel, "WAIT [ESPACE]", Vector2(312.0, 87.0), Vector2(104.0, 32.0))
+	_end_button = _make_button(panel, "FIN [ESPACE]", Vector2(312.0, 87.0), Vector2(104.0, 32.0))
 	_move_button.toggle_mode = true
 	_attack_button.toggle_mode = true
 
@@ -439,6 +441,8 @@ func _build_ui() -> void:
 	root.add_child(_timeline_panel)
 	var timeline_title: Label = _make_label(_timeline_panel, Vector2(10.0, 6.0), Vector2(272.0, 18.0), 11, Color(0.68, 0.79, 0.87, 1.0))
 	timeline_title.text = "INITIATIVE"
+	timeline_title.add_theme_color_override("font_color", Color(0.98, 0.96, 0.90, 1.0))
+	timeline_title.add_theme_font_size_override("font_size", 13)
 	_timeline_bar = HBoxContainer.new()
 	_timeline_bar.position = Vector2(10.0, 27.0)
 	_timeline_bar.size = Vector2(272.0, 48.0)
@@ -453,7 +457,7 @@ func _build_ui() -> void:
 	log_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	log_panel.add_theme_stylebox_override("panel", style)
 	root.add_child(log_panel)
-	_log_label = _make_label(log_panel, Vector2(12.0, 9.0), Vector2(396.0, 70.0), 11, Color(0.82, 0.87, 0.91, 1.0))
+	_log_label = _make_label(log_panel, Vector2(12.0, 9.0), Vector2(396.0, 70.0), 11, Color(0.49, 0.87, 1.0, 1.0))
 	_log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	_preview_panel = Panel.new()
@@ -488,7 +492,7 @@ func _build_ui() -> void:
 	_unit_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_unit_card_panel.add_child(_unit_portrait)
 
-	_unit_card_title = _make_label(_unit_card_panel, Vector2(104.0, 10.0), Vector2(244.0, 25.0), 17, Color(1.0, 0.82, 0.40, 1.0))
+	_unit_card_title = _make_label(_unit_card_panel, Vector2(104.0, 10.0), Vector2(244.0, 25.0), 18, Color(1.0, 0.80, 0.16, 1.0))
 
 	_unit_hp_bar = ProgressBar.new()
 	_unit_hp_bar.position = Vector2(104.0, 39.0)
@@ -568,6 +572,31 @@ func _make_button(parent: Control, title: String, pos: Vector2, size_value: Vect
 	button.position = pos
 	button.size = size_value
 	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_font_size_override("font_size", 13)
+	button.add_theme_color_override("font_color", Color(0.96, 0.95, 0.90, 1.0))
+	button.add_theme_color_override("font_hover_color", Color(0.06, 0.06, 0.06, 1.0))
+	button.add_theme_color_override("font_pressed_color", Color(0.06, 0.06, 0.06, 1.0))
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.035, 0.038, 0.045, 0.96)
+	normal.border_color = Color(0.88, 0.86, 0.79, 0.95)
+	normal.border_width_left = 2
+	normal.border_width_top = 2
+	normal.border_width_right = 2
+	normal.border_width_bottom = 2
+	normal.corner_radius_top_left = 2
+	normal.corner_radius_top_right = 2
+	normal.corner_radius_bottom_left = 2
+	normal.corner_radius_bottom_right = 2
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(1.0, 0.82, 0.18, 1.0)
+	hover.border_color = Color(1.0, 0.94, 0.64, 1.0)
+	var pressed := normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color(0.92, 0.18, 0.12, 1.0)
+	pressed.border_color = Color(1.0, 0.86, 0.72, 1.0)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", hover)
 	parent.add_child(button)
 	return button
 
@@ -1197,16 +1226,16 @@ func _ensure_objective_ui_3d() -> void:
 		_objective_panel_3d.offset_bottom = 132.0
 
 		var style: StyleBoxFlat = StyleBoxFlat.new()
-		style.bg_color = Color(0.045, 0.060, 0.085, 0.92)
-		style.border_color = Color(0.46, 0.76, 0.56, 0.92)
-		style.border_width_left = 1
-		style.border_width_top = 1
-		style.border_width_right = 1
-		style.border_width_bottom = 1
-		style.corner_radius_top_left = 12
-		style.corner_radius_top_right = 12
-		style.corner_radius_bottom_left = 12
-		style.corner_radius_bottom_right = 12
+		style.bg_color = Color(0.018, 0.020, 0.024, 0.95)
+		style.border_color = Color(0.93, 0.91, 0.84, 0.98)
+		style.border_width_left = 3
+		style.border_width_top = 3
+		style.border_width_right = 3
+		style.border_width_bottom = 3
+		style.corner_radius_top_left = 3
+		style.corner_radius_top_right = 3
+		style.corner_radius_bottom_left = 3
+		style.corner_radius_bottom_right = 3
 		_objective_panel_3d.add_theme_stylebox_override(
 			"panel",
 			style
@@ -1223,7 +1252,7 @@ func _ensure_objective_ui_3d() -> void:
 		)
 		_objective_title_3d.add_theme_color_override(
 			"font_color",
-			Color(1.0, 0.84, 0.40, 1.0)
+			Color(1.0, 0.80, 0.16, 1.0)
 		)
 		_objective_title_3d.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_objective_panel_3d.add_child(_objective_title_3d)
@@ -2942,16 +2971,16 @@ func _show_action_banner(actor_name: String, action_name: String, category: Stri
 		_action_banner_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 		var style: StyleBoxFlat = StyleBoxFlat.new()
-		style.bg_color = Color(0.04, 0.055, 0.08, 0.94)
-		style.border_color = Color(1.0, 0.78, 0.32, 0.90)
-		style.border_width_left = 1
-		style.border_width_top = 1
-		style.border_width_right = 1
-		style.border_width_bottom = 1
-		style.corner_radius_top_left = 12
-		style.corner_radius_top_right = 12
-		style.corner_radius_bottom_left = 12
-		style.corner_radius_bottom_right = 12
+		style.bg_color = Color(0.01, 0.01, 0.012, 0.96)
+		style.border_color = Color(0.96, 0.94, 0.88, 0.98)
+		style.border_width_left = 3
+		style.border_width_top = 3
+		style.border_width_right = 3
+		style.border_width_bottom = 3
+		style.corner_radius_top_left = 2
+		style.corner_radius_top_right = 2
+		style.corner_radius_bottom_left = 2
+		style.corner_radius_bottom_right = 2
 		_action_banner_panel.add_theme_stylebox_override("panel", style)
 		root.add_child(_action_banner_panel)
 
@@ -6035,38 +6064,65 @@ func _refresh_timeline_ui() -> void:
 	if signature == _timeline_signature:
 		return
 	_timeline_signature = signature
+
 	for child: Node in _timeline_bar.get_children():
 		child.free()
+
 	var predicted: Array[SporeUnitActor3D] = _predict_timeline_3d(5)
 	for actor: SporeUnitActor3D in predicted:
 		if actor == null or not actor.alive:
 			continue
-		var card: Button = Button.new()
-		card.custom_minimum_size = Vector2(44.0, 48.0)
-		card.alignment = HORIZONTAL_ALIGNMENT_CENTER
-		card.focus_mode = Control.FOCUS_NONE
-		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_theme_font_size_override("font_size", 9)
-		var timing_text: String = "C%d" % int(actor.casting.get("remaining_ticks", 0)) if actor.is_casting() else "%d/%d" % [actor.ct, actor.effective_speed()]
-		card.text = actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper()
-		card.tooltip_text = "%s • CT %d • VIT %d%s" % [actor.display_name, actor.ct, actor.effective_speed(), " • CAST" if actor.is_casting() else ""]
-		var card_style: StyleBoxFlat = StyleBoxFlat.new()
-		card_style.bg_color = Color(0.16, 0.42, 0.62, 0.92) if actor.team == "player" else Color(0.60, 0.24, 0.22, 0.92)
-		card_style.corner_radius_top_left = 7
-		card_style.corner_radius_top_right = 7
-		card_style.corner_radius_bottom_left = 7
-		card_style.corner_radius_bottom_right = 7
-		if actor == active_actor:
-			card_style.border_width_left = 2
-			card_style.border_width_top = 2
-			card_style.border_width_right = 2
-			card_style.border_width_bottom = 2
-			card_style.border_color = Color(1.0, 0.82, 0.40, 1.0)
-		card.add_theme_stylebox_override("normal", card_style)
-		card.add_theme_stylebox_override("hover", card_style)
-		card.add_theme_stylebox_override("pressed", card_style)
-		_timeline_bar.add_child(card)
 
+		var card := Panel.new()
+		card.custom_minimum_size = Vector2(50.0, 48.0)
+		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		var card_style := StyleBoxFlat.new()
+		card_style.bg_color = Color(0.035, 0.038, 0.045, 0.98)
+		card_style.border_width_left = 2
+		card_style.border_width_top = 2
+		card_style.border_width_right = 2
+		card_style.border_width_bottom = 2
+		card_style.border_color = Color(0.12, 0.58, 0.92, 1.0) if actor.team == "player" else Color(0.88, 0.18, 0.15, 1.0)
+		if actor == active_actor:
+			card_style.border_width_left = 3
+			card_style.border_width_top = 3
+			card_style.border_width_right = 3
+			card_style.border_width_bottom = 3
+			card_style.border_color = Color(1.0, 0.80, 0.16, 1.0)
+		card_style.corner_radius_top_left = 2
+		card_style.corner_radius_top_right = 2
+		card_style.corner_radius_bottom_left = 2
+		card_style.corner_radius_bottom_right = 2
+		card.add_theme_stylebox_override("panel", card_style)
+
+		var portrait := TextureRect.new()
+		portrait.position = Vector2(7.0, 3.0)
+		portrait.size = Vector2(36.0, 29.0)
+		portrait.texture = actor.portrait_texture()
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(portrait)
+
+		var name_label := Label.new()
+		name_label.position = Vector2(2.0, 31.0)
+		name_label.size = Vector2(46.0, 15.0)
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		name_label.add_theme_font_size_override("font_size", 9)
+		name_label.add_theme_color_override("font_color", Color(0.98, 0.97, 0.92, 1.0))
+		name_label.text = actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper()
+		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(name_label)
+
+		card.tooltip_text = "%s • CT %d • VIT %d%s" % [
+			actor.display_name,
+			actor.ct,
+			actor.effective_speed(),
+			" • CAST" if actor.is_casting() else ""
+		]
+		_timeline_bar.add_child(card)
 
 func _unit_card_actor() -> SporeUnitActor3D:
 	var hovered_actor: SporeUnitActor3D = actors_by_cell.get(hovered_cell, null) as SporeUnitActor3D
