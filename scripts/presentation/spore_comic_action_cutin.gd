@@ -18,7 +18,6 @@ var _tween: Tween
 func _ready() -> void:
 	layer = 26
 	_build_ui()
-	visible = false
 
 
 func show_action(
@@ -38,7 +37,6 @@ func show_action(
 	var accent := _accent_for(category, team)
 	var on_right := side == "right"
 
-	portrait_texture = portrait_texture
 	_portrait.texture = portrait_texture
 	_name_label.text = actor_name.to_upper()
 	_action_label.text = action_name.to_upper()
@@ -78,7 +76,6 @@ func show_action(
 	_layout_panel(panel_size, on_right)
 	_build_speed_lines(accent, on_right)
 
-	visible = true
 	_root.visible = true
 	_panel.visible = true
 	_dimmer.visible = true
@@ -239,4 +236,3 @@ func _accent_for(category: String, team: String) -> Color:
 func _hide() -> void:
 	if _root != null:
 		_root.visible = false
-	visible = false
