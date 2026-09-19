@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/presentation/spore_comic_visual_layer.gd" id="1_script"]
+
+[node name="ComicVisualLayer" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1_script")
