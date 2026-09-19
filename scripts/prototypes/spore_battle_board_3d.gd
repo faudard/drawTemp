@@ -11,7 +11,7 @@ const UnitActorScene = preload("res://scenes/battle/unit_actor_3d.tscn")
 const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
 const CinematicPlayerScene = preload("res://scenes/ui/cinematic_player_3d.tscn")
 const ComicActionCutinScene = preload("res://scenes/ui/comic_action_cutin.tscn")
-const BattleHudScene = preload("res://scenes/ui/battle_hud_3d.tscn")
+const BATTLE_HUD_SCENE_PATH: String = "res://scenes/ui/battle_hud_3d.tscn"
 const TimelineActorCardScene = preload("res://scenes/ui/timeline_actor_card.tscn")
 const CombatFloatingTextScene = preload("res://scenes/battle/combat_floating_text_3d.tscn")
 const CombatFeedbackBurstScene = preload("res://scenes/battle/combat_feedback_burst_3d.tscn")
@@ -135,7 +135,7 @@ var _hover_forecast_label: Label3D = null
 var _threat_overlay_enabled: bool = false
 var _threat_cells_cache: Dictionary = {}
 var _ui_layer: CanvasLayer
-var _battle_hud: SporeBattleHud = null
+var _battle_hud: CanvasLayer = null
 var _cinematic_player_3d: SporeCinematicPlayer3D = null
 var _cinematic_camera_active: bool = false
 var _cinematic_camera_saved_focus: Vector3 = Vector3.ZERO
@@ -390,61 +390,72 @@ func _ensure_runtime_nodes() -> void:
 
 
 func _build_ui() -> void:
-	_battle_hud = get_node_or_null("UI") as SporeBattleHud
+	_battle_hud = get_node_or_null("UI") as CanvasLayer
 	if _battle_hud == null:
-		var hud_node: Node = BattleHudScene.instantiate()
-		if not (hud_node is SporeBattleHud):
+		var hud_resource: Resource = load(BATTLE_HUD_SCENE_PATH)
+		if hud_resource == null or not (hud_resource is PackedScene):
+			push_error("Battle HUD scene could not be loaded: %s" % BATTLE_HUD_SCENE_PATH)
+			return
+		var hud_scene: PackedScene = hud_resource as PackedScene
+		var hud_node: Node = hud_scene.instantiate()
+		if not (hud_node is CanvasLayer):
 			hud_node.queue_free()
+			push_error("Battle HUD root must be a CanvasLayer.")
 			return
 		hud_node.name = "UI"
 		add_child(hud_node)
-		_battle_hud = hud_node as SporeBattleHud
+		_battle_hud = hud_node as CanvasLayer
 
 	_ui_layer = _battle_hud
 	if _battle_hud == null:
 		return
 
-	_turn_label = _battle_hud.turn_label
-	_info_label = _battle_hud.info_label
-	_help_label = _battle_hud.help_label
-	_move_button = _battle_hud.move_button
-	_attack_button = _battle_hud.attack_button
-	_face_button = _battle_hud.face_button
-	_end_button = _battle_hud.end_button
-	_primary_skill_button = _battle_hud.primary_skill_button
-	_secondary_skill_button = _battle_hud.secondary_skill_button
+	var root: Control = _battle_hud.get_node_or_null("Root") as Control
+	if root == null:
+		push_error("Battle HUD is missing Root.")
+		return
 
-	_timeline_panel = _battle_hud.timeline_panel
-	_timeline_bar = _battle_hud.timeline_bar
-	_log_label = _battle_hud.log_label
+	_turn_label = root.get_node_or_null("%TurnLabel") as Label
+	_info_label = root.get_node_or_null("%InfoLabel") as Label
+	_help_label = root.get_node_or_null("%HelpLabel") as Label
+	_move_button = root.get_node_or_null("%MoveButton") as Button
+	_attack_button = root.get_node_or_null("%AttackButton") as Button
+	_face_button = root.get_node_or_null("%FaceButton") as Button
+	_end_button = root.get_node_or_null("%EndButton") as Button
+	_primary_skill_button = root.get_node_or_null("%PrimarySkillButton") as Button
+	_secondary_skill_button = root.get_node_or_null("%SecondarySkillButton") as Button
 
-	_preview_panel = _battle_hud.preview_panel
-	_preview_title = _battle_hud.preview_title
-	_preview_body = _battle_hud.preview_body
-	_preview_confirm_button = _battle_hud.preview_confirm_button
-	_preview_cancel_button = _battle_hud.preview_cancel_button
+	_timeline_panel = root.get_node_or_null("%InitiativeRibbon") as Panel
+	_timeline_bar = root.get_node_or_null("%TimelineBar") as HBoxContainer
+	_log_label = root.get_node_or_null("%LogLabel") as Label
 
-	_unit_card_panel = _battle_hud.unit_card_panel
-	_unit_portrait = _battle_hud.unit_portrait
-	_unit_card_title = _battle_hud.unit_card_title
-	_unit_hp_bar = _battle_hud.unit_hp_bar
-	_unit_hp_text_label = _battle_hud.unit_hp_text
-	_unit_focus_bar = _battle_hud.unit_mp_bar
-	_unit_mp_text_label = _battle_hud.unit_mp_text
-	_unit_card_body = _battle_hud.unit_card_body
+	_preview_panel = root.get_node_or_null("%CombatPreview") as Panel
+	_preview_title = root.get_node_or_null("%PreviewTitle") as Label
+	_preview_body = root.get_node_or_null("%PreviewBody") as Label
+	_preview_confirm_button = root.get_node_or_null("%PreviewConfirmButton") as Button
+	_preview_cancel_button = root.get_node_or_null("%PreviewCancelButton") as Button
 
-	_hero_panel = _battle_hud.hero_panel
-	_hero_portrait = _battle_hud.hero_portrait
-	_hero_name = _battle_hud.hero_name
+	_unit_card_panel = root.get_node_or_null("%UnitDossier") as Panel
+	_unit_portrait = root.get_node_or_null("%UnitPortrait") as TextureRect
+	_unit_card_title = root.get_node_or_null("%UnitTitle") as Label
+	_unit_hp_bar = root.get_node_or_null("%HpBar") as ProgressBar
+	_unit_hp_text_label = root.get_node_or_null("%HpText") as Label
+	_unit_focus_bar = root.get_node_or_null("%MpBar") as ProgressBar
+	_unit_mp_text_label = root.get_node_or_null("%MpText") as Label
+	_unit_card_body = root.get_node_or_null("%UnitBody") as Label
 
-	_objective_panel_3d = _battle_hud.objective_panel
-	_objective_title_3d = _battle_hud.objective_title
-	_objective_body_3d = _battle_hud.objective_body
+	_hero_panel = root.get_node_or_null("%HeroPanel") as Panel
+	_hero_portrait = root.get_node_or_null("%HeroPortrait") as TextureRect
+	_hero_name = root.get_node_or_null("%HeroName") as Label
 
-	_action_banner_panel = _battle_hud.action_banner_panel
-	_action_banner_title = _battle_hud.action_banner_title
-	_action_banner_subtitle = _battle_hud.action_banner_subtitle
-	_facing_panel = _battle_hud.facing_panel
+	_objective_panel_3d = root.get_node_or_null("%ObjectiveBrief") as Panel
+	_objective_title_3d = root.get_node_or_null("%ObjectiveTitle") as Label
+	_objective_body_3d = root.get_node_or_null("%ObjectiveBody") as Label
+
+	_action_banner_panel = root.get_node_or_null("%ActionBanner") as Panel
+	_action_banner_title = root.get_node_or_null("%ActionBannerTitle") as Label
+	_action_banner_subtitle = root.get_node_or_null("%ActionBannerSubtitle") as Label
+	_facing_panel = root.get_node_or_null("%FacingSelector") as Panel
 
 	if _move_button != null and not _move_button.pressed.is_connected(_on_move_mode_pressed):
 		_move_button.pressed.connect(_on_move_mode_pressed)
@@ -468,25 +479,31 @@ func _build_ui() -> void:
 	if _preview_cancel_button != null and not _preview_cancel_button.pressed.is_connected(_cancel_pending_action):
 		_preview_cancel_button.pressed.connect(_cancel_pending_action)
 
+	var facing_north: Button = root.get_node_or_null("%FacingNorth") as Button
+	var facing_west: Button = root.get_node_or_null("%FacingWest") as Button
+	var facing_south: Button = root.get_node_or_null("%FacingSouth") as Button
+	var facing_east: Button = root.get_node_or_null("%FacingEast") as Button
+	var facing_cancel: Button = root.get_node_or_null("%FacingCancel") as Button
+	var facing_confirm: Button = root.get_node_or_null("%FacingConfirm") as Button
+
 	var north_callable: Callable = _choose_facing.bind(Vector2i.UP)
 	var west_callable: Callable = _choose_facing.bind(Vector2i.LEFT)
 	var south_callable: Callable = _choose_facing.bind(Vector2i.DOWN)
 	var east_callable: Callable = _choose_facing.bind(Vector2i.RIGHT)
 
-	if _battle_hud.facing_north != null and not _battle_hud.facing_north.pressed.is_connected(north_callable):
-		_battle_hud.facing_north.pressed.connect(north_callable)
-	if _battle_hud.facing_west != null and not _battle_hud.facing_west.pressed.is_connected(west_callable):
-		_battle_hud.facing_west.pressed.connect(west_callable)
-	if _battle_hud.facing_south != null and not _battle_hud.facing_south.pressed.is_connected(south_callable):
-		_battle_hud.facing_south.pressed.connect(south_callable)
-	if _battle_hud.facing_east != null and not _battle_hud.facing_east.pressed.is_connected(east_callable):
-		_battle_hud.facing_east.pressed.connect(east_callable)
-	if _battle_hud.facing_cancel != null and not _battle_hud.facing_cancel.pressed.is_connected(_close_facing_selector):
-		_battle_hud.facing_cancel.pressed.connect(_close_facing_selector)
-	if _battle_hud.facing_confirm != null and not _battle_hud.facing_confirm.pressed.is_connected(_confirm_facing_and_end):
-		_battle_hud.facing_confirm.pressed.connect(_confirm_facing_and_end)
+	if facing_north != null and not facing_north.pressed.is_connected(north_callable):
+		facing_north.pressed.connect(north_callable)
+	if facing_west != null and not facing_west.pressed.is_connected(west_callable):
+		facing_west.pressed.connect(west_callable)
+	if facing_south != null and not facing_south.pressed.is_connected(south_callable):
+		facing_south.pressed.connect(south_callable)
+	if facing_east != null and not facing_east.pressed.is_connected(east_callable):
+		facing_east.pressed.connect(east_callable)
+	if facing_cancel != null and not facing_cancel.pressed.is_connected(_close_facing_selector):
+		facing_cancel.pressed.connect(_close_facing_selector)
+	if facing_confirm != null and not facing_confirm.pressed.is_connected(_confirm_facing_and_end):
+		facing_confirm.pressed.connect(_confirm_facing_and_end)
 
-	# The old floating ActionWheel duplicated commands and covered tactical cells.
 	_action_wheel = null
 	_action_wheel_label = null
 	_wheel_move_button = null
@@ -1119,14 +1136,7 @@ func _mission_result_3d() -> int:
 func _ensure_objective_ui_3d() -> void:
 	if _objective_panel_3d != null and _objective_body_3d != null:
 		return
-	if _battle_hud == null:
-		_build_ui()
-	if _battle_hud == null:
-		return
-
-	_objective_panel_3d = _battle_hud.objective_panel
-	_objective_title_3d = _battle_hud.objective_title
-	_objective_body_3d = _battle_hud.objective_body
+	_build_ui()
 
 
 func _objective_status_text_3d() -> String:
