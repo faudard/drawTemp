@@ -69,3 +69,16 @@ Les marqueurs temporaires du plateau suivent désormais la même règle scene-fi
 - les labels du monde utilisent `fixed_size = false` et un `pixel_size` contrôlé pour rester proportionnés à la caméra.
 
 Les scripts ne fournissent plus que : texte, couleur, rayon, position et durée.
+
+
+### Transitions et résultats
+
+Les écrans/effets transitoires suivent aussi l'architecture scene-first :
+
+- `skill_burst_3d.tscn` pour l'impulsion visuelle d'une compétence ;
+- `victory_celebration_3d.tscn` pour les confettis/spores de victoire ;
+- `battle_result_overlay.tscn` pour VICTOIRE / DÉFAITE ;
+- `turn_transition_banner.tscn` pour le changement de tour ;
+- `mission_event_banner.tscn` pour les événements de mission.
+
+Le battle controller ne construit plus ces panneaux, labels, matériaux ou particules à la main. Il instancie les scènes et fournit les données dynamiques.

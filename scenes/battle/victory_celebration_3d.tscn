@@ -1,0 +1,112 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/presentation/spore_victory_celebration_3d.gd" id="1_script"]
+
+[sub_resource type="StandardMaterial3D" id="ConfettiGoldMaterial"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_color = Color(1, 1, 1, 1)
+
+[sub_resource type="BoxMesh" id="ConfettiMeshGold"]
+material = SubResource("ConfettiGoldMaterial")
+size = Vector3(0.07, 0.03, 0.11)
+
+[sub_resource type="ParticleProcessMaterial" id="ConfettiGoldProcess"]
+emission_shape = 2
+emission_sphere_radius = 0.55
+direction = Vector3(0, 1, 0)
+spread = 66.0
+initial_velocity_min = 1.8
+initial_velocity_max = 2.65
+gravity = Vector3(0, -2.8, 0)
+angular_velocity_min = -360.0
+angular_velocity_max = 360.0
+scale_min = 0.72
+scale_max = 1.12
+color = Color(1, 0.78, 0.24, 0.96)
+
+[sub_resource type="StandardMaterial3D" id="ConfettiCyanMaterial"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_color = Color(1, 1, 1, 1)
+
+[sub_resource type="BoxMesh" id="ConfettiMeshCyan"]
+material = SubResource("ConfettiCyanMaterial")
+size = Vector3(0.06, 0.025, 0.10)
+
+[sub_resource type="ParticleProcessMaterial" id="ConfettiCyanProcess"]
+emission_shape = 2
+emission_sphere_radius = 0.50
+direction = Vector3(0, 1, 0)
+spread = 72.0
+initial_velocity_min = 1.55
+initial_velocity_max = 2.35
+gravity = Vector3(0, -2.6, 0)
+angular_velocity_min = -420.0
+angular_velocity_max = 420.0
+scale_min = 0.68
+scale_max = 1.08
+color = Color(0.40, 0.86, 1, 0.92)
+
+[sub_resource type="StandardMaterial3D" id="SporeMaterial"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_color = Color(1, 1, 1, 1)
+
+[sub_resource type="SphereMesh" id="SporeMesh"]
+material = SubResource("SporeMaterial")
+radius = 0.045
+height = 0.09
+radial_segments = 8
+rings = 4
+
+[sub_resource type="ParticleProcessMaterial" id="SporeProcess"]
+emission_shape = 2
+emission_sphere_radius = 0.32
+direction = Vector3(0, 1, 0)
+spread = 84.0
+initial_velocity_min = 0.75
+initial_velocity_max = 1.35
+gravity = Vector3(0, -0.35, 0)
+scale_min = 0.78
+scale_max = 1.28
+color = Color(0.56, 0.94, 0.60, 0.88)
+
+[node name="VictoryCelebration3D" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="ConfettiGold" type="GPUParticles3D" parent="."]
+position = Vector3(0, 0.75, 0)
+emitting = false
+amount = 14
+lifetime = 1.05
+one_shot = true
+explosiveness = 0.94
+randomness = 0.38
+process_material = SubResource("ConfettiGoldProcess")
+draw_pass_1 = SubResource("ConfettiMeshGold")
+
+[node name="ConfettiCyan" type="GPUParticles3D" parent="."]
+position = Vector3(0, 0.70, 0)
+emitting = false
+amount = 12
+lifetime = 1.0
+one_shot = true
+explosiveness = 0.92
+randomness = 0.42
+process_material = SubResource("ConfettiCyanProcess")
+draw_pass_1 = SubResource("ConfettiMeshCyan")
+
+[node name="SporeGlow" type="GPUParticles3D" parent="."]
+position = Vector3(0, 0.42, 0)
+emitting = false
+amount = 16
+lifetime = 1.12
+one_shot = true
+explosiveness = 0.84
+randomness = 0.40
+process_material = SubResource("SporeProcess")
+draw_pass_1 = SubResource("SporeMesh")

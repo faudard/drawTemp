@@ -17,6 +17,10 @@ const CombatFloatingTextScene = preload("res://scenes/battle/combat_floating_tex
 const CombatFeedbackBurstScene = preload("res://scenes/battle/combat_feedback_burst_3d.tscn")
 const TacticalMarkerScene = preload("res://scenes/battle/tactical_marker_3d.tscn")
 const MissionHazardScene = preload("res://scenes/battle/mission_hazard_3d.tscn")
+const SkillBurstScene = preload("res://scenes/battle/skill_burst_3d.tscn")
+const VictoryCelebrationScene = preload("res://scenes/battle/victory_celebration_3d.tscn")
+const TurnTransitionBannerScene = preload("res://scenes/ui/turn_transition_banner.tscn")
+const MissionEventBannerScene = preload("res://scenes/ui/mission_event_banner.tscn")
 
 const MODE_MOVE: String = "move"
 const MODE_ATTACK: String = "attack"
@@ -1716,88 +1720,13 @@ func _show_turn_transition(actor: SporeUnitActor3D) -> void:
 	if previous != null:
 		previous.queue_free()
 
-	var panel: Panel = Panel.new()
-	panel.name = "TurnTransition"
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.size = Vector2(390.0, 62.0)
-
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	panel.position = Vector2(
-		(viewport_size.x - panel.size.x) * 0.5,
-		26.0
-	)
-	panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
-
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.045, 0.060, 0.085, 0.94)
-	style.corner_radius_top_left = 12
-	style.corner_radius_top_right = 12
-	style.corner_radius_bottom_left = 12
-	style.corner_radius_bottom_right = 12
-
-	if actor.team == "player":
-		style.border_color = Color(0.36, 0.82, 1.0, 0.95)
-	else:
-		style.border_color = Color(1.0, 0.42, 0.38, 0.95)
-
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-
-	panel.add_theme_stylebox_override("panel", style)
-	root.add_child(panel)
-
-	var label: Label = Label.new()
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 22)
-
-	if actor.team == "player":
-		label.text = "À TOI  •  %s" % actor.display_name
-		label.add_theme_color_override(
-			"font_color",
-			Color(0.72, 0.91, 1.0, 1.0)
-		)
-	else:
-		label.text = "ENNEMI  •  %s" % actor.display_name
-		label.add_theme_color_override(
-			"font_color",
-			Color(1.0, 0.70, 0.64, 1.0)
-		)
-
-	panel.add_child(label)
-
-	var start_position: Vector2 = panel.position - Vector2(0.0, 12.0)
-	var shown_position: Vector2 = panel.position
-	panel.position = start_position
-
-	var tween: Tween = create_tween()
-	tween.set_parallel(true)
-	tween.set_trans(Tween.TRANS_BACK)
-	tween.set_ease(Tween.EASE_OUT)
-	tween.tween_property(panel, "position", shown_position, 0.22)
-	tween.tween_property(panel, "modulate", Color.WHITE, 0.18)
-	tween.set_parallel(false)
-	tween.tween_interval(0.48)
-	tween.set_parallel(true)
-	tween.set_trans(Tween.TRANS_SINE)
-	tween.tween_property(
-		panel,
-		"position",
-		shown_position + Vector2(0.0, -8.0),
-		0.20
-	)
-	tween.tween_property(
-		panel,
-		"modulate",
-		Color(1.0, 1.0, 1.0, 0.0),
-		0.20
-	)
-	tween.set_parallel(false)
-	tween.tween_callback(Callable(panel, "queue_free"))
+	var node: Node = TurnTransitionBannerScene.instantiate()
+	var banner := node as SporeTurnTransitionBanner
+	if banner == null:
+		node.queue_free()
+		return
+	root.add_child(banner)
+	banner.present(actor.display_name, actor.team)
 
 	_show_floating_text(
 		actor.position + Vector3(0.0, 1.52, 0.0),
@@ -2860,75 +2789,14 @@ func _play_victory_celebration() -> void:
 func _spawn_victory_confetti(center: Vector3) -> void:
 	if _vfx_holder == null:
 		return
-
-	var colors: Array[Color] = [
-		Color(1.0, 0.78, 0.24, 1.0),
-		Color(0.40, 0.86, 1.0, 1.0),
-		Color(0.56, 0.94, 0.60, 1.0),
-		Color(0.92, 0.54, 1.0, 1.0)
-	]
-
-	for index: int in range(18):
-		var piece: MeshInstance3D = MeshInstance3D.new()
-		var mesh: BoxMesh = BoxMesh.new()
-		mesh.size = Vector3(0.07, 0.03, 0.11)
-		piece.mesh = mesh
-
-		var color: Color = colors[index % colors.size()]
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.albedo_color = color
-		material.emission_enabled = true
-		material.emission = color
-		material.emission_energy_multiplier = 0.55
-		piece.material_override = material
-
-		_vfx_holder.add_child(piece)
-
-		var angle: float = TAU * float(index) / 18.0
-		var radius: float = 0.5 + 0.07 * float(index % 5)
-		piece.position = center + Vector3(
-			cos(angle) * radius,
-			1.2 + 0.08 * float(index % 4),
-			sin(angle) * radius
-		)
-
-		piece.rotation = Vector3(
-			0.15 * float(index % 3),
-			angle,
-			0.20 * float(index % 4)
-		)
-
-		var outward: Vector3 = Vector3(
-			cos(angle) * (0.7 + 0.05 * float(index % 4)),
-			1.4 + 0.08 * float(index % 3),
-			sin(angle) * (0.7 + 0.05 * float(index % 4))
-		)
-
-		var tween: Tween = create_tween()
-		tween.set_parallel(true)
-		tween.set_trans(Tween.TRANS_SINE)
-		tween.tween_property(
-			piece,
-			"position",
-			piece.position + outward,
-			0.55
-		)
-		tween.tween_property(
-			piece,
-			"rotation",
-			piece.rotation + Vector3(2.2, 2.8, 1.7),
-			0.55
-		)
-		tween.set_parallel(false)
-		tween.set_trans(Tween.TRANS_QUAD)
-		tween.set_ease(Tween.EASE_IN)
-		tween.tween_property(
-			piece,
-			"position:y",
-			center.y + 0.10,
-			0.55
-		)
-		tween.tween_callback(Callable(piece, "queue_free"))
+	var node: Node = VictoryCelebrationScene.instantiate()
+	var celebration := node as SporeVictoryCelebration3D
+	if celebration == null:
+		node.queue_free()
+		return
+	_vfx_holder.add_child(celebration)
+	celebration.position = center
+	celebration.play(true, false)
 
 
 func _player_use_skill(anchor_cell: Vector2i) -> void:
@@ -3143,29 +3011,16 @@ func _try_displace_actor(target: SporeUnitActor3D, source_cell: Vector2i, distan
 
 
 func _show_skill_burst(cell_value: Vector2i, color: Color) -> void:
-	if map_root == null:
+	if map_root == null or _vfx_holder == null:
 		return
-	var marker: MeshInstance3D = MeshInstance3D.new()
-	var mesh: CylinderMesh = CylinderMesh.new()
-	mesh.top_radius = 0.18
-	mesh.bottom_radius = 0.18
-	mesh.height = 0.05
-	marker.mesh = mesh
-	marker.position = map_root.cell_top_local(cell_value) + Vector3(0.0, 0.11, 0.0)
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(color.r, color.g, color.b, 0.72)
-	material.emission_enabled = true
-	material.emission = color
-	material.emission_energy_multiplier = 0.65
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	marker.material_override = material
-	_actor_holder.add_child(marker)
-	var tween: Tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(marker, "scale", Vector3(5.0, 1.0, 5.0), 0.32)
-	tween.tween_property(material, "albedo_color", Color(color.r, color.g, color.b, 0.0), 0.32)
-	tween.set_parallel(false)
-	tween.tween_callback(Callable(marker, "queue_free"))
+	var node: Node = SkillBurstScene.instantiate()
+	var burst := node as SporeSkillBurst3D
+	if burst == null:
+		node.queue_free()
+		return
+	_vfx_holder.add_child(burst)
+	burst.position = map_root.cell_top_local(cell_value)
+	burst.play(color)
 
 
 func _process_status_phase(actor: SporeUnitActor3D, phase: String) -> void:
@@ -3461,61 +3316,13 @@ func _show_mission_event_banner_3d(message: String) -> void:
 	if previous != null:
 		previous.queue_free()
 
-	var panel: Panel = Panel.new()
-	panel.name = "MissionEventBanner"
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.size = Vector2(620.0, 92.0)
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	panel.position = Vector2((viewport_size.x - 620.0) * 0.5, 92.0)
-	panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
-
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.045, 0.035, 0.070, 0.96)
-	style.border_color = Color(0.76, 0.58, 1.0, 1.0)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.corner_radius_top_left = 14
-	style.corner_radius_top_right = 14
-	style.corner_radius_bottom_left = 14
-	style.corner_radius_bottom_right = 14
-	panel.add_theme_stylebox_override("panel", style)
-	root.add_child(panel)
-
-	var title: Label = Label.new()
-	title.position = Vector2(18.0, 9.0)
-	title.size = Vector2(584.0, 22.0)
-	title.text = "ÉVÉNEMENT DE MISSION"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 14)
-	title.add_theme_color_override("font_color", Color(0.82, 0.70, 1.0, 1.0))
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(title)
-
-	var body: Label = Label.new()
-	body.position = Vector2(24.0, 34.0)
-	body.size = Vector2(572.0, 46.0)
-	body.text = message
-	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	body.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_theme_font_size_override("font_size", 15)
-	body.add_theme_color_override("font_color", Color(0.95, 0.93, 1.0, 1.0))
-	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(body)
-
-	var tween: Tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(panel, "modulate", Color.WHITE, 0.18)
-	tween.tween_property(panel, "position:y", 102.0, 0.22)
-	tween.set_parallel(false)
-	tween.tween_interval(1.05)
-	tween.set_parallel(true)
-	tween.tween_property(panel, "modulate", Color(1.0, 1.0, 1.0, 0.0), 0.22)
-	tween.tween_property(panel, "position:y", 94.0, 0.22)
-	tween.set_parallel(false)
-	tween.tween_callback(Callable(panel, "queue_free"))
+	var node: Node = MissionEventBannerScene.instantiate()
+	var banner := node as SporeMissionEventBanner
+	if banner == null:
+		node.queue_free()
+		return
+	root.add_child(banner)
+	banner.present(message)
 
 
 func _rebuild_hazard_visuals_3d() -> void:
@@ -4778,58 +4585,16 @@ func _run_battle_end_sequence(victory: bool) -> void:
 
 
 func _spawn_victory_spores(origin: Vector3) -> void:
-	if _actor_holder == null:
+	if _vfx_holder == null:
 		return
-	var root: Node3D = Node3D.new()
-	root.name = "VictorySpores"
-	root.position = origin + Vector3(0.0, 0.25, 0.0)
-	_actor_holder.add_child(root)
-
-	for index: int in range(12):
-		var spark: MeshInstance3D = MeshInstance3D.new()
-		var mesh: SphereMesh = SphereMesh.new()
-		mesh.radius = 0.045 + 0.010 * float(index % 3)
-		mesh.height = mesh.radius * 2.0
-		mesh.radial_segments = 8
-		mesh.rings = 4
-		spark.mesh = mesh
-
-		var color: Color = Color(1.0, 0.82, 0.32, 0.92)
-		if index % 3 == 1:
-			color = Color(0.44, 0.92, 0.62, 0.92)
-		elif index % 3 == 2:
-			color = Color(0.42, 0.82, 1.0, 0.92)
-
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.albedo_color = color
-		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		material.emission_enabled = true
-		material.emission = Color(color.r, color.g, color.b, 1.0)
-		material.emission_energy_multiplier = 1.4
-		spark.material_override = material
-
-		var angle: float = TAU * float(index) / 12.0
-		spark.position = Vector3(cos(angle) * 0.18, 0.05, sin(angle) * 0.18)
-		root.add_child(spark)
-
-		var target: Vector3 = Vector3(
-			cos(angle) * (0.70 + 0.10 * float(index % 4)),
-			0.75 + 0.08 * float(index % 5),
-			sin(angle) * (0.70 + 0.10 * float(index % 4))
-		)
-		var tween: Tween = create_tween()
-		tween.set_parallel(true)
-		tween.set_trans(Tween.TRANS_SINE)
-		tween.set_ease(Tween.EASE_OUT)
-		tween.tween_property(spark, "position", target, 0.82)
-		tween.tween_property(spark, "scale", Vector3.ONE * 1.35, 0.36)
-		tween.set_parallel(false)
-		tween.tween_callback(Callable(spark, "queue_free"))
-
-	await get_tree().create_timer(0.95).timeout
-	if is_instance_valid(root):
-		root.queue_free()
+	var node: Node = VictoryCelebrationScene.instantiate()
+	var celebration := node as SporeVictoryCelebration3D
+	if celebration == null:
+		node.queue_free()
+		return
+	_vfx_holder.add_child(celebration)
+	celebration.position = origin + Vector3(0.0, 0.18, 0.0)
+	celebration.play(false, true)
 
 
 func _show_battle_result(victory: bool) -> void:
@@ -4839,87 +4604,16 @@ func _show_battle_result(victory: bool) -> void:
 	if root == null:
 		return
 
-	var previous: Node = root.get_node_or_null("BattleResult")
-	if previous != null:
-		previous.queue_free()
-
-	var overlay: ColorRect = ColorRect.new()
-	overlay.name = "BattleResult"
-	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0.015, 0.022, 0.034, 0.84)
-	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	overlay.modulate = Color(1.0, 1.0, 1.0, 0.0)
-	root.add_child(overlay)
-
-	var panel: Panel = Panel.new()
-	panel.size = Vector2(520.0, 260.0)
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	panel.position = (viewport_size - panel.size) * 0.5
-	panel.pivot_offset = panel.size * 0.5
-	panel.scale = Vector2(0.86, 0.86)
-
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.045, 0.060, 0.085, 0.985)
-	style.border_color = Color(1.0, 0.80, 0.30, 1.0) if victory else Color(1.0, 0.38, 0.34, 1.0)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.corner_radius_top_left = 18
-	style.corner_radius_top_right = 18
-	style.corner_radius_bottom_left = 18
-	style.corner_radius_bottom_right = 18
-	panel.add_theme_stylebox_override("panel", style)
-	overlay.add_child(panel)
-
-	var title: Label = Label.new()
-	title.position = Vector2(24.0, 24.0)
-	title.size = Vector2(472.0, 50.0)
-	title.text = "VICTOIRE !" if victory else "DÉFAITE"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 34)
-	title.add_theme_color_override(
-		"font_color",
-		Color(1.0, 0.86, 0.38, 1.0) if victory else Color(1.0, 0.50, 0.46, 1.0)
-	)
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(title)
+	var overlay := root.get_node_or_null("BattleResult") as SporeBattleResultOverlay
+	if overlay == null:
+		return
 
 	var survivors: int = 0
 	for actor: SporeUnitActor3D in player_actors:
 		if actor != null and actor.alive:
 			survivors += 1
 
-	var body: Label = Label.new()
-	body.position = Vector2(40.0, 88.0)
-	body.size = Vector2(440.0, 78.0)
-	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	body.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_theme_font_size_override("font_size", 16)
-	body.add_theme_color_override("font_color", Color(0.92, 0.94, 0.90, 1.0))
-	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	body.text = (
-		"Mission accomplie.\n%d membre(s) de l'escouade encore debout." % survivors
-		if victory
-		else "L'escouade a été mise hors combat.\nAdapte ton placement et retente la mission."
-	)
-	panel.add_child(body)
-
-	var replay: Button = Button.new()
-	replay.text = "REJOUER  [R]"
-	replay.position = Vector2(150.0, 190.0)
-	replay.size = Vector2(220.0, 44.0)
-	replay.add_theme_font_size_override("font_size", 16)
-	replay.pressed.connect(func() -> void: get_tree().reload_current_scene())
-	panel.add_child(replay)
-
-	var tween: Tween = create_tween()
-	tween.set_parallel(true)
-	tween.set_trans(Tween.TRANS_BACK)
-	tween.set_ease(Tween.EASE_OUT)
-	tween.tween_property(overlay, "modulate", Color.WHITE, 0.30)
-	tween.tween_property(panel, "scale", Vector2.ONE, 0.42)
+	overlay.present(victory, survivors)
 
 
 func _check_battle_end() -> bool:
