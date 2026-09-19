@@ -464,6 +464,7 @@ reward_value = 1
 reward_team = "player"
 
 [node name="Dressing" parent="." instance=ExtResource("6_dressing")]
+scale = Vector3(1.4, 1.0, 1.4)
 
 [node name="PreviewRig" type="Node3D" parent="."]
 
@@ -480,6 +481,7 @@ light_energy = 1.08
 shadow_enabled = true
 
 [node name="TileMaterialField" parent="." instance=ExtResource("1")]
+scale = Vector3(1.4, 1.0, 1.4)
 
 
 [node name="HeroArtPolish" parent="." instance=ExtResource("2")]
