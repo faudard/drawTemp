@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/presentation/spore_comic_action_cutin.gd" id="1_script"]
+
+[node name="ComicActionCutin" type="CanvasLayer"]
+layer = 26
+script = ExtResource("1_script")
