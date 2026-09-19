@@ -428,21 +428,24 @@ func _build_ui() -> void:
 	_action_banner_title = root.get_node_or_null("ActionBanner/Title") as Label
 	_action_banner_subtitle = root.get_node_or_null("ActionBanner/Subtitle") as Label
 
-	if _move_button != null:
+	if _move_button != null and not _move_button.pressed.is_connected(_on_move_mode_pressed):
 		_move_button.pressed.connect(_on_move_mode_pressed)
-	if _attack_button != null:
+	if _attack_button != null and not _attack_button.pressed.is_connected(_on_attack_mode_pressed):
 		_attack_button.pressed.connect(_on_attack_mode_pressed)
-	if _face_button != null:
-		_face_button.pressed.connect(_on_face_pressed.bind(1))
-	if _end_button != null:
+	var face_callable := _on_face_pressed.bind(1)
+	if _face_button != null and not _face_button.pressed.is_connected(face_callable):
+		_face_button.pressed.connect(face_callable)
+	if _end_button != null and not _end_button.pressed.is_connected(_on_end_activation_pressed):
 		_end_button.pressed.connect(_on_end_activation_pressed)
-	if _primary_skill_button != null:
-		_primary_skill_button.pressed.connect(_on_skill_pressed.bind(1))
-	if _secondary_skill_button != null:
-		_secondary_skill_button.pressed.connect(_on_skill_pressed.bind(2))
-	if _preview_confirm_button != null:
+	var primary_skill_callable := _on_skill_pressed.bind(1)
+	if _primary_skill_button != null and not _primary_skill_button.pressed.is_connected(primary_skill_callable):
+		_primary_skill_button.pressed.connect(primary_skill_callable)
+	var secondary_skill_callable := _on_skill_pressed.bind(2)
+	if _secondary_skill_button != null and not _secondary_skill_button.pressed.is_connected(secondary_skill_callable):
+		_secondary_skill_button.pressed.connect(secondary_skill_callable)
+	if _preview_confirm_button != null and not _preview_confirm_button.pressed.is_connected(_confirm_pending_action):
 		_preview_confirm_button.pressed.connect(_confirm_pending_action)
-	if _preview_cancel_button != null:
+	if _preview_cancel_button != null and not _preview_cancel_button.pressed.is_connected(_cancel_pending_action):
 		_preview_cancel_button.pressed.connect(_cancel_pending_action)
 
 	# The old floating ActionWheel duplicated commands and covered tactical cells.
@@ -5805,7 +5808,7 @@ func _refresh_timeline_ui() -> void:
 	_timeline_signature = signature
 
 	for child: Node in _timeline_bar.get_children():
-		child.queue_free()
+		child.free()
 
 	var predicted: Array[SporeUnitActor3D] = _predict_timeline_3d(5)
 	for actor: SporeUnitActor3D in predicted:
