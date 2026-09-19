@@ -14,7 +14,7 @@ var _screen_pass: ColorRect
 
 
 func _ready() -> void:
-	layer = 10
+	layer = 0
 	_build_screen_pass()
 	_apply_parameters()
 
