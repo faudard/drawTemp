@@ -1,66 +1,168 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/environment/comic_mushroom_tree_3d.tscn" id="1_tree"]
 [ext_resource type="PackedScene" path="res://scenes/environment/comic_mushroom_cluster_3d.tscn" id="2_cluster"]
+[ext_resource type="PackedScene" path="res://scenes/environment/comic_ruin_cluster_3d.tscn" id="3_ruin"]
 
 [node name="Mission1Dressing" type="Node3D"]
 
 [node name="ForestRing" type="Node3D" parent="."]
 
-[node name="TreeNW" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(-7.15, 0, -5.55)
+[node name="TreeNWOuter" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(-7.20, 0, -5.58)
 rotation = Vector3(0, 0.45, 0)
-scale = Vector3(0.72, 0.72, 0.72)
+scale = Vector3(0.96, 0.96, 0.96)
 
-[node name="TreeN" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(-2.60, 0, -5.75)
-rotation = Vector3(0, -0.30, 0)
-scale = Vector3(0.66, 0.66, 0.66)
+[node name="TreeNWInner" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(-5.45, 0, -5.82)
+rotation = Vector3(0, -0.24, 0)
+scale = Vector3(0.78, 0.78, 0.78)
+
+[node name="TreeNorthA" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(-3.55, 0, -6.00)
+rotation = Vector3(0, 0.78, 0)
+scale = Vector3(0.90, 0.90, 0.90)
+
+[node name="TreeNorthB" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(-1.28, 0, -6.10)
+rotation = Vector3(0, -0.52, 0)
+scale = Vector3(0.76, 0.76, 0.76)
+
+[node name="TreeNorthC" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(1.05, 0, -6.08)
+rotation = Vector3(0, 0.16, 0)
+scale = Vector3(0.86, 0.86, 0.86)
+
+[node name="TreeNorthD" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(3.42, 0, -5.96)
+rotation = Vector3(0, -0.72, 0)
+scale = Vector3(0.82, 0.82, 0.82)
 
 [node name="TreeNE" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(5.15, 0, -5.60)
-rotation = Vector3(0, 0.66, 0)
-scale = Vector3(0.68, 0.68, 0.68)
+position = Vector3(5.66, 0, -5.66)
+rotation = Vector3(0, 0.62, 0)
+scale = Vector3(0.93, 0.93, 0.93)
 
-[node name="TreeW" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(-7.30, 0, -0.65)
+[node name="TreeWestNorth" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(-7.52, 0, -3.16)
 rotation = Vector3(0, 1.10, 0)
-scale = Vector3(0.62, 0.62, 0.62)
+scale = Vector3(0.82, 0.82, 0.82)
 
-[node name="TreeE" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(7.25, 0, 0.10)
-rotation = Vector3(0, -0.80, 0)
-scale = Vector3(0.60, 0.60, 0.60)
+[node name="TreeWestMid" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(-7.64, 0, -0.46)
+rotation = Vector3(0, 0.24, 0)
+scale = Vector3(0.96, 0.96, 0.96)
+
+[node name="TreeWestSouth" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(-7.46, 0, 2.72)
+rotation = Vector3(0, -0.62, 0)
+scale = Vector3(0.82, 0.82, 0.82)
+
+[node name="TreeEastNorth" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(7.46, 0, -3.18)
+rotation = Vector3(0, -0.90, 0)
+scale = Vector3(0.86, 0.86, 0.86)
+
+[node name="TreeEastMid" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(7.64, 0, -0.14)
+rotation = Vector3(0, 0.66, 0)
+scale = Vector3(0.94, 0.94, 0.94)
+
+[node name="TreeEastSouth" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(7.40, 0, 2.88)
+rotation = Vector3(0, -0.22, 0)
+scale = Vector3(0.80, 0.80, 0.80)
 
 [node name="TreeSW" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(-6.95, 0, 5.70)
+position = Vector3(-6.84, 0, 5.66)
 rotation = Vector3(0, -0.20, 0)
-scale = Vector3(0.68, 0.68, 0.68)
+scale = Vector3(0.94, 0.94, 0.94)
+
+[node name="TreeSouthA" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(-4.42, 0, 6.00)
+rotation = Vector3(0, 0.58, 0)
+scale = Vector3(0.76, 0.76, 0.76)
+
+[node name="TreeSouthB" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(-1.72, 0, 6.18)
+rotation = Vector3(0, -0.34, 0)
+scale = Vector3(0.88, 0.88, 0.88)
+
+[node name="TreeSouthC" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(1.42, 0, 6.15)
+rotation = Vector3(0, 0.44, 0)
+scale = Vector3(0.80, 0.80, 0.80)
+
+[node name="TreeSouthD" parent="ForestRing" instance=ExtResource("1_tree")]
+position = Vector3(4.10, 0, 5.96)
+rotation = Vector3(0, -0.72, 0)
+scale = Vector3(0.86, 0.86, 0.86)
 
 [node name="TreeSE" parent="ForestRing" instance=ExtResource("1_tree")]
-position = Vector3(6.90, 0, 5.65)
+position = Vector3(6.66, 0, 5.62)
 rotation = Vector3(0, 0.35, 0)
-scale = Vector3(0.70, 0.70, 0.70)
-
+scale = Vector3(0.96, 0.96, 0.96)
 
 [node name="GroundClusters" type="Node3D" parent="."]
 
 [node name="ClusterNW" parent="GroundClusters" instance=ExtResource("2_cluster")]
-position = Vector3(-5.85, 0, -5.82)
+position = Vector3(-6.18, 0, -5.18)
 rotation = Vector3(0, 0.46, 0)
-scale = Vector3(0.84, 0.84, 0.84)
+scale = Vector3(1.02, 1.02, 1.02)
+
+[node name="ClusterNorth" parent="GroundClusters" instance=ExtResource("2_cluster")]
+position = Vector3(0.08, 0, -5.62)
+rotation = Vector3(0, -0.18, 0)
+scale = Vector3(0.92, 0.92, 0.92)
 
 [node name="ClusterNE" parent="GroundClusters" instance=ExtResource("2_cluster")]
-position = Vector3(6.10, 0, -4.55)
+position = Vector3(6.20, 0, -4.72)
 rotation = Vector3(0, -0.72, 0)
-scale = Vector3(0.76, 0.76, 0.76)
+scale = Vector3(0.94, 0.94, 0.94)
+
+[node name="ClusterWest" parent="GroundClusters" instance=ExtResource("2_cluster")]
+position = Vector3(-6.72, 0, 0.88)
+rotation = Vector3(0, 0.82, 0)
+scale = Vector3(0.90, 0.90, 0.90)
+
+[node name="ClusterEast" parent="GroundClusters" instance=ExtResource("2_cluster")]
+position = Vector3(6.70, 0, 1.42)
+rotation = Vector3(0, -0.44, 0)
+scale = Vector3(0.92, 0.92, 0.92)
 
 [node name="ClusterSW" parent="GroundClusters" instance=ExtResource("2_cluster")]
-position = Vector3(-6.18, 0, 5.18)
+position = Vector3(-6.20, 0, 5.10)
 rotation = Vector3(0, 0.94, 0)
-scale = Vector3(0.82, 0.82, 0.82)
+scale = Vector3(0.98, 0.98, 0.98)
+
+[node name="ClusterSouth" parent="GroundClusters" instance=ExtResource("2_cluster")]
+position = Vector3(0.34, 0, 5.62)
+rotation = Vector3(0, 0.18, 0)
+scale = Vector3(0.90, 0.90, 0.90)
 
 [node name="ClusterSE" parent="GroundClusters" instance=ExtResource("2_cluster")]
-position = Vector3(5.72, 0, 5.82)
+position = Vector3(5.82, 0, 5.22)
 rotation = Vector3(0, -0.22, 0)
+scale = Vector3(0.96, 0.96, 0.96)
+
+[node name="BorderRuins" type="Node3D" parent="."]
+
+[node name="RuinNW" parent="BorderRuins" instance=ExtResource("3_ruin")]
+position = Vector3(-6.74, 0, -4.54)
+rotation = Vector3(0, 0.26, 0)
+scale = Vector3(0.86, 0.86, 0.86)
+
+[node name="RuinNE" parent="BorderRuins" instance=ExtResource("3_ruin")]
+position = Vector3(6.60, 0, -4.18)
+rotation = Vector3(0, -0.44, 0)
 scale = Vector3(0.78, 0.78, 0.78)
+
+[node name="RuinSW" parent="BorderRuins" instance=ExtResource("3_ruin")]
+position = Vector3(-6.42, 0, 4.52)
+rotation = Vector3(0, -0.28, 0)
+scale = Vector3(0.82, 0.82, 0.82)
+
+[node name="RuinSE" parent="BorderRuins" instance=ExtResource("3_ruin")]
+position = Vector3(6.36, 0, 4.42)
+rotation = Vector3(0, 0.54, 0)
+scale = Vector3(0.82, 0.82, 0.82)
