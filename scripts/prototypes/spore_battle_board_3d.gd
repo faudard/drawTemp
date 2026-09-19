@@ -171,10 +171,10 @@ var _unit_hp_bar: ProgressBar
 var _unit_focus_bar: ProgressBar
 var _unit_hp_text_label: Label
 var _unit_mp_text_label: Label
-var _hero_splash_panel: Panel = null
-var _hero_splash_portrait: TextureRect = null
-var _hero_splash_name: Label = null
-var _hero_splash_last_actor: SporeUnitActor3D = null
+var _hero_panel: Panel = null
+var _hero_portrait: TextureRect = null
+var _hero_name: Label = null
+var _hero_panel_last_actor: SporeUnitActor3D = null
 var _action_wheel: Panel
 var _action_wheel_label: Label
 var _wheel_move_button: Button
@@ -433,9 +433,9 @@ func _build_ui() -> void:
 	_unit_mp_text_label = _battle_hud.unit_mp_text
 	_unit_card_body = _battle_hud.unit_card_body
 
-	_hero_splash_panel = _battle_hud.hero_panel
-	_hero_splash_portrait = _battle_hud.hero_portrait
-	_hero_splash_name = _battle_hud.hero_name
+	_hero_panel = _battle_hud.hero_panel
+	_hero_portrait = _battle_hud.hero_portrait
+	_hero_name = _battle_hud.hero_name
 
 	_objective_panel_3d = _battle_hud.objective_panel
 	_objective_title_3d = _battle_hud.objective_title
@@ -5206,7 +5206,7 @@ func _update_ui_text() -> void:
 	_help_label.text = "Boucle FFT : 1 Move + 1 Act dans l’ordre voulu • F choisit l’orientation • Espace = Wait/Fin • Vert déplacement • Rouge attaque • Violet skill • Entrée confirmer • Échap annuler • Q/E caméra • molette zoom • C recentrer • T menaces • R recommencer"
 	_refresh_timeline_ui()
 	_refresh_unit_card_ui()
-	_refresh_hero_splash_ui()
+	_refresh_hero_panel_ui()
 	_update_skill_buttons()
 	if not pending_action.is_empty():
 		_update_pending_preview_panel()
@@ -5316,23 +5316,23 @@ func _unit_card_actor() -> SporeUnitActor3D:
 	return active_actor if active_actor != null and active_actor.alive else null
 
 
-func _refresh_hero_splash_ui() -> void:
-	if _hero_splash_panel == null:
+func _refresh_hero_panel_ui() -> void:
+	if _hero_panel == null:
 		return
 
 	var actor: SporeUnitActor3D = null
 	if active_actor != null and active_actor.alive:
 		actor = active_actor
-	_hero_splash_panel.visible = actor != null
+	_hero_panel.visible = actor != null
 	if actor == null:
-		_hero_splash_last_actor = null
+		_hero_panel_last_actor = null
 		return
 
-	if _hero_splash_portrait != null and actor != _hero_splash_last_actor:
-		_hero_splash_portrait.texture = actor.portrait_texture()
-	if _hero_splash_name != null:
-		_hero_splash_name.text = actor.display_name.to_upper()
-	_hero_splash_last_actor = actor
+	if _hero_portrait != null and actor != _hero_panel_last_actor:
+		_hero_portrait.texture = actor.portrait_texture()
+	if _hero_name != null:
+		_hero_name.text = actor.display_name.to_upper()
+	_hero_panel_last_actor = actor
 
 
 func _refresh_unit_card_ui() -> void:
