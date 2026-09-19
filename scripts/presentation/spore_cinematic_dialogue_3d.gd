@@ -243,6 +243,8 @@ func _hide_dialogue_panel() -> void:
 	tween.tween_property(dialogue_panel, "scale", Vector2(0.99, 0.96), panel_exit_seconds)
 	await tween.finished
 	dialogue_panel.visible = false
+	cutin_left.visible = false
+	cutin_right.visible = false
 	letterbox_top.visible = false
 	letterbox_bottom.visible = false
 	dimmer.visible = false
