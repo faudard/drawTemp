@@ -1,7 +1,7 @@
 extends SceneTree
 
 const Appearance = preload("res://scripts/data/hero_appearance_definition.gd")
-const Compositor = preload("res://scripts/visual/hero_compositor.gd")
+const HeroCompositor = preload("res://scripts/visual/hero_compositor.gd")
 
 func _init() -> void:
 	var appearance: Resource = Appearance.new()
@@ -18,10 +18,10 @@ func _init() -> void:
 	assert(String(appearance.call("directional_part_id", "horns", "right")) == "short")
 	assert(String(appearance.call("directional_part_id", "horns", "front")) == "short")
 	for category: String in ["hair", "ears", "horns", "accessory_2", "accessory_3"]:
-		assert(not Compositor.available_part_ids(category).is_empty())
-	for direction: String in Compositor.DIRECTIONS:
-		var frame: Image = Compositor.compose_frame(appearance, direction)
+		assert(not HeroCompositor.available_part_ids(category).is_empty())
+	for direction: String in HeroCompositor.DIRECTIONS:
+		var frame: Image = HeroCompositor.compose_frame(appearance, direction)
 		assert(frame != null)
-		assert(frame.get_size() == Compositor.FRAME_SIZE)
+		assert(frame.get_size() == HeroCompositor.FRAME_SIZE)
 	print("[V1.24] Hero Creator Asymmetry smoke test OK")
 	quit()

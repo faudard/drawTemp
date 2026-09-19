@@ -2146,7 +2146,7 @@ func _append_enemy_spawn(cell: Vector2i, data: Dictionary) -> void:
 
 
 func _ensure_spawn_parallel_arrays() -> void:
-	var count := mission_current.enemy_positions.size()
+	var count: int = mission_current.enemy_positions.size()
 	while mission_current.enemy_ids.size() < count:
 		mission_current.enemy_ids.append("baveux")
 	while mission_current.enemy_roles.size() < count:
@@ -2820,7 +2820,7 @@ func _add_effect() -> void:
 	skill_current.effects.append(effect)
 	_mark_skill_dirty()
 	_refresh_effect_list()
-	var index := skill_current.effects.size() - 1
+	var index: int = skill_current.effects.size() - 1
 	effect_list.select(index)
 	_on_effect_selected(index)
 	status_label.text = "Bloc d'effet ajouté. Pense à enregistrer la compétence."
@@ -3126,7 +3126,7 @@ func _on_campaign_canvas_node_selected(node_id: String) -> void:
 func _select_campaign_node_by_id(node_id: String) -> void:
 	if campaign_current == null:
 		return
-	var node := campaign_current.node_by_id(node_id)
+	var node: Resource = campaign_current.node_by_id(node_id) as Resource
 	if node == null:
 		return
 	campaign_node_current = node
@@ -3321,11 +3321,11 @@ func _validate_campaign() -> void:
 	var reachable: Dictionary = {}
 	var queue: Array[String] = [String(campaign_current.start_node_id)]
 	while not queue.is_empty():
-		var current_id := queue.pop_front()
+		var current_id: String = String(queue.pop_front())
 		if current_id.is_empty() or reachable.has(current_id):
 			continue
 		reachable[current_id] = true
-		var current := campaign_current.node_by_id(current_id)
+		var current: Resource = campaign_current.node_by_id(current_id) as Resource
 		if current == null:
 			continue
 		for target_id in current.outgoing_node_ids():
@@ -3849,7 +3849,7 @@ func _add_logic_trigger() -> void:
 	action.id = "action_1"
 	trigger.actions.append(action)
 	logic_mission_current.battle_triggers.append(trigger)
-	var new_index := logic_mission_current.battle_triggers.size() - 1
+	var new_index: int = logic_mission_current.battle_triggers.size() - 1
 	dirty_logic_mission = true
 	_refresh_logic_lists()
 	logic_trigger_list.select(new_index)

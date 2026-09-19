@@ -80,13 +80,13 @@ func _rebuild_visual(map: SporeMap3D) -> void:
 	body_mesh.size = Vector3(map.tile_size * 0.94, total_height, map.tile_size * 0.94)
 	body.mesh = body_mesh
 	body.position = Vector3(0.0, -total_height * 0.5 - 0.02, 0.0)
-	body.material_override = _material(_side_color())
+	body.material_override = _surface_material(_side_color(), 0.022, 0.0)
 
 	var top_mesh: BoxMesh = BoxMesh.new()
 	top_mesh.size = Vector3(map.tile_size * 0.90, 0.08, map.tile_size * 0.90)
 	top.mesh = top_mesh
 	top.position = Vector3(0.0, -0.04, 0.0)
-	top.material_override = _material(_top_color())
+	top.material_override = _surface_material(_top_color(), 0.050, _surface_emission())
 
 	var rim: MeshInstance3D = get_node_or_null("_EditorRim") as MeshInstance3D
 	if rim == null:
@@ -98,6 +98,7 @@ func _rebuild_visual(map: SporeMap3D) -> void:
 	rim.mesh = rim_mesh
 	rim.position = Vector3(0.0, -0.092, 0.0)
 	rim.material_override = _material(_side_color().darkened(0.10))
+	rim.visible = false
 
 	var label: Label3D = get_node_or_null("_EditorLabel") as Label3D
 	if label == null:
@@ -145,49 +146,12 @@ func _rebuild_ground_detail(map: SporeMap3D) -> void:
 		root.name = "_EditorGroundDetail"
 		add_child(root, false, Node.INTERNAL_MODE_BACK)
 
-	for child: Node in root.get_children():
-		child.free()
-
-	if terrain_type != "ground":
+	# Runtime stays clean: no per-cell moss/mushroom geometry.
+	if not Engine.is_editor_hint():
 		root.visible = false
 		return
 
-	root.visible = true
-	var seed_value: int = absi(cell.x * 92821 + cell.y * 68917 + elevation * 101)
-
-	# Keep details sparse so the tactical silhouettes stay readable.
-	if seed_value % 3 != 0:
-		return
-
-	var stem: MeshInstance3D = MeshInstance3D.new()
-	var stem_mesh: CylinderMesh = CylinderMesh.new()
-	stem_mesh.top_radius = 0.025
-	stem_mesh.bottom_radius = 0.035
-	stem_mesh.height = 0.16
-	stem.mesh = stem_mesh
-	stem.position = Vector3(-map.tile_size * 0.23, 0.08, map.tile_size * 0.20)
-	stem.material_override = _material(Color("#d8caa6"))
-	root.add_child(stem)
-
-	var cap: MeshInstance3D = MeshInstance3D.new()
-	var cap_mesh: SphereMesh = SphereMesh.new()
-	cap_mesh.radius = 0.085
-	cap_mesh.height = 0.10
-	cap.mesh = cap_mesh
-	cap.position = stem.position + Vector3(0.0, 0.105, 0.0)
-	cap.scale = Vector3(1.15, 0.55, 1.15)
-	cap.material_override = _material(Color("#b96e58") if seed_value % 2 == 0 else Color("#d4a74f"))
-	root.add_child(cap)
-
-	var moss: MeshInstance3D = MeshInstance3D.new()
-	var moss_mesh: CylinderMesh = CylinderMesh.new()
-	moss_mesh.top_radius = 0.13
-	moss_mesh.bottom_radius = 0.16
-	moss_mesh.height = 0.025
-	moss.mesh = moss_mesh
-	moss.position = Vector3(map.tile_size * 0.20, 0.015, -map.tile_size * 0.22)
-	moss.material_override = _material(Color("#456b45"))
-	root.add_child(moss)
+	root.visible = false
 
 
 func _rebuild_terrain_prop(map: SporeMap3D) -> void:
@@ -282,19 +246,71 @@ func _cover_direction() -> Vector2i:
 	return Vector2i.UP
 
 
+
+static var _tile_surface_shader_cache: Shader = null
+
+
+func _tile_surface_shader() -> Shader:
+	if _tile_surface_shader_cache != null:
+		return _tile_surface_shader_cache
+
+	var shader: Shader = Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode diffuse_burley, specular_schlick_ggx;
+
+uniform vec4 base_color : source_color = vec4(0.3, 0.45, 0.3, 1.0);
+uniform float variation = 0.04;
+uniform float emission_strength = 0.0;
+
+void fragment() {
+	float broad = sin(UV.x * 8.0 + UV.y * 5.0) * 0.5 + 0.5;
+	float fine = sin(UV.x * 31.0 - UV.y * 23.0) * 0.5 + 0.5;
+	float grain = ((broad - 0.5) * 0.65 + (fine - 0.5) * 0.35) * variation;
+	vec3 c = clamp(base_color.rgb * (1.0 + grain), vec3(0.0), vec3(1.0));
+	ALBEDO = c;
+	ROUGHNESS = 0.94;
+	METALLIC = 0.0;
+	EMISSION = c * emission_strength;
+}
+"""
+	_tile_surface_shader_cache = shader
+	return shader
+
+
+func _surface_material(color: Color, variation: float, emission_strength: float) -> ShaderMaterial:
+	var material: ShaderMaterial = ShaderMaterial.new()
+	material.shader = _tile_surface_shader()
+	material.set_shader_parameter("base_color", color)
+	material.set_shader_parameter("variation", variation)
+	material.set_shader_parameter("emission_strength", emission_strength)
+	return material
+
+
+func _surface_emission() -> float:
+	match terrain_type:
+		"hazard":
+			return 0.055
+		"extraction":
+			return 0.045
+		"bonus":
+			return 0.035
+		"crown":
+			return 0.075
+	return 0.0
+
+
 func _material(color: Color) -> StandardMaterial3D:
 	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = color
-	material.roughness = 0.92
+	material.metallic = 0.0
+	material.roughness = 0.96
 
+	# Only gameplay landmarks get a very restrained emissive cue.
 	if terrain_type in ["hazard", "bonus", "crown", "extraction"]:
 		material.emission_enabled = true
-		material.emission = color.darkened(0.18)
-		material.emission_energy_multiplier = 0.18 if terrain_type != "crown" else 0.30
-
-	if terrain_type in ["bonus", "crown"]:
-		material.metallic = 0.08
-		material.roughness = 0.68
+		material.emission = color.darkened(0.30)
+		material.emission_energy_multiplier = 0.08 if terrain_type != "crown" else 0.14
 
 	return material
 
@@ -302,25 +318,25 @@ func _material(color: Color) -> StandardMaterial3D:
 func _top_color() -> Color:
 	match terrain_type:
 		"obstacle":
-			return Color("#55564a")
+			return Color("#57584f")
 		"cover":
-			return Color("#786341")
+			return Color("#6f5a3c")
 		"hazard":
-			return Color("#8749a9")
+			return Color("#684775")
 		"extraction":
-			return Color("#3f8f67")
+			return Color("#356c59")
 		"bonus":
-			return Color("#3d7f9e")
+			return Color("#426b78")
 		"crown":
-			return Color("#c39b3e")
+			return Color("#9a7938")
 		_:
-			var elevation_light: float = minf(0.08, float(elevation) * 0.026)
+			var elevation_light: float = minf(0.055, float(elevation) * 0.018)
 			var hash_value: int = absi(cell.x * 92821 + cell.y * 68917)
-			var variation: float = float(hash_value % 5) * 0.010 - 0.020
+			var variation: float = float(hash_value % 5) * 0.007 - 0.014
 			return Color(
-				0.27 + elevation_light + variation,
-				0.43 + elevation_light + variation,
-				0.27 + elevation_light + variation * 0.5,
+				0.245 + elevation_light + variation,
+				0.365 + elevation_light + variation,
+				0.225 + elevation_light + variation * 0.5,
 				1.0
 			)
 

@@ -1,7 +1,7 @@
 extends SceneTree
 
 const AppearanceDefinition = preload("res://scripts/data/hero_appearance_definition.gd")
-const Compositor = preload("res://scripts/visual/hero_compositor.gd")
+const HeroCompositor = preload("res://scripts/visual/hero_compositor.gd")
 const VisualDefinition = preload("res://scripts/data/unit_visual_definition.gd")
 
 var failures: PackedStringArray = PackedStringArray()
@@ -27,19 +27,19 @@ func expect(condition: bool, message: String) -> void:
 
 func test_part_library() -> void:
 	for category: String in ["body", "cap", "face", "top", "bottom", "accessory", "weapon"]:
-		var ids: PackedStringArray = Compositor.available_part_ids(category)
+		var ids: PackedStringArray = HeroCompositor.available_part_ids(category)
 		expect(not ids.is_empty(), "hero part category must not be empty: %s" % category)
-	expect(Compositor.available_part_ids("cap").has("classic"), "classic cap available")
-	expect(Compositor.available_part_ids("face").has("cyclops"), "cyclops face available")
-	expect(Compositor.available_part_ids("weapon").has("rifle"), "rifle available")
+	expect(HeroCompositor.available_part_ids("cap").has("classic"), "classic cap available")
+	expect(HeroCompositor.available_part_ids("face").has("cyclops"), "cyclops face available")
+	expect(HeroCompositor.available_part_ids("weapon").has("rifle"), "rifle available")
 
 
 func test_compositor_contract() -> void:
 	var appearance: SporeHeroAppearanceDefinition = AppearanceDefinition.new() as SporeHeroAppearanceDefinition
-	var front: Image = Compositor.compose_frame(appearance, "front")
-	var atlas: Image = Compositor.compose_atlas(appearance)
-	expect(front.get_size() == Compositor.FRAME_SIZE, "hero preview frame size")
-	expect(atlas.get_size() == Vector2i(Compositor.FRAME_SIZE.x * 6, Compositor.FRAME_SIZE.y * 4), "hero atlas is six states x four directions")
+	var front: Image = HeroCompositor.compose_frame(appearance, "front")
+	var atlas: Image = HeroCompositor.compose_atlas(appearance)
+	expect(front.get_size() == HeroCompositor.FRAME_SIZE, "hero preview frame size")
+	expect(atlas.get_size() == Vector2i(HeroCompositor.FRAME_SIZE.x * 6, HeroCompositor.FRAME_SIZE.y * 4), "hero atlas is six states x four directions")
 	expect(front.detect_alpha() != Image.ALPHA_NONE, "hero frame keeps transparency")
 
 

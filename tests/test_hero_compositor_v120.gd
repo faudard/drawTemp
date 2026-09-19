@@ -1,7 +1,7 @@
 extends SceneTree
 
 const AppearanceDefinition = preload("res://scripts/data/hero_appearance_definition.gd")
-const Compositor = preload("res://scripts/visual/hero_compositor.gd")
+const HeroCompositor = preload("res://scripts/visual/hero_compositor.gd")
 
 var failures: PackedStringArray = PackedStringArray()
 
@@ -16,11 +16,11 @@ func _init() -> void:
 	appearance.mark_style = "crack"
 	appearance.head_scale = 1.15
 	appearance.head_width_scale = 1.20
-	for direction: String in Compositor.DIRECTIONS:
-		var frame: Image = Compositor.compose_frame(appearance, direction)
-		expect(frame.get_size() == Compositor.FRAME_SIZE, "frame size stays 192x192 for %s" % direction)
+	for direction: String in HeroCompositor.DIRECTIONS:
+		var frame: Image = HeroCompositor.compose_frame(appearance, direction)
+		expect(frame.get_size() == HeroCompositor.FRAME_SIZE, "frame size stays 192x192 for %s" % direction)
 		expect(frame.detect_alpha() != Image.ALPHA_NONE, "frame keeps alpha for %s" % direction)
-	var atlas: Image = Compositor.compose_atlas(appearance)
+	var atlas: Image = HeroCompositor.compose_atlas(appearance)
 	expect(atlas.get_size() == Vector2i(1152, 768), "atlas remains 6 states x 4 directions")
 	if failures.is_empty():
 		print("[V1.20] Hero compositor morphology test OK")

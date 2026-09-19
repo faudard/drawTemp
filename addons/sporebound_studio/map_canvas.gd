@@ -121,13 +121,14 @@ func _draw() -> void:
 
 	_draw_spawns()
 	_draw_interactables()
-	for cell in overlay_cells:
-		if is_cell_valid(cell):
-			var overlay_rect := Rect2(board_origin + Vector2(cell) * cell_size, Vector2(cell_size, cell_size))
+	for cell_value: Variant in overlay_cells:
+		if cell_value is Vector2i and is_cell_valid(cell_value):
+			var cell: Vector2i = cell_value
+			var overlay_rect: Rect2 = Rect2(board_origin + Vector2(cell) * cell_size, Vector2(cell_size, cell_size))
 			draw_rect(overlay_rect.grow(-2.0), overlay_color, true)
-			var overlay_edge := overlay_color
-		overlay_edge.a = 0.92
-		draw_rect(overlay_rect.grow(-2.0), overlay_edge, false, 2.0)
+			var overlay_edge: Color = overlay_color
+			overlay_edge.a = 0.92
+			draw_rect(overlay_rect.grow(-2.0), overlay_edge, false, 2.0)
 	if is_cell_valid(selected_spawn_cell):
 		var selected_rect := Rect2(board_origin + Vector2(selected_spawn_cell) * cell_size, Vector2(cell_size, cell_size))
 		draw_rect(selected_rect.grow(-2.0), Color("#fff3a4"), false, 4.0)

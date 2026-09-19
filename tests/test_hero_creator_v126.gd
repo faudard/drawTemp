@@ -1,7 +1,7 @@
 extends SceneTree
 
 const Appearance = preload("res://scripts/data/hero_appearance_definition.gd")
-const Compositor = preload("res://scripts/visual/hero_compositor.gd")
+const HeroCompositor = preload("res://scripts/visual/hero_compositor.gd")
 
 func _init() -> void:
 	var appearance: Resource = Appearance.new()
@@ -22,12 +22,12 @@ func _init() -> void:
 	assert(String(appearance.call("expression_for_state", "attack")) == "angry")
 	assert(String(appearance.call("expression_part_override", "eyes", "angry")) == "angry")
 	assert(String(appearance.call("expression_part_override", "iris", "ko")) == "none")
-	for state: String in Compositor.STATES:
-		var frame: Image = Compositor.compose_frame(appearance, "front", state)
+	for state: String in HeroCompositor.STATES:
+		var frame: Image = HeroCompositor.compose_frame(appearance, "front", state)
 		assert(frame != null)
-		assert(frame.get_size() == Compositor.FRAME_SIZE)
-	var atlas: Image = Compositor.compose_atlas(appearance)
-	assert(atlas.get_size() == Vector2i(Compositor.FRAME_SIZE.x * 6, Compositor.FRAME_SIZE.y * 4))
+		assert(frame.get_size() == HeroCompositor.FRAME_SIZE)
+	var atlas: Image = HeroCompositor.compose_atlas(appearance)
+	assert(atlas.get_size() == Vector2i(HeroCompositor.FRAME_SIZE.x * 6, HeroCompositor.FRAME_SIZE.y * 4))
 	appearance.set("expressions_enabled", false)
 	assert(String(appearance.call("expression_for_state", "attack")) == "base")
 	print("[V1.26] Hero Creator Expressions & Profiles smoke test OK")

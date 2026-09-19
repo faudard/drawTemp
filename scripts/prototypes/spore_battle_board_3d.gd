@@ -36,6 +36,7 @@ const ACTION_SKILL: String = "skill"
 @export_range(0, 4, 1) var intercept_damage_reduction: int = 1
 @export_range(0, 4, 1) var opportunity_damage_penalty: int = 1
 @export var show_reachable_overlay: bool = true
+@export_range(0, 10, 1) var mp_regen_end_activation: int = 1
 
 @export_group("Camera")
 @export var camera_distance: float = 12.5
@@ -413,7 +414,7 @@ func _build_ui() -> void:
 	_attack_button = _make_button(panel, "ATTAQUE [A]", Vector2(114.0, 87.0), Vector2(104.0, 32.0))
 	_face_button = _make_button(panel, "ORIENT. [F]", Vector2(224.0, 87.0), Vector2(82.0, 32.0))
 	_face_button.tooltip_text = "Orientation : frapper de dos ou de flanc est plus efficace."
-	_end_button = _make_button(panel, "WAIT [ESPACE]", Vector2(312.0, 87.0), Vector2(104.0, 32.0))
+	_end_button = _make_button(panel, "FIN [ESPACE]", Vector2(312.0, 87.0), Vector2(104.0, 32.0))
 	_move_button.toggle_mode = true
 	_attack_button.toggle_mode = true
 
@@ -475,24 +476,24 @@ func _build_ui() -> void:
 	_unit_card_panel = Panel.new()
 	_unit_card_panel.name = "UnitCard"
 	_unit_card_panel.position = Vector2(880.0, 568.0)
-	_unit_card_panel.size = Vector2(360.0, 170.0)
+	_unit_card_panel.size = Vector2(372.0, 192.0)
 	_unit_card_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_unit_card_panel.add_theme_stylebox_override("panel", style)
 	root.add_child(_unit_card_panel)
 
 	_unit_portrait = TextureRect.new()
-	_unit_portrait.position = Vector2(12.0, 12.0)
-	_unit_portrait.size = Vector2(82.0, 104.0)
+	_unit_portrait.position = Vector2(14.0, 14.0)
+	_unit_portrait.size = Vector2(88.0, 112.0)
 	_unit_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_unit_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_unit_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_unit_card_panel.add_child(_unit_portrait)
 
-	_unit_card_title = _make_label(_unit_card_panel, Vector2(104.0, 10.0), Vector2(244.0, 25.0), 17, Color(1.0, 0.82, 0.40, 1.0))
+	_unit_card_title = _make_label(_unit_card_panel, Vector2(114.0, 12.0), Vector2(244.0, 25.0), 17, Color(1.0, 0.82, 0.40, 1.0))
 
 	_unit_hp_bar = ProgressBar.new()
-	_unit_hp_bar.position = Vector2(104.0, 39.0)
-	_unit_hp_bar.size = Vector2(244.0, 15.0)
+	_unit_hp_bar.position = Vector2(114.0, 42.0)
+	_unit_hp_bar.size = Vector2(244.0, 16.0)
 	_unit_hp_bar.show_percentage = false
 	_unit_hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_unit_hp_bar.add_theme_stylebox_override("background", _progress_style(Color(0.07, 0.08, 0.10, 0.95), 4))
@@ -510,8 +511,8 @@ func _build_ui() -> void:
 	_unit_hp_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	_unit_focus_bar = ProgressBar.new()
-	_unit_focus_bar.position = Vector2(104.0, 58.0)
-	_unit_focus_bar.size = Vector2(244.0, 12.0)
+	_unit_focus_bar.position = Vector2(114.0, 64.0)
+	_unit_focus_bar.size = Vector2(244.0, 16.0)
 	_unit_focus_bar.show_percentage = false
 	_unit_focus_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_unit_focus_bar.add_theme_stylebox_override("background", _progress_style(Color(0.07, 0.08, 0.10, 0.95), 3))
@@ -528,8 +529,10 @@ func _build_ui() -> void:
 	_unit_mp_text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_unit_mp_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	_unit_card_body = _make_label(_unit_card_panel, Vector2(104.0, 76.0), Vector2(244.0, 82.0), 10, Color(0.92, 0.93, 0.88, 1.0))
+	_unit_card_body = _make_label(_unit_card_panel, Vector2(114.0, 90.0), Vector2(244.0, 92.0), 10, Color(0.92, 0.93, 0.88, 1.0))
 	_unit_card_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_unit_card_body.clip_contents = false
+	_unit_card_body.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 
 	# The old floating ActionWheel duplicated commands and covered tactical cells.
 	_action_wheel = null
@@ -1965,6 +1968,14 @@ func _start_next_activation() -> void:
 		var expired_statuses: PackedStringArray = active_actor.finish_status_activation()
 		if not expired_statuses.is_empty():
 			_log("%s : fin de %s." % [active_actor.display_name, ", ".join(expired_statuses)])
+		if active_actor.alive and mp_regen_end_activation > 0:
+			var restored_mp: int = active_actor.change_focus(mp_regen_end_activation)
+			if restored_mp > 0:
+				_show_floating_text(
+					active_actor.position + Vector3(0.0, 1.28, 0.0),
+					"MP +%d" % restored_mp,
+					Color(0.42, 0.72, 1.0, 1.0)
+				)
 		active_actor.end_activation()
 		_finalize_actor_timing(active_actor)
 		if _mission_event_pending_3d():
@@ -2639,15 +2650,14 @@ func _update_facing_selector_title() -> void:
 	title.text = "ORIENTATION : %s" % active_actor.facing_name().to_upper()
 
 
-func _confirm_facing_and_end() -> void:
-	if not _facing_selection_active or active_actor == null:
+func _finish_player_activation_keep_facing() -> void:
+	if active_actor == null or battle_finished:
 		return
 
-	if _facing_panel != null and is_instance_valid(_facing_panel):
-		_facing_panel.visible = false
-
-	_facing_selection_active = false
-	player_busy = false
+	_clear_pending_action()
+	selected_skill_id = ""
+	skill_preview_cells.clear()
+	preview_path_cells.clear()
 
 	active_actor.waited_this_activation = (
 		not active_actor.moved_this_activation
@@ -2659,10 +2669,22 @@ func _confirm_facing_and_end() -> void:
 		wait_note = " • préparation conservée"
 
 	_log(
-		"%s termine son tour • orientation %s%s."
+		"%s termine son tour • orientation %s conservée%s."
 		% [active_actor.display_name, active_actor.facing_name(), wait_note]
 	)
 	_start_next_activation()
+
+
+func _confirm_facing_and_end() -> void:
+	if active_actor == null:
+		return
+
+	if _facing_panel != null and is_instance_valid(_facing_panel):
+		_facing_panel.visible = false
+
+	_facing_selection_active = false
+	player_busy = false
+	_finish_player_activation_keep_facing()
 
 
 func _on_face_pressed(turns: int = 1) -> void:
@@ -2674,12 +2696,14 @@ func _on_face_pressed(turns: int = 1) -> void:
 
 
 func _on_end_activation_pressed() -> void:
+	# Ending a turn no longer forces the facing selector. The actor simply keeps
+	# its current orientation. Facing remains an explicit choice through F / ORIENT.
 	if _facing_selection_active:
 		_confirm_facing_and_end()
 		return
 	if not _player_can_input():
 		return
-	_open_facing_selector()
+	_finish_player_activation_keep_facing()
 
 
 func _refresh_player_overlays() -> void:
@@ -5367,86 +5391,6 @@ func _cell_player_description(cell_value: Vector2i) -> String:
 	if occupant != null and occupant.alive:
 		terrain_name += " • %s" % occupant.display_name
 	return terrain_name
-
-
-func _show_battle_result(victory: bool) -> void:
-	if _ui_layer == null:
-		return
-	var root: Control = _ui_layer.get_node_or_null("Root") as Control
-	if root == null:
-		return
-
-	var previous: Node = root.get_node_or_null("BattleResult")
-	if previous != null:
-		previous.queue_free()
-
-	var overlay: ColorRect = ColorRect.new()
-	overlay.name = "BattleResult"
-	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0.02, 0.03, 0.045, 0.82)
-	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	overlay.modulate = Color(1.0, 1.0, 1.0, 0.0)
-	root.add_child(overlay)
-
-	var panel: Panel = Panel.new()
-	panel.size = Vector2(500.0, 240.0)
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	panel.position = (viewport_size - panel.size) * 0.5
-	panel.pivot_offset = panel.size * 0.5
-	panel.scale = Vector2(0.84, 0.84)
-
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.055, 0.075, 0.105, 0.98)
-	style.border_color = Color(1.0, 0.78, 0.30, 1.0) if victory else Color(0.90, 0.30, 0.30, 1.0)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.corner_radius_top_left = 18
-	style.corner_radius_top_right = 18
-	style.corner_radius_bottom_left = 18
-	style.corner_radius_bottom_right = 18
-	panel.add_theme_stylebox_override("panel", style)
-	overlay.add_child(panel)
-
-	var title: Label = _make_label(
-		panel,
-		Vector2(24.0, 24.0),
-		Vector2(452.0, 52.0),
-		34,
-		Color(1.0, 0.84, 0.38, 1.0) if victory else Color(1.0, 0.48, 0.44, 1.0)
-	)
-	title.text = "VICTOIRE !" if victory else "DÉFAITE"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-	var body: Label = _make_label(
-		panel,
-		Vector2(32.0, 84.0),
-		Vector2(436.0, 62.0),
-		16,
-		Color(0.92, 0.94, 0.90, 1.0)
-	)
-	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.text = (
-		"Mission accomplie. L'escouade contrôle le terrain."
-		if victory
-		else
-		"L'escouade a été mise hors combat."
-	)
-
-	var replay: Button = _make_button(
-		panel,
-		"REJOUER [R]",
-		Vector2(150.0, 166.0),
-		Vector2(200.0, 44.0)
-	)
-	replay.pressed.connect(func() -> void: get_tree().reload_current_scene())
-
-	var tween: Tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(overlay, "modulate", Color.WHITE, 0.32)
-	tween.tween_property(panel, "scale", Vector2.ONE, 0.42)
 
 
 func _ensure_hover_forecast_label() -> void:

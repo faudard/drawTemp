@@ -3,13 +3,14 @@ extends RefCounted
 
 const ABILITY_DIR := "res://data/loadout_abilities/"
 const JobCatalog = preload("res://scripts/catalogs/job_catalog.gd")
+const LoadoutAbilityDefinition = preload("res://scripts/data/loadout_ability_definition.gd")
 
 
-static func definition(id: String) -> SporeLoadoutAbilityDefinition:
+static func definition(id: String) -> LoadoutAbilityDefinition:
 	if id.is_empty() or id == "none":
 		return null
 	var path: String = ABILITY_DIR + id + ".tres"
-	return (load(path) as SporeLoadoutAbilityDefinition) if ResourceLoader.exists(path) else null
+	return (load(path) as LoadoutAbilityDefinition) if ResourceLoader.exists(path) else null
 
 
 static func all_ids() -> PackedStringArray:

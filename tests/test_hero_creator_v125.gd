@@ -1,12 +1,12 @@
 extends SceneTree
 
 const Appearance = preload("res://scripts/data/hero_appearance_definition.gd")
-const Compositor = preload("res://scripts/visual/hero_compositor.gd")
+const HeroCompositor = preload("res://scripts/visual/hero_compositor.gd")
 
-const NEW_CATEGORIES := PackedStringArray([
+const NEW_CATEGORIES: Array[String] = [
 	"iris", "pupil", "brows", "nose", "teeth", "skin_spots",
 	"mark_2", "mark_3", "earrings", "jewelry",
-])
+]
 
 func _init() -> void:
 	var appearance: Resource = Appearance.new()
@@ -31,13 +31,13 @@ func _init() -> void:
 	assert(String(appearance.call("part_id", "mark_2")) == "cheek_slash")
 	assert(String(appearance.call("part_id", "mark_3")) == "crack")
 	for category: String in NEW_CATEGORIES:
-		assert(not Compositor.available_part_ids(category).is_empty())
-	for direction: String in Compositor.DIRECTIONS:
-		var frame: Image = Compositor.compose_frame(appearance, direction)
+		assert(not HeroCompositor.available_part_ids(category).is_empty())
+	for direction: String in HeroCompositor.DIRECTIONS:
+		var frame: Image = HeroCompositor.compose_frame(appearance, direction)
 		assert(frame != null)
-		assert(frame.get_size() == Compositor.FRAME_SIZE)
-	var thumb_a: Image = Compositor.compose_part_thumbnail("iris", "ring")
-	var thumb_b: Image = Compositor.compose_part_thumbnail("iris", "ring")
+		assert(frame.get_size() == HeroCompositor.FRAME_SIZE)
+	var thumb_a: Image = HeroCompositor.compose_part_thumbnail("iris", "ring")
+	var thumb_b: Image = HeroCompositor.compose_part_thumbnail("iris", "ring")
 	assert(thumb_a.get_size() == Vector2i(96, 96))
 	assert(thumb_b.get_size() == Vector2i(96, 96))
 	print("[V1.25] Hero Creator Face Details smoke test OK")

@@ -61,12 +61,12 @@ func _gui_input(event: InputEvent) -> void:
 	if campaign == null:
 		return
 	if event is InputEventMouseMotion:
-		var hit := _node_at(event.position)
+		var hit: String = _node_at(event.position)
 		if hit != hovered_node_id:
 			hovered_node_id = hit
 			queue_redraw()
 		if not dragging_node_id.is_empty():
-			var node := campaign.node_by_id(dragging_node_id)
+			var node: Resource = campaign.node_by_id(dragging_node_id) as Resource
 			if node != null:
 				node.editor_position = event.position - drag_offset
 				node.editor_position.x = max(10.0, node.editor_position.x)
@@ -77,12 +77,12 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
-			var hit := _node_at(event.position)
+			var hit: String = _node_at(event.position)
 			if not hit.is_empty():
 				selected_node_id = hit
 				dragging_node_id = hit
-				var node := campaign.node_by_id(hit)
-				var index := campaign.nodes.find(node)
+				var node: Resource = campaign.node_by_id(hit) as Resource
+				var index: int = campaign.nodes.find(node)
 				drag_offset = event.position - _node_position(node, index)
 				node_selected.emit(hit)
 				queue_redraw()
@@ -106,19 +106,19 @@ func _draw() -> void:
 		var node: Resource = campaign.nodes[index]
 		if node == null:
 			continue
-		var from_rect := _node_rect(node, index)
+		var from_rect: Rect2 = _node_rect(node, index)
 		for target_id in node.outgoing_node_ids():
-			var target := campaign.node_by_id(target_id)
+			var target: Resource = campaign.node_by_id(String(target_id)) as Resource
 			if target == null:
 				continue
-			var target_index := campaign.nodes.find(target)
-			var to_rect := _node_rect(target, target_index)
-			var from_point := Vector2(from_rect.end.x, from_rect.get_center().y)
-			var to_point := Vector2(to_rect.position.x, to_rect.get_center().y)
+			var target_index: int = campaign.nodes.find(target)
+			var to_rect: Rect2 = _node_rect(target, target_index)
+			var from_point: Vector2 = Vector2(from_rect.end.x, from_rect.get_center().y)
+			var to_point: Vector2 = Vector2(to_rect.position.x, to_rect.get_center().y)
 			draw_line(from_point, to_point, EDGE, 3.0)
-			var direction := (to_point - from_point).normalized()
+			var direction: Vector2 = (to_point - from_point).normalized()
 			if direction.length() > 0.0:
-				var normal := Vector2(-direction.y, direction.x)
+				var normal: Vector2 = Vector2(-direction.y, direction.x)
 				draw_colored_polygon(PackedVector2Array([to_point, to_point - direction * 10.0 + normal * 5.0, to_point - direction * 10.0 - normal * 5.0]), EDGE)
 
 	for index in range(campaign.nodes.size()):

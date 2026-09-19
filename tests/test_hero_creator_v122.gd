@@ -1,7 +1,7 @@
 extends SceneTree
 
 const AppearanceDefinition = preload("res://scripts/data/hero_appearance_definition.gd")
-const Compositor = preload("res://scripts/visual/hero_compositor.gd")
+const HeroCompositor = preload("res://scripts/visual/hero_compositor.gd")
 const Preview = preload("res://addons/sporebound_studio/hero_customizer_preview.gd")
 
 var failures: PackedStringArray = PackedStringArray()
@@ -40,12 +40,12 @@ func test_group_bounds() -> void:
 	appearance.head_shape_style = "wide"
 	appearance.head_pattern_style = "spots"
 	appearance.eyes_style = "big"
-	var head_bounds: Rect2 = Compositor.edit_group_bounds(appearance, "head", "front")
-	var face_bounds: Rect2 = Compositor.edit_group_bounds(appearance, "face", "front")
+	var head_bounds: Rect2 = HeroCompositor.edit_group_bounds(appearance, "head", "front")
+	var face_bounds: Rect2 = HeroCompositor.edit_group_bounds(appearance, "face", "front")
 	expect(head_bounds.size.x > 1.0 and head_bounds.size.y > 1.0, "head alpha bounds are available for selection handles")
 	expect(face_bounds.size.x > 1.0 and face_bounds.size.y > 1.0, "face alpha bounds are available for selection handles")
-	expect(Compositor.edit_group_for_category("weapon") == "weapon", "weapon maps to direct edit group")
-	expect(Compositor.edit_group_for_category("eyes") == "face", "eyes map to face direct edit group")
+	expect(HeroCompositor.edit_group_for_category("weapon") == "weapon", "weapon maps to direct edit group")
+	expect(HeroCompositor.edit_group_for_category("eyes") == "face", "eyes map to face direct edit group")
 
 
 func test_scale_rotation_and_offset_change_output() -> void:
@@ -54,17 +54,17 @@ func test_scale_rotation_and_offset_change_output() -> void:
 	appearance.head_pattern_style = "rim"
 	appearance.eyes_style = "friendly"
 	appearance.weapon_style = "sword"
-	var base: Image = Compositor.compose_frame(appearance, "front")
+	var base: Image = HeroCompositor.compose_frame(appearance, "front")
 	appearance.head_transform_scale = 1.18
-	var scaled: Image = Compositor.compose_frame(appearance, "front")
+	var scaled: Image = HeroCompositor.compose_frame(appearance, "front")
 	expect(base.get_data() != scaled.get_data(), "direct head scale changes composed frame")
 	appearance.head_transform_scale = 1.0
 	appearance.head_rotation_degrees = 8.0
-	var rotated: Image = Compositor.compose_frame(appearance, "front")
+	var rotated: Image = HeroCompositor.compose_frame(appearance, "front")
 	expect(base.get_data() != rotated.get_data(), "direct head rotation changes composed frame")
 	appearance.head_rotation_degrees = 0.0
 	appearance.face_offset = Vector2(6, -4)
-	var moved: Image = Compositor.compose_frame(appearance, "front")
+	var moved: Image = HeroCompositor.compose_frame(appearance, "front")
 	expect(base.get_data() != moved.get_data(), "direct face drag offset changes composed frame")
 
 

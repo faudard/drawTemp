@@ -1,7 +1,7 @@
 extends SceneTree
 
 const AppearanceDefinition = preload("res://scripts/data/hero_appearance_definition.gd")
-const Compositor = preload("res://scripts/visual/hero_compositor.gd")
+const HeroCompositor = preload("res://scripts/visual/hero_compositor.gd")
 
 var failures: PackedStringArray = PackedStringArray()
 
@@ -25,7 +25,7 @@ func expect(condition: bool, message: String) -> void:
 
 
 func test_part_thumbnails() -> void:
-	var image: Image = Compositor.compose_part_thumbnail("head_shape", "noble", "front", Color.WHITE)
+	var image: Image = HeroCompositor.compose_part_thumbnail("head_shape", "noble", "front", Color.WHITE)
 	expect(image.get_size() == Vector2i(96, 96), "part thumbnails stay 96x96")
 	expect(image.detect_alpha() != Image.ALPHA_NONE, "thumbnail keeps transparency")
 
@@ -35,13 +35,13 @@ func test_fine_offsets() -> void:
 	appearance.head_shape_style = "pointed"
 	appearance.eyes_style = "big"
 	appearance.face_offset = Vector2.ZERO
-	var centered: Image = Compositor.compose_frame(appearance, "front")
+	var centered: Image = HeroCompositor.compose_frame(appearance, "front")
 	appearance.face_offset = Vector2(7, -5)
-	var shifted: Image = Compositor.compose_frame(appearance, "front")
+	var shifted: Image = HeroCompositor.compose_frame(appearance, "front")
 	expect(centered.get_data() != shifted.get_data(), "face offset changes composed output")
 	appearance.face_offset = Vector2.ZERO
 	appearance.weapon_offset = Vector2(8, 3)
-	var weapon_shifted: Image = Compositor.compose_frame(appearance, "front")
+	var weapon_shifted: Image = HeroCompositor.compose_frame(appearance, "front")
 	expect(centered.get_data() != weapon_shifted.get_data(), "weapon offset changes composed output")
 
 

@@ -1,10 +1,10 @@
 extends SceneTree
 
-const MAPS: PackedStringArray = PackedStringArray([
+const MAPS: Array[String] = [
 	"res://maps/mission_1_map.tscn",
 	"res://maps/mission_2_map.tscn",
 	"res://maps/mission_3_map.tscn",
-])
+]
 
 
 func _init() -> void:

@@ -25,15 +25,15 @@ const HOVER_HIGHLIGHT := Color(1.0, 0.941, 0.659, 0.18)
 
 var units: Array = []
 var obstacles: Array = []
-var selected_id := ""
-var hovered_cell := Vector2i(-1, -1)
+var selected_id = ""
+var hovered_cell = Vector2i(-1, -1)
 var move_cells: Array = []
 var attack_cells: Array = []
 var message_log: Array = []
-var current_turn := 1
-var enemy_phase := false
-var game_over := false
-var animation_time := 0.0
+var current_turn = 1
+var enemy_phase = false
+var game_over = false
+var animation_time = 0.0
 
 var turn_label: Label
 var selected_label: Label
@@ -55,11 +55,11 @@ func _process(delta: float) -> void:
 
 
 func build_ui() -> void:
-	var ui_layer := CanvasLayer.new()
+	var ui_layer = CanvasLayer.new()
 	ui_layer.name = "UILayer"
 	add_child(ui_layer)
 
-	var root := Control.new()
+	var root = Control.new()
 	root.name = "UI"
 	root.position = Vector2.ZERO
 	root.size = Vector2(1280.0, 760.0)
@@ -70,7 +70,7 @@ func build_ui() -> void:
 	add_label(root, "prototype de combat • le royaume a besoin d'un champignon", Vector2(48.0, 70.0), Vector2(700.0, 28.0), 15, TEXT_SOFT)
 	status_label = add_label(root, "", Vector2(48.0, 105.0), Vector2(720.0, 30.0), 17, GOLD)
 
-	var panel := Panel.new()
+	var panel = Panel.new()
 	panel.name = "CommandPanel"
 	panel.position = Vector2(804.0, 112.0)
 	panel.size = Vector2(430.0, 610.0)
@@ -89,7 +89,7 @@ func build_ui() -> void:
 	end_turn_button = add_button(panel, "Fin du tour", Vector2(24.0, 307.0), Vector2(382.0, 48.0))
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 
-	var restart_button := add_button(panel, "Recommencer la bataille", Vector2(24.0, 364.0), Vector2(382.0, 42.0))
+	var restart_button = add_button(panel, "Recommencer la bataille", Vector2(24.0, 364.0), Vector2(382.0, 42.0))
 	restart_button.pressed.connect(reset_battle)
 
 	add_label(panel, "JOURNAL DU NARRATEUR", Vector2(24.0, 427.0), Vector2(382.0, 28.0), 13, TEXT_SOFT)
@@ -100,7 +100,7 @@ func build_ui() -> void:
 
 
 func add_label(parent: Control, value: String, position: Vector2, size: Vector2, font_size: int, color: Color) -> Label:
-	var label := Label.new()
+	var label = Label.new()
 	label.text = value
 	label.position = position
 	label.size = size
@@ -112,7 +112,7 @@ func add_label(parent: Control, value: String, position: Vector2, size: Vector2,
 
 
 func add_button(parent: Control, value: String, position: Vector2, size: Vector2) -> Button:
-	var button := Button.new()
+	var button = Button.new()
 	button.text = value
 	button.position = position
 	button.size = size
@@ -131,7 +131,7 @@ func add_button(parent: Control, value: String, position: Vector2, size: Vector2
 
 
 func make_style(fill: Color, radius: int, border: Color) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
+	var style = StyleBoxFlat.new()
 	style.bg_color = fill
 	style.corner_radius_top_left = radius
 	style.corner_radius_top_right = radius
@@ -194,15 +194,15 @@ func make_unit(id: String, unit_name: String, role: String, team: String, positi
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
-		var motion_event := event as InputEventMouseMotion
+		var motion_event = event as InputEventMouseMotion
 		hovered_cell = world_to_cell(motion_event.position)
 		queue_redraw()
 	elif event is InputEventMouseButton:
-		var mouse_event := event as InputEventMouseButton
+		var mouse_event = event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
 			handle_board_click(world_to_cell(mouse_event.position))
 	elif event is InputEventKey:
-		var key_event := event as InputEventKey
+		var key_event = event as InputEventKey
 		if key_event.pressed and not key_event.echo:
 			if key_event.keycode == KEY_R:
 				reset_battle()
@@ -219,7 +219,7 @@ func handle_board_click(cell: Vector2i) -> void:
 	if game_over or enemy_phase or not is_inside(cell):
 		return
 
-	var clicked := unit_at(cell)
+	var clicked = unit_at(cell)
 	if not clicked.is_empty():
 		if clicked["team"] == "player":
 			if not clicked["has_acted"]:
@@ -232,7 +232,7 @@ func handle_board_click(cell: Vector2i) -> void:
 			queue_redraw()
 			return
 
-	var unit := selected_unit()
+	var unit = selected_unit()
 	if unit.is_empty() or unit["has_acted"]:
 		return
 
@@ -253,7 +253,7 @@ func perform_move(unit: Dictionary, destination: Vector2i) -> void:
 
 
 func perform_attack(attacker: Dictionary, target: Dictionary) -> void:
-	var damage := int(attacker["attack"])
+	var damage = int(attacker["attack"])
 	target["hp"] = max(0, int(target["hp"]) - damage)
 	attacker["has_acted"] = true
 	log_message("%s frappe %s pour %d dégâts. Le service réclamation est fermé." % [attacker["name"], target["name"], damage])
@@ -265,12 +265,12 @@ func perform_attack(attacker: Dictionary, target: Dictionary) -> void:
 func _on_special_pressed() -> void:
 	if game_over or enemy_phase:
 		return
-	var unit := selected_unit()
+	var unit = selected_unit()
 	if unit.is_empty() or unit["has_acted"]:
 		return
 
 	if unit["id"] == "momo":
-		var target := closest_enemy_in_range(unit, 1)
+		var target = closest_enemy_in_range(unit, 1)
 		if target.is_empty():
 			log_message("Coup de chapeau impossible : Momo doit être au contact. Le chapeau refuse le télétravail.")
 			update_ui()
@@ -281,12 +281,12 @@ func _on_special_pressed() -> void:
 		if int(target["hp"]) <= 0:
 			log_message("%s tombe sous une pluie de confettis imaginaires." % target["name"])
 	else:
-		var ally := most_injured_ally()
+		var ally = most_injured_ally()
 		if ally.is_empty():
 			log_message("Pipo ne soigne personne : tout le monde va bien, c'est suspect.")
 			update_ui()
 			return
-		var healed := min(3, int(ally["max_hp"]) - int(ally["hp"]))
+		var healed = min(3, int(ally["max_hp"]) - int(ally["hp"]))
 		ally["hp"] = int(ally["hp"]) + healed
 		unit["has_acted"] = true
 		log_message("Pipo lance SOIN D'URGENCE sur %s : +%d PV. Pansement homologué par personne." % [ally["name"], healed])
@@ -324,15 +324,15 @@ func run_enemy_phase() -> void:
 	for enemy in units:
 		if enemy["team"] != "enemy" or int(enemy["hp"]) <= 0:
 			continue
-		var target := closest_player(enemy)
+		var target = closest_player(enemy)
 		if target.is_empty():
 			break
-		var step := enemy_step(enemy, target)
+		var step = enemy_step(enemy, target)
 		if step != enemy["pos"]:
 			enemy["pos"] = step
 			log_message("%s avance. Personne ne sait pourquoi, mais il semble sûr de lui." % enemy["name"])
 		if manhattan(enemy["pos"], target["pos"]) <= int(enemy["range"]):
-			var damage := int(enemy["attack"])
+			var damage = int(enemy["attack"])
 			target["hp"] = max(0, int(target["hp"]) - damage)
 			log_message("%s attaque %s : -%d PV. C'était légal dans leur royaume." % [enemy["name"], target["name"], damage])
 			if int(target["hp"]) <= 0:
@@ -354,8 +354,8 @@ func run_enemy_phase() -> void:
 
 
 func check_battle_end() -> bool:
-	var living_players := alive_count("player")
-	var living_enemies := alive_count("enemy")
+	var living_players = alive_count("player")
+	var living_enemies = alive_count("enemy")
 	if living_enemies == 0:
 		game_over = true
 		enemy_phase = false
@@ -385,7 +385,7 @@ func all_players_acted() -> bool:
 
 
 func alive_count(team: String) -> int:
-	var count := 0
+	var count = 0
 	for unit in units:
 		if unit["team"] == team and int(unit["hp"]) > 0:
 			count += 1
@@ -411,7 +411,7 @@ func unit_at(cell: Vector2i) -> Dictionary:
 func update_selection() -> void:
 	move_cells.clear()
 	attack_cells.clear()
-	var unit := selected_unit()
+	var unit = selected_unit()
 	if unit.is_empty() or enemy_phase or unit["has_acted"]:
 		return
 	if not unit["has_moved"]:
@@ -435,7 +435,7 @@ func update_ui() -> void:
 		turn_label.add_theme_color_override("font_color", MINT)
 
 	status_label.text = "Équipe %d/%d   •   Adversaires %d/%d" % [alive_count("player"), 2, alive_count("enemy"), 3]
-	var unit := selected_unit()
+	var unit = selected_unit()
 	if unit.is_empty():
 		selected_label.text = "Aucune unité sélectionnée.\nClique Momo ou Pipo sur la grille."
 		special_button.text = "Action spéciale"
@@ -453,7 +453,7 @@ func update_ui() -> void:
 
 func visible_log() -> String:
 	var visible: Array = []
-	var first := max(0, message_log.size() - 7)
+	var first = max(0, message_log.size() - 7)
 	for index in range(first, message_log.size()):
 		visible.append("• " + str(message_log[index]))
 	return "\n".join(visible)
@@ -470,7 +470,7 @@ func log_message(message: String) -> void:
 func reachable_cells(unit: Dictionary) -> Array:
 	var result: Array = []
 	var start: Vector2i = unit["pos"]
-	var visited := {start: true}
+	var visited = {start: true}
 	var queue: Array = [{"cell": start, "distance": 0}]
 	while not queue.is_empty():
 		var current: Dictionary = queue.pop_front()
@@ -511,10 +511,10 @@ func is_inside(cell: Vector2i) -> bool:
 
 func closest_player(source: Dictionary) -> Dictionary:
 	var best: Dictionary = {}
-	var best_distance := 999
+	var best_distance = 999
 	for unit in units:
 		if unit["team"] == "player" and int(unit["hp"]) > 0:
-			var distance := manhattan(source["pos"], unit["pos"])
+			var distance = manhattan(source["pos"], unit["pos"])
 			if distance < best_distance:
 				best = unit
 				best_distance = distance
@@ -523,10 +523,10 @@ func closest_player(source: Dictionary) -> Dictionary:
 
 func closest_enemy_in_range(source: Dictionary, range_value: int) -> Dictionary:
 	var best: Dictionary = {}
-	var best_distance := 999
+	var best_distance = 999
 	for unit in units:
 		if unit["team"] == "enemy" and int(unit["hp"]) > 0:
-			var distance := manhattan(source["pos"], unit["pos"])
+			var distance = manhattan(source["pos"], unit["pos"])
 			if distance <= range_value and distance < best_distance:
 				best = unit
 				best_distance = distance
@@ -535,11 +535,11 @@ func closest_enemy_in_range(source: Dictionary, range_value: int) -> Dictionary:
 
 func most_injured_ally() -> Dictionary:
 	var best: Dictionary = {}
-	var lowest_ratio := 1.1
+	var lowest_ratio = 1.1
 	for unit in units:
 		if unit["team"] != "player" or int(unit["hp"]) <= 0 or int(unit["hp"]) >= int(unit["max_hp"]):
 			continue
-		var ratio := float(unit["hp"]) / float(unit["max_hp"])
+		var ratio = float(unit["hp"]) / float(unit["max_hp"])
 		if ratio < lowest_ratio:
 			best = unit
 			lowest_ratio = ratio
@@ -548,13 +548,13 @@ func most_injured_ally() -> Dictionary:
 
 func enemy_step(enemy: Dictionary, target: Dictionary) -> Vector2i:
 	var current: Vector2i = enemy["pos"]
-	var candidates := neighbours(current)
-	var best := current
-	var best_distance := manhattan(current, target["pos"])
+	var candidates = neighbours(current)
+	var best = current
+	var best_distance = manhattan(current, target["pos"])
 	for candidate in candidates:
 		if not is_walkable(candidate, enemy["id"]):
 			continue
-		var distance := manhattan(candidate, target["pos"])
+		var distance = manhattan(candidate, target["pos"])
 		if distance < best_distance:
 			best = candidate
 			best_distance = distance
@@ -577,30 +577,30 @@ func cell_to_world(cell: Vector2i) -> Vector2:
 
 
 func world_to_cell(point: Vector2) -> Vector2i:
-	var local := point - BOARD_ORIGIN
+	var local = point - BOARD_ORIGIN
 	return Vector2i(floor(local.x / CELL_SIZE), floor(local.y / CELL_SIZE))
 
 
 func _draw() -> void:
-	var viewport_size := get_viewport_rect().size
+	var viewport_size = get_viewport_rect().size
 	draw_rect(Rect2(Vector2.ZERO, viewport_size), BG, true)
 
 	# Quiet decorative spores in the background.
 	for index in range(14):
-		var x := 18.0 + float((index * 113) % 1260)
-		var y := 18.0 + float((index * 67) % 735)
-		var radius := 2.0 + float(index % 3)
+		var x = 18.0 + float((index * 113) % 1260)
+		var y = 18.0 + float((index * 67) % 735)
+		var radius = 2.0 + float(index % 3)
 		draw_circle(Vector2(x, y), radius, Color(0.45, 0.82, 0.72, 0.12))
 
-	var board_size := Vector2(float(GRID_WIDTH) * CELL_SIZE, float(GRID_HEIGHT) * CELL_SIZE)
+	var board_size = Vector2(float(GRID_WIDTH) * CELL_SIZE, float(GRID_HEIGHT) * CELL_SIZE)
 	draw_rect(Rect2(BOARD_ORIGIN - Vector2(10.0, 10.0), board_size + Vector2(20.0, 20.0)), Color("#0a111e"), true)
 	draw_rect(Rect2(BOARD_ORIGIN - Vector2(5.0, 5.0), board_size + Vector2(10.0, 10.0)), Color("#496879"), true)
 
 	for y in range(GRID_HEIGHT):
 		for x in range(GRID_WIDTH):
-			var cell := Vector2i(x, y)
-			var rect := Rect2(cell_to_world(cell), Vector2(CELL_SIZE - 1.0, CELL_SIZE - 1.0))
-			var fill := GRID_A if (x + y) % 2 == 0 else GRID_B
+			var cell = Vector2i(x, y)
+			var rect = Rect2(cell_to_world(cell), Vector2(CELL_SIZE - 1.0, CELL_SIZE - 1.0))
+			var fill = GRID_A if (x + y) % 2 == 0 else GRID_B
 			draw_rect(rect, fill, true)
 			draw_rect(rect, GRID_LINE, false, 1.0)
 			if move_cells.has(cell):
@@ -618,16 +618,16 @@ func _draw() -> void:
 			draw_unit(unit)
 
 	if game_over:
-		var banner_color := Color(0.145, 0.294, 0.271, 0.94) if alive_count("enemy") == 0 else Color(0.357, 0.188, 0.220, 0.94)
+		var banner_color = Color(0.145, 0.294, 0.271, 0.94) if alive_count("enemy") == 0 else Color(0.357, 0.188, 0.220, 0.94)
 		draw_rect(Rect2(BOARD_ORIGIN + Vector2(95.0, 232.0), Vector2(510.0, 92.0)), banner_color, true)
-		var banner := "VICTOIRE !" if alive_count("enemy") == 0 else "DÉFAITE !"
+		var banner = "VICTOIRE !" if alive_count("enemy") == 0 else "DÉFAITE !"
 		draw_string(ThemeDB.fallback_font, BOARD_ORIGIN + Vector2(250.0, 290.0), banner, HORIZONTAL_ALIGNMENT_CENTER, 200.0, 30, TEXT)
 
 
 func draw_obstacle(cell: Vector2i) -> void:
-	var rect := Rect2(cell_to_world(cell) + Vector2(8.0, 8.0), Vector2(CELL_SIZE - 17.0, CELL_SIZE - 17.0))
+	var rect = Rect2(cell_to_world(cell) + Vector2(8.0, 8.0), Vector2(CELL_SIZE - 17.0, CELL_SIZE - 17.0))
 	draw_rect(rect, Color("#1b2b3d"), true)
-	var center := rect.position + rect.size * 0.5
+	var center = rect.position + rect.size * 0.5
 	draw_circle(center + Vector2(-13.0, 8.0), 13.0, Color("#56726f"))
 	draw_circle(center + Vector2(12.0, 7.0), 16.0, Color("#6f8c7b"))
 	draw_circle(center + Vector2(0.0, -9.0), 19.0, Color("#9ab58d"))
@@ -637,12 +637,12 @@ func draw_obstacle(cell: Vector2i) -> void:
 
 func draw_unit(unit: Dictionary) -> void:
 	var cell: Vector2i = unit["pos"]
-	var center := cell_to_world(cell) + Vector2(CELL_SIZE * 0.5, CELL_SIZE * 0.5)
-	var bob := sin(animation_time * 3.0 + float(cell.x)) * 1.5
+	var center = cell_to_world(cell) + Vector2(CELL_SIZE * 0.5, CELL_SIZE * 0.5)
+	var bob = sin(animation_time * 3.0 + float(cell.x)) * 1.5
 	center.y += bob
 	var unit_color: Color = unit["color"]
-	var is_player := unit["team"] == "player"
-	var selected := unit["id"] == selected_id
+	var is_player = unit["team"] == "player"
+	var selected = unit["id"] == selected_id
 
 	if selected:
 		draw_arc(center + Vector2(0.0, 2.0), 29.0, 0.0, TAU, 32, GOLD, 3.0, true)
@@ -668,9 +668,9 @@ func draw_unit(unit: Dictionary) -> void:
 		draw_line(center + Vector2(18.0, 18.0), center + Vector2(27.0, 25.0), unit_color, 4.0, true)
 
 	# Health bar.
-	var bar_position := center + Vector2(-27.0, 38.0)
+	var bar_position = center + Vector2(-27.0, 38.0)
 	draw_rect(Rect2(bar_position, Vector2(54.0, 6.0)), Color("#111722"), true)
-	var hp_ratio := float(unit["hp"]) / float(unit["max_hp"])
-	var hp_color := MINT if is_player else CORAL
+	var hp_ratio = float(unit["hp"]) / float(unit["max_hp"])
+	var hp_color = MINT if is_player else CORAL
 	draw_rect(Rect2(bar_position, Vector2(54.0 * hp_ratio, 6.0)), hp_color, true)
 	draw_string(ThemeDB.fallback_font, center + Vector2(-31.0, 57.0), str(unit["name"]), HORIZONTAL_ALIGNMENT_CENTER, 62.0, 12, TEXT)
