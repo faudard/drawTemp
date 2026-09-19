@@ -47,4 +47,4 @@ func present(text_value: String, color: Color, kind: String = "default") -> void
 	tween.tween_property(self, "position", target_position + Vector3(0.0, 0.18, 0.0), 0.20)
 	tween.tween_property(self, "scale", Vector3(0.92, 0.92, 0.92), 0.20)
 	tween.set_parallel(false)
-	tween.tween_callback(queue_free)
+	tween.tween_callback(Callable(self, "queue_free"))
