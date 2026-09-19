@@ -4,12 +4,12 @@
 
 [sub_resource type="ShaderMaterial" id="ComicMaterial"]
 shader = ExtResource("1_shader")
-shader_parameter/grayscale_strength = 0.90
-shader_parameter/ink_strength = 0.56
-shader_parameter/poster_levels = 7.0
+shader_parameter/grayscale_strength = 0.95
+shader_parameter/ink_strength = 0.64
+shader_parameter/poster_levels = 6.0
 shader_parameter/grain_strength = 0.012
 shader_parameter/selective_color_strength = 1.0
-shader_parameter/halftone_strength = 0.055
+shader_parameter/halftone_strength = 0.065
 shader_parameter/halftone_scale = 5.0
 
 [node name="ComicVisualLayer" type="CanvasLayer"]

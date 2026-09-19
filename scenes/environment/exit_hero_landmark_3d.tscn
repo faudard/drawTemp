@@ -1,137 +1,92 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/environment/spore_hero_prop_pulse_3d.gd" id="1_script"]
+[ext_resource type="Material" path="res://assets/materials/comic_ink.tres" id="2_ink"]
+[ext_resource type="Material" path="res://assets/materials/comic_wood.tres" id="3_wood"]
+[ext_resource type="Material" path="res://assets/materials/comic_stone.tres" id="4_stone"]
+[ext_resource type="Material" path="res://assets/materials/comic_accent_green.tres" id="5_green"]
 
-[sub_resource type="CylinderMesh" id="1_post"]
-top_radius = 0.10
-bottom_radius = 0.13
-height = 1.75
+[sub_resource type="CylinderMesh" id="PostMesh"]
+top_radius = 0.085
+bottom_radius = 0.11
+height = 1.62
+radial_segments = 8
 
-[sub_resource type="StandardMaterial3D" id="2_wood"]
-albedo_color = Color(0.58, 0.42, 0.27, 1)
-roughness = 0.94
+[sub_resource type="BoxMesh" id="CrossBeamMesh"]
+size = Vector3(1.62, 0.14, 0.14)
 
-[sub_resource type="CylinderMesh" id="3_cross"]
-top_radius = 0.09
-bottom_radius = 0.09
-height = 2.0
+[sub_resource type="BoxMesh" id="ArrowMesh"]
+size = Vector3(0.72, 0.18, 0.08)
 
-[sub_resource type="BoxMesh" id="4_banner"]
-size = Vector3(0.48, 0.92, 0.02)
+[sub_resource type="SphereMesh" id="LanternMesh"]
+radius = 0.085
+height = 0.13
+radial_segments = 10
+rings = 5
 
-[sub_resource type="StandardMaterial3D" id="5_banner_left"]
-albedo_color = Color(0.31, 0.88, 0.60, 1)
-roughness = 0.76
-
-[sub_resource type="StandardMaterial3D" id="6_banner_right"]
-albedo_color = Color(0.42, 0.72, 1.0, 1)
-roughness = 0.76
-
-[sub_resource type="SphereMesh" id="7_lantern"]
-radius = 0.10
-height = 0.16
-
-[sub_resource type="StandardMaterial3D" id="8_lantern_mat"]
-albedo_color = Color(0.62, 1.0, 0.76, 1)
-emission_enabled = true
-emission = Color(0.42, 1.0, 0.72, 1)
-emission_energy_multiplier = 0.9
-roughness = 0.12
-
-[sub_resource type="CylinderMesh" id="9_path_stone"]
-top_radius = 0.34
-bottom_radius = 0.38
-height = 0.06
-
-[sub_resource type="StandardMaterial3D" id="10_path_stone_mat"]
-albedo_color = Color(0.48, 0.46, 0.41, 1)
-roughness = 0.98
-
-[sub_resource type="SphereMesh" id="11_flower"]
-radius = 0.10
-height = 0.06
-
-[sub_resource type="StandardMaterial3D" id="12_flower_mat"]
-albedo_color = Color(0.62, 0.95, 0.64, 1)
-roughness = 0.82
+[sub_resource type="CylinderMesh" id="StepMesh"]
+top_radius = 0.32
+bottom_radius = 0.36
+height = 0.055
+radial_segments = 10
 
 [node name="ExitHeroLandmark3D" type="Node3D"]
 script = ExtResource("1_script")
 pulse_speed = 1.10
-light_min = 0.38
-light_max = 0.70
+light_min = 0.24
+light_max = 0.44
 bob_amount = 0.0
 
 [node name="PostLeft" type="MeshInstance3D" parent="."]
-mesh = SubResource("1_post")
-material_override = SubResource("2_wood")
-position = Vector3(-0.82, 0.88, 0)
+position = Vector3(-0.68, 0.81, 0)
+mesh = SubResource("PostMesh")
+material_override = ExtResource("3_wood")
 
 [node name="PostRight" type="MeshInstance3D" parent="."]
-mesh = SubResource("1_post")
-material_override = SubResource("2_wood")
-position = Vector3(0.82, 0.88, 0)
+position = Vector3(0.68, 0.81, 0)
+mesh = SubResource("PostMesh")
+material_override = ExtResource("3_wood")
 
 [node name="CrossBeam" type="MeshInstance3D" parent="."]
-mesh = SubResource("3_cross")
-material_override = SubResource("2_wood")
-position = Vector3(0, 1.58, 0)
-rotation = Vector3(0, 0, 1.5708)
+position = Vector3(0, 1.50, 0)
+mesh = SubResource("CrossBeamMesh")
+material_override = ExtResource("2_ink")
 
-[node name="BannerLeft" type="MeshInstance3D" parent="."]
-mesh = SubResource("4_banner")
-material_override = SubResource("5_banner_left")
-position = Vector3(-0.38, 1.02, 0.08)
-rotation = Vector3(0.0, 0.0, 0.05)
-
-[node name="BannerRight" type="MeshInstance3D" parent="."]
-mesh = SubResource("4_banner")
-material_override = SubResource("6_banner_right")
-position = Vector3(0.38, 1.02, 0.08)
-rotation = Vector3(0.0, 0.0, -0.05)
+[node name="Arrow" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.20, 0.04)
+mesh = SubResource("ArrowMesh")
+material_override = ExtResource("5_green")
 
 [node name="LanternLeft" type="MeshInstance3D" parent="."]
-mesh = SubResource("7_lantern")
-material_override = SubResource("8_lantern_mat")
-position = Vector3(-0.52, 1.42, 0.10)
+position = Vector3(-0.48, 1.42, 0.10)
+mesh = SubResource("LanternMesh")
+material_override = ExtResource("5_green")
 
 [node name="LanternRight" type="MeshInstance3D" parent="."]
-mesh = SubResource("7_lantern")
-material_override = SubResource("8_lantern_mat")
-position = Vector3(0.52, 1.42, 0.10)
-
-[node name="LightLeft" type="OmniLight3D" parent="."]
-position = Vector3(-0.52, 1.42, 0.18)
-light_color = Color(0.45, 1.0, 0.78, 1)
-light_energy = 0.52
-omni_range = 3.6
-
-[node name="LightRight" type="OmniLight3D" parent="."]
-position = Vector3(0.52, 1.42, 0.18)
-light_color = Color(0.45, 1.0, 0.78, 1)
-light_energy = 0.52
-omni_range = 3.6
+position = Vector3(0.48, 1.42, 0.10)
+mesh = SubResource("LanternMesh")
+material_override = ExtResource("5_green")
 
 [node name="StepA" type="MeshInstance3D" parent="."]
-mesh = SubResource("9_path_stone")
-material_override = SubResource("10_path_stone_mat")
-position = Vector3(0.0, 0.03, 0.84)
-scale = Vector3(1.0, 1.0, 0.74)
+position = Vector3(-0.22, 0.03, 0.70)
+scale = Vector3(1.0, 1.0, 0.76)
+mesh = SubResource("StepMesh")
+material_override = ExtResource("4_stone")
 
 [node name="StepB" type="MeshInstance3D" parent="."]
-mesh = SubResource("9_path_stone")
-material_override = SubResource("10_path_stone_mat")
-position = Vector3(0.0, 0.03, 1.32)
+position = Vector3(0.24, 0.03, 1.06)
 scale = Vector3(0.82, 1.0, 0.64)
+mesh = SubResource("StepMesh")
+material_override = ExtResource("4_stone")
 
-[node name="FlowerLeft" type="MeshInstance3D" parent="."]
-mesh = SubResource("11_flower")
-material_override = SubResource("12_flower_mat")
-position = Vector3(-0.60, 0.06, 0.98)
-scale = Vector3(1.4, 0.45, 1.2)
+[node name="LightLeft" type="OmniLight3D" parent="."]
+position = Vector3(-0.48, 1.42, 0.18)
+light_color = Color(0.38, 0.92, 0.64, 1)
+light_energy = 0.34
+omni_range = 2.8
 
-[node name="FlowerRight" type="MeshInstance3D" parent="."]
-mesh = SubResource("11_flower")
-material_override = SubResource("12_flower_mat")
-position = Vector3(0.62, 0.06, 1.04)
-scale = Vector3(1.4, 0.45, 1.2)
+[node name="LightRight" type="OmniLight3D" parent="."]
+position = Vector3(0.48, 1.42, 0.18)
+light_color = Color(0.38, 0.92, 0.64, 1)
+light_energy = 0.34
+omni_range = 2.8

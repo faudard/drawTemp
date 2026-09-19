@@ -1,0 +1,53 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Material" path="res://assets/materials/comic_ink.tres" id="1_ink"]
+[ext_resource type="Material" path="res://assets/materials/comic_stone.tres" id="2_stone"]
+[ext_resource type="Material" path="res://assets/materials/comic_stone_light.tres" id="3_stone_light"]
+
+[sub_resource type="CylinderMesh" id="PillarMesh"]
+top_radius = 0.15
+bottom_radius = 0.19
+height = 0.92
+radial_segments = 8
+
+[sub_resource type="BoxMesh" id="StoneMesh"]
+size = Vector3(0.44, 0.26, 0.36)
+
+[sub_resource type="BoxMesh" id="InkSlabMesh"]
+size = Vector3(0.58, 0.055, 0.18)
+
+[sub_resource type="BoxMesh" id="ChipMesh"]
+size = Vector3(0.18, 0.12, 0.16)
+
+[node name="ComicRuinCluster3D" type="Node3D"]
+
+[node name="BrokenPillar" type="MeshInstance3D" parent="."]
+position = Vector3(-0.18, 0.42, -0.08)
+rotation = Vector3(0.06, 0.22, -0.14)
+mesh = SubResource("PillarMesh")
+material_override = ExtResource("2_stone")
+
+[node name="StoneA" type="MeshInstance3D" parent="."]
+position = Vector3(0.24, 0.13, 0.18)
+rotation = Vector3(0.04, -0.34, 0.08)
+mesh = SubResource("StoneMesh")
+material_override = ExtResource("3_stone_light")
+
+[node name="StoneB" type="MeshInstance3D" parent="."]
+position = Vector3(-0.36, 0.08, 0.30)
+rotation = Vector3(-0.05, 0.48, -0.03)
+scale = Vector3(0.72, 0.72, 0.72)
+mesh = SubResource("StoneMesh")
+material_override = ExtResource("2_stone")
+
+[node name="Chip" type="MeshInstance3D" parent="."]
+position = Vector3(0.48, 0.06, -0.20)
+rotation = Vector3(0.12, 0.18, 0.16)
+mesh = SubResource("ChipMesh")
+material_override = ExtResource("3_stone_light")
+
+[node name="InkSlab" type="MeshInstance3D" parent="."]
+position = Vector3(0.02, 0.045, -0.38)
+rotation = Vector3(0, 0.28, 0)
+mesh = SubResource("InkSlabMesh")
+material_override = ExtResource("1_ink")

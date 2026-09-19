@@ -82,3 +82,27 @@ Les écrans/effets transitoires suivent aussi l'architecture scene-first :
 - `mission_event_banner.tscn` pour les événements de mission.
 
 Le battle controller ne construit plus ces panneaux, labels, matériaux ou particules à la main. Il instancie les scènes et fournit les données dynamiques.
+
+
+### Palette environnementale
+
+Le niveau 1 applique désormais une palette partagée par des ressources `.tres` :
+
+- `comic_ink.tres` : encre / silhouettes / speakers / câbles ;
+- `comic_stone.tres` et `comic_stone_light.tres` : pierre, champignons et ruines ;
+- `comic_wood.tres` : bois volontairement désaturé ;
+- `comic_accent_gold.tres` : Couronne et objectif principal ;
+- `comic_accent_green.tres` : sortie / validation ;
+- `comic_accent_cyan.tres` : information tactique / vinyle ;
+- `comic_accent_purple.tres` : magie / spores / DJ.
+
+Règle : les éléments naturels et architecturaux restent en valeurs gris/brun désaturées. Les couleurs saturées sont réservées aux informations de gameplay et aux points narratifs.
+
+### Composition niveau 1
+
+- la Couronne doit être lisible par sa **silhouette réelle**, pas par un gros texte ;
+- la sortie doit être reconnaissable par sa forme et son accent vert ;
+- les panneaux du monde restent petits et secondaires ;
+- les ruines et champignons périphériques servent de cadre sans masquer les cellules ;
+- les props DJ conservent uniquement les accents cyan/violet ;
+- éviter les anneaux statiques qui doublonnent les marqueurs tactiques runtime.
