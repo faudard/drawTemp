@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="SporeCinematicDefinition" load_steps=12 format=3]
+[gd_resource type="Resource" script_class="SporeCinematicDefinition" load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/data/cinematic_definition.gd" id="1_cine"]
 [ext_resource type="Script" path="res://scripts/data/battle_action_definition.gd" id="2_action"]
@@ -99,6 +99,32 @@ text_speed = 34.0
 voice_pitch = 0.84
 blip_every = 2
 
+[sub_resource type="Resource" id="MomoGo"]
+script = ExtResource("2_action")
+id = "momo_go"
+action_type = "dialogue"
+message = "Bon... on y va ?"
+unit_id = "momo"
+speaker = "Momo"
+portrait_side = "left"
+wait_for_input = true
+text_speed = 58.0
+voice_pitch = 1.12
+blip_every = 2
+
+[sub_resource type="Resource" id="LumaGo"]
+script = ExtResource("2_action")
+id = "luma_go"
+action_type = "dialogue"
+message = "On y va. Mais on récupère la couronne, pas tout le jardin."
+unit_id = "luma"
+speaker = "Luma"
+portrait_side = "right"
+wait_for_input = true
+text_speed = 48.0
+voice_pitch = 1.02
+blip_every = 2
+
 [sub_resource type="Resource" id="Reset"]
 script = ExtResource("2_action")
 id = "camera_reset"
@@ -111,4 +137,4 @@ script = ExtResource("1_cine")
 id = "intro_crown"
 display_name = "Intro — Couronne Beatbox"
 description = "Intro JRPG éditable dans Sporebound Studio."
-actions = Array[Resource]([SubResource("FadeOut"), SubResource("FocusBoss"), SubResource("FadeIn"), SubResource("BossLine1"), SubResource("FocusLuma"), SubResource("LumaLine1"), SubResource("FocusMomo"), SubResource("MomoLine"), SubResource("FocusCrown"), SubResource("BossLine2"), SubResource("Reset")])
+actions = Array[Resource]([SubResource("FadeOut"), SubResource("FocusBoss"), SubResource("FadeIn"), SubResource("BossLine1"), SubResource("FocusLuma"), SubResource("LumaLine1"), SubResource("FocusMomo"), SubResource("MomoLine"), SubResource("FocusCrown"), SubResource("BossLine2"), SubResource("FocusMomo"), SubResource("MomoGo"), SubResource("FocusLuma"), SubResource("LumaGo"), SubResource("Reset")])
