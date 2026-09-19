@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/environment/comic_mushroom_tree_3d.tscn" id="1_tree"]
+[ext_resource type="PackedScene" path="res://scenes/environment/comic_mushroom_cluster_3d.tscn" id="2_cluster"]
 
 [node name="Mission1Dressing" type="Node3D"]
 
@@ -40,3 +41,26 @@ scale = Vector3(0.68, 0.68, 0.68)
 position = Vector3(6.90, 0, 5.65)
 rotation = Vector3(0, 0.35, 0)
 scale = Vector3(0.70, 0.70, 0.70)
+
+
+[node name="GroundClusters" type="Node3D" parent="."]
+
+[node name="ClusterNW" parent="GroundClusters" instance=ExtResource("2_cluster")]
+position = Vector3(-5.85, 0, -5.82)
+rotation = Vector3(0, 0.46, 0)
+scale = Vector3(0.84, 0.84, 0.84)
+
+[node name="ClusterNE" parent="GroundClusters" instance=ExtResource("2_cluster")]
+position = Vector3(6.10, 0, -4.55)
+rotation = Vector3(0, -0.72, 0)
+scale = Vector3(0.76, 0.76, 0.76)
+
+[node name="ClusterSW" parent="GroundClusters" instance=ExtResource("2_cluster")]
+position = Vector3(-6.18, 0, 5.18)
+rotation = Vector3(0, 0.94, 0)
+scale = Vector3(0.82, 0.82, 0.82)
+
+[node name="ClusterSE" parent="GroundClusters" instance=ExtResource("2_cluster")]
+position = Vector3(5.72, 0, 5.82)
+rotation = Vector3(0, -0.22, 0)
+scale = Vector3(0.78, 0.78, 0.78)
