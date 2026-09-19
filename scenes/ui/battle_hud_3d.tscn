@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Theme" path="res://assets/themes/comic_battle_theme.tres" id="1_theme"]
 
@@ -34,6 +34,20 @@ corner_radius_top_left = 2
 corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="FacingStyle"]
+bg_color = Color(0.018, 0.020, 0.024, 0.97)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.78, 0.30, 0.96)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+shadow_color = Color(0, 0, 0, 0.62)
+shadow_size = 7
 
 [sub_resource type="StyleBoxFlat" id="PreviewStyle"]
 bg_color = Color(0.018, 0.020, 0.024, 0.97)
@@ -394,3 +408,88 @@ theme_override_colors/font_color = Color(0.82, 0.88, 0.94, 1)
 theme_override_font_sizes/font_size = 11
 horizontal_alignment = 1
 text = "—"
+
+[node name="FacingSelector" type="Panel" parent="Root"]
+visible = false
+layout_mode = 1
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -215.0
+offset_top = -214.0
+offset_right = 215.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 0
+theme_override_styles/panel = SubResource("FacingStyle")
+
+[node name="Title" type="Label" parent="Root/FacingSelector"]
+offset_left = 18.0
+offset_top = 12.0
+offset_right = 412.0
+offset_bottom = 38.0
+theme_override_colors/font_color = Color(1, 0.84, 0.40, 1)
+theme_override_font_sizes/font_size = 17
+horizontal_alignment = 1
+text = "ORIENTATION"
+
+[node name="Help" type="Label" parent="Root/FacingSelector"]
+offset_left = 18.0
+offset_top = 41.0
+offset_right = 412.0
+offset_bottom = 75.0
+theme_override_colors/font_color = Color(0.82, 0.87, 0.91, 1)
+theme_override_font_sizes/font_size = 11
+text = "Choisis la direction regardée. Le dos et les flancs sont plus vulnérables."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="North" type="Button" parent="Root/FacingSelector"]
+offset_left = 164.0
+offset_top = 78.0
+offset_right = 266.0
+offset_bottom = 110.0
+text = "↑ NORD"
+focus_mode = 0
+
+[node name="West" type="Button" parent="Root/FacingSelector"]
+offset_left = 54.0
+offset_top = 112.0
+offset_right = 156.0
+offset_bottom = 144.0
+text = "← OUEST"
+focus_mode = 0
+
+[node name="South" type="Button" parent="Root/FacingSelector"]
+offset_left = 164.0
+offset_top = 112.0
+offset_right = 266.0
+offset_bottom = 144.0
+text = "↓ SUD"
+focus_mode = 0
+
+[node name="East" type="Button" parent="Root/FacingSelector"]
+offset_left = 274.0
+offset_top = 112.0
+offset_right = 376.0
+offset_bottom = 144.0
+text = "EST →"
+focus_mode = 0
+
+[node name="Cancel" type="Button" parent="Root/FacingSelector"]
+offset_left = 54.0
+offset_top = 151.0
+offset_right = 194.0
+offset_bottom = 181.0
+text = "RETOUR"
+focus_mode = 0
+
+[node name="Confirm" type="Button" parent="Root/FacingSelector"]
+offset_left = 202.0
+offset_top = 151.0
+offset_right = 376.0
+offset_bottom = 181.0
+text = "TERMINER LE TOUR"
+focus_mode = 0
