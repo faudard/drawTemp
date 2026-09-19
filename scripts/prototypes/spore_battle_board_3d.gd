@@ -16,6 +16,7 @@ const TimelineActorCardScene = preload("res://scenes/ui/timeline_actor_card.tscn
 const CombatFloatingTextScene = preload("res://scenes/battle/combat_floating_text_3d.tscn")
 const CombatFeedbackBurstScene = preload("res://scenes/battle/combat_feedback_burst_3d.tscn")
 const TacticalMarkerScene = preload("res://scenes/battle/tactical_marker_3d.tscn")
+const MissionHazardScene = preload("res://scenes/battle/mission_hazard_3d.tscn")
 
 const MODE_MOVE: String = "move"
 const MODE_ATTACK: String = "attack"
@@ -3522,6 +3523,8 @@ func _rebuild_hazard_visuals_3d() -> void:
 		return
 
 	if _hazard_visual_root_3d == null or not is_instance_valid(_hazard_visual_root_3d):
+		_hazard_visual_root_3d = get_node_or_null("MissionHazards") as Node3D
+	if _hazard_visual_root_3d == null:
 		_hazard_visual_root_3d = Node3D.new()
 		_hazard_visual_root_3d.name = "MissionHazards"
 		add_child(_hazard_visual_root_3d)
@@ -3533,100 +3536,20 @@ func _rebuild_hazard_visuals_3d() -> void:
 		var cell_value: Vector2i = _hazard_cells_3d[hazard_index]
 		if not map_root.is_cell_valid(cell_value):
 			continue
-
-		var root: Node3D = Node3D.new()
-		root.name = "Hazard_%02d_%02d" % [cell_value.x, cell_value.y]
-		root.position = map_root.cell_top_local(cell_value) + Vector3(0.0, 0.07, 0.0)
-		root.set_meta("phase", float(hazard_index) * 0.73)
-		_hazard_visual_root_3d.add_child(root)
-
-		var pool: MeshInstance3D = MeshInstance3D.new()
-		pool.name = "Pool"
-		var pool_mesh: CylinderMesh = CylinderMesh.new()
-		pool_mesh.top_radius = map_root.tile_size * 0.31
-		pool_mesh.bottom_radius = map_root.tile_size * 0.35
-		pool_mesh.height = 0.035
-		pool.mesh = pool_mesh
-
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.albedo_color = Color(0.58, 0.28, 0.78, 0.28)
-		material.emission_enabled = true
-		material.emission = Color(0.66, 0.34, 0.86, 1.0)
-		material.emission_energy_multiplier = 0.30
-		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		pool.material_override = material
-		root.add_child(pool)
-
-		for spore_index: int in range(5):
-			var spore: MeshInstance3D = MeshInstance3D.new()
-			spore.name = "Spore_%d" % spore_index
-			var spore_mesh: SphereMesh = SphereMesh.new()
-			spore_mesh.radius = 0.035 + 0.008 * float(spore_index % 3)
-			spore_mesh.height = spore_mesh.radius * 2.0
-			spore_mesh.radial_segments = 8
-			spore_mesh.rings = 4
-			spore.mesh = spore_mesh
-
-			var spore_material: StandardMaterial3D = StandardMaterial3D.new()
-			spore_material.albedo_color = Color(0.80, 0.54, 1.0, 0.82)
-			spore_material.emission_enabled = true
-			spore_material.emission = Color(0.80, 0.54, 1.0, 1.0)
-			spore_material.emission_energy_multiplier = 0.50
-			spore_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			spore_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			spore.material_override = spore_material
-
-			var angle: float = TAU * float(spore_index) / 5.0
-			spore.position = Vector3(
-				cos(angle) * map_root.tile_size * 0.19,
-				0.05 + 0.035 * float(spore_index % 2),
-				sin(angle) * map_root.tile_size * 0.19
-			)
-			spore.set_meta("base_angle", angle)
-			spore.set_meta("spore_index", spore_index)
-			root.add_child(spore)
-
-		var label: Label3D = Label3D.new()
-		label.text = "SPORES • -1 PV fin de tour"
-		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label.no_depth_test = true
-		label.font_size = 18
-		label.outline_size = 6
-		label.modulate = Color(0.88, 0.72, 1.0, 0.96)
-		label.position = Vector3(0.0, 0.32, 0.0)
-		root.add_child(label)
+		var node: Node = MissionHazardScene.instantiate()
+		var hazard := node as SporeMissionHazard3D
+		if hazard == null:
+			node.queue_free()
+			continue
+		hazard.name = "Hazard_%02d_%02d" % [cell_value.x, cell_value.y]
+		_hazard_visual_root_3d.add_child(hazard)
+		hazard.position = map_root.cell_top_local(cell_value) + Vector3(0.0, 0.05, 0.0)
+		hazard.configure(map_root.tile_size, float(hazard_index) * 0.73)
 
 
 func _update_hazard_visuals_3d() -> void:
-	if _hazard_visual_root_3d == null or not is_instance_valid(_hazard_visual_root_3d):
-		return
-
-	for child: Node in _hazard_visual_root_3d.get_children():
-		var root: Node3D = child as Node3D
-		if root == null:
-			continue
-
-		var phase: float = float(root.get_meta("phase", 0.0))
-		var pulse: float = 1.0 + sin(_presentation_time * 2.7 + phase) * 0.055
-		var pool: MeshInstance3D = root.get_node_or_null("Pool") as MeshInstance3D
-		if pool != null:
-			pool.scale = Vector3(pulse, 1.0, pulse)
-
-		for spore_child: Node in root.get_children():
-			if not spore_child.name.begins_with("Spore_"):
-				continue
-			var spore: MeshInstance3D = spore_child as MeshInstance3D
-			if spore == null:
-				continue
-
-			var base_angle: float = float(spore.get_meta("base_angle", 0.0))
-			var spore_index: int = int(spore.get_meta("spore_index", 0))
-			var angle: float = base_angle + _presentation_time * (0.22 + float(spore_index) * 0.015)
-			var radius: float = map_root.tile_size * (0.17 + 0.012 * float(spore_index % 2))
-			spore.position.x = cos(angle) * radius
-			spore.position.z = sin(angle) * radius
-			spore.position.y = 0.06 + 0.055 * float(spore_index % 2) + sin(_presentation_time * 2.2 + base_angle) * 0.035
+	# Each SporeMissionHazard3D animates its own authored scene.
+	pass
 
 
 func _show_hazard_spawn_3d(cell_value: Vector2i) -> void:
@@ -3711,47 +3634,50 @@ func _create_persistent_zone(caster: SporeUnitActor3D, skill: Resource, effect: 
 
 
 func _build_persistent_zone_visual(zone: Dictionary) -> Node3D:
-	var root: Node3D = Node3D.new()
+	var root := Node3D.new()
 	root.name = "Zone_%d" % int(zone.get("id", 0))
 	_zone_holder.add_child(root)
+
 	var tick_type: String = String(zone.get("tick_type", "damage"))
 	var color: Color = Color(1.0, 0.34, 0.24, 0.34)
 	if tick_type == "heal":
 		color = Color(0.38, 0.92, 0.62, 0.34)
 	elif tick_type == "status":
 		color = Color(0.72, 0.48, 1.0, 0.34)
+
 	var cells_value: Variant = zone.get("cells", [])
 	if cells_value is Array:
 		for cell_var: Variant in cells_value:
 			if not (cell_var is Vector2i):
 				continue
 			var cell_value: Vector2i = cell_var
-			var marker: MeshInstance3D = MeshInstance3D.new()
-			var mesh: CylinderMesh = CylinderMesh.new()
-			mesh.top_radius = map_root.tile_size * 0.40
-			mesh.bottom_radius = map_root.tile_size * 0.40
-			mesh.height = 0.025
-			marker.mesh = mesh
-			marker.position = map_root.cell_top_local(cell_value) + Vector3(0.0, 0.055, 0.0)
-			var material: StandardMaterial3D = StandardMaterial3D.new()
-			material.albedo_color = color
-			material.emission_enabled = true
-			material.emission = Color(color.r, color.g, color.b, 1.0)
-			material.emission_energy_multiplier = 0.18
-			material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			marker.material_override = material
+			var node: Node = TacticalMarkerScene.instantiate()
+			var marker := node as SporeTacticalMarker3D
+			if marker == null:
+				node.queue_free()
+				continue
 			root.add_child(marker)
+			marker.position = map_root.cell_top_local(cell_value)
+			marker.configure("", color, map_root.tile_size * 0.40, 0.0, true, false, 16, color.a)
+
 	var anchor_value: Variant = zone.get("anchor", Vector2i.ZERO)
 	if anchor_value is Vector2i:
-		var label: Label3D = Label3D.new()
-		label.name = "DurationLabel"
-		label.text = "ZONE %dr" % int(zone.get("remaining_rounds", 1))
-		label.font_size = 24
-		label.outline_size = 7
-		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label.no_depth_test = true
-		label.position = map_root.cell_top_local(anchor_value) + Vector3(0.0, 0.30, 0.0)
-		root.add_child(label)
+		var duration_node: Node = TacticalMarkerScene.instantiate()
+		var duration_marker := duration_node as SporeTacticalMarker3D
+		if duration_marker != null:
+			duration_marker.name = "DurationMarker"
+			root.add_child(duration_marker)
+			duration_marker.position = map_root.cell_top_local(anchor_value)
+			duration_marker.configure(
+				"ZONE %dr" % int(zone.get("remaining_rounds", 1)),
+				Color(color.r, color.g, color.b, 1.0),
+				0.0,
+				0.34,
+				false,
+				true,
+				16,
+				0.0
+			)
 	return root
 
 
@@ -3766,9 +3692,9 @@ func _advance_persistent_zones_round() -> void:
 				visual.queue_free()
 			continue
 		if visual != null:
-			var label: Label3D = visual.get_node_or_null("DurationLabel") as Label3D
-			if label != null:
-				label.text = "ZONE %dr" % remaining
+			var duration_marker := visual.get_node_or_null("DurationMarker") as SporeTacticalMarker3D
+			if duration_marker != null:
+				duration_marker.set_text("ZONE %dr" % remaining)
 		kept.append(zone)
 	persistent_zones = kept
 
