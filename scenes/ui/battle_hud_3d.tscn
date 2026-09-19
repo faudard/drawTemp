@@ -1,7 +1,8 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Theme" path="res://assets/themes/comic_battle_theme.tres" id="1_theme"]
 [ext_resource type="PackedScene" path="res://scenes/ui/battle_result_overlay.tscn" id="2_result"]
+[ext_resource type="Shader" path="res://assets/shaders/comic_portrait_selective.gdshader" id="3_portrait_shader"]
 
 [sub_resource type="StyleBoxFlat" id="ProgressBackground"]
 bg_color = Color(0.07, 0.08, 0.10, 0.95)
@@ -64,6 +65,39 @@ corner_radius_bottom_left = 3
 shadow_color = Color(0, 0, 0, 0.62)
 shadow_size = 7
 
+
+[sub_resource type="StyleBoxFlat" id="SplashPanelStyle"]
+bg_color = Color(0.008, 0.009, 0.011, 0.97)
+border_width_left = 5
+border_width_top = 5
+border_width_right = 5
+border_width_bottom = 5
+border_color = Color(0.97, 0.94, 0.84, 1)
+shadow_color = Color(0, 0, 0, 0.78)
+shadow_size = 10
+
+[sub_resource type="StyleBoxFlat" id="SplashCaptionStyle"]
+bg_color = Color(0.006, 0.006, 0.008, 0.96)
+border_width_top = 4
+border_color = Color(0.97, 0.94, 0.84, 1)
+
+[sub_resource type="StyleBoxFlat" id="MottoStyle"]
+bg_color = Color(0.96, 0.94, 0.86, 0.98)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.03, 0.03, 0.025, 1)
+shadow_color = Color(0, 0, 0, 0.56)
+shadow_size = 7
+
+[sub_resource type="ShaderMaterial" id="HeroSplashPortraitMaterial"]
+shader = ExtResource("3_portrait_shader")
+shader_parameter/grayscale_strength = 0.97
+shader_parameter/ink_strength = 1.04
+shader_parameter/poster_levels = 5.0
+shader_parameter/accent_strength = 1.0
+
 [node name="BattleHUD" type="CanvasLayer"]
 layer = 20
 
@@ -76,6 +110,157 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("1_theme")
+
+
+[node name="ComicFrame" type="Control" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Top" type="ColorRect" parent="Root/ComicFrame"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 6.0
+grow_horizontal = 2
+color = Color(0.97, 0.94, 0.84, 1)
+mouse_filter = 2
+
+[node name="Bottom" type="ColorRect" parent="Root/ComicFrame"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -6.0
+grow_horizontal = 2
+grow_vertical = 0
+color = Color(0.97, 0.94, 0.84, 1)
+mouse_filter = 2
+
+[node name="Left" type="ColorRect" parent="Root/ComicFrame"]
+layout_mode = 1
+anchors_preset = 13
+anchor_bottom = 1.0
+offset_right = 6.0
+grow_vertical = 2
+color = Color(0.97, 0.94, 0.84, 1)
+mouse_filter = 2
+
+[node name="Right" type="ColorRect" parent="Root/ComicFrame"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -6.0
+grow_horizontal = 0
+grow_vertical = 2
+color = Color(0.97, 0.94, 0.84, 1)
+mouse_filter = 2
+
+[node name="HeroSplash" type="Panel" parent="Root"]
+layout_mode = 1
+anchor_bottom = 1.0
+offset_left = -4.0
+offset_top = 202.0
+offset_right = 294.0
+offset_bottom = -104.0
+mouse_filter = 2
+clip_contents = true
+theme_override_styles/panel = SubResource("SplashPanelStyle")
+
+[node name="Portrait" type="TextureRect" parent="Root/HeroSplash"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -72.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+material = SubResource("HeroSplashPortraitMaterial")
+
+[node name="Name" type="Label" parent="Root/HeroSplash"]
+offset_left = 17.0
+offset_top = 14.0
+offset_right = 264.0
+offset_bottom = 45.0
+theme_override_colors/font_color = Color(1, 0.80, 0.16, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.02, 0.02, 1)
+theme_override_constants/outline_size = 7
+theme_override_font_sizes/font_size = 20
+text = "MOMO"
+mouse_filter = 2
+
+[node name="Caption" type="Panel" parent="Root/HeroSplash"]
+layout_mode = 1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -74.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("SplashCaptionStyle")
+
+[node name="Text" type="Label" parent="Root/HeroSplash/Caption"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.97, 0.94, 0.84, 1)
+theme_override_font_sizes/font_size = 27
+text = "ON AVANCE !"
+horizontal_alignment = 1
+vertical_alignment = 1
+rotation = -0.025
+mouse_filter = 2
+
+[node name="MottoPanel" type="Panel" parent="Root"]
+layout_mode = 1
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -154.0
+offset_top = -74.0
+offset_right = 8.0
+offset_bottom = 91.0
+grow_horizontal = 0
+grow_vertical = 2
+rotation = -0.035
+mouse_filter = 2
+theme_override_styles/panel = SubResource("MottoStyle")
+
+[node name="Text" type="Label" parent="Root/MottoPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.035, 0.035, 0.03, 1)
+theme_override_font_sizes/font_size = 19
+text = "PETITS\nCHAPEAUX,\nGRANDS\nDESTINS !"
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
 
 [node name="CommandPanel" type="Panel" parent="Root"]
 layout_mode = 1
@@ -91,7 +276,7 @@ offset_top = 8.0
 offset_right = 416.0
 offset_bottom = 36.0
 theme_override_colors/font_color = Color(1, 0.80, 0.16, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 23
 text = "Manche 1 • JOUEUR • —"
 mouse_filter = 2
 
@@ -100,7 +285,7 @@ offset_left = 14.0
 offset_top = 38.0
 offset_right = 416.0
 offset_bottom = 82.0
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 13
 text = "—"
 autowrap_mode = 2
 mouse_filter = 2
@@ -164,28 +349,28 @@ text = "Aide"
 layout_mode = 1
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -146.0
+offset_left = -170.0
 offset_top = 14.0
-offset_right = 146.0
-offset_bottom = 96.0
+offset_right = 170.0
+offset_bottom = 100.0
 grow_horizontal = 2
 mouse_filter = 2
 
 [node name="Title" type="Label" parent="Root/InitiativeTimeline"]
 offset_left = 10.0
 offset_top = 6.0
-offset_right = 282.0
-offset_bottom = 24.0
+offset_right = 330.0
+offset_bottom = 25.0
 theme_override_colors/font_color = Color(0.98, 0.96, 0.90, 1)
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 14
 text = "INITIATIVE"
 mouse_filter = 2
 
 [node name="Bar" type="HBoxContainer" parent="Root/InitiativeTimeline"]
 offset_left = 10.0
 offset_top = 27.0
-offset_right = 282.0
-offset_bottom = 75.0
+offset_right = 330.0
+offset_bottom = 82.0
 theme_override_constants/separation = 4
 mouse_filter = 2
 
@@ -206,7 +391,7 @@ offset_top = 9.0
 offset_right = 354.0
 offset_bottom = 33.0
 theme_override_colors/font_color = Color(1, 0.80, 0.16, 1)
-theme_override_font_sizes/font_size = 15
+theme_override_font_sizes/font_size = 18
 text = "OBJECTIF"
 mouse_filter = 2
 
@@ -216,7 +401,7 @@ offset_top = 35.0
 offset_right = 354.0
 offset_bottom = 107.0
 theme_override_colors/font_color = Color(0.91, 0.93, 0.88, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 13
 text = "—"
 autowrap_mode = 2
 mouse_filter = 2
@@ -227,7 +412,7 @@ anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 14.0
 offset_top = -102.0
-offset_right = 434.0
+offset_right = 478.0
 offset_bottom = -14.0
 grow_vertical = 0
 mouse_filter = 2
@@ -235,10 +420,10 @@ mouse_filter = 2
 [node name="LogLabel" type="Label" parent="Root/BattleLog"]
 offset_left = 12.0
 offset_top = 9.0
-offset_right = 408.0
+offset_right = 452.0
 offset_bottom = 79.0
 theme_override_colors/font_color = Color(0.49, 0.87, 1, 1)
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 text = "—"
 autowrap_mode = 2
 mouse_filter = 2
@@ -319,7 +504,7 @@ offset_top = 10.0
 offset_right = 348.0
 offset_bottom = 35.0
 theme_override_colors/font_color = Color(1, 0.80, 0.16, 1)
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 20
 text = "—"
 
 [node name="HpBar" type="ProgressBar" parent="Root/UnitCard"]
@@ -372,7 +557,7 @@ offset_top = 90.0
 offset_right = 358.0
 offset_bottom = 182.0
 theme_override_colors/font_color = Color(0.92, 0.93, 0.88, 1)
-theme_override_font_sizes/font_size = 10
+theme_override_font_sizes/font_size = 11
 text = "—"
 autowrap_mode = 2
 vertical_alignment = 0
