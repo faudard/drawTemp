@@ -28,11 +28,6 @@ func _ready() -> void:
 		_rebuild()
 
 
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_EDITOR_POST_SAVE and Engine.is_editor_hint():
-		call_deferred("_rebuild")
-
-
 func _rebuild() -> void:
 	var map := get_parent() as SporeMap3D
 	if map == null:
