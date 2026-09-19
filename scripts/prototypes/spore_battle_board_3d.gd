@@ -432,15 +432,15 @@ func _build_ui() -> void:
 		_move_button.pressed.connect(_on_move_mode_pressed)
 	if _attack_button != null and not _attack_button.pressed.is_connected(_on_attack_mode_pressed):
 		_attack_button.pressed.connect(_on_attack_mode_pressed)
-	var face_callable := _on_face_pressed.bind(1)
+	var face_callable: Callable = _on_face_pressed.bind(1)
 	if _face_button != null and not _face_button.pressed.is_connected(face_callable):
 		_face_button.pressed.connect(face_callable)
 	if _end_button != null and not _end_button.pressed.is_connected(_on_end_activation_pressed):
 		_end_button.pressed.connect(_on_end_activation_pressed)
-	var primary_skill_callable := _on_skill_pressed.bind(1)
+	var primary_skill_callable: Callable = _on_skill_pressed.bind(1)
 	if _primary_skill_button != null and not _primary_skill_button.pressed.is_connected(primary_skill_callable):
 		_primary_skill_button.pressed.connect(primary_skill_callable)
-	var secondary_skill_callable := _on_skill_pressed.bind(2)
+	var secondary_skill_callable: Callable = _on_skill_pressed.bind(2)
 	if _secondary_skill_button != null and not _secondary_skill_button.pressed.is_connected(secondary_skill_callable):
 		_secondary_skill_button.pressed.connect(secondary_skill_callable)
 	if _preview_confirm_button != null and not _preview_confirm_button.pressed.is_connected(_confirm_pending_action):
