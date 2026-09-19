@@ -18,11 +18,14 @@ shadow_size = 6
 
 [node name="TurnTransition" type="Panel"]
 custom_minimum_size = Vector2(390, 62)
-layout_mode = 0
-offset_left = 0.0
-offset_top = 0.0
-offset_right = 390.0
-offset_bottom = 62.0
+layout_mode = 1
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -195.0
+offset_top = 26.0
+offset_right = 195.0
+offset_bottom = 88.0
+grow_horizontal = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("TurnStyle")
 script = ExtResource("1_script")
