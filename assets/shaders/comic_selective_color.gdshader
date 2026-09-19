@@ -6,7 +6,9 @@ uniform float grayscale_strength : hint_range(0.0, 1.0) = 0.94;
 uniform float ink_strength : hint_range(0.0, 2.0) = 0.72;
 uniform float poster_levels : hint_range(2.0, 12.0) = 6.0;
 uniform float grain_strength : hint_range(0.0, 0.12) = 0.022;
-uniform float selective_color_strength : hint_range(0.0, 1.0) = 1.0;\nuniform float halftone_strength : hint_range(0.0, 0.35) = 0.11;\nuniform float halftone_scale : hint_range(2.0, 10.0) = 4.0;
+uniform float selective_color_strength : hint_range(0.0, 1.0) = 1.0;
+uniform float halftone_strength : hint_range(0.0, 0.35) = 0.11;
+uniform float halftone_scale : hint_range(2.0, 10.0) = 4.0;
 
 float luma(vec3 c) {
 	return dot(c, vec3(0.299, 0.587, 0.114));
@@ -50,7 +52,14 @@ void fragment() {
 	float ink = clamp(edge * 4.5 * ink_strength, 0.0, 0.86);
 
 	float grain = (hash21(FRAGCOORD.xy) - 0.5) * grain_strength;
-	vec3 mono = vec3(clamp(poster - ink + grain, 0.0, 1.0));
+
+	vec2 hatch_uv = (FRAGCOORD.xy + vec2(FRAGCOORD.y * 0.32, 0.0)) / halftone_scale;
+	vec2 hatch_cell = fract(hatch_uv);
+	float dot_pattern = step(0.58, hatch_cell.x * hatch_cell.y * 2.0);
+	float midtone = smoothstep(0.12, 0.42, lum) * (1.0 - smoothstep(0.58, 0.90, lum));
+	float halftone = dot_pattern * midtone * halftone_strength;
+
+	vec3 mono = vec3(clamp(poster - ink - halftone + grain, 0.0, 1.0));
 
 	float preserve = keep_color(src) * selective_color_strength;
 	vec3 colored = mix(mono, src, preserve);
