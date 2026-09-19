@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=3]
+
+[node name="CameraRig" type="Node3D"]
+
+[node name="Camera3D" type="Camera3D" parent="."]
+projection = 1
+current = true
+size = 10.5
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-48, 28, 0)
+light_color = Color(1, 0.90, 0.78, 1)
+light_energy = 1.08
+shadow_enabled = true
