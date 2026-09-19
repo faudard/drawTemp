@@ -32,6 +32,8 @@ preview_camera_enabled = false
 
 [node name="EnemyIntentPreview" type="Node3D" parent="."]
 
+[node name="MissionHazards" type="Node3D" parent="."]
+
 [node name="CameraRig" parent="." instance=ExtResource("5_camera")]
 
 [node name="Cursor" parent="." instance=ExtResource("6_cursor")]
