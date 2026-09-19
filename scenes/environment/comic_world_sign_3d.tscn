@@ -1,6 +1,7 @@
 [gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/presentation/spore_comic_world_sign_3d.gd" id="1_script"]
+[ext_resource type="Material" path="res://assets/materials/comic_ink.tres" id="2_ink"]
 
 [sub_resource type="CylinderMesh" id="PostMesh"]
 top_radius = 0.045
@@ -13,10 +14,6 @@ size = Vector3(1.34, 0.36, 0.07)
 
 [sub_resource type="BoxMesh" id="AccentMesh"]
 size = Vector3(1.16, 0.045, 0.08)
-
-[sub_resource type="StandardMaterial3D" id="InkMaterial"]
-albedo_color = Color(0.055, 0.055, 0.060, 1)
-roughness = 0.98
 
 [sub_resource type="StandardMaterial3D" id="AccentMaterial"]
 resource_local_to_scene = true
@@ -32,7 +29,7 @@ script = ExtResource("1_script")
 [node name="Post" type="MeshInstance3D" parent="."]
 position = Vector3(0, 0.44, 0)
 mesh = SubResource("PostMesh")
-material_override = SubResource("InkMaterial")
+material_override = ExtResource("2_ink")
 
 [node name="Board" type="MeshInstance3D" parent="."]
 position = Vector3(0, 0.94, 0)
@@ -48,9 +45,9 @@ material_override = SubResource("AccentMaterial")
 position = Vector3(0, 0.96, -0.055)
 billboard = 1
 no_depth_test = false
-font_size = 26
-outline_size = 5
-pixel_size = 0.0034
+font_size = 22
+outline_size = 4
+pixel_size = 0.0032
 modulate = Color(0.95, 0.93, 0.86, 1)
 outline_modulate = Color(0.03, 0.03, 0.035, 1)
 text = "SIGN"
