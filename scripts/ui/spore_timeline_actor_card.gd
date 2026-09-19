@@ -17,7 +17,7 @@ func bind_actor(actor: SporeUnitActor3D, is_active: bool) -> void:
 		" • CAST" if actor.is_casting() else ""
 	]
 
-	var style := get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+	var style: StyleBoxFlat = get_theme_stylebox("panel").duplicate() as StyleBoxFlat
 	if style == null:
 		return
 	style.border_color = (
