@@ -415,7 +415,7 @@ func _build_ui() -> void:
 	_attack_button = _make_button(panel, "ATTAQUE [A]", Vector2(114.0, 87.0), Vector2(104.0, 32.0))
 	_face_button = _make_button(panel, "ORIENT. [F]", Vector2(224.0, 87.0), Vector2(82.0, 32.0))
 	_face_button.tooltip_text = "Orientation : frapper de dos ou de flanc est plus efficace."
-	_end_button = _make_button(panel, "WAIT [ESPACE]", Vector2(312.0, 87.0), Vector2(104.0, 32.0))
+	_end_button = _make_button(panel, "FIN [ESPACE]", Vector2(312.0, 87.0), Vector2(104.0, 32.0))
 	_move_button.toggle_mode = true
 	_attack_button.toggle_mode = true
 
@@ -6064,43 +6064,65 @@ func _refresh_timeline_ui() -> void:
 	if signature == _timeline_signature:
 		return
 	_timeline_signature = signature
+
 	for child: Node in _timeline_bar.get_children():
 		child.free()
+
 	var predicted: Array[SporeUnitActor3D] = _predict_timeline_3d(5)
 	for actor: SporeUnitActor3D in predicted:
 		if actor == null or not actor.alive:
 			continue
-		var card: Button = Button.new()
-		card.custom_minimum_size = Vector2(44.0, 48.0)
-		card.alignment = HORIZONTAL_ALIGNMENT_CENTER
-		card.focus_mode = Control.FOCUS_NONE
+
+		var card := Panel.new()
+		card.custom_minimum_size = Vector2(50.0, 48.0)
 		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_theme_font_size_override("font_size", 9)
-		var timing_text: String = "C%d" % int(actor.casting.get("remaining_ticks", 0)) if actor.is_casting() else "%d/%d" % [actor.ct, actor.effective_speed()]
-		card.text = actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper()
-		card.tooltip_text = "%s • CT %d • VIT %d%s" % [actor.display_name, actor.ct, actor.effective_speed(), " • CAST" if actor.is_casting() else ""]
-		var card_style: StyleBoxFlat = StyleBoxFlat.new()
-		card_style.bg_color = Color(0.08, 0.42, 0.64, 0.96) if actor.team == "player" else Color(0.68, 0.12, 0.10, 0.96)
+
+		var card_style := StyleBoxFlat.new()
+		card_style.bg_color = Color(0.035, 0.038, 0.045, 0.98)
 		card_style.border_width_left = 2
 		card_style.border_width_top = 2
 		card_style.border_width_right = 2
 		card_style.border_width_bottom = 2
-		card_style.border_color = Color(0.93, 0.91, 0.84, 0.94)
+		card_style.border_color = Color(0.12, 0.58, 0.92, 1.0) if actor.team == "player" else Color(0.88, 0.18, 0.15, 1.0)
+		if actor == active_actor:
+			card_style.border_width_left = 3
+			card_style.border_width_top = 3
+			card_style.border_width_right = 3
+			card_style.border_width_bottom = 3
+			card_style.border_color = Color(1.0, 0.80, 0.16, 1.0)
 		card_style.corner_radius_top_left = 2
 		card_style.corner_radius_top_right = 2
 		card_style.corner_radius_bottom_left = 2
 		card_style.corner_radius_bottom_right = 2
-		if actor == active_actor:
-			card_style.border_width_left = 2
-			card_style.border_width_top = 2
-			card_style.border_width_right = 2
-			card_style.border_width_bottom = 2
-			card_style.border_color = Color(1.0, 0.80, 0.16, 1.0)
-		card.add_theme_stylebox_override("normal", card_style)
-		card.add_theme_stylebox_override("hover", card_style)
-		card.add_theme_stylebox_override("pressed", card_style)
-		_timeline_bar.add_child(card)
+		card.add_theme_stylebox_override("panel", card_style)
 
+		var portrait := TextureRect.new()
+		portrait.position = Vector2(7.0, 3.0)
+		portrait.size = Vector2(36.0, 29.0)
+		portrait.texture = actor.portrait_texture()
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(portrait)
+
+		var name_label := Label.new()
+		name_label.position = Vector2(2.0, 31.0)
+		name_label.size = Vector2(46.0, 15.0)
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		name_label.add_theme_font_size_override("font_size", 9)
+		name_label.add_theme_color_override("font_color", Color(0.98, 0.97, 0.92, 1.0))
+		name_label.text = actor.display_name.substr(0, mini(3, actor.display_name.length())).to_upper()
+		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(name_label)
+
+		card.tooltip_text = "%s • CT %d • VIT %d%s" % [
+			actor.display_name,
+			actor.ct,
+			actor.effective_speed(),
+			" • CAST" if actor.is_casting() else ""
+		]
+		_timeline_bar.add_child(card)
 
 func _unit_card_actor() -> SporeUnitActor3D:
 	var hovered_actor: SporeUnitActor3D = actors_by_cell.get(hovered_cell, null) as SporeUnitActor3D
