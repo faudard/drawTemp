@@ -12,27 +12,27 @@ bottom_radius = 0.24
 height = 0.03
 
 [sub_resource type="StandardMaterial3D" id="4_grass_cap"]
-albedo_color = Color(0.31, 0.34, 0.31, 1)
+albedo_color = Color(0.18, 0.20, 0.18, 1)
 roughness = 0.98
 
 [sub_resource type="StandardMaterial3D" id="5_grass_stroke"]
-albedo_color = Color(0.38, 0.42, 0.38, 0.55)
+albedo_color = Color(0.25, 0.28, 0.25, 0.55)
 transparency = 1
 cull_mode = 2
 roughness = 1.0
 
 [sub_resource type="StandardMaterial3D" id="6_path_cap"]
-albedo_color = Color(0.39, 0.36, 0.31, 1)
+albedo_color = Color(0.22, 0.20, 0.18, 1)
 roughness = 0.97
 
 [sub_resource type="StandardMaterial3D" id="7_path_stroke"]
-albedo_color = Color(0.46, 0.42, 0.36, 0.58)
+albedo_color = Color(0.30, 0.27, 0.23, 0.58)
 transparency = 1
 cull_mode = 2
 roughness = 1.0
 
 [sub_resource type="StandardMaterial3D" id="8_spore_cap"]
-albedo_color = Color(0.28, 0.29, 0.28, 1)
+albedo_color = Color(0.16, 0.17, 0.17, 1)
 roughness = 0.98
 
 [sub_resource type="StandardMaterial3D" id="9_spore_stain"]
@@ -45,7 +45,7 @@ emission_energy_multiplier = 0.16
 roughness = 0.95
 
 [sub_resource type="StandardMaterial3D" id="10_crown_cap"]
-albedo_color = Color(0.40, 0.37, 0.29, 1)
+albedo_color = Color(0.22, 0.20, 0.16, 1)
 roughness = 0.85
 
 [sub_resource type="StandardMaterial3D" id="11_crown_disc"]
@@ -56,7 +56,7 @@ emission_energy_multiplier = 0.40
 roughness = 0.22
 
 [sub_resource type="StandardMaterial3D" id="12_exit_cap"]
-albedo_color = Color(0.29, 0.34, 0.32, 1)
+albedo_color = Color(0.17, 0.20, 0.19, 1)
 roughness = 0.96
 
 [sub_resource type="StandardMaterial3D" id="13_exit_disc"]
@@ -67,7 +67,7 @@ emission_energy_multiplier = 0.34
 roughness = 0.18
 
 [sub_resource type="StandardMaterial3D" id="14_bonus_cap"]
-albedo_color = Color(0.30, 0.34, 0.36, 1)
+albedo_color = Color(0.17, 0.20, 0.22, 1)
 roughness = 0.94
 
 [sub_resource type="StandardMaterial3D" id="15_bonus_disc"]
@@ -78,7 +78,7 @@ emission_energy_multiplier = 0.28
 roughness = 0.16
 
 [sub_resource type="StandardMaterial3D" id="16_edge_shadow"]
-albedo_color = Color(0.13, 0.15, 0.12, 1)
+albedo_color = Color(0.055, 0.065, 0.055, 1)
 roughness = 1.0
 
 [node name="Mission1TileMaterialField3D" type="Node3D"]
