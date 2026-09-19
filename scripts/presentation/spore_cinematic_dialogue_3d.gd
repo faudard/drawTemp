@@ -333,6 +333,8 @@ func _animate_cutin(side: String) -> void:
 
 
 func _apply_accent(accent: String) -> void:
+	# Layout, borders and backgrounds are authored in cinematic_dialogue_3d.tscn.
+	# Runtime code only chooses the speaker color; this keeps the UI reusable/editable.
 	var accent_color: Color = Color(1.0, 0.80, 0.16, 1.0)
 	var resolved_name_color: Color = accent_color
 	if accent == "profile":
@@ -346,40 +348,7 @@ func _apply_accent(accent: String) -> void:
 		resolved_name_color = Color(0.82, 0.70, 1.0, 1.0)
 
 	speaker_label.add_theme_color_override("font_color", resolved_name_color)
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.012, 0.012, 0.015, 0.985)
-	style.border_color = accent_color
-	style.border_width_left = 4
-	style.border_width_top = 4
-	style.border_width_right = 4
-	style.border_width_bottom = 4
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	style.shadow_color = Color(0.0, 0.0, 0.0, 0.78)
-	style.shadow_size = 14
-	style.content_margin_left = 14.0
-	style.content_margin_right = 14.0
-	style.content_margin_top = 10.0
-	style.content_margin_bottom = 10.0
-	dialogue_panel.add_theme_stylebox_override("panel", style)
-
-	var cutin_style := StyleBoxFlat.new()
-	cutin_style.bg_color = Color(0.01, 0.01, 0.012, 0.97)
-	cutin_style.border_color = accent_color
-	cutin_style.border_width_left = 5
-	cutin_style.border_width_top = 5
-	cutin_style.border_width_right = 5
-	cutin_style.border_width_bottom = 5
-	cutin_style.corner_radius_top_left = 2
-	cutin_style.corner_radius_top_right = 2
-	cutin_style.corner_radius_bottom_left = 2
-	cutin_style.corner_radius_bottom_right = 2
-	cutin_style.shadow_color = Color(0.0, 0.0, 0.0, 0.82)
-	cutin_style.shadow_size = 16
-	cutin_left.add_theme_stylebox_override("panel", cutin_style)
-	cutin_right.add_theme_stylebox_override("panel", cutin_style)
+	advance_pulse.add_theme_color_override("font_color", accent_color)
 
 
 func _setup_blip_audio() -> void:
