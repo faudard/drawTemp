@@ -505,28 +505,44 @@ func _short_skill_name(skill_id: String) -> String:
 
 
 func _load_map() -> void:
-	for child: Node in _map_holder.get_children():
-		child.queue_free()
 	map_root = null
 	var resolved_path: String = map_scene_path
 	if mission_index >= 0:
 		var mission_map_path: String = MissionCatalog.map_scene_path(mission_index)
 		if not mission_map_path.is_empty():
 			resolved_path = mission_map_path
-	if resolved_path.is_empty() or not ResourceLoader.exists(resolved_path):
-		return
-	var packed: PackedScene = load(resolved_path) as PackedScene
-	if packed == null:
-		return
-	var instance: Node = packed.instantiate()
-	_map_holder.add_child(instance)
-	if instance is SporeMap3D:
-		map_root = instance as SporeMap3D
+
+	# Prefer an authored map already instanced in the battle scene. This keeps the
+	# complete level visible/editable in Godot instead of rebuilding it at runtime.
+	for child: Node in _map_holder.get_children():
+		if not (child is SporeMap3D):
+			continue
+		var candidate := child as SporeMap3D
+		if resolved_path.is_empty() or candidate.scene_file_path == resolved_path:
+			map_root = candidate
+			break
+
+	if map_root == null:
+		for child: Node in _map_holder.get_children():
+			child.queue_free()
+		if resolved_path.is_empty() or not ResourceLoader.exists(resolved_path):
+			return
+		var packed: PackedScene = load(resolved_path) as PackedScene
+		if packed == null:
+			return
+		var instance: Node = packed.instantiate()
+		_map_holder.add_child(instance)
+		if instance is SporeMap3D:
+			map_root = instance as SporeMap3D
+
 	if map_root == null:
 		return
+
 	var preview: Node = map_root.get_node_or_null("PreviewRig")
 	if preview != null:
 		preview.queue_free()
+	if _camera != null:
+		_camera.current = true
 	_hide_spawn_markers()
 
 
