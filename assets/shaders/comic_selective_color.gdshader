@@ -6,7 +6,7 @@ uniform float grayscale_strength : hint_range(0.0, 1.0) = 0.94;
 uniform float ink_strength : hint_range(0.0, 2.0) = 0.72;
 uniform float poster_levels : hint_range(2.0, 12.0) = 6.0;
 uniform float grain_strength : hint_range(0.0, 0.12) = 0.022;
-uniform float selective_color_strength : hint_range(0.0, 1.0) = 1.0;
+uniform float selective_color_strength : hint_range(0.0, 1.0) = 1.0;\nuniform float halftone_strength : hint_range(0.0, 0.35) = 0.11;\nuniform float halftone_scale : hint_range(2.0, 10.0) = 4.0;
 
 float luma(vec3 c) {
 	return dot(c, vec3(0.299, 0.587, 0.114));
