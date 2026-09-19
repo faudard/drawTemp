@@ -1,0 +1,396 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Theme" path="res://assets/themes/comic_battle_theme.tres" id="1_theme"]
+
+[sub_resource type="StyleBoxFlat" id="ProgressBackground"]
+bg_color = Color(0.07, 0.08, 0.10, 0.95)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="HpFill"]
+bg_color = Color(0.31, 0.82, 0.42, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="MpFill"]
+bg_color = Color(0.34, 0.64, 1, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="ActionBannerStyle"]
+bg_color = Color(0.01, 0.01, 0.012, 0.94)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.96, 0.94, 0.88, 0.98)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="PreviewStyle"]
+bg_color = Color(0.018, 0.020, 0.024, 0.97)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.72, 0.69, 0.62, 0.96)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+shadow_color = Color(0, 0, 0, 0.62)
+shadow_size = 7
+
+[node name="BattleHUD" type="CanvasLayer"]
+layer = 20
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("1_theme")
+
+[node name="CommandPanel" type="Panel" parent="Root"]
+layout_mode = 1
+offset_left = 14.0
+offset_top = 14.0
+offset_right = 444.0
+offset_bottom = 188.0
+mouse_filter = 2
+
+[node name="TurnLabel" type="Label" parent="Root/CommandPanel"]
+offset_left = 14.0
+offset_top = 8.0
+offset_right = 416.0
+offset_bottom = 36.0
+theme_override_colors/font_color = Color(1, 0.80, 0.16, 1)
+theme_override_font_sizes/font_size = 20
+text = "Manche 1 • JOUEUR • —"
+mouse_filter = 2
+
+[node name="InfoLabel" type="Label" parent="Root/CommandPanel"]
+offset_left = 14.0
+offset_top = 38.0
+offset_right = 416.0
+offset_bottom = 82.0
+theme_override_font_sizes/font_size = 12
+text = "—"
+autowrap_mode = 2
+mouse_filter = 2
+
+[node name="MoveButton" type="Button" parent="Root/CommandPanel"]
+offset_left = 14.0
+offset_top = 87.0
+offset_right = 108.0
+offset_bottom = 119.0
+toggle_mode = true
+text = "MOVE [M]"
+focus_mode = 0
+
+[node name="AttackButton" type="Button" parent="Root/CommandPanel"]
+offset_left = 114.0
+offset_top = 87.0
+offset_right = 218.0
+offset_bottom = 119.0
+toggle_mode = true
+text = "ATTAQUE [A]"
+focus_mode = 0
+
+[node name="FaceButton" type="Button" parent="Root/CommandPanel"]
+offset_left = 224.0
+offset_top = 87.0
+offset_right = 306.0
+offset_bottom = 119.0
+tooltip_text = "Orientation : frapper de dos ou de flanc est plus efficace."
+text = "ORIENT. [F]"
+focus_mode = 0
+
+[node name="EndButton" type="Button" parent="Root/CommandPanel"]
+offset_left = 312.0
+offset_top = 87.0
+offset_right = 416.0
+offset_bottom = 119.0
+text = "FIN [ESPACE]"
+focus_mode = 0
+
+[node name="PrimarySkillButton" type="Button" parent="Root/CommandPanel"]
+offset_left = 14.0
+offset_top = 126.0
+offset_right = 212.0
+offset_bottom = 158.0
+text = "I [1]"
+focus_mode = 0
+
+[node name="SecondarySkillButton" type="Button" parent="Root/CommandPanel"]
+offset_left = 218.0
+offset_top = 126.0
+offset_right = 416.0
+offset_bottom = 158.0
+text = "II [2]"
+focus_mode = 0
+
+[node name="HelpLabel" type="Label" parent="Root/CommandPanel"]
+visible = false
+text = "Aide"
+
+[node name="InitiativeTimeline" type="Panel" parent="Root"]
+layout_mode = 1
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -146.0
+offset_top = 14.0
+offset_right = 146.0
+offset_bottom = 96.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="Root/InitiativeTimeline"]
+offset_left = 10.0
+offset_top = 6.0
+offset_right = 282.0
+offset_bottom = 24.0
+theme_override_colors/font_color = Color(0.98, 0.96, 0.90, 1)
+theme_override_font_sizes/font_size = 13
+text = "INITIATIVE"
+mouse_filter = 2
+
+[node name="Bar" type="HBoxContainer" parent="Root/InitiativeTimeline"]
+offset_left = 10.0
+offset_top = 27.0
+offset_right = 282.0
+offset_bottom = 75.0
+theme_override_constants/separation = 4
+mouse_filter = 2
+
+[node name="MissionObjectivePanel" type="Panel" parent="Root"]
+layout_mode = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -382.0
+offset_top = 14.0
+offset_right = -14.0
+offset_bottom = 132.0
+grow_horizontal = 0
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="Root/MissionObjectivePanel"]
+offset_left = 14.0
+offset_top = 9.0
+offset_right = 354.0
+offset_bottom = 33.0
+theme_override_colors/font_color = Color(1, 0.80, 0.16, 1)
+theme_override_font_sizes/font_size = 15
+text = "OBJECTIF"
+mouse_filter = 2
+
+[node name="Body" type="Label" parent="Root/MissionObjectivePanel"]
+offset_left = 14.0
+offset_top = 35.0
+offset_right = 354.0
+offset_bottom = 107.0
+theme_override_colors/font_color = Color(0.91, 0.93, 0.88, 1)
+theme_override_font_sizes/font_size = 12
+text = "—"
+autowrap_mode = 2
+mouse_filter = 2
+
+[node name="BattleLog" type="Panel" parent="Root"]
+layout_mode = 1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 14.0
+offset_top = -102.0
+offset_right = 434.0
+offset_bottom = -14.0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="LogLabel" type="Label" parent="Root/BattleLog"]
+offset_left = 12.0
+offset_top = 9.0
+offset_right = 408.0
+offset_bottom = 79.0
+theme_override_colors/font_color = Color(0.49, 0.87, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "—"
+autowrap_mode = 2
+mouse_filter = 2
+
+[node name="CombatPreview" type="Panel" parent="Root"]
+visible = false
+layout_mode = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -434.0
+offset_top = 146.0
+offset_right = -14.0
+offset_bottom = 446.0
+grow_horizontal = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("PreviewStyle")
+
+[node name="Title" type="Label" parent="Root/CombatPreview"]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 404.0
+offset_bottom = 40.0
+theme_override_colors/font_color = Color(1, 0.82, 0.40, 1)
+theme_override_font_sizes/font_size = 18
+text = "PRÉVISION"
+
+[node name="Body" type="Label" parent="Root/CombatPreview"]
+offset_left = 16.0
+offset_top = 45.0
+offset_right = 404.0
+offset_bottom = 243.0
+theme_override_font_sizes/font_size = 12
+text = "—"
+autowrap_mode = 2
+
+[node name="ConfirmButton" type="Button" parent="Root/CombatPreview"]
+offset_left = 16.0
+offset_top = 252.0
+offset_right = 236.0
+offset_bottom = 286.0
+text = "CONFIRMER [ENTRÉE]"
+focus_mode = 0
+
+[node name="CancelButton" type="Button" parent="Root/CombatPreview"]
+offset_left = 244.0
+offset_top = 252.0
+offset_right = 404.0
+offset_bottom = 286.0
+text = "ANNULER [ÉCHAP]"
+focus_mode = 0
+
+[node name="UnitCard" type="Panel" parent="Root"]
+layout_mode = 1
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -386.0
+offset_top = -206.0
+offset_right = -14.0
+offset_bottom = -14.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="Portrait" type="TextureRect" parent="Root/UnitCard"]
+offset_left = 14.0
+offset_top = 14.0
+offset_right = 102.0
+offset_bottom = 126.0
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="Root/UnitCard"]
+offset_left = 104.0
+offset_top = 10.0
+offset_right = 348.0
+offset_bottom = 35.0
+theme_override_colors/font_color = Color(1, 0.80, 0.16, 1)
+theme_override_font_sizes/font_size = 18
+text = "—"
+
+[node name="HpBar" type="ProgressBar" parent="Root/UnitCard"]
+offset_left = 114.0
+offset_top = 42.0
+offset_right = 358.0
+offset_bottom = 58.0
+show_percentage = false
+mouse_filter = 2
+theme_override_styles/background = SubResource("ProgressBackground")
+theme_override_styles/fill = SubResource("HpFill")
+
+[node name="HpText" type="Label" parent="Root/UnitCard"]
+offset_left = 114.0
+offset_top = 42.0
+offset_right = 358.0
+offset_bottom = 58.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 11
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "PV"
+mouse_filter = 2
+
+[node name="MpBar" type="ProgressBar" parent="Root/UnitCard"]
+offset_left = 114.0
+offset_top = 64.0
+offset_right = 358.0
+offset_bottom = 80.0
+show_percentage = false
+mouse_filter = 2
+theme_override_styles/background = SubResource("ProgressBackground")
+theme_override_styles/fill = SubResource("MpFill")
+
+[node name="MpText" type="Label" parent="Root/UnitCard"]
+offset_left = 114.0
+offset_top = 64.0
+offset_right = 358.0
+offset_bottom = 80.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "MP"
+mouse_filter = 2
+
+[node name="Body" type="Label" parent="Root/UnitCard"]
+offset_left = 114.0
+offset_top = 90.0
+offset_right = 358.0
+offset_bottom = 182.0
+theme_override_colors/font_color = Color(0.92, 0.93, 0.88, 1)
+theme_override_font_sizes/font_size = 10
+text = "—"
+autowrap_mode = 2
+vertical_alignment = 0
+
+[node name="ActionBanner" type="Panel" parent="Root"]
+visible = false
+layout_mode = 1
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -210.0
+offset_top = 108.0
+offset_right = 210.0
+offset_bottom = 172.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("ActionBannerStyle")
+
+[node name="Title" type="Label" parent="Root/ActionBanner"]
+offset_left = 14.0
+offset_top = 7.0
+offset_right = 406.0
+offset_bottom = 34.0
+theme_override_colors/font_color = Color(1, 0.84, 0.42, 1)
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+text = "ACTION"
+
+[node name="Subtitle" type="Label" parent="Root/ActionBanner"]
+offset_left = 14.0
+offset_top = 34.0
+offset_right = 406.0
+offset_bottom = 54.0
+theme_override_colors/font_color = Color(0.82, 0.88, 0.94, 1)
+theme_override_font_sizes/font_size = 11
+horizontal_alignment = 1
+text = "—"
