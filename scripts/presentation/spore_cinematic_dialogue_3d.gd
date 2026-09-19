@@ -297,33 +297,36 @@ func _set_portrait(texture: Texture2D, side: String) -> void:
 
 
 func _apply_accent(accent: String) -> void:
-	var accent_color: Color = Color(0.48, 0.82, 1.0, 1.0)
-	var resolved_name_color: Color = accent_color.lightened(0.18)
+	var accent_color: Color = Color(1.0, 0.80, 0.16, 1.0)
+	var resolved_name_color: Color = accent_color
 	if accent == "profile":
 		accent_color = _profile_accent_color
 		resolved_name_color = _profile_name_color
 	elif accent == "enemy":
-		accent_color = Color(1.0, 0.46, 0.40, 1.0)
-		resolved_name_color = accent_color.lightened(0.18)
+		accent_color = Color(0.95, 0.20, 0.16, 1.0)
+		resolved_name_color = Color(1.0, 0.48, 0.42, 1.0)
 	elif accent == "narrator":
-		accent_color = Color(0.86, 0.72, 1.0, 1.0)
-		resolved_name_color = accent_color.lightened(0.18)
+		accent_color = Color(0.62, 0.38, 0.96, 1.0)
+		resolved_name_color = Color(0.82, 0.70, 1.0, 1.0)
 
 	speaker_label.add_theme_color_override("font_color", resolved_name_color)
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	if _base_panel_style != null:
-		style = _base_panel_style.duplicate()
-	else:
-		style.bg_color = Color(0.035, 0.050, 0.080, 0.98)
-		style.corner_radius_top_left = 18
-		style.corner_radius_top_right = 18
-		style.corner_radius_bottom_left = 18
-		style.corner_radius_bottom_right = 18
+	style.bg_color = Color(0.012, 0.012, 0.015, 0.985)
 	style.border_color = accent_color
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
+	style.border_width_left = 4
+	style.border_width_top = 4
+	style.border_width_right = 4
+	style.border_width_bottom = 4
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.shadow_color = Color(0.0, 0.0, 0.0, 0.78)
+	style.shadow_size = 14
+	style.content_margin_left = 14.0
+	style.content_margin_right = 14.0
+	style.content_margin_top = 10.0
+	style.content_margin_bottom = 10.0
 	dialogue_panel.add_theme_stylebox_override("panel", style)
 
 
