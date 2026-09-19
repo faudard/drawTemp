@@ -534,7 +534,7 @@ reward_value = 1
 [node name="Camera3D" type="Camera3D" parent="PreviewRig" unique_id=654462955]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.5, 11.5, 10.5)
 projection = 1
-current = true
+current = false
 size = 16.0
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="PreviewRig" unique_id=2015313746]
