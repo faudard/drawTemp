@@ -10,6 +10,7 @@ const ActionVfxScript = preload("res://scripts/prototypes/spore_action_vfx_3d.gd
 const UnitActorScript = preload("res://scripts/maps/spore_unit_actor_3d.gd")
 const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
 const CinematicPlayerScene = preload("res://scenes/ui/cinematic_player_3d.tscn")
+const ComicActionCutinScene = preload("res://scenes/ui/comic_action_cutin.tscn")
 
 const MODE_MOVE: String = "move"
 const MODE_ATTACK: String = "attack"
@@ -148,6 +149,7 @@ var _action_banner_subtitle: Label
 var _action_banner_tween: Tween
 var _comic_stamp_label: Label = null
 var _comic_stamp_tween: Tween = null
+var _comic_action_cutin: SporeComicActionCutin = null
 var _timeline_panel: Panel
 var _timeline_bar: HBoxContainer
 var _unit_card_panel: Panel
@@ -1825,6 +1827,11 @@ func _resolve_due_cast_3d(caster: SporeUnitActor3D) -> void:
 	var skill: Resource = SkillCatalog.definition(skill_id)
 	if skill == null:
 		return
+	_show_actor_comic_cutin(
+		active_actor,
+		String(skill.get("display_name")),
+		"COMPÉTENCE"
+	)
 	if not caster.spend_skill_resource_only(skill_id):
 		_log("NO MP : %s ne peut pas libérer %s." % [caster.display_name, SkillCatalog.display_name(skill_id)])
 		_show_floating_text(caster.position + Vector3(0.0, 1.28, 0.0), "NO MP", Color(0.48, 0.72, 1.0, 1.0))
@@ -2204,6 +2211,11 @@ func _player_attack(target: SporeUnitActor3D) -> void:
 		_weapon_family_display_name(active_actor.weapon_family),
 		"ATTAQUE"
 	)
+	_show_actor_comic_cutin(
+		active_actor,
+		_weapon_family_display_name(active_actor.weapon_family),
+		"ATTAQUE"
+	)
 
 	var camera_duration: float = _basic_attack_camera_duration(active_actor)
 	var camera_zoom: float = 0.62 if active_actor.weapon_family == "ranged" else 0.78
@@ -2407,6 +2419,7 @@ func _perform_reaction_attack(reactor: SporeUnitActor3D, target: SporeUnitActor3
 		return
 	reactor.consume_reaction()
 	reactor.face_cell(target.cell)
+	_show_actor_comic_cutin(reactor, reaction_label, "RÉACTION")
 	reactor.play_attack(target.position)
 	_spawn_action_vfx(reactor.basic_attack_vfx_id, reactor.global_position + Vector3(0.0, 0.72, 0.0), target.global_position + Vector3(0.0, 0.64, 0.0), false)
 	_show_floating_text(reactor.position + Vector3(0.0, 1.34, 0.0), reaction_label, Color(1.0, 0.82, 0.40, 1.0))
@@ -2958,6 +2971,38 @@ func _refresh_skill_preview() -> void:
 	_rebuild_highlights()
 
 
+
+func _ensure_comic_action_cutin() -> SporeComicActionCutin:
+	if _comic_action_cutin != null and is_instance_valid(_comic_action_cutin):
+		return _comic_action_cutin
+	var instance: Node = ComicActionCutinScene.instantiate()
+	if not (instance is SporeComicActionCutin):
+		return null
+	_comic_action_cutin = instance as SporeComicActionCutin
+	add_child(_comic_action_cutin)
+	return _comic_action_cutin
+
+
+func _show_actor_comic_cutin(
+	actor: SporeUnitActor3D,
+	action_name: String,
+	category: String
+) -> void:
+	if actor == null:
+		return
+	var cutin := _ensure_comic_action_cutin()
+	if cutin == null:
+		return
+	cutin.show_action(
+		actor.portrait_texture(),
+		actor.display_name,
+		action_name,
+		category,
+		actor.team,
+		"right" if actor.team == "enemy" else "left"
+	)
+
+
 func _show_action_banner(actor_name: String, action_name: String, category: String = "") -> void:
 	if _ui_layer == null:
 		return
@@ -3302,6 +3347,11 @@ func _player_use_skill(anchor_cell: Vector2i) -> void:
 			SkillCatalog.display_name(selected_skill_id),
 			"PRÉPARATION"
 		)
+		_show_actor_comic_cutin(
+			active_actor,
+			SkillCatalog.display_name(selected_skill_id),
+			"PRÉPARATION"
+		)
 		active_actor.face_cell(anchor_cell)
 		if _queue_cast_3d(active_actor, selected_skill_id, anchor_cell):
 			selected_skill_id = ""
@@ -3315,6 +3365,7 @@ func _player_use_skill(anchor_cell: Vector2i) -> void:
 	player_busy = true
 	var skill_name: String = String(skill.get("display_name"))
 	_show_action_banner(active_actor.display_name, skill_name, "COMPÉTENCE")
+	_show_actor_comic_cutin(active_actor, skill_name, "COMPÉTENCE")
 	var anchor_global: Vector3 = map_root.to_global(map_root.cell_top_local(anchor_cell))
 	active_actor.face_cell(anchor_cell)
 	_begin_action_camera(active_actor.global_position, anchor_global, 0.86, action_camera_zoom_in + 0.25)
@@ -4506,6 +4557,11 @@ func _enemy_attack(target: SporeUnitActor3D) -> void:
 	if active_actor == null or target == null or not target.alive:
 		return
 	active_actor.acted_this_activation = true
+	_show_actor_comic_cutin(
+		active_actor,
+		_weapon_family_display_name(active_actor.weapon_family),
+		"ATTAQUE"
+	)
 	_begin_action_camera(active_actor.global_position, target.global_position, 0.72, action_camera_zoom_in)
 	active_actor.play_attack(target.position)
 	var enemy_vfx_kind: String = _basic_attack_vfx_kind(active_actor)
