@@ -3,7 +3,6 @@
 [ext_resource type="Script" uid="uid://ch7npq2pwptgi" path="res://scripts/maps/spore_map_3d.gd" id="1_map"]
 [ext_resource type="Script" uid="uid://ccvo5elovhaec" path="res://scripts/maps/spore_tactical_tile_3d.gd" id="2_tile"]
 [ext_resource type="Script" uid="uid://b6vlwgbdjyo3q" path="res://scripts/maps/spore_hero_spawn_3d.gd" id="3_hero"]
-[ext_resource type="PackedScene" path="res://scenes/environment/mission1_tile_material_field_3d.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_hero_art_polish_3d.tscn" id="2"]
 [ext_resource type="Script" uid="uid://ci4ow6j43edf8" path="res://scripts/maps/spore_enemy_spawn_3d.gd" id="4_enemy"]
 [ext_resource type="PackedScene" path="res://scenes/environment/mission1_stage_lighting_pretty_3d.tscn" id="6"]
@@ -542,9 +541,6 @@ transform = Transform3D(0.7648422, 0.5240167, -0.37473053, 0, 0.5816831, 0.81341
 light_color = Color(1, 0.9, 0.78, 1)
 light_energy = 1.08
 shadow_enabled = true
-
-[node name="TileMaterialField" parent="." instance=ExtResource("1")]
-scale = Vector3(1.4, 1.0, 1.4)
 
 
 [node name="HeroArtPolish" parent="." instance=ExtResource("2")]

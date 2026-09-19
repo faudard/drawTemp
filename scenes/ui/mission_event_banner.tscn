@@ -3,51 +3,58 @@
 [ext_resource type="Script" path="res://scripts/presentation/spore_mission_event_banner.gd" id="1_script"]
 
 [sub_resource type="StyleBoxFlat" id="MissionEventStyle"]
-bg_color = Color(0.025, 0.020, 0.034, 0.96)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.76, 0.58, 1, 1)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
-shadow_color = Color(0, 0, 0, 0.56)
-shadow_size = 6
+bg_color = Color(0.018, 0.012, 0.026, 0.975)
+border_width_left = 5
+border_width_top = 5
+border_width_right = 5
+border_width_bottom = 5
+border_color = Color(0.78, 0.58, 1, 1)
+shadow_color = Color(0, 0, 0, 0.70)
+shadow_size = 11
 
 [node name="MissionEventBanner" type="Panel"]
-custom_minimum_size = Vector2(620, 92)
+custom_minimum_size = Vector2(610, 94)
 layout_mode = 1
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -310.0
-offset_top = 92.0
-offset_right = 310.0
-offset_bottom = 184.0
+offset_left = -305.0
+offset_top = 192.0
+offset_right = 305.0
+offset_bottom = 286.0
 grow_horizontal = 2
+rotation = 0.009
 mouse_filter = 2
 theme_override_styles/panel = SubResource("MissionEventStyle")
 script = ExtResource("1_script")
 
 [node name="Title" type="Label" parent="."]
+layout_mode = 1
+anchor_right = 1.0
 offset_left = 18.0
-offset_top = 9.0
-offset_right = 602.0
+offset_top = 8.0
+offset_right = -18.0
 offset_bottom = 31.0
-theme_override_colors/font_color = Color(0.82, 0.70, 1, 1)
-theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.86, 0.74, 1, 1)
+theme_override_font_sizes/font_size = 12
 horizontal_alignment = 1
 text = "ÉVÉNEMENT DE MISSION"
 mouse_filter = 2
 
 [node name="Body" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 offset_left = 24.0
-offset_top = 34.0
-offset_right = 596.0
-offset_bottom = 80.0
-theme_override_colors/font_color = Color(0.95, 0.93, 1, 1)
-theme_override_font_sizes/font_size = 14
+offset_top = 33.0
+offset_right = -24.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.97, 0.95, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 16
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2

@@ -1,13 +1,14 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Material" path="res://assets/materials/comic_wood.tres" id="1_wood"]
 [ext_resource type="Material" path="res://assets/materials/comic_stone.tres" id="2_cap"]
 [ext_resource type="Material" path="res://assets/materials/comic_stone_light.tres" id="3_cap_light"]
+[ext_resource type="Material" path="res://assets/materials/comic_ink.tres" id="4_ink"]
 
 [sub_resource type="CylinderMesh" id="TrunkMesh"]
-top_radius = 0.18
-bottom_radius = 0.28
-height = 2.1
+top_radius = 0.20
+bottom_radius = 0.34
+height = 2.18
 radial_segments = 10
 
 [sub_resource type="SphereMesh" id="CapMesh"]
@@ -29,22 +30,28 @@ position = Vector3(0, 1.05, 0)
 mesh = SubResource("TrunkMesh")
 material_override = ExtResource("1_wood")
 
+[node name="CapInkUnder" type="MeshInstance3D" parent="."]
+position = Vector3(0, 2.03, 0)
+scale = Vector3(1.62, 0.25, 1.56)
+mesh = SubResource("CapMesh")
+material_override = ExtResource("4_ink")
+
 [node name="MainCap" type="MeshInstance3D" parent="."]
-position = Vector3(0, 2.05, 0)
-scale = Vector3(1.18, 0.62, 1.18)
+position = Vector3(0, 2.10, 0)
+scale = Vector3(1.52, 0.38, 1.46)
 mesh = SubResource("CapMesh")
 material_override = ExtResource("2_cap")
 
 [node name="SideCapA" type="MeshInstance3D" parent="."]
-position = Vector3(0.42, 1.55, 0.12)
+position = Vector3(0.54, 1.58, 0.16)
 rotation = Vector3(0.08, 0.0, 0.30)
-scale = Vector3(1.0, 0.70, 1.0)
+scale = Vector3(1.20, 0.54, 1.12)
 mesh = SubResource("SideCapMesh")
 material_override = ExtResource("3_cap_light")
 
 [node name="SideCapB" type="MeshInstance3D" parent="."]
-position = Vector3(-0.38, 1.42, -0.10)
+position = Vector3(-0.50, 1.46, -0.12)
 rotation = Vector3(-0.04, 0.0, -0.24)
-scale = Vector3(0.88, 0.64, 0.88)
+scale = Vector3(1.02, 0.48, 0.96)
 mesh = SubResource("SideCapMesh")
 material_override = ExtResource("3_cap_light")
