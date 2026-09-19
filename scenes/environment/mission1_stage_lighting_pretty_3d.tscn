@@ -1,28 +1,39 @@
 [gd_scene load_steps=2 format=3]
 
+[sub_resource type="Environment" id="Environment_stage"]
+background_mode = 1
+background_color = Color(0.075, 0.082, 0.088, 1)
+background_energy_multiplier = 0.72
+ambient_light_source = 3
+ambient_light_color = Color(0.72, 0.76, 0.78, 1)
+ambient_light_energy = 0.34
+
 [node name="Mission1StageLightingPretty3D" type="Node3D"]
 
-[node name="MoonFill" type="DirectionalLight3D" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_stage")
+
+[node name="CoolFill" type="DirectionalLight3D" parent="."]
 rotation = Vector3(-0.92, 0.58, 0)
-light_color = Color(0.60, 0.74, 1, 1)
-light_energy = 0.33
+light_color = Color(0.68, 0.76, 0.84, 1)
+light_energy = 0.24
 shadow_enabled = false
 
 [node name="WarmKey" type="DirectionalLight3D" parent="."]
 rotation = Vector3(-1.16, -0.62, 0)
-light_color = Color(1, 0.90, 0.70, 1)
-light_energy = 0.48
+light_color = Color(1, 0.90, 0.72, 1)
+light_energy = 0.54
 shadow_enabled = true
 
 [node name="CrownAccent" type="OmniLight3D" parent="."]
-position = Vector3(2.8, 2.0, -2.4)
-light_color = Color(1, 0.80, 0.44, 1)
-light_energy = 0.65
-omni_range = 6.0
+position = Vector3(6.3, 1.55, -4.9)
+light_color = Color(1, 0.80, 0.36, 1)
+light_energy = 0.58
+omni_range = 4.2
 shadow_enabled = true
 
 [node name="ExitAccent" type="OmniLight3D" parent="."]
-position = Vector3(-3.9, 1.4, 3.4)
-light_color = Color(0.44, 1, 0.72, 1)
-light_energy = 0.40
-omni_range = 4.5
+position = Vector3(-5.6, 1.10, 4.25)
+light_color = Color(0.44, 0.92, 0.70, 1)
+light_energy = 0.28
+omni_range = 3.2
