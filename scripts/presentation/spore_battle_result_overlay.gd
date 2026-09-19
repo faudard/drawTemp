@@ -51,3 +51,11 @@ func present(victory: bool, survivors: int) -> void:
 
 func _on_replay_pressed() -> void:
 	get_tree().reload_current_scene()
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not visible or not (event is InputEventKey):
+		return
+	var key_event := event as InputEventKey
+	if key_event.pressed and not key_event.echo and key_event.keycode == KEY_R:
+		_on_replay_pressed()
