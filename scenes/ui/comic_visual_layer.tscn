@@ -3,5 +3,5 @@
 [ext_resource type="Script" path="res://scripts/presentation/spore_comic_visual_layer.gd" id="1_script"]
 
 [node name="ComicVisualLayer" type="CanvasLayer"]
-layer = 10
+layer = 0
 script = ExtResource("1_script")
