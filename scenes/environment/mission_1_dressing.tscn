@@ -1,10 +1,14 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/environment/comic_mushroom_tree_3d.tscn" id="1_tree"]
 [ext_resource type="PackedScene" path="res://scenes/environment/comic_mushroom_cluster_3d.tscn" id="2_cluster"]
 [ext_resource type="PackedScene" path="res://scenes/environment/comic_ruin_cluster_3d.tscn" id="3_ruin"]
+[ext_resource type="PackedScene" path="res://scenes/environment/comic_forest_floor_3d.tscn" id="4_floor"]
 
 [node name="Mission1Dressing" type="Node3D"]
+
+[node name="ForestFloor" parent="." instance=ExtResource("4_floor")]
+
 
 [node name="ForestRing" type="Node3D" parent="."]
 
@@ -166,3 +170,35 @@ scale = Vector3(0.82, 0.82, 0.82)
 position = Vector3(6.36, 0, 4.42)
 rotation = Vector3(0, 0.54, 0)
 scale = Vector3(0.82, 0.82, 0.82)
+
+[node name="ForegroundFrame" type="Node3D" parent="."]
+
+[node name="HeroTreeLeft" parent="ForegroundFrame" instance=ExtResource("1_tree")]
+position = Vector3(-8.25, 0, 5.65)
+rotation = Vector3(0, 0.72, 0)
+scale = Vector3(1.48, 1.48, 1.48)
+
+[node name="HeroTreeRight" parent="ForegroundFrame" instance=ExtResource("1_tree")]
+position = Vector3(8.15, 0, 5.40)
+rotation = Vector3(0, -0.58, 0)
+scale = Vector3(1.42, 1.42, 1.42)
+
+[node name="HeroTreeBackLeft" parent="ForegroundFrame" instance=ExtResource("1_tree")]
+position = Vector3(-8.05, 0, -5.95)
+rotation = Vector3(0, -0.34, 0)
+scale = Vector3(1.26, 1.26, 1.26)
+
+[node name="HeroTreeBackRight" parent="ForegroundFrame" instance=ExtResource("1_tree")]
+position = Vector3(8.00, 0, -5.85)
+rotation = Vector3(0, 0.44, 0)
+scale = Vector3(1.32, 1.32, 1.32)
+
+[node name="HeroClusterLeft" parent="ForegroundFrame" instance=ExtResource("2_cluster")]
+position = Vector3(-7.55, 0, 4.85)
+rotation = Vector3(0, -0.54, 0)
+scale = Vector3(1.45, 1.45, 1.45)
+
+[node name="HeroClusterRight" parent="ForegroundFrame" instance=ExtResource("2_cluster")]
+position = Vector3(7.48, 0, 4.70)
+rotation = Vector3(0, 0.62, 0)
+scale = Vector3(1.38, 1.38, 1.38)
