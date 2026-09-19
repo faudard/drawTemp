@@ -9,17 +9,17 @@ extends Node3D
 @onready var label: Label3D = $Label
 
 var _phase: float = 0.0
+var _base_radius: float = 0.42
 
 
 func configure(tile_size: float, phase: float = 0.0) -> void:
 	_phase = phase
-	var radius: float = tile_size * 0.34
-	pool.scale = Vector3(radius, 1.0, radius)
+	_base_radius = tile_size * 0.34
+	pool.scale = Vector3(_base_radius, 1.0, _base_radius)
 	spores.amount = 8
 	label.text = "SPORES"
 
 
 func _process(_delta: float) -> void:
 	var pulse: float = 1.0 + sin(Time.get_ticks_msec() * 0.001 * pulse_speed + _phase) * pulse_amount
-	pool.scale.x = absf(pool.scale.x) * pulse
-	pool.scale.z = absf(pool.scale.z) * pulse
+	pool.scale = Vector3(_base_radius * pulse, 1.0, _base_radius * pulse)
