@@ -316,66 +316,65 @@ text = "—"
 autowrap_mode = 2
 mouse_filter = 2
 
-[node name="MoveButton" type="Button" parent="Root/CommandDeck"]
-unique_name_in_owner = true
+[node name="ActionRow" type="HBoxContainer" parent="Root/CommandDeck"]
+layout_mode = 1
+anchor_right = 1.0
 offset_left = 16.0
 offset_top = 84.0
-offset_right = 111.0
+offset_right = -16.0
 offset_bottom = 118.0
+theme_override_constants/separation = 6
+
+[node name="MoveButton" type="Button" parent="Root/CommandDeck/ActionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
 toggle_mode = true
 text = "MOVE [M]"
 focus_mode = 0
 
-[node name="AttackButton" type="Button" parent="Root/CommandDeck"]
+[node name="AttackButton" type="Button" parent="Root/CommandDeck/ActionRow"]
 unique_name_in_owner = true
-offset_left = 117.0
-offset_top = 84.0
-offset_right = 225.0
-offset_bottom = 118.0
+layout_mode = 2
+size_flags_horizontal = 3
 toggle_mode = true
 text = "ATTAQUE [A]"
 focus_mode = 0
 
-[node name="FaceButton" type="Button" parent="Root/CommandDeck"]
+[node name="FaceButton" type="Button" parent="Root/CommandDeck/ActionRow"]
 unique_name_in_owner = true
-offset_left = 231.0
-offset_top = 84.0
-offset_right = 326.0
-offset_bottom = 118.0
+layout_mode = 2
+size_flags_horizontal = 3
 text = "ORIENT. [F]"
 focus_mode = 0
 
-[node name="EndButton" type="Button" parent="Root/CommandDeck"]
+[node name="EndButton" type="Button" parent="Root/CommandDeck/ActionRow"]
 unique_name_in_owner = true
-layout_mode = 1
-anchor_right = 1.0
-offset_left = 332.0
-offset_top = 84.0
-offset_right = -16.0
-offset_bottom = 118.0
+layout_mode = 2
+size_flags_horizontal = 3
 text = "FIN [ESPACE]"
 focus_mode = 0
 
-[node name="PrimarySkillButton" type="Button" parent="Root/CommandDeck"]
-unique_name_in_owner = true
+[node name="SkillRow" type="HBoxContainer" parent="Root/CommandDeck"]
 layout_mode = 1
-anchor_right = 0.5
-offset_left = 16.0
-offset_top = 124.0
-offset_right = -4.0
-offset_bottom = 158.0
-text = "I [1]"
-focus_mode = 0
-
-[node name="SecondarySkillButton" type="Button" parent="Root/CommandDeck"]
-unique_name_in_owner = true
-layout_mode = 1
-anchor_left = 0.5
 anchor_right = 1.0
-offset_left = 4.0
+offset_left = 16.0
 offset_top = 124.0
 offset_right = -16.0
 offset_bottom = 158.0
+theme_override_constants/separation = 6
+
+[node name="PrimarySkillButton" type="Button" parent="Root/CommandDeck/SkillRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "I [1]"
+focus_mode = 0
+
+[node name="SecondarySkillButton" type="Button" parent="Root/CommandDeck/SkillRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
 text = "II [2]"
 focus_mode = 0
 
