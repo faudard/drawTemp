@@ -7,12 +7,14 @@ const SkillCatalog = preload("res://scripts/catalogs/skill_catalog.gd")
 const StatusCatalog = preload("res://scripts/catalogs/status_catalog.gd")
 const VfxCatalog = preload("res://scripts/catalogs/vfx_catalog.gd")
 const ActionVfxScript = preload("res://scripts/prototypes/spore_action_vfx_3d.gd")
-const UnitActorScript = preload("res://scripts/maps/spore_unit_actor_3d.gd")
+const UnitActorScene = preload("res://scenes/battle/unit_actor_3d.tscn")
 const CombatMechanics = preload("res://scripts/core/combat_mechanics.gd")
 const CinematicPlayerScene = preload("res://scenes/ui/cinematic_player_3d.tscn")
 const ComicActionCutinScene = preload("res://scenes/ui/comic_action_cutin.tscn")
 const BattleHudScene = preload("res://scenes/ui/battle_hud_3d.tscn")
 const TimelineActorCardScene = preload("res://scenes/ui/timeline_actor_card.tscn")
+const CombatFloatingTextScene = preload("res://scenes/battle/combat_floating_text_3d.tscn")
+const CombatFeedbackBurstScene = preload("res://scenes/battle/combat_feedback_burst_3d.tscn")
 
 const MODE_MOVE: String = "move"
 const MODE_ATTACK: String = "attack"
@@ -607,7 +609,7 @@ func _spawn_runtime_units() -> void:
 		var unit_data: Resource = UnitCatalog.definition(unit_id)
 		if unit_data == null:
 			continue
-		var actor: SporeUnitActor3D = UnitActorScript.new() as SporeUnitActor3D
+		var actor: SporeUnitActor3D = UnitActorScene.instantiate() as SporeUnitActor3D
 		actor.name = "%sActor" % unit_id.capitalize()
 		_actor_holder.add_child(actor)
 		var runtime_unit: Dictionary = UnitCatalog.make_hero(unit_id, hero_starts[index], 1, UnitCatalog.default_job(unit_id), {}, {}, PackedStringArray())
@@ -663,7 +665,7 @@ func _spawn_runtime_units() -> void:
 		if not (enemy_cell_value is Vector2i):
 			continue
 		var enemy_cell: Vector2i = enemy_cell_value
-		var enemy_actor: SporeUnitActor3D = UnitActorScript.new() as SporeUnitActor3D
+		var enemy_actor: SporeUnitActor3D = UnitActorScene.instantiate() as SporeUnitActor3D
 		enemy_actor.name = "%sEnemy" % enemy_id.capitalize()
 		_actor_holder.add_child(enemy_actor)
 		var overrides: Dictionary = {
@@ -2299,30 +2301,44 @@ func _handle_actor_ko(actor: SporeUnitActor3D, source_label: String = "") -> voi
 
 
 func _show_floating_text(world_position: Vector3, text_value: String, color: Color) -> void:
-	var label: Label3D = Label3D.new()
-	label.text = text_value
-	label.font_size = 48
-	label.outline_size = 11
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.modulate = color
-	label.position = world_position
-	label.scale = Vector3(0.82, 0.82, 0.82)
-	_actor_holder.add_child(label)
+	var kind: String = "default"
+	if text_value.begins_with("-"):
+		kind = "damage"
+	elif text_value.begins_with("+") or text_value.contains("AUTO-POTION"):
+		kind = "heal"
+	elif (
+		text_value.contains("COURONNE")
+		or text_value.contains("VINYLE")
+		or text_value.contains("COFFRE")
+		or text_value.contains("INTERRUPTEUR")
+	):
+		kind = "objective"
+	elif (
+		text_value == "RÉSISTE"
+		or text_value == "GARDE"
+		or text_value == "RÉACTION"
+		or text_value == "MISS"
+	):
+		kind = "status"
+	_show_combat_floating_text(world_position, text_value, color, kind)
 
-	var tween: Tween = create_tween()
-	tween.set_parallel(true)
-	tween.set_trans(Tween.TRANS_BACK)
-	tween.set_ease(Tween.EASE_OUT)
-	tween.tween_property(label, "position", world_position + Vector3(0.0, 0.70, 0.0), 0.82)
-	tween.tween_property(label, "scale", Vector3(1.10, 1.10, 1.10), 0.20)
-	tween.set_parallel(false)
-	tween.tween_interval(0.22)
-	tween.set_parallel(true)
-	tween.tween_property(label, "modulate", Color(color.r, color.g, color.b, 0.0), 0.28)
-	tween.tween_property(label, "scale", Vector3(0.92, 0.92, 0.92), 0.28)
-	tween.set_parallel(false)
-	tween.tween_callback(Callable(label, "queue_free"))
+
+func _show_combat_floating_text(
+	world_position: Vector3,
+	text_value: String,
+	color: Color,
+	kind: String = "default"
+) -> void:
+	if _actor_holder == null:
+		return
+	var node: Node = CombatFloatingTextScene.instantiate()
+	var floating := node as SporeCombatFloatingText3D
+	if floating == null:
+		node.queue_free()
+		return
+	_actor_holder.add_child(floating)
+	floating.position = world_position
+	floating.present(text_value, color, kind)
 
 
 func _finish_activation_if_complete() -> void:
@@ -2818,64 +2834,14 @@ func _show_action_banner(actor_name: String, action_name: String, category: Stri
 func _spawn_feedback_burst(actor: SporeUnitActor3D, color: Color) -> void:
 	if actor == null or _vfx_holder == null:
 		return
-
-	var root: Node3D = Node3D.new()
-	root.name = "FeedbackBurst"
-	_vfx_holder.add_child(root)
-	root.global_position = actor.global_position + Vector3(0.0, 0.62, 0.0)
-
-	var particle_count: int = 8
-	for index: int in range(particle_count):
-		var orb: MeshInstance3D = MeshInstance3D.new()
-		var mesh: SphereMesh = SphereMesh.new()
-		mesh.radius = 0.045
-		mesh.height = 0.09
-		orb.mesh = mesh
-
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.albedo_color = color
-		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		material.emission_enabled = true
-		material.emission = Color(color.r, color.g, color.b, 1.0)
-		material.emission_energy_multiplier = 1.3
-		orb.material_override = material
-
-		var angle: float = TAU * float(index) / float(particle_count)
-		var direction: Vector3 = Vector3(
-			cos(angle),
-			0.45 + 0.10 * float(index % 3),
-			sin(angle)
-		).normalized()
-
-		root.add_child(orb)
-		orb.position = Vector3.ZERO
-
-		var tween: Tween = create_tween()
-		tween.set_parallel(true)
-		tween.set_trans(Tween.TRANS_SINE)
-		tween.tween_property(
-			orb,
-			"position",
-			direction * (0.34 + 0.06 * float(index % 2)),
-			0.36
-		)
-		tween.tween_property(
-			orb,
-			"scale",
-			Vector3(0.12, 0.12, 0.12),
-			0.36
-		)
-		tween.tween_property(
-			material,
-			"albedo_color",
-			Color(color.r, color.g, color.b, 0.0),
-			0.36
-		)
-
-	var cleanup: Tween = create_tween()
-	cleanup.tween_interval(0.40)
-	cleanup.tween_callback(Callable(root, "queue_free"))
+	var node: Node = CombatFeedbackBurstScene.instantiate()
+	var burst := node as SporeCombatFeedbackBurst3D
+	if burst == null:
+		node.queue_free()
+		return
+	_vfx_holder.add_child(burst)
+	burst.global_position = actor.global_position + Vector3(0.0, 0.62, 0.0)
+	burst.play(color)
 
 
 func _play_victory_celebration() -> void:
@@ -6351,38 +6317,14 @@ func _skill_area_vfx_kind(skill_id: String) -> String:
 
 
 func _show_skill_name_banner(actor: SporeUnitActor3D, skill: Resource) -> void:
-	if actor == null or skill == null or _actor_holder == null:
+	if actor == null or skill == null:
 		return
-
-	var label: Label3D = Label3D.new()
-	label.text = String(skill.get("display_name"))
-	label.font_size = 32
-	label.outline_size = 9
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.modulate = Color(1.0, 0.88, 0.50, 1.0)
-	label.position = actor.position + Vector3(0.0, 1.72, 0.0)
-	label.scale = Vector3(0.74, 0.74, 0.74)
-	_actor_holder.add_child(label)
-
-	var tween: Tween = create_tween()
-	tween.set_parallel(true)
-	tween.set_trans(Tween.TRANS_BACK)
-	tween.set_ease(Tween.EASE_OUT)
-	tween.tween_property(label, "position:y", label.position.y + 0.22, 0.28)
-	tween.tween_property(label, "scale", Vector3.ONE, 0.22)
-	tween.set_parallel(false)
-	tween.tween_interval(0.30)
-	tween.set_parallel(true)
-	tween.tween_property(label, "position:y", label.position.y + 0.18, 0.26)
-	tween.tween_property(
-		label,
-		"modulate",
-		Color(1.0, 0.88, 0.50, 0.0),
-		0.26
+	_show_combat_floating_text(
+		actor.position + Vector3(0.0, 1.58, 0.0),
+		String(skill.get("display_name")),
+		Color(1.0, 0.88, 0.50, 1.0),
+		"skill"
 	)
-	tween.set_parallel(false)
-	tween.tween_callback(Callable(label, "queue_free"))
 
 
 func _play_skill_area_impacts(skill: Resource, caster: SporeUnitActor3D, anchor_cell: Vector2i) -> void:

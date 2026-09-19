@@ -1,0 +1,120 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/maps/spore_unit_actor_3d.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/components/cinematic_target_3d.tscn" id="2_cinematic"]
+
+[sub_resource type="CylinderMesh" id="ShadowMesh"]
+top_radius = 0.28
+bottom_radius = 0.36
+height = 0.02
+radial_segments = 24
+
+[sub_resource type="StandardMaterial3D" id="ShadowMaterial"]
+albedo_color = Color(0, 0, 0, 0.34)
+transparency = 1
+roughness = 1.0
+
+[sub_resource type="CylinderMesh" id="SelectionMesh"]
+top_radius = 0.40
+bottom_radius = 0.40
+height = 0.025
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="SelectionMaterial"]
+resource_local_to_scene = true
+albedo_color = Color(1, 0.91, 0.48, 0.82)
+transparency = 1
+emission_enabled = true
+emission = Color(1, 0.91, 0.48, 1)
+emission_energy_multiplier = 0.35
+roughness = 0.72
+
+[sub_resource type="CylinderMesh" id="TurnMesh"]
+top_radius = 0.48
+bottom_radius = 0.48
+height = 0.012
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="TurnMaterial"]
+resource_local_to_scene = true
+albedo_color = Color(0.34, 0.83, 1, 0.36)
+transparency = 1
+emission_enabled = true
+emission = Color(0.34, 0.83, 1, 1)
+emission_energy_multiplier = 0.20
+roughness = 0.78
+
+[sub_resource type="BoxMesh" id="FacingMesh"]
+size = Vector3(0.16, 0.04, 0.44)
+
+[sub_resource type="StandardMaterial3D" id="FacingMaterial"]
+resource_local_to_scene = true
+albedo_color = Color(0.40, 0.82, 1, 0.92)
+transparency = 1
+emission_enabled = true
+emission = Color(0.40, 0.82, 1, 1)
+emission_energy_multiplier = 0.28
+roughness = 0.76
+
+[node name="UnitActor3D" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="CinematicTarget3D" parent="." instance=ExtResource("2_cinematic")]
+
+[node name="Shadow" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.01, 0)
+mesh = SubResource("ShadowMesh")
+material_override = SubResource("ShadowMaterial")
+
+[node name="Sprite" type="Sprite3D" parent="."]
+position = Vector3(0, 0.72, 0)
+billboard = 1
+pixel_size = 0.016
+no_depth_test = false
+
+[node name="SelectionDisc" type="MeshInstance3D" parent="."]
+visible = false
+position = Vector3(0, 0.035, 0)
+mesh = SubResource("SelectionMesh")
+material_override = SubResource("SelectionMaterial")
+
+[node name="TurnMarker" type="MeshInstance3D" parent="."]
+visible = false
+position = Vector3(0, 0.018, 0)
+mesh = SubResource("TurnMesh")
+material_override = SubResource("TurnMaterial")
+
+[node name="FacingMarker" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.055, 0.25)
+mesh = SubResource("FacingMesh")
+material_override = SubResource("FacingMaterial")
+
+[node name="Vitals" type="Sprite3D" parent="."]
+position = Vector3(0, 1.30, 0)
+billboard = 1
+pixel_size = 0.0065
+no_depth_test = true
+
+[node name="HpLabel" type="Label3D" parent="."]
+position = Vector3(0, 1.48, 0)
+billboard = 1
+no_depth_test = true
+fixed_size = false
+font_size = 18
+outline_size = 5
+pixel_size = 0.0045
+horizontal_alignment = 1
+text = "10/10"
+
+[node name="StatusVfx" type="Node3D" parent="."]
+
+[node name="Label" type="Label3D" parent="."]
+position = Vector3(0, 1.60, 0)
+billboard = 1
+no_depth_test = true
+fixed_size = false
+font_size = 18
+outline_size = 5
+pixel_size = 0.0045
+horizontal_alignment = 1
+text = "Momo"

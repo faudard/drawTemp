@@ -45,3 +45,15 @@ La composition visuelle doit être **éditable dans l'éditeur Godot** :
 - le code runtime réutilise les instances présentes et ne crée des fallbacks que si elles manquent.
 
 Le but est qu'un level designer puisse déplacer le décor dans la vue 3D et ajuster l'UI dans la vue 2D sans modifier `spore_battle_board_3d.gd`.
+
+
+### Feedback de combat
+
+Les éléments temporaires de combat doivent aussi utiliser des scènes réutilisables quand leur structure visuelle est stable :
+
+- `combat_floating_text_3d.tscn` porte la taille, le billboard, le pixel size et le contour des textes ;
+- `combat_feedback_burst_3d.tscn` utilise `GPUParticles3D` plutôt qu'une boucle qui crée des meshes à la volée ;
+- `unit_actor_3d.tscn` porte les nodes visuels communs à tous les combattants (sprite, ombre, sélection, direction, vitaux, labels) ;
+- les scripts ne changent que le contenu, la couleur, l'état et l'animation.
+
+Les textes flottants restent petits et ancrés dans le monde : pas de `fixed_size` et pas de gros texte écran pour les dégâts, objets ou compétences.
