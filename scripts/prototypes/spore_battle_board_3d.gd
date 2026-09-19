@@ -50,12 +50,13 @@ const ACTION_SKILL: String = "skill"
 @export_range(0, 10, 1) var mp_regen_end_activation: int = 1
 
 @export_group("Camera")
-@export var camera_distance: float = 11.8
-@export var camera_height: float = 10.6
-@export var camera_angle_degrees: float = -38.0
-@export var zoom_min: float = 5.0
-@export var zoom_max: float = 18.0
+@export var camera_distance: float = 10.4
+@export var camera_height: float = 9.4
+@export var camera_angle_degrees: float = -43.0
+@export var zoom_min: float = 4.8
+@export var zoom_max: float = 16.0
 @export var camera_follow_active: bool = false
+@export_range(-4.0, 4.0, 0.1) var camera_composition_bias: float = -1.15
 @export_range(1.0, 16.0, 0.5) var camera_pan_speed: float = 5.5
 @export_range(1.0, 20.0, 0.5) var camera_smoothing: float = 4.5
 @export var action_camera_enabled: bool = true
@@ -134,10 +135,11 @@ var _hover_forecast_label: Label3D = null
 var _threat_overlay_enabled: bool = false
 var _threat_cells_cache: Dictionary = {}
 var _ui_layer: CanvasLayer
+var _battle_hud: SporeBattleHud = null
 var _cinematic_player_3d: SporeCinematicPlayer3D = null
 var _cinematic_camera_active: bool = false
 var _cinematic_camera_saved_focus: Vector3 = Vector3.ZERO
-var _cinematic_camera_saved_distance: float = 11.8
+var _cinematic_camera_saved_distance: float = 10.4
 var _cinematic_end_started: bool = false
 var _info_label: Label
 var _help_label: Label
@@ -183,8 +185,8 @@ var _wheel_face_button: Button
 var _wheel_end_button: Button
 var _camera_current_angle: float = 0.0
 var _camera_target_angle: float = 0.0
-var _camera_current_distance: float = 11.8
-var _camera_target_distance: float = 11.8
+var _camera_current_distance: float = 10.4
+var _camera_target_distance: float = 10.4
 var _camera_focus_current: Vector3 = Vector3.ZERO
 var _camera_focus_target: Vector3 = Vector3.ZERO
 var _camera_initialized: bool = false
@@ -388,63 +390,61 @@ func _ensure_runtime_nodes() -> void:
 
 
 func _build_ui() -> void:
-	_ui_layer = get_node_or_null("UI") as CanvasLayer
-	if _ui_layer == null:
+	_battle_hud = get_node_or_null("UI") as SporeBattleHud
+	if _battle_hud == null:
 		var hud_node: Node = BattleHudScene.instantiate()
-		if not (hud_node is CanvasLayer):
+		if not (hud_node is SporeBattleHud):
 			hud_node.queue_free()
 			return
 		hud_node.name = "UI"
 		add_child(hud_node)
-		_ui_layer = hud_node as CanvasLayer
+		_battle_hud = hud_node as SporeBattleHud
 
-	var root := _ui_layer.get_node_or_null("Root") as Control
-	if root == null:
+	_ui_layer = _battle_hud
+	if _battle_hud == null:
 		return
 
-	_turn_label = root.get_node_or_null("CommandPanel/TurnLabel") as Label
-	_info_label = root.get_node_or_null("CommandPanel/InfoLabel") as Label
-	_help_label = root.get_node_or_null("CommandPanel/HelpLabel") as Label
-	_move_button = root.get_node_or_null("CommandPanel/MoveButton") as Button
-	_attack_button = root.get_node_or_null("CommandPanel/AttackButton") as Button
-	_face_button = root.get_node_or_null("CommandPanel/FaceButton") as Button
-	_end_button = root.get_node_or_null("CommandPanel/EndButton") as Button
-	_primary_skill_button = root.get_node_or_null("CommandPanel/PrimarySkillButton") as Button
-	_secondary_skill_button = root.get_node_or_null("CommandPanel/SecondarySkillButton") as Button
+	_turn_label = _battle_hud.turn_label
+	_info_label = _battle_hud.info_label
+	_help_label = _battle_hud.help_label
+	_move_button = _battle_hud.move_button
+	_attack_button = _battle_hud.attack_button
+	_face_button = _battle_hud.face_button
+	_end_button = _battle_hud.end_button
+	_primary_skill_button = _battle_hud.primary_skill_button
+	_secondary_skill_button = _battle_hud.secondary_skill_button
 
-	_timeline_panel = root.get_node_or_null("InitiativeTimeline") as Panel
-	_timeline_bar = root.get_node_or_null("InitiativeTimeline/Bar") as HBoxContainer
+	_timeline_panel = _battle_hud.timeline_panel
+	_timeline_bar = _battle_hud.timeline_bar
+	_log_label = _battle_hud.log_label
 
-	_log_label = root.get_node_or_null("BattleLog/LogLabel") as Label
+	_preview_panel = _battle_hud.preview_panel
+	_preview_title = _battle_hud.preview_title
+	_preview_body = _battle_hud.preview_body
+	_preview_confirm_button = _battle_hud.preview_confirm_button
+	_preview_cancel_button = _battle_hud.preview_cancel_button
 
-	_preview_panel = root.get_node_or_null("CombatPreview") as Panel
-	_preview_title = root.get_node_or_null("CombatPreview/Title") as Label
-	_preview_body = root.get_node_or_null("CombatPreview/Body") as Label
-	_preview_confirm_button = root.get_node_or_null("CombatPreview/ConfirmButton") as Button
-	_preview_cancel_button = root.get_node_or_null("CombatPreview/CancelButton") as Button
+	_unit_card_panel = _battle_hud.unit_card_panel
+	_unit_portrait = _battle_hud.unit_portrait
+	_unit_card_title = _battle_hud.unit_card_title
+	_unit_hp_bar = _battle_hud.unit_hp_bar
+	_unit_hp_text_label = _battle_hud.unit_hp_text
+	_unit_focus_bar = _battle_hud.unit_mp_bar
+	_unit_mp_text_label = _battle_hud.unit_mp_text
+	_unit_card_body = _battle_hud.unit_card_body
 
-	_unit_card_panel = root.get_node_or_null("UnitCard") as Panel
-	_unit_portrait = root.get_node_or_null("UnitCard/Portrait") as TextureRect
-	_unit_card_title = root.get_node_or_null("UnitCard/Title") as Label
-	_unit_hp_bar = root.get_node_or_null("UnitCard/HpBar") as ProgressBar
-	_unit_hp_text_label = root.get_node_or_null("UnitCard/HpText") as Label
-	_unit_focus_bar = root.get_node_or_null("UnitCard/MpBar") as ProgressBar
-	_unit_mp_text_label = root.get_node_or_null("UnitCard/MpText") as Label
-	_unit_card_body = root.get_node_or_null("UnitCard/Body") as Label
+	_hero_splash_panel = _battle_hud.hero_panel
+	_hero_splash_portrait = _battle_hud.hero_portrait
+	_hero_splash_name = _battle_hud.hero_name
 
-	_hero_splash_panel = root.get_node_or_null("HeroSplash") as Panel
-	_hero_splash_portrait = root.get_node_or_null("HeroSplash/Portrait") as TextureRect
-	_hero_splash_name = root.get_node_or_null("HeroSplash/Name") as Label
+	_objective_panel_3d = _battle_hud.objective_panel
+	_objective_title_3d = _battle_hud.objective_title
+	_objective_body_3d = _battle_hud.objective_body
 
-	_objective_panel_3d = root.get_node_or_null("MissionObjectivePanel") as Panel
-	_objective_title_3d = root.get_node_or_null("MissionObjectivePanel/Title") as Label
-	_objective_body_3d = root.get_node_or_null("MissionObjectivePanel/Body") as Label
-
-	_action_banner_panel = root.get_node_or_null("ActionBanner") as Panel
-	_action_banner_title = root.get_node_or_null("ActionBanner/Title") as Label
-	_action_banner_subtitle = root.get_node_or_null("ActionBanner/Subtitle") as Label
-
-	_facing_panel = root.get_node_or_null("FacingSelector") as Panel
+	_action_banner_panel = _battle_hud.action_banner_panel
+	_action_banner_title = _battle_hud.action_banner_title
+	_action_banner_subtitle = _battle_hud.action_banner_subtitle
+	_facing_panel = _battle_hud.facing_panel
 
 	if _move_button != null and not _move_button.pressed.is_connected(_on_move_mode_pressed):
 		_move_button.pressed.connect(_on_move_mode_pressed)
@@ -455,40 +455,36 @@ func _build_ui() -> void:
 		_face_button.pressed.connect(face_callable)
 	if _end_button != null and not _end_button.pressed.is_connected(_on_end_activation_pressed):
 		_end_button.pressed.connect(_on_end_activation_pressed)
+
 	var primary_skill_callable: Callable = _on_skill_pressed.bind(1)
 	if _primary_skill_button != null and not _primary_skill_button.pressed.is_connected(primary_skill_callable):
 		_primary_skill_button.pressed.connect(primary_skill_callable)
 	var secondary_skill_callable: Callable = _on_skill_pressed.bind(2)
 	if _secondary_skill_button != null and not _secondary_skill_button.pressed.is_connected(secondary_skill_callable):
 		_secondary_skill_button.pressed.connect(secondary_skill_callable)
+
 	if _preview_confirm_button != null and not _preview_confirm_button.pressed.is_connected(_confirm_pending_action):
 		_preview_confirm_button.pressed.connect(_confirm_pending_action)
 	if _preview_cancel_button != null and not _preview_cancel_button.pressed.is_connected(_cancel_pending_action):
 		_preview_cancel_button.pressed.connect(_cancel_pending_action)
 
-	if _facing_panel != null:
-		var north := _facing_panel.get_node_or_null("North") as Button
-		var west := _facing_panel.get_node_or_null("West") as Button
-		var south := _facing_panel.get_node_or_null("South") as Button
-		var east := _facing_panel.get_node_or_null("East") as Button
-		var cancel := _facing_panel.get_node_or_null("Cancel") as Button
-		var confirm := _facing_panel.get_node_or_null("Confirm") as Button
-		var north_callable: Callable = _choose_facing.bind(Vector2i.UP)
-		var west_callable: Callable = _choose_facing.bind(Vector2i.LEFT)
-		var south_callable: Callable = _choose_facing.bind(Vector2i.DOWN)
-		var east_callable: Callable = _choose_facing.bind(Vector2i.RIGHT)
-		if north != null and not north.pressed.is_connected(north_callable):
-			north.pressed.connect(north_callable)
-		if west != null and not west.pressed.is_connected(west_callable):
-			west.pressed.connect(west_callable)
-		if south != null and not south.pressed.is_connected(south_callable):
-			south.pressed.connect(south_callable)
-		if east != null and not east.pressed.is_connected(east_callable):
-			east.pressed.connect(east_callable)
-		if cancel != null and not cancel.pressed.is_connected(_close_facing_selector):
-			cancel.pressed.connect(_close_facing_selector)
-		if confirm != null and not confirm.pressed.is_connected(_confirm_facing_and_end):
-			confirm.pressed.connect(_confirm_facing_and_end)
+	var north_callable: Callable = _choose_facing.bind(Vector2i.UP)
+	var west_callable: Callable = _choose_facing.bind(Vector2i.LEFT)
+	var south_callable: Callable = _choose_facing.bind(Vector2i.DOWN)
+	var east_callable: Callable = _choose_facing.bind(Vector2i.RIGHT)
+
+	if _battle_hud.facing_north != null and not _battle_hud.facing_north.pressed.is_connected(north_callable):
+		_battle_hud.facing_north.pressed.connect(north_callable)
+	if _battle_hud.facing_west != null and not _battle_hud.facing_west.pressed.is_connected(west_callable):
+		_battle_hud.facing_west.pressed.connect(west_callable)
+	if _battle_hud.facing_south != null and not _battle_hud.facing_south.pressed.is_connected(south_callable):
+		_battle_hud.facing_south.pressed.connect(south_callable)
+	if _battle_hud.facing_east != null and not _battle_hud.facing_east.pressed.is_connected(east_callable):
+		_battle_hud.facing_east.pressed.connect(east_callable)
+	if _battle_hud.facing_cancel != null and not _battle_hud.facing_cancel.pressed.is_connected(_close_facing_selector):
+		_battle_hud.facing_cancel.pressed.connect(_close_facing_selector)
+	if _battle_hud.facing_confirm != null and not _battle_hud.facing_confirm.pressed.is_connected(_confirm_facing_and_end):
+		_battle_hud.facing_confirm.pressed.connect(_confirm_facing_and_end)
 
 	# The old floating ActionWheel duplicated commands and covered tactical cells.
 	_action_wheel = null
@@ -1123,18 +1119,14 @@ func _mission_result_3d() -> int:
 func _ensure_objective_ui_3d() -> void:
 	if _objective_panel_3d != null and _objective_body_3d != null:
 		return
-	if _ui_layer == null:
+	if _battle_hud == null:
 		_build_ui()
-	if _ui_layer == null:
+	if _battle_hud == null:
 		return
 
-	var root := _ui_layer.get_node_or_null("Root") as Control
-	if root == null:
-		return
-
-	_objective_panel_3d = root.get_node_or_null("MissionObjectivePanel") as Panel
-	_objective_title_3d = root.get_node_or_null("MissionObjectivePanel/Title") as Label
-	_objective_body_3d = root.get_node_or_null("MissionObjectivePanel/Body") as Label
+	_objective_panel_3d = _battle_hud.objective_panel
+	_objective_title_3d = _battle_hud.objective_title
+	_objective_body_3d = _battle_hud.objective_body
 
 
 func _objective_status_text_3d() -> String:
@@ -6042,11 +6034,14 @@ func _apply_camera_transform() -> void:
 	if _camera_shake_strength > 0.0001:
 		shake_offset.x = sin(_presentation_time * 79.0) * _camera_shake_strength
 		shake_offset.z = cos(_presentation_time * 67.0) * _camera_shake_strength * 0.65
-	_camera_rig.position = _camera_focus_current + shake_offset
+	var yaw: float = deg_to_rad(_camera_current_angle)
+	var screen_right: Vector3 = Vector3(cos(yaw), 0.0, -sin(yaw))
+	var framing_focus: Vector3 = _camera_focus_current + screen_right * camera_composition_bias
+	_camera_rig.position = framing_focus + shake_offset
 	_camera_rig.rotation_degrees = Vector3(0.0, _camera_current_angle, 0.0)
 	_camera.position = Vector3(0.0, camera_height, _camera_current_distance)
-	_camera.look_at(_camera_focus_current, Vector3.UP)
-	_camera.size = clampf(_camera_current_distance * 0.84, zoom_min, zoom_max)
+	_camera.look_at(framing_focus, Vector3.UP)
+	_camera.size = clampf(_camera_current_distance * 0.76, zoom_min, zoom_max)
 	_light.rotation_degrees = Vector3(-48.0, 28.0, 0.0)
 
 
