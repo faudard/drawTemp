@@ -23,6 +23,8 @@ def _utility(battle, actor, rows):
             score += 10 if friendly else -10
         elif row["kind"] == "mp":
             score += (1 if friendly else -1) * min(row["amount"], target.max_mp - target.mp)
+        elif row["kind"] == "tactic":
+            score += (-1.4 if friendly else 1) * min(row["amount"], target.hp) * row["chance"]
     return score
 
 
@@ -90,6 +92,11 @@ def choose_command(battle):
     if candidates:
         # Canonical JSON-like string breaks ties independently of dict ordering.
         return sorted(candidates, key=lambda c: (-c[0], str(sorted(c[1].items()))))[0][1]
+    if not u.acted and "dont_act" not in u.statuses:
+        if u.weapon == "ranged" and not battle.engaged_by(u):
+            return {"kind": "prepare", "mode": "overwatch"}
+        if battle.engagement_range(u) > 0 and any(distance(u.pos, t.pos) <= u.movement_budget + battle.engagement_range(u) for t in opponents):
+            return {"kind": "prepare", "mode": "guard"}
     facing = u.facing
     if opponents:
         nearest = min(opponents, key=lambda t: (distance(t.pos, u.pos), t.id))
