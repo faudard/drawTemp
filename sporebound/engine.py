@@ -227,7 +227,8 @@ class Battle:
     def engaged_by(self, u: Unit) -> list[Unit]:
         return [e for e in self.units if e.alive and e.team != u.team
                 and self.engagement_range(e) > 0
-                and distance(e.pos, u.pos) <= self.engagement_range(e)]
+                and distance(e.pos, u.pos) <= self.engagement_range(e)
+                and self.line_of_sight(e.pos, u.pos)]
 
     def engagement_threats(self, cell: Cell, moving_team: str) -> list[dict]:
         result = []
@@ -235,7 +236,7 @@ class Battle:
             if not enemy.alive or enemy.team == moving_team:
                 continue
             radius = self.engagement_range(enemy)
-            if radius and distance(enemy.pos, cell) <= radius:
+            if radius and distance(enemy.pos, cell) <= radius and self.line_of_sight(enemy.pos, cell):
                 result.append({"unit": enemy.id, "kind": "engagement", "range": radius})
         return result
 
@@ -257,7 +258,8 @@ class Battle:
         return result
 
     def _basic(self, u: Unit) -> Skill:
-        attack_range = u.attack_range if u.attack_range_mode == "fixed" else max(1, self.board.width + self.board.height - 2)
+        fixed_range = max(u.attack_range, 2) if u.weapon == "spear" else u.attack_range
+        attack_range = fixed_range if u.attack_range_mode == "fixed" else max(1, self.board.width + self.board.height - 2)
         optimal = u.optimal_range or (u.attack_range if u.attack_range_mode == "los" else 0)
         return Skill("attack", "Attaque", [Effect()], range=attack_range, min_range=u.min_range,
                      optimal_range=optimal, falloff_per_tile=u.falloff_per_tile)
@@ -377,7 +379,7 @@ class Battle:
                     partner = self.unit(tactic["partner"])
                     basic = self._basic(partner)
                     result.append({"unit": target.id, "kind": "tactic",
-                                   "chance": self.hit_chance(partner, target, basic),
+                                   "chance": self.hit_chance(u, target, s) * self.hit_chance(partner, target, basic),
                                    "amount": max(1, self.damage(partner, target, basic, basic.effects[0]) // 2),
                                    "status": "", "tactic": tactic["id"], "partner": partner.id})
         return result
@@ -395,6 +397,9 @@ class Battle:
             if status != "silence" or self.content.skills[u.cast["skill"]].magical:
                 u.cast = None
                 self.emit("cast_cancelled", unit=u.id)
+        if status in {"sleep", "stop", "dont_act"} and u.id in self.prepared_reactions:
+            self.prepared_reactions.pop(u.id, None)
+            self.emit("prepared_cancelled", unit=u.id, reason=status)
         self.emit("status", unit=u.id, status=status, duration=duration)
 
     def _hurt(self, target: Unit, amount: int, source: Unit | None = None, reactions=True):
@@ -502,7 +507,7 @@ class Battle:
                     self._displace(caster, target, e.power, e.kind == "pull")
         if skill.id == "attack":
             primary = self.at(cell)
-            if primary is not None and primary.alive and primary.team != caster.team:
+            if primary is not None and primary.alive and primary.team != caster.team and rolls.get(primary.id, False):
                 self._resolve_team_tactic(caster, primary)
         self._triggers()
         self._outcome()
