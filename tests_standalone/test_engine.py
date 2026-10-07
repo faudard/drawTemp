@@ -398,4 +398,15 @@ class TeamTacticsTests(unittest.TestCase):
         self.assertTrue(any(e['kind']=='prepared_cancelled' and e['reason']=='sleep' for e in b.events))
 
 
+    def test_movement_threat_forecast_is_pure_and_lists_guard(self):
+        b=fixture()
+        b.execute({'kind':'prepare','mode':'guard'})
+        mover=b.unit('b')
+        before=b.digest()
+        rows=b.movement_threats(mover,[(3,1),(2,1),(1,1)])
+        self.assertEqual(before,b.digest())
+        self.assertTrue(any(r['kind']=='engagement' and r['unit']=='a' for r in rows))
+        self.assertTrue(any(r['kind']=='guard' and r['unit']=='a' and r['cell']==(1,1) for r in rows))
+
+
 if __name__=='__main__': unittest.main()
