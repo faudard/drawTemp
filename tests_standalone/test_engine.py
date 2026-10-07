@@ -359,6 +359,28 @@ class TeamTacticsTests(unittest.TestCase):
         self.assertEqual(partner.ct,20)
         self.assertTrue(any(e['kind']=='tactic' and e['tactic']=='pincer' for e in b.events))
 
+
+    def test_crossfire_requires_distinct_angle_and_spends_partner_ct(self):
+        b=fixture(weapon='ranged',attack_range=4,min_range=1,attack_range_mode='los',
+                  tactics=['crossfire'])
+        target=b.unit('b')
+        partner=Unit('ally','Ally','player',(3,4),weapon='ranged',attack_range=4,
+                     min_range=1,attack_range_mode='los',ct=40,tactics=['crossfire'])
+        b.units.append(partner)
+        options=b.available_team_tactics(b.active,target)
+        self.assertEqual(options,[{'id':'crossfire','partner':'ally','target':'b','ct_cost':20}])
+        b.execute({'kind':'act','skill':'attack','cell':[3,1]})
+        self.assertEqual(target.hp,9)
+        self.assertEqual(partner.ct,20)
+        self.assertTrue(any(e['kind']=='tactic' and e['tactic']=='crossfire' for e in b.events))
+
+        b=fixture(weapon='ranged',attack_range=4,min_range=1,attack_range_mode='los',
+                  tactics=['crossfire'])
+        partner=Unit('ally','Ally','player',(1,1),weapon='ranged',attack_range=4,
+                     min_range=1,attack_range_mode='los',ct=40,tactics=['crossfire'])
+        b.units.append(partner)
+        self.assertEqual(b.available_team_tactics(b.active,b.unit('b')),[])
+
     def test_prepared_reaction_is_replay_deterministic(self):
         b=fixture(weapon='ranged',attack_range=4,min_range=1)
         b.execute({'kind':'prepare','mode':'overwatch'})
