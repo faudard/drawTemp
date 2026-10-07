@@ -9,7 +9,7 @@ Cell = tuple[int, int]
 STATUSES = {"poison", "regen", "haste", "slow", "protect", "shell", "silence",
             "sleep", "stop", "dont_move", "dont_act", "guard"}
 REACTIONS = {"none", "counter", "opportunity", "blade_grasp", "auto_potion", "mp_switch"}
-TEAM_TACTICS = {"pincer"}
+TEAM_TACTICS = {"pincer", "crossfire"}
 SUPPORTS = {"none", "attack_up", "magic_attack_up", "defense_up", "magic_defense_up",
             "concentrate", "short_charge"}
 MOVEMENTS = {"none", "move_plus_1", "move_plus_2", "ignore_height", "teleport", "move_mp_up"}
