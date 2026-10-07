@@ -538,6 +538,8 @@ class Battle:
                 self.prepared_reactions.pop(target.id, None)
             if amount <= 0:
                 return
+        self.emit("forced_move", unit=target.id, source=caster.id,
+                  mode="pull" if pull else "push", amount=amount)
         dx, dy = target.pos[0] - caster.pos[0], target.pos[1] - caster.pos[1]
         if not dx and not dy:
             return
