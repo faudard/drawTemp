@@ -28,6 +28,15 @@ def _utility(battle, actor, rows):
     return score
 
 
+def _path_risk(battle, actor, path):
+    rows = battle.movement_threats(actor, path)
+    risk = sum(row["amount"] * row["chance"] for row in rows
+               if row["kind"] in {"opportunity", "overwatch", "guard"})
+    if actor.weapon == "ranged":
+        risk += sum(6 for row in rows if row["kind"] == "engagement")
+    return risk
+
+
 def choose_command(battle):
     u = battle.active
     if u is None:
@@ -50,6 +59,8 @@ def choose_command(battle):
     original = u.pos
     try:
         for origin, (cost, path) in sorted(origins.items()):
+            u.pos = original
+            path_risk = _path_risk(battle, u, path) if origin != original else 0
             u.pos = origin
             if not u.acted and "dont_act" not in u.statuses:
                 for sid in ["attack", *u.skills]:
@@ -63,7 +74,7 @@ def choose_command(battle):
                         except RuleError:
                             continue
                         value = _utility(battle, u, rows) / (1 + skill.cast_ticks / 10) - skill.cost * .2
-                        value -= sum(battle.board.tile(c).hazard for c in path[1:]) * 1.5 + cost * .05
+                        value -= sum(battle.board.tile(c).hazard for c in path[1:]) * 1.5 + cost * .05 + path_risk
                         if value > 0:
                             cmd = {"kind": "act", "skill": sid, "cell": list(cell)} if origin == original else {"kind": "move", "cell": list(origin)}
                             candidates.append((value, cmd))
@@ -78,7 +89,7 @@ def choose_command(battle):
                     goals = battle.mission.goal if battle.carrier == u.id else [battle.relic_pos] if battle.relic_pos else []
                     if goals:
                         score = (min(distance(original, g) for g in goals) - min(distance(origin, g) for g in goals)) * 3 - cost * .05
-                score -= sum(battle.board.tile(c).hazard for c in path[1:]) * 1.5
+                score -= sum(battle.board.tile(c).hazard for c in path[1:]) * 1.5 + path_risk
                 score += battle.board.tile(origin).cover * .001
                 if score > 0:
                     candidates.append((score, {"kind": "move", "cell": list(origin)}))
