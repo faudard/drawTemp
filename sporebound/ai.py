@@ -35,6 +35,16 @@ def choose_command(battle):
     opponents = [t for t in battle.units if t.alive and t.team != u.team]
     if u.cast:
         return {"kind": "end"}
+    if u.disengaging:
+        reachable = battle.reachable(u)
+        if reachable and opponents:
+            best = max(reachable, key=lambda c: (min(distance(c, t.pos) for t in opponents),
+                                                 battle.board.tile(c).cover, -reachable[c][0], c))
+            if best != u.pos:
+                return {"kind": "move", "cell": list(best)}
+        return {"kind": "end"}
+    if u.weapon == "ranged" and battle.engaged_by(u) and not u.acted and "dont_act" not in u.statuses:
+        return {"kind": "disengage"}
     origins = {u.pos: (0, [u.pos]), **battle.reachable(u)}
     candidates = []
     original = u.pos
