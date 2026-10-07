@@ -1289,7 +1289,7 @@
                 "status": "slow"
               },
               {
-                "kind": "displace",
+                "kind": "forced_move",
                 "mode": "push"
               },
               {
