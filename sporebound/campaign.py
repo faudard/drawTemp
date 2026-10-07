@@ -51,6 +51,7 @@ class Campaign:
         return True
 
     def unlock_tactic(self, a, b, tactic):
+        require(tactic in TEAM_TACTICS, "Tactic not implemented")
         key = pair_key(a, b)
         known = self.known_tactics.setdefault(key, [])
         if tactic in known:
@@ -84,6 +85,7 @@ class Campaign:
             require(len(members) == 2, "Tactic unlock currently requires a pair")
             key = pair_key(*members)
             tactic = rule["id"]
+            require(tactic in TEAM_TACTICS, "Tactic not implemented")
             if tactic in self.known_tactics.get(key, []):
                 continue
             if unlock_rule_met(self.bond_stats.get(key, {}), rule["unlock"],
@@ -159,7 +161,7 @@ class Campaign:
         return Battle(prepared, mission_id, seed)
 
     def finish(self, battle, playtest=False, tactic_rules=None):
-        if playtest:
+        if playtest or battle.result not in {"victory", "defeat"}:
             return False
         rules = battle.content.tactic_unlocks if tactic_rules is None else tactic_rules
         self.record_bonds(battle)
