@@ -1261,5 +1261,47 @@
       },
       "price": 100
     }
-  }
+  },
+  "tactic_unlocks": [
+    {
+      "id": "pincer",
+      "members": [
+        "ziggy",
+        "momo"
+      ],
+      "unlock": {
+        "any": [
+          {
+            "all": [
+              {
+                "completed_mission": "garden"
+              },
+              {
+                "stat": "shared_kills",
+                "gte": 2
+              }
+            ]
+          },
+          {
+            "sequence": [
+              {
+                "kind": "status",
+                "status": "slow"
+              },
+              {
+                "kind": "displace",
+                "mode": "push"
+              },
+              {
+                "kind": "damage"
+              }
+            ],
+            "same_target": true,
+            "max_ticks": 10,
+            "require_sources": "all_members"
+          }
+        ]
+      }
+    }
+  ]
 }
