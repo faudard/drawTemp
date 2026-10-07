@@ -272,3 +272,27 @@ An engaged unit may spend Act to prepare a safe withdrawal; its following Move i
 **Reason:** melee control should impose a meaningful opportunity cost without becoming a hard movement lock.
 
 Future contact mechanics (Charge, Brace, Pursuit, Challenge) must preserve this counterplay principle.
+
+
+## D-031 — Intercept makes melee protection active
+**Decision:** PROTOTYPE IMPLEMENTED.
+
+A close-combat unit may spend Act to protect one nearby ally from one eligible enemy hit. The response consumes its prepared charge and CT.
+
+**Reason:** tank/protector identity should come from spatial protection decisions rather than passive HP/DEF alone.
+
+## D-032 — Crossfire is a ranged Team Tactic
+**Decision:** PROTOTYPE IMPLEMENTED.
+
+Two prepared ranged bondmates with LOS from distinct vectors may create a bounded follow-up. Same-ray positions do not qualify; engaged shooters cannot contribute.
+
+**Reason:** long range remains powerful but teamwork still depends on geometry, positioning and CT reserve.
+
+## D-033 — Tactical Bond unlocks are event-driven
+**Decision:** FOUNDATION IMPLEMENTED.
+
+Campaign progression stores per-pair statistics plus known/prepared tactics. Unlock rules may compose mission requirements, cumulative stats and hidden ordered event sequences.
+
+Examples include target-specific shared kills and same-target status → displacement → damage patterns.
+
+**Reason:** secret/mastery unlocks must be authored as data over normalized battle events, never as character-specific branches in the combat engine.
