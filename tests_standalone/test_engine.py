@@ -398,6 +398,21 @@ class TeamTacticsTests(unittest.TestCase):
         self.assertTrue(any(e['kind']=='prepared_cancelled' and e['reason']=='sleep' for e in b.events))
 
 
+    def test_intercept_redirects_one_enemy_hit_to_protector(self):
+        b=fixture()
+        ally=Unit('ally','Ally','player',(1,1))
+        b.units.append(ally)
+        b.unit('b').pos=(2,1)
+        b.execute({'kind':'prepare','mode':'intercept','target':'ally'})
+        b.execute({'kind':'end'})
+        b.execute({'kind':'act','skill':'attack','cell':[1,1]})
+        self.assertEqual(ally.hp,40)
+        self.assertEqual(b.unit('a').hp,25)
+        self.assertNotIn('a',b.prepared_reactions)
+        self.assertTrue(any(e['kind']=='intercept' and e['unit']=='a'
+                            and e['protected']=='ally' for e in b.events))
+
+
     def test_movement_threat_forecast_is_pure_and_lists_guard(self):
         b=fixture()
         b.execute({'kind':'prepare','mode':'guard'})
