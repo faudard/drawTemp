@@ -31,9 +31,13 @@ def battle_bond_deltas(battle) -> dict[str, dict[str, int]]:
             if source in player_ids and target:
                 contributors.setdefault(target, set()).add(source)
         elif kind == "downed":
-            sources = sorted(contributors.get(event.get("unit"), set()))
+            target = event.get("unit")
+            sources = sorted(contributors.get(target, set()))
             for a, b in combinations(sources, 2):
-                _inc(result, pair_key(a, b), "shared_kills")
+                key = pair_key(a, b)
+                _inc(result, key, "shared_kills")
+                _inc(result, key, f"shared_kill:{target}")
+            contributors.pop(target, None)
         elif kind == "tactic":
             members = sorted({uid for uid in event.get("units", []) if uid in player_ids})
             for a, b in combinations(members, 2):
