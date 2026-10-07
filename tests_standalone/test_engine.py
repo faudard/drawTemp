@@ -549,4 +549,39 @@ class TeamTacticsTests(unittest.TestCase):
                              for row in b.available_team_tactics(caster,target)))
 
 
+    def test_relay_repositions_partner_without_bypassing_topology(self):
+        content=fixture().content
+        mission=content.missions['test']
+        mission.units[0].tactics=['relay']
+        mission.units.append(Unit('ally','Ally','player',(1,1),ct=40,tactics=['relay']))
+        content.validate()
+        b=Battle(content,'test',seed=7)
+
+        before=b.digest()
+        options=b.relay_options()
+        self.assertEqual(before,b.digest())
+        option=next(row for row in options
+                    if row['partner']=='ally' and row['cell']==(2,1))
+        self.assertEqual(option['move_cost'],1)
+        b.execute({'kind':'relay','partner':'ally','cell':[2,1]})
+        self.assertEqual(b.unit('ally').pos,(2,1))
+        self.assertEqual(b.unit('ally').ct,20)
+        self.assertTrue(b.unit('a').acted)
+        self.assertTrue(any(e['kind']=='tactic' and e['tactic']=='relay'
+                            and e['units']==['a','ally'] for e in b.events))
+        self.assertEqual(Battle.replay(b.recording()).digest(),b.digest())
+
+    def test_relay_rejects_blocked_and_carrier_destinations(self):
+        content=fixture().content
+        mission=content.missions['test']
+        mission.units[0].tactics=['relay']
+        mission.units.append(Unit('ally','Ally','player',(1,1),ct=40,tactics=['relay']))
+        mission.board.tiles[(2,1)]=Tile(blocked=True)
+        content.validate()
+        b=Battle(content,'test',seed=7)
+        self.assertFalse(any(row['cell']==(2,1) for row in b.relay_options()))
+        b.carrier='ally'
+        self.assertEqual(b.relay_options(),[])
+
+
 if __name__=='__main__': unittest.main()

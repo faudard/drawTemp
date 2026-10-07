@@ -356,6 +356,32 @@ class Battle:
                            "threats": self.movement_threats(u, path)})
         return sorted(result, key=lambda row: (row["target"], row["landing"]))
 
+    def relay_options(self, unit: Unit | None = None) -> list[dict]:
+        """Pure pair-tactic query: spend Act + partner CT for a bounded legal reposition."""
+        u = unit or self.active
+        if (u is None or not u.alive or u.acted or "dont_act" in u.statuses
+                or "relay" not in u.tactics):
+            return []
+        result = []
+        for partner in self.units:
+            if (partner.id == u.id or not partner.alive or partner.team != u.team
+                    or "relay" not in partner.tactics or not self._can_react(partner)
+                    or partner.ct < 20 or "dont_move" in partner.statuses
+                    or self.carrier == partner.id
+                    or distance(u.pos, partner.pos) != 1
+                    or not self.line_of_sight(u.pos, partner.pos)):
+                continue
+            ghost = deepcopy(partner)
+            ghost.moved = False
+            ghost.disengaging = False
+            for cell, (cost, path) in self.reachable(ghost).items():
+                if cell == partner.pos or cost > 2:
+                    continue
+                result.append({"id": "relay", "partner": partner.id, "cell": cell,
+                               "move_cost": cost, "ct_cost": 20,
+                               "threats": self.movement_threats(ghost, path)})
+        return sorted(result, key=lambda row: (row["partner"], row["move_cost"], row["cell"]))
+
     def _basic(self, u: Unit) -> Skill:
         fixed_range = max(u.attack_range, 2) if u.weapon == "spear" else u.attack_range
         attack_range = fixed_range if u.attack_range_mode == "fixed" else max(1, self.board.width + self.board.height - 2)
@@ -926,6 +952,20 @@ class Battle:
         self.emit("charge", unit=u.id, target=target.id, distance=option["distance"],
                   pushed=pushed, ct_cost=option["ct_cost"])
 
+    def _relay(self, u: Unit, partner_id: str, cell: Cell):
+        require(isinstance(partner_id, str) and bool(partner_id), "Relay needs a partner")
+        option = next((row for row in self.relay_options(u)
+                       if row["partner"] == partner_id and tuple(row["cell"]) == cell), None)
+        require(option is not None, "Relay destination or partner unavailable")
+        partner = self.unit(partner_id)
+        u.acted = True
+        u.cast = None
+        partner.ct = max(0, partner.ct - option["ct_cost"])
+        self.emit("tactic", tactic="relay", units=[u.id, partner.id],
+                  target=partner.id, cell=cell, ct_cost=option["ct_cost"])
+        partner.moved = False
+        self._move(partner, cell)
+
     def _disengage(self, u: Unit):
         require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
         require(bool(self.engaged_by(u)), "Unit is not engaged")
@@ -999,7 +1039,7 @@ class Battle:
             u = self.active
             require(command.get("unit", u.id) == u.id, "Not this unit's turn")
             kind = command.get("kind")
-            if kind in {"move", "act", "item", "charge"}:
+            if kind in {"move", "act", "item", "charge", "relay"}:
                 raw = command["cell"]
                 require(isinstance(raw, (list, tuple)) and len(raw) == 2 and all(type(v) is int for v in raw), "Invalid cell")
                 cell = tuple(raw)
@@ -1011,6 +1051,8 @@ class Battle:
                 self._item(u, command["item"], cell)
             elif kind == "charge":
                 self._charge(u, cell)
+            elif kind == "relay":
+                self._relay(u, command["partner"], cell)
             elif kind == "disengage":
                 self._disengage(u)
             elif kind == "interact":
