@@ -643,24 +643,49 @@ class Battle:
         self.emit("prepared", unit=u.id, mode=mode)
 
     def available_team_tactics(self, caster: Unit, target: Unit) -> list[dict]:
-        if "pincer" not in caster.tactics or not target.alive or target.team == caster.team:
+        if not target.alive or target.team == caster.team:
             return []
-        if self.engagement_range(caster) <= 0 or distance(caster.pos, target.pos) > self.engagement_range(caster):
-            return []
-        cx, cy = caster.pos[0] - target.pos[0], caster.pos[1] - target.pos[1]
         result = []
-        for ally in self.units:
-            if ally.id == caster.id or not ally.alive or ally.team != caster.team or "pincer" not in ally.tactics:
-                continue
-            if not self._can_react(ally) or ally.ct < 20 or self.engagement_range(ally) <= 0:
-                continue
-            if distance(ally.pos, target.pos) > self.engagement_range(ally):
-                continue
-            ax, ay = ally.pos[0] - target.pos[0], ally.pos[1] - target.pos[1]
-            opposite = (cx == 0 and ax == 0 and cy * ay < 0) or (cy == 0 and ay == 0 and cx * ax < 0)
-            if opposite:
-                result.append({"id": "pincer", "partner": ally.id, "target": target.id, "ct_cost": 20})
-        return sorted(result, key=lambda row: row["partner"])
+
+        if "pincer" in caster.tactics and self.engagement_range(caster) > 0:
+            if distance(caster.pos, target.pos) <= self.engagement_range(caster):
+                cx, cy = caster.pos[0] - target.pos[0], caster.pos[1] - target.pos[1]
+                for ally in self.units:
+                    if (ally.id == caster.id or not ally.alive or ally.team != caster.team
+                            or "pincer" not in ally.tactics or not self._can_react(ally)
+                            or ally.ct < 20 or self.engagement_range(ally) <= 0):
+                        continue
+                    if distance(ally.pos, target.pos) > self.engagement_range(ally):
+                        continue
+                    if not self.line_of_sight(ally.pos, target.pos):
+                        continue
+                    ax, ay = ally.pos[0] - target.pos[0], ally.pos[1] - target.pos[1]
+                    opposite = ((cx == 0 and ax == 0 and cy * ay < 0)
+                                or (cy == 0 and ay == 0 and cx * ax < 0))
+                    if opposite:
+                        result.append({"id": "pincer", "partner": ally.id,
+                                       "target": target.id, "ct_cost": 20})
+
+        if ("crossfire" in caster.tactics and caster.weapon == "ranged"
+                and not self.engaged_by(caster)):
+            cx, cy = caster.pos[0] - target.pos[0], caster.pos[1] - target.pos[1]
+            for ally in self.units:
+                if (ally.id == caster.id or not ally.alive or ally.team != caster.team
+                        or "crossfire" not in ally.tactics or ally.weapon != "ranged"
+                        or not self._can_react(ally) or ally.ct < 20 or self.engaged_by(ally)):
+                    continue
+                skill = self._basic(ally)
+                d = distance(ally.pos, target.pos)
+                if not (skill.min_range <= d <= skill.range and self.line_of_sight(ally.pos, target.pos)):
+                    continue
+                ax, ay = ally.pos[0] - target.pos[0], ally.pos[1] - target.pos[1]
+                cross = cx * ay - cy * ax
+                dot = cx * ax + cy * ay
+                if cross != 0 or dot < 0:
+                    result.append({"id": "crossfire", "partner": ally.id,
+                                   "target": target.id, "ct_cost": 20})
+
+        return sorted(result, key=lambda row: (row["id"], row["partner"]))
 
     def _resolve_team_tactic(self, caster: Unit, target: Unit):
         options = self.available_team_tactics(caster, target)
@@ -670,8 +695,8 @@ class Battle:
         partner = self.unit(tactic["partner"])
         skill = self._basic(partner)
         partner.ct = max(0, partner.ct - tactic["ct_cost"])
-        self.emit("tactic", tactic="pincer", units=[caster.id, partner.id], target=target.id,
-                  ct_cost=tactic["ct_cost"])
+        self.emit("tactic", tactic=tactic["id"], units=[caster.id, partner.id],
+                  target=target.id, ct_cost=tactic["ct_cost"])
         if self.rng.random() < self.hit_chance(partner, target, skill):
             amount = max(1, self.damage(partner, target, skill, skill.effects[0]) // 2)
             self._hurt(target, amount, partner, reactions=False)
