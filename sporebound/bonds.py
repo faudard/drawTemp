@@ -58,15 +58,55 @@ def merge_bond_stats(target: dict[str, dict[str, int]], delta: dict[str, dict[st
             current[stat] = current.get(stat, 0) + amount
 
 
+def event_sequence_met(events: list[dict], rule: dict, members: list[str] | tuple[str, ...] = ()) -> bool:
+    specs = rule.get("sequence", [])
+    if not specs:
+        return False
+    index = 0
+    first_tick = None
+    target = None
+    matched_sources = set()
+    max_ticks = rule.get("max_ticks")
+    same_target = rule.get("same_target", False)
+
+    for event in events:
+        spec = specs[index]
+        if isinstance(spec, str):
+            spec = {"kind": spec}
+        if any(event.get(key) != value for key, value in spec.items()):
+            continue
+        if first_tick is None:
+            first_tick = event.get("tick", 0)
+        if max_ticks is not None and event.get("tick", first_tick) - first_tick > max_ticks:
+            return False
+        if same_target:
+            current = event.get("unit")
+            if target is None:
+                target = current
+            elif current != target:
+                continue
+        if event.get("source"):
+            matched_sources.add(event["source"])
+        index += 1
+        if index == len(specs):
+            if rule.get("require_sources") == "all_members":
+                return set(members) <= matched_sources
+            return True
+    return False
+
+
 def unlock_rule_met(stats: dict[str, int], rule: dict, *, mission_id: str = "",
-                    completed: set[str] | None = None) -> bool:
+                    completed: set[str] | None = None, events: list[dict] | None = None,
+                    members: list[str] | tuple[str, ...] = ()) -> bool:
     """Evaluate a small declarative rule tree; sequence rules come in a later slice."""
     completed = completed or set()
     if "all" in rule:
-        return all(unlock_rule_met(stats, child, mission_id=mission_id, completed=completed)
+        return all(unlock_rule_met(stats, child, mission_id=mission_id, completed=completed,
+                                   events=events, members=members)
                    for child in rule["all"])
     if "any" in rule:
-        return any(unlock_rule_met(stats, child, mission_id=mission_id, completed=completed)
+        return any(unlock_rule_met(stats, child, mission_id=mission_id, completed=completed,
+                                   events=events, members=members)
                    for child in rule["any"])
     if "stat" in rule:
         value = stats.get(rule["stat"], 0)
@@ -75,4 +115,6 @@ def unlock_rule_met(stats: dict[str, int], rule: dict, *, mission_id: str = "",
         return mission_id == rule["mission"]
     if "completed_mission" in rule:
         return rule["completed_mission"] in completed
+    if "sequence" in rule:
+        return event_sequence_met(events or [], rule, members)
     return False
