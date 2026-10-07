@@ -441,7 +441,7 @@ class Battle:
     def _can_react(self, u: Unit) -> bool:
         return u.alive and not {"sleep", "stop", "dont_act"} & u.statuses.keys()
 
-    def _status(self, u: Unit, status: str, duration: int):
+    def _status(self, u: Unit, status: str, duration: int, source: Unit | None = None):
         opposite = {"haste": "slow", "slow": "haste", "poison": "regen", "regen": "poison"}
         u.statuses.pop(opposite.get(status, ""), None)
         previous = u.statuses.get(status, 0)
@@ -454,7 +454,8 @@ class Battle:
         if status in {"sleep", "stop", "dont_act"} and u.id in self.prepared_reactions:
             self.prepared_reactions.pop(u.id, None)
             self.emit("prepared_cancelled", unit=u.id, reason=status)
-        self.emit("status", unit=u.id, status=status, duration=duration)
+        self.emit("status", unit=u.id, status=status, duration=duration,
+                  source=source.id if source else None)
 
     def _hurt(self, target: Unit, amount: int, source: Unit | None = None, reactions=True):
         if not target.alive:
@@ -521,11 +522,14 @@ class Battle:
             if drop < -target.jump:
                 break
             target.pos = nxt
-            self._hurt(target, max(0, drop - target.jump) * 5 + self.board.tile(nxt).hazard)
+            forced_damage = max(0, drop - target.jump) * 5 + self.board.tile(nxt).hazard
+            if forced_damage:
+                self._hurt(target, forced_damage, caster, reactions=False)
             self._collect(target)
             if not target.alive:
                 break
-        self.emit("displace", unit=target.id, pos=target.pos)
+        self.emit("displace", unit=target.id, pos=target.pos, source=caster.id,
+                  mode="pull" if pull else "push")
 
     def _resolve(self, caster: Unit, skill: Skill, cell: Cell):
         self.emit("skill", unit=caster.id, skill=skill.id, cell=cell)
@@ -552,7 +556,7 @@ class Battle:
                     target.ct = 0
                     self.emit("revive", unit=target.id, source=caster.id)
                 elif e.kind == "status" and target.alive:
-                    self._status(target, e.status, e.duration)
+                    self._status(target, e.status, e.duration, caster)
                 elif e.kind == "cleanse":
                     target.statuses.pop(e.status, None)
                 elif e.kind == "mp":
