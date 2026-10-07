@@ -22,6 +22,10 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 
 ## 2.1 — profondeur tactique
 
+- [x] Combat 1.1 framework : engagement, zones de contrôle, Guard/Vigilance, portée LOS/falloff, première tactique Pincer.
+- [ ] Tactical Bonds : progression paire/trio, tactiques préparées, missions de déblocage, conditions secrètes event-driven.
+- [ ] Team Tactics 2 : Crossfire, Launch/Relay, Protect/Intercept, terrain combos et temporal combos.
+- [ ] Formations : Shield Wall, Phalanx, Escort Diamond, contrôle de couloirs et outils de preview.
 - [ ] Déploiement avant combat, limites d’équipe et formations sauvegardées.
 - [ ] Menaces et réserves de réaction visibles ; Intercept et protection d’alliés.
 - [ ] Compatibilités zodiacales, immunités de statut, dissipation et règles de stacking dédiées.
