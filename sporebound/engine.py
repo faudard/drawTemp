@@ -426,9 +426,17 @@ class Battle:
                                min(e.power, t.max_hp - t.hp) if e.kind == "heal" else
                                min(e.power, t.max_mp - t.mp) if e.kind == "mp" else e.power,
                                "status": e.status})
+        for row in result:
+            if row["kind"] == "damage":
+                protected = self.unit(row["unit"])
+                protector = self.interceptor_for(protected, u)
+                if protector is not None:
+                    row["redirected_to"] = protector.id
         if skill_id == "attack":
             target = self.at(cell)
-            if target is not None and target.team != u.team:
+            direct = next((row for row in result if row["unit"] == target.id and row["kind"] == "damage"), None) if target else None
+            if (target is not None and target.team != u.team and direct is not None
+                    and direct["amount"] < target.hp):
                 for tactic in self.available_team_tactics(u, target):
                     partner = self.unit(tactic["partner"])
                     basic = self._basic(partner)
@@ -457,22 +465,31 @@ class Battle:
         self.emit("status", unit=u.id, status=status, duration=duration,
                   source=source.id if source else None)
 
+    def interceptor_for(self, target: Unit, source: Unit | None) -> Unit | None:
+        if source is None or source.team == target.team:
+            return None
+        for uid, prep in sorted(self.prepared_reactions.items()):
+            protector = self.unit(uid)
+            if (prep.get("mode") == "intercept" and prep.get("target") == target.id
+                    and protector.alive and protector.team == target.team
+                    and self._can_react(protector)
+                    and distance(protector.pos, target.pos) <= max(1, self.engagement_range(protector))
+                    and self.line_of_sight(protector.pos, target.pos)):
+                return protector
+        return None
+
     def _hurt(self, target: Unit, amount: int, source: Unit | None = None, reactions=True):
         if not target.alive:
             return
-        if source is not None and source.team != target.team and reactions:
-            for uid, prep in sorted(self.prepared_reactions.items()):
-                protector = self.unit(uid)
-                if (prep.get("mode") == "intercept" and prep.get("target") == target.id
-                        and protector.alive and protector.team == target.team
-                        and self._can_react(protector)
-                        and distance(protector.pos, target.pos) <= max(1, self.engagement_range(protector))
-                        and self.line_of_sight(protector.pos, target.pos)):
-                    self.prepared_reactions.pop(uid, None)
-                    protector.ct = max(0, protector.ct - prep.get("ct_tax", 20))
-                    self.emit("intercept", unit=uid, protected=target.id, source=source.id, amount=amount)
-                    self._hurt(protector, amount, source, reactions=False)
-                    return
+        if reactions:
+            protector = self.interceptor_for(target, source)
+            if protector is not None:
+                prep = self.prepared_reactions.pop(protector.id)
+                protector.ct = max(0, protector.ct - prep.get("ct_tax", 20))
+                self.emit("intercept", unit=protector.id, protected=target.id,
+                          source=source.id, amount=amount)
+                self._hurt(protector, amount, source, reactions=False)
+                return
         reactive = source is not None and source.team != target.team and reactions and self._can_react(target)
         if reactive and target.reaction == "mp_switch" and target.mp > 0 and self.rng.randrange(100) < target.brave:
             target.mp = max(0, target.mp - amount)
