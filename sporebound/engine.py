@@ -5,6 +5,7 @@ from copy import deepcopy
 from dataclasses import asdict
 import hashlib
 import heapq
+from itertools import combinations
 import json
 import random
 import uuid
@@ -482,12 +483,16 @@ class Battle:
             if (target is not None and target.team != u.team and direct is not None
                     and direct["amount"] < target.hp):
                 for tactic in self.available_team_tactics(u, target):
-                    partner = self.unit(tactic["partner"])
-                    basic = self._basic(partner)
-                    result.append({"unit": target.id, "kind": "tactic",
-                                   "chance": self.hit_chance(u, target, s) * self.hit_chance(partner, target, basic),
-                                   "amount": max(1, self.damage(partner, target, basic, basic.effects[0]) // 2),
-                                   "status": "", "tactic": tactic["id"], "partner": partner.id})
+                    partner_ids = tactic["partners"] if "partners" in tactic else [tactic["partner"]]
+                    divisor = 3 if tactic["id"] == "encirclement" else 2
+                    for partner_id in partner_ids:
+                        partner = self.unit(partner_id)
+                        basic = self._basic(partner)
+                        result.append({"unit": target.id, "kind": "tactic",
+                                       "chance": self.hit_chance(u, target, s) * self.hit_chance(partner, target, basic),
+                                       "amount": max(1, self.damage(partner, target, basic, basic.effects[0]) // divisor),
+                                       "status": "", "tactic": tactic["id"], "partner": partner.id,
+                                       "members": [u.id, *partner_ids]})
         return result
 
     def _can_react(self, u: Unit) -> bool:
@@ -748,23 +753,60 @@ class Battle:
                     result.append({"id": "crossfire", "partner": ally.id,
                                    "target": target.id, "ct_cost": 20})
 
-        return sorted(result, key=lambda row: (row["id"], row["partner"]))
+        if ("encirclement" in caster.tactics and self.engagement_range(caster) > 0
+                and distance(caster.pos, target.pos) <= self.engagement_range(caster)):
+            def cardinal_axis(unit):
+                dx, dy = unit.pos[0] - target.pos[0], unit.pos[1] - target.pos[1]
+                if dx == 0 and dy:
+                    return 0, 1 if dy > 0 else -1
+                if dy == 0 and dx:
+                    return 1 if dx > 0 else -1, 0
+                return None
+
+            caster_axis = cardinal_axis(caster)
+            candidates = []
+            if caster_axis is not None:
+                for ally in self.units:
+                    if (ally.id == caster.id or not ally.alive or ally.team != caster.team
+                            or "encirclement" not in ally.tactics or not self._can_react(ally)
+                            or ally.ct < 20 or self.engagement_range(ally) <= 0
+                            or distance(ally.pos, target.pos) > self.engagement_range(ally)
+                            or not self.line_of_sight(ally.pos, target.pos)):
+                        continue
+                    ally_axis = cardinal_axis(ally)
+                    if ally_axis is not None and ally_axis != caster_axis:
+                        candidates.append((ally.id, ally_axis))
+                for left, right in combinations(sorted(candidates), 2):
+                    if left[1] != right[1]:
+                        result.append({"id": "encirclement",
+                                       "partners": [left[0], right[0]],
+                                       "target": target.id, "ct_cost": 20})
+                        break
+
+        return sorted(result, key=lambda row: (
+            row["id"], tuple(row["partners"] if "partners" in row else [row["partner"]])))
 
     def _resolve_team_tactic(self, caster: Unit, target: Unit):
         options = self.available_team_tactics(caster, target)
         if not options or not target.alive:
             return
         tactic = options[0]
-        partner = self.unit(tactic["partner"])
-        skill = self._basic(partner)
-        partner.ct = max(0, partner.ct - tactic["ct_cost"])
-        self.emit("tactic", tactic=tactic["id"], units=[caster.id, partner.id],
-                  target=target.id, ct_cost=tactic["ct_cost"])
-        if self.rng.random() < self.hit_chance(partner, target, skill):
-            amount = max(1, self.damage(partner, target, skill, skill.effects[0]) // 2)
-            self._hurt(target, amount, partner, reactions=False)
-        else:
-            self.emit("miss", unit=partner.id, target=target.id)
+        partner_ids = tactic["partners"] if "partners" in tactic else [tactic["partner"]]
+        divisor = 3 if tactic["id"] == "encirclement" else 2
+        partners = [self.unit(uid) for uid in partner_ids]
+        for partner in partners:
+            partner.ct = max(0, partner.ct - tactic["ct_cost"])
+        self.emit("tactic", tactic=tactic["id"], units=[caster.id, *partner_ids],
+                  target=target.id, ct_cost=tactic["ct_cost"] * len(partners))
+        for partner in partners:
+            if not target.alive:
+                break
+            skill = self._basic(partner)
+            if self.rng.random() < self.hit_chance(partner, target, skill):
+                amount = max(1, self.damage(partner, target, skill, skill.effects[0]) // divisor)
+                self._hurt(target, amount, partner, reactions=False)
+            else:
+                self.emit("miss", unit=partner.id, target=target.id)
 
     def _move(self, u: Unit, cell: Cell):
         if u.id in self.prepared_reactions:

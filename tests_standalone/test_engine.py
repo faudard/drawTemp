@@ -510,4 +510,43 @@ class TeamTacticsTests(unittest.TestCase):
         self.assertEqual(Battle.replay(b.recording()).digest(),b.digest())
 
 
+    def test_encirclement_requires_three_axes_and_spends_two_reserves(self):
+        b=fixture()
+        caster=b.active; target=b.unit('b')
+        caster.pos=(3,1); caster.tactics=['encirclement']
+        target.pos=(3,2)
+        left=Unit('left','Left','player',(2,2),ct=40,tactics=['encirclement'])
+        right=Unit('right','Right','player',(4,2),ct=40,tactics=['encirclement'])
+        b.units.extend([left,right])
+        trio=next(row for row in b.available_team_tactics(caster,target)
+                  if row['id']=='encirclement')
+        self.assertEqual(trio['partners'],['left','right'])
+
+        before=b.digest()
+        forecast=b.forecast('attack',(3,2))
+        self.assertEqual(before,b.digest())
+        branches=[row for row in forecast if row.get('tactic')=='encirclement']
+        self.assertEqual([row['partner'] for row in branches],['left','right'])
+        self.assertEqual([row['amount'] for row in branches],[5,5])
+
+        b.execute({'kind':'act','skill':'attack','cell':[3,2]})
+        self.assertEqual(target.hp,15)
+        self.assertEqual((left.ct,right.ct),(20,20))
+        event=next(e for e in b.events if e['kind']=='tactic'
+                   and e['tactic']=='encirclement')
+        self.assertEqual(event['units'],['a','left','right'])
+        self.assertEqual(event['ct_cost'],40)
+
+    def test_encirclement_rejects_duplicate_axis(self):
+        b=fixture()
+        caster=b.active; target=b.unit('b')
+        caster.pos=(3,1); caster.tactics=['encirclement']; target.pos=(3,2)
+        one=Unit('one','One','player',(2,2),ct=40,tactics=['encirclement'])
+        two=Unit('two','Two','player',(1,2),ct=40,tactics=['encirclement'],
+                 engagement_range=2)
+        b.units.extend([one,two])
+        self.assertFalse(any(row['id']=='encirclement'
+                             for row in b.available_team_tactics(caster,target)))
+
+
 if __name__=='__main__': unittest.main()
