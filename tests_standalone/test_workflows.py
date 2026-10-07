@@ -281,6 +281,19 @@ class CampaignTests(unittest.TestCase):
         self.assertTrue(self.campaign.finish(b,tactic_rules=rules))
         self.assertIn('pincer',self.campaign.known_tactics['momo|ziggy'])
 
+    def test_content_defined_relay_unlocks_after_escape(self):
+        self.campaign.completed=['garden']
+        self.campaign.unlocked.append('escape')
+        self.campaign.bond('ziggy','luma')['missions_together']=1
+        b=self.campaign.prepare(self.content,'escape')
+        b.result='victory'
+        self.assertTrue(self.campaign.finish(b))
+        key='luma|ziggy'
+        self.assertIn('relay',self.campaign.known_tactics[key])
+        row=next(row for row in self.campaign.tactic_codex(self.content.tactic_unlocks)
+                 if row['id']=='relay')
+        self.assertEqual(row['state'],'unlocked')
+
     def test_trio_bond_stats_unlock_prepare_and_codex(self):
         b=self.campaign.prepare(self.content,'garden')
         b.events=[

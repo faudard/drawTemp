@@ -558,7 +558,7 @@ Possible effect:
 - suppress/mark;
 - reduce cover/evasion from facing.
 
-### Launch / Relay
+### Launch / Relay — RELAY PROTOTYPE IMPLEMENTED
 One ally converts its action or CT into another ally's position.
 
 Variants:
@@ -567,6 +567,14 @@ Variants:
 - swap;
 - hand-off objective;
 - relay movement.
+
+Current Relay prototype is deliberately conservative: prepared bondmates must be adjacent,
+the active unit spends Act, the partner spends 20 CT, and the partner may traverse at most
+two points of its normal movement graph. Walls, terrain cost, height/jump, occupied cells,
+engagement reactions and hazards are therefore preserved. The current prototype refuses
+to move the objective carrier. The query is pure and exposes path threats before commitment.
+
+Launch/throw across otherwise impassable topology remains a separate future mechanic.
 
 Critical guardrail: must not invalidate authored topology. Height, mass, objective-carrier and cooldown restrictions should be available.
 

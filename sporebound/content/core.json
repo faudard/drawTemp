@@ -1328,6 +1328,30 @@
           }
         ]
       }
+    },
+    {
+      "id": "relay",
+      "members": [
+        "ziggy",
+        "luma"
+      ],
+      "hints": {
+        "hidden": "Un duo pourrait apprendre a convertir son tour en mouvement pour son partenaire.",
+        "clue": "Ziggy et Luma doivent traverser ensemble une mission de fuite.",
+        "near": "Le duo est proche de maitriser un relais de position.",
+        "unlocked": "Relay : depenser l'action du lanceur et 20 CT du partenaire pour un repositionnement court."
+      },
+      "unlock": {
+        "all": [
+          {
+            "completed_mission": "escape"
+          },
+          {
+            "stat": "missions_together",
+            "gte": 2
+          }
+        ]
+      }
     }
   ]
 }
