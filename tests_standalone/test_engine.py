@@ -494,8 +494,11 @@ class TeamTacticsTests(unittest.TestCase):
         self.assertEqual(b.commands,[])
 
     def test_pursuit_follows_disengage_once_and_is_forecast(self):
-        b=fixture()
-        enemy=b.unit('b'); enemy.pos=(1,1); enemy.reaction='pursuit'; enemy.brave=100
+        content=fixture().content
+        source=content.missions['test'].units[1]
+        source.pos=(1,1); source.reaction='pursuit'; source.brave=100
+        b=Battle(content,'test',seed=7)
+        enemy=b.unit('b')
         b.execute({'kind':'disengage'})
         path=b.reachable(b.active)[(0,0)][1]
         threats=b.movement_threats(b.active,path)
