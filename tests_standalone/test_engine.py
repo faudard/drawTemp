@@ -553,7 +553,7 @@ class TeamTacticsTests(unittest.TestCase):
         content=fixture().content
         mission=content.missions['test']
         mission.units[0].tactics=['relay']
-        mission.units.append(Unit('ally','Ally','player',(1,1),ct=40,tactics=['relay']))
+        mission.units.append(Unit('ally','Ally','player',(1,1),ct=40,speed=1,tactics=['relay']))
         content.validate()
         b=Battle(content,'test',seed=7)
 
@@ -565,7 +565,7 @@ class TeamTacticsTests(unittest.TestCase):
         self.assertEqual(option['move_cost'],1)
         b.execute({'kind':'relay','partner':'ally','cell':[2,1]})
         self.assertEqual(b.unit('ally').pos,(2,1))
-        self.assertEqual(b.unit('ally').ct,20)
+        self.assertEqual(b.unit('ally').ct,30)
         self.assertTrue(b.unit('a').acted)
         self.assertTrue(any(e['kind']=='tactic' and e['tactic']=='relay'
                             and e['units']==['a','ally'] for e in b.events))
@@ -575,7 +575,7 @@ class TeamTacticsTests(unittest.TestCase):
         content=fixture().content
         mission=content.missions['test']
         mission.units[0].tactics=['relay']
-        mission.units.append(Unit('ally','Ally','player',(1,1),ct=40,tactics=['relay']))
+        mission.units.append(Unit('ally','Ally','player',(1,1),ct=40,speed=1,tactics=['relay']))
         mission.board.tiles[(2,1)]=Tile(blocked=True)
         content.validate()
         b=Battle(content,'test',seed=7)
