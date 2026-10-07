@@ -135,6 +135,7 @@ class Unit:
     moved: bool = False
     acted: bool = False
     cast: dict | None = None
+    disengaging: bool = False
 
     @property
     def alive(self) -> bool:
@@ -291,7 +292,7 @@ class Content:
                 require(u.facing in {(0, 1), (0, -1), (1, 0), (-1, 0)}, f"{u.id}: facing")
                 require(u.reaction in REACTIONS and u.support in SUPPORTS and u.movement in MOVEMENTS, f"{u.id}: ability slot")
                 require(all(s in self.skills for s in u.skills), f"{u.id}: unknown skill")
-                require(u.cast is None and not u.moved and not u.acted, "Mission spawns cannot be mid-turn")
+                require(u.cast is None and not u.moved and not u.acted and not u.disengaging, "Mission spawns cannot be mid-turn")
                 for status, duration in u.statuses.items():
                     require(status in STATUSES, f"{u.id}: status")
                     integer(duration, -1, 10000, f"{u.id}.status duration")
