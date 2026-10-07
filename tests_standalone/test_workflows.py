@@ -37,6 +37,8 @@ class ContentTests(unittest.TestCase):
             lambda d:d['skills'][0]['effects'][0].update(kind='script'),
             lambda d:d['missions'][0].update(next_missions=['missing']),
             lambda d:d['missions'][0]['objects'][1].update(link='missing'),
+            lambda d:d['tactic_unlocks'][0].update(id='missing_tactic'),
+            lambda d:d['tactic_unlocks'][0].update(members=['ziggy','missing']),
         ]
         for edit in changes:
             with self.subTest(edit=edit):
@@ -206,6 +208,20 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(stats['missions_together'],1)
         self.assertEqual(stats['shared_kills'],1)
         self.assertEqual(stats['shared_kill:grincheux'],1)
+
+    def test_content_defined_tactic_unlock_is_automatic(self):
+        b=self.campaign.prepare(self.content,'garden')
+        b.events=[
+            {'tick':1,'kind':'damage','unit':'grincheux','source':'ziggy','amount':5},
+            {'tick':2,'kind':'damage','unit':'grincheux','source':'momo','amount':5},
+            {'tick':3,'kind':'downed','unit':'grincheux','source':'momo'},
+            {'tick':4,'kind':'damage','unit':'baveux','source':'ziggy','amount':5},
+            {'tick':5,'kind':'damage','unit':'baveux','source':'momo','amount':5},
+            {'tick':6,'kind':'downed','unit':'baveux','source':'ziggy'},
+        ]
+        b.result='victory'
+        self.assertTrue(self.campaign.finish(b))
+        self.assertIn('pincer',self.campaign.known_tactics['momo|ziggy'])
 
     def test_declarative_tactic_unlock_and_prepared_loadout(self):
         rules=[{
