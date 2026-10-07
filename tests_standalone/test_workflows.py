@@ -205,6 +205,7 @@ class CampaignTests(unittest.TestCase):
         stats=self.campaign.bond('ziggy','momo')
         self.assertEqual(stats['missions_together'],1)
         self.assertEqual(stats['shared_kills'],1)
+        self.assertEqual(stats['shared_kill:grincheux'],1)
 
     def test_declarative_tactic_unlock_and_prepared_loadout(self):
         rules=[{
