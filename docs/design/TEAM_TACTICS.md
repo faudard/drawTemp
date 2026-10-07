@@ -440,14 +440,10 @@ Potential parameters:
 
 Preferred identity: **position conversion**, not a generic damage multiplier.
 
-### Brace — NEXT
+### Brace — IMPLEMENTED
 Spend Act to anchor against forced movement/charge until next activation or first trigger.
 
-Potential effect:
-- reduce/cancel push and pull;
-- reduce fall risk;
-- stop a charging enemy at reach;
-- strongest on shield/polearm/tank builds.
+Current prototype: spend Act to prepare one Brace charge; the first Push/Pull absorbs up to 2 forced-movement cells and applies the prepared-reaction CT tax. Future extensions may reduce fall risk and stop Charge.
 
 ### Pursuit
 A reaction that follows an enemy leaving engagement instead of immediately dealing damage.
