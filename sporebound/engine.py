@@ -369,6 +369,16 @@ class Battle:
                                min(e.power, t.max_hp - t.hp) if e.kind == "heal" else
                                min(e.power, t.max_mp - t.mp) if e.kind == "mp" else e.power,
                                "status": e.status})
+        if skill_id == "attack":
+            target = self.at(cell)
+            if target is not None and target.team != u.team:
+                for tactic in self.available_team_tactics(u, target):
+                    partner = self.unit(tactic["partner"])
+                    basic = self._basic(partner)
+                    result.append({"unit": target.id, "kind": "tactic",
+                                   "chance": self.hit_chance(partner, target, basic),
+                                   "amount": max(1, self.damage(partner, target, basic, basic.effects[0]) // 2),
+                                   "status": "", "tactic": tactic["id"], "partner": partner.id})
         return result
 
     def _can_react(self, u: Unit) -> bool:
