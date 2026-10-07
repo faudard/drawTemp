@@ -302,4 +302,68 @@ class MissionTests(unittest.TestCase):
         self.assertFalse(b.board.tile((2,1)).blocked)
 
 
+class TeamTacticsTests(unittest.TestCase):
+    def test_engagement_zone_and_spear_reach(self):
+        b=fixture()
+        enemy=b.unit('b')
+        enemy.pos=(1,1)
+        self.assertEqual([u.id for u in b.engaged_by(b.active)], ['b'])
+        self.assertEqual(b.engagement_threats((0,1),'player')[0]['range'],1)
+        enemy.weapon='spear'
+        enemy.pos=(2,1)
+        self.assertEqual([u.id for u in b.engaged_by(b.active)], ['b'])
+        self.assertEqual(b.engagement_range(enemy),2)
+
+    def test_los_range_falloff_and_engaged_ranged_penalty(self):
+        b=fixture(weapon='ranged',attack_range=4,min_range=1,attack_range_mode='los',
+                  optimal_range=4,falloff_per_tile=10)
+        a=b.active; target=b.unit('b'); target.pos=(7,1)
+        skill=b._basic(a)
+        self.assertGreaterEqual(skill.range,7)
+        self.assertAlmostEqual(b.hit_chance(a,target,skill),.7)
+        b.units.append(Unit('engager','Engager','enemy',(1,1)))
+        self.assertAlmostEqual(b.hit_chance(a,target,skill),.455)
+
+    def test_overwatch_is_prepared_single_charge_and_costs_ct(self):
+        b=fixture(weapon='ranged',attack_range=4,min_range=1)
+        b.execute({'kind':'prepare','mode':'overwatch'})
+        self.assertEqual(b.prepared_reactions['a']['charges'],1)
+        b.execute({'kind':'end'})
+        self.assertEqual(b.active_id,'b')
+        b.execute({'kind':'move','cell':[2,1]})
+        self.assertEqual(b.unit('b').hp,25)
+        self.assertNotIn('a',b.prepared_reactions)
+        self.assertEqual(b.unit('a').ct,0)
+        self.assertTrue(any(e['kind']=='prepared_triggered' and e['mode']=='overwatch' for e in b.events))
+
+    def test_guard_triggers_on_entry_to_engagement(self):
+        b=fixture()
+        b.execute({'kind':'prepare','mode':'guard'})
+        b.execute({'kind':'end'})
+        b.execute({'kind':'move','cell':[1,1]})
+        self.assertEqual(b.unit('b').hp,25)
+        self.assertTrue(any(e['kind']=='engagement_entered' and e['unit']=='b' for e in b.events))
+        self.assertTrue(any(e['kind']=='prepared_triggered' and e['mode']=='guard' for e in b.events))
+
+    def test_pincer_followup_spends_partner_ct(self):
+        b=fixture()
+        a=b.active; target=b.unit('b')
+        a.pos=(2,1); a.tactics=['pincer']
+        partner=Unit('ally','Ally','player',(4,1),ct=40,tactics=['pincer'])
+        b.units.append(partner)
+        options=b.available_team_tactics(a,target)
+        self.assertEqual(options,[{'id':'pincer','partner':'ally','target':'b','ct_cost':20}])
+        b.execute({'kind':'act','skill':'attack','cell':[3,1]})
+        self.assertEqual(target.hp,18)
+        self.assertEqual(partner.ct,20)
+        self.assertTrue(any(e['kind']=='tactic' and e['tactic']=='pincer' for e in b.events))
+
+    def test_prepared_reaction_is_replay_deterministic(self):
+        b=fixture(weapon='ranged',attack_range=4,min_range=1)
+        b.execute({'kind':'prepare','mode':'overwatch'})
+        b.execute({'kind':'end'})
+        b.execute({'kind':'move','cell':[2,1]})
+        self.assertEqual(Battle.replay(b.recording()).digest(),b.digest())
+
+
 if __name__=='__main__': unittest.main()
