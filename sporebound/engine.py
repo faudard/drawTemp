@@ -416,6 +416,9 @@ class Battle:
             target.cast = None
             target.ct = 0
             target.statuses.clear()
+            if target.id in self.prepared_reactions:
+                self.prepared_reactions.pop(target.id, None)
+                self.emit("prepared_cancelled", unit=target.id, reason="downed")
             self.emit("downed", unit=target.id)
         elif reactive and actual and target.reaction == "auto_potion" and self.inventory[target.team]["potion"] > 0 and self.rng.randrange(100) < target.brave:
             self.inventory[target.team]["potion"] -= 1
@@ -577,6 +580,9 @@ class Battle:
             self.emit("miss", unit=partner.id, target=target.id)
 
     def _move(self, u: Unit, cell: Cell):
+        if u.id in self.prepared_reactions:
+            self.prepared_reactions.pop(u.id, None)
+            self.emit("prepared_cancelled", unit=u.id, reason="moved")
         paths = self.reachable(u)
         require(cell != u.pos and cell in paths, "Destination unreachable or movement spent")
         cost, path = paths[cell]
