@@ -377,4 +377,15 @@ class TeamTacticsTests(unittest.TestCase):
         self.assertTrue(any(e['kind']=='disengaged' for e in b.events))
 
 
+    def test_brace_absorbs_forced_movement(self):
+        b=fixture()
+        b.execute({'kind':'prepare','mode':'brace'})
+        a=b.unit('a')
+        self.assertIn('a',b.prepared_reactions)
+        b._displace(b.unit('b'),a,2)
+        self.assertEqual(a.pos,(0,1))
+        self.assertNotIn('a',b.prepared_reactions)
+        self.assertTrue(any(e['kind']=='brace' and e['absorbed']==2 for e in b.events))
+
+
 if __name__=='__main__': unittest.main()
