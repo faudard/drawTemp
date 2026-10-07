@@ -520,7 +520,10 @@
           "skills": [
             "silence"
           ],
-          "class_evade": 10
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
         }
       ],
       "objective": "eliminate",
@@ -758,7 +761,10 @@
           "skills": [
             "silence"
           ],
-          "class_evade": 10
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
         }
       ],
       "objective": "extract",
@@ -949,7 +955,10 @@
           "skills": [
             "silence"
           ],
-          "class_evade": 10
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
         }
       ],
       "objective": "hold",
@@ -1148,7 +1157,10 @@
           "skills": [
             "silence"
           ],
-          "class_evade": 10
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
         }
       ],
       "objective": "crown",
