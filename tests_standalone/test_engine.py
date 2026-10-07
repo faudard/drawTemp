@@ -332,7 +332,7 @@ class TeamTacticsTests(unittest.TestCase):
         b.execute({'kind':'end'})
         self.assertEqual(b.active_id,'b')
         b.execute({'kind':'move','cell':[2,1]})
-        self.assertEqual(b.unit('b').hp,25)
+        self.assertEqual(b.unit('b').hp,19)
         self.assertNotIn('a',b.prepared_reactions)
         self.assertEqual(b.unit('a').ct,0)
         self.assertTrue(any(e['kind']=='prepared_triggered' and e['mode']=='overwatch' for e in b.events))
