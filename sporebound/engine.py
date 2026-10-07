@@ -437,6 +437,17 @@ class Battle:
         self.emit("heal", unit=target.id, amount=actual)
 
     def _displace(self, caster, target, amount, pull=False):
+        prep = self.prepared_reactions.get(target.id)
+        if prep and prep.get("mode") == "brace" and prep.get("charges", 0) > 0:
+            absorbed = min(amount, 2)
+            amount -= absorbed
+            prep["charges"] -= 1
+            target.ct = max(0, target.ct - prep.get("ct_tax", 20))
+            self.emit("brace", unit=target.id, source=caster.id, absorbed=absorbed)
+            if prep["charges"] <= 0:
+                self.prepared_reactions.pop(target.id, None)
+            if amount <= 0:
+                return
         dx, dy = target.pos[0] - caster.pos[0], target.pos[1] - caster.pos[1]
         if not dx and not dy:
             return
@@ -533,12 +544,14 @@ class Battle:
 
     def _prepare(self, u: Unit, mode: str):
         require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
-        require(mode in {"overwatch", "guard"}, "Unknown preparation")
+        require(mode in {"overwatch", "guard", "brace"}, "Unknown preparation")
         if mode == "overwatch":
             require(u.weapon == "ranged", "Overwatch requires a ranged weapon")
             require(not self.engaged_by(u), "Cannot prepare Overwatch while engaged")
-        else:
+        elif mode == "guard":
             require(self.engagement_range(u) > 0, "Guard requires an engagement zone")
+        else:
+            require(self.engagement_range(u) > 0, "Brace requires a close-combat control zone")
         u.acted = True
         u.cast = None
         self.prepared_reactions[u.id] = {"mode": mode, "charges": 1, "ct_tax": 20}
