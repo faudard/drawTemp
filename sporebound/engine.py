@@ -264,22 +264,30 @@ class Battle:
         previous = path[0]
         engaged = {row["unit"] for row in self.engagement_threats(previous, u.team)}
         seen_prepared = set()
+        seen_pursuit = set()
         for cell in path[1:]:
             after = {row["unit"] for row in self.engagement_threats(cell, u.team)}
             for uid in sorted(after - engaged):
                 result.append({"kind": "engagement", "unit": uid, "cell": cell,
                                "chance": 1.0, "amount": 0})
-            if not u.disengaging:
-                for uid in sorted(engaged - after):
-                    enemy = self.unit(uid)
-                    if enemy.reaction == "opportunity" and self._can_react(enemy):
-                        skill = self._basic(enemy)
-                        ghost = deepcopy(u)
-                        ghost.pos = previous
-                        if skill.min_range <= distance(enemy.pos, previous) <= skill.range and self.line_of_sight(enemy.pos, previous):
-                            result.append({"kind": "opportunity", "unit": uid, "cell": previous,
-                                           "chance": enemy.brave / 100 * self.hit_chance(enemy, ghost, skill),
-                                           "amount": self.damage(enemy, ghost, skill, skill.effects[0])})
+            for uid in sorted(engaged - after):
+                enemy = self.unit(uid)
+                if enemy.reaction == "opportunity" and not u.disengaging and self._can_react(enemy):
+                    skill = self._basic(enemy)
+                    ghost = deepcopy(u)
+                    ghost.pos = previous
+                    if skill.min_range <= distance(enemy.pos, previous) <= skill.range and self.line_of_sight(enemy.pos, previous):
+                        result.append({"kind": "opportunity", "unit": uid, "cell": previous,
+                                       "chance": enemy.brave / 100 * self.hit_chance(enemy, ghost, skill),
+                                       "amount": self.damage(enemy, ghost, skill, skill.effects[0])})
+                elif (enemy.reaction == "pursuit" and uid not in seen_pursuit
+                      and self._can_react(enemy) and distance(enemy.pos, previous) == 1):
+                    tile = self.board.tile(previous)
+                    if (not tile.blocked and (enemy.movement == "ignore_height"
+                            or abs(tile.height - self.board.tile(enemy.pos).height) <= enemy.jump)):
+                        result.append({"kind": "pursuit", "unit": uid, "cell": previous,
+                                       "chance": enemy.brave / 100, "amount": 0})
+                        seen_pursuit.add(uid)
             for uid, prep in sorted(self.prepared_reactions.items()):
                 if uid in seen_prepared:
                     continue
@@ -310,6 +318,42 @@ class Battle:
             previous = cell
             engaged = after
         return result
+
+    def charge_options(self, unit: Unit | None = None) -> list[dict]:
+        """Pure charge query for UI/AI: straight approach, minimum two-cell commitment."""
+        u = unit or self.active
+        if (u is None or not u.alive or u.moved or u.acted
+                or {"dont_move", "dont_act"} & u.statuses.keys()
+                or self.engagement_range(u) <= 0):
+            return []
+        paths = self.reachable(u)
+        radius = self.engagement_range(u)
+        result = []
+        for target in self.units:
+            if not target.alive or target.team == u.team:
+                continue
+            dx, dy = target.pos[0] - u.pos[0], target.pos[1] - u.pos[1]
+            if dx and dy:
+                continue
+            total = abs(dx) + abs(dy)
+            travel = total - radius
+            if travel < 2:
+                continue
+            step = ((1 if dx > 0 else -1), 0) if dx else (0, (1 if dy > 0 else -1))
+            landing = (target.pos[0] - step[0] * radius,
+                       target.pos[1] - step[1] * radius)
+            row = paths.get(landing)
+            if row is None:
+                continue
+            _, path = row
+            expected = [(u.pos[0] + step[0] * i, u.pos[1] + step[1] * i)
+                        for i in range(travel + 1)]
+            if path != expected:
+                continue
+            result.append({"target": target.id, "cell": target.pos, "landing": landing,
+                           "distance": travel, "ct_cost": 20,
+                           "threats": self.movement_threats(u, path)})
+        return sorted(result, key=lambda row: (row["target"], row["landing"]))
 
     def _basic(self, u: Unit) -> Skill:
         fixed_range = max(u.attack_range, 2) if u.weapon == "spear" else u.attack_range
@@ -733,19 +777,44 @@ class Battle:
         if u.movement == "teleport" and self.rng.randrange(100) >= max(0, 100 - 10 * max(0, cost - u.movement_budget)):
             self.emit("teleport_failed", unit=u.id, cell=cell)
             return
+        pursued = set()
         for nxt in path[1:]:
             previous = u.pos
             before_engaged = {e.id for e in self.engaged_by(u)}
+            pursuers = []
             for enemy in self.units:
                 radius = self.engagement_range(enemy)
-                if not u.disengaging and enemy.team != u.team and enemy.reaction == "opportunity" and self._can_react(enemy) and radius > 0 and distance(previous, enemy.pos) <= radius and distance(nxt, enemy.pos) > radius:
+                leaving = (enemy.team != u.team and self._can_react(enemy) and radius > 0
+                           and distance(previous, enemy.pos) <= radius
+                           and distance(nxt, enemy.pos) > radius)
+                if not leaving:
+                    continue
+                if enemy.reaction == "opportunity" and not u.disengaging:
                     if self.rng.randrange(100) < enemy.brave:
                         s = self._basic(enemy)
                         if self.rng.random() < self.hit_chance(enemy, u, s):
                             self._hurt(u, self.damage(enemy, u, s, s.effects[0]), enemy, reactions=False)
+                elif (enemy.reaction == "pursuit" and enemy.id not in pursued
+                      and distance(enemy.pos, previous) == 1):
+                    tile = self.board.tile(previous)
+                    legal_height = (enemy.movement == "ignore_height"
+                                    or abs(tile.height - self.board.tile(enemy.pos).height) <= enemy.jump)
+                    if not tile.blocked and legal_height and self.rng.randrange(100) < enemy.brave:
+                        pursuers.append(enemy)
             if not u.alive:
                 break
             u.pos = nxt
+            for pursuer in pursuers:
+                if not pursuer.alive or self.at(previous) is not None:
+                    continue
+                origin = pursuer.pos
+                pursuer.pos = previous
+                pursuer.ct = max(0, pursuer.ct - 20)
+                pursued.add(pursuer.id)
+                self.emit("pursuit", unit=pursuer.id, target=u.id, start=origin,
+                          end=previous, ct_cost=20)
+                if self.board.tile(previous).hazard:
+                    self._hurt(pursuer, self.board.tile(previous).hazard, reactions=False)
             after_engaged = {e.id for e in self.engaged_by(u)}
             for uid in sorted(after_engaged - before_engaged):
                 self.emit("engagement_entered", unit=u.id, enemy=uid)
@@ -785,6 +854,35 @@ class Battle:
         else:
             u.mp -= skill.cost
             self._resolve(u, skill, cell)
+
+    def _charge(self, u: Unit, target_cell: Cell):
+        require(not u.moved and not u.acted, "Charge needs Move and Act")
+        option = next((row for row in self.charge_options(u)
+                       if tuple(row["cell"]) == target_cell), None)
+        require(option is not None, "Charge needs a clear straight approach of at least two cells")
+        target = self.unit(option["target"])
+        u.ct = max(0, u.ct - option["ct_cost"])
+        self.emit("charge_started", unit=u.id, target=target.id,
+                  landing=option["landing"], distance=option["distance"],
+                  ct_cost=option["ct_cost"])
+        self._move(u, tuple(option["landing"]))
+        if (not u.alive or self.result or u.pos != tuple(option["landing"])
+                or {"sleep", "stop", "dont_act"} & u.statuses.keys()):
+            self.emit("charge_interrupted", unit=u.id, target=target.id, end=u.pos)
+            return
+        require(target.alive and target.pos == target_cell, "Charge target no longer available")
+        first_event = len(self.events)
+        self._act(u, "attack", target_cell)
+        hit = any(event.get("kind") == "damage" and event.get("source") == u.id
+                  and event.get("unit") == target.id and event.get("amount", 0) > 0
+                  for event in self.events[first_event:])
+        pushed = False
+        if hit and target.alive:
+            before = target.pos
+            self._displace(u, target, 1)
+            pushed = target.pos != before
+        self.emit("charge", unit=u.id, target=target.id, distance=option["distance"],
+                  pushed=pushed, ct_cost=option["ct_cost"])
 
     def _disengage(self, u: Unit):
         require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
@@ -859,7 +957,7 @@ class Battle:
             u = self.active
             require(command.get("unit", u.id) == u.id, "Not this unit's turn")
             kind = command.get("kind")
-            if kind in {"move", "act", "item"}:
+            if kind in {"move", "act", "item", "charge"}:
                 raw = command["cell"]
                 require(isinstance(raw, (list, tuple)) and len(raw) == 2 and all(type(v) is int for v in raw), "Invalid cell")
                 cell = tuple(raw)
@@ -869,6 +967,8 @@ class Battle:
                 self._act(u, command["skill"], cell)
             elif kind == "item":
                 self._item(u, command["item"], cell)
+            elif kind == "charge":
+                self._charge(u, cell)
             elif kind == "disengage":
                 self._disengage(u)
             elif kind == "interact":

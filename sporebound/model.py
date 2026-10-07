@@ -8,7 +8,7 @@ from pathlib import Path
 Cell = tuple[int, int]
 STATUSES = {"poison", "regen", "haste", "slow", "protect", "shell", "silence",
             "sleep", "stop", "dont_move", "dont_act", "guard"}
-REACTIONS = {"none", "counter", "opportunity", "blade_grasp", "auto_potion", "mp_switch"}
+REACTIONS = {"none", "counter", "opportunity", "pursuit", "blade_grasp", "auto_potion", "mp_switch"}
 TEAM_TACTICS = {"pincer", "crossfire"}
 SUPPORTS = {"none", "attack_up", "magic_attack_up", "defense_up", "magic_defense_up",
             "concentrate", "short_charge"}

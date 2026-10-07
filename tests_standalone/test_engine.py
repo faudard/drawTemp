@@ -462,4 +462,49 @@ class TeamTacticsTests(unittest.TestCase):
         self.assertTrue(any(r['kind']=='guard' and r['unit']=='a' and r['cell']==(1,1) for r in rows))
 
 
+    def test_charge_query_is_pure_and_charge_pushes(self):
+        b=fixture()
+        before=b.digest()
+        options=b.charge_options()
+        self.assertEqual(before,b.digest())
+        option=next(row for row in options if row['target']=='b')
+        self.assertEqual(option['landing'],(2,1))
+        self.assertEqual(option['distance'],2)
+        self.assertTrue(any(row['kind']=='engagement' for row in option['threats']))
+        b.execute({'kind':'charge','cell':[3,1]})
+        self.assertEqual(b.unit('a').pos,(2,1))
+        self.assertEqual(b.unit('b').pos,(4,1))
+        self.assertTrue(b.unit('a').moved and b.unit('a').acted)
+        self.assertEqual(b.unit('a').ct,80)
+        self.assertTrue(any(e['kind']=='charge' and e['pushed'] for e in b.events))
+
+    def test_brace_stops_charge_push(self):
+        b=fixture()
+        b.prepared_reactions['b']={'mode':'brace','charges':1,'ct_tax':20}
+        b.execute({'kind':'charge','cell':[3,1]})
+        self.assertEqual(b.unit('b').pos,(3,1))
+        self.assertTrue(any(e['kind']=='brace' and e['unit']=='b' for e in b.events))
+        self.assertTrue(any(e['kind']=='charge' and not e['pushed'] for e in b.events))
+
+    def test_charge_rejects_non_aligned_target_atomically(self):
+        b=fixture(); b.unit('b').pos=(3,2); before=b.digest()
+        with self.assertRaises(RuleError):
+            b.execute({'kind':'charge','cell':[3,2]})
+        self.assertEqual(before,b.digest())
+        self.assertEqual(b.commands,[])
+
+    def test_pursuit_follows_disengage_once_and_is_forecast(self):
+        b=fixture()
+        enemy=b.unit('b'); enemy.pos=(1,1); enemy.reaction='pursuit'; enemy.brave=100
+        b.execute({'kind':'disengage'})
+        path=b.reachable(b.active)[(0,0)][1]
+        threats=b.movement_threats(b.active,path)
+        self.assertTrue(any(row['kind']=='pursuit' and row['unit']=='b' for row in threats))
+        b.execute({'kind':'move','cell':[0,0]})
+        self.assertEqual(enemy.pos,(0,1))
+        self.assertEqual(enemy.ct,80)
+        self.assertTrue(any(e['kind']=='pursuit' and e['target']=='a' for e in b.events))
+        self.assertEqual(Battle.replay(b.recording()).digest(),b.digest())
+
+
 if __name__=='__main__': unittest.main()

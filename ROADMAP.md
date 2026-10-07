@@ -23,6 +23,7 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 ## 2.1 — profondeur tactique
 
 - [x] Combat 1.1 framework : engagement, zones de contrôle, Guard/Vigilance/Brace/Intercept, Disengage, portée LOS/falloff, threat forecast.
+- [x] Combat 1.2 melee pressure : Charge rectiligne avec coût CT et push, Pursuit bornée, contre Brace/Disengage et preview de menace.
 - [x] Team Tactics foundation : Pincer + Crossfire, coût CT partenaire, forecast pur et prise en compte IA.
 - [x] Tactical Bonds foundation : stats par paire, kills ciblés, Intercepts, missions, séquences secrètes, tactiques connues/préparées et sauvegarde.
 - [ ] Tactical Bonds 2 : trios, indices progressifs/codex, règles de séquence plus riches et UI de préparation.

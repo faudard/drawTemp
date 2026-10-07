@@ -51,9 +51,20 @@ cross et square. `scope=target` affecte les unités de la zone, y compris les al
 des dégâts en fin d’activation, expirent en ticks et peuvent se cumuler.
 
 Counter ne peut pas déclencher une autre réaction en chaîne. Opportunity agit à la
-sortie d’une case adjacente, Brave comme chance de déclenchement. Auto-Potion consomme
-réellement une potion disponible, soigne 25 PV et ne ressuscite pas. MP Switch redirige
-tout le coup vers les MP dès qu’au moins 1 MP reste, sans report de l’excédent sur les PV.
+sortie d’une case adjacente, Brave comme chance de déclenchement. Pursuit remplace les
+dégâts gratuits par un suivi spatial : une fois par Move ennemi, le poursuivant peut
+occuper la case adjacente qui vient d’être libérée, y compris après Disengage, avec un
+coût de 20 CT et un jet de Brave. Le preview de déplacement expose ce risque.
+Auto-Potion consomme réellement une potion disponible, soigne 25 PV et ne ressuscite pas.
+MP Switch redirige tout le coup vers les MP dès qu’au moins 1 MP reste, sans report de
+l’excédent sur les PV.
+
+Charge est une commande Move+Act réservée aux unités qui contrôlent l’espace en mêlée.
+Elle exige un ennemi aligné et au moins deux cases d’approche rectiligne, coûte 20 CT
+supplémentaires, s’arrête à la portée d’engagement, résout l’attaque de base puis tente
+un push d’une case sur coup direct. Guard/Overwatch/dangers peuvent interrompre l’approche
+et Brace absorbe le push : Charge convertit donc position et temps en pression plutôt
+qu’en multiplicateur de dégâts gratuit.
 
 ## Incantation
 

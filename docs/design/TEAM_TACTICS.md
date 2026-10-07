@@ -430,7 +430,7 @@ Design role:
 - converts enemy control into an action-economy cost rather than hard immobilization;
 - preserves Move/Act order freedom.
 
-### Charge — NEXT
+### Charge — IMPLEMENTED PROTOTYPE
 A melee unit that enters engagement after moving a minimum straight-line distance may use a charge attack.
 
 Potential parameters:
@@ -442,12 +442,19 @@ Potential parameters:
 
 Preferred identity: **position conversion**, not a generic damage multiplier.
 
+Current prototype: `{"kind":"charge","cell":[x,y]}` targets an aligned enemy. The engine
+requires at least two straight movement cells, automatically stops at melee/reach distance,
+spends both Move and Act plus 20 CT, resolves the normal basic attack and, on a direct hit,
+attempts a one-cell push. Ordinary movement reactions/hazards still apply during the approach;
+Brace can absorb the push and an interrupted approach does not roll back the reactions already
+resolved.
+
 ### Brace — IMPLEMENTED
 Spend Act to anchor against forced movement/charge until next activation or first trigger.
 
 Current prototype: spend Act to prepare one Brace charge; the first Push/Pull absorbs up to 2 forced-movement cells and applies the prepared-reaction CT tax. Future extensions may reduce fall risk and stop Charge.
 
-### Pursuit
+### Pursuit — IMPLEMENTED PROTOTYPE
 A reaction that follows an enemy leaving engagement instead of immediately dealing damage.
 
 Why it is interesting:
@@ -455,6 +462,11 @@ Why it is interesting:
 - differs from Opportunity;
 - can expose the pursuing unit;
 - interacts with traps, Guard and objective zones.
+
+Current prototype: a Pursuit reaction may follow once per enemy Move into the vacated adjacent
+cell, including after Disengage. It uses Brave as its trigger chance, costs 20 CT, obeys height
+and blocking rules, and is exposed by `movement_threats()`. It does not deal free damage:
+its value is preserving spatial pressure.
 
 ### Challenge / Mark
 An engaged defender marks one or more targets.
@@ -694,6 +706,7 @@ This vocabulary should grow from normalized events, not pair-specific condition 
 {"kind": "prepare", "mode": "guard"}
 {"kind": "prepare", "mode": "brace"}
 {"kind": "prepare", "mode": "intercept", "target": "ziggy"}
+{"kind": "charge", "cell": [x, y]}
 {"kind": "disengage"}
 ```
 
