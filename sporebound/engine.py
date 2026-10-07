@@ -479,7 +479,7 @@ class Battle:
             if target.id in self.prepared_reactions:
                 self.prepared_reactions.pop(target.id, None)
                 self.emit("prepared_cancelled", unit=target.id, reason="downed")
-            self.emit("downed", unit=target.id)
+            self.emit("downed", unit=target.id, source=source.id if source else None)
         elif reactive and actual and target.reaction == "auto_potion" and self.inventory[target.team]["potion"] > 0 and self.rng.randrange(100) < target.brave:
             self.inventory[target.team]["potion"] -= 1
             self._heal(target, 25)
@@ -550,7 +550,7 @@ class Battle:
                 elif e.kind == "revive" and not target.alive and self.at(target.pos) is None and not self.board.tile(target.pos).blocked:
                     target.hp = min(target.max_hp, max(1, e.power))
                     target.ct = 0
-                    self.emit("revive", unit=target.id)
+                    self.emit("revive", unit=target.id, source=caster.id)
                 elif e.kind == "status" and target.alive:
                     self._status(target, e.status, e.duration)
                 elif e.kind == "cleanse":
@@ -741,6 +741,7 @@ class Battle:
         else:
             target.hp = max(1, target.max_hp // 4)
             target.ct = 0
+            self.emit("revive", unit=target.id, source=u.id, item="phoenix")
         self.emit("item", unit=u.id, item=item, target=target.id)
 
     def _interact(self, u, object_id):
