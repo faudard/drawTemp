@@ -76,7 +76,7 @@ class Campaign:
         prepared.remove(tactic)
         return True
 
-    def evaluate_tactic_unlocks(self, rules, mission_id=""):
+    def evaluate_tactic_unlocks(self, rules, mission_id="", events=None):
         unlocked = []
         completed = set(self.completed)
         for rule in rules:
@@ -87,7 +87,8 @@ class Campaign:
             if tactic in self.known_tactics.get(key, []):
                 continue
             if unlock_rule_met(self.bond_stats.get(key, {}), rule["unlock"],
-                               mission_id=mission_id, completed=completed):
+                               mission_id=mission_id, completed=completed,
+                               events=events or [], members=members):
                 self.known_tactics.setdefault(key, []).append(tactic)
                 unlocked.append({"id": tactic, "members": list(members)})
         return unlocked
@@ -163,7 +164,7 @@ class Campaign:
         self.record_bonds(battle)
         if battle.result != "victory" or battle.mission.id in self.completed:
             if tactic_rules:
-                self.evaluate_tactic_unlocks(tactic_rules, battle.mission.id)
+                self.evaluate_tactic_unlocks(tactic_rules, battle.mission.id, battle.events)
             return False
         require(battle.mission.id in self.unlocked, "Mission was not unlocked")
         self.completed.append(battle.mission.id)
@@ -177,7 +178,7 @@ class Campaign:
             if mission not in self.unlocked:
                 self.unlocked.append(mission)
         if tactic_rules:
-            self.evaluate_tactic_unlocks(tactic_rules, battle.mission.id)
+            self.evaluate_tactic_unlocks(tactic_rules, battle.mission.id, battle.events)
         return True
 
     def save(self, path):
