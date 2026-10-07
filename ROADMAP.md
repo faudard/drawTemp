@@ -1,5 +1,16 @@
 # Roadmap — priorité gameplay, sans dépendance à Godot
 
+## Research gate — Combat Fundamentals 1.0
+
+La profondeur tactique n'est plus développée comme une liste ouverte de features. Les décisions de gameplay doivent d'abord être confrontées au cadre de recherche et au journal de décisions :
+
+- [Combat Design 1.0](docs/design/COMBAT_DESIGN.md)
+- [Comparative Analysis](docs/research/COMPARATIVE_ANALYSIS.md)
+- [Research Bibliography](docs/research/BIBLIOGRAPHY.md)
+- [Decision Log](docs/research/DECISION_LOG.md)
+
+Ordre de recherche : combat fundamentals → jobs/builds/progression → encounter design → tactical AI → campagne/meta → authoring UX → balance/telemetry → renderer/player UX.
+
 ## 2.0 alpha — socle implémenté
 
 - [x] Moteur headless, contenu JSON validé, commandes atomiques et événements.
