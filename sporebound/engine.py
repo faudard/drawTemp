@@ -478,6 +478,90 @@ class Battle:
         self._triggers()
         self._outcome()
 
+    def _prepared_attack(self, watcher: Unit, mover: Unit, mode: str):
+        prep = self.prepared_reactions.get(watcher.id)
+        if not prep or prep.get("charges", 0) <= 0 or not self._can_react(watcher) or not mover.alive:
+            return
+        skill = self._basic(watcher)
+        d = distance(watcher.pos, mover.pos)
+        if not (skill.min_range <= d <= skill.range) or not self.line_of_sight(watcher.pos, mover.pos):
+            return
+        prep["charges"] -= 1
+        watcher.ct = max(0, watcher.ct - prep.get("ct_tax", 20))
+        self.emit("prepared_triggered", unit=watcher.id, target=mover.id, mode=mode)
+        if self.rng.random() < self.hit_chance(watcher, mover, skill):
+            self._hurt(mover, self.damage(watcher, mover, skill, skill.effects[0]), watcher, reactions=False)
+        else:
+            self.emit("miss", unit=watcher.id, target=mover.id)
+        if prep["charges"] <= 0:
+            self.prepared_reactions.pop(watcher.id, None)
+
+    def _prepared_on_move(self, mover: Unit, previous: Cell):
+        for uid in list(self.prepared_reactions):
+            if not mover.alive:
+                break
+            watcher = self.unit(uid)
+            if watcher.team == mover.team or not watcher.alive:
+                continue
+            prep = self.prepared_reactions.get(uid)
+            if not prep:
+                continue
+            if prep["mode"] == "overwatch":
+                self._prepared_attack(watcher, mover, "overwatch")
+            elif prep["mode"] == "guard":
+                radius = self.engagement_range(watcher)
+                if radius and distance(previous, watcher.pos) > radius and distance(mover.pos, watcher.pos) <= radius:
+                    self._prepared_attack(watcher, mover, "guard")
+
+    def _prepare(self, u: Unit, mode: str):
+        require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
+        require(mode in {"overwatch", "guard"}, "Unknown preparation")
+        if mode == "overwatch":
+            require(u.weapon == "ranged", "Overwatch requires a ranged weapon")
+            require(not self.engaged_by(u), "Cannot prepare Overwatch while engaged")
+        else:
+            require(self.engagement_range(u) > 0, "Guard requires an engagement zone")
+        u.acted = True
+        u.cast = None
+        self.prepared_reactions[u.id] = {"mode": mode, "charges": 1, "ct_tax": 20}
+        self.emit("prepared", unit=u.id, mode=mode)
+
+    def available_team_tactics(self, caster: Unit, target: Unit) -> list[dict]:
+        if "pincer" not in caster.tactics or not target.alive or target.team == caster.team:
+            return []
+        if self.engagement_range(caster) <= 0 or distance(caster.pos, target.pos) > self.engagement_range(caster):
+            return []
+        cx, cy = caster.pos[0] - target.pos[0], caster.pos[1] - target.pos[1]
+        result = []
+        for ally in self.units:
+            if ally.id == caster.id or not ally.alive or ally.team != caster.team or "pincer" not in ally.tactics:
+                continue
+            if not self._can_react(ally) or ally.ct < 20 or self.engagement_range(ally) <= 0:
+                continue
+            if distance(ally.pos, target.pos) > self.engagement_range(ally):
+                continue
+            ax, ay = ally.pos[0] - target.pos[0], ally.pos[1] - target.pos[1]
+            opposite = (cx == 0 and ax == 0 and cy * ay < 0) or (cy == 0 and ay == 0 and cx * ax < 0)
+            if opposite:
+                result.append({"id": "pincer", "partner": ally.id, "target": target.id, "ct_cost": 20})
+        return sorted(result, key=lambda row: row["partner"])
+
+    def _resolve_team_tactic(self, caster: Unit, target: Unit):
+        options = self.available_team_tactics(caster, target)
+        if not options or not target.alive:
+            return
+        tactic = options[0]
+        partner = self.unit(tactic["partner"])
+        skill = self._basic(partner)
+        partner.ct = max(0, partner.ct - tactic["ct_cost"])
+        self.emit("tactic", tactic="pincer", units=[caster.id, partner.id], target=target.id,
+                  ct_cost=tactic["ct_cost"])
+        if self.rng.random() < self.hit_chance(partner, target, skill):
+            amount = max(1, self.damage(partner, target, skill, skill.effects[0]) // 2)
+            self._hurt(target, amount, partner, reactions=False)
+        else:
+            self.emit("miss", unit=partner.id, target=target.id)
+
     def _move(self, u: Unit, cell: Cell):
         paths = self.reachable(u)
         require(cell != u.pos and cell in paths, "Destination unreachable or movement spent")
