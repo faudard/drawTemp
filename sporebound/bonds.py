@@ -42,6 +42,12 @@ def battle_bond_deltas(battle) -> dict[str, dict[str, int]]:
             members = sorted({uid for uid in event.get("units", []) if uid in player_ids})
             for a, b in combinations(members, 2):
                 _inc(result, pair_key(a, b), f"tactic:{event.get('tactic', 'unknown')}")
+        elif kind == "intercept":
+            protector, protected = event.get("unit"), event.get("protected")
+            if protector in player_ids and protected in player_ids and protector != protected:
+                key = pair_key(protector, protected)
+                _inc(result, key, "intercepts")
+                _inc(result, key, f"intercepts_for:{protected}")
         elif kind == "revive":
             source = event.get("source")
             target = event.get("unit")
