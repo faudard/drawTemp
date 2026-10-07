@@ -191,6 +191,51 @@ class CampaignTests(unittest.TestCase):
             path=Path(tmp)/'campaign.json'; self.campaign.save(path)
             self.assertEqual(Campaign.load(path),self.campaign)
 
+
+    def test_bonds_record_once_and_count_shared_kills(self):
+        b=self.campaign.prepare(self.content,'garden')
+        b.events=[
+            {'tick':1,'kind':'damage','unit':'grincheux','source':'ziggy','amount':10},
+            {'tick':2,'kind':'damage','unit':'grincheux','source':'momo','amount':10},
+            {'tick':3,'kind':'downed','unit':'grincheux','source':'momo'},
+        ]
+        b.result='victory'
+        self.assertTrue(self.campaign.record_bonds(b))
+        self.assertFalse(self.campaign.record_bonds(b))
+        stats=self.campaign.bond('ziggy','momo')
+        self.assertEqual(stats['missions_together'],1)
+        self.assertEqual(stats['shared_kills'],1)
+
+    def test_declarative_tactic_unlock_and_prepared_loadout(self):
+        rules=[{
+            'id':'pincer',
+            'members':['ziggy','momo'],
+            'unlock':{'all':[
+                {'stat':'missions_together','gte':1},
+                {'completed_mission':'garden'},
+            ]},
+        }]
+        b=self.campaign.prepare(self.content,'garden'); b.result='victory'
+        self.assertTrue(self.campaign.finish(b,tactic_rules=rules))
+        self.assertIn('pincer',self.campaign.known_tactics['momo|ziggy'])
+        self.assertTrue(self.campaign.prepare_tactic('ziggy','momo','pincer'))
+        battle=self.campaign.prepare(self.content,'escape')
+        self.assertIn('pincer',battle.unit('ziggy').tactics)
+        self.assertIn('pincer',battle.unit('momo').tactics)
+
+    def test_bond_progress_persists_in_campaign_save(self):
+        self.campaign.bond('ziggy','momo')['missions_together']=4
+        self.campaign.unlock_tactic('ziggy','momo','pincer')
+        self.campaign.prepare_tactic('ziggy','momo','pincer')
+        self.campaign.tracked_battles.append('battle-1')
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'campaign.json'; self.campaign.save(path)
+            loaded=Campaign.load(path)
+        self.assertEqual(loaded.bond_stats,self.campaign.bond_stats)
+        self.assertEqual(loaded.known_tactics,self.campaign.known_tactics)
+        self.assertEqual(loaded.prepared_tactics,self.campaign.prepared_tactics)
+        self.assertEqual(loaded.tracked_battles,self.campaign.tracked_battles)
+
 class CrownAndShopTests(unittest.TestCase):
     def test_crown_pickup_drop_recover_and_extract(self):
         b=fixture(); b.mission.objective='crown'; b.mission.goal=[(0,0)]; b.relic_pos=(1,1)
