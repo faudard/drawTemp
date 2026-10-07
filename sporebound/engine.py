@@ -475,6 +475,10 @@ class Battle:
                     target.mp = min(target.max_mp, target.mp + e.power)
                 elif e.kind in {"push", "pull"} and target.alive:
                     self._displace(caster, target, e.power, e.kind == "pull")
+        if skill.id == "attack":
+            primary = self.at(cell)
+            if primary is not None and primary.alive and primary.team != caster.team:
+                self._resolve_team_tactic(caster, primary)
         self._triggers()
         self._outcome()
 
@@ -572,8 +576,10 @@ class Battle:
             return
         for nxt in path[1:]:
             previous = u.pos
+            before_engaged = {e.id for e in self.engaged_by(u)}
             for enemy in self.units:
-                if enemy.team != u.team and enemy.reaction == "opportunity" and self._can_react(enemy) and distance(previous, enemy.pos) == 1 and distance(nxt, enemy.pos) > 1:
+                radius = self.engagement_range(enemy)
+                if enemy.team != u.team and enemy.reaction == "opportunity" and self._can_react(enemy) and radius > 0 and distance(previous, enemy.pos) <= radius and distance(nxt, enemy.pos) > radius:
                     if self.rng.randrange(100) < enemy.brave:
                         s = self._basic(enemy)
                         if self.rng.random() < self.hit_chance(enemy, u, s):
@@ -581,6 +587,14 @@ class Battle:
             if not u.alive:
                 break
             u.pos = nxt
+            after_engaged = {e.id for e in self.engaged_by(u)}
+            for uid in sorted(after_engaged - before_engaged):
+                self.emit("engagement_entered", unit=u.id, enemy=uid)
+            for uid in sorted(before_engaged - after_engaged):
+                self.emit("engagement_left", unit=u.id, enemy=uid)
+            self._prepared_on_move(u, previous)
+            if not u.alive:
+                break
             self._hurt(u, self.board.tile(nxt).hazard) if self.board.tile(nxt).hazard else None
             self._collect(u)
             self._triggers()
@@ -685,6 +699,8 @@ class Battle:
                 self._item(u, command["item"], cell)
             elif kind == "interact":
                 self._interact(u, command["object"])
+            elif kind == "prepare":
+                self._prepare(u, command["mode"])
             elif kind == "end":
                 self._end(u, tuple(command.get("facing", u.facing)))
             else:
@@ -705,7 +721,8 @@ class Battle:
     def state(self) -> dict:
         return {"tick": self.tick, "active": self.active_id, "result": self.result,
                 "units": [asdict(u) for u in self.units], "inventory": self.inventory,
-                "zones": self.zones, "fired": self.fired, "loot": self.loot,
+                "zones": self.zones, "prepared_reactions": self.prepared_reactions,
+                "fired": self.fired, "loot": self.loot,
                 "hold_ticks": self.hold_ticks, "objects": self.mission.objects,
                 "relic_pos": self.relic_pos, "carrier": self.carrier,
                 "tiles": [{"pos": c, **asdict(t)} for c, t in sorted(self.board.tiles.items())],
