@@ -58,40 +58,47 @@ def merge_bond_stats(target: dict[str, dict[str, int]], delta: dict[str, dict[st
             current[stat] = current.get(stat, 0) + amount
 
 
+def _event_matches(event: dict, spec) -> bool:
+    if isinstance(spec, str):
+        spec = {"kind": spec}
+    return all(event.get(key) == value for key, value in spec.items())
+
+
 def event_sequence_met(events: list[dict], rule: dict, members: list[str] | tuple[str, ...] = ()) -> bool:
+    """Find an ordered event pattern, retrying from later starts when an early candidate expires."""
     specs = rule.get("sequence", [])
     if not specs:
         return False
-    index = 0
-    first_tick = None
-    target = None
-    matched_sources = set()
     max_ticks = rule.get("max_ticks")
     same_target = rule.get("same_target", False)
 
-    for event in events:
-        spec = specs[index]
-        if isinstance(spec, str):
-            spec = {"kind": spec}
-        if any(event.get(key) != value for key, value in spec.items()):
+    for start_index, first in enumerate(events):
+        if not _event_matches(first, specs[0]):
             continue
-        if first_tick is None:
-            first_tick = event.get("tick", 0)
-        if max_ticks is not None and event.get("tick", first_tick) - first_tick > max_ticks:
-            return False
-        if same_target:
-            current = event.get("unit")
-            if target is None:
-                target = current
-            elif current != target:
+        matched = [first]
+        target = first.get("unit") if same_target else None
+        first_tick = first.get("tick", 0)
+        next_spec = 1
+
+        for event in events[start_index + 1:]:
+            if max_ticks is not None and event.get("tick", first_tick) - first_tick > max_ticks:
+                break
+            if next_spec >= len(specs):
+                break
+            if not _event_matches(event, specs[next_spec]):
                 continue
-        if event.get("source"):
-            matched_sources.add(event["source"])
-        index += 1
-        if index == len(specs):
-            if rule.get("require_sources") == "all_members":
-                return set(members) <= matched_sources
-            return True
+            if same_target and event.get("unit") != target:
+                continue
+            matched.append(event)
+            next_spec += 1
+
+        if next_spec != len(specs):
+            continue
+        if rule.get("require_sources") == "all_members":
+            sources = {event.get("source") for event in matched if event.get("source")}
+            if not set(members) <= sources:
+                continue
+        return True
     return False
 
 
