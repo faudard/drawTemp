@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .bonds import battle_bond_deltas, merge_bond_stats, pair_key, unlock_rule_met
 from .engine import Battle
-from .model import Content, require
+from .model import Content, TEAM_TACTICS, require
 from .storage import write_json
 
 
@@ -60,6 +60,7 @@ class Campaign:
 
     def prepare_tactic(self, a, b, tactic, limit=2):
         key = pair_key(a, b)
+        require(tactic in TEAM_TACTICS, "Tactic not implemented")
         require(tactic in self.known_tactics.get(key, []), "Tactic not unlocked")
         prepared = self.prepared_tactics.setdefault(key, [])
         if tactic in prepared:
