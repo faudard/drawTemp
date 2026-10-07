@@ -257,6 +257,60 @@ class Battle:
                     result.append({"unit": uid, "kind": "guard", "cell": cell})
         return result
 
+    def movement_threats(self, u: Unit, path: list[Cell]) -> list[dict]:
+        """Pure path analysis for UI/AI: engagement entries and reactions that may trigger."""
+        require(bool(path) and path[0] == u.pos, "Threat path must start at unit position")
+        result = []
+        previous = path[0]
+        engaged = {row["unit"] for row in self.engagement_threats(previous, u.team)}
+        seen_prepared = set()
+        for cell in path[1:]:
+            after = {row["unit"] for row in self.engagement_threats(cell, u.team)}
+            for uid in sorted(after - engaged):
+                result.append({"kind": "engagement", "unit": uid, "cell": cell,
+                               "chance": 1.0, "amount": 0})
+            if not u.disengaging:
+                for uid in sorted(engaged - after):
+                    enemy = self.unit(uid)
+                    if enemy.reaction == "opportunity" and self._can_react(enemy):
+                        skill = self._basic(enemy)
+                        ghost = deepcopy(u)
+                        ghost.pos = previous
+                        if skill.min_range <= distance(enemy.pos, previous) <= skill.range and self.line_of_sight(enemy.pos, previous):
+                            result.append({"kind": "opportunity", "unit": uid, "cell": previous,
+                                           "chance": enemy.brave / 100 * self.hit_chance(enemy, ghost, skill),
+                                           "amount": self.damage(enemy, ghost, skill, skill.effects[0])})
+            for uid, prep in sorted(self.prepared_reactions.items()):
+                if uid in seen_prepared:
+                    continue
+                watcher = self.unit(uid)
+                if not watcher.alive or watcher.team == u.team or not self._can_react(watcher):
+                    continue
+                ghost = deepcopy(u)
+                ghost.pos = cell
+                if prep["mode"] == "overwatch":
+                    skill = self._basic(watcher)
+                    d = distance(watcher.pos, cell)
+                    if skill.min_range <= d <= skill.range and self.line_of_sight(watcher.pos, cell):
+                        result.append({"kind": "overwatch", "unit": uid, "cell": cell,
+                                       "chance": self.hit_chance(watcher, ghost, skill),
+                                       "amount": self.damage(watcher, ghost, skill, skill.effects[0])})
+                        seen_prepared.add(uid)
+                elif prep["mode"] == "guard":
+                    radius = self.engagement_range(watcher)
+                    if (radius and distance(previous, watcher.pos) > radius
+                            and distance(cell, watcher.pos) <= radius
+                            and self.line_of_sight(watcher.pos, cell)):
+                        skill = self._basic(watcher)
+                        if skill.min_range <= distance(watcher.pos, cell) <= skill.range:
+                            result.append({"kind": "guard", "unit": uid, "cell": cell,
+                                           "chance": self.hit_chance(watcher, ghost, skill),
+                                           "amount": self.damage(watcher, ghost, skill, skill.effects[0])})
+                            seen_prepared.add(uid)
+            previous = cell
+            engaged = after
+        return result
+
     def _basic(self, u: Unit) -> Skill:
         fixed_range = max(u.attack_range, 2) if u.weapon == "spear" else u.attack_range
         attack_range = fixed_range if u.attack_range_mode == "fixed" else max(1, self.board.width + self.board.height - 2)
