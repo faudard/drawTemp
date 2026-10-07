@@ -9,7 +9,7 @@ Cell = tuple[int, int]
 STATUSES = {"poison", "regen", "haste", "slow", "protect", "shell", "silence",
             "sleep", "stop", "dont_move", "dont_act", "guard"}
 REACTIONS = {"none", "counter", "opportunity", "pursuit", "blade_grasp", "auto_potion", "mp_switch"}
-TEAM_TACTICS = {"pincer", "crossfire"}
+TEAM_TACTICS = {"pincer", "crossfire", "encirclement"}\nTEAM_TACTIC_ARITY = {"pincer": 2, "crossfire": 2, "encirclement": 3}
 SUPPORTS = {"none", "attack_up", "magic_attack_up", "defense_up", "magic_defense_up",
             "concentrate", "short_charge"}
 MOVEMENTS = {"none", "move_plus_1", "move_plus_2", "ignore_height", "teleport", "move_mp_up"}
@@ -358,6 +358,7 @@ class Content:
                 require(all(isinstance(spec, (str, dict)) for spec in rule["sequence"]), "Invalid tactic sequence event")
                 if "max_ticks" in rule:
                     integer(rule["max_ticks"], 1, 100000, "tactic sequence max_ticks")
+                integer(rule.get("count", 1), 1, 1000, "tactic sequence count")
                 require(type(rule.get("same_target", False)) is bool, "Invalid same_target")
                 require(rule.get("require_sources") in {None, "all_members"}, "Invalid sequence source rule")
                 return
@@ -365,11 +366,18 @@ class Content:
 
         all_unit_ids = {u.id for m in self.missions.values() for u in m.units if u.team == "player"}
         for rule in self.tactic_unlocks:
-            require(rule.get("id") in TEAM_TACTICS, "Unknown tactic unlock id")
+            tactic = rule.get("id")
+            require(tactic in TEAM_TACTICS, "Unknown tactic unlock id")
             members = rule.get("members", [])
-            require(isinstance(members, list) and len(members) == 2 and len(set(members)) == 2,
-                    "Tactic unlock currently needs two distinct members")
+            require(isinstance(members, list) and len(members) in {2, 3}
+                    and len(set(members)) == len(members),
+                    "Tactic unlock needs two or three distinct members")
+            require(len(members) == TEAM_TACTIC_ARITY[tactic], "Tactic unlock arity mismatch")
             require(all(member in all_unit_ids for member in members), "Unknown tactic unlock member")
+            hints = rule.get("hints", {})
+            require(isinstance(hints, dict) and set(hints) <= {"hidden", "clue", "near", "unlocked"}
+                    and all(isinstance(value, str) and bool(value) for value in hints.values()),
+                    "Invalid tactic unlock hints")
             unlock_rule(rule.get("unlock"))
 
         for jid, job in self.jobs.items():
