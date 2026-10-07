@@ -460,6 +460,19 @@ class Battle:
     def _hurt(self, target: Unit, amount: int, source: Unit | None = None, reactions=True):
         if not target.alive:
             return
+        if source is not None and source.team != target.team and reactions:
+            for uid, prep in sorted(self.prepared_reactions.items()):
+                protector = self.unit(uid)
+                if (prep.get("mode") == "intercept" and prep.get("target") == target.id
+                        and protector.alive and protector.team == target.team
+                        and self._can_react(protector)
+                        and distance(protector.pos, target.pos) <= max(1, self.engagement_range(protector))
+                        and self.line_of_sight(protector.pos, target.pos)):
+                    self.prepared_reactions.pop(uid, None)
+                    protector.ct = max(0, protector.ct - prep.get("ct_tax", 20))
+                    self.emit("intercept", unit=uid, protected=target.id, source=source.id, amount=amount)
+                    self._hurt(protector, amount, source, reactions=False)
+                    return
         reactive = source is not None and source.team != target.team and reactions and self._can_react(target)
         if reactive and target.reaction == "mp_switch" and target.mp > 0 and self.rng.randrange(100) < target.brave:
             target.mp = max(0, target.mp - amount)
@@ -605,19 +618,28 @@ class Battle:
                 if radius and distance(previous, watcher.pos) > radius and distance(mover.pos, watcher.pos) <= radius:
                     self._prepared_attack(watcher, mover, "guard")
 
-    def _prepare(self, u: Unit, mode: str):
+    def _prepare(self, u: Unit, mode: str, target_id: str | None = None):
         require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
-        require(mode in {"overwatch", "guard", "brace"}, "Unknown preparation")
+        require(mode in {"overwatch", "guard", "brace", "intercept"}, "Unknown preparation")
         if mode == "overwatch":
             require(u.weapon == "ranged", "Overwatch requires a ranged weapon")
             require(not self.engaged_by(u), "Cannot prepare Overwatch while engaged")
         elif mode == "guard":
             require(self.engagement_range(u) > 0, "Guard requires an engagement zone")
-        else:
+        elif mode == "brace":
             require(self.engagement_range(u) > 0, "Brace requires a close-combat control zone")
+        else:
+            require(self.engagement_range(u) > 0, "Intercept requires a close-combat control zone")
+            require(target_id is not None, "Intercept needs a protected ally")
+            target = self.unit(target_id)
+            require(target.alive and target.team == u.team and target.id != u.id, "Invalid Intercept target")
+            require(distance(u.pos, target.pos) <= max(1, self.engagement_range(u))
+                    and self.line_of_sight(u.pos, target.pos), "Intercept target outside protection range")
         u.acted = True
         u.cast = None
         self.prepared_reactions[u.id] = {"mode": mode, "charges": 1, "ct_tax": 20}
+        if mode == "intercept":
+            self.prepared_reactions[u.id]["target"] = target_id
         self.emit("prepared", unit=u.id, mode=mode)
 
     def available_team_tactics(self, caster: Unit, target: Unit) -> list[dict]:
@@ -808,7 +830,7 @@ class Battle:
             elif kind == "interact":
                 self._interact(u, command["object"])
             elif kind == "prepare":
-                self._prepare(u, command["mode"])
+                self._prepare(u, command["mode"], command.get("target"))
             elif kind == "end":
                 self._end(u, tuple(command.get("facing", u.facing)))
             else:
