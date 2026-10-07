@@ -366,4 +366,15 @@ class TeamTacticsTests(unittest.TestCase):
         self.assertEqual(Battle.replay(b.recording()).digest(),b.digest())
 
 
+    def test_disengage_spends_action_and_avoids_opportunity(self):
+        b=fixture()
+        enemy=b.unit('b'); enemy.pos=(1,1); enemy.reaction='opportunity'; enemy.brave=100
+        b.execute({'kind':'disengage'})
+        self.assertTrue(b.active.acted and b.active.disengaging)
+        b.execute({'kind':'move','cell':[0,0]})
+        self.assertEqual(b.unit('a').hp,40)
+        self.assertFalse(b.unit('a').disengaging)
+        self.assertTrue(any(e['kind']=='disengaged' for e in b.events))
+
+
 if __name__=='__main__': unittest.main()
