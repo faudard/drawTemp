@@ -135,3 +135,27 @@ Next bibliography expansions should cover:
 - campaign pacing and roster attachment;
 - automated balancing/search;
 - accessible presentation of complex tactical information.
+
+
+## G. Team tactics, reactions and relationship systems
+
+### Firaxis / 2K — XCOM 2: War of the Chosen manual and Soldier Bonds
+Primary source for pair progression translated into tactical benefits. The manual documents Teamwork, Spotter, Stand By Me, Advanced Teamwork and Dual Strike, while the expansion documentation frames bonds as relationships that develop through joint deployment.
+
+https://assets.2k.com/1a6ngf98576c/6LIsXornIgRpO5WnGoU1oS/d99b534548498ac045f80e5888d2c3f3/XCOM2_WOTC_ONLINE_MANUAL_SHEET_ENG.pdf
+https://newsroom.2k.com/news/xcomr-2-war-of-the-chosen-expansion-available-now
+
+### Firaxis — "Breathing More Layers into XCOM 2: War of the Chosen"
+Useful production lesson: establish a small working core for a new strategic/tactical system, then add complexity after iteration and playtesting.
+
+https://xcom.com/news/breathing-more-layers-and-life-into-xcom-2-war-of-the-chosen/amp
+
+### Chrono Trigger — 1995 developer interviews
+Primary historical interview describing Double/Triple Techs as coordinated character actions developed to make characters visibly work together.
+
+https://shmuplations.com/chronotrigger2/
+
+### Craig Stern — "12 ways to improve turn-based RPG combat systems"
+Secondary design essay describing counterattacks, opportunity attacks and reaction fire as delayed attacks that increase the tactical value of action reserves, movement and positioning.
+
+https://www.gamedeveloper.com/design/12-ways-to-improve-turn-based-rpg-combat-systems

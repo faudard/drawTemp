@@ -9,6 +9,7 @@ Cell = tuple[int, int]
 STATUSES = {"poison", "regen", "haste", "slow", "protect", "shell", "silence",
             "sleep", "stop", "dont_move", "dont_act", "guard"}
 REACTIONS = {"none", "counter", "opportunity", "blade_grasp", "auto_potion", "mp_switch"}
+TEAM_TACTICS = {"pincer", "crossfire"}
 SUPPORTS = {"none", "attack_up", "magic_attack_up", "defense_up", "magic_defense_up",
             "concentrate", "short_charge"}
 MOVEMENTS = {"none", "move_plus_1", "move_plus_2", "ignore_height", "teleport", "move_mp_up"}
@@ -86,6 +87,8 @@ class Skill:
     cast_ticks: int = 0
     lock: str = "cell"  # cell / unit
     los: bool = True
+    optimal_range: int = 0
+    falloff_per_tile: int = 0
 
 
 @dataclass
@@ -109,6 +112,10 @@ class Unit:
     weapon: str = "melee"
     attack_range: int = 1
     min_range: int = 1
+    attack_range_mode: str = "fixed"  # fixed / los
+    optimal_range: int = 0
+    falloff_per_tile: int = 0
+    engagement_range: int = -1  # -1 = infer from weapon family
     brave: int = 70
     faith: int = 60
     class_evade: int = 0
@@ -121,12 +128,14 @@ class Unit:
     movement: str = "none"
     facing: Cell = (0, 1)
     skills: list[str] = field(default_factory=list)
+    tactics: list[str] = field(default_factory=list)
     resistances: dict[str, int] = field(default_factory=dict)
     statuses: dict[str, int] = field(default_factory=dict)
     ct: int = 0
     moved: bool = False
     acted: bool = False
     cast: dict | None = None
+    disengaging: bool = False
 
     @property
     def alive(self) -> bool:
@@ -160,6 +169,7 @@ class Content:
     missions: dict[str, Mission]
     jobs: dict[str, dict] = field(default_factory=dict)
     equipment: dict[str, dict] = field(default_factory=dict)
+    tactic_unlocks: list[dict] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> Content:
@@ -190,7 +200,8 @@ class Content:
                                "goal": [tuple(c) for c in row.get("goal", [])]})
                 require(m.id not in missions, f"Duplicate mission: {m.id}")
                 missions[m.id] = m
-            result = cls(skills, missions, data.get("jobs", {}), data.get("equipment", {}))
+            result = cls(skills, missions, data.get("jobs", {}), data.get("equipment", {}),
+                         data.get("tactic_unlocks", []))
             result.validate()
             return result
         except (KeyError, TypeError, AttributeError) as exc:
@@ -208,7 +219,8 @@ class Content:
                             "tiles": [{"pos": list(c), **asdict(t)} for c, t in sorted(mission.board.tiles.items())]}
             missions.append(row)
         return {"version": 1, "skills": [asdict(s) for s in self.skills.values()],
-                "missions": missions, "jobs": self.jobs, "equipment": self.equipment}
+                "missions": missions, "jobs": self.jobs, "equipment": self.equipment,
+                "tactic_unlocks": self.tactic_unlocks}
 
     def validate(self) -> None:
         def integer(value, low, high, label):
@@ -220,7 +232,7 @@ class Content:
 
         for s in self.skills.values():
             require(bool(s.id) and bool(s.effects), "Skill needs an id and effects")
-            for key in ("cost", "range", "min_range", "radius", "cast_ticks"):
+            for key in ("cost", "range", "min_range", "radius", "cast_ticks", "optimal_range", "falloff_per_tile"):
                 integer(getattr(s, key), 0, 100, f"{s.id}.{key}")
             integer(s.accuracy, 0, 100, f"{s.id}.accuracy")
             require(s.min_range <= s.range, f"{s.id}: invalid range")
@@ -274,11 +286,16 @@ class Content:
                 for key in ("brave", "faith", "class_evade", "shield_evade", "accessory_evade", "weapon_evade", "magic_evade"):
                     integer(getattr(u, key), 0, 100, f"{u.id}.{key}")
                 require(u.min_range <= u.attack_range, f"{u.id}: range")
+                require(u.attack_range_mode in {"fixed", "los"}, f"{u.id}: attack_range_mode")
+                integer(u.optimal_range, 0, 10000, f"{u.id}.optimal_range")
+                integer(u.falloff_per_tile, 0, 100, f"{u.id}.falloff_per_tile")
+                integer(u.engagement_range, -1, 8, f"{u.id}.engagement_range")
+                require(all(t in TEAM_TACTICS for t in u.tactics), f"{u.id}: unknown tactic")
                 require(u.weapon in {"melee", "spear", "ranged", "focus", "unarmed"}, f"{u.id}: weapon")
                 require(u.facing in {(0, 1), (0, -1), (1, 0), (-1, 0)}, f"{u.id}: facing")
                 require(u.reaction in REACTIONS and u.support in SUPPORTS and u.movement in MOVEMENTS, f"{u.id}: ability slot")
                 require(all(s in self.skills for s in u.skills), f"{u.id}: unknown skill")
-                require(u.cast is None and not u.moved and not u.acted, "Mission spawns cannot be mid-turn")
+                require(u.cast is None and not u.moved and not u.acted and not u.disengaging, "Mission spawns cannot be mid-turn")
                 for status, duration in u.statuses.items():
                     require(status in STATUSES, f"{u.id}: status")
                     integer(duration, -1, 10000, f"{u.id}.status duration")
@@ -318,6 +335,43 @@ class Content:
                     elif action["kind"] == "status":
                         require(action["unit"] in ids and action["status"] in STATUSES, "Invalid trigger status")
                         integer(action["duration"], 1, 10000, "trigger duration")
+        def unlock_rule(rule):
+            require(isinstance(rule, dict), "Tactic unlock rule must be an object")
+            if "all" in rule or "any" in rule:
+                key = "all" if "all" in rule else "any"
+                require(isinstance(rule[key], list) and bool(rule[key]), f"Tactic unlock {key} must be non-empty")
+                for child in rule[key]:
+                    unlock_rule(child)
+                return
+            if "stat" in rule:
+                require(isinstance(rule["stat"], str) and bool(rule["stat"]), "Invalid tactic unlock stat")
+                integer(rule.get("gte", 1), 1, 1000000, "tactic unlock gte")
+                return
+            if "mission" in rule:
+                require(rule["mission"] in self.missions, "Unknown tactic unlock mission")
+                return
+            if "completed_mission" in rule:
+                require(rule["completed_mission"] in self.missions, "Unknown completed tactic mission")
+                return
+            if "sequence" in rule:
+                require(isinstance(rule["sequence"], list) and bool(rule["sequence"]), "Empty tactic sequence")
+                require(all(isinstance(spec, (str, dict)) for spec in rule["sequence"]), "Invalid tactic sequence event")
+                if "max_ticks" in rule:
+                    integer(rule["max_ticks"], 1, 100000, "tactic sequence max_ticks")
+                require(type(rule.get("same_target", False)) is bool, "Invalid same_target")
+                require(rule.get("require_sources") in {None, "all_members"}, "Invalid sequence source rule")
+                return
+            raise RuleError("Unknown tactic unlock rule")
+
+        all_unit_ids = {u.id for m in self.missions.values() for u in m.units if u.team == "player"}
+        for rule in self.tactic_unlocks:
+            require(rule.get("id") in TEAM_TACTICS, "Unknown tactic unlock id")
+            members = rule.get("members", [])
+            require(isinstance(members, list) and len(members) == 2 and len(set(members)) == 2,
+                    "Tactic unlock currently needs two distinct members")
+            require(all(member in all_unit_ids for member in members), "Unknown tactic unlock member")
+            unlock_rule(rule.get("unlock"))
+
         for jid, job in self.jobs.items():
             require(job.get("requires", "") in {"", *self.jobs}, f"{jid}: prerequisite job")
             integer(job.get("requires_level", 1), 1, 20, "requires_level")

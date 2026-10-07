@@ -8,7 +8,7 @@ Sporebound Tactics is a solo tactical JRPG built around compact grid maps with e
 
 The core design equation is:
 
-**Time × Position × Terrain × Build × Objective**
+**Time × Position × Terrain × Build × Objective × Team**
 
 A new mechanic should materially strengthen at least one of these axes. Mechanics that only add arithmetic without changing decisions should be rejected or simplified.
 
@@ -133,7 +133,24 @@ Every authored mission must declare an **encounter intention**. Examples:
 
 Objectives currently supported by the engine (eliminate, survive, extract, hold, crown) are a good base. Future objectives should be justified by the decision space they create.
 
-## 6. Information and randomness
+## 6. Team: coordinated tactical depth
+
+Team depth is a first-class pillar, separate from individual build depth.
+
+It includes:
+- engagement and space control;
+- prepared reactions such as Vigilance/Guard;
+- formations;
+- pincer/crossfire/relay tactics;
+- pair/trio techniques;
+- relationship unlocks and mission-specific mastery;
+- terrain and temporal combos.
+
+The detailed contract lives in [TEAM_TACTICS.md](TEAM_TACTICS.md).
+
+A Team mechanic should normally create a new action, threat, positional constraint or transformation rather than a passive adjacency percentage.
+
+## 7. Information and randomness
 
 Sporebound should not become fully deterministic, but important tactical information must be readable.
 
@@ -167,7 +184,7 @@ Forecast should explicitly distinguish:
 2. probabilistic branch;
 3. future opponent-dependent uncertainty.
 
-## 7. Reactions
+## 8. Reactions
 
 Reactions are valuable because they make positioning and build choices matter outside the active unit's turn.
 
@@ -180,7 +197,7 @@ Rules:
 
 Reaction spam that turns every action into an opaque cascade is a **REJECT**.
 
-## 8. Mobility guardrail
+## 9. Mobility guardrail
 
 Mobility can destroy encounter design if it bypasses geometry too cheaply. Fire Emblem Engage's developers explicitly describe this tension when increased movement and teleportation threatened to break stage tactics.
 
@@ -196,7 +213,7 @@ Therefore every exceptional mobility skill must pay at least one meaningful cost
 
 Teleport is retained, but must be balanced against authored map topology.
 
-## 9. Enemy design
+## 10. Enemy design
 
 Enemy variety should change decisions, not only stats.
 
@@ -221,7 +238,7 @@ Each archetype should declare:
 
 The encounter designer should select combinations intentionally.
 
-## 10. Battle size and pacing targets
+## 11. Battle size and pacing targets
 
 Initial design target, to validate empirically:
 
@@ -234,7 +251,7 @@ Initial design target, to validate empirically:
 
 These are targets for telemetry, not hard engine limits.
 
-## 11. Non-goals for the next phase
+## 12. Non-goals for the next phase
 
 Do not prioritize yet:
 
@@ -248,11 +265,11 @@ Do not prioritize yet:
 
 They can be revisited after the core loop is proven.
 
-## 12. Definition of a good new mechanic
+## 13. Definition of a good new mechanic
 
 Before implementation, answer:
 
-1. Which pillar does it strengthen: Time, Position, Terrain, Build, Objective?
+1. Which pillar does it strengthen: Time, Position, Terrain, Build, Objective, Team?
 2. What new decision does it create?
 3. What existing decision does it risk making irrelevant?
 4. Can the player understand its consequence before committing?

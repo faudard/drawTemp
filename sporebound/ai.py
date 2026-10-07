@@ -23,7 +23,18 @@ def _utility(battle, actor, rows):
             score += 10 if friendly else -10
         elif row["kind"] == "mp":
             score += (1 if friendly else -1) * min(row["amount"], target.max_mp - target.mp)
+        elif row["kind"] == "tactic":
+            score += (-1.4 if friendly else 1) * min(row["amount"], target.hp) * row["chance"]
     return score
+
+
+def _path_risk(battle, actor, path):
+    rows = battle.movement_threats(actor, path)
+    risk = sum(row["amount"] * row["chance"] for row in rows
+               if row["kind"] in {"opportunity", "overwatch", "guard"})
+    if actor.weapon == "ranged":
+        risk += sum(6 for row in rows if row["kind"] == "engagement")
+    return risk
 
 
 def choose_command(battle):
@@ -33,11 +44,23 @@ def choose_command(battle):
     opponents = [t for t in battle.units if t.alive and t.team != u.team]
     if u.cast:
         return {"kind": "end"}
+    if u.disengaging:
+        reachable = battle.reachable(u)
+        if reachable and opponents:
+            best = max(reachable, key=lambda c: (min(distance(c, t.pos) for t in opponents),
+                                                 battle.board.tile(c).cover, -reachable[c][0], c))
+            if best != u.pos:
+                return {"kind": "move", "cell": list(best)}
+        return {"kind": "end"}
+    if u.weapon == "ranged" and battle.engaged_by(u) and not u.acted and "dont_act" not in u.statuses:
+        return {"kind": "disengage"}
     origins = {u.pos: (0, [u.pos]), **battle.reachable(u)}
     candidates = []
     original = u.pos
     try:
         for origin, (cost, path) in sorted(origins.items()):
+            u.pos = original
+            path_risk = _path_risk(battle, u, path) if origin != original else 0
             u.pos = origin
             if not u.acted and "dont_act" not in u.statuses:
                 for sid in ["attack", *u.skills]:
@@ -51,7 +74,7 @@ def choose_command(battle):
                         except RuleError:
                             continue
                         value = _utility(battle, u, rows) / (1 + skill.cast_ticks / 10) - skill.cost * .2
-                        value -= sum(battle.board.tile(c).hazard for c in path[1:]) * 1.5 + cost * .05
+                        value -= sum(battle.board.tile(c).hazard for c in path[1:]) * 1.5 + cost * .05 + path_risk
                         if value > 0:
                             cmd = {"kind": "act", "skill": sid, "cell": list(cell)} if origin == original else {"kind": "move", "cell": list(origin)}
                             candidates.append((value, cmd))
@@ -66,7 +89,7 @@ def choose_command(battle):
                     goals = battle.mission.goal if battle.carrier == u.id else [battle.relic_pos] if battle.relic_pos else []
                     if goals:
                         score = (min(distance(original, g) for g in goals) - min(distance(origin, g) for g in goals)) * 3 - cost * .05
-                score -= sum(battle.board.tile(c).hazard for c in path[1:]) * 1.5
+                score -= sum(battle.board.tile(c).hazard for c in path[1:]) * 1.5 + path_risk
                 score += battle.board.tile(origin).cover * .001
                 if score > 0:
                     candidates.append((score, {"kind": "move", "cell": list(origin)}))
@@ -90,6 +113,11 @@ def choose_command(battle):
     if candidates:
         # Canonical JSON-like string breaks ties independently of dict ordering.
         return sorted(candidates, key=lambda c: (-c[0], str(sorted(c[1].items()))))[0][1]
+    if not u.acted and "dont_act" not in u.statuses:
+        if u.weapon == "ranged" and not battle.engaged_by(u):
+            return {"kind": "prepare", "mode": "overwatch"}
+        if battle.engagement_range(u) > 0 and any(distance(u.pos, t.pos) <= u.movement_budget + battle.engagement_range(u) for t in opponents):
+            return {"kind": "prepare", "mode": "guard"}
     facing = u.facing
     if opponents:
         nearest = min(opponents, key=lambda t: (distance(t.pos, u.pos), t.id))

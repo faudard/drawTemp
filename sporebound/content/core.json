@@ -520,7 +520,10 @@
           "skills": [
             "silence"
           ],
-          "class_evade": 10
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
         }
       ],
       "objective": "eliminate",
@@ -758,7 +761,10 @@
           "skills": [
             "silence"
           ],
-          "class_evade": 10
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
         }
       ],
       "objective": "extract",
@@ -949,7 +955,10 @@
           "skills": [
             "silence"
           ],
-          "class_evade": 10
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
         }
       ],
       "objective": "hold",
@@ -1148,7 +1157,10 @@
           "skills": [
             "silence"
           ],
-          "class_evade": 10
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
         }
       ],
       "objective": "crown",
@@ -1249,5 +1261,47 @@
       },
       "price": 100
     }
-  }
+  },
+  "tactic_unlocks": [
+    {
+      "id": "pincer",
+      "members": [
+        "ziggy",
+        "momo"
+      ],
+      "unlock": {
+        "any": [
+          {
+            "all": [
+              {
+                "completed_mission": "garden"
+              },
+              {
+                "stat": "shared_kills",
+                "gte": 2
+              }
+            ]
+          },
+          {
+            "sequence": [
+              {
+                "kind": "status",
+                "status": "slow"
+              },
+              {
+                "kind": "forced_move",
+                "mode": "push"
+              },
+              {
+                "kind": "damage"
+              }
+            ],
+            "same_target": true,
+            "max_ticks": 10,
+            "require_sources": "all_members"
+          }
+        ]
+      }
+    }
+  ]
 }

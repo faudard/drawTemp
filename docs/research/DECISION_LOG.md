@@ -206,3 +206,93 @@ Any significant mechanic PR must document:
 6. Data model and authoring UX.
 7. Simulation/balance methodology.
 8. Renderer/player UX.
+
+
+## D-024 — Team is a sixth combat pillar
+**Decision:** ADD.
+
+The combat model becomes **Time × Position × Terrain × Build × Objective × Team**.
+
+Team covers explicit synergies, formations, engagement, assists, prepared reactions and coordinated tactical actions.
+
+## D-025 — Engagement is core spatial control
+**Decision:** ADD.
+
+Melee identity must not be reduced to short attack range. Close-combat units exert an engagement zone even without an opportunity-reaction slot.
+
+Leaving engagement only creates an attack when a relevant reaction/preparation exists.
+
+## D-026 — Prepared reactions
+**Decision:** ADD.
+
+Vigilance/Overwatch and Guard spend Act now to reserve one bounded future response.
+
+Prepared reactions:
+- expire on the preparing unit's next activation;
+- have explicit charges;
+- may apply a CT tax;
+- are visible/queryable by UI and AI;
+- do not recursively trigger reaction cascades by default.
+
+## D-027 — Ranged attacks use practical range + falloff
+**Decision:** EXPERIMENT.
+
+Ranged basic attacks may use LOS-scale maximum reach while retaining an optimal range and accuracy falloff. Being engaged penalizes ranged basic accuracy and Overwatch cannot be prepared while engaged.
+
+Goal: make closing distance strategically valuable without arbitrary short caps.
+
+## D-028 — Pincer is the first explicit Team Tactic
+**Decision:** PROTOTYPE.
+
+Two tactic-enabled melee allies controlling opposite sides of one target may generate a bounded follow-up.
+
+The partner spends CT and the follow-up cannot recursively trigger normal reactions.
+
+This is a framework proof, not final balance.
+
+## D-029 — Tactical Bonds / hidden unlocks
+**Decision:** DESIGN NOW, PERSISTENCE LATER.
+
+Pair/trio tactics may unlock through:
+- story;
+- dedicated missions;
+- repeated joint deployment/mastery;
+- hidden event sequences and achievements.
+
+The unlock engine must consume normalized battle events rather than hardcoded battle-rule branches.
+
+See `docs/design/TEAM_TACTICS.md`.
+
+
+## D-030 — Disengage converts melee control into action pressure
+**Decision:** ADD.
+
+An engaged unit may spend Act to prepare a safe withdrawal; its following Move ignores Opportunity and clears the state.
+
+**Reason:** melee control should impose a meaningful opportunity cost without becoming a hard movement lock.
+
+Future contact mechanics (Charge, Brace, Pursuit, Challenge) must preserve this counterplay principle.
+
+
+## D-031 — Intercept makes melee protection active
+**Decision:** PROTOTYPE IMPLEMENTED.
+
+A close-combat unit may spend Act to protect one nearby ally from one eligible enemy hit. The response consumes its prepared charge and CT.
+
+**Reason:** tank/protector identity should come from spatial protection decisions rather than passive HP/DEF alone.
+
+## D-032 — Crossfire is a ranged Team Tactic
+**Decision:** PROTOTYPE IMPLEMENTED.
+
+Two prepared ranged bondmates with LOS from distinct vectors may create a bounded follow-up. Same-ray positions do not qualify; engaged shooters cannot contribute.
+
+**Reason:** long range remains powerful but teamwork still depends on geometry, positioning and CT reserve.
+
+## D-033 — Tactical Bond unlocks are event-driven
+**Decision:** FOUNDATION IMPLEMENTED.
+
+Campaign progression stores per-pair statistics plus known/prepared tactics. Unlock rules may compose mission requirements, cumulative stats and hidden ordered event sequences.
+
+Examples include target-specific shared kills and same-target status → displacement → damage patterns.
+
+**Reason:** secret/mastery unlocks must be authored as data over normalized battle events, never as character-specific branches in the combat engine.

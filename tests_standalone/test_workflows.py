@@ -37,6 +37,8 @@ class ContentTests(unittest.TestCase):
             lambda d:d['skills'][0]['effects'][0].update(kind='script'),
             lambda d:d['missions'][0].update(next_missions=['missing']),
             lambda d:d['missions'][0]['objects'][1].update(link='missing'),
+            lambda d:d['tactic_unlocks'][0].update(id='missing_tactic'),
+            lambda d:d['tactic_unlocks'][0].update(members=['ziggy','missing']),
         ]
         for edit in changes:
             with self.subTest(edit=edit):
@@ -110,6 +112,16 @@ class AITests(unittest.TestCase):
         self.assertEqual(choose_command(b),{'kind':'end'})
 
 
+    def test_ranged_ai_disengages_then_creates_distance(self):
+        b=fixture(weapon='ranged',attack_range=4,min_range=2)
+        b.unit('b').pos=(1,1)
+        self.assertEqual(choose_command(b),{'kind':'disengage'})
+        b.execute({'kind':'disengage'})
+        move=choose_command(b)
+        self.assertEqual(move['kind'],'move')
+        self.assertGreater(abs(move['cell'][0]-1)+abs(move['cell'][1]-1),1)
+
+
 class EditorTests(unittest.TestCase):
     def setUp(self):
         self.doc=Document(Content.load(DEFAULT_CONTENT))
@@ -180,6 +192,92 @@ class CampaignTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'campaign.json'; self.campaign.save(path)
             self.assertEqual(Campaign.load(path),self.campaign)
+
+
+    def test_bonds_record_once_and_count_shared_kills(self):
+        b=self.campaign.prepare(self.content,'garden')
+        b.events=[
+            {'tick':1,'kind':'damage','unit':'grincheux','source':'ziggy','amount':10},
+            {'tick':2,'kind':'damage','unit':'grincheux','source':'momo','amount':10},
+            {'tick':3,'kind':'downed','unit':'grincheux','source':'momo'},
+        ]
+        b.result='victory'
+        self.assertTrue(self.campaign.record_bonds(b))
+        self.assertFalse(self.campaign.record_bonds(b))
+        stats=self.campaign.bond('ziggy','momo')
+        self.assertEqual(stats['missions_together'],1)
+        self.assertEqual(stats['shared_kills'],1)
+        self.assertEqual(stats['shared_kill:grincheux'],1)
+
+    def test_content_defined_tactic_unlock_is_automatic(self):
+        b=self.campaign.prepare(self.content,'garden')
+        b.events=[
+            {'tick':1,'kind':'damage','unit':'grincheux','source':'ziggy','amount':5},
+            {'tick':2,'kind':'damage','unit':'grincheux','source':'momo','amount':5},
+            {'tick':3,'kind':'downed','unit':'grincheux','source':'momo'},
+            {'tick':4,'kind':'damage','unit':'baveux','source':'ziggy','amount':5},
+            {'tick':5,'kind':'damage','unit':'baveux','source':'momo','amount':5},
+            {'tick':6,'kind':'downed','unit':'baveux','source':'ziggy'},
+        ]
+        b.result='victory'
+        self.assertTrue(self.campaign.finish(b))
+        self.assertIn('pincer',self.campaign.known_tactics['momo|ziggy'])
+
+    def test_declarative_tactic_unlock_and_prepared_loadout(self):
+        rules=[{
+            'id':'pincer',
+            'members':['ziggy','momo'],
+            'unlock':{'all':[
+                {'stat':'missions_together','gte':1},
+                {'completed_mission':'garden'},
+            ]},
+        }]
+        b=self.campaign.prepare(self.content,'garden'); b.result='victory'
+        self.assertTrue(self.campaign.finish(b,tactic_rules=rules))
+        self.assertIn('pincer',self.campaign.known_tactics['momo|ziggy'])
+        self.assertTrue(self.campaign.prepare_tactic('ziggy','momo','pincer'))
+        battle=self.campaign.prepare(self.content,'escape')
+        self.assertIn('pincer',battle.unit('ziggy').tactics)
+        self.assertIn('pincer',battle.unit('momo').tactics)
+
+    def test_bond_progress_persists_in_campaign_save(self):
+        self.campaign.bond('ziggy','momo')['missions_together']=4
+        self.campaign.unlock_tactic('ziggy','momo','pincer')
+        self.campaign.prepare_tactic('ziggy','momo','pincer')
+        self.campaign.tracked_battles.append('battle-1')
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'campaign.json'; self.campaign.save(path)
+            loaded=Campaign.load(path)
+        self.assertEqual(loaded.bond_stats,self.campaign.bond_stats)
+        self.assertEqual(loaded.known_tactics,self.campaign.known_tactics)
+        self.assertEqual(loaded.prepared_tactics,self.campaign.prepared_tactics)
+        self.assertEqual(loaded.tracked_battles,self.campaign.tracked_battles)
+
+
+    def test_hidden_sequence_unlock_same_target_and_both_members(self):
+        b=self.campaign.prepare(self.content,'garden')
+        b.events=[
+            {'tick':10,'kind':'status','unit':'grincheux','source':'ziggy','status':'slow','duration':20},
+            {'tick':14,'kind':'displace','unit':'grincheux','source':'momo','mode':'push','pos':(5,1)},
+            {'tick':14,'kind':'damage','unit':'grincheux','source':'momo','amount':5},
+        ]
+        b.result='victory'
+        rules=[{
+            'id':'pincer',
+            'members':['ziggy','momo'],
+            'unlock':{
+                'sequence':[
+                    {'kind':'status','status':'slow'},
+                    {'kind':'displace','mode':'push'},
+                    {'kind':'damage'},
+                ],
+                'same_target':True,
+                'max_ticks':10,
+                'require_sources':'all_members',
+            },
+        }]
+        self.assertTrue(self.campaign.finish(b,tactic_rules=rules))
+        self.assertIn('pincer',self.campaign.known_tactics['momo|ziggy'])
 
 class CrownAndShopTests(unittest.TestCase):
     def test_crown_pickup_drop_recover_and_extract(self):
