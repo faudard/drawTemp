@@ -262,3 +262,13 @@ Pair/trio tactics may unlock through:
 The unlock engine must consume normalized battle events rather than hardcoded battle-rule branches.
 
 See `docs/design/TEAM_TACTICS.md`.
+
+
+## D-030 — Disengage converts melee control into action pressure
+**Decision:** ADD.
+
+An engaged unit may spend Act to prepare a safe withdrawal; its following Move ignores Opportunity and clears the state.
+
+**Reason:** melee control should impose a meaningful opportunity cost without becoming a hard movement lock.
+
+Future contact mechanics (Charge, Brace, Pursuit, Challenge) must preserve this counterplay principle.
