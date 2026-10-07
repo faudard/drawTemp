@@ -22,10 +22,12 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 
 ## 2.1 — profondeur tactique
 
-- [x] Combat 1.1 framework : engagement, zones de contrôle, Guard/Vigilance, portée LOS/falloff, première tactique Pincer.
-- [ ] Tactical Bonds : progression paire/trio, tactiques préparées, missions de déblocage, conditions secrètes event-driven.
-- [ ] Team Tactics 2 : Crossfire, Launch/Relay, Protect/Intercept, terrain combos et temporal combos.
-- [ ] Formations : Shield Wall, Phalanx, Escort Diamond, contrôle de couloirs et outils de preview.
+- [x] Combat 1.1 framework : engagement, zones de contrôle, Guard/Vigilance/Brace/Intercept, Disengage, portée LOS/falloff, threat forecast.
+- [x] Team Tactics foundation : Pincer + Crossfire, coût CT partenaire, forecast pur et prise en compte IA.
+- [x] Tactical Bonds foundation : stats par paire, kills ciblés, Intercepts, missions, séquences secrètes, tactiques connues/préparées et sauvegarde.
+- [ ] Tactical Bonds 2 : trios, indices progressifs/codex, règles de séquence plus riches et UI de préparation.
+- [ ] Team Tactics 2 : Launch/Relay, Pursuit, Charge, terrain combos et temporal combos.
+- [ ] Formations : Shield Wall, Phalanx, Escort Diamond, contrôle de couloirs et preview dédiée.
 - [ ] Déploiement avant combat, limites d’équipe et formations sauvegardées.
 - [ ] Menaces et réserves de réaction visibles ; Intercept et protection d’alliés.
 - [ ] Compatibilités zodiacales, immunités de statut, dissipation et règles de stacking dédiées.
