@@ -131,8 +131,8 @@ Spend Act to watch the engagement zone.
 Trigger:
 - enemy enters the zone, attacks an adjacent protected ally, or attempts a configured crossing.
 
-### Intercept
-Prepared or slotted protection rule.
+### Intercept — IMPLEMENTED PROTOTYPE
+Prepared protection rule. The current version protects one nearby ally for one eligible enemy hit, redirects the resolved hit to the protector, consumes the charge and applies the prepared-reaction CT tax.
 
 Trigger:
 - ally in protected space becomes the target of an eligible attack.
@@ -232,6 +232,8 @@ One character manipulates CT/cast timing so another action resolves in a new tac
 
 ## 8. Tactical Bonds and unlocks
 
+**Pair foundation is implemented.** Campaign state now persists per-pair statistics, known tactics, prepared tactics (initial limit: 2 per pair) and battle ids already counted. Trio persistence remains future work.
+
 Pair/trio tactics can be learned through multiple routes.
 
 ### Story unlock
@@ -249,8 +251,8 @@ Pair/trio tactics can be learned through multiple routes.
 - use a tactic family N times;
 - reach job/skill prerequisites.
 
-### Hidden emergent unlock
-A pattern in real battles unlocks a tactic.
+### Hidden emergent unlock — PAIR FOUNDATION IMPLEMENTED
+A pattern in real battles unlocks a tactic. The current declarative evaluator supports cumulative stats, current/completed mission requirements, `all`/`any` composition and ordered event sequences with a tick window, same-target constraint and participation by all pair members.
 
 Examples:
 - protect the same ally from lethal damage three times;
@@ -530,8 +532,8 @@ Shield is better modeled as a control/protection tool than a passive armor numbe
 
 ## 18. Team Tactics 2 candidates
 
-### Crossfire
-Two ranged allies have LOS to the same target from sufficiently distinct vectors.
+### Crossfire — IMPLEMENTED PROTOTYPE
+Two ranged allies have LOS to the same target from sufficiently distinct vectors. The current version requires both members to know/prepare Crossfire, both to be unengaged, the partner to have CT reserve, and rejects same-ray firing positions.
 
 Activation should require more than adjacency:
 - angular separation;
@@ -635,3 +637,64 @@ This keeps discovery without turning the design into mandatory external-wiki arc
 Influence maps are a strong candidate for step 11 because Game AI Pro documents their use for tank positioning between threats and vulnerable allies, threat estimation, safe positions, AoE clustering and emergent small-group coordination:
 
 https://www.gameaipro.com/GameAIPro2/GameAIPro2_Chapter30_Modular_Tactical_Influence_Maps.pdf
+
+
+## 21. Current declarative unlock examples
+
+### Repeated targeted kills + mission
+
+```json
+{
+  "id": "pincer",
+  "members": ["ziggy", "momo"],
+  "unlock": {
+    "all": [
+      {"stat": "shared_kill:grincheux", "gte": 3},
+      {"completed_mission": "garden"}
+    ]
+  }
+}
+```
+
+### Secret same-target sequence
+
+```json
+{
+  "id": "pincer",
+  "members": ["ziggy", "momo"],
+  "unlock": {
+    "sequence": [
+      {"kind": "status", "status": "slow"},
+      {"kind": "displace", "mode": "push"},
+      {"kind": "damage"}
+    ],
+    "same_target": true,
+    "max_ticks": 10,
+    "require_sources": "all_members"
+  }
+}
+```
+
+### Bond statistics currently recorded
+
+- `missions_together`
+- `shared_kills`
+- `shared_kill:<target-id>`
+- `tactic:<tactic-id>`
+- `intercepts`
+- `intercepts_for:<protected-id>`
+- `rescues`
+
+This vocabulary should grow from normalized events, not pair-specific condition code.
+
+## 22. Implemented Combat 1.1 command vocabulary
+
+```json
+{"kind": "prepare", "mode": "overwatch"}
+{"kind": "prepare", "mode": "guard"}
+{"kind": "prepare", "mode": "brace"}
+{"kind": "prepare", "mode": "intercept", "target": "ziggy"}
+{"kind": "disengage"}
+```
+
+Prepared reactions are anchored: moving cancels the preparation. They also disappear on the preparing unit's next activation, death, or incapacitating status where applicable.
