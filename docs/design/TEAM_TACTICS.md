@@ -414,3 +414,228 @@ https://shmuplations.com/chronotrigger2/
 Attacks of opportunity and reaction fire can be understood as reserved future actions that increase the tactical value of movement and action economy:
 
 https://www.gamedeveloper.com/design/12-ways-to-improve-turn-based-rpg-combat-systems
+
+
+## 16. Melee control ecosystem — next experiments
+
+Engagement becomes interesting only if it creates a network of threats and counters.
+
+### Disengage — IMPLEMENTED
+Spend Act while engaged to mark the unit for a safe withdrawal. The following Move does not trigger Opportunity.
+
+Design role:
+- clear counterplay to melee lock;
+- converts enemy control into an action-economy cost rather than hard immobilization;
+- preserves Move/Act order freedom.
+
+### Charge — NEXT
+A melee unit that enters engagement after moving a minimum straight-line distance may use a charge attack.
+
+Potential parameters:
+- minimum approach distance;
+- straight-line or limited-turn requirement;
+- bonus push rather than pure damage;
+- extra CT cost;
+- vulnerability to Guard/Brace/polearm control.
+
+Preferred identity: **position conversion**, not a generic damage multiplier.
+
+### Brace — NEXT
+Spend Act to anchor against forced movement/charge until next activation or first trigger.
+
+Potential effect:
+- reduce/cancel push and pull;
+- reduce fall risk;
+- stop a charging enemy at reach;
+- strongest on shield/polearm/tank builds.
+
+### Pursuit
+A reaction that follows an enemy leaving engagement instead of immediately dealing damage.
+
+Why it is interesting:
+- maintains pressure;
+- differs from Opportunity;
+- can expose the pursuing unit;
+- interacts with traps, Guard and objective zones.
+
+### Challenge / Mark
+An engaged defender marks one or more targets.
+
+If a marked target attacks someone else, the defender gains a response:
+- step;
+- strike;
+- CT gain;
+- Intercept window.
+
+Avoid traditional MMO-style compulsory taunt unless a class fantasy explicitly requires it.
+
+### Breakthrough
+Heavy melee ability that attempts to cross or displace an engagement line.
+
+Counters:
+- Brace;
+- polearm Guard;
+- Shield Wall.
+
+This creates a tactical rock-paper-scissors around chokepoints without hard unit classes.
+
+## 17. Weapon-space identities
+
+Weapons should define geometry and timing, not only damage.
+
+### Dagger
+- engagement 1;
+- weak frontal control;
+- excellent flank/rear follow-up;
+- low CT reaction cost;
+- strong pursuit/disengage tools.
+
+### Sword
+- engagement 1;
+- balanced Guard/Counter;
+- flexible facing;
+- reliable pincer contributor.
+
+### Axe / heavy weapon
+- engagement 1;
+- high push/guard-break potential;
+- expensive CT;
+- weaker reaction economy.
+
+### Spear / polearm
+- engagement 2;
+- lane control;
+- strong Guard vs Charge;
+- potential dead/weak zone at adjacency depending on playtest.
+
+### Shield
+Shield is better modeled as a control/protection tool than a passive armor number:
+- Intercept;
+- Brace;
+- Shield Wall;
+- directional cover;
+- push resistance.
+
+### Bow
+- map-scale LOS reach;
+- optimal-range window;
+- falloff;
+- weak under engagement;
+- good high-ground/crossfire identity.
+
+### Crossbow / firearm
+- map-scale LOS reach;
+- stronger long-range accuracy;
+- reload/setup/CT cost;
+- powerful Overwatch identity.
+
+### Focus / spellcasting implement
+- range constrained more by cast time, LOS, resource and interruption than by a small hard radius.
+
+## 18. Team Tactics 2 candidates
+
+### Crossfire
+Two ranged allies have LOS to the same target from sufficiently distinct vectors.
+
+Activation should require more than adjacency:
+- angular separation;
+- both not engaged;
+- partner CT reserve;
+- prepared/known tactic.
+
+Possible effect:
+- partner follow-up;
+- suppress/mark;
+- reduce cover/evasion from facing.
+
+### Launch / Relay
+One ally converts its action or CT into another ally's position.
+
+Variants:
+- throw/boost;
+- pull ally out of danger;
+- swap;
+- hand-off objective;
+- relay movement.
+
+Critical guardrail: must not invalidate authored topology. Height, mass, objective-carrier and cooldown restrictions should be available.
+
+### Intercept Bond
+A prepared tactic tied to a specific bondmate or protected zone.
+
+Possible resolution:
+1. redirect eligible hit to protector;
+2. move protector one cell if legal;
+3. consume bond/reaction charge;
+4. optionally enable counter.
+
+### Rescue Chain
+A support character moves/heals/cleanses an ally and another linked character gains a discounted reposition.
+
+### Spell Weave
+Two casters with compatible pending spells can combine them.
+
+Examples:
+- fire + spores -> explosive/burning spore field;
+- wind + fire -> directional flame expansion;
+- water + lightning -> conductive zone;
+- slow + delayed strike -> timing combo.
+
+The combo should alter geometry/timing/status, not just add both damage values.
+
+### Temporal Relay
+A character spends CT to advance or synchronize a partner's next activation/cast.
+
+This should be heavily bounded because CT manipulation can dominate the entire game.
+
+## 19. Bond progression philosophy
+
+Do not use a single friendship XP bar as the only unlock gate.
+
+A bond has several dimensions that can be derived from play:
+- missions together;
+- protection events;
+- assists;
+- shared boss kills;
+- terrain combos;
+- rescue/revive events;
+- objective hand-offs;
+- synchronized casts;
+- low-HP victories;
+- repeated formation usage.
+
+A tactic unlock can combine dimensions.
+
+Example:
+- **Guardian Pair**: 3 Intercepts + finish an escort mission together.
+- **Hunter Pair**: 5 shared elite kills + 3 pincers.
+- **Spore Cascade**: execute status → displacement → terrain damage sequence 3 times.
+- **Last Stand**: win a mission with both bondmates below 20% HP.
+- **Secret Trio**: a specific three-unit sequence inside one CT window.
+
+The system should expose **hints after partial progress** for hidden unlocks:
+- Unknown condition: no hint;
+- discovered clue: thematic hint;
+- near completion: partial measurable clue;
+- unlocked: exact historical condition shown in codex.
+
+This keeps discovery without turning the design into mandatory external-wiki archaeology.
+
+## 20. Priority order after Combat 1.1
+
+1. Make CI/replay/forecast proof solid.
+2. Threat/path preview for engagement + prepared reactions.
+3. Disengage balance and Charge/Brace prototype.
+4. Intercept as first protection mechanic.
+5. Crossfire as first ranged Team Tactic.
+6. Event-normalization layer for bond progression.
+7. Pair/trio persistence + known/prepared tactic loadout.
+8. Mission unlock rules.
+9. Hidden condition evaluators.
+10. Formation experiments: Shield Wall / Phalanx / Escort Diamond.
+11. AI influence maps and coordinated setup scoring.
+12. Telemetry: engagement duration, reaction value, tactic frequency and opportunity cost.
+
+Influence maps are a strong candidate for step 11 because Game AI Pro documents their use for tank positioning between threats and vulnerable allies, threat estimation, safe positions, AoE clustering and emergent small-group coordination:
+
+https://www.gameaipro.com/GameAIPro2/GameAIPro2_Chapter30_Modular_Tactical_Influence_Maps.pdf
