@@ -161,10 +161,11 @@ class Campaign:
     def finish(self, battle, playtest=False, tactic_rules=None):
         if playtest:
             return False
+        rules = battle.content.tactic_unlocks if tactic_rules is None else tactic_rules
         self.record_bonds(battle)
         if battle.result != "victory" or battle.mission.id in self.completed:
-            if tactic_rules:
-                self.evaluate_tactic_unlocks(tactic_rules, battle.mission.id, battle.events)
+            if rules:
+                self.evaluate_tactic_unlocks(rules, battle.mission.id, battle.events)
             return False
         require(battle.mission.id in self.unlocked, "Mission was not unlocked")
         self.completed.append(battle.mission.id)
@@ -177,8 +178,8 @@ class Campaign:
         for mission in battle.mission.next_missions:
             if mission not in self.unlocked:
                 self.unlocked.append(mission)
-        if tactic_rules:
-            self.evaluate_tactic_unlocks(tactic_rules, battle.mission.id, battle.events)
+        if rules:
+            self.evaluate_tactic_unlocks(rules, battle.mission.id, battle.events)
         return True
 
     def save(self, path):
