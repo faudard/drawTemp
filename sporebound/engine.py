@@ -30,6 +30,7 @@ class Battle:
         self.commands: list[dict] = []
         self.fired: list[str] = []
         self.zones: list[dict] = []
+        self.prepared_reactions: dict[str, dict] = {}
         self.inventory = {"player": {"potion": 3, "ether": 2, "phoenix": 1},
                           "enemy": {"potion": 1, "ether": 0, "phoenix": 0}}
         self.loot = 0
@@ -114,6 +115,9 @@ class Battle:
                 return
             for u in self.units:
                 if u.alive and u.ct >= 100 and not {"sleep", "stop"} & u.statuses.keys():
+                    if u.id in self.prepared_reactions:
+                        self.prepared_reactions.pop(u.id, None)
+                        self.emit("prepared_expired", unit=u.id)
                     self.active_id = u.id
                     u.moved = "dont_move" in u.statuses
                     u.acted = "dont_act" in u.statuses
@@ -210,8 +214,52 @@ class Battle:
         return all(not self.board.tile(c).blocked and self.board.tile(c).height <= high
                    for c in cells if c not in {start, end} and self.board.contains(c))
 
+    def engagement_range(self, u: Unit) -> int:
+        if u.engagement_range >= 0:
+            return u.engagement_range
+        if u.weapon == "spear":
+            return 2
+        if u.weapon in {"melee", "unarmed"}:
+            return 1
+        return 0
+
+    def engaged_by(self, u: Unit) -> list[Unit]:
+        return [e for e in self.units if e.alive and e.team != u.team
+                and self.engagement_range(e) > 0
+                and distance(e.pos, u.pos) <= self.engagement_range(e)]
+
+    def engagement_threats(self, cell: Cell, moving_team: str) -> list[dict]:
+        result = []
+        for enemy in self.units:
+            if not enemy.alive or enemy.team == moving_team:
+                continue
+            radius = self.engagement_range(enemy)
+            if radius and distance(enemy.pos, cell) <= radius:
+                result.append({"unit": enemy.id, "kind": "engagement", "range": radius})
+        return result
+
+    def reaction_threats(self, cell: Cell, moving_team: str) -> list[dict]:
+        result = []
+        for uid, prep in sorted(self.prepared_reactions.items()):
+            watcher = self.unit(uid)
+            if not watcher.alive or watcher.team == moving_team or not self._can_react(watcher):
+                continue
+            if prep["mode"] == "overwatch":
+                skill = self._basic(watcher)
+                d = distance(watcher.pos, cell)
+                if skill.min_range <= d <= skill.range and self.line_of_sight(watcher.pos, cell):
+                    result.append({"unit": uid, "kind": "overwatch", "cell": cell})
+            elif prep["mode"] == "guard":
+                radius = self.engagement_range(watcher)
+                if radius and distance(watcher.pos, cell) <= radius:
+                    result.append({"unit": uid, "kind": "guard", "cell": cell})
+        return result
+
     def _basic(self, u: Unit) -> Skill:
-        return Skill("attack", "Attaque", [Effect()], range=u.attack_range, min_range=u.min_range)
+        attack_range = u.attack_range if u.attack_range_mode == "fixed" else max(1, self.board.width + self.board.height - 2)
+        optimal = u.optimal_range or (u.attack_range if u.attack_range_mode == "los" else 0)
+        return Skill("attack", "Attaque", [Effect()], range=attack_range, min_range=u.min_range,
+                     optimal_range=optimal, falloff_per_tile=u.falloff_per_tile)
 
     def _skill(self, u: Unit, sid: str) -> Skill:
         if sid == "attack":
@@ -249,6 +297,11 @@ class Battle:
         if target.team == caster.team and skill.target in {"ally", "self", "downed"}:
             return 1.0
         chance = skill.accuracy / 100
+        d = distance(caster.pos, target.pos)
+        if skill.optimal_range and d > skill.optimal_range and skill.falloff_per_tile:
+            chance *= max(0, 100 - (d - skill.optimal_range) * skill.falloff_per_tile) / 100
+        if skill.id == "attack" and caster.weapon == "ranged" and self.engaged_by(caster):
+            chance *= 0.65
         if target.cast or {"sleep", "stop"} & target.statuses.keys():
             return chance
         if skill.magical:
