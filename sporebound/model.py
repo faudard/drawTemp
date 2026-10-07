@@ -9,6 +9,7 @@ Cell = tuple[int, int]
 STATUSES = {"poison", "regen", "haste", "slow", "protect", "shell", "silence",
             "sleep", "stop", "dont_move", "dont_act", "guard"}
 REACTIONS = {"none", "counter", "opportunity", "blade_grasp", "auto_potion", "mp_switch"}
+TEAM_TACTICS = {"pincer"}
 SUPPORTS = {"none", "attack_up", "magic_attack_up", "defense_up", "magic_defense_up",
             "concentrate", "short_charge"}
 MOVEMENTS = {"none", "move_plus_1", "move_plus_2", "ignore_height", "teleport", "move_mp_up"}
@@ -86,6 +87,8 @@ class Skill:
     cast_ticks: int = 0
     lock: str = "cell"  # cell / unit
     los: bool = True
+    optimal_range: int = 0
+    falloff_per_tile: int = 0
 
 
 @dataclass
@@ -109,6 +112,10 @@ class Unit:
     weapon: str = "melee"
     attack_range: int = 1
     min_range: int = 1
+    attack_range_mode: str = "fixed"  # fixed / los
+    optimal_range: int = 0
+    falloff_per_tile: int = 0
+    engagement_range: int = -1  # -1 = infer from weapon family
     brave: int = 70
     faith: int = 60
     class_evade: int = 0
@@ -121,6 +128,7 @@ class Unit:
     movement: str = "none"
     facing: Cell = (0, 1)
     skills: list[str] = field(default_factory=list)
+    tactics: list[str] = field(default_factory=list)
     resistances: dict[str, int] = field(default_factory=dict)
     statuses: dict[str, int] = field(default_factory=dict)
     ct: int = 0
@@ -220,7 +228,7 @@ class Content:
 
         for s in self.skills.values():
             require(bool(s.id) and bool(s.effects), "Skill needs an id and effects")
-            for key in ("cost", "range", "min_range", "radius", "cast_ticks"):
+            for key in ("cost", "range", "min_range", "radius", "cast_ticks", "optimal_range", "falloff_per_tile"):
                 integer(getattr(s, key), 0, 100, f"{s.id}.{key}")
             integer(s.accuracy, 0, 100, f"{s.id}.accuracy")
             require(s.min_range <= s.range, f"{s.id}: invalid range")
@@ -274,6 +282,11 @@ class Content:
                 for key in ("brave", "faith", "class_evade", "shield_evade", "accessory_evade", "weapon_evade", "magic_evade"):
                     integer(getattr(u, key), 0, 100, f"{u.id}.{key}")
                 require(u.min_range <= u.attack_range, f"{u.id}: range")
+                require(u.attack_range_mode in {"fixed", "los"}, f"{u.id}: attack_range_mode")
+                integer(u.optimal_range, 0, 10000, f"{u.id}.optimal_range")
+                integer(u.falloff_per_tile, 0, 100, f"{u.id}.falloff_per_tile")
+                integer(u.engagement_range, -1, 8, f"{u.id}.engagement_range")
+                require(all(t in TEAM_TACTICS for t in u.tactics), f"{u.id}: unknown tactic")
                 require(u.weapon in {"melee", "spear", "ranged", "focus", "unarmed"}, f"{u.id}: weapon")
                 require(u.facing in {(0, 1), (0, -1), (1, 0), (-1, 0)}, f"{u.id}: facing")
                 require(u.reaction in REACTIONS and u.support in SUPPORTS and u.movement in MOVEMENTS, f"{u.id}: ability slot")
