@@ -26,8 +26,8 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Combat 1.2 melee pressure : Charge rectiligne avec coût CT et push, Pursuit bornée, contre Brace/Disengage et preview de menace.
 - [x] Team Tactics foundation : Pincer + Crossfire, coût CT partenaire, forecast pur et prise en compte IA.
 - [x] Tactical Bonds foundation : stats par paire, kills ciblés, Intercepts, missions, séquences secrètes, tactiques connues/préparées et sauvegarde.
-- [ ] Tactical Bonds 2 : trios, indices progressifs/codex, règles de séquence plus riches et UI de préparation.
-- [ ] Team Tactics 2 : Launch/Relay, Pursuit, Charge, terrain combos et temporal combos.
+- [ ] Tactical Bonds 2 : trios + stats/sauvegarde, séquences répétables et codex progressif implémentés ; reste l’UI de préparation dédiée.
+- [ ] Team Tactics 2 : Encirclement trio + Pursuit + Charge implémentés ; restent Launch/Relay, terrain combos et temporal combos.
 - [ ] Formations : Shield Wall, Phalanx, Escort Diamond, contrôle de couloirs et preview dédiée.
 - [ ] Déploiement avant combat, limites d’équipe et formations sauvegardées.
 - [ ] Menaces et réserves de réaction visibles ; Intercept et protection d’alliés.

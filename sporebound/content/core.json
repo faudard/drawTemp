@@ -1302,6 +1302,32 @@
           }
         ]
       }
+    },
+    {
+      "id": "encirclement",
+      "members": [
+        "ziggy",
+        "momo",
+        "luma"
+      ],
+      "hints": {
+        "hidden": "Trois combattants semblent pouvoir transformer leur placement en une seule manoeuvre.",
+        "clue": "Le trio doit combattre ensemble et participer au meme ennemi.",
+        "near": "Le trio est proche de maitriser une prise d'encerclement.",
+        "unlocked": "Encirclement : trois axes autour d'une cible declenchent deux suivis coordonnes."
+      },
+      "unlock": {
+        "all": [
+          {
+            "stat": "missions_together",
+            "gte": 2
+          },
+          {
+            "stat": "shared_kills",
+            "gte": 1
+          }
+        ]
+      }
     }
   ]
 }

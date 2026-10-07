@@ -232,7 +232,7 @@ One character manipulates CT/cast timing so another action resolves in a new tac
 
 ## 8. Tactical Bonds and unlocks
 
-**Pair foundation is implemented.** Campaign state now persists per-pair statistics, known tactics, prepared tactics (initial limit: 2 per pair) and battle ids already counted. Trio persistence remains future work.
+**Pair + trio foundation is implemented.** Campaign state persists statistics for groups of two or three, known/prepared tactics (initial limit: 2 per group) and battle ids already counted. Tactic arity is explicit, so pair techniques cannot accidentally be prepared as trio techniques.
 
 Pair/trio tactics can be learned through multiple routes.
 
@@ -251,8 +251,8 @@ Pair/trio tactics can be learned through multiple routes.
 - use a tactic family N times;
 - reach job/skill prerequisites.
 
-### Hidden emergent unlock — PAIR FOUNDATION IMPLEMENTED
-A pattern in real battles unlocks a tactic. The current declarative evaluator supports cumulative stats, current/completed mission requirements, `all`/`any` composition and ordered event sequences with a tick window, same-target constraint and participation by all pair members.
+### Hidden emergent unlock — PAIR/TRIO FOUNDATION IMPLEMENTED
+A pattern in real battles unlocks a tactic. The declarative evaluator supports cumulative stats, current/completed mission requirements, `all`/`any` composition, ordered event sequences with a tick window, same-target constraint, participation by every group member and a repeat `count`. Non-overlapping matches prevent one event chain from satisfying the same repeated secret several times.
 
 Examples:
 - protect the same ally from lethal damage three times;
@@ -593,6 +593,12 @@ Examples:
 
 The combo should alter geometry/timing/status, not just add both damage values.
 
+### Encirclement — IMPLEMENTED PROTOTYPE
+Three prepared melee bondmates occupy three distinct cardinal axes around one target. A normal
+basic attack can then trigger two bounded follow-ups; both partners spend 20 CT and each
+follow-up deals one third of its normal basic damage. The rule is explicit and forecastable,
+so the trio bonus comes from formation + reserve timing rather than a passive aura.
+
 ### Temporal Relay
 A character spends CT to advance or synchronize a partner's next activation/cast.
 
@@ -711,3 +717,14 @@ This vocabulary should grow from normalized events, not pair-specific condition 
 ```
 
 Prepared reactions are anchored: moving cancels the preparation. They also disappear on the preparing unit's next activation, death, or incapacitating status where applicable.
+
+
+## 23. Tactical Bonds 2 codex contract
+
+The campaign exposes a pure `tactic_codex()` view. Each unlock reports `hidden`,
+`clue`, `near` or `unlocked`, a normalized progress value, and an optional authored
+hint for that reveal stage. This is UI-agnostic so the future editor/player surface can
+display discovery without duplicating progression rules.
+
+Group keys remain sorted and backwards-compatible with pair saves:
+`momo|ziggy` stays valid, while trio state uses e.g. `luma|momo|ziggy`.

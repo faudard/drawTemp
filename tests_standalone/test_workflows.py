@@ -39,6 +39,8 @@ class ContentTests(unittest.TestCase):
             lambda d:d['missions'][0]['objects'][1].update(link='missing'),
             lambda d:d['tactic_unlocks'][0].update(id='missing_tactic'),
             lambda d:d['tactic_unlocks'][0].update(members=['ziggy','missing']),
+            lambda d:d['tactic_unlocks'][0].update(members=['ziggy','momo','luma']),
+            lambda d:d['tactic_unlocks'][0]['unlock']['any'][1].update(count=0),
         ]
         for edit in changes:
             with self.subTest(edit=edit):
@@ -278,6 +280,88 @@ class CampaignTests(unittest.TestCase):
         }]
         self.assertTrue(self.campaign.finish(b,tactic_rules=rules))
         self.assertIn('pincer',self.campaign.known_tactics['momo|ziggy'])
+
+    def test_trio_bond_stats_unlock_prepare_and_codex(self):
+        b=self.campaign.prepare(self.content,'garden')
+        b.events=[
+            {'tick':1,'kind':'damage','unit':'grincheux','source':'ziggy','amount':4},
+            {'tick':2,'kind':'damage','unit':'grincheux','source':'momo','amount':4},
+            {'tick':3,'kind':'damage','unit':'grincheux','source':'luma','amount':4},
+            {'tick':4,'kind':'downed','unit':'grincheux','source':'luma'},
+        ]
+        b.result='victory'
+        self.assertTrue(self.campaign.record_bonds(b))
+        stats=self.campaign.bond_group('ziggy','momo','luma')
+        self.assertEqual(stats['missions_together'],1)
+        self.assertEqual(stats['shared_kills'],1)
+
+        rules=[{
+            'id':'encirclement',
+            'members':['ziggy','momo','luma'],
+            'hints':{'hidden':'hidden','clue':'clue','near':'near','unlocked':'unlocked'},
+            'unlock':{'all':[
+                {'stat':'missions_together','gte':2},
+                {'stat':'shared_kills','gte':1},
+            ]},
+        }]
+        codex=self.campaign.tactic_codex(rules)
+        self.assertEqual(codex[0]['state'],'near')
+        self.assertEqual(codex[0]['progress'],.75)
+        self.assertEqual(codex[0]['hint'],'near')
+
+        self.campaign.bond_group('ziggy','momo','luma')['missions_together']=2
+        unlocked=self.campaign.evaluate_tactic_unlocks(rules)
+        self.assertEqual(unlocked,[{'id':'encirclement','members':['ziggy','momo','luma']}])
+        self.assertTrue(self.campaign.prepare_tactic_members(
+            ['ziggy','momo','luma'],'encirclement'))
+        battle=self.campaign.prepare(self.content,'garden')
+        self.assertTrue(all('encirclement' in battle.unit(uid).tactics
+                            for uid in ('ziggy','momo','luma')))
+
+    def test_repeated_secret_sequence_count_does_not_reuse_events(self):
+        rules=[{
+            'id':'encirclement',
+            'members':['ziggy','momo','luma'],
+            'unlock':{
+                'sequence':[
+                    {'kind':'damage'},
+                    {'kind':'damage'},
+                    {'kind':'damage'},
+                ],
+                'same_target':True,
+                'max_ticks':5,
+                'require_sources':'all_members',
+                'count':2,
+            },
+        }]
+        one=[
+            {'tick':1,'kind':'damage','unit':'x','source':'ziggy','amount':1},
+            {'tick':2,'kind':'damage','unit':'x','source':'momo','amount':1},
+            {'tick':3,'kind':'damage','unit':'x','source':'luma','amount':1},
+        ]
+        self.assertEqual(self.campaign.tactic_codex(rules,events=one)[0]['progress'],.5)
+        self.assertEqual(self.campaign.evaluate_tactic_unlocks(rules,events=one),[])
+        two=one+[
+            {'tick':6,'kind':'damage','unit':'y','source':'ziggy','amount':1},
+            {'tick':7,'kind':'damage','unit':'y','source':'momo','amount':1},
+            {'tick':8,'kind':'damage','unit':'y','source':'luma','amount':1},
+        ]
+        self.assertEqual(
+            self.campaign.evaluate_tactic_unlocks(rules,events=two),
+            [{'id':'encirclement','members':['ziggy','momo','luma']}])
+
+    def test_trio_bond_progress_persists(self):
+        self.campaign.bond_group('ziggy','momo','luma')['missions_together']=3
+        self.campaign.unlock_tactic_members(['ziggy','momo','luma'],'encirclement')
+        self.campaign.prepare_tactic_members(['ziggy','momo','luma'],'encirclement')
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'campaign.json'; self.campaign.save(path)
+            loaded=Campaign.load(path)
+        key='luma|momo|ziggy'
+        self.assertEqual(loaded.bond_stats[key],{'missions_together':3})
+        self.assertEqual(loaded.known_tactics[key],['encirclement'])
+        self.assertEqual(loaded.prepared_tactics[key],['encirclement'])
+
 
 class CrownAndShopTests(unittest.TestCase):
     def test_crown_pickup_drop_recover_and_extract(self):
