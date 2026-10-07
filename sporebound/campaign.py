@@ -34,6 +34,7 @@ class Campaign:
     inventory: dict[str, int] = field(default_factory=dict)
     bond_stats: dict[str, dict[str, int]] = field(default_factory=dict)
     known_tactics: dict[str, list[str]] = field(default_factory=dict)
+    prepared_tactics: dict[str, list[str]] = field(default_factory=dict)
     tracked_battles: list[str] = field(default_factory=list)
 
     def hero(self, uid):
@@ -55,6 +56,23 @@ class Campaign:
         if tactic in known:
             return False
         known.append(tactic)
+        return True
+
+    def prepare_tactic(self, a, b, tactic, limit=2):
+        key = pair_key(a, b)
+        require(tactic in self.known_tactics.get(key, []), "Tactic not unlocked")
+        prepared = self.prepared_tactics.setdefault(key, [])
+        if tactic in prepared:
+            return False
+        require(len(prepared) < limit, "Tactic preparation limit reached")
+        prepared.append(tactic)
+        return True
+
+    def unprepare_tactic(self, a, b, tactic):
+        key = pair_key(a, b)
+        prepared = self.prepared_tactics.get(key, [])
+        require(tactic in prepared, "Tactic not prepared")
+        prepared.remove(tactic)
         return True
 
     def evaluate_tactic_unlocks(self, rules, mission_id=""):
@@ -106,7 +124,8 @@ class Campaign:
     def prepare(self, content, mission_id, seed=1):
         require(mission_id in self.unlocked, "Mission locked")
         prepared = deepcopy(content)
-        for unit in prepared.missions[mission_id].units:
+        mission_units = prepared.missions[mission_id].units
+        for unit in mission_units:
             if unit.team != "player":
                 continue
             hero = self.hero(unit.id)
@@ -123,6 +142,17 @@ class Campaign:
                 for key, value in content.equipment[item_id].get("bonuses", {}).items():
                     setattr(unit, key, getattr(unit, key) + value)
             unit.hp, unit.mp = unit.max_hp, unit.max_mp
+        by_id = {unit.id: unit for unit in mission_units if unit.team == "player"}
+        for key, tactics in self.prepared_tactics.items():
+            a, b = key.split("|", 1)
+            if a not in by_id or b not in by_id:
+                continue
+            for tactic in tactics:
+                require(tactic in self.known_tactics.get(key, []), "Prepared tactic is not unlocked")
+                if tactic not in by_id[a].tactics:
+                    by_id[a].tactics.append(tactic)
+                if tactic not in by_id[b].tactics:
+                    by_id[b].tactics.append(tactic)
         prepared.validate()
         return Battle(prepared, mission_id, seed)
 
@@ -164,6 +194,9 @@ class Campaign:
                     for k, stats in result.bond_stats.items()), "Invalid bond stats")
         require(all(isinstance(k, str) and isinstance(v, list) and all(isinstance(t, str) for t in v)
                     for k, v in result.known_tactics.items()), "Invalid known tactics")
+        require(all(isinstance(k, str) and isinstance(v, list) and len(v) <= 2
+                    and len(v) == len(set(v)) and all(t in result.known_tactics.get(k, []) for t in v)
+                    for k, v in result.prepared_tactics.items()), "Invalid prepared tactics")
         require(len(result.tracked_battles) == len(set(result.tracked_battles))
                 and all(isinstance(b, str) for b in result.tracked_battles), "Invalid tracked battles")
         for h in result.heroes.values():
