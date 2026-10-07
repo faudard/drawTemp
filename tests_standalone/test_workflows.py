@@ -237,6 +237,32 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(loaded.prepared_tactics,self.campaign.prepared_tactics)
         self.assertEqual(loaded.tracked_battles,self.campaign.tracked_battles)
 
+
+    def test_hidden_sequence_unlock_same_target_and_both_members(self):
+        b=self.campaign.prepare(self.content,'garden')
+        b.events=[
+            {'tick':10,'kind':'status','unit':'grincheux','source':'ziggy','status':'slow','duration':20},
+            {'tick':14,'kind':'displace','unit':'grincheux','source':'momo','mode':'push','pos':(5,1)},
+            {'tick':14,'kind':'damage','unit':'grincheux','source':'momo','amount':5},
+        ]
+        b.result='victory'
+        rules=[{
+            'id':'pincer',
+            'members':['ziggy','momo'],
+            'unlock':{
+                'sequence':[
+                    {'kind':'status','status':'slow'},
+                    {'kind':'displace','mode':'push'},
+                    {'kind':'damage'},
+                ],
+                'same_target':True,
+                'max_ticks':10,
+                'require_sources':'all_members',
+            },
+        }]
+        self.assertTrue(self.campaign.finish(b,tactic_rules=rules))
+        self.assertIn('pincer',self.campaign.known_tactics['momo|ziggy'])
+
 class CrownAndShopTests(unittest.TestCase):
     def test_crown_pickup_drop_recover_and_extract(self):
         b=fixture(); b.mission.objective='crown'; b.mission.goal=[(0,0)]; b.relic_pos=(1,1)
