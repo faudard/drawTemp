@@ -1,3 +1,11 @@
 # Godot editor/import cache: local machine state, never source data.
 .godot/
 *_backup
+# Standalone Python runtime
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+saves/

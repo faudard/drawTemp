@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sporebound-tactics"
+version = "2.0.0a1"
+description = "Godot-independent tactical gameplay engine and mission workbench"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+sporebound = "sporebound.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["sporebound*"]
+
+[tool.setuptools.package-data]
+sporebound = ["content/*.json"]

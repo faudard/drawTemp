@@ -1,94 +1,104 @@
+# Sporebound Tactics — gameplay autonome 2.0 alpha
 
-## V1.27 — Library Art Runtime
+**Le développement actif quitte Godot.** Le moteur tactique, les données et notre
+éditeur sont désormais dans `sporebound/`, en Python 3.10+ sans dépendance tierce.
+L’interface Tk est volontairement utilitaire : la priorité est aux règles,
+aux scénarios, à l’équilibrage et aux tests.
 
-La mission 1 utilise maintenant directement les personnages haute qualité de la bibliothèque Sporebound grâce au mode `portrait_billboard`. Les 39 personnages sont disponibles comme skins `lib_*` dans **Sporebound Studio > Visuals**. Ce rendu remplace le fallback procédural pour les unités associées, sans attendre la production des atlas 4 directions définitifs. Voir `LIBRARY_ASSETS.md`.
+Les anciens scripts/scènes/assets Godot sont conservés comme sources de référence.
+Ils ne sont ni chargés ni nécessaires au nouveau runtime. Cette version est une
+base jouable substantielle, **pas encore une conversion intégrale** de l’ancien jeu.
+Voir [la migration et ses limites](docs/GAMEPLAY.md#migration-de-godot).
 
-# Sporebound Tactics — V1.9.6 First Tactical 2.5D Map
+## Démarrer
 
-## Première map 2.5D / 3D
+Depuis la racine du dépôt :
 
-La **mission 1** est maintenant une vraie scène `SporeMap3D` ouverte dans le workspace **3D Godot**. Chaque case est un nœud `SporeTacticalTile3D` éditable dans l'Inspector avec `cell`, `elevation` et `terrain_type`. Les spawns et interactables sont également des nœuds 3D éditables et se recalent sur le relief.
+```sh
+python -m sporebound editor
+```
 
-Le runtime conserve la logique tactique 2D existante : `SporeMap3D` expose le même contrat de données que `SporeMap2D`. Voir `FIRST_3D_MAP.md` pour le workflow.
+Tk/Tcl doit être disponible pour l’éditeur (`python -m tkinter` permet de vérifier).
+Sous Linux, installer le paquet `python3-tk` si nécessaire. Le moteur, les tests,
+le terminal et les simulations fonctionnent sans Tk ni écran.
 
-L'ancienne mission 1 2D est conservée dans `maps/mission_1_map_2d_legacy.tscn`.
+```sh
+python -m sporebound validate
+python -m sporebound play --mission garden
+python -m sporebound simulate --mission crown --seed 42 --save saves/battle.json
+python -m sporebound replay --load saves/battle.json
+python -m sporebound play --load saves/battle.json
+python -m sporebound balance --mission garden --runs 20
+python -m unittest discover -s tests_standalone -v
+```
 
+Installation facultative : `python -m pip install .`, puis `sporebound editor`.
+Le paquet inclut les données JSON ; il fonctionne hors du dépôt. Aucun téléchargement
+ni exécutable Godot n’est requis.
 
-## Level design = scènes Godot natives
+## Gameplay disponible
 
-Les maps restent de vraies scènes `.tscn`. Le projet accepte maintenant **deux authorings natifs** : `SporeMap2D + TileMapLayer` pour les missions 2D historiques, et `SporeMap3D + SporeTacticalTile3D` pour le relief 2.5D. Le dock Sporebound Studio ouvre automatiquement le workspace 2D ou 3D selon la scène.
+- Initiative CT, ordre stable, déplacement/action dans les deux ordres, attente et orientation.
+- Dijkstra pondéré, obstacles, occupation, relief, saut, téléportation, dangers,
+  poussée/traction, dégâts de chute, lignes de vue sans fuite entre deux murs.
+- Attaques par famille d’arme, Brave/Faith, évasion directionnelle, résistances,
+  supports et réactions : Counter, Opportunity, Blade Grasp, Auto-Potion, MP Switch.
+- 21 compétences, zones d’effet avec tirs alliés, incantations, ciblage case/unité,
+  paiement MP à résolution, interruptions, soin, résurrection et consommables.
+- Poison, Regen, Haste, Slow, Protect, Shell, Silence, Sleep, Stop, Don't Move,
+  Don't Act et Guard ; zones persistantes, portes, interrupteurs, coffres et triggers.
+- Objectifs élimination, survie, extraction, contrôle de zone et récupération de
+  couronne ; protection d’un personnage et défaite prioritaire.
+- IA utilitaire déterministe, soins prioritaires à faibles PV, évaluation des dégâts
+  alliés, placement, objectifs et prévisions utilisant les mêmes règles que le joueur.
+- Campagne : XP, niveaux, maîtrise des classes, déblocages, boutique, équipement,
+  récompenses uniques et missions suivantes.
+- Sauvegardes JSON atomiques et replays vérifiés avec contenu embarqué, seed et journal
+  des commandes. Les entrées illégales ne consomment ni action ni hasard.
 
-Workflow mission 1 :
+Quatre scénarios de travail (`garden`, `escape`, `hold`, `crown`), quatre classes et
+trois équipements sont fournis. Ils servent de terrain d’essai ; l’équilibrage
+et les valeurs sont propres au prototype autonome.
 
-1. `Sporebound Studio > Maps` : sélectionne **La Couronne Beatbox**.
-2. Ouvre la map : Godot bascule dans le workspace **3D**.
-3. Dans `Tiles`, sélectionne une `Cell_XX_YY`.
-4. Modifie `elevation` ou `terrain_type` dans l’Inspector.
-5. Modifie les nœuds `Spawns` et `Objects` via leur propriété `cell`.
-6. Utilise **Recaler** / **Valider** dans l’Inspector Sporebound, puis teste la mission depuis Studio.
+## Utiliser notre éditeur
 
-Les missions 2 et 3 conservent le workflow `TileMapLayer` 2D existant.
+1. Choisir une mission ; peindre murs, relief, boue, dangers, couvert ou objectifs.
+2. Choisir le pinceau `unit` et une unité pour déplacer son point de départ.
+3. Dans **Données JSON**, modifier stats, compétences, IA via loadouts, objectifs,
+   objets, triggers, classes et équipement ; **Valider et appliquer**.
+4. **Playtest**, choisir une commande puis une case et **Exécuter**. Le panneau donne
+   PV/MP/CT, disponibilité des actions et prévisions. **Fin** valide l’orientation.
+5. **IA : 1 tour** délègue une activation ; le journal explique le déroulement.
+6. **Éditer** revient au document intact. Annuler/rétablir, duplication de mission,
+   ouverture/enregistrement et reprise de combat sont disponibles.
 
-## V1.9.5
+Le playtest n’écrit aucune progression de campagne. Les éditeurs spécialisés
+(formulaires de compétences/classes et graphes de triggers) restent à construire ;
+le JSON validé permet déjà de tout configurer sans modifier le code du moteur.
 
-- **Zones polygonales natives** (`SporeMapZone2D`) éditables comme `Polygon2D` dans la viewport.
-- Types de zone : `deployment`, `objective`, `trigger`, `danger`, `camera` + filtre d’équipe.
-- Les zones exportent les cases couvertes vers le runtime.
-- Nouveaux triggers : `player_enters_zone` et `enemy_enters_zone`.
-- Exemple fourni dans **Tenir la Scène** : zone `center_stage` visible dans la map et trigger associé.
-- Menu **+ Objet** directement dans la toolbar 2D : spawn héros/ennemi, porte, interrupteur, coffre, zone.
-- Le curseur de création suit la case survolée même hors mode pinceau.
-- **▶ Ici** : playtest direct de la scène ouverte, sans sauvegarder les résultats dans la campagne.
-- **▶ Tester direct** disponible aussi depuis `Studio > Maps`.
-- Templates de nouvelle mission : vide, escarmouche 8×8, objectif 10×8, grande 12×10.
-- Validation des Zone Id, polygones invalides/vides et comptage des zones dans l’Inspector/Studio.
-- Nouveau smoke test `tests/test_native_level_design_v195.gd`.
+## Campagne et équipement
 
-## Couches de map
+```sh
+python -m sporebound play --campaign --mission garden --save saves/current.json
+python -m sporebound play --campaign --load saves/current.json
+python -m sporebound roster
+python -m sporebound roster --buy rhythm_boots --hero ziggy --equip rhythm_boots
+python -m sporebound roster --hero ziggy --job spore_maestro
+python -m sporebound roster --hero ziggy --unequip accessory
+```
 
-- `Ground` : sol.
-- `Height` : hauteurs 1/2.
-- `Terrain` : obstacles, couverture, spores.
-- `Objectives` : extraction, bonus, couronne.
-- `SporeMapZone2D` : volumes 2D libres pour triggers/objectifs/aires de gameplay.
+Les achats nécessitent de l’or ; les classes avancées demandent Brave niveau 2.
+`campaign --mission garden` permet aussi une simulation automatique avec progression.
+Par défaut, la campagne est dans `saves/campaign.json` ; `--campaign-file` la remplace.
+Les récompenses ne sont accordées qu’une fois par mission, même après rechargement.
 
-## Playtest protégé
+## Documentation
 
-Le mode `▶ Ici` écrit une requête temporaire dans `user://`, lance la scène principale et démarre automatiquement la mission correspondante. Pendant ce mode, `save_campaign()` est neutralisé : le level designer peut tester sans polluer sa progression persistante.
+- [Contrats du moteur et règles détaillées](docs/GAMEPLAY.md)
+- [Architecture autonome](ARCHITECTURE.md)
+- [Roadmap gameplay et éditeur](ROADMAP.md)
+- Historique Godot : [README](docs/legacy/GODOT_README.md),
+  [architecture](docs/legacy/GODOT_ARCHITECTURE.md), documents `FFT_*` à la racine.
 
-## 2.5D / 3D
-
-La mission 1 utilise désormais `SporeMap3D`. Le plateau est réellement en 3D dans l’éditeur, tandis que les règles restent basées sur des coordonnées tactiques `Vector2i` et un niveau de hauteur entier. Ce découplage permet de garder le BattleController actuel tout en faisant évoluer progressivement le rendu vers un tactical RPG 2.5D.
-## V1.26 — Hero Creator Expressions & Profiles
-
-Le Hero Creator peut maintenant baker une expression différente pour chacun des six états de combat, choisir une pose de portrait, appliquer des silhouettes fortement différenciées et sauvegarder/appliquer des profils de couleur indépendants du look. Voir `HERO_CREATOR.md`.
-
-## V1.25 — Hero Creator Face Details
-
-Le Hero Creator gère désormais des détails faciaux combinables : iris et pupilles séparés, sourcils, nez, dents, taches de peau, trois marques/cicatrices, boucles d’oreilles et bijoux. Les couches restent compatibles avec les transformations directes, les variantes gauche/droite, les presets et la génération d’atlas. Voir `HERO_CREATOR.md`.
-
-## V1.24 — Hero Creator Asymmetry
-
-Le Hero Creator gagne un workflow de production : Undo/Redo 30 états, favoris persistants, comparaison Avant/Après et export/import de looks `.tres`. L’édition directe, les vignettes, les presets et la génération 4 directions restent compatibles avec V1.22.
-
-## V1.22 — Hero Creator Direct Edit
-
-- L’aperçu du héros est maintenant éditable directement à la souris.
-- Déplacement, resize uniforme et rotation des groupes Corps / Tête / Visage / Accessoire / Arme.
-- Verrouillage des groupes et reset rapide par clic droit.
-- Molette pour le resize, Ctrl+molette pour la rotation.
-- Les transforms sont persistées et appliquées au portrait/spritesheet généré.
-- Voir `HERO_CREATOR.md` pour le workflow complet.
-
-## V1.21 — Hero Creator Pro
-
-- Galeries de vignettes cliquables dans le Hero Creator.
-- Offsets fins X/Y par zone visuelle.
-- Presets sauvegardables et trois presets fournis.
-- Duplication de look vers un autre héros avec génération immédiate.
-- Randomizer intelligent à palettes cohérentes.
-
-## V1.20 — Hero Creator Advanced
-
-Le dock **Sporebound Studio > Hero Creator Advanced** permet de construire le héros principal par couches avec forme du spore, motif bicolore, yeux, bouche, barbe, cicatrices, morphologie Petit/Moyen/Grand, présentation Masculin/Féminin/Neutre/Créature et presets de style. Le résultat est prévisualisé en direct puis généré dans le spritesheet 4 directions utilisé par le combat. Voir `HERO_CREATOR.md`.
-
+La CI vérifie Python 3.10/3.12/3.14 sur Windows/Linux/macOS, les règles, les replays
+et l’installation. Un job Linux teste l’interface Tk réelle sous Xvfb.
