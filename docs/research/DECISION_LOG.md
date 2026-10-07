@@ -206,3 +206,59 @@ Any significant mechanic PR must document:
 6. Data model and authoring UX.
 7. Simulation/balance methodology.
 8. Renderer/player UX.
+
+
+## D-024 — Team is a sixth combat pillar
+**Decision:** ADD.
+
+The combat model becomes **Time × Position × Terrain × Build × Objective × Team**.
+
+Team covers explicit synergies, formations, engagement, assists, prepared reactions and coordinated tactical actions.
+
+## D-025 — Engagement is core spatial control
+**Decision:** ADD.
+
+Melee identity must not be reduced to short attack range. Close-combat units exert an engagement zone even without an opportunity-reaction slot.
+
+Leaving engagement only creates an attack when a relevant reaction/preparation exists.
+
+## D-026 — Prepared reactions
+**Decision:** ADD.
+
+Vigilance/Overwatch and Guard spend Act now to reserve one bounded future response.
+
+Prepared reactions:
+- expire on the preparing unit's next activation;
+- have explicit charges;
+- may apply a CT tax;
+- are visible/queryable by UI and AI;
+- do not recursively trigger reaction cascades by default.
+
+## D-027 — Ranged attacks use practical range + falloff
+**Decision:** EXPERIMENT.
+
+Ranged basic attacks may use LOS-scale maximum reach while retaining an optimal range and accuracy falloff. Being engaged penalizes ranged basic accuracy and Overwatch cannot be prepared while engaged.
+
+Goal: make closing distance strategically valuable without arbitrary short caps.
+
+## D-028 — Pincer is the first explicit Team Tactic
+**Decision:** PROTOTYPE.
+
+Two tactic-enabled melee allies controlling opposite sides of one target may generate a bounded follow-up.
+
+The partner spends CT and the follow-up cannot recursively trigger normal reactions.
+
+This is a framework proof, not final balance.
+
+## D-029 — Tactical Bonds / hidden unlocks
+**Decision:** DESIGN NOW, PERSISTENCE LATER.
+
+Pair/trio tactics may unlock through:
+- story;
+- dedicated missions;
+- repeated joint deployment/mastery;
+- hidden event sequences and achievements.
+
+The unlock engine must consume normalized battle events rather than hardcoded battle-rule branches.
+
+See `docs/design/TEAM_TACTICS.md`.
