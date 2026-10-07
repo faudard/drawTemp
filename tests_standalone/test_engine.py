@@ -435,6 +435,22 @@ class TeamTacticsTests(unittest.TestCase):
                             and e['protected']=='ally' for e in b.events))
 
 
+    def test_forecast_exposes_intercept_without_consuming_it(self):
+        b=fixture()
+        ally=Unit('ally','Ally','player',(1,1))
+        b.units.append(ally)
+        b.unit('b').pos=(2,1)
+        b.active_id='a'
+        b._prepare(b.unit('a'),'intercept','ally')
+        b.active_id='b'; b.unit('b').acted=False
+        before=b.digest()
+        rows=b.forecast('attack',(1,1),b.unit('b'))
+        damage=next(row for row in rows if row['kind']=='damage')
+        self.assertEqual(damage['redirected_to'],'a')
+        self.assertEqual(before,b.digest())
+        self.assertIn('a',b.prepared_reactions)
+
+
     def test_movement_threat_forecast_is_pure_and_lists_guard(self):
         b=fixture()
         b.execute({'kind':'prepare','mode':'guard'})
