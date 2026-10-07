@@ -121,6 +121,7 @@ class Battle:
                     self.active_id = u.id
                     u.moved = "dont_move" in u.statuses
                     u.acted = "dont_act" in u.statuses
+                    u.disengaging = False
                     self.emit("activation", unit=u.id, ct=u.ct)
                     return
             self.tick += 1
@@ -595,7 +596,7 @@ class Battle:
             before_engaged = {e.id for e in self.engaged_by(u)}
             for enemy in self.units:
                 radius = self.engagement_range(enemy)
-                if enemy.team != u.team and enemy.reaction == "opportunity" and self._can_react(enemy) and radius > 0 and distance(previous, enemy.pos) <= radius and distance(nxt, enemy.pos) > radius:
+                if not u.disengaging and enemy.team != u.team and enemy.reaction == "opportunity" and self._can_react(enemy) and radius > 0 and distance(previous, enemy.pos) <= radius and distance(nxt, enemy.pos) > radius:
                     if self.rng.randrange(100) < enemy.brave:
                         s = self._basic(enemy)
                         if self.rng.random() < self.hit_chance(enemy, u, s):
@@ -619,6 +620,9 @@ class Battle:
                 break
         if u.movement == "move_mp_up" and u.alive:
             u.mp = min(u.max_mp, u.mp + max(1, u.max_mp // 10))
+        if u.disengaging:
+            self.emit("disengaged", unit=u.id)
+            u.disengaging = False
         self.emit("move", unit=u.id, start=path[0], end=u.pos, cost=cost)
 
     def _act(self, u, skill_id, cell):
@@ -639,6 +643,14 @@ class Battle:
         else:
             u.mp -= skill.cost
             self._resolve(u, skill, cell)
+
+    def _disengage(self, u: Unit):
+        require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
+        require(bool(self.engaged_by(u)), "Unit is not engaged")
+        u.acted = True
+        u.cast = None
+        u.disengaging = True
+        self.emit("disengage_ready", unit=u.id)
 
     def _item(self, u, item, cell):
         require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
@@ -682,6 +694,7 @@ class Battle:
     def _end(self, u, facing):
         require(facing in {(0, -1), (0, 1), (-1, 0), (1, 0)}, "Invalid facing")
         u.facing = facing
+        u.disengaging = False
         cost = 100 if u.moved and u.acted else 80 if u.moved or u.acted else 60
         u.ct = min(60, max(0, u.ct - cost))
         if "poison" in u.statuses:
@@ -713,6 +726,8 @@ class Battle:
                 self._act(u, command["skill"], cell)
             elif kind == "item":
                 self._item(u, command["item"], cell)
+            elif kind == "disengage":
+                self._disengage(u)
             elif kind == "interact":
                 self._interact(u, command["object"])
             elif kind == "prepare":
