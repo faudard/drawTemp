@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
 
+from .bonds import battle_bond_deltas, merge_bond_stats, pair_key, unlock_rule_met
 from .engine import Battle
 from .model import Content, require
 from .storage import write_json
@@ -31,9 +32,46 @@ class Campaign:
     completed: list[str] = field(default_factory=list)
     gold: int = 0
     inventory: dict[str, int] = field(default_factory=dict)
+    bond_stats: dict[str, dict[str, int]] = field(default_factory=dict)
+    known_tactics: dict[str, list[str]] = field(default_factory=dict)
+    tracked_battles: list[str] = field(default_factory=list)
 
     def hero(self, uid):
         return self.heroes.setdefault(uid, HeroProgress())
+
+    def bond(self, a, b):
+        return self.bond_stats.setdefault(pair_key(a, b), {})
+
+    def record_bonds(self, battle):
+        if battle.result not in {"victory", "defeat"} or battle.battle_id in self.tracked_battles:
+            return False
+        merge_bond_stats(self.bond_stats, battle_bond_deltas(battle))
+        self.tracked_battles.append(battle.battle_id)
+        return True
+
+    def unlock_tactic(self, a, b, tactic):
+        key = pair_key(a, b)
+        known = self.known_tactics.setdefault(key, [])
+        if tactic in known:
+            return False
+        known.append(tactic)
+        return True
+
+    def evaluate_tactic_unlocks(self, rules, mission_id=""):
+        unlocked = []
+        completed = set(self.completed)
+        for rule in rules:
+            members = rule.get("members", [])
+            require(len(members) == 2, "Tactic unlock currently requires a pair")
+            key = pair_key(*members)
+            tactic = rule["id"]
+            if tactic in self.known_tactics.get(key, []):
+                continue
+            if unlock_rule_met(self.bond_stats.get(key, {}), rule["unlock"],
+                               mission_id=mission_id, completed=completed):
+                self.known_tactics.setdefault(key, []).append(tactic)
+                unlocked.append({"id": tactic, "members": list(members)})
+        return unlocked
 
     def set_job(self, content, uid, job):
         require(job in content.jobs, "Unknown job")
@@ -88,8 +126,13 @@ class Campaign:
         prepared.validate()
         return Battle(prepared, mission_id, seed)
 
-    def finish(self, battle, playtest=False):
-        if playtest or battle.result != "victory" or battle.mission.id in self.completed:
+    def finish(self, battle, playtest=False, tactic_rules=None):
+        if playtest:
+            return False
+        self.record_bonds(battle)
+        if battle.result != "victory" or battle.mission.id in self.completed:
+            if tactic_rules:
+                self.evaluate_tactic_unlocks(tactic_rules, battle.mission.id)
             return False
         require(battle.mission.id in self.unlocked, "Mission was not unlocked")
         self.completed.append(battle.mission.id)
@@ -102,6 +145,8 @@ class Campaign:
         for mission in battle.mission.next_missions:
             if mission not in self.unlocked:
                 self.unlocked.append(mission)
+        if tactic_rules:
+            self.evaluate_tactic_unlocks(tactic_rules, battle.mission.id)
         return True
 
     def save(self, path):
@@ -115,6 +160,12 @@ class Campaign:
         result = cls(**data)
         require(type(result.gold) is int and result.gold >= 0, "Invalid gold")
         require(all(type(n) is int and n >= 0 for n in result.inventory.values()), "Invalid inventory")
+        require(all(isinstance(k, str) and all(type(v) is int and v >= 0 for v in stats.values())
+                    for k, stats in result.bond_stats.items()), "Invalid bond stats")
+        require(all(isinstance(k, str) and isinstance(v, list) and all(isinstance(t, str) for t in v)
+                    for k, v in result.known_tactics.items()), "Invalid known tactics")
+        require(len(result.tracked_battles) == len(set(result.tracked_battles))
+                and all(isinstance(b, str) for b in result.tracked_battles), "Invalid tracked battles")
         for h in result.heroes.values():
             require(type(h.xp) is int and h.xp >= 0 and all(type(n) is int and n >= 0 for n in h.job_xp.values()), "Invalid XP")
         return result
