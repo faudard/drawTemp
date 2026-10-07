@@ -313,6 +313,7 @@ class TeamTacticsTests(unittest.TestCase):
         enemy.pos=(2,1)
         self.assertEqual([u.id for u in b.engaged_by(b.active)], ['b'])
         self.assertEqual(b.engagement_range(enemy),2)
+        self.assertEqual(b._basic(enemy).range,2)
 
     def test_los_range_falloff_and_engaged_ranged_penalty(self):
         b=fixture(weapon='ranged',attack_range=4,min_range=1,attack_range_mode='los',
@@ -386,6 +387,15 @@ class TeamTacticsTests(unittest.TestCase):
         self.assertEqual(a.pos,(0,1))
         self.assertNotIn('a',b.prepared_reactions)
         self.assertTrue(any(e['kind']=='brace' and e['absorbed']==2 for e in b.events))
+
+
+    def test_sleep_cancels_prepared_reaction(self):
+        b=fixture()
+        b.execute({'kind':'prepare','mode':'guard'})
+        self.assertIn('a',b.prepared_reactions)
+        b._status(b.unit('a'),'sleep',10)
+        self.assertNotIn('a',b.prepared_reactions)
+        self.assertTrue(any(e['kind']=='prepared_cancelled' and e['reason']=='sleep' for e in b.events))
 
 
 if __name__=='__main__': unittest.main()
