@@ -169,6 +169,7 @@ class Content:
     missions: dict[str, Mission]
     jobs: dict[str, dict] = field(default_factory=dict)
     equipment: dict[str, dict] = field(default_factory=dict)
+    tactic_unlocks: list[dict] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> Content:
@@ -199,7 +200,8 @@ class Content:
                                "goal": [tuple(c) for c in row.get("goal", [])]})
                 require(m.id not in missions, f"Duplicate mission: {m.id}")
                 missions[m.id] = m
-            result = cls(skills, missions, data.get("jobs", {}), data.get("equipment", {}))
+            result = cls(skills, missions, data.get("jobs", {}), data.get("equipment", {}),
+                         data.get("tactic_unlocks", []))
             result.validate()
             return result
         except (KeyError, TypeError, AttributeError) as exc:
@@ -217,7 +219,8 @@ class Content:
                             "tiles": [{"pos": list(c), **asdict(t)} for c, t in sorted(mission.board.tiles.items())]}
             missions.append(row)
         return {"version": 1, "skills": [asdict(s) for s in self.skills.values()],
-                "missions": missions, "jobs": self.jobs, "equipment": self.equipment}
+                "missions": missions, "jobs": self.jobs, "equipment": self.equipment,
+                "tactic_unlocks": self.tactic_unlocks}
 
     def validate(self) -> None:
         def integer(value, low, high, label):
@@ -332,6 +335,43 @@ class Content:
                     elif action["kind"] == "status":
                         require(action["unit"] in ids and action["status"] in STATUSES, "Invalid trigger status")
                         integer(action["duration"], 1, 10000, "trigger duration")
+        def unlock_rule(rule):
+            require(isinstance(rule, dict), "Tactic unlock rule must be an object")
+            if "all" in rule or "any" in rule:
+                key = "all" if "all" in rule else "any"
+                require(isinstance(rule[key], list) and bool(rule[key]), f"Tactic unlock {key} must be non-empty")
+                for child in rule[key]:
+                    unlock_rule(child)
+                return
+            if "stat" in rule:
+                require(isinstance(rule["stat"], str) and bool(rule["stat"]), "Invalid tactic unlock stat")
+                integer(rule.get("gte", 1), 1, 1000000, "tactic unlock gte")
+                return
+            if "mission" in rule:
+                require(rule["mission"] in self.missions, "Unknown tactic unlock mission")
+                return
+            if "completed_mission" in rule:
+                require(rule["completed_mission"] in self.missions, "Unknown completed tactic mission")
+                return
+            if "sequence" in rule:
+                require(isinstance(rule["sequence"], list) and bool(rule["sequence"]), "Empty tactic sequence")
+                require(all(isinstance(spec, (str, dict)) for spec in rule["sequence"]), "Invalid tactic sequence event")
+                if "max_ticks" in rule:
+                    integer(rule["max_ticks"], 1, 100000, "tactic sequence max_ticks")
+                require(type(rule.get("same_target", False)) is bool, "Invalid same_target")
+                require(rule.get("require_sources") in {None, "all_members"}, "Invalid sequence source rule")
+                return
+            raise RuleError("Unknown tactic unlock rule")
+
+        all_unit_ids = {u.id for m in self.missions.values() for u in m.units if u.team == "player"}
+        for rule in self.tactic_unlocks:
+            require(rule.get("id") in TEAM_TACTICS, "Unknown tactic unlock id")
+            members = rule.get("members", [])
+            require(isinstance(members, list) and len(members) == 2 and len(set(members)) == 2,
+                    "Tactic unlock currently needs two distinct members")
+            require(all(member in all_unit_ids for member in members), "Unknown tactic unlock member")
+            unlock_rule(rule.get("unlock"))
+
         for jid, job in self.jobs.items():
             require(job.get("requires", "") in {"", *self.jobs}, f"{jid}: prerequisite job")
             integer(job.get("requires_level", 1), 1, 20, "requires_level")
