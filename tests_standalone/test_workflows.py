@@ -110,6 +110,16 @@ class AITests(unittest.TestCase):
         self.assertEqual(choose_command(b),{'kind':'end'})
 
 
+    def test_ranged_ai_disengages_then_creates_distance(self):
+        b=fixture(weapon='ranged',attack_range=4,min_range=2)
+        b.unit('b').pos=(1,1)
+        self.assertEqual(choose_command(b),{'kind':'disengage'})
+        b.execute({'kind':'disengage'})
+        move=choose_command(b)
+        self.assertEqual(move['kind'],'move')
+        self.assertGreater(abs(move['cell'][0]-1)+abs(move['cell'][1]-1),1)
+
+
 class EditorTests(unittest.TestCase):
     def setUp(self):
         self.doc=Document(Content.load(DEFAULT_CONTENT))
