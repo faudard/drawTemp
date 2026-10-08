@@ -1,4 +1,5 @@
 """Pure combat calculations shared by forecasts and effect execution."""
+from . import statuses
 from ..model import Unit, Skill, Effect, distance
 
 def hit_chance(battle, caster: Unit, target: Unit, skill: Skill) -> float:
@@ -10,7 +11,7 @@ def hit_chance(battle, caster: Unit, target: Unit, skill: Skill) -> float:
         chance *= max(0, 100 - (d - skill.optimal_range) * skill.falloff_per_tile) / 100
     if skill.id == "attack" and caster.weapon == "ranged" and battle.engaged_by(caster):
         chance *= 0.65
-    if target.cast or {"sleep", "stop"} & target.statuses.keys():
+    if target.cast or battle.status_blocks(target, "evasion"):
         return chance
     if skill.magical:
         return chance * (1 - target.magic_evade / 100)
@@ -24,9 +25,7 @@ def hit_chance(battle, caster: Unit, target: Unit, skill: Skill) -> float:
             layers += [target.class_evade]
         for evade in layers:
             chance *= 1 - evade / 100
-    if target.reaction == "blade_grasp" and battle._can_react(target):
-        chance *= 1 - target.brave / 100
-    return chance
+    return battle.rules.reactions.get(target.reaction).evade(battle, target, chance)
 
 def damage(battle, caster: Unit, target: Unit, skill: Skill, effect: Effect) -> int:
     if skill.id == "attack":
@@ -51,10 +50,7 @@ def _mitigate(battle, caster, target, skill, effect, raw):
         raw = raw * 4 // 3
     if target.support == defense:
         raw = raw * 2 // 3
-    if ("shell" if skill.magical else "protect") in target.statuses:
-        raw = raw * 2 // 3
-    if "guard" in target.statuses:
-        raw //= 2
+    raw = statuses.mitigate(battle, target, skill, raw)
     if target.cast and not skill.magical:
         raw = raw * 3 // 2
     raw = max(0, raw - (target.magic_defense if skill.magical else target.defense))

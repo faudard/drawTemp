@@ -7,7 +7,8 @@ from pathlib import Path
 from .bonds import (battle_bond_deltas, group_key, merge_bond_stats, pair_key,
                     unlock_progress, unlock_rule_met)
 from .engine import Battle
-from .model import Content, TEAM_TACTICS, TEAM_TACTIC_ARITY, require
+from .model import Content, require
+from .rules import default_rules
 from .storage import write_json
 
 
@@ -54,10 +55,11 @@ class Campaign:
         self.tracked_battles.append(battle.battle_id)
         return True
 
-    def unlock_tactic_members(self, members, tactic):
+    def unlock_tactic_members(self, members, tactic, *, ruleset=None):
+        ruleset = ruleset or default_rules()
         members = tuple(members)
-        require(tactic in TEAM_TACTICS, "Tactic not implemented")
-        require(len(members) == TEAM_TACTIC_ARITY[tactic], "Tactic member count mismatch")
+        require(tactic in ruleset.tactics, "Tactic not implemented")
+        require(len(members) == ruleset.tactics.get(tactic).arity, "Tactic member count mismatch")
         key = group_key(members)
         known = self.known_tactics.setdefault(key, [])
         if tactic in known:
@@ -65,13 +67,14 @@ class Campaign:
         known.append(tactic)
         return True
 
-    def unlock_tactic(self, a, b, tactic):
-        return self.unlock_tactic_members((a, b), tactic)
+    def unlock_tactic(self, a, b, tactic, *, ruleset=None):
+        return self.unlock_tactic_members((a, b), tactic, ruleset=ruleset)
 
-    def prepare_tactic_members(self, members, tactic, limit=2):
+    def prepare_tactic_members(self, members, tactic, limit=2, *, ruleset=None):
+        ruleset = ruleset or default_rules()
         members = tuple(members)
-        require(tactic in TEAM_TACTICS, "Tactic not implemented")
-        require(len(members) == TEAM_TACTIC_ARITY[tactic], "Tactic member count mismatch")
+        require(tactic in ruleset.tactics, "Tactic not implemented")
+        require(len(members) == ruleset.tactics.get(tactic).arity, "Tactic member count mismatch")
         key = group_key(members)
         require(tactic in self.known_tactics.get(key, []), "Tactic not unlocked")
         prepared = self.prepared_tactics.setdefault(key, [])
@@ -81,8 +84,8 @@ class Campaign:
         prepared.append(tactic)
         return True
 
-    def prepare_tactic(self, a, b, tactic, limit=2):
-        return self.prepare_tactic_members((a, b), tactic, limit)
+    def prepare_tactic(self, a, b, tactic, limit=2, *, ruleset=None):
+        return self.prepare_tactic_members((a, b), tactic, limit, ruleset=ruleset)
 
     def unprepare_tactic_members(self, members, tactic):
         key = group_key(members)
@@ -94,14 +97,15 @@ class Campaign:
     def unprepare_tactic(self, a, b, tactic):
         return self.unprepare_tactic_members((a, b), tactic)
 
-    def evaluate_tactic_unlocks(self, rules, mission_id="", events=None):
+    def evaluate_tactic_unlocks(self, rules, mission_id="", events=None, *, ruleset=None):
+        ruleset = ruleset or default_rules()
         unlocked = []
         completed = set(self.completed)
         for rule in rules:
             members = rule.get("members", [])
             tactic = rule["id"]
-            require(tactic in TEAM_TACTICS, "Tactic not implemented")
-            require(len(members) in {2, 3} and len(members) == TEAM_TACTIC_ARITY[tactic],
+            require(tactic in ruleset.tactics, "Tactic not implemented")
+            require(len(members) in {2, 3} and len(members) == ruleset.tactics.get(tactic).arity,
                     "Tactic unlock member count mismatch")
             key = group_key(members)
             if tactic in self.known_tactics.get(key, []):
@@ -162,7 +166,8 @@ class Campaign:
         self.gold -= price
         self.inventory[item_id] = self.inventory.get(item_id, 0) + 1
 
-    def prepare(self, content, mission_id, seed=1):
+    def prepare(self, content, mission_id, seed=1, *, ruleset=None):
+        ruleset = ruleset or default_rules()
         require(mission_id in self.unlocked, "Mission locked")
         prepared = deepcopy(content)
         mission_units = prepared.missions[mission_id].units
@@ -190,12 +195,12 @@ class Campaign:
                 continue
             for tactic in tactics:
                 require(tactic in self.known_tactics.get(key, []), "Prepared tactic is not unlocked")
-                require(len(members) == TEAM_TACTIC_ARITY[tactic], "Prepared tactic member count mismatch")
+                require(len(members) == ruleset.tactics.get(tactic).arity, "Prepared tactic member count mismatch")
                 for member in members:
                     if tactic not in by_id[member].tactics:
                         by_id[member].tactics.append(tactic)
-        prepared.validate()
-        return Battle(prepared, mission_id, seed)
+        prepared.validate(rules=ruleset)
+        return Battle(prepared, mission_id, seed, rules=ruleset)
 
     def finish(self, battle, playtest=False, tactic_rules=None):
         if playtest or battle.result not in {"victory", "defeat"}:
@@ -204,7 +209,7 @@ class Campaign:
         self.record_bonds(battle)
         if battle.result != "victory" or battle.mission.id in self.completed:
             if rules:
-                self.evaluate_tactic_unlocks(rules, battle.mission.id, battle.events)
+                self.evaluate_tactic_unlocks(rules, battle.mission.id, battle.events, ruleset=battle.rules)
             return False
         require(battle.mission.id in self.unlocked, "Mission was not unlocked")
         self.completed.append(battle.mission.id)
@@ -218,14 +223,15 @@ class Campaign:
             if mission not in self.unlocked:
                 self.unlocked.append(mission)
         if rules:
-            self.evaluate_tactic_unlocks(rules, battle.mission.id, battle.events)
+            self.evaluate_tactic_unlocks(rules, battle.mission.id, battle.events, ruleset=battle.rules)
         return True
 
     def save(self, path):
         write_json(path, {"version": 1, **asdict(self)})
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, *, ruleset=None):
+        ruleset = ruleset or default_rules()
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         require(data.pop("version", None) == 1, "Unsupported campaign version")
         data["heroes"] = {uid: HeroProgress(**p) for uid, p in data["heroes"].items()}
@@ -238,7 +244,7 @@ class Campaign:
             members = key.split("|")
             return (len(members) in {2, 3} and len(set(members)) == len(members)
                     and members == sorted(members)
-                    and all(t in TEAM_TACTICS and TEAM_TACTIC_ARITY[t] == len(members)
+                    and all(t in ruleset.tactics and ruleset.tactics.get(t).arity == len(members)
                             for t in tactics))
         require(all(isinstance(k, str) and isinstance(v, list) and tactic_key_valid(k, v)
                     for k, v in result.known_tactics.items()), "Invalid known tactics")

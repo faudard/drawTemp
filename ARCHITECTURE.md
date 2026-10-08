@@ -7,7 +7,7 @@ Le cœur ne dépend ni de Tk, ni de Godot, ni du filesystem. La même frontière
 | --- | --- |
 | `model.py` | Contrats typés, contenu JSON versionné, validation des références et valeurs |
 | `engine.py` | État de combat, horloge CT, transactions, événements, RNG et replay |
-| `rules/` | Registres immuables : commandes, effets, formules, objectifs et comportements |
+| `rules/` | Douze registres immuables : commandes, effets, formules, objectifs, IA, statuts, mouvements, réactions, préparations, synergies et triggers |
 | `actors.py` | Fabrique d’acteurs et archétypes JSON ; personnage/monstre/invocation |
 | `ai.py` | Évaluation déterministe des actions et positions avec les prévisions du moteur |
 | `campaign.py` | Progression, jobs, achats, inventaire, loadouts et récompenses uniques |
@@ -63,4 +63,4 @@ Les versions Godot sont des références historiques, sans import au runtime aut
 ## Extension du moteur
 
 Voir [règles modulaires et acteurs](docs/MODULAR_ENGINE.md) pour les contrats, exemples,
-limites et règles de compatibilité des replays v1/v2.
+limites et règles de compatibilité des replays v1/v2/v3.

@@ -67,13 +67,14 @@ parité Godot, de gameplay final ou de finition produit.
 
 ## Architecture modulaire — continuation PR #14
 
-Livré : cinq familles de règles composables (commandes, effets, formules, objectifs,
-comportements), validation commune, prévision/résolution des effets, archétypes
-personnages/monstres/invocations, manifeste de replay v2 et rollback des extensions.
-Exemple exécutable et contrats : [moteur modulaire](docs/MODULAR_ENGINE.md).
+Livré : douze registres composables, incluant statuts, déplacements, réactions
+passives/préparées, synergies et conditions/actions de triggers. Validation, IA et
+prévisions partagent ces définitions. Les archétypes personnages/monstres/invocations,
+le rollback des extensions et les replays v3 avec lecture v1/v2 sont intégrés.
+La campagne accepte les synergies enregistrées via `ruleset`.
+Exemples et contrats : [moteur modulaire](docs/MODULAR_ENGINE.md).
 
 Prochaines étapes :
-- Extraire déplacements, statuts/horloge, réactions, synergies et triggers en politiques.
 - Ajouter spawn/despawn transactionnels, renforts et durée de vie des invocations.
 - Éditeur d'archétypes avec distinction explicite défauts/surcharges et resynchronisation.
 - Profils IA spécialisés (soigneur, meute, boss) avec tests de décisions déterministes.

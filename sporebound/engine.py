@@ -4,13 +4,12 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import asdict
 import hashlib
-import heapq
-from itertools import combinations
 import json
 import random
 import uuid
 
 from .rules import default_rules
+from .rules import movement, reactions as reaction_rules, statuses, tactics, triggers
 from .model import Cell, Content, Effect, RuleError, Skill, Tile, Unit, distance, require
 
 
@@ -82,26 +81,7 @@ class Battle:
             self.emit("relic_taken", unit=unit.id)
 
     def _triggers(self):
-        for trigger in self.mission.triggers:
-            if trigger["id"] in self.fired:
-                continue
-            condition = trigger["condition"]
-            matches = (condition == "tick" and self.tick >= trigger["value"] or
-                       condition == "enter" and any(u.alive and u.team == "player" and u.pos == tuple(trigger["pos"]) for u in self.units) or
-                       condition == "defeated" and not self.unit(trigger["unit"]).alive)
-            if not matches:
-                continue
-            self.fired.append(trigger["id"])
-            self.emit("trigger", id=trigger["id"])
-            for action in trigger["actions"]:
-                if action["kind"] == "hazard":
-                    c = tuple(action["pos"])
-                    self.board.tiles[c] = deepcopy(self.board.tile(c))
-                    self.board.tiles[c].hazard = action["amount"]
-                elif action["kind"] == "status":
-                    self._status(self.unit(action["unit"]), action["status"], action["duration"])
-                else:
-                    self.emit("message", text=action.get("text", ""))
+        triggers.dispatch(self)
 
     def _advance(self):
         """Stable roster tie-break; time moves only when nobody is ready."""
@@ -111,13 +91,13 @@ class Battle:
             if self.result:
                 return
             for u in self.units:
-                if u.alive and u.ct >= 100 and not {"sleep", "stop"} & u.statuses.keys():
+                if u.alive and u.ct >= 100 and not self.status_blocks(u, "activation"):
                     if u.id in self.prepared_reactions:
                         self.prepared_reactions.pop(u.id, None)
                         self.emit("prepared_expired", unit=u.id)
                     self.active_id = u.id
-                    u.moved = "dont_move" in u.statuses
-                    u.acted = "dont_act" in u.statuses
+                    u.moved = self.status_blocks(u, "move")
+                    u.acted = self.status_blocks(u, "act")
                     u.disengaging = False
                     self.emit("activation", unit=u.id, ct=u.ct)
                     return
@@ -129,19 +109,9 @@ class Battle:
             for u in self.units:
                 if not u.alive:
                     continue
-                if not {"sleep", "stop"} & u.statuses.keys():
-                    gain = u.speed
-                    if "haste" in u.statuses:
-                        gain = gain * 3 // 2
-                    if "slow" in u.statuses:
-                        gain = max(1, gain // 2)
-                    u.ct += gain
-                for status in list(u.statuses):
-                    if u.statuses[status] > 0:
-                        u.statuses[status] -= 1
-                        if u.statuses[status] == 0:
-                            del u.statuses[status]
-                            self.emit("status_expired", unit=u.id, status=status)
+                if not self.status_blocks(u, "activation"):
+                    u.ct += statuses.speed(self, u)
+                statuses.tick(self, u)
                 if u.cast:
                     u.cast["remaining"] -= 1
             # All CT/status clocks advance before slow actions resolve in roster order.
@@ -152,7 +122,7 @@ class Battle:
                     skill = self.content.skills[pending["skill"]]
                     target = self.unit(pending["unit"]) if pending.get("unit") else None
                     cell = target.pos if target else tuple(pending["cell"])
-                    if u.mp < skill.cost or (skill.magical and "silence" in u.statuses):
+                    if u.mp < skill.cost or (skill.magical and self.status_blocks(u, "magic")):
                         self.emit("cast_failed", unit=u.id, skill=skill.id)
                     else:
                         u.mp -= skill.cost
@@ -165,218 +135,31 @@ class Battle:
         self.emit("battle_end", result="draw", reason="no activation within 10000 ticks")
 
     def reachable(self, unit: Unit | None = None) -> dict[Cell, tuple[int, list[Cell]]]:
-        u = unit or self.active
-        if not u or not u.alive or u.moved or "dont_move" in u.statuses:
-            return {}
-        blocked = {o.pos for o in self.units if o.alive and o.id != u.id}
-        if u.movement == "teleport":
-            return {c: (distance(u.pos, c), [u.pos, c]) for c in self.board.cells()
-                    if c not in blocked and not self.board.tile(c).blocked and distance(u.pos, c) <= u.movement_budget + 5}
-        result = {u.pos: (0, [u.pos])}
-        queue = [(0, u.pos)]
-        while queue:
-            cost, c = heapq.heappop(queue)
-            if cost != result[c][0]:
-                continue
-            for nxt in self.board.neighbors(c):
-                tile = self.board.tile(nxt)
-                if tile.blocked or nxt in blocked:
-                    continue
-                if u.movement != "ignore_height" and abs(tile.height - self.board.tile(c).height) > u.jump:
-                    continue
-                total = cost + tile.cost
-                if total <= u.movement_budget and (nxt not in result or total < result[nxt][0]):
-                    result[nxt] = total, result[c][1] + [nxt]
-                    heapq.heappush(queue, (total, nxt))
-        return result
+        return movement.reachable(self, unit)
 
     def line_of_sight(self, start: Cell, end: Cell) -> bool:
-        """Conservative supercover: diagonal shots cannot leak through a corner."""
-        dx, dy = end[0] - start[0], end[1] - start[1]
-        nx, ny = abs(dx), abs(dy)
-        sx, sy = (1 if dx > 0 else -1), (1 if dy > 0 else -1)
-        x, y = start
-        ix = iy = 0
-        cells = []
-        while ix < nx or iy < ny:
-            decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx
-            if decision == 0:
-                cells.extend([(x + sx, y), (x, y + sy)])
-                x, y, ix, iy = x + sx, y + sy, ix + 1, iy + 1
-            elif decision < 0:
-                x, ix = x + sx, ix + 1
-            else:
-                y, iy = y + sy, iy + 1
-            cells.append((x, y))
-        high = max(self.board.tile(start).height, self.board.tile(end).height) + 1
-        return all(not self.board.tile(c).blocked and self.board.tile(c).height <= high
-                   for c in cells if c not in {start, end} and self.board.contains(c))
+        return movement.line_of_sight(self, start, end)
 
     def engagement_range(self, u: Unit) -> int:
-        if u.engagement_range >= 0:
-            return u.engagement_range
-        if u.weapon == "spear":
-            return 2
-        if u.weapon in {"melee", "unarmed"}:
-            return 1
-        return 0
+        return movement.engagement_range(self, u)
 
     def engaged_by(self, u: Unit) -> list[Unit]:
-        return [e for e in self.units if e.alive and e.team != u.team
-                and self.engagement_range(e) > 0
-                and distance(e.pos, u.pos) <= self.engagement_range(e)
-                and self.line_of_sight(e.pos, u.pos)]
+        return movement.engaged_by(self, u)
 
     def engagement_threats(self, cell: Cell, moving_team: str) -> list[dict]:
-        result = []
-        for enemy in self.units:
-            if not enemy.alive or enemy.team == moving_team:
-                continue
-            radius = self.engagement_range(enemy)
-            if radius and distance(enemy.pos, cell) <= radius and self.line_of_sight(enemy.pos, cell):
-                result.append({"unit": enemy.id, "kind": "engagement", "range": radius})
-        return result
+        return movement.engagement_threats(self, cell, moving_team)
 
     def reaction_threats(self, cell: Cell, moving_team: str) -> list[dict]:
-        result = []
-        for uid, prep in sorted(self.prepared_reactions.items()):
-            watcher = self.unit(uid)
-            if not watcher.alive or watcher.team == moving_team or not self._can_react(watcher):
-                continue
-            if prep["mode"] == "overwatch":
-                skill = self._basic(watcher)
-                d = distance(watcher.pos, cell)
-                if skill.min_range <= d <= skill.range and self.line_of_sight(watcher.pos, cell):
-                    result.append({"unit": uid, "kind": "overwatch", "cell": cell})
-            elif prep["mode"] == "guard":
-                radius = self.engagement_range(watcher)
-                if radius and distance(watcher.pos, cell) <= radius:
-                    result.append({"unit": uid, "kind": "guard", "cell": cell})
-        return result
+        return reaction_rules.reaction_threats(self, cell, moving_team)
 
     def movement_threats(self, u: Unit, path: list[Cell]) -> list[dict]:
-        """Pure path analysis for UI/AI: engagement entries and reactions that may trigger."""
-        require(bool(path) and path[0] == u.pos, "Threat path must start at unit position")
-        result = []
-        previous = path[0]
-        engaged = {row["unit"] for row in self.engagement_threats(previous, u.team)}
-        seen_prepared = set()
-        seen_pursuit = set()
-        for cell in path[1:]:
-            after = {row["unit"] for row in self.engagement_threats(cell, u.team)}
-            for uid in sorted(after - engaged):
-                result.append({"kind": "engagement", "unit": uid, "cell": cell,
-                               "chance": 1.0, "amount": 0})
-            for uid in sorted(engaged - after):
-                enemy = self.unit(uid)
-                if enemy.reaction == "opportunity" and not u.disengaging and self._can_react(enemy):
-                    skill = self._basic(enemy)
-                    ghost = deepcopy(u)
-                    ghost.pos = previous
-                    if skill.min_range <= distance(enemy.pos, previous) <= skill.range and self.line_of_sight(enemy.pos, previous):
-                        result.append({"kind": "opportunity", "unit": uid, "cell": previous,
-                                       "chance": enemy.brave / 100 * self.hit_chance(enemy, ghost, skill),
-                                       "amount": self.damage(enemy, ghost, skill, skill.effects[0])})
-                elif (enemy.reaction == "pursuit" and uid not in seen_pursuit
-                      and self._can_react(enemy) and distance(enemy.pos, previous) == 1):
-                    tile = self.board.tile(previous)
-                    if (not tile.blocked and (enemy.movement == "ignore_height"
-                            or abs(tile.height - self.board.tile(enemy.pos).height) <= enemy.jump)):
-                        result.append({"kind": "pursuit", "unit": uid, "cell": previous,
-                                       "chance": enemy.brave / 100, "amount": 0})
-                        seen_pursuit.add(uid)
-            for uid, prep in sorted(self.prepared_reactions.items()):
-                if uid in seen_prepared:
-                    continue
-                watcher = self.unit(uid)
-                if not watcher.alive or watcher.team == u.team or not self._can_react(watcher):
-                    continue
-                ghost = deepcopy(u)
-                ghost.pos = cell
-                if prep["mode"] == "overwatch":
-                    skill = self._basic(watcher)
-                    d = distance(watcher.pos, cell)
-                    if skill.min_range <= d <= skill.range and self.line_of_sight(watcher.pos, cell):
-                        result.append({"kind": "overwatch", "unit": uid, "cell": cell,
-                                       "chance": self.hit_chance(watcher, ghost, skill),
-                                       "amount": self.damage(watcher, ghost, skill, skill.effects[0])})
-                        seen_prepared.add(uid)
-                elif prep["mode"] == "guard":
-                    radius = self.engagement_range(watcher)
-                    if (radius and distance(previous, watcher.pos) > radius
-                            and distance(cell, watcher.pos) <= radius
-                            and self.line_of_sight(watcher.pos, cell)):
-                        skill = self._basic(watcher)
-                        if skill.min_range <= distance(watcher.pos, cell) <= skill.range:
-                            result.append({"kind": "guard", "unit": uid, "cell": cell,
-                                           "chance": self.hit_chance(watcher, ghost, skill),
-                                           "amount": self.damage(watcher, ghost, skill, skill.effects[0])})
-                            seen_prepared.add(uid)
-            previous = cell
-            engaged = after
-        return result
+        return reaction_rules.movement_threats(self, u, path)
 
     def charge_options(self, unit: Unit | None = None) -> list[dict]:
-        """Pure charge query for UI/AI: straight approach, minimum two-cell commitment."""
-        u = unit or self.active
-        if (u is None or not u.alive or u.moved or u.acted
-                or {"dont_move", "dont_act"} & u.statuses.keys()
-                or self.engagement_range(u) <= 0):
-            return []
-        paths = self.reachable(u)
-        radius = self.engagement_range(u)
-        result = []
-        for target in self.units:
-            if not target.alive or target.team == u.team:
-                continue
-            dx, dy = target.pos[0] - u.pos[0], target.pos[1] - u.pos[1]
-            if dx and dy:
-                continue
-            total = abs(dx) + abs(dy)
-            travel = total - radius
-            if travel < 2:
-                continue
-            step = ((1 if dx > 0 else -1), 0) if dx else (0, (1 if dy > 0 else -1))
-            landing = (target.pos[0] - step[0] * radius,
-                       target.pos[1] - step[1] * radius)
-            row = paths.get(landing)
-            if row is None:
-                continue
-            _, path = row
-            expected = [(u.pos[0] + step[0] * i, u.pos[1] + step[1] * i)
-                        for i in range(travel + 1)]
-            if path != expected:
-                continue
-            result.append({"target": target.id, "cell": target.pos, "landing": landing,
-                           "distance": travel, "ct_cost": 20,
-                           "threats": self.movement_threats(u, path)})
-        return sorted(result, key=lambda row: (row["target"], row["landing"]))
+        return movement.charge_options(self, unit)
 
     def relay_options(self, unit: Unit | None = None) -> list[dict]:
-        """Pure pair-tactic query: spend Act + partner CT for a bounded legal reposition."""
-        u = unit or self.active
-        if (u is None or not u.alive or u.acted or "dont_act" in u.statuses
-                or "relay" not in u.tactics):
-            return []
-        result = []
-        for partner in self.units:
-            if (partner.id == u.id or not partner.alive or partner.team != u.team
-                    or "relay" not in partner.tactics or not self._can_react(partner)
-                    or partner.ct < 20 or "dont_move" in partner.statuses
-                    or self.carrier == partner.id
-                    or distance(u.pos, partner.pos) != 1
-                    or not self.line_of_sight(u.pos, partner.pos)):
-                continue
-            ghost = deepcopy(partner)
-            ghost.moved = False
-            ghost.disengaging = False
-            for cell, (cost, path) in self.reachable(ghost).items():
-                if cell == partner.pos or cost > 2:
-                    continue
-                result.append({"id": "relay", "partner": partner.id, "cell": cell,
-                               "move_cost": cost, "ct_cost": 20,
-                               "threats": self.movement_threats(ghost, path)})
-        return sorted(result, key=lambda row: (row["partner"], row["move_cost"], row["cell"]))
+        return self.rules.tactics.get("relay").reposition(self, unit) if "relay" in self.rules.tactics else []
 
     def _basic(self, u: Unit) -> Skill:
         fixed_range = max(u.attack_range, 2) if u.weapon == "spear" else u.attack_range
@@ -430,10 +213,10 @@ class Battle:
         """Pure forecast: never consume RNG, MP or mutate cast/turn state."""
         u = unit or self.active
         require(u is not None, "No active unit")
-        require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
+        require(not u.acted and not self.status_blocks(u, "act"), "Action unavailable")
         s = self._skill(u, skill_id)
         require(u.mp >= s.cost, "Not enough MP")
-        require(not s.magical or "silence" not in u.statuses, "Silenced")
+        require(not s.magical or not self.status_blocks(u, "magic"), "Silenced")
         self._target(u, s, cell)
         result = []
         for e in s.effects:
@@ -454,7 +237,7 @@ class Battle:
                     and direct["amount"] < target.hp):
                 for tactic in self.available_team_tactics(u, target):
                     partner_ids = tactic["partners"] if "partners" in tactic else [tactic["partner"]]
-                    divisor = 3 if tactic["id"] == "encirclement" else 2
+                    divisor = self.rules.tactics.get(tactic["id"]).divisor
                     for partner_id in partner_ids:
                         partner = self.unit(partner_id)
                         basic = self._basic(partner)
@@ -465,80 +248,27 @@ class Battle:
                                        "members": [u.id, *partner_ids]})
         return result
 
+    def status_blocks(self, unit: Unit, action: str) -> bool:
+        return statuses.blocked(self, unit, action)
+
+    def movement_budget(self, unit: Unit) -> int:
+        return unit.move + self.rules.movements.get(unit.movement).bonus
+
+    def can_step_height(self, unit: Unit, start: Cell, end: Cell) -> bool:
+        return (self.rules.movements.get(unit.movement).ignore_height
+                or abs(self.board.tile(end).height - self.board.tile(start).height) <= unit.jump)
+
     def _can_react(self, u: Unit) -> bool:
-        return u.alive and not {"sleep", "stop", "dont_act"} & u.statuses.keys()
+        return u.alive and not self.status_blocks(u, "reaction")
 
     def _status(self, u: Unit, status: str, duration: int, source: Unit | None = None):
-        opposite = {"haste": "slow", "slow": "haste", "poison": "regen", "regen": "poison"}
-        u.statuses.pop(opposite.get(status, ""), None)
-        previous = u.statuses.get(status, 0)
-        u.statuses[status] = -1 if previous == -1 or duration == -1 else max(duration, previous)
-        if status in {"sleep", "stop", "silence"} and u.cast:
-            # Silence interrupts magic only; Stop/Sleep interrupt all casts.
-            if status != "silence" or self.content.skills[u.cast["skill"]].magical:
-                u.cast = None
-                self.emit("cast_cancelled", unit=u.id)
-        if status in {"sleep", "stop", "dont_act"} and u.id in self.prepared_reactions:
-            self.prepared_reactions.pop(u.id, None)
-            self.emit("prepared_cancelled", unit=u.id, reason=status)
-        self.emit("status", unit=u.id, status=status, duration=duration,
-                  source=source.id if source else None)
+        return statuses._status(self, u, status, duration, source)
 
     def interceptor_for(self, target: Unit, source: Unit | None) -> Unit | None:
-        if source is None or source.team == target.team:
-            return None
-        for uid, prep in sorted(self.prepared_reactions.items()):
-            protector = self.unit(uid)
-            if (prep.get("mode") == "intercept" and prep.get("target") == target.id
-                    and protector.alive and protector.team == target.team
-                    and self._can_react(protector)
-                    and distance(protector.pos, target.pos) <= max(1, self.engagement_range(protector))
-                    and self.line_of_sight(protector.pos, target.pos)):
-                return protector
-        return None
+        return reaction_rules.interceptor_for(self, target, source)
 
     def _hurt(self, target: Unit, amount: int, source: Unit | None = None, reactions=True):
-        if not target.alive:
-            return
-        if reactions:
-            protector = self.interceptor_for(target, source)
-            if protector is not None:
-                prep = self.prepared_reactions.pop(protector.id)
-                protector.ct = max(0, protector.ct - prep.get("ct_tax", 20))
-                self.emit("intercept", unit=protector.id, protected=target.id,
-                          source=source.id, amount=amount)
-                self._hurt(protector, amount, source, reactions=False)
-                return
-        reactive = source is not None and source.team != target.team and reactions and self._can_react(target)
-        if reactive and target.reaction == "mp_switch" and target.mp > 0 and self.rng.randrange(100) < target.brave:
-            target.mp = max(0, target.mp - amount)
-            self.emit("mp_switch", unit=target.id, amount=amount)
-            return
-        actual = min(target.hp, amount)
-        target.hp -= actual
-        if actual:
-            target.statuses.pop("sleep", None)
-        self.emit("damage", unit=target.id, source=source.id if source else None, amount=actual)
-        if not target.alive:
-            if self.carrier == target.id:
-                self.relic_pos, self.carrier = target.pos, None
-                self.emit("relic_dropped", unit=target.id, cell=target.pos)
-            target.cast = None
-            target.ct = 0
-            target.statuses.clear()
-            if target.id in self.prepared_reactions:
-                self.prepared_reactions.pop(target.id, None)
-                self.emit("prepared_cancelled", unit=target.id, reason="downed")
-            self.emit("downed", unit=target.id, source=source.id if source else None)
-        elif reactive and actual and target.reaction == "auto_potion" and self.inventory[target.team]["potion"] > 0 and self.rng.randrange(100) < target.brave:
-            self.inventory[target.team]["potion"] -= 1
-            self._heal(target, 25)
-        elif reactive and actual and target.reaction == "counter" and source.alive and self.rng.randrange(100) < target.brave:
-            s = self._basic(target)
-            if s.min_range <= distance(target.pos, source.pos) <= s.range and self.line_of_sight(target.pos, source.pos):
-                if self.rng.random() < self.hit_chance(target, source, s):
-                    self._hurt(source, self.damage(target, source, s, s.effects[0]), target, reactions=False)
-                    self.emit("counter", unit=target.id, target=source.id)
+        return reaction_rules._hurt(self, target, amount, source, reactions)
 
     def _heal(self, target, amount):
         actual = min(amount, target.max_hp - target.hp)
@@ -546,41 +276,7 @@ class Battle:
         self.emit("heal", unit=target.id, amount=actual)
 
     def _displace(self, caster, target, amount, pull=False):
-        prep = self.prepared_reactions.get(target.id)
-        if prep and prep.get("mode") == "brace" and prep.get("charges", 0) > 0:
-            absorbed = min(amount, 2)
-            amount -= absorbed
-            prep["charges"] -= 1
-            target.ct = max(0, target.ct - prep.get("ct_tax", 20))
-            self.emit("brace", unit=target.id, source=caster.id, absorbed=absorbed)
-            if prep["charges"] <= 0:
-                self.prepared_reactions.pop(target.id, None)
-            if amount <= 0:
-                return
-        self.emit("forced_move", unit=target.id, source=caster.id,
-                  mode="pull" if pull else "push", amount=amount)
-        dx, dy = target.pos[0] - caster.pos[0], target.pos[1] - caster.pos[1]
-        if not dx and not dy:
-            return
-        direction = ((1 if dx > 0 else -1), 0) if abs(dx) >= abs(dy) else (0, (1 if dy > 0 else -1))
-        if pull:
-            direction = -direction[0], -direction[1]
-        for _ in range(amount):
-            nxt = target.pos[0] + direction[0], target.pos[1] + direction[1]
-            if not self.board.contains(nxt) or self.board.tile(nxt).blocked or self.at(nxt):
-                break
-            drop = self.board.tile(target.pos).height - self.board.tile(nxt).height
-            if drop < -target.jump:
-                break
-            target.pos = nxt
-            forced_damage = max(0, drop - target.jump) * 5 + self.board.tile(nxt).hazard
-            if forced_damage:
-                self._hurt(target, forced_damage, caster, reactions=False)
-            self._collect(target)
-            if not target.alive:
-                break
-        self.emit("displace", unit=target.id, pos=target.pos, source=caster.id,
-                  mode="pull" if pull else "push")
+        return movement._displace(self, caster, target, amount, pull)
 
     def _resolve(self, caster: Unit, skill: Skill, cell: Cell):
         self.emit("skill", unit=caster.id, skill=skill.id, cell=cell)
@@ -607,237 +303,28 @@ class Battle:
         self._outcome()
 
     def _prepared_attack(self, watcher: Unit, mover: Unit, mode: str):
-        prep = self.prepared_reactions.get(watcher.id)
-        if not prep or prep.get("charges", 0) <= 0 or not self._can_react(watcher) or not mover.alive:
-            return
-        skill = self._basic(watcher)
-        d = distance(watcher.pos, mover.pos)
-        if not (skill.min_range <= d <= skill.range) or not self.line_of_sight(watcher.pos, mover.pos):
-            return
-        prep["charges"] -= 1
-        watcher.ct = max(0, watcher.ct - prep.get("ct_tax", 20))
-        self.emit("prepared_triggered", unit=watcher.id, target=mover.id, mode=mode)
-        if self.rng.random() < self.hit_chance(watcher, mover, skill):
-            self._hurt(mover, self.damage(watcher, mover, skill, skill.effects[0]), watcher, reactions=False)
-        else:
-            self.emit("miss", unit=watcher.id, target=mover.id)
-        if prep["charges"] <= 0:
-            self.prepared_reactions.pop(watcher.id, None)
+        return reaction_rules._prepared_attack(self, watcher, mover, mode)
 
     def _prepared_on_move(self, mover: Unit, previous: Cell):
-        for uid in list(self.prepared_reactions):
-            if not mover.alive:
-                break
-            watcher = self.unit(uid)
-            if watcher.team == mover.team or not watcher.alive:
-                continue
-            prep = self.prepared_reactions.get(uid)
-            if not prep:
-                continue
-            if prep["mode"] == "overwatch":
-                self._prepared_attack(watcher, mover, "overwatch")
-            elif prep["mode"] == "guard":
-                radius = self.engagement_range(watcher)
-                if radius and distance(previous, watcher.pos) > radius and distance(mover.pos, watcher.pos) <= radius:
-                    self._prepared_attack(watcher, mover, "guard")
+        return reaction_rules._prepared_on_move(self, mover, previous)
 
     def _prepare(self, u: Unit, mode: str, target_id: str | None = None):
-        require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
-        require(mode in {"overwatch", "guard", "brace", "intercept"}, "Unknown preparation")
-        if mode == "overwatch":
-            require(u.weapon == "ranged", "Overwatch requires a ranged weapon")
-            require(not self.engaged_by(u), "Cannot prepare Overwatch while engaged")
-        elif mode == "guard":
-            require(self.engagement_range(u) > 0, "Guard requires an engagement zone")
-        elif mode == "brace":
-            require(self.engagement_range(u) > 0, "Brace requires a close-combat control zone")
-        else:
-            require(self.engagement_range(u) > 0, "Intercept requires a close-combat control zone")
-            require(target_id is not None, "Intercept needs a protected ally")
-            target = self.unit(target_id)
-            require(target.alive and target.team == u.team and target.id != u.id, "Invalid Intercept target")
-            require(distance(u.pos, target.pos) <= max(1, self.engagement_range(u))
-                    and self.line_of_sight(u.pos, target.pos), "Intercept target outside protection range")
-        u.acted = True
-        u.cast = None
-        self.prepared_reactions[u.id] = {"mode": mode, "charges": 1, "ct_tax": 20}
-        if mode == "intercept":
-            self.prepared_reactions[u.id]["target"] = target_id
-        self.emit("prepared", unit=u.id, mode=mode)
+        return reaction_rules._prepare(self, u, mode, target_id)
 
     def available_team_tactics(self, caster: Unit, target: Unit) -> list[dict]:
-        if not target.alive or target.team == caster.team:
-            return []
-        result = []
-
-        if "pincer" in caster.tactics and self.engagement_range(caster) > 0:
-            if distance(caster.pos, target.pos) <= self.engagement_range(caster):
-                cx, cy = caster.pos[0] - target.pos[0], caster.pos[1] - target.pos[1]
-                for ally in self.units:
-                    if (ally.id == caster.id or not ally.alive or ally.team != caster.team
-                            or "pincer" not in ally.tactics or not self._can_react(ally)
-                            or ally.ct < 20 or self.engagement_range(ally) <= 0):
-                        continue
-                    if distance(ally.pos, target.pos) > self.engagement_range(ally):
-                        continue
-                    if not self.line_of_sight(ally.pos, target.pos):
-                        continue
-                    ax, ay = ally.pos[0] - target.pos[0], ally.pos[1] - target.pos[1]
-                    opposite = ((cx == 0 and ax == 0 and cy * ay < 0)
-                                or (cy == 0 and ay == 0 and cx * ax < 0))
-                    if opposite:
-                        result.append({"id": "pincer", "partner": ally.id,
-                                       "target": target.id, "ct_cost": 20})
-
-        if ("crossfire" in caster.tactics and caster.weapon == "ranged"
-                and not self.engaged_by(caster)):
-            cx, cy = caster.pos[0] - target.pos[0], caster.pos[1] - target.pos[1]
-            for ally in self.units:
-                if (ally.id == caster.id or not ally.alive or ally.team != caster.team
-                        or "crossfire" not in ally.tactics or ally.weapon != "ranged"
-                        or not self._can_react(ally) or ally.ct < 20 or self.engaged_by(ally)):
-                    continue
-                skill = self._basic(ally)
-                d = distance(ally.pos, target.pos)
-                if not (skill.min_range <= d <= skill.range and self.line_of_sight(ally.pos, target.pos)):
-                    continue
-                ax, ay = ally.pos[0] - target.pos[0], ally.pos[1] - target.pos[1]
-                cross = cx * ay - cy * ax
-                dot = cx * ax + cy * ay
-                if cross != 0 or dot < 0:
-                    result.append({"id": "crossfire", "partner": ally.id,
-                                   "target": target.id, "ct_cost": 20})
-
-        if ("encirclement" in caster.tactics and self.engagement_range(caster) > 0
-                and distance(caster.pos, target.pos) <= self.engagement_range(caster)):
-            def cardinal_axis(unit):
-                dx, dy = unit.pos[0] - target.pos[0], unit.pos[1] - target.pos[1]
-                if dx == 0 and dy:
-                    return 0, 1 if dy > 0 else -1
-                if dy == 0 and dx:
-                    return 1 if dx > 0 else -1, 0
-                return None
-
-            caster_axis = cardinal_axis(caster)
-            candidates = []
-            if caster_axis is not None:
-                for ally in self.units:
-                    if (ally.id == caster.id or not ally.alive or ally.team != caster.team
-                            or "encirclement" not in ally.tactics or not self._can_react(ally)
-                            or ally.ct < 20 or self.engagement_range(ally) <= 0
-                            or distance(ally.pos, target.pos) > self.engagement_range(ally)
-                            or not self.line_of_sight(ally.pos, target.pos)):
-                        continue
-                    ally_axis = cardinal_axis(ally)
-                    if ally_axis is not None and ally_axis != caster_axis:
-                        candidates.append((ally.id, ally_axis))
-                for left, right in combinations(sorted(candidates), 2):
-                    if left[1] != right[1]:
-                        result.append({"id": "encirclement",
-                                       "partners": [left[0], right[0]],
-                                       "target": target.id, "ct_cost": 20})
-                        break
-
-        return sorted(result, key=lambda row: (
-            row["id"], tuple(row["partners"] if "partners" in row else [row["partner"]])))
+        return tactics.available_team_tactics(self, caster, target)
 
     def _resolve_team_tactic(self, caster: Unit, target: Unit):
-        options = self.available_team_tactics(caster, target)
-        if not options or not target.alive:
-            return
-        tactic = options[0]
-        partner_ids = tactic["partners"] if "partners" in tactic else [tactic["partner"]]
-        divisor = 3 if tactic["id"] == "encirclement" else 2
-        partners = [self.unit(uid) for uid in partner_ids]
-        for partner in partners:
-            partner.ct = max(0, partner.ct - tactic["ct_cost"])
-        self.emit("tactic", tactic=tactic["id"], units=[caster.id, *partner_ids],
-                  target=target.id, ct_cost=tactic["ct_cost"] * len(partners))
-        for partner in partners:
-            if not target.alive:
-                break
-            skill = self._basic(partner)
-            if self.rng.random() < self.hit_chance(partner, target, skill):
-                amount = max(1, self.damage(partner, target, skill, skill.effects[0]) // divisor)
-                self._hurt(target, amount, partner, reactions=False)
-            else:
-                self.emit("miss", unit=partner.id, target=target.id)
+        return tactics._resolve_team_tactic(self, caster, target)
 
     def _move(self, u: Unit, cell: Cell):
-        if u.id in self.prepared_reactions:
-            self.prepared_reactions.pop(u.id, None)
-            self.emit("prepared_cancelled", unit=u.id, reason="moved")
-        paths = self.reachable(u)
-        require(cell != u.pos and cell in paths, "Destination unreachable or movement spent")
-        cost, path = paths[cell]
-        u.moved = True
-        if u.movement == "teleport" and self.rng.randrange(100) >= max(0, 100 - 10 * max(0, cost - u.movement_budget)):
-            self.emit("teleport_failed", unit=u.id, cell=cell)
-            return
-        pursued = set()
-        for nxt in path[1:]:
-            previous = u.pos
-            before_engaged = {e.id for e in self.engaged_by(u)}
-            pursuers = []
-            for enemy in self.units:
-                radius = self.engagement_range(enemy)
-                leaving = (enemy.team != u.team and self._can_react(enemy) and radius > 0
-                           and distance(previous, enemy.pos) <= radius
-                           and distance(nxt, enemy.pos) > radius)
-                if not leaving:
-                    continue
-                if enemy.reaction == "opportunity" and not u.disengaging:
-                    if self.rng.randrange(100) < enemy.brave:
-                        s = self._basic(enemy)
-                        if self.rng.random() < self.hit_chance(enemy, u, s):
-                            self._hurt(u, self.damage(enemy, u, s, s.effects[0]), enemy, reactions=False)
-                elif (enemy.reaction == "pursuit" and enemy.id not in pursued
-                      and distance(enemy.pos, previous) == 1):
-                    tile = self.board.tile(previous)
-                    legal_height = (enemy.movement == "ignore_height"
-                                    or abs(tile.height - self.board.tile(enemy.pos).height) <= enemy.jump)
-                    if not tile.blocked and legal_height and self.rng.randrange(100) < enemy.brave:
-                        pursuers.append(enemy)
-            if not u.alive:
-                break
-            u.pos = nxt
-            for pursuer in pursuers:
-                if not pursuer.alive or self.at(previous) is not None:
-                    continue
-                origin = pursuer.pos
-                pursuer.pos = previous
-                pursuer.ct = max(0, pursuer.ct - 20)
-                pursued.add(pursuer.id)
-                self.emit("pursuit", unit=pursuer.id, target=u.id, start=origin,
-                          end=previous, ct_cost=20)
-                if self.board.tile(previous).hazard:
-                    self._hurt(pursuer, self.board.tile(previous).hazard, reactions=False)
-            after_engaged = {e.id for e in self.engaged_by(u)}
-            for uid in sorted(after_engaged - before_engaged):
-                self.emit("engagement_entered", unit=u.id, enemy=uid)
-            for uid in sorted(before_engaged - after_engaged):
-                self.emit("engagement_left", unit=u.id, enemy=uid)
-            self._prepared_on_move(u, previous)
-            if not u.alive:
-                break
-            self._hurt(u, self.board.tile(nxt).hazard) if self.board.tile(nxt).hazard else None
-            self._collect(u)
-            self._triggers()
-            self._outcome()
-            if self.result or not u.alive or {"sleep", "stop", "dont_move"} & u.statuses.keys():
-                break
-        if u.movement == "move_mp_up" and u.alive:
-            u.mp = min(u.max_mp, u.mp + max(1, u.max_mp // 10))
-        if u.disengaging:
-            self.emit("disengaged", unit=u.id)
-            u.disengaging = False
-        self.emit("move", unit=u.id, start=path[0], end=u.pos, cost=cost)
+        return movement._move(self, u, cell)
 
     def _act(self, u, skill_id, cell):
-        require(not u.acted and "dont_act" not in u.statuses, "Action already spent or sealed")
+        require(not u.acted and not self.status_blocks(u, "act"), "Action already spent or sealed")
         skill = self._skill(u, skill_id)
         require(u.mp >= skill.cost, "Not enough MP")
-        require(not skill.magical or "silence" not in u.statuses, "Silenced")
+        require(not skill.magical or not self.status_blocks(u, "magic"), "Silenced")
         target = self._target(u, skill, cell)
         u.acted = True
         if u.cast:
@@ -853,58 +340,16 @@ class Battle:
             self._resolve(u, skill, cell)
 
     def _charge(self, u: Unit, target_cell: Cell):
-        require(not u.moved and not u.acted, "Charge needs Move and Act")
-        option = next((row for row in self.charge_options(u)
-                       if tuple(row["cell"]) == target_cell), None)
-        require(option is not None, "Charge needs a clear straight approach of at least two cells")
-        target = self.unit(option["target"])
-        u.ct = max(0, u.ct - option["ct_cost"])
-        self.emit("charge_started", unit=u.id, target=target.id,
-                  landing=option["landing"], distance=option["distance"],
-                  ct_cost=option["ct_cost"])
-        self._move(u, tuple(option["landing"]))
-        if (not u.alive or self.result or u.pos != tuple(option["landing"])
-                or {"sleep", "stop", "dont_act"} & u.statuses.keys()):
-            self.emit("charge_interrupted", unit=u.id, target=target.id, end=u.pos)
-            return
-        require(target.alive and target.pos == target_cell, "Charge target no longer available")
-        first_event = len(self.events)
-        self._act(u, "attack", target_cell)
-        hit = any(event.get("kind") == "damage" and event.get("source") == u.id
-                  and event.get("unit") == target.id and event.get("amount", 0) > 0
-                  for event in self.events[first_event:])
-        pushed = False
-        if hit and target.alive:
-            before = target.pos
-            self._displace(u, target, 1)
-            pushed = target.pos != before
-        self.emit("charge", unit=u.id, target=target.id, distance=option["distance"],
-                  pushed=pushed, ct_cost=option["ct_cost"])
+        return movement._charge(self, u, target_cell)
 
     def _relay(self, u: Unit, partner_id: str, cell: Cell):
-        require(isinstance(partner_id, str) and bool(partner_id), "Relay needs a partner")
-        option = next((row for row in self.relay_options(u)
-                       if row["partner"] == partner_id and tuple(row["cell"]) == cell), None)
-        require(option is not None, "Relay destination or partner unavailable")
-        partner = self.unit(partner_id)
-        u.acted = True
-        u.cast = None
-        partner.ct = max(0, partner.ct - option["ct_cost"])
-        self.emit("tactic", tactic="relay", units=[u.id, partner.id],
-                  target=partner.id, cell=cell, ct_cost=option["ct_cost"])
-        partner.moved = False
-        self._move(partner, cell)
+        return self.rules.tactics.get("relay").execute(self, u, partner_id, cell)
 
     def _disengage(self, u: Unit):
-        require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
-        require(bool(self.engaged_by(u)), "Unit is not engaged")
-        u.acted = True
-        u.cast = None
-        u.disengaging = True
-        self.emit("disengage_ready", unit=u.id)
+        return movement._disengage(self, u)
 
     def _item(self, u, item, cell):
-        require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
+        require(not u.acted and not self.status_blocks(u, "act"), "Action unavailable")
         require(item in self.inventory[u.team] and self.inventory[u.team][item] > 0, "Item unavailable")
         target = self.at(cell, alive=item != "phoenix")
         require(target is not None and target.team == u.team and distance(u.pos, cell) <= 1, "Invalid item target")
@@ -924,7 +369,7 @@ class Battle:
         self.emit("item", unit=u.id, item=item, target=target.id)
 
     def _interact(self, u, object_id):
-        require(not u.acted and "dont_act" not in u.statuses, "Action unavailable")
+        require(not u.acted and not self.status_blocks(u, "act"), "Action unavailable")
         obj = next((o for o in self.mission.objects if o["id"] == object_id), None)
         require(obj is not None and distance(u.pos, tuple(obj["pos"])) <= 1 and not obj.get("used", False), "Object unavailable")
         require(u.team == "player", "Only players can interact")
@@ -949,10 +394,7 @@ class Battle:
         u.disengaging = False
         cost = 100 if u.moved and u.acted else 80 if u.moved or u.acted else 60
         u.ct = min(60, max(0, u.ct - cost))
-        if "poison" in u.statuses:
-            self._hurt(u, max(1, u.max_hp // 8))
-        if "regen" in u.statuses and u.alive:
-            self._heal(u, max(1, u.max_hp // 8))
+        statuses.end_turn(self, u)
         for zone in self.zones:
             if u.alive and u.pos in zone["cells"] and (zone["scope"] in {"all", "target"} or (u.team == zone["team"]) == (zone["scope"] == "allies")):
                 self._hurt(u, zone["power"])
@@ -973,7 +415,7 @@ class Battle:
             if not self.result and self.active and not self.active.alive:
                 self.active_id = None
                 self._advance()
-            elif not self.result and self.active and {"sleep", "stop"} & self.active.statuses.keys():
+            elif not self.result and self.active and self.status_blocks(self.active, "activation"):
                 self._end(self.active, self.active.facing)
         except Exception as exc:
             self.__dict__ = snapshot
@@ -1005,16 +447,24 @@ class Battle:
         return hashlib.sha256(json.dumps(self.state(), sort_keys=True).encode()).hexdigest()
 
     def recording(self) -> dict:
-        return {"version": 2, "rules": self.rules.manifest(), "battle_id": self.battle_id, "mission": self.mission.id,
+        return {"version": 3, "rules": self.rules.manifest(), "battle_id": self.battle_id, "mission": self.mission.id,
                 "seed": self.seed, "content": self.content.to_dict(),
                 "commands": deepcopy(self.commands), "digest": self.digest()}
 
     @classmethod
     def replay(cls, recording: dict, *, rules=None) -> Battle:
-        require(recording.get("version") in {1, 2}, "Unsupported replay version")
+        require(recording.get("version") in {1, 2, 3}, "Unsupported replay version")
         rules = rules if rules is not None else default_rules()
-        if recording['version'] == 2:
+        if recording['version'] == 3:
             require(recording.get('rules') == rules.manifest(), 'Replay ruleset mismatch')
+        elif recording['version'] == 2:
+            legacy_keys = {'version', 'commands', 'effects', 'objectives', 'behaviors', 'formulas'}
+            current = rules.manifest()
+            legacy = {key: value for key, value in current.items() if key in legacy_keys}
+            require(recording.get('rules') == legacy, 'Replay ruleset mismatch')
+            defaults = default_rules().manifest()
+            require(all(value == defaults[key] for key, value in current.items() if key not in legacy_keys),
+                    'Legacy replay requires default extended rules')
         else:
             require(rules.manifest() == default_rules().manifest(), 'Legacy replay requires default rules')
         battle = cls(Content.from_dict(recording["content"], rules=rules), recording["mission"],

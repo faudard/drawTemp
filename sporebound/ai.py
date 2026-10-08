@@ -17,7 +17,7 @@ def _utility(battle, actor, rows):
         elif row["kind"] == "revive" and not target.alive:
             score += 35 if friendly else -35
         elif row["kind"] == "status" and row["status"] not in target.statuses:
-            helpful = row["status"] in {"haste", "protect", "shell", "regen", "guard"}
+            helpful = battle.rules.statuses.get(row["status"]).beneficial
             score += (12 if friendly == helpful else -12) * row["chance"]
         elif row["kind"] == "cleanse" and row["status"] in target.statuses:
             score += 10 if friendly else -10
@@ -30,8 +30,7 @@ def _utility(battle, actor, rows):
 
 def _path_risk(battle, actor, path):
     rows = battle.movement_threats(actor, path)
-    risk = sum(row["amount"] * row["chance"] for row in rows
-               if row["kind"] in {"opportunity", "overwatch", "guard"})
+    risk = sum(row["amount"] * row["chance"] for row in rows)
     if actor.weapon == "ranged":
         risk += sum(6 for row in rows if row["kind"] == "engagement")
     return risk
@@ -52,7 +51,7 @@ def _choose_tactical_command(battle):
             if best != u.pos:
                 return {"kind": "move", "cell": list(best)}
         return {"kind": "end"}
-    if "disengage" in battle.rules.commands and u.weapon == "ranged" and battle.engaged_by(u) and not u.acted and "dont_act" not in u.statuses:
+    if "disengage" in battle.rules.commands and u.weapon == "ranged" and battle.engaged_by(u) and not u.acted and not battle.status_blocks(u, "act"):
         return {"kind": "disengage"}
     origins = {u.pos: (0, [u.pos])}
     if 'move' in battle.rules.commands:
@@ -64,10 +63,10 @@ def _choose_tactical_command(battle):
             u.pos = original
             path_risk = _path_risk(battle, u, path) if origin != original else 0
             u.pos = origin
-            if "act" in battle.rules.commands and not u.acted and "dont_act" not in u.statuses:
+            if "act" in battle.rules.commands and not u.acted and not battle.status_blocks(u, "act"):
                 for sid in ["attack", *u.skills]:
                     skill = battle._skill(u, sid)
-                    if skill.cost > u.mp or skill.magical and "silence" in u.statuses:
+                    if skill.cost > u.mp or skill.magical and battle.status_blocks(u, "magic"):
                         continue
                     cells = list(battle.board.cells()) if skill.target == "ground" else sorted({t.pos for t in battle.units})
                     for cell in cells:
@@ -97,7 +96,7 @@ def _choose_tactical_command(battle):
                     candidates.append((score, {"kind": "move", "cell": list(origin)}))
     finally:
         u.pos = original
-    if not u.acted and "dont_act" not in u.statuses:
+    if not u.acted and not battle.status_blocks(u, "act"):
         for target in battle.units if "item" in battle.rules.commands else []:
             if target.team != u.team or distance(u.pos, target.pos) > 1 or not battle.line_of_sight(u.pos, target.pos):
                 continue
@@ -115,10 +114,10 @@ def _choose_tactical_command(battle):
     if candidates:
         # Canonical JSON-like string breaks ties independently of dict ordering.
         return sorted(candidates, key=lambda c: (-c[0], str(sorted(c[1].items()))))[0][1]
-    if "prepare" in battle.rules.commands and not u.acted and "dont_act" not in u.statuses:
-        if u.weapon == "ranged" and not battle.engaged_by(u):
+    if "prepare" in battle.rules.commands and not u.acted and not battle.status_blocks(u, "act"):
+        if "overwatch" in battle.rules.preparations and u.weapon == "ranged" and not battle.engaged_by(u):
             return {"kind": "prepare", "mode": "overwatch"}
-        if battle.engagement_range(u) > 0 and any(distance(u.pos, t.pos) <= u.movement_budget + battle.engagement_range(u) for t in opponents):
+        if "guard" in battle.rules.preparations and battle.engagement_range(u) > 0 and any(distance(u.pos, t.pos) <= battle.movement_budget(u) + battle.engagement_range(u) for t in opponents):
             return {"kind": "prepare", "mode": "guard"}
     facing = u.facing
     if opponents:

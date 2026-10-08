@@ -148,6 +148,7 @@ class Unit:
 
     @property
     def movement_budget(self) -> int:
+        """Legacy default-rule view; use Battle.movement_budget for composed rules."""
         return self.move + {"move_plus_1": 1, "move_plus_2": 2}.get(self.movement, 0)
 
 
@@ -256,7 +257,7 @@ class Content:
                 require(e.scope in {"target", "allies", "enemies", "all"}, f"{s.id}: scope")
                 integer(e.power, 0, 10000, f"{s.id}.power")
                 integer(e.duration, 1, 10000, f"{s.id}.duration")
-                require(e.kind not in {"status", "cleanse"} or e.status in STATUSES, f"{s.id}: unknown status")
+                require(e.kind not in {"status", "cleanse"} or e.status in rules.statuses, f"{s.id}: unknown status")
         require(bool(self.missions), "At least one mission required")
         for m in self.missions.values():
             b = m.board
@@ -305,21 +306,11 @@ class Content:
             for trigger in m.triggers:
                 require(trigger["id"] not in trigger_ids, "Duplicate trigger")
                 trigger_ids.add(trigger["id"])
-                require(trigger["condition"] in {"tick", "enter", "defeated"}, "Unknown trigger condition")
-                if trigger["condition"] == "tick":
-                    integer(trigger["value"], 0, 100000, "trigger tick")
-                elif trigger["condition"] == "enter":
-                    cell(trigger["pos"], b)
-                else:
-                    require(trigger["unit"] in ids, "Unknown trigger unit")
-                for action in trigger["actions"]:
-                    require(action["kind"] in {"hazard", "message", "status"}, "Unknown trigger action")
-                    if action["kind"] == "hazard":
-                        cell(action["pos"], b)
-                        integer(action["amount"], 0, 10000, "trigger hazard")
-                    elif action["kind"] == "status":
-                        require(action["unit"] in ids and action["status"] in STATUSES, "Invalid trigger status")
-                        integer(action["duration"], 1, 10000, "trigger duration")
+                from .rules.triggers import ValidationContext
+                context = ValidationContext(b, ids, rules)
+                rules.trigger_conditions.get(trigger['condition']).validate(context, trigger)
+                for action in trigger['actions']:
+                    rules.trigger_actions.get(action['kind']).validate(context, action)
         def unlock_rule(rule):
             require(isinstance(rule, dict), "Tactic unlock rule must be an object")
             if "all" in rule or "any" in rule:
@@ -352,12 +343,12 @@ class Content:
         all_unit_ids = {u.id for m in self.missions.values() for u in m.units if u.team == "player"}
         for rule in self.tactic_unlocks:
             tactic = rule.get("id")
-            require(tactic in TEAM_TACTICS, "Unknown tactic unlock id")
+            require(tactic in rules.tactics, "Unknown tactic unlock id")
             members = rule.get("members", [])
             require(isinstance(members, list) and len(members) in {2, 3}
                     and len(set(members)) == len(members),
                     "Tactic unlock needs two or three distinct members")
-            require(len(members) == TEAM_TACTIC_ARITY[tactic], "Tactic unlock arity mismatch")
+            require(len(members) == rules.tactics.get(tactic).arity, "Tactic unlock arity mismatch")
             require(all(member in all_unit_ids for member in members), "Unknown tactic unlock member")
             hints = rule.get("hints", {})
             require(isinstance(hints, dict) and set(hints) <= {"hidden", "clue", "near", "unlocked"}

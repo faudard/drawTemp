@@ -6,7 +6,7 @@ team controls allegiance and behavior controls intent selection.
 from copy import deepcopy
 from dataclasses import fields
 
-from .model import (Unit, require, TEAM_TACTICS, REACTIONS, SUPPORTS, MOVEMENTS, STATUSES)
+from .model import (Unit, require, SUPPORTS)
 
 SPAWN_FIELDS = {'id', 'name', 'team', 'pos', 'facing', 'hp', 'mp'}
 RUNTIME_FIELDS = {'ct', 'moved', 'acted', 'cast', 'disengaging', 'statuses'}
@@ -60,14 +60,14 @@ def validate_actor(u, skills, archetypes, rules):
     integer(u.optimal_range, 0, 10000, f"{u.id}.optimal_range")
     integer(u.falloff_per_tile, 0, 100, f"{u.id}.falloff_per_tile")
     integer(u.engagement_range, -1, 8, f"{u.id}.engagement_range")
-    require(all(t in TEAM_TACTICS for t in u.tactics), f"{u.id}: unknown tactic")
+    require(all(t in rules.tactics for t in u.tactics), f"{u.id}: unknown tactic")
     require(u.weapon in {"melee", "spear", "ranged", "focus", "unarmed"}, f"{u.id}: weapon")
     require(u.facing in {(0, 1), (0, -1), (1, 0), (-1, 0)}, f"{u.id}: facing")
-    require(u.reaction in REACTIONS and u.support in SUPPORTS and u.movement in MOVEMENTS, f"{u.id}: ability slot")
+    require(u.reaction in rules.reactions and u.support in SUPPORTS and u.movement in rules.movements, f"{u.id}: ability slot")
     require(all(s in skills for s in u.skills), f"{u.id}: unknown skill")
     require(u.cast is None and not u.moved and not u.acted and not u.disengaging, "Mission spawns cannot be mid-turn")
     for status, duration in u.statuses.items():
-        require(status in STATUSES, f"{u.id}: status")
+        require(status in rules.statuses, f"{u.id}: status")
         integer(duration, -1, 10000, f"{u.id}.status duration")
         require(duration != 0, "Status duration must not be zero")
     for resistance in u.resistances.values():

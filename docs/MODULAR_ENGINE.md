@@ -15,6 +15,13 @@ un nouveau combat, plutôt que changer les règles au milieu d'une sauvegarde.
 | `formulas` | `calculate(battle, caster, target, skill, ...)` | Dégâts, mitigation et probabilité de toucher |
 | `objectives` | `achieved(battle) -> bool` | Victoire ; défaite et protection restent prioritaires |
 | `behaviors` | `choose(battle) -> dict` | Choisir une commande pour l'acteur actif |
+| `statuses` | Blocages, vitesse, mitigation, interruption, réveil, fin de tour | Cycle de vie des statuts |
+| `movements` | Bonus, relief, téléportation, callback de fin de mouvement | Traversée et budget partagés par moteur et IA |
+| `reactions` | Avant/après dégâts, sortie de zone, prévision, évasion | Réactions passives |
+| `preparations` | Validation, couverture, entrée de zone, interception, déplacement forcé | Réactions préparées |
+| `tactics` | Options, nombre de partenaires, diviseur, repositionnement | Synergies offensives et Relay |
+| `trigger_conditions` | `matches(battle, trigger)` et `validate(context, trigger)` | Conditions de scénario |
+| `trigger_actions` | `apply(battle, action)` et `validate(context, action)` | Actions de scénario |
 
 Les registres et descripteurs sont immuables. `with_rule`, `without` et `with_family`
 retournent des variantes ; ils ne modifient ni les règles par défaut ni un autre combat.
@@ -110,18 +117,93 @@ Toute exception d'une commande restaure état, événements, journal et RNG, y c
 une erreur inattendue d'un module. Les erreurs inattendues sont ensuite propagées
 pour permettre leur diagnostic, sans être présentées comme une simple entrée invalide.
 
-Les enregistrements v2 contiennent le manifeste des familles, identifiants et versions.
+Les enregistrements v3 contiennent le manifeste des familles, identifiants et versions.
 `Battle.replay(recording, rules=rules)` et `load_battle(path, rules=rules)` vérifient ce
 manifeste avant de rejouer. Le code des règles n'est jamais sérialisé ou importé depuis
 la sauvegarde. L'appelant doit fournir les extensions. Incrémenter la version d'une
 règle à chaque changement de comportement ; le manifeste n'est pas un hash de son code.
 Les replays v1 restent lisibles avec les règles historiques par défaut et leur checksum.
+Les anciens replays v2 vérifient leur manifeste à cinq familles ; les sept familles
+ajoutées doivent correspondre aux valeurs par défaut historiques. Une extension de
+ces familles nécessite un enregistrement v3. Les nouvelles versions ne sont pas
+lisibles par les anciens exécutables.
 
-## Suite de l'extraction
+## Statuts, déplacements et réactions personnalisés
 
-Les cinq familles ci-dessus sont intégrées au moteur actuel. Le cheminement, les
-horloges/statuts, réactions préparées, synergies et triggers restent des services de
-`Battle`. Leur extraction en politiques spécialisées est une étape ultérieure ;
-un nouveau statut ou type de réaction ne se branche pas encore dans un registre.
-Les invocations ont un type d'acteur, mais spawn/despawn en cours de combat et leurs
-règles d'initiative ne sont pas encore implémentés.
+```python
+from sporebound.rules import MovementRule, StatusRule
+
+rules = rules.with_family('statuses', rules.statuses.with_rule(
+    'meditating', StatusRule(
+        blocks=frozenset({'act', 'reaction'}), beneficial=True,
+        end_turn=lambda battle, unit: battle._heal(unit, 3),
+        version='meditation-v1',
+    ),
+))
+rules = rules.with_family('movements', rules.movements.with_rule(
+    'climber', MovementRule(bonus=2, ignore_height=True),
+))
+```
+
+Référencer ces identifiants dans `Unit.statuses` / `Unit.movement`, dans un archétype
+ou un effet `status`. Les statuts sont appliqués dans l'ordre `(priority, id)` pour
+les modificateurs et fins de tour. Une priorité basse s'applique en premier.
+Les durées restent en ticks, `-1` signifie permanent. L'expiration suit l'ordre
+d'insertion historique des statuts pour conserver l'ordre des événements.
+
+Les capacités bloquées sont `activation`, `act`, `move`, `magic`, `reaction`,
+`continue_move`, `charge` et `evasion`. `interrupt` accepte `all` ou `magic` ;
+`cancel_prepared` annule une posture et `wake_on_damage` retire le statut après des
+dégâts effectifs. `beneficial` informe l'évaluation IA. Le moteur consulte
+`Battle.movement_budget(unit)` ; l'ancienne propriété `Unit.movement_budget` reste
+une commodité pour les valeurs historiques, sans accès aux règles du combat.
+
+Une `ReactionRule` peut absorber un dommage via `before_damage` (retour vrai),
+réagir à un dommage non nul via `after_damage`, ou agir à la sortie d'une zone via
+`on_leave`. Ce dernier retourne vrai pour demander le déplacement de poursuite.
+`forecast_leave` produit une ligne de menace sans mutation du combat ; son ensemble
+`seen` est local à la prévision et permet de limiter une poursuite à une fois.
+Une réaction qui modifie l'absorption des dégâts doit aussi adapter la prévision
+via les formules/effets si cette absorption doit apparaître dans l'interface.
+
+Une `PreparationRule` partage `enters` entre prévision du trajet et résolution.
+`covers` sert à la carte de menaces ; `intercepts` choisit une protection et
+`displace` réduit éventuellement un déplacement forcé. Les attaques préparées
+réutilisent la portée/LOS de l'arme, consomment leur charge et leur coût CT.
+L'IA tactique n'émet plus une posture retirée du registre.
+
+## Synergies et campagne
+
+Les synergies offensives exposent des options et un `divisor` commun à la prévision
+et à la résolution. Une option indique `id`, `target`, `partner` ou `partners`,
+et `ct_cost`. L'ordre des résultats est déterministe, indépendamment de l'ordre
+d'enregistrement. Les combos offensifs utilisent les attaques des partenaires ;
+Relay dispose des callbacks `reposition` et `execute`.
+
+Les méthodes de campagne `unlock_tactic[_members]`, `prepare_tactic[_members]`,
+`evaluate_tactic_unlocks`, `prepare` et `load` acceptent `ruleset=rules`. Cela permet
+à une nouvelle synergie de traverser déblocage, préparation, sauvegarde et combat.
+`finish` utilise les règles du combat. Les groupes restent limités à deux ou trois
+membres ; les données de campagne n'embarquent jamais les callbacks Python.
+
+## Conditions et actions de scénario
+
+Les deux registres de triggers sont séparés. Leurs validateurs reçoivent un
+`ValidationContext` avec `board`, `unit_ids`, `rules`, et les helpers `cell`, `unit`,
+`integer`. Les conditions sont pures ; les actions mutent le combat dans la
+transaction de la commande. L'ordre des triggers et de leurs actions reste celui
+du JSON. Un trigger est marqué avant ses actions et ne s'exécute qu'une fois.
+Une exception restaure aussi son marqueur, le déplacement en cours et le RNG.
+
+## Limites et suite
+
+Les douze registres couvrent maintenant les familles extraites. `Battle` reste
+responsable de l'état, de l'ordonnancement CT, des transactions et du replay ; les
+services de règles appellent ses opérations. Le pathfinding et l'ordonnancement
+ne sont pas des plugins arbitraires : les modes de mouvement configurent le
+parcours commun. Le terminal et l'éditeur embarqués utilisent les règles par
+défaut ; les extensions Python sont assemblées par leur application hôte.
+
+Les invocations ont un type d'acteur, mais spawn/despawn en cours de combat,
+renforts et durée de vie restent à implémenter. Les prochains chantiers sont les
+profils IA spécialisés et l'édition visuelle des archétypes/règles.
