@@ -3,14 +3,31 @@ from .actors import ActorFactory, validate_actor
 from .model import require
 
 
+def _fallback_cells(battle, origin):
+    """Stable nearest-cell order: distance, y, x."""
+    return sorted(
+        (cell for cell in battle.board.cells()
+         if not battle.board.tile(cell).blocked
+         and not any(u.alive and u.pos == cell for u in battle.units)),
+        key=lambda cell: (abs(cell[0] - origin[0]) + abs(cell[1] - origin[1]), cell[1], cell[0]),
+    )
+
+
 def spawn(battle, definition):
     """Create a validated actor without touching the initiative clock or RNG."""
     require(isinstance(definition, dict), 'Spawn must be an object')
     actor = ActorFactory(battle.content.archetypes).create(definition)
     require(not any(u.id == actor.id for u in battle.units), f'Duplicate actor: {actor.id}')
     require(battle.board.contains(actor.pos), f'Outside board: {actor.pos}')
-    require(not battle.board.tile(actor.pos).blocked, f'Blocked spawn: {actor.pos}')
-    require(not any(u.alive and u.pos == actor.pos for u in battle.units), f'Occupied spawn: {actor.pos}')
+    occupied = any(u.alive and u.pos == actor.pos for u in battle.units)
+    blocked = battle.board.tile(actor.pos).blocked
+    if (occupied or blocked) and definition.get('fallback_nearest', False):
+        cells = _fallback_cells(battle, actor.pos)
+        require(bool(cells), 'No free spawn cell')
+        actor.pos = cells[0]
+    else:
+        require(not blocked, f'Blocked spawn: {actor.pos}')
+        require(not occupied, f'Occupied spawn: {actor.pos}')
     validate_actor(actor, battle.content.skills, battle.content.archetypes, battle.rules)
     battle.units.append(actor)
     battle.emit('actor_spawned', unit=actor.id, actor_kind=actor.kind, team=actor.team)
