@@ -53,7 +53,7 @@ def default_trigger_conditions():
 
 def spawn_actor(battle, action):
     spec = deepcopy(action['actor'])
-    battle.spawn_actor(spec, lifetime=action.get('lifetime'))
+    battle.spawn_actor(spec, lifetime=action.get('lifetime'), owner_id=action.get('owner'))
 
 
 def validate_spawn(context, action):
@@ -65,6 +65,8 @@ def validate_spawn(context, action):
     require(not archetype or (context.archetypes is not None and archetype in context.archetypes), 'Unknown spawn archetype')
     if 'lifetime' in action:
         context.integer(action['lifetime'], 1, 100000)
+    if 'owner' in action:
+        context.unit(action['owner'])
 
 
 def validate_despawn(context, action):
