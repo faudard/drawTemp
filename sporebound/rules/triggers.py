@@ -10,6 +10,7 @@ class ValidationContext:
     board: object
     unit_ids: set
     rules: object
+    archetypes: dict | None = None
 
     def integer(self, value, low, high):
         require(type(value) is int and low <= value <= high, f'Expected integer {low}..{high}')
@@ -50,11 +51,33 @@ def default_trigger_conditions():
     ))
 
 
-def spawn_actor(battle, action):\n    spec = deepcopy(action['actor'])\n    battle.spawn_actor(spec, lifetime=action.get('lifetime'))\n\n\ndef validate_spawn(context, action):\n    require(isinstance(action.get('actor'), dict), 'Spawn actor must be an object')\n    actor = action['actor']\n    require(isinstance(actor.get('id'), str) and actor['id'], 'Spawn actor needs id')\n    context.cell(actor['pos'])\n    archetype = actor.get('archetype', '')\n    require(not archetype or (context.archetypes is not None and archetype in context.archetypes), 'Unknown spawn archetype')\n    if 'lifetime' in action:\n        context.integer(action['lifetime'], 1, 100000)\n\n\ndef validate_despawn(context, action):\n    require(isinstance(action.get('unit'), str) and action['unit'], 'Despawn needs unit id')\n\n\ndef default_trigger_actions():
+def spawn_actor(battle, action):
+    spec = deepcopy(action['actor'])
+    battle.spawn_actor(spec, lifetime=action.get('lifetime'))
+
+
+def validate_spawn(context, action):
+    require(isinstance(action.get('actor'), dict), 'Spawn actor must be an object')
+    actor = action['actor']
+    require(isinstance(actor.get('id'), str) and actor['id'], 'Spawn actor needs id')
+    context.cell(actor['pos'])
+    archetype = actor.get('archetype', '')
+    require(not archetype or (context.archetypes is not None and archetype in context.archetypes), 'Unknown spawn archetype')
+    if 'lifetime' in action:
+        context.integer(action['lifetime'], 1, 100000)
+
+
+def validate_despawn(context, action):
+    require(isinstance(action.get('unit'), str) and action['unit'], 'Despawn needs unit id')
+
+
+def default_trigger_actions():
     return Registry((
         ('hazard', TriggerActionRule(hazard, validate_hazard)),
         ('status', TriggerActionRule(lambda b, a: b._status(b.unit(a['unit']), a['status'], a['duration']), validate_status)),
-        ('message', TriggerActionRule(lambda b, a: b.emit('message', text=a.get('text', '')), lambda c, a: None)),\n        ('spawn', TriggerActionRule(spawn_actor, validate_spawn)),\n        ('despawn', TriggerActionRule(lambda b, a: b.despawn_actor(a['unit']), validate_despawn)),
+        ('message', TriggerActionRule(lambda b, a: b.emit('message', text=a.get('text', '')), lambda c, a: None)),
+        ('spawn', TriggerActionRule(spawn_actor, validate_spawn)),
+        ('despawn', TriggerActionRule(lambda b, a: b.despawn_actor(a['unit']), validate_despawn)),
     ))
 
 
