@@ -50,11 +50,11 @@ def default_trigger_conditions():
     ))
 
 
-def default_trigger_actions():
+def spawn_actor(battle, action):\n    spec = deepcopy(action['actor'])\n    battle.spawn_actor(spec, lifetime=action.get('lifetime'))\n\n\ndef validate_spawn(context, action):\n    require(isinstance(action.get('actor'), dict), 'Spawn actor must be an object')\n    actor = action['actor']\n    require(isinstance(actor.get('id'), str) and actor['id'], 'Spawn actor needs id')\n    context.cell(actor['pos'])\n    archetype = actor.get('archetype', '')\n    require(not archetype or (context.archetypes is not None and archetype in context.archetypes), 'Unknown spawn archetype')\n    if 'lifetime' in action:\n        context.integer(action['lifetime'], 1, 100000)\n\n\ndef validate_despawn(context, action):\n    require(isinstance(action.get('unit'), str) and action['unit'], 'Despawn needs unit id')\n\n\ndef default_trigger_actions():
     return Registry((
         ('hazard', TriggerActionRule(hazard, validate_hazard)),
         ('status', TriggerActionRule(lambda b, a: b._status(b.unit(a['unit']), a['status'], a['duration']), validate_status)),
-        ('message', TriggerActionRule(lambda b, a: b.emit('message', text=a.get('text', '')), lambda c, a: None)),
+        ('message', TriggerActionRule(lambda b, a: b.emit('message', text=a.get('text', '')), lambda c, a: None)),\n        ('spawn', TriggerActionRule(spawn_actor, validate_spawn)),\n        ('despawn', TriggerActionRule(lambda b, a: b.despawn_actor(a['unit']), validate_despawn)),
     ))
 
 
