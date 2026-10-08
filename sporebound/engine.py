@@ -35,6 +35,8 @@ class Battle:
         self.commands: list[dict] = []
         self.fired: list[str] = []
         self.zones: list[dict] = []
+        self.lifetimes: dict[str, int] = {}
+        self.summon_owners: dict[str, str] = {}
         self.prepared_reactions: dict[str, dict] = {}
         self.inventory = {"player": {"potion": 3, "ether": 2, "phoenix": 1},
                           "enemy": {"potion": 1, "ether": 0, "phoenix": 0}}
@@ -80,7 +82,44 @@ class Battle:
             self.carrier, self.relic_pos = unit.id, None
             self.emit("relic_taken", unit=unit.id)
 
+    def spawn_actor(self, definition, *, lifetime=None, owner_id=None):
+        from .lifecycle import spawn
+        spec = deepcopy(definition)
+        if spec.get("kind") == "summon":
+            require(owner_id is not None, "Summon requires owner")
+            owner = self.unit(owner_id)
+            require(owner.alive, "Summoner must be alive")
+            limit = spec.pop("summon_limit", 1)
+            require(type(limit) is int and limit > 0, "Summon limit must be positive")
+            owned = [uid for uid, oid in self.summon_owners.items() if oid == owner_id]
+            require(len(owned) < limit, "Summon limit reached")
+        actor = spawn(self, spec)
+        if lifetime is not None:
+            require(type(lifetime) is int and lifetime > 0, "Lifetime must be positive")
+            self.lifetimes[actor.id] = self.tick + lifetime
+        if owner_id is not None:
+            self.summon_owners[actor.id] = owner_id
+        return actor
+
+    def despawn_actor(self, actor_id):
+        from .lifecycle import despawn
+        self.lifetimes.pop(actor_id, None)
+        self.summon_owners.pop(actor_id, None)
+        return despawn(self, actor_id)
+
+    def _expire_actors(self):
+        for uid, deadline in list(self.lifetimes.items()):
+            if self.tick >= deadline:
+                self.despawn_actor(uid)
+                self.emit("actor_expired", unit=uid)
+        for uid, owner_id in list(self.summon_owners.items()):
+            owner = next((u for u in self.units if u.id == owner_id), None)
+            if owner is None or not owner.alive:
+                self.despawn_actor(uid)
+                self.emit("summon_lost", unit=uid, owner=owner_id)
+
     def _triggers(self):
+        self._expire_actors()
         triggers.dispatch(self)
 
     def _advance(self):
