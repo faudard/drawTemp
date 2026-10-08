@@ -37,14 +37,14 @@ def _path_risk(battle, actor, path):
     return risk
 
 
-def choose_command(battle):
+def _choose_tactical_command(battle):
     u = battle.active
     if u is None:
         raise RuleError("No active unit")
     opponents = [t for t in battle.units if t.alive and t.team != u.team]
     if u.cast:
         return {"kind": "end"}
-    if u.disengaging:
+    if u.disengaging and 'move' in battle.rules.commands:
         reachable = battle.reachable(u)
         if reachable and opponents:
             best = max(reachable, key=lambda c: (min(distance(c, t.pos) for t in opponents),
@@ -52,9 +52,11 @@ def choose_command(battle):
             if best != u.pos:
                 return {"kind": "move", "cell": list(best)}
         return {"kind": "end"}
-    if u.weapon == "ranged" and battle.engaged_by(u) and not u.acted and "dont_act" not in u.statuses:
+    if "disengage" in battle.rules.commands and u.weapon == "ranged" and battle.engaged_by(u) and not u.acted and "dont_act" not in u.statuses:
         return {"kind": "disengage"}
-    origins = {u.pos: (0, [u.pos]), **battle.reachable(u)}
+    origins = {u.pos: (0, [u.pos])}
+    if 'move' in battle.rules.commands:
+        origins.update(battle.reachable(u))
     candidates = []
     original = u.pos
     try:
@@ -62,7 +64,7 @@ def choose_command(battle):
             u.pos = original
             path_risk = _path_risk(battle, u, path) if origin != original else 0
             u.pos = origin
-            if not u.acted and "dont_act" not in u.statuses:
+            if "act" in battle.rules.commands and not u.acted and "dont_act" not in u.statuses:
                 for sid in ["attack", *u.skills]:
                     skill = battle._skill(u, sid)
                     if skill.cost > u.mp or skill.magical and "silence" in u.statuses:
@@ -96,7 +98,7 @@ def choose_command(battle):
     finally:
         u.pos = original
     if not u.acted and "dont_act" not in u.statuses:
-        for target in battle.units:
+        for target in battle.units if "item" in battle.rules.commands else []:
             if target.team != u.team or distance(u.pos, target.pos) > 1 or not battle.line_of_sight(u.pos, target.pos):
                 continue
             if target.alive and battle.inventory[u.team]["potion"]:
@@ -106,14 +108,14 @@ def choose_command(battle):
                     candidates.append((value, {"kind": "item", "item": "potion", "cell": list(target.pos)}))
             elif not target.alive and battle.inventory[u.team]["phoenix"] and not battle.at(target.pos) and not battle.board.tile(target.pos).blocked:
                 candidates.append((30, {"kind": "item", "item": "phoenix", "cell": list(target.pos)}))
-        if u.team == "player":
+        if "interact" in battle.rules.commands and u.team == "player":
             for obj in battle.mission.objects:
                 if not obj.get("used") and distance(u.pos, tuple(obj["pos"])) <= 1 and not (obj["kind"] == "door" and obj.get("open")):
                     candidates.append((4, {"kind": "interact", "object": obj["id"]}))
     if candidates:
         # Canonical JSON-like string breaks ties independently of dict ordering.
         return sorted(candidates, key=lambda c: (-c[0], str(sorted(c[1].items()))))[0][1]
-    if not u.acted and "dont_act" not in u.statuses:
+    if "prepare" in battle.rules.commands and not u.acted and "dont_act" not in u.statuses:
         if u.weapon == "ranged" and not battle.engaged_by(u):
             return {"kind": "prepare", "mode": "overwatch"}
         if battle.engagement_range(u) > 0 and any(distance(u.pos, t.pos) <= u.movement_budget + battle.engagement_range(u) for t in opponents):
@@ -142,3 +144,11 @@ def simulate(battle, max_commands=1000):
         battle.execute(choose_command(battle))
     return {"result": battle.result or "limit", "ticks": battle.tick,
             "commands": len(battle.commands), "digest": battle.digest()}
+
+
+def choose_command(battle):
+    """Actor behavior selects intent; execution always uses Battle.execute."""
+    actor = battle.active
+    if actor is None:
+        raise RuleError('No active unit')
+    return battle.rules.behaviors.get(actor.behavior).choose(battle)

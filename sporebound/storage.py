@@ -26,9 +26,9 @@ def write_json(path, data):
             os.unlink(name)
 
 
-def load_battle(path):
+def load_battle(path, *, rules=None):
     try:
-        return Battle.replay(json.loads(Path(path).read_text(encoding="utf-8")))
+        return Battle.replay(json.loads(Path(path).read_text(encoding="utf-8")), rules=rules)
     except (KeyError, TypeError, ValueError, StopIteration) as exc:
         raise RuleError(f"Invalid battle save: {exc}") from exc
 

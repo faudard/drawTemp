@@ -6,7 +6,9 @@ Le cœur ne dépend ni de Tk, ni de Godot, ni du filesystem. La même frontière
 | Module | Responsabilité |
 | --- | --- |
 | `model.py` | Contrats typés, contenu JSON versionné, validation des références et valeurs |
-| `engine.py` | Horloge CT, commandes atomiques, règles, objectifs, événements, RNG et replay |
+| `engine.py` | État de combat, horloge CT, transactions, événements, RNG et replay |
+| `rules/` | Registres immuables : commandes, effets, formules, objectifs et comportements |
+| `actors.py` | Fabrique d’acteurs et archétypes JSON ; personnage/monstre/invocation |
 | `ai.py` | Évaluation déterministe des actions et positions avec les prévisions du moteur |
 | `campaign.py` | Progression, jobs, achats, inventaire, loadouts et récompenses uniques |
 | `storage.py` | Écriture JSON temporaire puis remplacement atomique, chargement vérifié |
@@ -57,3 +59,8 @@ pour les très longues sessions. Le rollback copie actuellement l’état pour p
 la correction ; il devra être profilé avant de viser de très grandes batailles.
 
 Les versions Godot sont des références historiques, sans import au runtime autonome.
+
+## Extension du moteur
+
+Voir [règles modulaires et acteurs](docs/MODULAR_ENGINE.md) pour les contrats, exemples,
+limites et règles de compatibilité des replays v1/v2.

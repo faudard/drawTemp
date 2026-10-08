@@ -64,3 +64,16 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 
 Les éléments cochés sont implémentés ; ils ne constituent pas une certification de
 parité Godot, de gameplay final ou de finition produit.
+
+## Architecture modulaire — continuation PR #14
+
+Livré : cinq familles de règles composables (commandes, effets, formules, objectifs,
+comportements), validation commune, prévision/résolution des effets, archétypes
+personnages/monstres/invocations, manifeste de replay v2 et rollback des extensions.
+Exemple exécutable et contrats : [moteur modulaire](docs/MODULAR_ENGINE.md).
+
+Prochaines étapes :
+- Extraire déplacements, statuts/horloge, réactions, synergies et triggers en politiques.
+- Ajouter spawn/despawn transactionnels, renforts et durée de vie des invocations.
+- Éditeur d'archétypes avec distinction explicite défauts/surcharges et resynchronisation.
+- Profils IA spécialisés (soigneur, meute, boss) avec tests de décisions déterministes.

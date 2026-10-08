@@ -137,6 +137,10 @@ class Unit:
     acted: bool = False
     cast: dict | None = None
     disengaging: bool = False
+    archetype: str = ""
+    kind: str = "character"
+    tags: list[str] = field(default_factory=list)
+    behavior: str = "tactical"
 
     @property
     def alive(self) -> bool:
@@ -171,11 +175,14 @@ class Content:
     jobs: dict[str, dict] = field(default_factory=dict)
     equipment: dict[str, dict] = field(default_factory=dict)
     tactic_unlocks: list[dict] = field(default_factory=list)
+    archetypes: dict[str, dict] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict) -> Content:
+    def from_dict(cls, data: dict, *, rules=None) -> Content:
         try:
             require(data["version"] == 1, "Unsupported content version")
+            from .actors import ActorFactory
+            factory = ActorFactory(data.get('archetypes', {}))
             skills = {}
             for row in data["skills"]:
                 s = Skill(**{**row, "effects": [Effect(**e) for e in row["effects"]]})
@@ -190,27 +197,22 @@ class Content:
                     require(cell not in tiles, f"Duplicate tile: {cell}")
                     tiles[cell] = Tile(**{k: v for k, v in t.items() if k != "pos"})
                 board = Board(raw_board["width"], raw_board["height"], tiles)
-                units = []
-                for u in row["units"]:
-                    values = {**u, "pos": tuple(u["pos"]), "facing": tuple(u.get("facing", [0, 1]))}
-                    values.setdefault("hp", u.get("max_hp", 40))
-                    values.setdefault("mp", u.get("max_mp", 12))
-                    units.append(Unit(**values))
+                units = [factory.create(u) for u in row["units"]]
                 m = Mission(**{**row, "board": board, "units": units,
                                "relic": tuple(row["relic"]) if row.get("relic") is not None else None,
                                "goal": [tuple(c) for c in row.get("goal", [])]})
                 require(m.id not in missions, f"Duplicate mission: {m.id}")
                 missions[m.id] = m
             result = cls(skills, missions, data.get("jobs", {}), data.get("equipment", {}),
-                         data.get("tactic_unlocks", []))
-            result.validate()
+                         data.get("tactic_unlocks", []), data.get("archetypes", {}))
+            result.validate(rules=rules)
             return result
         except (KeyError, TypeError, AttributeError) as exc:
             raise RuleError(f"Invalid content structure: {exc}") from exc
 
     @classmethod
-    def load(cls, path: str | Path) -> Content:
-        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
+    def load(cls, path: str | Path, *, rules=None) -> Content:
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")), rules=rules)
 
     def to_dict(self) -> dict:
         missions = []
@@ -221,15 +223,23 @@ class Content:
             missions.append(row)
         return {"version": 1, "skills": [asdict(s) for s in self.skills.values()],
                 "missions": missions, "jobs": self.jobs, "equipment": self.equipment,
-                "tactic_unlocks": self.tactic_unlocks}
+                "tactic_unlocks": self.tactic_unlocks, "archetypes": self.archetypes}
 
-    def validate(self) -> None:
+    def validate(self, *, rules=None) -> None:
+        from .rules import default_rules
+        rules = rules if rules is not None else default_rules()
         def integer(value, low, high, label):
             require(type(value) is int and low <= value <= high, f"{label}: expected integer {low}..{high}")
 
         def cell(value, board):
             require(len(value) == 2 and all(type(v) is int for v in value) and board.contains(value),
                     f"Invalid cell: {value}")
+
+        from .actors import ActorFactory, validate_actor
+        factory = ActorFactory(self.archetypes)
+        for key in self.archetypes:
+            actor = factory.create({'id': 'template', 'name': key, 'team': 'player', 'pos': (0, 0), 'archetype': key})
+            validate_actor(actor, self.skills, self.archetypes, rules)
 
         for s in self.skills.values():
             require(bool(s.id) and bool(s.effects), "Skill needs an id and effects")
@@ -242,7 +252,7 @@ class Content:
             require(s.lock in {"cell", "unit"}, f"{s.id}: lock")
             require(s.target != "ground" or s.lock == "cell", f"{s.id}: ground requires cell lock")
             for e in s.effects:
-                require(e.kind in {"damage", "heal", "revive", "status", "cleanse", "push", "pull", "mp", "zone"}, f"{s.id}: effect")
+                require(e.kind in rules.effects, f"{s.id}: effect")
                 require(e.scope in {"target", "allies", "enemies", "all"}, f"{s.id}: scope")
                 integer(e.power, 0, 10000, f"{s.id}.power")
                 integer(e.duration, 1, 10000, f"{s.id}.duration")
@@ -254,9 +264,9 @@ class Content:
             integer(b.height, 1, 128, "height")
             integer(m.target_ticks, 1, 100000, "target_ticks")
             integer(m.reward, 0, 1000000, "reward")
-            require(m.objective in {"eliminate", "survive", "extract", "hold", "crown"}, "Unknown objective")
-            require(m.objective not in {"extract", "hold", "crown"} or bool(m.goal), "Objective needs goal cells")
-            require(m.objective != "crown" or m.relic is not None, "Crown objective needs a relic")
+            objective = rules.objectives.get(m.objective)
+            require(not objective.needs_goal or bool(m.goal), "Objective needs goal cells")
+            require(not objective.needs_relic or m.relic is not None, "Objective needs a relic")
             if m.relic is not None:
                 cell(m.relic, b)
                 require(not b.tile(m.relic).blocked, "Relic is blocked")
@@ -276,33 +286,7 @@ class Content:
                 cell(u.pos, b)
                 require(u.pos not in occupied and not b.tile(u.pos).blocked, f"Invalid spawn: {u.id}")
                 occupied.add(u.pos)
-                require(u.team in {"player", "enemy"}, f"{u.id}: team")
-                for key in ("max_hp", "speed", "weapon_power", "attack_range"):
-                    integer(getattr(u, key), 1, 10000, f"{u.id}.{key}")
-                for key in ("max_mp", "attack", "magic", "defense", "magic_defense", "move", "jump", "min_range"):
-                    integer(getattr(u, key), 0, 10000, f"{u.id}.{key}")
-                integer(u.hp, 1, u.max_hp, f"{u.id}.hp")
-                integer(u.mp, 0, u.max_mp, f"{u.id}.mp")
-                integer(u.ct, 0, 10000, f"{u.id}.ct")
-                for key in ("brave", "faith", "class_evade", "shield_evade", "accessory_evade", "weapon_evade", "magic_evade"):
-                    integer(getattr(u, key), 0, 100, f"{u.id}.{key}")
-                require(u.min_range <= u.attack_range, f"{u.id}: range")
-                require(u.attack_range_mode in {"fixed", "los"}, f"{u.id}: attack_range_mode")
-                integer(u.optimal_range, 0, 10000, f"{u.id}.optimal_range")
-                integer(u.falloff_per_tile, 0, 100, f"{u.id}.falloff_per_tile")
-                integer(u.engagement_range, -1, 8, f"{u.id}.engagement_range")
-                require(all(t in TEAM_TACTICS for t in u.tactics), f"{u.id}: unknown tactic")
-                require(u.weapon in {"melee", "spear", "ranged", "focus", "unarmed"}, f"{u.id}: weapon")
-                require(u.facing in {(0, 1), (0, -1), (1, 0), (-1, 0)}, f"{u.id}: facing")
-                require(u.reaction in REACTIONS and u.support in SUPPORTS and u.movement in MOVEMENTS, f"{u.id}: ability slot")
-                require(all(s in self.skills for s in u.skills), f"{u.id}: unknown skill")
-                require(u.cast is None and not u.moved and not u.acted and not u.disengaging, "Mission spawns cannot be mid-turn")
-                for status, duration in u.statuses.items():
-                    require(status in STATUSES, f"{u.id}: status")
-                    integer(duration, -1, 10000, f"{u.id}.status duration")
-                    require(duration != 0, "Status duration must not be zero")
-                for resistance in u.resistances.values():
-                    integer(resistance, -100, 100, "resistance")
+                validate_actor(u, self.skills, self.archetypes, rules)
             require(any(u.team == "player" for u in m.units), "Mission needs a player")
             require(any(u.team == "enemy" for u in m.units), "Mission needs an enemy")
             require(not m.protected_id or m.protected_id in ids, "Unknown protected unit")

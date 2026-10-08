@@ -10,11 +10,16 @@ import json
 import random
 import uuid
 
+from .rules import default_rules
 from .model import Cell, Content, Effect, RuleError, Skill, Tile, Unit, distance, require
 
 
 class Battle:
-    def __init__(self, content: Content, mission_id: str, seed: int = 1, battle_id: str | None = None):
+    def __init__(self, content: Content, mission_id: str, seed: int = 1, battle_id: str | None = None, *, rules=None):
+        self.rules = rules if rules is not None else default_rules()
+        for key in ('damage', 'hit_chance', 'mitigation'):
+            self.rules.formulas.get(key)
+        content.validate(rules=self.rules)
         require(mission_id in content.missions, "Unknown mission")
         self.content = deepcopy(content)
         self.mission = deepcopy(content.missions[mission_id])
@@ -62,19 +67,10 @@ class Battle:
         if self.result:
             return
         players = [u for u in self.units if u.team == "player" and u.alive]
-        enemies = [u for u in self.units if u.team == "enemy" and u.alive]
         m = self.mission
         if not players or (m.protected_id and not self.unit(m.protected_id).alive):
             self.result = "defeat"
-        elif m.objective == "eliminate" and not enemies:
-            self.result = "victory"
-        elif m.objective == "survive" and self.tick >= m.target_ticks:
-            self.result = "victory"
-        elif m.objective == "extract" and any(u.pos in m.goal for u in players):
-            self.result = "victory"
-        elif m.objective == "hold" and self.hold_ticks >= m.target_ticks:
-            self.result = "victory"
-        elif m.objective == "crown" and self.carrier and self.unit(self.carrier).pos in m.goal:
+        elif self.rules.objectives.get(m.objective).achieved(self):
             self.result = "victory"
         if self.result:
             self.emit("battle_end", result=self.result)
@@ -418,67 +414,17 @@ class Battle:
 
     def _affected(self, caster: Unit, skill: Skill, cell: Cell, effect: Effect):
         area = self._area(cell, skill)
-        return [t for t in self.units if t.pos in area and (not t.alive if effect.kind == "revive" else t.alive)
+        return [t for t in self.units if t.pos in area and (not t.alive if self.rules.effects.get(effect.kind).targets_downed else t.alive)
                 and (effect.scope in {"all", "target"} or (t.team == caster.team) == (effect.scope == "allies"))]
 
     def hit_chance(self, caster: Unit, target: Unit, skill: Skill) -> float:
-        if target.team == caster.team and skill.target in {"ally", "self", "downed"}:
-            return 1.0
-        chance = skill.accuracy / 100
-        d = distance(caster.pos, target.pos)
-        if skill.optimal_range and d > skill.optimal_range and skill.falloff_per_tile:
-            chance *= max(0, 100 - (d - skill.optimal_range) * skill.falloff_per_tile) / 100
-        if skill.id == "attack" and caster.weapon == "ranged" and self.engaged_by(caster):
-            chance *= 0.65
-        if target.cast or {"sleep", "stop"} & target.statuses.keys():
-            return chance
-        if skill.magical:
-            return chance * (1 - target.magic_evade / 100)
-        if caster.support != "concentrate":
-            dx, dy = caster.pos[0] - target.pos[0], caster.pos[1] - target.pos[1]
-            dot = dx * target.facing[0] + dy * target.facing[1]
-            layers = [target.accessory_evade]
-            if dot >= 0:
-                layers += [target.shield_evade, target.weapon_evade]
-            if dot > 0:
-                layers += [target.class_evade]
-            for evade in layers:
-                chance *= 1 - evade / 100
-        if target.reaction == "blade_grasp" and self._can_react(target):
-            chance *= 1 - target.brave / 100
-        return chance
+        return self.rules.formulas.get('hit_chance').calculate(self, caster, target, skill)
 
     def damage(self, caster: Unit, target: Unit, skill: Skill, effect: Effect) -> int:
-        if skill.id == "attack":
-            power = caster.attack
-            if caster.weapon == "focus":
-                power = caster.magic
-            elif caster.weapon == "ranged":
-                power = (caster.attack + caster.speed) // 2
-            elif caster.weapon == "unarmed":
-                return self._mitigate(caster, target, skill, effect, caster.attack * caster.attack * caster.brave // 100)
-            raw = power * caster.weapon_power
-        elif skill.magical:
-            raw = effect.power * caster.magic * caster.faith * target.faith // 10000
-        else:
-            raw = caster.attack * effect.power
-        return self._mitigate(caster, target, skill, effect, raw)
+        return self.rules.formulas.get('damage').calculate(self, caster, target, skill, effect)
 
     def _mitigate(self, caster, target, skill, effect, raw):
-        support = "magic_attack_up" if skill.magical else "attack_up"
-        defense = "magic_defense_up" if skill.magical else "defense_up"
-        if caster.support == support:
-            raw = raw * 4 // 3
-        if target.support == defense:
-            raw = raw * 2 // 3
-        if ("shell" if skill.magical else "protect") in target.statuses:
-            raw = raw * 2 // 3
-        if "guard" in target.statuses:
-            raw //= 2
-        if target.cast and not skill.magical:
-            raw = raw * 3 // 2
-        raw = max(0, raw - (target.magic_defense if skill.magical else target.defense))
-        return max(0, raw * (100 - target.resistances.get(effect.element, 0)) // 100)
+        return self.rules.formulas.get('mitigation').calculate(self, caster, target, skill, effect, raw)
 
     def forecast(self, skill_id: str, cell: Cell, unit: Unit | None = None) -> list[dict]:
         """Pure forecast: never consume RNG, MP or mutate cast/turn state."""
@@ -493,9 +439,7 @@ class Battle:
         for e in s.effects:
             for t in self._affected(u, s, cell, e):
                 result.append({"unit": t.id, "kind": e.kind, "chance": self.hit_chance(u, t, s),
-                               "amount": self.damage(u, t, s, e) if e.kind == "damage" else
-                               min(e.power, t.max_hp - t.hp) if e.kind == "heal" else
-                               min(e.power, t.max_mp - t.mp) if e.kind == "mp" else e.power,
+                               "amount": self.rules.effects.get(e.kind).amount(self, u, t, s, e),
                                "status": e.status})
         for row in result:
             if row["kind"] == "damage":
@@ -643,9 +587,9 @@ class Battle:
         # One accuracy roll per victim, shared by a skill's chained effects.
         rolls = {}
         for e in skill.effects:
-            if e.kind == "zone":
-                self.zones.append({"cells": sorted(self._area(cell, skill)), "remaining": e.duration,
-                                   "power": e.power, "team": caster.team, "scope": e.scope})
+            rule = self.rules.effects.get(e.kind)
+            if rule.area:
+                rule.apply(self, caster, None, skill, e, cell)
                 continue
             for target in self._affected(caster, skill, cell, e):
                 if target.id not in rolls:
@@ -654,22 +598,7 @@ class Battle:
                         self.emit("miss", unit=caster.id, target=target.id)
                 if not rolls[target.id]:
                     continue
-                if e.kind == "damage":
-                    self._hurt(target, self.damage(caster, target, skill, e), caster)
-                elif e.kind == "heal" and target.alive:
-                    self._heal(target, e.power)
-                elif e.kind == "revive" and not target.alive and self.at(target.pos) is None and not self.board.tile(target.pos).blocked:
-                    target.hp = min(target.max_hp, max(1, e.power))
-                    target.ct = 0
-                    self.emit("revive", unit=target.id, source=caster.id)
-                elif e.kind == "status" and target.alive:
-                    self._status(target, e.status, e.duration, caster)
-                elif e.kind == "cleanse":
-                    target.statuses.pop(e.status, None)
-                elif e.kind == "mp":
-                    target.mp = min(target.max_mp, target.mp + e.power)
-                elif e.kind in {"push", "pull"} and target.alive:
-                    self._displace(caster, target, e.power, e.kind == "pull")
+                rule.apply(self, caster, target, skill, e, cell)
         if skill.id == "attack":
             primary = self.at(cell)
             if primary is not None and primary.alive and primary.team != caster.team and rolls.get(primary.id, False):
@@ -1038,31 +967,7 @@ class Battle:
         try:
             u = self.active
             require(command.get("unit", u.id) == u.id, "Not this unit's turn")
-            kind = command.get("kind")
-            if kind in {"move", "act", "item", "charge", "relay"}:
-                raw = command["cell"]
-                require(isinstance(raw, (list, tuple)) and len(raw) == 2 and all(type(v) is int for v in raw), "Invalid cell")
-                cell = tuple(raw)
-            if kind == "move":
-                self._move(u, cell)
-            elif kind == "act":
-                self._act(u, command["skill"], cell)
-            elif kind == "item":
-                self._item(u, command["item"], cell)
-            elif kind == "charge":
-                self._charge(u, cell)
-            elif kind == "relay":
-                self._relay(u, command["partner"], cell)
-            elif kind == "disengage":
-                self._disengage(u)
-            elif kind == "interact":
-                self._interact(u, command["object"])
-            elif kind == "prepare":
-                self._prepare(u, command["mode"], command.get("target"))
-            elif kind == "end":
-                self._end(u, tuple(command.get("facing", u.facing)))
-            else:
-                raise RuleError("Unknown command")
+            self.rules.commands.get(command.get("kind")).execute(self, u, command)
             self.commands.append(deepcopy(command))
             self._outcome()
             if not self.result and self.active and not self.active.alive:
@@ -1070,15 +975,25 @@ class Battle:
                 self._advance()
             elif not self.result and self.active and {"sleep", "stop"} & self.active.statuses.keys():
                 self._end(self.active, self.active.facing)
-        except (RuleError, KeyError, TypeError, ValueError) as exc:
+        except Exception as exc:
             self.__dict__ = snapshot
             if isinstance(exc, RuleError):
                 raise
-            raise RuleError(f"Invalid command: {exc}") from exc
+            if isinstance(exc, (KeyError, TypeError, ValueError)):
+                raise RuleError(f"Invalid command: {exc}") from exc
+            raise
+
+    @staticmethod
+    def _unit_state(unit):
+        row = asdict(unit)
+        for key, default in {'archetype': '', 'kind': 'character', 'tags': [], 'behavior': 'tactical'}.items():
+            if row[key] == default:
+                del row[key]
+        return row
 
     def state(self) -> dict:
         return {"tick": self.tick, "active": self.active_id, "result": self.result,
-                "units": [asdict(u) for u in self.units], "inventory": self.inventory,
+                "units": [self._unit_state(u) for u in self.units], "inventory": self.inventory,
                 "zones": self.zones, "prepared_reactions": self.prepared_reactions,
                 "fired": self.fired, "loot": self.loot,
                 "hold_ticks": self.hold_ticks, "objects": self.mission.objects,
@@ -1090,15 +1005,20 @@ class Battle:
         return hashlib.sha256(json.dumps(self.state(), sort_keys=True).encode()).hexdigest()
 
     def recording(self) -> dict:
-        return {"version": 1, "battle_id": self.battle_id, "mission": self.mission.id,
+        return {"version": 2, "rules": self.rules.manifest(), "battle_id": self.battle_id, "mission": self.mission.id,
                 "seed": self.seed, "content": self.content.to_dict(),
                 "commands": deepcopy(self.commands), "digest": self.digest()}
 
     @classmethod
-    def replay(cls, recording: dict) -> Battle:
-        require(recording.get("version") == 1, "Unsupported replay version")
-        battle = cls(Content.from_dict(recording["content"]), recording["mission"],
-                     recording["seed"], recording["battle_id"])
+    def replay(cls, recording: dict, *, rules=None) -> Battle:
+        require(recording.get("version") in {1, 2}, "Unsupported replay version")
+        rules = rules if rules is not None else default_rules()
+        if recording['version'] == 2:
+            require(recording.get('rules') == rules.manifest(), 'Replay ruleset mismatch')
+        else:
+            require(rules.manifest() == default_rules().manifest(), 'Legacy replay requires default rules')
+        battle = cls(Content.from_dict(recording["content"], rules=rules), recording["mission"],
+                     recording["seed"], recording["battle_id"], rules=rules)
         for command in recording["commands"]:
             battle.execute(command)
         require(battle.digest() == recording["digest"], "Replay checksum mismatch")
