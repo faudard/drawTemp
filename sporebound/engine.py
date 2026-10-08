@@ -436,7 +436,7 @@ class Battle:
     def state(self) -> dict:
         return {"tick": self.tick, "active": self.active_id, "result": self.result,
                 "units": [self._unit_state(u) for u in self.units], "inventory": self.inventory,
-                "zones": self.zones, "prepared_reactions": self.prepared_reactions,
+                "zones": self.zones, "lifetimes": self.lifetimes, "prepared_reactions": self.prepared_reactions,
                 "fired": self.fired, "loot": self.loot,
                 "hold_ticks": self.hold_ticks, "objects": self.mission.objects,
                 "relic_pos": self.relic_pos, "carrier": self.carrier,
