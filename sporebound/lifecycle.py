@@ -16,12 +16,14 @@ def _fallback_cells(battle, origin):
 def spawn(battle, definition):
     """Create a validated actor without touching the initiative clock or RNG."""
     require(isinstance(definition, dict), 'Spawn must be an object')
-    actor = ActorFactory(battle.content.archetypes).create(definition)
+    spawn_spec = dict(definition)
+    fallback_nearest = bool(spawn_spec.pop('fallback_nearest', False))
+    actor = ActorFactory(battle.content.archetypes).create(spawn_spec)
     require(not any(u.id == actor.id for u in battle.units), f'Duplicate actor: {actor.id}')
     require(battle.board.contains(actor.pos), f'Outside board: {actor.pos}')
     occupied = any(u.alive and u.pos == actor.pos for u in battle.units)
     blocked = battle.board.tile(actor.pos).blocked
-    if (occupied or blocked) and definition.get('fallback_nearest', False):
+    if (occupied or blocked) and fallback_nearest:
         cells = _fallback_cells(battle, actor.pos)
         require(bool(cells), 'No free spawn cell')
         actor.pos = cells[0]
