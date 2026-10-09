@@ -314,7 +314,6 @@ def launch(path):
             refresh()
         else:
             stroke_cells = [selected_cell]
-        else:
             brush = brush_var.get()
             if brush == 'unit':
                 design_change(lambda: doc.place_unit(mission_var.get(), unit_var.get(), selected_cell))
