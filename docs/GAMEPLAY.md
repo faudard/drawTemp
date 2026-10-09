@@ -354,3 +354,24 @@ python -m unittest discover -s tests_standalone -p test_convoy_rescue.py -v
 La fenêtre Tk propose les boutons **Combat de secours** et **Abandonner**,
 ainsi que les PV du chariot et l'unité active. Toute la séance, même sauvegardée
 au milieu du combat de secours, est rejouée avec vérification intégrale.
+
+
+### Choix multiples : sauver les soldats, perdre les biens, poursuivre les pillards
+
+`siege_session(contested=True, decisions=True)` active la nouvelle économie
+de convoi. Une fois immobilisé, le transport présente plusieurs possibilités :
+évacuation de tous les survivants sans cargaison, récupération partielle après
+avoir éliminé un pillard, rançon pendant la bataille, secours complet ou
+abandon pur et simple. Le matériel non récupéré peut devenir l'objectif
+d'une seconde mission tactique, `castle_convoy_pursuit`. Gagner la poursuite
+rapporte des provisions et fait perdre un point de pression défensive au front
+cible. Perdre n'annule pas l'évacuation déjà obtenue.
+
+Chaque choix respecte la capacité de transport, les arrivées différées,
+le gel de la timeline pendant les combats, et la relecture vérifiée des
+commandes tactiques. Ce mode avancé reste explicitement optionnel.
+
+```sh
+python -m examples.siege_command --choices-demo
+python -m unittest discover -s tests_standalone -p test_convoy_choices.py -v
+```
