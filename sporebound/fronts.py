@@ -9,6 +9,7 @@ from . import front_links
 from .logistics import LogisticsDirector, destination_actors
 from .convoy_choices import ConvoyChoicesMixin
 from .campaign_strategy import SiegeCampaign, CampaignChoicesMixin
+from .campaign_routes import CampaignRoutesPolicy, CampaignRoutesMixin
 
 DOCTRINES = {"hold", "assault", "delay", "retreat"}
 
@@ -88,7 +89,7 @@ class FrontDirector:
         self.events = deepcopy(state["events"])
 
 
-class MultiFrontSession(CampaignChoicesMixin, ConvoyChoicesMixin):
+class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoicesMixin):
     """Deterministic tactical/strategic session with an explicit command journal.
 
     Use execute() rather than calling active.execute() directly when a session
@@ -122,10 +123,23 @@ class MultiFrontSession(CampaignChoicesMixin, ConvoyChoicesMixin):
         self.initial_campaign = deepcopy(campaign) if campaign is not None else None
         self.campaign = (SiegeCampaign(self.initial_campaign, self.content, self.missions)
                          if self.initial_campaign is not None else None)
+        self.route_policy = None
+        if self.campaign is not None and "routes" in self.initial_campaign:
+            self.route_policy = CampaignRoutesPolicy(
+                {"routes": self.initial_campaign["routes"],
+                 "recovery": self.initial_campaign["recovery"]},
+                self.content, self.missions, self.campaign.final)
+        self.route_selected = "breach"
+        self.route_locked = False
+        self.recovery_battles = {}
+        self.recovery_outcomes = {}
         if self.campaign is not None:
             require(focused != self.campaign.final
                     or all(self.timeline.fronts[f]["status"] in outcomes
-                           for f, outcomes in self.campaign.spec["required_fronts"].items()),
+                           for f, outcomes in
+                           (self.route_policy.routes["breach"]["required"]
+                            if self.route_policy is not None else
+                            self.campaign.spec["required_fronts"]).items()),
                     "Cannot begin on a locked final front")
         self.initial_logistics = deepcopy(logistics) if logistics is not None else None
         self.logistics = (LogisticsDirector(self.initial_logistics, self.missions)
@@ -171,7 +185,8 @@ class MultiFrontSession(CampaignChoicesMixin, ConvoyChoicesMixin):
 
     def execute(self, command):
         """Execute exactly one player/AI command on the focused front."""
-        require(not self.rescue_battles and not self.pursuit_battles,
+        require(not self.rescue_battles and not self.pursuit_battles
+                and not self.recovery_battles,
                 "Resolve the tactical side mission first")
         if self.campaign is not None:
             require(self.timeline.fronts[self.timeline.focused]["status"]
@@ -211,7 +226,8 @@ class MultiFrontSession(CampaignChoicesMixin, ConvoyChoicesMixin):
         self.history.append({"kind": "doctrine", "front": front, "doctrine": doctrine})
 
     def switch(self, front):
-        require(not self.rescue_battles and not self.pursuit_battles,
+        require(not self.rescue_battles and not self.pursuit_battles
+                and not self.recovery_battles,
                 "Resolve the tactical side mission first")
         require(front in self.missions, "Unknown front")
         if self.campaign is not None:
@@ -552,13 +568,15 @@ class MultiFrontSession(CampaignChoicesMixin, ConvoyChoicesMixin):
 
     def advance(self):
         """One strategic turn; automatic fights never execute tactical AI."""
-        require(not self.rescue_battles and not self.pursuit_battles,
+        require(not self.rescue_battles and not self.pursuit_battles
+                and not self.recovery_battles,
                 "Resolve the tactical side mission before advancing the timeline")
         snapshot = deepcopy((self.timeline, self.battles, self.front_snapshots,
                              self.pending_reinforcements, self.logistics))
         try:
             for name, battle in self.battles.items():
-                if battle.result in {"victory", "defeat"}:
+                if (battle.result in {"victory", "defeat"}
+                        and self.timeline.fronts[name]["status"] == "active"):
                     self.timeline.fronts[name]["status"] = battle.result
             before = deepcopy(self.timeline.fronts)
             self.timeline.advance()
@@ -726,6 +744,14 @@ class MultiFrontSession(CampaignChoicesMixin, ConvoyChoicesMixin):
                 session.negotiate_front(operation["front"])
             elif kind == "withdraw_front":
                 session.withdraw_front(operation["front"])
+            elif kind == "select_route":
+                session.select_route(operation["route"])
+            elif kind == "start_recovery":
+                session.start_recovery(operation["front"])
+            elif kind == "execute_recovery":
+                session.execute_recovery(operation["front"], operation["command"])
+            elif kind == "abandon_recovery":
+                session.abandon_recovery(operation["front"])
             else:
                 require(False, "Unknown multi-front operation")
         require(session.digest() == recording["digest"], "Multi-front checksum mismatch")
