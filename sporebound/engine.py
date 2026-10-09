@@ -37,6 +37,8 @@ class Battle:
         self.zones: list[dict] = []
         self.lifetimes: dict[str, int] = {}
         self.summon_owners: dict[str, str] = {}
+        from .encounters import EncounterDirector
+        self.encounter = EncounterDirector()
         self.prepared_reactions: dict[str, dict] = {}
         self.inventory = {"player": {"potion": 3, "ether": 2, "phoenix": 1},
                           "enemy": {"potion": 1, "ether": 0, "phoenix": 0}}
@@ -117,6 +119,11 @@ class Battle:
             self.__dict__ = snapshot
             raise
 
+    def queue_wave(self, actors, *, lifetime=None):
+        wave_id = self.encounter.queue(actors, lifetime=lifetime)
+        self.emit("encounter_wave_queued", wave=wave_id)
+        return wave_id
+
     def despawn_actor(self, actor_id):
         from .lifecycle import despawn
         actor = despawn(self, actor_id)
@@ -138,6 +145,7 @@ class Battle:
     def _triggers(self):
         self._expire_actors()
         triggers.dispatch(self)
+        self.encounter.dispatch(self)
 
     def _advance(self):
         """Stable roster tie-break; time moves only when nobody is ready."""
@@ -520,7 +528,7 @@ class Battle:
     def state(self) -> dict:
         return {"tick": self.tick, "active": self.active_id, "result": self.result,
                 "units": [self._unit_state(u) for u in self.units], "inventory": self.inventory,
-                "zones": self.zones, "lifetimes": self.lifetimes, "summon_owners": self.summon_owners, "prepared_reactions": self.prepared_reactions,
+                "zones": self.zones, "encounter": self.encounter.state(), "lifetimes": self.lifetimes, "summon_owners": self.summon_owners, "prepared_reactions": self.prepared_reactions,
                 "fired": self.fired, "loot": self.loot,
                 "hold_ticks": self.hold_ticks, "objects": self.mission.objects,
                 "relic_pos": self.relic_pos, "carrier": self.carrier,
