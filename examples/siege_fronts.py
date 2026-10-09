@@ -29,6 +29,14 @@ SIEGE_LINKS = [
         ],
     },
     {
+        "id": "gate_collapse",
+        "source": "gate", "event": "battle_end",
+        "match": {"result": "defeat"},
+        "effects": [
+            {"kind": "reduce_strength", "front": "courtyard", "amount": 3},
+        ],
+    },
+    {
         "id": "cut_supply_route",
         "source": "supplies", "event": "interact",
         "match": {"object": "supply_cache"},
@@ -54,6 +62,17 @@ def siege_session(seed=1, focused="supplies"):
             "throne": {"strength": 7, "opposition": 18, "doctrine": "hold"},
         },
         links=SIEGE_LINKS,
+        logistics={
+            "reserves": {"player": 3, "enemy": 0},
+            "capacity": 4,
+            "routes": [
+                {"from": "reserve", "to": "walls", "turns": 2},
+                {"from": "reserve", "to": "gate", "turns": 1},
+                {"from": "supplies", "to": "courtyard", "turns": 2},
+                {"from": "walls", "to": "courtyard", "turns": 1},
+                {"from": "courtyard", "to": "throne", "turns": 2},
+            ],
+        },
     )
 
 
@@ -61,9 +80,17 @@ if __name__ == "__main__":
     session = siege_session()
     session.execute({"kind": "start_battle"})
     session.execute({"kind": "interact", "object": "supply_cache"})
+    session.send_reserves("walls", [
+        {"id": "shield_reserve", "name": "Shield Reserve", "team": "player",
+         "pos": [3, 6]}])
+    session.transfer_units("courtyard", {"supply_scout": [3, 6]})
+    session.advance()
+    session.advance()
     restored = MultiFrontSession.replay(session.recording())
     assert restored.digest() == session.digest()
     print("Activated objectives:", sorted(session.applied_links))
     print("Blocked enemy reinforcements:", sorted(session.blocked_reinforcements))
     print("Strategic turn:", session.timeline.turn)
+    print("Convoys still travelling:", len(session.logistics.in_transit))
+    print("Player reserves remaining:", session.logistics.reserves["player"])
     print("Deterministic replay: OK")
