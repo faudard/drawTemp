@@ -39,9 +39,10 @@ class StoryGraphGUITests(unittest.TestCase):
                                if book.tab(i,'text')=='Arbre narratif')
                     book.select(index)
                     root.update()
-                    tree=next(w for w in descendants(root)
+                    tree_page=root.nametowidget(book.select())
+                    tree=next(w for w in descendants(tree_page)
                               if isinstance(w,tk.Canvas) and
-                              any('node_' in tag for item in w.find_all()
+                              any(tag.startswith('node_') for item in w.find_all()
                                   for tag in w.gettags(item)))
                     self.assertGreater(len(tree.find_all()),3)
                     roots=next(w for w in descendants(root)
