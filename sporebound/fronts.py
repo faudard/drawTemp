@@ -128,8 +128,11 @@ class MultiFrontSession:
             mission = self.content.missions[mid]
             require(mission.objective == "eliminate" and mission.protected_id
                     and any(u.id == mission.protected_id and u.team == "player"
-                            for u in mission.units),
-                    "Rescue mission needs a protected friendly wagon and elimination goal")
+                            for u in mission.units)
+                    and any(u.id != mission.protected_id and u.team == "player"
+                            for u in mission.units)
+                    and any(u.team == "enemy" for u in mission.units),
+                    "Rescue mission needs a wagon, escort fighters, enemy and elimination goal")
         self.links = deepcopy(links if links is not None else [])
         front_links.validate(self.content, self.missions, self.links)
         self.applied_links = set()
@@ -420,6 +423,16 @@ class MultiFrontSession:
         try:
             battle = self.rescue_battles[convoy_id]
             battle.execute(deepcopy(command))
+            # A defenseless cart cannot win once every non-wagon escort has
+            # fallen. The ordinary eliminate objective alone would otherwise
+            # leave an unarmed cart trapped against surviving bandits forever.
+            if (battle.result is None
+                    and not any(u.team == "player"
+                                and u.id != battle.mission.protected_id and u.alive
+                                for u in battle.units)):
+                battle.result = "defeat"
+                battle.active_id = None
+                battle.emit("battle_end", result="defeat")
             if battle.result is not None:
                 self._finish_rescue(convoy_id)
         except Exception:
