@@ -73,6 +73,10 @@ def launch(session):
                                      state="readonly", width=12)
     doctrine_selector.pack(side="left", padx=5)
 
+    campaign_row = ttk.Frame(controls, padding=5)
+    campaign_row.pack(fill="x")
+    ttk.Label(campaign_row, text="Choix de siège").pack(side="left", padx=4)
+
     second = ttk.Frame(controls, padding=5)
     second.pack(fill="x")
     ttk.Label(second, text="Destination").pack(side="left")
@@ -120,6 +124,11 @@ def launch(session):
             cid, battle = next(iter(s.pursuit_battles.items()))
             rescue_text = (f" | POURSUITE {cid}: "
                            f"actif={battle.active_id or 'aucun'}")
+        if s.campaign is not None:
+            result = s.campaign.state(s)
+            stock += (" | Campagne:" + result["status"]
+                      + " | Trône:" + ("accessible" if result["unlocked"]
+                                      else "verrouillé"))
         status.set(f"Tour {s.timeline.turn} | Focus : {s.timeline.focused} | {stock}"
                    + rescue_text)
         front_selector.configure(values=sorted(s.missions))
@@ -204,6 +213,15 @@ def launch(session):
                    front_name.get(), doctrine.get()))).pack(side="left", padx=3)
     ttk.Button(one, text="Tour stratégique +1",
                command=lambda: guarded(lambda: current[0].advance())).pack(side="right", padx=3)
+    ttk.Button(campaign_row, text="Victoire partielle",
+               command=lambda: guarded(lambda: current[0].partial_front(
+                   current[0].timeline.focused))).pack(side="left", padx=3)
+    ttk.Button(campaign_row, text="Négocier passage",
+               command=lambda: guarded(lambda: current[0].negotiate_front(
+                   current[0].timeline.focused))).pack(side="left", padx=3)
+    ttk.Button(campaign_row, text="Retraite du secteur",
+               command=lambda: guarded(lambda: current[0].withdraw_front(
+                   current[0].timeline.focused))).pack(side="left", padx=3)
     ttk.Button(second, text="Envoyer réserve",
                command=lambda: guarded(lambda: current[0].send_reserves(
                    destination.get(), [{"id": unit_id.get(), "name": unit_id.get(),
