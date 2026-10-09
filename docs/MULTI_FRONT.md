@@ -185,7 +185,7 @@ python -m examples.siege_command --demo
 python -m examples.siege_command --interactive
 ```
 
-The screen shows the global strategic turn, every front's doctrine/strength/
+Both the Tk window and the terminal screen show the global strategic turn, every front's doctrine/strength/
 opposition/status, focused zone, finite reserves and supplies, convoy progress
 and ETA, rescue requirements and recent strategic events. The interactive
 commands are `status`, `focus FRONT`, `doctrine FRONT DOCTRINE`,
