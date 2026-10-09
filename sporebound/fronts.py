@@ -7,6 +7,7 @@ from copy import deepcopy
 from .model import require
 from . import front_links
 from .logistics import LogisticsDirector, destination_actors
+from .convoy_choices import ConvoyChoicesMixin
 
 DOCTRINES = {"hold", "assault", "delay", "retreat"}
 
@@ -86,7 +87,7 @@ class FrontDirector:
         self.events = deepcopy(state["events"])
 
 
-class MultiFrontSession:
+class MultiFrontSession(ConvoyChoicesMixin):
     """Deterministic tactical/strategic session with an explicit command journal.
 
     Use execute() rather than calling active.execute() directly when a session
@@ -122,6 +123,10 @@ class MultiFrontSession:
                           if self.initial_logistics is not None else None)
         self.rescue_battles = {}
         self.rescue_outcomes = {}
+        self.pursuit_targets = {}
+        self.pursuit_battles = {}
+        self.pursuit_outcomes = {}
+        self._validate_pursuit_mission()
         if self.logistics is not None and self.logistics.rescue_mission is not None:
             mid = self.logistics.rescue_mission
             require(mid in self.content.missions, "Unknown rescue mission")
@@ -157,7 +162,8 @@ class MultiFrontSession:
 
     def execute(self, command):
         """Execute exactly one player/AI command on the focused front."""
-        require(not self.rescue_battles, "Resolve the tactical convoy rescue first")
+        require(not self.rescue_battles and not self.pursuit_battles,
+                "Resolve the tactical side mission first")
         require(isinstance(command, dict), "Expected tactical command")
         # Battle.execute is transactional. Linking other fronts must be just as
         # atomic, including their events, aggregate scores and future overrides.
@@ -185,7 +191,8 @@ class MultiFrontSession:
         self.history.append({"kind": "doctrine", "front": front, "doctrine": doctrine})
 
     def switch(self, front):
-        require(not self.rescue_battles, "Resolve the tactical convoy rescue first")
+        require(not self.rescue_battles and not self.pursuit_battles,
+                "Resolve the tactical side mission first")
         require(front in self.missions, "Unknown front")
         require(self.active.active is None or (not self.active.active.moved
                 and not self.active.active.acted),
@@ -368,7 +375,8 @@ class MultiFrontSession:
         from .engine import Battle
         require(self.logistics is not None and self.logistics.rescue_mission is not None,
                 "Tactical convoy rescue is not enabled")
-        require(not self.rescue_battles, "Finish the current rescue battle first")
+        require(not self.rescue_battles and not self.pursuit_battles,
+                "Finish the current tactical side mission first")
         require(convoy_id not in self.rescue_outcomes, "Rescue already resolved")
         convoy = self.logistics.convoy(convoy_id)
         require(convoy.get("stranded") is True and convoy["actors"],
@@ -522,8 +530,8 @@ class MultiFrontSession:
 
     def advance(self):
         """One strategic turn; automatic fights never execute tactical AI."""
-        require(not self.rescue_battles,
-                "Resolve the tactical convoy rescue before advancing the timeline")
+        require(not self.rescue_battles and not self.pursuit_battles,
+                "Resolve the tactical side mission before advancing the timeline")
         snapshot = deepcopy((self.timeline, self.battles, self.front_snapshots,
                              self.pending_reinforcements, self.logistics))
         try:
@@ -589,6 +597,11 @@ class MultiFrontSession:
                 state["rescue_battles"] = {
                     key: battle.state() for key, battle in sorted(self.rescue_battles.items())}
                 state["rescue_outcomes"] = deepcopy(self.rescue_outcomes)
+            if self.logistics.choices is not None:
+                state["pursuit_targets"] = deepcopy(self.pursuit_targets)
+                state["pursuit_battles"] = {
+                    key: battle.state() for key, battle in sorted(self.pursuit_battles.items())}
+                state["pursuit_outcomes"] = deepcopy(self.pursuit_outcomes)
         if self.links:
             state["links"] = deepcopy(self.links)
             state["applied_links"] = sorted(self.applied_links)
@@ -656,6 +669,18 @@ class MultiFrontSession:
                 session.execute_rescue(operation["convoy"], operation["command"])
             elif kind == "abandon_convoy":
                 session.abandon_convoy(operation["convoy"])
+            elif kind == "evacuate_convoy":
+                session.evacuate_convoy(operation["convoy"])
+            elif kind == "salvage_convoy":
+                session.salvage_convoy(operation["convoy"])
+            elif kind == "negotiate_convoy":
+                session.negotiate_convoy(operation["convoy"])
+            elif kind == "start_pursuit":
+                session.start_pursuit(operation["convoy"])
+            elif kind == "execute_pursuit":
+                session.execute_pursuit(operation["convoy"], operation["command"])
+            elif kind == "abandon_pursuit":
+                session.abandon_pursuit(operation["convoy"])
             else:
                 require(False, "Unknown multi-front operation")
         require(session.digest() == recording["digest"], "Multi-front checksum mismatch")
