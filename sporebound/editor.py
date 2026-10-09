@@ -186,6 +186,28 @@ def launch(path):
         design_change(edit)
 
     @guarded
+    def blank_mission():
+        from .authoring import add_blank_mission
+        mid = simpledialog.askstring('Carte vierge', 'Identifiant de mission :')
+        if not mid:
+            return
+        name = simpledialog.askstring('Carte vierge', 'Titre :', initialvalue=mid)
+        if name is None:
+            return
+        width = simpledialog.askinteger('Carte vierge', 'Largeur (4–128) :',
+                                         initialvalue=8, minvalue=4, maxvalue=128)
+        if width is None:
+            return
+        height = simpledialog.askinteger('Carte vierge', 'Hauteur (4–128) :',
+                                          initialvalue=8, minvalue=4, maxvalue=128)
+        if height is None:
+            return
+        def edit():
+            doc.replace(add_blank_mission(doc.data, mid, name, width, height))
+            mission_var.set(mid)
+        design_change(edit)
+
+    @guarded
     def start():
         nonlocal battle, campaign_battle
         campaign_battle = False
@@ -384,7 +406,7 @@ def launch(path):
 
     bar = ttk.Frame(root)
     bar.pack(fill='x')
-    for label,cmd in [('Ouvrir',open_doc),('Enregistrer sous',save_doc),('Nouvelle mission',new_mission),('Annuler',guarded(lambda: design_change(doc.undo))),('Rétablir',guarded(lambda: design_change(doc.redo))),('Playtest',start),('Éditer',stop),('Sauver combat',save_game),('Charger combat',load_game)]:
+    for label,cmd in [('Ouvrir',open_doc),('Enregistrer sous',save_doc),('Nouvelle mission',new_mission),('Carte vierge',blank_mission),('Annuler',guarded(lambda: design_change(doc.undo))),('Rétablir',guarded(lambda: design_change(doc.redo))),('Playtest',start),('Éditer',stop),('Sauver combat',save_game),('Charger combat',load_game)]:
         ttk.Button(bar,text=label,command=cmd).pack(side='left',padx=2,pady=4)
     controls = ttk.Frame(root)
     controls.pack(fill='x')
