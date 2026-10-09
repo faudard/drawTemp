@@ -202,6 +202,53 @@ class StrategicGUITests(unittest.TestCase):
             launch(session)
             showerror.assert_not_called()
 
+    def test_route_selection_and_gate_recovery_in_tk(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.strategic_ui import launch
+
+        session = siege_session(contested=True, campaign=True, paths=True)
+        session.switch("gate")
+        session.execute({"kind": "start_battle"})
+        session.withdraw_front("gate")
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        def inspect(root):
+            try:
+                root.update()
+                widgets = list(descendants(root))
+                buttons = {w.cget("text"): w for w in widgets
+                           if isinstance(w, ttk.Button)}
+                route = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                             and "direct" in w.cget("values"))
+                self.assertEqual(route.get(), "tunnels")
+                route.set("direct")
+                buttons["Choisir route"].invoke()
+                self.assertEqual(session.route_selected, "direct")
+                self.assertEqual(session.timeline.fronts["throne"]["strength"], 3)
+                buttons["Contre-attaque"].invoke()
+                self.assertIn("gate", session.recovery_battles)
+                editor = next(w for w in widgets if isinstance(w, ttk.Entry)
+                              and w.get() == '{"kind":"start_battle"}')
+                editor.delete(0, "end")
+                editor.insert(0, '{"kind":"end"}')
+                buttons["Jouer tactique"].invoke()
+                self.assertEqual(len(session.recovery_battles["gate"].commands), 1)
+                buttons["Abandon reprise"].invoke()
+                self.assertEqual(session.recovery_outcomes["gate"], "abandoned")
+            finally:
+                root.destroy()
+
+        with patch.object(tk.Tk, "mainloop", inspect), \
+             patch("tkinter.messagebox.showerror") as showerror:
+            launch(session)
+            showerror.assert_not_called()
+
+
 
 if __name__ == "__main__":
     unittest.main()
