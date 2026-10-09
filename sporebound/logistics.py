@@ -14,6 +14,7 @@ class LogisticsDirector:
     def __init__(self, config, missions):
         require(isinstance(config, dict) and set(config) <= {"routes", "reserves", "capacity"},
                 "Invalid logistics configuration")
+        require("reserve" not in missions, "reserve is a reserved strategic origin")
         reserves = config.get("reserves", {})
         require(isinstance(reserves, dict) and set(reserves) <= {"player", "enemy"},
                 "Invalid logistics reserves")
@@ -58,6 +59,7 @@ class LogisticsDirector:
                 all(isinstance(actor, dict) for actor in actors),
                 "Convoy needs concrete actors")
         self.capacity_available(len(actors))
+        require(len(actors) <= 14, "A convoy may contain at most 14 tactical actors")
         require(team in {"player", "enemy"}
                 and all(actor.get("team") == team for actor in actors),
                 "Convoy cannot mix teams")
@@ -101,6 +103,7 @@ def destination_actors(session, front, definitions):
             if order["to"] == front:
                 occupied_ids.update(actor["id"] for actor in order["actors"])
     actors = []
+    footprints = set()
     factory = ActorFactory(session.content.archetypes)
     for definition in definitions:
         require(isinstance(definition, dict) and isinstance(definition.get("id"), str)
@@ -109,9 +112,11 @@ def destination_actors(session, front, definitions):
         actor = factory.create(definition)
         validate_actor(actor, session.content.skills, session.content.archetypes,
                        session.rules)
+        require(actor.kind != "summon", "Summons cannot be transported by convoy")
         occupied_ids.add(actor.id)
         anchor = cell(actor.pos)
         footprint = actor.occupied_cells(anchor)
+        require(not footprints.intersection(footprint), "Overlapping convoy landing cells")
         require(all(mission.board.contains(pos)
                     and not mission.board.tile(pos).blocked
                     and not any(obj["kind"] == "door"
@@ -121,5 +126,6 @@ def destination_actors(session, front, definitions):
                                 for obj in mission.objects)
                     for pos in footprint),
                 "Invalid convoy landing footprint")
+        footprints.update(footprint)
         actors.append(asdict(actor))
     return actors
