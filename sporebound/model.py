@@ -98,6 +98,7 @@ class Unit:
     name: str
     team: str
     pos: Cell
+    footprint: tuple[int, int] = (1, 1)
     max_hp: int = 40
     hp: int = 40
     max_mp: int = 12
@@ -141,6 +142,11 @@ class Unit:
     kind: str = "character"
     tags: list[str] = field(default_factory=list)
     behavior: str = "tactical"
+
+    def occupied_cells(self, origin=None):
+        x, y = self.pos if origin is None else origin
+        width, height = self.footprint
+        return {(x + dx, y + dy) for dy in range(height) for dx in range(width)}
 
     @property
     def alive(self) -> bool:
@@ -284,9 +290,13 @@ class Content:
             for u in m.units:
                 require(u.id and u.id not in ids, f"Duplicate/empty unit: {u.id}")
                 ids.add(u.id)
-                cell(u.pos, b)
-                require(u.pos not in occupied and not b.tile(u.pos).blocked, f"Invalid spawn: {u.id}")
-                occupied.add(u.pos)
+                require(isinstance(u.footprint, (tuple, list)) and len(u.footprint) == 2
+                        and all(type(n) is int and 1 <= n <= 4 for n in u.footprint),
+                        f"Invalid footprint: {u.id}")
+                cells = u.occupied_cells()
+                require(all(b.contains(c) and not b.tile(c).blocked and c not in occupied
+                            for c in cells), f"Invalid spawn: {u.id}")
+                occupied.update(cells)
                 validate_actor(u, self.skills, self.archetypes, rules)
             require(any(u.team == "player" for u in m.units), "Mission needs a player")
             require(any(u.team == "enemy" for u in m.units), "Mission needs an enemy")
