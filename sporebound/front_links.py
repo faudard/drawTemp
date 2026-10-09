@@ -51,6 +51,9 @@ def validate(content, missions, links):
                       "defense_sabotaged": "defense"}.get(event)
             require(obj is not None and (expect is None or obj["kind"] == expect),
                     "Unknown or incompatible source object")
+            if event == "interact":
+                require(obj["kind"] not in {"defense", "passage"},
+                        "Defense and passage interactions emit specialized events")
         require(isinstance(link["effects"], list)
                 and 0 < len(link["effects"]) <= 16,
                 "Front link needs 1..16 effects")
