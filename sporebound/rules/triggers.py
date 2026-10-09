@@ -60,6 +60,7 @@ def validate_spawn(context, action):
     require(isinstance(action.get('actor'), dict), 'Spawn actor must be an object')
     actor = action['actor']
     require(isinstance(actor.get('id'), str) and actor['id'], 'Spawn actor needs id')
+    require('pos' in actor, 'Spawn actor needs pos')
     context.cell(actor['pos'])
     archetype = actor.get('archetype', '')
     require(not archetype or (context.archetypes is not None and archetype in context.archetypes), 'Unknown spawn archetype')
@@ -81,7 +82,9 @@ def validate_wave(context, action):
         require(isinstance(actor, dict), 'Wave actor must be an object')
         uid = actor.get('id')
         require(isinstance(uid, str) and bool(uid) and uid not in ids, 'Duplicate or invalid wave actor')
+        require(uid not in context.unit_ids, 'Wave actor conflicts with mission unit')
         ids.add(uid)
+        require('pos' in actor, 'Wave actor needs pos')
         context.cell(actor['pos'])
         archetype = actor.get('archetype', '')
         require(not archetype or (context.archetypes is not None and archetype in context.archetypes), 'Unknown wave archetype')
