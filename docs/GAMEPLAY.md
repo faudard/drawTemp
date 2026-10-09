@@ -207,6 +207,19 @@ python -m examples.siege_fronts
 python -m unittest discover -s tests_standalone -p test_front_links.py -v
 ```
 
+La logistique prend désormais en compte les réserves limitées et les
+transferts de véritables combattants. `send_reserves(front, actors)` dépense des
+unités de réserve, tandis que `transfer_units(front, placements)` fait quitter
+des personnages inactifs du front focalisé. Chaque déplacement suit un trajet
+déclaratif (nombre de tours stratégiques), avec contrôle de la capacité et des
+cases de débarquement. Une unité en transit ne peut pas combattre ; une
+défaite ou une retraite peut rendre un convoy irrécupérable. Les éléments
+sont conservés dans le replay multi-fronts v3.
+
+```sh
+python -m unittest discover -s tests_standalone -p test_logistics.py -v
+```
+
 Le moteur multi-fronts permet de focaliser un secteur tout en appliquant une
 résolution agrégée aux autres à chaque `advance()`. Les pertes d'un front encore
 jamais ouvert sont appliquées à ses unités lors du premier switch. La reprise
@@ -215,7 +228,7 @@ direct de `Battle.state()`. Voir [API et limites multi-fronts](MULTI_FRONT.md).
 
 ### Remparts, défenses et salle du trône
 
-Les exemples proposent désormais sept missions. Le scénario complet passe par
+Les exemples proposent désormais huit missions, dont une mission de ravitaillement optionnelle. Le scénario complet passe par
 l’approche contre le troll, une voie au choix (bélier, artillerie, infiltration),
 la cour intérieure, puis `castle_throne`. La victoire finale exige d’éliminer le
 châtelain et ses deux gardes royaux ; une défaite ne permet pas de passer à la suite.
