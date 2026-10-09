@@ -93,9 +93,10 @@ class Battle:
             require(type(limit) is int and limit > 0, "Summon limit must be positive")
             owned = [uid for uid, oid in self.summon_owners.items() if oid == owner_id]
             require(len(owned) < limit, "Summon limit reached")
-        actor = spawn(self, spec)
         if lifetime is not None:
             require(type(lifetime) is int and lifetime > 0, "Lifetime must be positive")
+        actor = spawn(self, spec)
+        if lifetime is not None:
             self.lifetimes[actor.id] = self.tick + lifetime
         if owner_id is not None:
             self.summon_owners[actor.id] = owner_id
