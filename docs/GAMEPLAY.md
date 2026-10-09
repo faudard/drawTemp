@@ -327,3 +327,29 @@ coûtant des provisions. Un escorteur dépensé avant interception empêche
 l'embuscade. Les anciens scénarios ne changent pas de comportement. La version
 4 du journal enregistre précisément embuscades, pénuries, sauvetages et ordres.
 Voir [les contrats et limites](MULTI_FRONT.md#command-centre-20-contested-routes-and-rescue-orders).
+
+
+### Mission jouable : sauver le convoi
+
+Dans le siège à routes contestées, chaque convoy immobilisé peut déclencher
+la mission `castle_convoy_rescue` : un petit groupe d'escorte protège un
+chariot allié (`protected_id`) contre deux pillards. Les attaques, mouvements
+et objectifs sont ceux de `Battle`, sans second moteur de combat.
+
+Le commandant peut payer un ordre de secours logistique, choisir de jouer le
+combat, ou abandonner le convoi et perdre les unités transportées. La victoire
+libère les survivants du convoy, leur permet de reprendre la route et récupère
+une provision ; une défaite détruit le transport. La timeline globale est
+gelée durant la mission et les voyageurs ne sont pas dupliqués sur la carte.
+
+```sh
+python -m examples.siege_command --interactive
+# Une fois un convoy immobilisé :
+# skirmish convoy_1
+# rescue-act convoy_1 {"kind":"end"}
+python -m unittest discover -s tests_standalone -p test_convoy_rescue.py -v
+```
+
+La fenêtre Tk propose les boutons **Combat de secours** et **Abandonner**,
+ainsi que les PV du chariot et l'unité active. Toute la séance, même sauvegardée
+au milieu du combat de secours, est rejouée avec vérification intégrale.
