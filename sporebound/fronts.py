@@ -127,7 +127,8 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
         if self.campaign is not None and "routes" in self.initial_campaign:
             self.route_policy = CampaignRoutesPolicy(
                 {"routes": self.initial_campaign["routes"],
-                 "recovery": self.initial_campaign["recovery"]},
+                 "recovery": self.initial_campaign["recovery"],
+                 "treaties": self.initial_campaign["treaties"]},
                 self.content, self.missions, self.campaign.final)
         self.route_selected = "breach"
         self.route_locked = False
