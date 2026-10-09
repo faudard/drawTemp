@@ -348,7 +348,13 @@ def launch(path):
     def refresh(*args):
         nonlocal selected_cell, campaign_battle
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
-            campaign_session.finish(battle)
+            from .narrative import StoryBook
+            story = StoryBook(studio.project.story, Content.from_dict(doc.data),
+                              studio.project.campaigns)
+            route = battle.result == 'victory' and battle.mission.id in story.after
+            earned = campaign_session.finish(battle, unlock_next=not route)
+            if earned and route:
+                story.after_victory(campaign_session, battle.mission.id)
             campaign_battle = False
             status_var.set('Résultat de campagne enregistré : ' + battle.result)
         mids = [m['id'] for m in doc.data['missions']]
