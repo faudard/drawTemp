@@ -4,6 +4,7 @@ The project manifest is intentionally separate from the validated tactical
 content v1, so editing a title screen cannot rewrite combat/replay contracts.
 """
 from dataclasses import dataclass, field
+from copy import deepcopy
 import json
 from pathlib import Path
 
@@ -34,7 +35,7 @@ class GameProject:
     def from_dict(cls, data, content):
         require(isinstance(data, dict), 'Project must be an object')
         try:
-            project = cls(**data)
+            project = cls(**deepcopy(data))
         except (TypeError, ValueError) as exc:
             raise RuleError(f'Invalid project structure: {exc}') from exc
         project.validate(content)
@@ -46,7 +47,8 @@ class GameProject:
 
     def to_dict(self):
         return {'version': self.version, 'title': self.title, 'subtitle': self.subtitle,
-                'campaigns': self.campaigns, 'options': self.options, 'save_slots': self.save_slots}
+                'campaigns': deepcopy(self.campaigns), 'options': deepcopy(self.options),
+                'save_slots': self.save_slots}
 
     def validate(self, content):
         require(type(self.version) is int and self.version == 1, 'Unsupported game project version')
