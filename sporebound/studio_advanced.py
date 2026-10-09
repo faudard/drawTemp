@@ -193,6 +193,9 @@ class AdvancedStudio:
         self.action_unit,_=self._field(form,7,'Unité / ID spawn')
         self.action_status,self.action_status_box=self._field(form,8,'Statut / archétype',choices=[])
         self.action_team,_=self._field(form,9,'Camp spawn','enemy',choices=['player','enemy'])
+        self.event_pos,_=self._field(form,10,'Position événement (x,y)','0,0')
+        ttk.Button(form,text='Case sélectionnée',command=lambda:self.event_pos.set(
+            ','.join(str(c) for c in self.owner.selection()))).grid(row=10,column=2,padx=4)
         ttk.Label(outer,text='Actions (dans l’ordre d’exécution)').pack(anchor='w',padx=8,pady=(7,0))
         self.blocks_list=self.tk.Listbox(outer,height=7,exportselection=False)
         self.blocks_list.pack(fill='both',expand=True,padx=8,pady=3)
@@ -251,12 +254,16 @@ class AdvancedStudio:
         self.cond_kind.set(trigger['condition'])
         self.cond_value.set(str(trigger.get('value',trigger.get('percent',20))))
         self.cond_unit.set(trigger.get('unit',''))
+        self.event_pos.set(','.join(str(v) for v in trigger.get('pos',self.owner.selection())))
         self.blocks=deepcopy(trigger['actions'])
         self._render_blocks()
 
     def _save_event(self):
         kind=self.cond_kind.get()
-        spec=event_composer.condition(kind,pos=self.owner.selection(),
+        position=[int(x.strip()) for x in self.event_pos.get().split(',')]
+        if len(position)!=2:
+            raise RuleError('Position de déclencheur : saisir x,y')
+        spec=event_composer.condition(kind,pos=position,
                                       tick=int(self.cond_value.get()),
                                       unit=self.cond_unit.get(),
                                       percent=int(self.cond_value.get()))
