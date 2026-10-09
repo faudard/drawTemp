@@ -69,8 +69,8 @@ class LogisticsTests(unittest.TestCase):
                                   "gate", logistics={**config, **patch})
         s = siege_session()
         with self.assertRaises(RuleError):
-            s.send_reserves("walls", [reserve("a"), reserve("b"),
-                                       reserve("c"), reserve("d")])
+            s.send_reserves("walls", [reserve("a", (3, 6)), reserve("b", (4, 6)),
+                                       reserve("c", (5, 6)), reserve("d", (6, 6))])
         self.assertEqual(s.logistics.reserves["player"], 3)
         self.assertEqual(s.logistics.in_transit, [])
         with self.assertRaises(RuleError):
