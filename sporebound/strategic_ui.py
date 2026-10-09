@@ -23,6 +23,7 @@ def launch(session):
     status = tk.StringVar(value="")
     front_name = tk.StringVar(value=session.timeline.focused)
     doctrine = tk.StringVar(value="hold")
+    route_choice = tk.StringVar(value="tunnels")
     destination = tk.StringVar(value="courtyard")
     unit_id = tk.StringVar(value="")
     x_value = tk.StringVar(value="3")
@@ -76,6 +77,10 @@ def launch(session):
     campaign_row = ttk.Frame(controls, padding=5)
     campaign_row.pack(fill="x")
     ttk.Label(campaign_row, text="Choix de siège").pack(side="left", padx=4)
+    route_combo = ttk.Combobox(campaign_row, textvariable=route_choice,
+                               values=("breach", "tunnels", "direct"),
+                               state="readonly", width=9)
+    route_combo.pack(side="right", padx=4)
 
     second = ttk.Frame(controls, padding=5)
     second.pack(fill="x")
@@ -129,6 +134,13 @@ def launch(session):
             stock += (" | Campagne:" + result["status"]
                       + " | Trône:" + ("accessible" if result["unlocked"]
                                       else "verrouillé"))
+            if s.route_policy is not None:
+                stock += " | Route:" + s.route_selected
+                route_combo.configure(values=sorted(s.route_policy.routes))
+                if s.recovery_battles:
+                    front, battle = next(iter(s.recovery_battles.items()))
+                    rescue_text = (f" | REPRISE {front}: "
+                                   f"actif={battle.active_id or 'aucun'}")
         status.set(f"Tour {s.timeline.turn} | Focus : {s.timeline.focused} | {stock}"
                    + rescue_text)
         front_selector.configure(values=sorted(s.missions))
@@ -222,6 +234,15 @@ def launch(session):
     ttk.Button(campaign_row, text="Retraite du secteur",
                command=lambda: guarded(lambda: current[0].withdraw_front(
                    current[0].timeline.focused))).pack(side="left", padx=3)
+    ttk.Button(campaign_row, text="Choisir route",
+               command=lambda: guarded(lambda: current[0].select_route(
+                   route_choice.get()))).pack(side="right", padx=3)
+    ttk.Button(campaign_row, text="Contre-attaque",
+               command=lambda: guarded(lambda: current[0].start_recovery(
+                   front_name.get()))).pack(side="right", padx=3)
+    ttk.Button(campaign_row, text="Abandon reprise",
+               command=lambda: guarded(lambda: current[0].abandon_recovery(
+                   next(iter(current[0].recovery_battles))))).pack(side="right", padx=3)
     ttk.Button(second, text="Envoyer réserve",
                command=lambda: guarded(lambda: current[0].send_reserves(
                    destination.get(), [{"id": unit_id.get(), "name": unit_id.get(),
@@ -260,7 +281,10 @@ def launch(session):
     def play_tactical():
         command = json.loads(tactical.get())
         s = current[0]
-        if s.pursuit_battles:
+        if s.recovery_battles:
+            front = next(iter(s.recovery_battles))
+            s.execute_recovery(front, command)
+        elif s.pursuit_battles:
             cid = next(iter(s.pursuit_battles))
             s.execute_pursuit(cid, command)
         elif s.rescue_battles:
