@@ -30,6 +30,9 @@ HELP = """Commands:
   pursue CONVOY_ID               Chase fleeing raiders for lost cargo
   pursuit-act CONVOY_ID JSON     Play pursuit using normal Battle commands
   giveup-pursuit CONVOY_ID       Stop pursuing, lose remaining loot
+  partial FRONT                  Claim a real completed tactical objective
+  parley FRONT                   Negotiate passage in exchange for supplies
+  withdraw FRONT                 Evacuate and permanently abandon this front
   tactical JSON                  Execute one normal Battle command
   save PATH                      Atomic JSON checkpoint with verified replay
   load PATH                      Verify and resume a multi-front recording
@@ -88,6 +91,13 @@ def dashboard(session, *, event_count=8):
     if session.pursuit_outcomes:
         lines.append("PURSUIT RESULTS  " + ", ".join(
             f"{cid}={result}" for cid, result in sorted(session.pursuit_outcomes.items())))
+    if session.campaign is not None:
+        campaign = session.campaign.state(session)
+        lines.append("CAMPAIGN  "
+                     + campaign["status"] + " | throne unlocked="
+                     + str(campaign["unlocked"]))
+        for front, info in sorted(campaign["required"].items()):
+            lines.append(f"  {front}: {info['status']} | accepted={info['accepted']}")
     if session.blocked_reinforcements:
         lines.append("INTERDICTED: " + ", ".join(sorted(session.blocked_reinforcements)))
     if event_count:
@@ -175,6 +185,14 @@ def handle(session, line):
         return session, dashboard(session), False
     if action == "doctrine" and len(fields) == 2:
         session.set_doctrine(*fields)
+        return session, dashboard(session), False
+    if action in {"partial", "parley", "withdraw"} and len(fields) == 1:
+        if action == "partial":
+            session.partial_front(fields[0])
+        elif action == "parley":
+            session.negotiate_front(fields[0])
+        else:
+            session.withdraw_front(fields[0])
         return session, dashboard(session), False
     if action == "turn" and len(fields) <= 1:
         count = int(fields[0]) if fields else 1
