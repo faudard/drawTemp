@@ -114,6 +114,9 @@ python -m examples.siege_command --interactive  # ordres et timeline en terminal
 python -m examples.siege_command --demo         # embuscade + secours
 python -m examples.siege_command --rescue-demo  # vrai combat : victoire + replay
 python -m examples.siege_command --choices-demo # évacuation + poursuite + replay
+python -m examples.siege_strategy_demo         # négociation, cour partielle, trône
+python -m examples.siege_command --gui --campaign
+python -m unittest discover -s tests_standalone -p test_siege_campaign.py -v
 python -m unittest discover -s tests_standalone -p test_command_center.py -v
 python -m unittest discover -s tests_standalone -p test_convoy_rescue.py -v
 ```
@@ -123,7 +126,9 @@ Routes dangereuses, escorte limitée et provisions sont facultatives.
 Le sauvetage d'un convoi peut désormais devenir une **vraie mission tactique** :
 protéger un chariot, négocier, évacuer les survivants, récupérer un butin
 partiel, poursuivre les pillards ou abandonner le convoi.
-Les opérations et la bataille sont vérifiées par replay. L'interface graphique viendra ensuite.
+La campagne multi-fronts optionnelle verrouille aussi le trône jusqu'aux
+victoires requises ou aux négociations et conquêtes partielles autorisées.
+Les opérations et les batailles sont vérifiées par replay v5.
 
 ## Documentation
 
