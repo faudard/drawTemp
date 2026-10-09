@@ -182,6 +182,7 @@ The same `MultiFrontSession` drives a small terminal **command centre**
 ```sh
 python -m examples.siege_command
 python -m examples.siege_command --demo
+python -m examples.siege_command --rescue-demo  # complete scripted tactical skirmish
 python -m examples.siege_command --interactive
 ```
 
