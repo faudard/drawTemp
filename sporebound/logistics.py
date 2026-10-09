@@ -12,7 +12,7 @@ from .model import require
 
 class LogisticsDirector:
     def __init__(self, config, missions):
-        require(isinstance(config, dict) and set(config) <= {"routes", "reserves", "capacity"},
+        require(isinstance(config, dict) and set(config) <= {"routes", "reserves", "capacity", "ambushes", "supplies", "escorts"},
                 "Invalid logistics configuration")
         require("reserve" not in missions, "reserve is a reserved strategic origin")
         reserves = config.get("reserves", {})
@@ -40,6 +40,37 @@ class LogisticsDirector:
                     "Travel time must be 1..100 strategic turns")
             require((origin, dest) not in self.routes, "Duplicate logistics route")
             self.routes[(origin, dest)] = turns
+        # Optional supply system; absent means legacy convoys need no provisions.
+        self.supplies = None
+        if "supplies" in config:
+            values = config["supplies"]
+            require(isinstance(values, dict) and set(values) <= {"player", "enemy"}
+                    and all(type(n) is int and 0 <= n <= 10000 for n in values.values()),
+                    "Invalid strategic supplies")
+            self.supplies = {"player": values.get("player", 0),
+                             "enemy": values.get("enemy", 0)}
+        self.escorts = config.get("escorts", 0)
+        require(type(self.escorts) is int and 0 <= self.escorts <= 10000,
+                "Invalid escort capacity")
+        self.ambushes = {}
+        hazards = config.get("ambushes", [])
+        require(isinstance(hazards, list), "Invalid route ambushes")
+        for hazard in hazards:
+            require(isinstance(hazard, dict)
+                    and set(hazard) == {"from", "to", "casualties", "delay", "charges"},
+                    "Invalid route ambush")
+            key = (hazard["from"], hazard["to"])
+            require(key in self.routes and key not in self.ambushes,
+                    "Ambush needs a unique authored route")
+            require(type(hazard["casualties"]) is int and 0 <= hazard["casualties"] <= 14
+                    and type(hazard["delay"]) is int and 1 <= hazard["delay"] <= 100
+                    and type(hazard["charges"]) is int and 1 <= hazard["charges"] <= 100,
+                    "Invalid ambush severity or charges")
+            self.ambushes[key] = {"casualties": hazard["casualties"],
+                                  "delay": hazard["delay"],
+                                  "charges": hazard["charges"]}
+        self._extended = {key for key in ("supplies", "escorts", "ambushes")
+                          if key in config}
         self.in_transit = []
         self.serial = 0
 
@@ -69,16 +100,40 @@ class LogisticsDirector:
         self.in_transit.append(order)
         return order["id"]
 
+    def spend_supplies(self, team, amount):
+        require(team in {"player", "enemy"} and type(amount) is int and amount > 0,
+                "Invalid supply cost")
+        if self.supplies is None:
+            return
+        require(self.supplies[team] >= amount, "Not enough strategic supplies")
+        self.supplies[team] -= amount
+
+    def convoy(self, convoy_id):
+        row = next((order for order in self.in_transit if order["id"] == convoy_id), None)
+        require(row is not None, "Unknown or completed convoy")
+        return row
+
     def due(self, turn):
-        ready = [row for row in self.in_transit if row["arrival"] <= turn]
-        self.in_transit = [row for row in self.in_transit if row["arrival"] > turn]
+        ready = [row for row in self.in_transit
+                 if row["arrival"] <= turn and not row.get("stranded")]
+        ids = {row["id"] for row in ready}
+        self.in_transit = [row for row in self.in_transit if row["id"] not in ids]
         return ready
 
     def state(self):
-        return {"capacity": self.capacity, "reserves": deepcopy(self.reserves),
-                "routes": [{"from": src, "to": dst, "turns": ticks}
-                           for (src, dst), ticks in sorted(self.routes.items())],
-                "in_transit": deepcopy(self.in_transit), "serial": self.serial}
+        result = {"capacity": self.capacity, "reserves": deepcopy(self.reserves),
+                  "routes": [{"from": src, "to": dst, "turns": ticks}
+                             for (src, dst), ticks in sorted(self.routes.items())],
+                  "in_transit": deepcopy(self.in_transit), "serial": self.serial}
+        if "supplies" in self._extended:
+            result["supplies"] = deepcopy(self.supplies)
+        if "escorts" in self._extended:
+            result["escorts"] = self.escorts
+        if "ambushes" in self._extended:
+            result["ambushes"] = [
+                {"from": src, "to": dst, **deepcopy(data)}
+                for (src, dst), data in sorted(self.ambushes.items())]
+        return result
 
 
 def destination_actors(session, front, definitions):
