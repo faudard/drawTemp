@@ -86,11 +86,11 @@ class CommandCenterTests(unittest.TestCase):
     def test_two_person_rescue_keeps_surviving_actor_identity(self):
         s = siege_session(contested=True)
         s.execute({"kind": "start_battle"})
-        s.transfer_units("courtyard", {"engineer": [3, 6],
+        s.transfer_units("courtyard", {"supply_outrider": [3, 6],
                                        "supply_scout": [3, 7]})
         s.advance()
         convoy = s.logistics.convoy("convoy_1")
-        self.assertEqual([u["id"] for u in convoy["actors"]], ["engineer"])
+        self.assertEqual([u["id"] for u in convoy["actors"]], ["supply_outrider"])
         s.rescue_convoy("convoy_1")
         for _ in range(3):
             s.advance()
