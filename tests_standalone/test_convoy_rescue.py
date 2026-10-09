@@ -1,5 +1,7 @@
 """Playable convoy rescue: real Battle commands, strategic outcomes, and replay."""
 from copy import deepcopy
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
 from examples.siege_command import tactical_rescue_demo
@@ -183,6 +185,25 @@ class ConvoyRescueTests(unittest.TestCase):
         s, msg, _ = handle(s, "abandon convoy_1")
         self.assertIn("RESCUE RESULTS", msg)
         self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
+
+    def test_reopen_checkpoint_mid_rescue_and_continue_without_duplication(self):
+        s = stranded()
+        s.start_rescue("convoy_1")
+        s.execute_rescue("convoy_1", {"kind": "end"})
+        with TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "rescue-progress.json"
+            s, message, _ = handle(s, f"save {checkpoint}")
+            self.assertTrue(checkpoint.exists())
+            self.assertIn("Verified", message)
+            s.execute_rescue("convoy_1", {"kind": "end"})
+            restored, _, _ = handle(s, f"load {checkpoint}")
+        self.assertEqual(len(restored.rescue_battles["convoy_1"].commands), 1)
+        self.assertEqual(restored.logistics.convoy("convoy_1")["actors"][0]["id"],
+                         "road_guard")
+        restored.abandon_convoy("convoy_1")
+        self.assertEqual(restored.rescue_outcomes["convoy_1"], "abandoned")
+        self.assertEqual(MultiFrontSession.replay(restored.recording()).digest(),
+                         restored.digest())
 
     def test_tampered_rescue_command_or_out_of_band_mutation_is_detected(self):
         s = stranded()
