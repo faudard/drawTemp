@@ -16,6 +16,7 @@ Depuis la racine du dépôt :
 
 ```sh
 python -m sporebound editor
+python -m sporebound player # client de jeu indépendant de l’éditeur
 ```
 
 Tk/Tcl doit être disponible pour l’éditeur (`python -m tkinter` permet de vérifier).
@@ -84,6 +85,39 @@ non un frontend de jeu autonome finalisé.
 
 Voir le [guide détaillé du Studio](docs/STUDIO.md) pour les actions disponibles,
 les conventions de sauvegarde et les limites.
+
+## Studio avancé et client joueur
+
+Trois onglets d'authoring supplémentaires sont disponibles :
+
+- **Graphe des missions** : afficher les nœuds, relier/délier deux missions,
+  repérer les cycles et les missions inaccessibles depuis une campagne ;
+  la navigation vers une mission actualise la carte tactique.
+- **Bibliothèque d'acteurs** : définir des archétypes de personnages/monstres,
+  capturer une unité existante, puis instancier le modèle sur plusieurs cartes.
+  Les unités placées sont des copies de données et restent indépendantes.
+- **Événements par blocs** : créer une condition et des actions ordonnées
+  (message, danger, statut, apparition depuis un archétype, disparition).
+  Le moteur valide toutes les références lors de l'application.
+
+Une application joueur distincte est également disponible :
+
+```sh
+python -m sporebound player
+python -m sporebound player --content chemin/jeu.json --project chemin/jeu.game.json
+```
+
+Le joueur choisit une campagne et un emplacement, lance les missions
+débloquées et combat sur la grille Tk avec le moteur `Battle`.
+Les victoires et défaites sont enregistrées dans le slot de campagne ;
+une bataille interrompue n'est pas enregistrée comme terminée.
+Par défaut, les profils sont écrits dans
+`~/.sporebound/<nom-du-projet>_saves/`, et non dans le package installé.
+
+Voir [le guide Studio et Player](docs/STUDIO.md). Les embranchements du graphe
+sont pour l'instant les `next_missions` existants : après une victoire,
+tous les successeurs déclarés sont débloqués. Les choix conditionnels,
+dialogues/cinématiques et renderer/audio dédiés restent à développer.
 
 ## Campagne et équipement
 
