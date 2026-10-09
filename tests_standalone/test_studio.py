@@ -7,7 +7,8 @@ import unittest
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import (add_unit, remove_unit, add_object, remove_object,
-                                  add_event, remove_event, resize_map)
+                                  add_event, remove_event, resize_map, add_blank_mission,
+                                  set_mission_properties)
 from sporebound.campaign import Campaign
 from sporebound.editor import Document
 from sporebound.game_project import GameProject, save_slot, load_slot
@@ -65,6 +66,23 @@ class AuthoringTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             add_event(self.data,self.mid,'badunit',condition='defeated',action='message',
                       pos=self.cell,unit='nope')
+
+    def test_blank_mission_and_progression(self):
+        updated=add_blank_mission(self.data,'new_battle','Nouvelle bataille',8,8)
+        battle=Content.from_dict(updated).missions['new_battle']
+        self.assertEqual(battle.board.tiles,{})
+        self.assertEqual(len(battle.units),2)
+        self.assertEqual(battle.objects,[])
+        self.assertEqual(battle.triggers,[])
+        changed=set_mission_properties(updated,self.mid,name='Intro',
+                                       objective='eliminate',reward=250,
+                                       next_missions=['new_battle'])
+        self.assertEqual(Content.from_dict(changed).missions[self.mid].next_missions,
+                         ['new_battle'])
+        with self.assertRaises(RuleError):
+            set_mission_properties(updated,self.mid,name='Intro',
+                                   objective='eliminate',reward=250,
+                                   next_missions=['not_found'])
 
     def test_resize_rejects_losing_actor_or_object(self):
         mission=self.content.missions[self.mid]
