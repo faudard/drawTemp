@@ -6,6 +6,7 @@ The focused front is never auto-resolved. All fronts share one clock.
 from copy import deepcopy
 from .model import require
 from . import front_links
+from .logistics import LogisticsDirector, destination_actors
 
 DOCTRINES = {"hold", "assault", "delay", "retreat"}
 
@@ -93,7 +94,7 @@ class MultiFrontSession:
     the multi-front journal can reconstruct offscreen attrition.
     """
 
-    def __init__(self, content, missions, focused, *, seed=1, rules=None, specs=None, links=None):
+    def __init__(self, content, missions, focused, *, seed=1, rules=None, specs=None, links=None, logistics=None):
         from .engine import Battle
         from .rules import default_rules
         require(isinstance(missions, dict) and bool(missions) and focused in missions,
@@ -116,6 +117,9 @@ class MultiFrontSession:
         self.front_snapshots = {}
         self.pending_reinforcements = {}
         self.history = []
+        self.initial_logistics = deepcopy(logistics) if logistics is not None else None
+        self.logistics = (LogisticsDirector(self.initial_logistics, self.missions)
+                          if self.initial_logistics is not None else None)
         self.links = deepcopy(links if links is not None else [])
         front_links.validate(self.content, self.missions, self.links)
         self.applied_links = set()
@@ -216,16 +220,134 @@ class MultiFrontSession:
         for wave in waves:
             battle.queue_wave(wave["actors"], lifetime=wave["lifetime"])
 
+    def _check_convoy_destination(self, front, actors):
+        require(self.timeline.fronts[front]["status"] == "active",
+                "Destination front is no longer active")
+        require(front not in self.blocked_reinforcements,
+                "The destination is under reinforcement interdiction")
+        return destination_actors(self, front, actors)
+
+    def send_reserves(self, destination, actors):
+        """Spend a finite strategic pool and send one bounded convoy.
+
+        The destination must have an authored reserve route. This never
+        creates tactical units until a later strategic synchronization.
+        """
+        require(self.logistics is not None, "Strategic logistics not configured")
+        require(destination in self.missions, "Unknown reserve destination")
+        snapshot = deepcopy((self.logistics, self.timeline))
+        try:
+            validated = self._check_convoy_destination(destination, actors)
+            teams = {actor["team"] for actor in validated}
+            require(len(teams) == 1, "Reserve convoy must use one team")
+            team = next(iter(teams))
+            require(self.logistics.reserves[team] >= len(validated),
+                    "Insufficient strategic reserves")
+            convoy_id = self.logistics.order(
+                "reserve", destination, validated, team, self.timeline.turn)
+            self.logistics.reserves[team] -= len(validated)
+            self.timeline.events.append({
+                "turn": self.timeline.turn, "kind": "reserves_dispatched",
+                "convoy": convoy_id, "front": destination, "team": team,
+                "count": len(validated)})
+        except Exception:
+            self.logistics, self.timeline = snapshot
+            raise
+        self.history.append({"kind": "send_reserves", "front": destination,
+                             "actors": deepcopy(actors)})
+        return convoy_id
+
+    def transfer_units(self, destination, placements):
+        """Move idle living players from the focused battle to another front.
+
+        placements: {unit_id: [x, y]}. Members leave their original Battle
+        immediately; current CT, casting and reaction reservations do not
+        travel. HP, MP, equipment stats and statuses survive the journey.
+        """
+        from dataclasses import asdict
+        require(self.logistics is not None, "Strategic logistics not configured")
+        source = self.timeline.focused
+        require(destination in self.missions and destination != source,
+                "Invalid transfer destination")
+        require(isinstance(placements, dict) and bool(placements),
+                "Transfer needs unit placements")
+        battle = self.active
+        require(not battle.deploying and battle.result is None,
+                "Finish deployment before transfers")
+        selected = []
+        for uid, pos in sorted(placements.items()):
+            require(isinstance(uid, str) and bool(uid), "Invalid transfer id")
+            actor = next((u for u in battle.units if u.id == uid), None)
+            require(actor is not None and actor.alive and actor.team == "player",
+                    "Only living friendly actors can transfer")
+            require(actor.id != battle.active_id and actor.id != battle.carrier
+                    and actor.id != battle.mission.protected_id,
+                    "Active, carrying or protected actors cannot depart")
+            require(actor.kind != "summon" and actor.cast is None
+                    and not actor.moved and not actor.acted
+                    and actor.id not in battle.summon_owners,
+                    "Actor must be an idle permanent unit")
+            definition = asdict(actor)
+            definition.update(pos=pos, ct=0, moved=False, acted=False,
+                              cast=None, disengaging=False)
+            selected.append(definition)
+        remaining = sum(u.alive and u.team == "player"
+                        and u.id not in placements for u in battle.units)
+        require(remaining > 0, "A front must retain a friendly defender")
+        snapshot = deepcopy((self.timeline, self.battles, self.logistics))
+        try:
+            validated = self._check_convoy_destination(destination, selected)
+            convoy_id = self.logistics.order(source, destination, validated,
+                                             "player", self.timeline.turn)
+            for definition in selected:
+                battle.despawn_actor(definition["id"])
+            own_front = self.timeline.fronts[source]
+            own_front["strength"] = max(0, own_front["strength"] - len(selected))
+            self.timeline.events.append({
+                "turn": self.timeline.turn, "kind": "units_departed",
+                "convoy": convoy_id, "from": source, "to": destination,
+                "units": [actor["id"] for actor in selected]})
+        except Exception:
+            self.timeline, self.battles, self.logistics = snapshot
+            raise
+        self.history.append({"kind": "transfer_units", "destination": destination,
+                             "placements": deepcopy(placements)})
+        return convoy_id
+
+    def _arrive_convoys(self):
+        if self.logistics is None:
+            return
+        for convoy in self.logistics.due(self.timeline.turn):
+            front = convoy["to"]
+            if (self.timeline.fronts[front]["status"] != "active"
+                    or front in self.blocked_reinforcements):
+                self.timeline.events.append({
+                    "turn": self.timeline.turn, "kind": "convoy_lost",
+                    "convoy": convoy["id"], "front": front,
+                    "reason": "front_inactive" if self.timeline.fronts[front]["status"]
+                    != "active" else "interdicted"})
+                continue
+            self.pending_reinforcements.setdefault(front, []).append({
+                "actors": deepcopy(convoy["actors"]), "lifetime": None})
+            row = self.timeline.fronts[front]
+            field = "strength" if convoy["team"] == "player" else "opposition"
+            row[field] = min(10000, row[field] + len(convoy["actors"]))
+            self.timeline.events.append({
+                "turn": self.timeline.turn, "kind": "convoy_arrived",
+                "convoy": convoy["id"], "front": front,
+                "count": len(convoy["actors"]), "team": convoy["team"]})
+
     def advance(self):
         """One strategic turn; automatic fights never execute tactical AI."""
         snapshot = deepcopy((self.timeline, self.battles, self.front_snapshots,
-                             self.pending_reinforcements))
+                             self.pending_reinforcements, self.logistics))
         try:
             for name, battle in self.battles.items():
                 if battle.result in {"victory", "defeat"}:
                     self.timeline.fronts[name]["status"] = battle.result
             before = deepcopy(self.timeline.fronts)
             self.timeline.advance()
+            self._arrive_convoys()
             self._deliver_reinforcements(self.timeline.focused)
             for name, battle in self.battles.items():
                 if name == self.timeline.focused or battle.result is not None:
@@ -248,7 +370,7 @@ class MultiFrontSession:
                     self.front_snapshots[name] = deepcopy(front)
         except Exception:
             (self.timeline, self.battles, self.front_snapshots,
-             self.pending_reinforcements) = snapshot
+             self.pending_reinforcements, self.logistics) = snapshot
             raise
         self.history.append({"kind": "advance"})
         return self.timeline.state()
@@ -275,6 +397,8 @@ class MultiFrontSession:
                  "front_snapshots": deepcopy(self.front_snapshots),
                  "pending_reinforcements": deepcopy(self.pending_reinforcements)}
         # Preserve version-1 checksum semantics for sessions without links.
+        if self.logistics is not None:
+            state["logistics"] = self.logistics.state()
         if self.links:
             state["links"] = deepcopy(self.links)
             state["applied_links"] = sorted(self.applied_links)
@@ -289,10 +413,12 @@ class MultiFrontSession:
 
     def recording(self):
         """Portable journal; replay proves all tactical and strategic mutations."""
-        return {"version": 2, "kind": "multi_front",
+        return {"version": 3 if self.logistics is not None else 2, "kind": "multi_front",
                 "content": self.content.to_dict(), "missions": dict(self.missions),
                 "focused": self.initial_focus, "specs": deepcopy(self.initial_specs),
                 "links": deepcopy(self.links),
+                **({"logistics": deepcopy(self.initial_logistics)}
+                   if self.logistics is not None else {}),
                 "seed": self.seed, "rules": self.rules.manifest(),
                 "operations": deepcopy(self.history), "digest": self.digest()}
 
@@ -300,7 +426,7 @@ class MultiFrontSession:
     def replay(cls, recording, *, rules=None):
         from .model import Content
         from .rules import default_rules
-        require(isinstance(recording, dict) and recording.get("version") in {1, 2}
+        require(isinstance(recording, dict) and recording.get("version") in {1, 2, 3}
                 and recording.get("kind") == "multi_front", "Unsupported multi-front save")
         effective_rules = rules if rules is not None else default_rules()
         require(recording.get("rules") == effective_rules.manifest(),
@@ -309,7 +435,8 @@ class MultiFrontSession:
                       recording["missions"], recording["focused"],
                       seed=recording["seed"], rules=effective_rules,
                       specs=recording["specs"],
-                      links=recording.get("links", []) if recording["version"] == 2 else [])
+                      links=recording.get("links", []) if recording["version"] >= 2 else [],
+                      logistics=recording["logistics"] if recording["version"] == 3 else None)
         for operation in recording["operations"]:
             kind = operation["kind"]
             if kind == "execute":
@@ -323,6 +450,10 @@ class MultiFrontSession:
             elif kind == "reinforce":
                 session.reinforce(operation["front"], operation["actors"],
                                   lifetime=operation["lifetime"])
+            elif kind == "send_reserves":
+                session.send_reserves(operation["front"], operation["actors"])
+            elif kind == "transfer_units":
+                session.transfer_units(operation["destination"], operation["placements"])
             else:
                 require(False, "Unknown multi-front operation")
         require(session.digest() == recording["digest"], "Multi-front checksum mismatch")
@@ -335,6 +466,7 @@ class MultiFrontSession:
         restored = self.replay(recording, rules=self.rules)
         require(restored.missions == self.missions
                 and restored.content.to_dict() == self.content.to_dict()
-                and restored.links == self.links,
+                and restored.links == self.links
+                and restored.initial_logistics == self.initial_logistics,
                 "Incompatible multi-front save")
         self.__dict__.update(restored.__dict__)
