@@ -99,6 +99,81 @@ Replay of the previous unlinked v1 format remains supported. Any failure
 during cross-front application restores the entire session snapshot and
 does not append a successful operation to its journal.
 
+## Logistics 1.0: bounded reserves and real actor transfers
+
+`MultiFrontSession(..., logistics={...})` opts into an explicit strategic
+convoy system; older sessions remain unchanged. A convoy does not move on the
+tactical map or simulate hundreds of units. A convoy travels over **global
+strategic turns** and occupies a bounded transport slot until arrival.
+
+```python
+from examples.siege_fronts import siege_session
+from sporebound.fronts import MultiFrontSession
+
+session = siege_session()
+session.execute({"kind": "start_battle"})
+session.send_reserves("walls", [
+    {"id": "shield_reserve", "name": "Shield Reserve",
+     "team": "player", "pos": [3, 6]},
+])
+session.transfer_units("courtyard", {"supply_scout": [3, 6]})
+session.advance()  # travel tick 1
+session.advance()  # the two convoys arrive: walls and courtyard
+assert session.logistics.reserves["player"] == 2
+assert MultiFrontSession.replay(session.recording()).digest() == session.digest()
+```
+
+The example configuration:
+
+```python
+logistics = {
+    "reserves": {"player": 3, "enemy": 0},
+    "capacity": 4,  # total actor slots in flight, not number of convoys
+    "routes": [
+        {"from": "reserve", "to": "walls", "turns": 2},
+        {"from": "supplies", "to": "courtyard", "turns": 2},
+    ],
+}
+```
+
+- **`send_reserves(destination, actors)`** consumes one reserve point per
+  actor at departure, requiring a `reserve → destination` route. Tactical
+  landing cells, actor identities and footprints must be valid. Supply spent
+  on a convoy that loses its destination is **not refunded**.
+- **`transfer_units(destination, placements)`** removes actual, living,
+  idle, player-controlled actors from the currently focused Battle. Use the
+  mapping `{actor_id: [x, y]}` to specify arrival anchors. Active, casting,
+  protected, relic-carrying, summoned, or already moved/acted actors cannot
+  transfer. The source retains at least one living player and one strategic
+  strength point. A named actor cannot duplicate a destination actor.
+- **Travel** uses directional author-defined routes and cannot complete on
+  the departure turn. Orders use monotonically increasing IDs, FIFO arrival
+  ordering and a total in-transit actor cap. All timers are advanced by
+  `session.advance()`, never by tactical CT or background processing.
+- **Arrival** increments the appropriate strategic aggregate strength
+  (friendly strength, enemy opposition) and queues an ordinary bounded
+  encounter wave. Arrivals on unopened fronts wait for their first tactical
+  entry. A busy/occupied landing may delay a wave until the landing becomes
+  free; already-active enemies can still contest the landing.
+- **Attrition and retreat**: a front resolved as withdrawn, victorious,
+  defeated, or interdicted before its convoy arrives rejects that convoy.
+  This is a real logistics loss, not a teleport or retroactive respawn.
+  Transfers preserve HP, MP, statuses and actor identity, while initiative
+  and partial actions are reset. The session records departure, transit,
+  delivery and loss in a replayable journal.
+- **Replays**: logistics sessions use multi-front save format **v3** and
+  include configuration, remaining pools, routes, in-flight convoys and
+  arrival/loss events. Version 1 (unlinked) and version 2 (linked, without
+  logistics) remain readable. Saves must be recorded using the session API,
+  not by mutating Battle objects outside the journal.
+
+An authored **gate defeat** effect now reduces courtyard friendly strength
+by three, applying corresponding damage if that tactical battle is loaded;
+the same loss is materialized on first load otherwise. More consequences can
+be authored with `reduce_strength`, `reduce_opposition`, and the existing
+object/wave effects. This allows sacrifices and withdrawals to have lasting
+consequences without simulating hundreds of combatants.
+
 ## Contracts and limitations
 
 - **Bounded tactical maps**: a front keeps its own units, CT, statuses and
@@ -132,6 +207,6 @@ does not append a successful operation to its journal.
   Opening an already simulated front applies HP attrition but does not
   reconstruct hypothetical individual offscreen moves. This is intentional.
 
-Next milestones: logistics/supply and limited transfers between fronts,
-player-selectable arrival points, doctrine presets, tactical objectives that
-alter strategic strength, and cross-front victory/failure conditions.
+Next milestones: selected landing zones in the editor, doctrine presets,
+convoy interception/delay events, supply-line protection objectives, and
+campaign-level victory and defeat conditions across the global timeline.
