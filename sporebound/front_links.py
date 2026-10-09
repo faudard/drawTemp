@@ -86,6 +86,8 @@ def _suppress_waves(battle):
 
 def configure_mission(content, mission_id, overrides, suppress):
     """Prepare the content *before* constructing Battle (tick-zero safety)."""
+    if not overrides and not suppress:
+        return
     mission = content.missions[mission_id]
     for obj in mission.objects:
         obj.update(deepcopy(overrides.get(obj["id"], {})))
