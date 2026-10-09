@@ -29,6 +29,8 @@ class StudioPanels:
         self._project_tab(notebook)
         from .studio_advanced import AdvancedStudio
         self.advanced=AdvancedStudio(self, notebook)
+        from .studio_story import StoryEditor
+        self.story_editor=StoryEditor(self, notebook)
         self._last_mission_signature=None
         self.reload_project()
         self.refresh()
@@ -210,6 +212,7 @@ class StudioPanels:
         self.project=(GameProject.load(self.project_path,content) if self.project_path.exists()
                       else GameProject.default(content))
         self.project_saved=json.dumps(self.project.to_dict(),sort_keys=True)
+        self.story_editor.reset_project()
         self._last_mission_signature=None
         self.session=None
         self.session_campaign=''
@@ -359,3 +362,4 @@ class StudioPanels:
         if self.session is not None:
             self.project_status.config(text=f'Campagne active : {self.session_campaign} | Missions : {len(self.session.completed)} terminées | Or : {self.session.gold}')
         self.advanced.refresh()
+        self.story_editor.refresh()
