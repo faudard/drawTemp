@@ -127,3 +127,90 @@ SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standal
    et validation des impasses ; aperçu de progression.
 5. Versionnement des sauvegardes de campagne avec identité de contenu,
    migrations, vérification des collisions de slots et autosave robuste.
+
+## Studio avancé — graphe, archétypes et blocs
+
+### Graphe des missions
+
+L'onglet **Graphe des missions** lit et modifie exclusivement les champs
+`Mission.next_missions` du contenu tactique. Les nœuds sont organisés
+automatiquement en couches à partir de la mission d'entrée de la campagne
+sélectionnée. Un nœud vert correspond à un départ, un nœud grisé à une
+mission non accessible depuis celui-ci, un nœud jaune à la sélection.
+
+Pour établir un lien, choisir la mission source, la destination puis
+**Relier →** ; **Retirer lien** effectue l'inverse. **Afficher mission**
+ouvre la mission source dans la vue de carte. L'inspection détecte les
+cycles et les missions isolées sans altérer le contenu. Les modifications
+sont validées et passent par Undo/Redo.
+
+**Important :** les liaisons sont des déblocages après une victoire, pas
+encore des choix exclusifs ou des transitions conditionnelles.
+Une mission peut débloquer plusieurs successeurs. Un graphe cyclique
+reste techniquement permis mais il est explicitement signalé.
+
+### Bibliothèque de personnages et de monstres
+
+L'onglet **Bibliothèque d'acteurs** utilise le registre
+`Content.archetypes` et l'usine `ActorFactory` existants.
+
+- **Créer archétype** définit une créature réutilisable avec type
+  (character/monster/summon), PV, attaque, vitesse et mobilité.
+- **Capturer unité** extrait les caractéristiques d'une unité existante
+  et crée un archétype unique, sans ses valeurs transitoires de combat.
+- **Placer sur carte** instancie un acteur sur la case sélectionnée.
+- **Supprimer archétype** est interdit tant qu'une unité ou un événement
+  y fait référence.
+
+Une instance déjà placée est une copie validée des propriétés du modèle ;
+les changements ultérieurs d'un archétype ne modifient pas implicitement
+les personnages existants. Cette politique préserve les replays et
+l'équilibrage historique.
+
+### Événements par blocs
+
+L'onglet **Événements par blocs** permet de composer un déclencheur
+`tick`, `enter`, `defeated` ou `hp_below`, puis plusieurs actions
+dans un ordre explicite. Les actions guidées proposées sont message,
+danger, statut, spawn depuis un archétype et despawn. Les boutons
+**Ajouter bloc**, **Supprimer bloc**, **↑** et **↓** manipulent une liste
+locale jusqu'à **Valider événement**. La validation par `Content`
+garantit que l'ensemble est accepté ou entièrement rejeté.
+
+L'identifiant permet aussi d'éditer un événement déjà créé :
+le sélectionner dans la liste, puis remplacer ses blocs. Les règles
+plus avancées (vagues, conditions personnalisées, extensions modulaires)
+restent accessibles par l'onglet JSON.
+
+## Client joueur indépendant
+
+```sh
+python -m sporebound player
+python -m sporebound player --content ./jeu.json --project ./jeu.game.json
+python -m sporebound player --profile ./profils/ma_partie.game.json
+```
+
+Le player Tk fournit un écran titre autonome, le choix de campagne,
+un sélecteur d'emplacements, un menu de missions débloquées et une
+grille de combat. Les commandes de déplacement, attaque, compétences,
+objets, orientation et déploiement passent par le même `Battle.execute`
+que la CLI. Le bouton de tour IA emploie `play_activation`.
+
+La progression est commise avec `Campaign.finish` une seule fois à la
+fin d'un combat ; elle est alors sauvegardée atomiquement. Les slots
+sont placés par défaut dans le répertoire de l'utilisateur plutôt que
+dans les fichiers du package. **Nouvelle partie** demande une
+confirmation avant d'écraser un slot déjà présent ; **Charger**
+refuse un slot absent/corrompu sans remplacer la session précédente.
+
+Un combat quitté avant son résultat est abandonné, pas enregistré
+comme victoire. Les sauvegardes en plein combat nécessitent encore
+l'API de replay distincte. Le player est fonctionnel, mais sa
+présentation Tk reste volontairement sobre et sans assets audio/vidéo.
+
+### Vérifications
+
+```sh
+python -m unittest discover -s tests_standalone -p test_studio_advanced.py -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_studio_advanced_gui.py -v
+```
