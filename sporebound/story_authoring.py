@@ -124,3 +124,37 @@ def set_mission_outcome(project, content, mission_id, scene_id=''):
         else:
             mapping.pop(mission_id, None)
     return _edit(project, content, change)
+
+
+def link_choice(project, content, scene_id, choice_id, target_id=''):
+    """Connect/disconnect a choice to a reusable scene, preserving other edges."""
+    def change(story):
+        require(not target_id or any(row['id'] == target_id for row in story['scenes']),
+                'Unknown destination scene')
+        choice = next((row for row in _scene(story, scene_id)['choices']
+                       if row['id'] == choice_id), None)
+        require(choice is not None, 'Unknown choice')
+        if target_id:
+            choice['next_scene'] = target_id
+        else:
+            choice.pop('next_scene', None)
+    return _edit(project, content, change)
+
+
+def create_linked_scene(project, content, source_scene, choice_id, new_id,
+                        title, dialogue, speaker=''):
+    """Create a scene and connect one branch in ONE validated undo step."""
+    _id(new_id, 'New scene id')
+    def change(story):
+        require(not any(row['id'] == new_id for row in story['scenes']),
+                'Scene id already exists')
+        choice=next((row for row in _scene(story, source_scene)['choices']
+                     if row['id'] == choice_id), None)
+        require(choice is not None, 'Unknown choice')
+        require(not choice.get('next_scene'), 'Branch already has a destination')
+        story['scenes'].append({
+            'id':new_id,'title':title,'speaker':speaker,'text':dialogue,
+            'choices':[{'id':'continue','label':'Continuer','effects':[]}],
+        })
+        choice['next_scene']=new_id
+    return _edit(project,content,change)
