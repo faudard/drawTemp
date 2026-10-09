@@ -72,8 +72,29 @@ def siege_content():
                        {**unit("castellan", "enemy", [10, 3]), "hp": 65, "max_hp": 65, "attack": 12},
                        unit("royal_guard_left", "enemy", [8, 2]),
                        unit("royal_guard_right", "enemy", [8, 4])]
-    throne['triggers'] = [{"id": "last_stand", "condition": "tick", "value": 0,
-                           "actions": [{"kind": "message", "text": "The royal guard defends the throne. Defeat every defender!"}]}]
+    # The defenders control two limited-use emplacements. A player may
+    # disable either post instead of fighting through its fire lane.
+    throne['objects'] = [
+        {"id": "throne_arrow_slit", "kind": "defense", "pos": [9, 2],
+         "team": "enemy", "cells": [[6, 2], [6, 3], [7, 3]],
+         "power": 11, "charges": 3, "cooldown": 18},
+        {"id": "throne_brazier", "kind": "defense", "pos": [9, 4],
+         "team": "enemy", "cells": [[6, 4], [7, 3], [7, 4]],
+         "power": 16, "charges": 2, "cooldown": 24},
+    ]
+    throne['triggers'] = [
+        {"id": "last_stand", "condition": "tick", "value": 0,
+         "actions": [{"kind": "message", "text": "The royal guard defends the throne. Defeat every defender!"}]},
+        {"id": "castellan_second_phase", "condition": "hp_below",
+         "unit": "castellan", "percent": 50,
+         "actions": [
+             {"kind": "message", "text": "The castellan sounds his last horn: protect the throne!"},
+             {"kind": "status", "unit": "castellan", "status": "haste", "duration": 35},
+             {"kind": "queue_wave", "actors": [
+                 unit("throne_reserve_north", "enemy", [11, 1]),
+                 unit("throne_reserve_south", "enemy", [11, 6])]},
+         ]},
+    ]
     data['missions'].extend([ramparts, courtyard, throne])
     return Content.from_dict(data)
 
