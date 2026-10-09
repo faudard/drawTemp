@@ -50,6 +50,18 @@ def validate_wave_capacity(context, trigger):
     require(trigger.get('team', 'enemy') in {'enemy', 'player', 'neutral'}, 'Invalid wave team')
 
 
+def hp_below(battle, trigger):
+    """One-shot boss phase gate: living actor at or below a HP percentage."""
+    actor = next((u for u in battle.units if u.id == trigger['unit']), None)
+    return (actor is not None and actor.alive
+            and actor.hp * 100 <= actor.max_hp * trigger['percent'])
+
+
+def validate_hp_below(context, trigger):
+    context.unit(trigger['unit'])
+    context.integer(trigger['percent'], 1, 99)
+
+
 def default_trigger_conditions():
     return Registry((
         ('tick', TriggerConditionRule(lambda b, t: b.tick >= t['value'],
@@ -57,6 +69,7 @@ def default_trigger_conditions():
         ('enter', TriggerConditionRule(lambda b, t: any(u.alive and u.team == 'player' and u.pos == tuple(t['pos']) for u in b.units),
                                       lambda c, t: c.cell(t['pos']))),
         ('wave_capacity', TriggerConditionRule(wave_capacity, validate_wave_capacity)),
+        ('hp_below', TriggerConditionRule(hp_below, validate_hp_below)),
         ('defeated', TriggerConditionRule(lambda b, t: not b.unit(t['unit']).alive,
                                          lambda c, t: c.unit(t['unit']))),
     ))
