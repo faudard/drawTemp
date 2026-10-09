@@ -45,6 +45,8 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Application déterministe des pertes stratégiques aux unités, y compris lors de la première ouverture d'un front.
 - [x] Journal de commandes multi-fronts, replay vérifié, sauvegarde/restauration par reconstruction.
 - [x] Salle du trône : deux postes défensifs sabotables et renforts déclenchés à 50 % des PV du châtelain.
+- [x] Liens événementiels déclaratifs entre fronts : herse → porte/cour, sabotage → défense neutralisée, réserves coupées → vagues bloquées.
+- [x] Validation des références, effets différés sur fronts non ouverts, application atomique et replay multi-fronts v2 (compatibilité v1).
 - [ ] Transmission d'ordres et de ressources entre fronts, budget logistique limité et délais de transfert.
 - [ ] Choix de la zone d'arrivée des réserves et déploiement visuel multi-fronts.
 - [ ] Conséquences stratégiques des objectifs tactiques (porte, remparts, ravitaillement).
