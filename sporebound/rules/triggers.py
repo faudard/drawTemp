@@ -73,12 +73,29 @@ def validate_despawn(context, action):
     require(isinstance(action.get('unit'), str) and action['unit'], 'Despawn needs unit id')
 
 
+def validate_wave(context, action):
+    actors = action.get('actors')
+    require(isinstance(actors, list) and bool(actors), 'Wave needs actors')
+    ids = set()
+    for actor in actors:
+        require(isinstance(actor, dict), 'Wave actor must be an object')
+        uid = actor.get('id')
+        require(isinstance(uid, str) and bool(uid) and uid not in ids, 'Duplicate or invalid wave actor')
+        ids.add(uid)
+        context.cell(actor['pos'])
+        archetype = actor.get('archetype', '')
+        require(not archetype or (context.archetypes is not None and archetype in context.archetypes), 'Unknown wave archetype')
+    if 'lifetime' in action:
+        context.integer(action['lifetime'], 1, 100000)
+
+
 def default_trigger_actions():
     return Registry((
         ('hazard', TriggerActionRule(hazard, validate_hazard)),
         ('status', TriggerActionRule(lambda b, a: b._status(b.unit(a['unit']), a['status'], a['duration']), validate_status)),
         ('message', TriggerActionRule(lambda b, a: b.emit('message', text=a.get('text', '')), lambda c, a: None)),
         ('spawn', TriggerActionRule(spawn_actor, validate_spawn)),
+        ('wave', TriggerActionRule(lambda b, a: b.spawn_wave(a['actors'], lifetime=a.get('lifetime')), validate_wave)),
         ('despawn', TriggerActionRule(lambda b, a: b.despawn_actor(a['unit']), validate_despawn)),
     ))
 
