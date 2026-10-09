@@ -195,6 +195,18 @@ via une vague bornée. Le nouveau trigger `hp_below` est validé à l'édition
 (pourcentage entier 1..99 et identifiant d'unité existante), ne se déclenche
 qu'une fois et conserve la sémantique du replay.
 
+Le nouveau front `castle_supply` permet de saboter les réserves royales.
+Dans `examples.siege_fronts`, lever la herse ouvre aussi la porte d'un
+autre secteur et affaiblit la cour, neutraliser l'huile bouillante coupe
+une défense de la cour, et couper la ligne de ravitaillement empêche les
+futures vagues de renforts au trône. Tous les liens sont validés, exécutés
+une seule fois et enregistrés pour la reprise déterministe.
+
+```sh
+python -m examples.siege_fronts
+python -m unittest discover -s tests_standalone -p test_front_links.py -v
+```
+
 Le moteur multi-fronts permet de focaliser un secteur tout en appliquant une
 résolution agrégée aux autres à chaque `advance()`. Les pertes d'un front encore
 jamais ouvert sont appliquées à ses unités lors du premier switch. La reprise
