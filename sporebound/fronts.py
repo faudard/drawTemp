@@ -421,7 +421,8 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
         from .engine import Battle
         require(self.logistics is not None and self.logistics.rescue_mission is not None,
                 "Tactical convoy rescue is not enabled")
-        require(not self.rescue_battles and not self.pursuit_battles,
+        require(not self.rescue_battles and not self.pursuit_battles
+                and not self.recovery_battles,
                 "Finish the current tactical side mission first")
         require(convoy_id not in self.rescue_outcomes, "Rescue already resolved")
         convoy = self.logistics.convoy(convoy_id)
