@@ -34,12 +34,18 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Exemple de projet embarqué, tests headless et smoke Tk/Xvfb.
 - [ ] **Studio 2.1** : éditeur de tilesets / brosses / pinceaux rectangles,
   groupes, rotation, copier-coller, sélection multiple et palettes d'acteurs.
-- [ ] **Studio 2.2** : éditeur visuel des archétypes, compétences, inventaires,
-  vague de renforts, arbres d'événements, dialogue et cutscenes.
-- [ ] **Studio 2.3** : graphe de campagne, branches conditionnelles, checkpoints,
-  transitions, aperçu de progression et validation des cycles/impasses.
-- [ ] **Player Shell 1.0** : page titre → choix de sauvegarde → carte de
-  campagne → bataille → résultats, séparé de l'atelier d'édition.
+- [x] **Studio 2.2 foundation** : bibliothèque réutilisable d'acteurs,
+  formulaires d'archétypes, conditions et actions d'événements ordonnées.
+- [ ] **Studio 2.2 closure** : éditeurs de compétences/inventaire,
+  vagues de renforts, dialogue et cinématiques.
+- [x] **Studio 2.3 foundation** : graphe visuel des `next_missions`,
+  ajout/retrait de liens, détection de cycles et missions isolées.
+- [ ] **Studio 2.3 closure** : choix exclusifs, branches conditionnelles,
+  checkpoints, transitions et analyse complète des impasses.
+- [x] **Player Shell 0.1** : menu joueur autonome, choix campagne/slot,
+  missions débloquées et combats Tk utilisant `Battle`, avec sauvegardes.
+- [ ] **Player Shell 1.0 closure** : carte de campagne illustrée,
+  déploiement ergonomique, menus d'équipement et rendu/audio dédiés.
 - [ ] **Persistence 2.0** : identité projet/version de contenu dans les slots,
   détection de slots incompatibles, migration et autosave.
 
