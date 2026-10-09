@@ -56,6 +56,10 @@ class SiegeCampaignTests(unittest.TestCase):
         self.assertEqual(s.timeline.fronts["gate"]["status"], "negotiated")
         self.assertEqual(s.logistics.supplies["player"], 3)
         self.assertEqual(s.timeline.fronts["throne"]["strength"], 6)
+        before = s.digest()
+        with self.assertRaises(RuleError):
+            s.execute({"kind": "end"})
+        self.assertEqual(s.digest(), before)
         self.assertFalse(s.state()["campaign"]["unlocked"])
         self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
 
@@ -80,6 +84,10 @@ class SiegeCampaignTests(unittest.TestCase):
         self.assertEqual(s.timeline.fronts["throne"]["strength"], 4)
         self.assertTrue(s.state()["campaign"]["unlocked"])
         self.assertEqual(s.state()["campaign"]["status"], "throne_unlocked")
+        before = s.digest()
+        with self.assertRaises(RuleError):
+            s.execute({"kind": "end"})
+        self.assertEqual(s.digest(), before)
         s.switch("throne")
         self.assertEqual(s.active.unit("captain").hp, 37)
         self.assertEqual(MultiFrontSession.replay(s.recording()).state(), s.state())
