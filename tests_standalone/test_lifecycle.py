@@ -48,7 +48,8 @@ class LifecycleTests(unittest.TestCase):
         battle.lifetimes = {}
         battle.summon_owners = {}
         battle.tick = 4
-        battle.__class__ = type("WaveBattle", (Battle,), {})
+        battle.spawn_actor = lambda spec, lifetime=None: spawn(battle, spec)
+        battle.spawn_wave = lambda actors, lifetime=None: Battle.spawn_wave(battle, actors, lifetime=lifetime)
         with patch('sporebound.lifecycle.validate_actor'):
             with self.assertRaises(Exception):
                 battle.spawn_wave([
