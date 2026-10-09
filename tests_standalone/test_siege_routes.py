@@ -119,6 +119,20 @@ class SiegeRoutesTests(unittest.TestCase):
         s.switch("throne")
         self.assertEqual(MultiFrontSession.replay(s.recording()).state(), s.state())
 
+    def test_long_strategic_clock_cannot_fake_tunnel_or_throne_victory(self):
+        s = session_with_easy_side_encounters()
+        s.set_doctrine("tunnels", "assault")
+        s.set_doctrine("throne", "assault")
+        for _ in range(20):
+            s.advance()
+        self.assertEqual(s.timeline.fronts["tunnels"]["status"], "active")
+        self.assertEqual(s.timeline.fronts["throne"]["status"], "active")
+        s.select_route("tunnels")
+        self.assertFalse(s.state()["campaign"]["unlocked"])
+        with self.assertRaises(RuleError):
+            s.switch("throne")
+        self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
+
     def test_treaty_requires_authentic_supply_intelligence(self):
         s = session_with_easy_side_encounters()
         s.switch("gate")
