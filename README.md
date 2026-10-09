@@ -113,11 +113,14 @@ python -m examples.siege_command --gui          # fenêtre de commandement Tk
 python -m examples.siege_command --interactive  # ordres et timeline en terminal
 python -m examples.siege_command --demo         # embuscade + secours
 python -m unittest discover -s tests_standalone -p test_command_center.py -v
+python -m unittest discover -s tests_standalone -p test_convoy_rescue.py -v
 ```
 
 Le tableau Tk et le terminal présentent tous les fronts, convois et ETA.
-Routes dangereuses, escorte limitée, provisions et ordre de sauvetage sont
-facultatifs et vérifiés par replay. L'interface graphique viendra ensuite.
+Routes dangereuses, escorte limitée et provisions sont facultatives.
+Le sauvetage d'un convoi peut désormais devenir une **vraie mission tactique** :
+protéger un chariot et éliminer les pillards, ou abandonner le convoi.
+Les opérations et la bataille sont vérifiées par replay. L'interface graphique viendra ensuite.
 
 ## Documentation
 
