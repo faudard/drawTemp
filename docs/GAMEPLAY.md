@@ -306,3 +306,24 @@ Les `entry_effects` d’une phase peuvent tester un flag, modifier `disabled`,
 Ces conséquences sont définies dans le scénario et reconstruites à l’identique
 au chargement. Le cumul `elapsed_ticks` reste un compteur des combats terminés ;
 il n’avance pas automatiquement les autres fronts de `MultiFrontSession`.
+
+
+### Centre de commandement et routes contestées
+
+Le module `sporebound.command_center` propose un tableau stratégique sans
+dépendance graphique. Les cinq secteurs du château apparaissent simultanément,
+avec doctrine, forces, ETA des convois, stocks et événements récents. Les ordres
+passent par `MultiFrontSession`, comme les commandes IA et le replay.
+
+```sh
+python -m examples.siege_command --interactive
+python -m examples.siege_command --demo
+```
+
+Le paramètre optionnel `contested=True` de `siege_session()` active
+provisions limitées, escortes et embuscades. Un convoi attaqué peut perdre des
+combattants ; les survivants restent immobilisés jusqu'à un ordre de secours
+coûtant des provisions. Un escorteur dépensé avant interception empêche
+l'embuscade. Les anciens scénarios ne changent pas de comportement. La version
+4 du journal enregistre précisément embuscades, pénuries, sauvetages et ordres.
+Voir [les contrats et limites](MULTI_FRONT.md#command-centre-20-contested-routes-and-rescue-orders).
