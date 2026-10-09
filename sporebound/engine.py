@@ -101,6 +101,18 @@ class Battle:
             self.summon_owners[actor.id] = owner_id
         return actor
 
+    def spawn_wave(self, actors, *, lifetime=None):
+        """Spawn an entire reinforcement wave atomically, including RNG and events."""
+        require(isinstance(actors, list) and bool(actors), "Wave needs actors")
+        snapshot = deepcopy(self.__dict__)
+        try:
+            spawned = [self.spawn_actor(spec, lifetime=lifetime) for spec in actors]
+            self.emit("reinforcement_wave", units=[actor.id for actor in spawned])
+            return spawned
+        except Exception:
+            self.__dict__ = snapshot
+            raise
+
     def despawn_actor(self, actor_id):
         from .lifecycle import despawn
         self.lifetimes.pop(actor_id, None)
