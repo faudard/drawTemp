@@ -105,7 +105,12 @@ class SiegeCampaign:
                           and not row["accepted"] for row in checked.values())
         final_status = session.timeline.fronts[self.final]["status"]
         if final_status == "victory":
-            status = "victory"
+            battle = session.battles.get(self.final)
+            if session.route_policy is not None and (
+                    not accepted or battle is None or battle.result != "victory"):
+                status = "blocked"
+            else:
+                status = "victory"
         elif final_status in {"defeat", "withdrawn"}:
             status = "defeat"
         elif irrevocable:
