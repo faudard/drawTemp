@@ -8,7 +8,7 @@ def _fallback_cells(battle, origin):
     return sorted(
         (cell for cell in battle.board.cells()
          if not battle.board.tile(cell).blocked
-         and not any(u.alive and u.pos == cell for u in battle.units)),
+         and not any(u.alive and cell in u.occupied_cells() for u in battle.units)),
         key=lambda cell: (abs(cell[0] - origin[0]) + abs(cell[1] - origin[1]), cell[1], cell[0]),
     )
 
@@ -20,11 +20,15 @@ def spawn(battle, definition):
     fallback_nearest = bool(spawn_spec.pop('fallback_nearest', False))
     actor = ActorFactory(battle.content.archetypes).create(spawn_spec)
     require(not any(u.id == actor.id for u in battle.units), f'Duplicate actor: {actor.id}')
+    def available(origin):
+        return all(battle.board.contains(c) and not battle.board.tile(c).blocked
+                   and not any(u.alive and c in u.occupied_cells() for u in battle.units)
+                   for c in actor.occupied_cells(origin))
     require(battle.board.contains(actor.pos), f'Outside board: {actor.pos}')
     occupied = any(u.alive and u.pos == actor.pos for u in battle.units)
     blocked = battle.board.tile(actor.pos).blocked
     if (occupied or blocked) and fallback_nearest:
-        cells = _fallback_cells(battle, actor.pos)
+        cells = [c for c in _fallback_cells(battle, actor.pos) if available(c)]
         require(bool(cells), 'No free spawn cell')
         actor.pos = cells[0]
     else:
