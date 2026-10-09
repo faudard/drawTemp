@@ -27,7 +27,9 @@ class SiegeCampaign:
                 and final not in required, "Invalid final-front prerequisites")
         for front, accepted in required.items():
             require(front in missions and isinstance(accepted, list)
-                    and bool(accepted) and len(set(accepted)) == len(accepted)
+                    and bool(accepted)
+                    and all(isinstance(value, str) for value in accepted)
+                    and len(set(accepted)) == len(accepted)
                     and set(accepted) <= {"victory", "partial", "negotiated"},
                     "Invalid campaign allowed outcomes")
         for key in ("partial", "negotiation", "retreat"):
@@ -41,6 +43,7 @@ class SiegeCampaign:
             require(rule["event"] in {"interact", "defense_sabotaged"},
                     "Partial result needs an actual tactical objective event")
             require(isinstance(rule["object"], str) and bool(rule["object"])
+                    and isinstance(rule["target"], str)
                     and rule["target"] in missions and rule["target"] != front,
                     "Invalid partial objective/target")
             obj = next((item for item in content.missions[missions[front]].objects
@@ -54,14 +57,16 @@ class SiegeCampaign:
             require(isinstance(rule, dict) and set(rule) == {
                 "supplies", "target", "target_loss"},
                 "Invalid negotiation rule")
-            require(rule["target"] in missions and rule["target"] != front,
+            require(isinstance(rule["target"], str)
+                    and rule["target"] in missions and rule["target"] != front,
                     "Invalid negotiation target")
             self._loss(rule, "supplies", "target_loss")
             require(rule["supplies"] > 0, "Negotiation needs a nonzero ransom")
         for front, rule in spec["retreat"].items():
             require(isinstance(rule, dict) and set(rule) == {
                 "target", "target_loss"}, "Invalid retreat rule")
-            require(rule["target"] in missions and rule["target"] != front,
+            require(isinstance(rule["target"], str)
+                    and rule["target"] in missions and rule["target"] != front,
                     "Invalid retreat target")
             self._loss(rule, "target_loss")
         self.spec = deepcopy(spec)
@@ -103,7 +108,8 @@ class SiegeCampaign:
         else:
             status = "in_progress"
         return {"final_front": self.final, "status": status,
-                "unlocked": accepted, "required": checked}
+                "unlocked": accepted, "required": checked,
+                "policy": deepcopy(self.spec)}
 
 
 class CampaignChoicesMixin:
@@ -138,9 +144,7 @@ class CampaignChoicesMixin:
     def partial_front(self, front):
         battle, rule = self._campaign_choice(front, "partial")
         event = rule["event"]
-        field = ("object" if event in {"interact", "defense_sabotaged"}
-                 else "object")
-        require(any(e["kind"] == event and e.get(field) == rule["object"]
+        require(any(e["kind"] == event and e.get("object") == rule["object"]
                     for e in battle.events),
                 "Partial victory requires completed tactical objective")
         cost = rule["cost"]
