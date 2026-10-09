@@ -40,12 +40,27 @@ def validate_status(context, action):
     context.integer(action['duration'], 1, 10000)
 
 
+def validate_wave_limit(context, action):
+    context.integer(action['max_alive'], 0, 100000)
+
+
+def wave_capacity(battle, action):
+    team = action.get('team', 'enemy')
+    return sum(u.alive and u.team == team for u in battle.units) <= action['max_alive']
+
+
+def validate_wave_capacity(context, trigger):
+    context.integer(trigger['max_alive'], 0, 100000)
+    require(trigger.get('team', 'enemy') in {'enemy', 'player', 'neutral'}, 'Invalid wave team')
+
+
 def default_trigger_conditions():
     return Registry((
         ('tick', TriggerConditionRule(lambda b, t: b.tick >= t['value'],
                                      lambda c, t: c.integer(t['value'], 0, 100000))),
         ('enter', TriggerConditionRule(lambda b, t: any(u.alive and u.team == 'player' and u.pos == tuple(t['pos']) for u in b.units),
                                       lambda c, t: c.cell(t['pos']))),
+        ('wave_capacity', TriggerConditionRule(wave_capacity, validate_wave_capacity)),
         ('defeated', TriggerConditionRule(lambda b, t: not b.unit(t['unit']).alive,
                                          lambda c, t: c.unit(t['unit']))),
     ))
