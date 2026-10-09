@@ -12,7 +12,7 @@ from .model import require
 
 class LogisticsDirector:
     def __init__(self, config, missions):
-        require(isinstance(config, dict) and set(config) <= {"routes", "reserves", "capacity", "ambushes", "supplies", "escorts", "rescue_mission"},
+        require(isinstance(config, dict) and set(config) <= {"routes", "reserves", "capacity", "ambushes", "supplies", "escorts", "rescue_mission", "choices"},
                 "Invalid logistics configuration")
         require("reserve" not in missions, "reserve is a reserved strategic origin")
         reserves = config.get("reserves", {})
@@ -73,8 +73,25 @@ class LogisticsDirector:
         require(self.rescue_mission is None or
                 isinstance(self.rescue_mission, str) and bool(self.rescue_mission),
                 "Invalid rescue mission id")
+        # Higher-level rescue decisions are explicitly opt-in. Keeping the
+        # field absent preserves every pre-existing v1..v4 session digest.
+        choices = config.get("choices")
+        require(choices is None or isinstance(choices, dict)
+                and set(choices) == {"ransom", "pursuit_mission", "pursuit_reward"},
+                "Invalid convoy decision rules")
+        if choices is not None:
+            require(self.rescue_mission is not None and self.supplies is not None,
+                    "Convoy choices need tactical rescue and limited supplies")
+            require(type(choices["ransom"]) is int and 1 <= choices["ransom"] <= 100,
+                    "Invalid convoy ransom")
+            require(type(choices["pursuit_reward"]) is int
+                    and 1 <= choices["pursuit_reward"] <= 100,
+                    "Invalid pursuit reward")
+            require(isinstance(choices["pursuit_mission"], str)
+                    and bool(choices["pursuit_mission"]), "Invalid pursuit mission")
+        self.choices = deepcopy(choices)
         self._extended = {key for key in ("supplies", "escorts", "ambushes",
-                                         "rescue_mission") if key in config}
+                                         "rescue_mission", "choices") if key in config}
         self.in_transit = []
         self.serial = 0
 
@@ -101,6 +118,10 @@ class LogisticsDirector:
         self.serial += 1
         order = {"id": f"convoy_{self.serial}", "from": origin, "to": destination,
                  "team": team, "arrival": turn + turns, "actors": deepcopy(actors)}
+        if self.choices is not None:
+            # Tactical cargo, counted separately from actual travelling actors.
+            # Cargo is *potential loot*, never credited at dispatch or arrival.
+            order["cargo"] = 2 * len(actors)
         self.in_transit.append(order)
         return order["id"]
 
@@ -139,6 +160,8 @@ class LogisticsDirector:
                 for (src, dst), data in sorted(self.ambushes.items())]
         if "rescue_mission" in self._extended:
             result["rescue_mission"] = self.rescue_mission
+        if "choices" in self._extended:
+            result["choices"] = deepcopy(self.choices)
         return result
 
 
