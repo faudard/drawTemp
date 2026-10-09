@@ -76,3 +76,52 @@ class ScenarioDirector:
         self.history = deepcopy(state["history"])
         self.flags = deepcopy(state["flags"])
         self.completed = state["completed"]
+
+
+class ScenarioSession:
+    """Owns one active Battle and transfers persistent campaign state between phases."""
+
+    def __init__(self, content, scenario, *, seed=1, rules=None):
+        from .engine import Battle
+        self.content = content
+        self.director = scenario
+        self.seed = seed
+        self.rules = rules
+        self.roster = {}
+        self.inventory = None
+        self.battle = Battle(content, scenario.mission_id(), seed=seed, rules=rules)
+        self._apply_campaign_state()
+
+    def _apply_campaign_state(self):
+        if self.inventory is not None:
+            self.battle.inventory["player"] = deepcopy(self.inventory)
+        for unit in self.battle.units:
+            previous = self.roster.get(unit.id)
+            if previous and unit.team == "player":
+                unit.hp = max(0, min(unit.max_hp, previous["hp"]))
+                unit.mp = max(0, min(unit.max_mp, previous["mp"]))
+                unit.statuses = deepcopy(previous["statuses"])
+
+    def complete(self, choice):
+        """Advance only after a terminal battle outcome; preserve surviving allies."""
+        require(self.battle.result in {"victory", "defeat"},
+                "Cannot leave an unfinished battle")
+        outcome = self.battle.result
+        for unit in self.battle.units:
+            if unit.team == "player":
+                self.roster[unit.id] = {
+                    "hp": unit.hp, "mp": unit.mp, "statuses": deepcopy(unit.statuses)}
+        self.inventory = deepcopy(self.battle.inventory["player"])
+        next_phase = self.director.advance(outcome, choice)
+        if next_phase is None:
+            self.battle = None
+            return None
+        from .engine import Battle
+        self.battle = Battle(self.content, self.director.mission_id(),
+                             seed=self.seed + len(self.director.history), rules=self.rules)
+        self._apply_campaign_state()
+        return self.battle
+
+    def state(self):
+        return {"scenario": self.director.state(), "roster": deepcopy(self.roster),
+                "inventory": deepcopy(self.inventory)}
