@@ -40,8 +40,14 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
   vagues de renforts, dialogue et cinématiques.
 - [x] **Studio 2.3 foundation** : graphe visuel des `next_missions`,
   ajout/retrait de liens, détection de cycles et missions isolées.
-- [ ] **Studio 2.3 closure** : choix exclusifs, branches conditionnelles,
-  checkpoints, transitions et analyse complète des impasses.
+- [x] **Studio 2.3 narrative tree** : arbre de choix dépliable, scènes
+  partagées visibles sur plusieurs branches, création/liaison atomique,
+  conditions et conséquences inspectables, limites d'affichage.
+- [x] **Studio 2.3 conditional foundation** : dialogues conditionnels,
+  choix exclusifs de missions, drapeaux persistants, écran de narration,
+  sauvegardes compatibles avec Campaign.
+- [ ] **Studio 2.3 closure** : checkpoints, transitions, édition avancée des
+  conditions imbriquées, visualisation des impasses et diagnostic des flags.
 - [x] **Player Shell 0.1** : menu joueur autonome, choix campagne/slot,
   missions débloquées et combats Tk utilisant `Battle`, avec sauvegardes.
 - [ ] **Player Shell 1.0 closure** : carte de campagne illustrée,
