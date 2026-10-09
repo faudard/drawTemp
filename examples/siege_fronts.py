@@ -47,7 +47,7 @@ SIEGE_LINKS = [
 ]
 
 
-def siege_session(seed=1, focused="supplies", *, contested=False):
+def siege_session(seed=1, focused="supplies", *, contested=False, decisions=False):
     logistics = {
         "reserves": {"player": 3, "enemy": 0},
         "capacity": 4,
@@ -69,6 +69,14 @@ def siege_session(seed=1, focused="supplies", *, contested=False):
                       {"from": "supplies", "to": "courtyard",
                        "casualties": 1, "delay": 2, "charges": 1}],
         )
+    if decisions:
+        if not contested:
+            raise ValueError("Advanced convoy choices require contested routes")
+        logistics["choices"] = {
+            "ransom": 2,
+            "pursuit_mission": "castle_convoy_pursuit",
+            "pursuit_reward": 2,
+        }
     return MultiFrontSession(
         siege_content(),
         {"walls": "castle_ramparts", "gate": "castle_ram",
