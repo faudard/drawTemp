@@ -133,11 +133,42 @@ class MultiFrontSession:
         for name, battle in self.battles.items():
             if battle.result in {"victory", "defeat"}:
                 self.timeline.fronts[name]["status"] = battle.result
+        before = deepcopy(self.timeline.fronts)
         state = self.timeline.advance()
+        for name, battle in self.battles.items():
+            if name == self.timeline.focused or battle.result is not None:
+                continue
+            old, new = before[name], self.timeline.fronts[name]
+            if old["status"] != "active":
+                continue
+            # Aggregate strategic losses become actual tactical HP losses.
+            # Apply in stable unit order; never resurrect or reposition units.
+            self._apply_attrition(battle, "player",
+                                  old["strength"] - new["strength"])
+            self._apply_attrition(battle, "enemy",
+                                  old["opposition"] - new["opposition"])
+            if new["status"] == "victory":
+                self._apply_attrition(battle, "enemy", 1000000)
+                battle.result = "victory"
+            elif new["status"] == "defeat":
+                self._apply_attrition(battle, "player", 1000000)
+                battle.result = "defeat"
         for name, front in self.timeline.fronts.items():
             if name != self.timeline.focused and name in self.battles:
                 self.front_snapshots[name] = deepcopy(front)
         return state
+
+    @staticmethod
+    def _apply_attrition(battle, team, amount):
+        """Distribute offscreen HP loss without changing the initiative clock."""
+        remaining = max(0, amount)
+        for unit in sorted((u for u in battle.units if u.team == team and u.alive),
+                           key=lambda u: u.id):
+            if remaining == 0:
+                break
+            damage = min(unit.hp, remaining)
+            unit.hp -= damage
+            remaining -= damage
 
     def state(self):
         return {"timeline": self.timeline.state(), "missions": dict(self.missions),
