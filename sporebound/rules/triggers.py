@@ -40,10 +40,6 @@ def validate_status(context, action):
     context.integer(action['duration'], 1, 10000)
 
 
-def validate_wave_limit(context, action):
-    context.integer(action['max_alive'], 0, 100000)
-
-
 def wave_capacity(battle, action):
     team = action.get('team', 'enemy')
     return sum(u.alive and u.team == team for u in battle.units) <= action['max_alive']
