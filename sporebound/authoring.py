@@ -130,3 +130,41 @@ def remove_event(data, mid, eid):
         require(any(e['id'] == eid for e in m['triggers']), 'Unknown event')
         m['triggers'] = [e for e in m['triggers'] if e['id'] != eid]
     return _edit(data, mid, change)
+
+
+def add_blank_mission(data, mid, name, width=8, height=8):
+    """Create a playable blank board with two existing actor templates."""
+    _identifier(mid, 'Mission id')
+    require(isinstance(name, str) and bool(name.strip()), 'Mission needs a name')
+    require(type(width) is int and type(height) is int and 4 <= width <= 128 and
+            4 <= height <= 128, 'Blank map size must be between 4 and 128')
+    new = deepcopy(data)
+    require(_mission(new, mid) is None, 'Mission id already exists')
+    template = new['missions'][0]
+    actors = []
+    for team, pos in [('player', [1, height - 2]), ('enemy', [width - 2, 1])]:
+        original = next((u for m in new['missions'] for u in m['units']
+                         if u['team'] == team and u.get('footprint', [1, 1]) == [1, 1]), None)
+        require(original is not None, f'A single-cell {team} actor is required')
+        actor = deepcopy(original)
+        actor['pos'] = pos
+        actors.append(actor)
+    mission = deepcopy(template)
+    mission.update(id=mid, name=name.strip(),
+                   board={'width': width, 'height': height, 'tiles': []},
+                   units=actors, objective='eliminate', goal=[], objects=[],
+                   triggers=[], deployment=[], protected_id='', relic=None,
+                   next_missions=[])
+    new['missions'].append(mission)
+    return Content.from_dict(new).to_dict()
+
+
+def set_mission_properties(data, mid, *, name, objective, reward, next_missions):
+    require(isinstance(name, str) and bool(name.strip()), 'Mission needs a name')
+    require(isinstance(next_missions, list), 'Next missions must be a list')
+    def change(_, m):
+        m['name'] = name.strip()
+        m['objective'] = objective
+        m['reward'] = reward
+        m['next_missions'] = next_missions
+    return _edit(data, mid, change)
