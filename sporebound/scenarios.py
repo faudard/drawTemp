@@ -28,6 +28,7 @@ class ScenarioDirector:
             require(isinstance(phase.get("mission"), str) and bool(phase["mission"]),
                     "Phase needs mission")
             require(isinstance(phase.get("exits", {}), dict), "Phase exits must be an object")
+            require(phase.get("required_result") in {None, "victory", "defeat"}, "Invalid required result")
             phases[phase["id"]] = deepcopy(phase)
         start = data.get("start")
         require(start in phases, "Unknown starting phase")
@@ -49,6 +50,8 @@ class ScenarioDirector:
         """Commit a completed encounter and select exactly one valid branch."""
         require(not self.completed, "Scenario completed")
         require(result in {"victory", "defeat"}, "Encounter must have a terminal result")
+        expected = self.phases[self.current].get("required_result")
+        require(expected is None or result == expected, "This phase requires " + str(expected))
         exits = self.phases[self.current].get("exits", {})
         require(choice in exits, "Invalid scenario choice")
         source = self.current
@@ -89,6 +92,7 @@ class ScenarioSession:
         self.rules = rules
         self.roster = {}
         self.inventory = None
+        self.elapsed_ticks = 0
         self.battle = Battle(content, scenario.mission_id(), seed=seed, rules=rules)
         self._apply_campaign_state()
 
@@ -107,11 +111,15 @@ class ScenarioSession:
         require(self.battle.result in {"victory", "defeat"},
                 "Cannot leave an unfinished battle")
         outcome = self.battle.result
+        expected = self.director.phases[self.director.current].get("required_result")
+        require(expected is None or outcome == expected, "This phase requires " + str(expected))
+        require(choice in self.director.available_choices(), "Invalid scenario choice")
         for unit in self.battle.units:
             if unit.team == "player":
                 self.roster[unit.id] = {
                     "hp": unit.hp, "mp": unit.mp, "statuses": deepcopy(unit.statuses)}
         self.inventory = deepcopy(self.battle.inventory["player"])
+        self.elapsed_ticks += getattr(self.battle, "tick", 0)
         next_phase = self.director.advance(outcome, choice)
         if next_phase is None:
             self.battle = None
@@ -124,4 +132,4 @@ class ScenarioSession:
 
     def state(self):
         return {"scenario": self.director.state(), "roster": deepcopy(self.roster),
-                "inventory": deepcopy(self.inventory)}
+                "inventory": deepcopy(self.inventory), "elapsed_ticks": self.elapsed_ticks}

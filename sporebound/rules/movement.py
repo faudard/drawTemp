@@ -24,13 +24,16 @@ def reachable(battle, unit: Unit | None = None) -> dict[Cell, tuple[int, list[Ce
         cost, c = heapq.heappop(queue)
         if cost != result[c][0]:
             continue
-        for nxt in battle.board.neighbors(c):
+        from ..siege import links
+        edges = [(nxt, None) for nxt in battle.board.neighbors(c)]
+        edges.extend(links(battle, c))
+        for nxt, passage_cost in edges:
             tile = battle.board.tile(nxt)
             if not free(nxt):
                 continue
-            if not battle.can_step_height(u, c, nxt):
+            if passage_cost is None and not battle.can_step_height(u, c, nxt):
                 continue
-            total = cost + tile.cost
+            total = cost + (tile.cost if passage_cost is None else passage_cost)
             if total <= battle.movement_budget(u) and (nxt not in result or total < result[nxt][0]):
                 result[nxt] = total, result[c][1] + [nxt]
                 heapq.heappush(queue, (total, nxt))

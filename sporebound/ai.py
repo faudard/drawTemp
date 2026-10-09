@@ -56,6 +56,13 @@ def _choose_tactical_command(battle):
     origins = {u.pos: (0, [u.pos])}
     if 'move' in battle.rules.commands:
         origins.update(battle.reachable(u))
+    # A staffed defense keeps its operator nearby until empty or sabotaged.
+    posts = [o for o in battle.mission.objects if o['kind'] == 'defense'
+             and o['team'] == u.team and not o.get('disabled') and o.get('charges', 2) > 0
+             and distance(u.pos, tuple(o['pos'])) <= 1]
+    if posts:
+        origins = {c: value for c, value in origins.items()
+                   if any(distance(c, tuple(o['pos'])) <= 1 for o in posts)}
     candidates = []
     original = u.pos
     try:
@@ -78,6 +85,15 @@ def _choose_tactical_command(battle):
                         value -= sum(battle.board.tile(c).hazard for c in path[1:]) * 1.5 + cost * .05 + path_risk
                         if value > 0:
                             cmd = {"kind": "act", "skill": sid, "cell": list(cell)} if origin == original else {"kind": "move", "cell": list(origin)}
+                            candidates.append((value, cmd))
+            if "interact" in battle.rules.commands and not u.acted and not battle.status_blocks(u, "act"):
+                from .siege import defense_value
+                for obj in battle.mission.objects:
+                    if obj['kind'] == 'defense' and distance(origin, tuple(obj['pos'])) <= 1:
+                        value = defense_value(battle, u, obj) - cost * .05 - path_risk
+                        if value > 0:
+                            cmd = ({'kind': 'interact', 'object': obj['id']} if origin == original
+                                   else {'kind': 'move', 'cell': list(origin)})
                             candidates.append((value, cmd))
             if origin != original:
                 before = min((distance(original, t.pos) for t in opponents), default=0)
@@ -109,8 +125,17 @@ def _choose_tactical_command(battle):
                 candidates.append((30, {"kind": "item", "item": "phoenix", "cell": list(target.pos)}))
         if "interact" in battle.rules.commands and u.team == "player":
             for obj in battle.mission.objects:
+                if obj['kind'] == 'defense' and (obj.get('disabled') or obj['team'] == u.team):
+                    continue
+                if obj['kind'] == 'passage' and obj.get('enabled', True):
+                    continue
+                if obj['kind'] == 'door' and obj.get('locked'):
+                    continue
+                if obj['kind'] in {'ram', 'catapult'} and any(o['id'] == obj['link'] and o.get('open') for o in battle.mission.objects):
+                    continue
                 if not obj.get("used") and distance(u.pos, tuple(obj["pos"])) <= 1 and not (obj["kind"] == "door" and obj.get("open")):
-                    candidates.append((4, {"kind": "interact", "object": obj["id"]}))
+                    if battle.can_interact(u, obj["id"]):
+                        candidates.append((4, {"kind": "interact", "object": obj["id"]}))
     if candidates:
         # Canonical JSON-like string breaks ties independently of dict ordering.
         return sorted(candidates, key=lambda c: (-c[0], str(sorted(c[1].items()))))[0][1]

@@ -278,6 +278,8 @@ def launch(path):
         canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
         reachable = battle.reachable() if battle else {}
         deployment_cells = {tuple(c) for z in mission.deployment for c in z['cells']}
+        danger_cells = {tuple(c) for o in mission.objects if o['kind'] == 'defense'
+                        and not o.get('disabled') and o.get('charges', 2) > 0 for c in o['cells']}
         for c in board.cells():
             t = board.tile(c)
             color = '#dddddd'
@@ -288,6 +290,7 @@ def launch(path):
             if t.blocked: color = '#555555'
             if c in deployment_cells and (not battle or battle.deploying): color = '#a8dce8'
             if c in mission.goal: color = '#d7c469'
+            if c in danger_cells: color = '#f0a181'
             x, y = c[0] * tile_size, c[1] * tile_size
             canvas.create_rectangle(x, y, x+tile_size, y+tile_size, fill=color,
                                     outline='#288949' if c in reachable else '#999999', width=3 if c in reachable else 1)
@@ -297,6 +300,12 @@ def launch(path):
                 canvas.create_text(x+tile_size-3, y+tile_size-3, text=f'!{t.hazard}', anchor='se')
         for obj in mission.objects:
             x,y = obj['pos']
+            if obj['kind'] == 'passage':
+                dx,dy = obj['destination']
+                canvas.create_line((x+.5)*tile_size,(y+.5)*tile_size,
+                                   (dx+.5)*tile_size,(dy+.5)*tile_size,
+                                   fill='#6e42a1', width=2, arrow='last',
+                                   dash=() if obj.get('enabled', True) else (4, 3))
             canvas.create_text(x*tile_size+tile_size//2,y*tile_size+8,text=obj['kind'][:2], fill='#5b3294')
         relic = battle.relic_pos if battle else mission.relic
         if relic is not None:
@@ -311,6 +320,11 @@ def launch(path):
         x,y = (v*tile_size for v in selected_cell)
         canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
         text = f'{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
+        for obj in mission.objects:
+            if obj['kind'] == 'defense':
+                text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
+            if obj['kind'] == 'passage':
+                text += f"Passage {obj['id']} : {obj['pos']} → {obj['destination']} ({'installé' if obj.get('enabled',True) else 'à installer'})\n"
         if battle:
             text += f'Tick : {battle.tick} | Résultat : {battle.result or "en cours"}\nTenue : {battle.hold_ticks}/{mission.target_ticks}\n'
             if mission.objective == 'crown':

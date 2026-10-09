@@ -434,10 +434,23 @@ class Battle:
             self.emit("revive", unit=target.id, source=u.id, item="phoenix")
         self.emit("item", unit=u.id, item=item, target=target.id)
 
+    def can_interact(self, unit, object_id):
+        """Pure legality query; evaluate the exact handler on an isolated copy."""
+        preview = deepcopy(self)
+        try:
+            preview._interact(preview.unit(unit.id), object_id)
+        except RuleError:
+            return False
+        return True
+
     def _interact(self, u, object_id):
         require(not u.acted and not self.status_blocks(u, "act"), "Action unavailable")
         obj = next((o for o in self.mission.objects if o["id"] == object_id), None)
         require(obj is not None and min(distance(c, tuple(obj["pos"])) for c in u.occupied_cells()) <= 1 and not obj.get("used", False), "Object unavailable")
+        if obj["kind"] in {"defense", "passage"}:
+            from .siege import interact
+            interact(self, u, obj)
+            return
         require(u.team == "player", "Only players can interact")
         if obj["kind"] in {"ram", "catapult"}:
             target = next(o for o in self.mission.objects if o["id"] == obj["link"])

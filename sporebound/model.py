@@ -310,7 +310,9 @@ class Content:
                 require(obj["id"] not in object_ids, "Duplicate object")
                 object_ids.add(obj["id"])
                 cell(obj["pos"], b)
-                require(obj["kind"] in {"door", "switch", "chest", "ram", "catapult"}, "Unknown object kind")
+                require(obj["kind"] in {"door", "switch", "chest", "ram", "catapult", "passage", "defense"}, "Unknown object kind")
+                from .siege import validate as validate_siege
+                validate_siege(m, obj, cell, integer)
                 integer(obj.get("amount", 1), 0, 10000, "object.amount")
                 if obj["kind"] == "door":
                     integer(obj.get("hp", 1), 1, 10000, "door.hp")

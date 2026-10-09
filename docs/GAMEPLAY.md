@@ -184,3 +184,50 @@ et d’une porte `locked: true` : impossible de contourner le mur ou d’ouvrir 
 porte à la main. Un interrupteur lié peut toujours lever une porte verrouillée.
 Avancer le bélier jusqu’à la porte puis frapper quatre fois (ou deux tirs de
 catapulte) ouvre le passage. L’approche avec le troll est une mission d’élimination.
+
+### Remparts, défenses et salle du trône
+
+Les exemples proposent désormais sept missions. Le scénario complet passe par
+l’approche contre le troll, une voie au choix (bélier, artillerie, infiltration),
+la cour intérieure, puis `castle_throne`. La victoire finale exige d’éliminer le
+châtelain et ses deux gardes royaux ; une défaite ne permet pas de passer à la suite.
+PV, MP, statuts et consommables suivent le groupe. `elapsed_ticks` cumule le temps
+des phases terminées, auquel s’ajoute le tick du combat en cours.
+
+```sh
+python -m examples.siege_campaign --play
+python -m examples.siege_scenarios > siege.json
+python -m sporebound editor --content siege.json
+python -m sporebound play --content siege.json --mission castle_ramparts
+```
+
+Le lanceur de campagne terminal joue automatiquement les défenseurs et propose
+les choix entre les phases. C’est un parcours en mémoire : les sauvegardes de
+combat de la CLI habituelle restent propres à une mission, sans reprise globale
+de campagne. L’éditeur permet de tester chaque mission séparément.
+
+**Remparts.** Installer `grapple` avec `interact grapple`, puis se déplacer sur
+son point de départ `(7,1)` et vers le rempart `(8,1)`. Atteindre le levier
+`portcullis_lever` pour lever la herse et emprunter `stairs` pour descendre dans
+la cour. Le bélier reste une autre solution dans cette mission.
+
+Les objets `passage` ont `pos`, `destination`, `cost` (défaut 2), `enabled`
+et `bidirectional` (défaut true). Une liaison désactivée doit être installée par
+interaction, ce qui consomme l’action. La traversée fait partie du déplacement
+normal : budget, collisions sur toute l’empreinte, réactions, dangers à l’arrivée
+et triggers restent appliqués. Elle autorise la différence de hauteur prévue par
+l’auteur, sans permettre de marcher librement à travers les murs. Les cordes,
+échelles, escaliers et passerelles utilisent ce même contrat.
+
+**Défenses.** `boiling_oil` frappe devant la porte ; `stone_drop` couvre le
+passage de la cour. Ces objets `defense` définissent l’équipe propriétaire,
+les cases visées, la puissance, les charges et le cooldown en ticks. Un opérateur
+vivant adjacent doit dépenser son action pour tirer. L’IA évalue les cibles et
+évite les tirs dont les dégâts alliés dépassent le bénéfice. Une zone touche
+chaque acteur une seule fois, même s’il occupe plusieurs cases. Le tir allié est
+possible ; les charges épuisées et les postes sabotés restent inutilisables.
+Un adversaire adjacent peut neutraliser définitivement le poste par interaction.
+
+L’éditeur colore les zones menacées en orange, dessine les liaisons et affiche
+leurs états ainsi que les charges restantes. Le dessin est utilitaire ; l’huile
+inflige des dégâts immédiats et ne crée pas encore de nappe persistante.
