@@ -25,7 +25,7 @@ class LogisticsTests(unittest.TestCase):
         self.assertEqual(s.logistics.in_transit, [])
         self.assertEqual(s.pending_reinforcements["walls"][0]["actors"][0]["id"],
                          "shield_one")
-        self.assertEqual(s.timeline.fronts["walls"]["strength"], 8)
+        self.assertEqual(s.timeline.fronts["walls"]["strength"], 5)
         s.switch("walls")
         self.assertEqual(len(s.active.encounter.pending), 1)
         s.execute({"kind": "start_battle"})
@@ -94,7 +94,7 @@ class LogisticsTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             s.transfer_units("courtyard", {"captain": [3, 6]})
         with self.assertRaises(RuleError):
-            s.transfer_units("courtyard", {"supply_scout": [8, 3]})
+            s.transfer_units("courtyard", {"supply_scout": [6, 2]})
         with self.assertRaises(RuleError):
             s.transfer_units("throne", {"supply_scout": [3, 6]})
         self.assertEqual(s.digest(), before)
@@ -103,11 +103,12 @@ class LogisticsTests(unittest.TestCase):
     def test_no_one_escapes_battle_by_moving_all_players(self):
         s = siege_session()
         s.execute({"kind": "start_battle"})
-        # Two idle heroes cannot depart because captain is currently active.
+        # An order evacuating all players necessarily includes the active hero.
         before = s.digest()
         with self.assertRaises(RuleError):
             s.transfer_units("courtyard",
-                             {"engineer": [3, 6], "supply_scout": [3, 7]})
+                             {"captain": [3, 5], "engineer": [3, 6],
+                              "supply_scout": [3, 7]})
         self.assertEqual(s.digest(), before)
 
     def test_convoys_lost_after_retreat_without_double_delivery(self):
