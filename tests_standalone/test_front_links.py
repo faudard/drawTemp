@@ -83,7 +83,7 @@ class FrontLinkTests(TestCase):
         self.assertTrue(gate["open"])
         self.assertFalse(session.active.board.tile((8, 3)).blocked)
         session.switch("courtyard")
-        self.assertEqual(session.active.unit("defender").hp, 37)
+        self.assertEqual(session.active.unit("courtyard_guard").hp, 37)
         self.assertEqual(MultiFrontSession.replay(session.recording()).digest(),
                          session.digest())
 
