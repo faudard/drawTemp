@@ -185,6 +185,22 @@ porte à la main. Un interrupteur lié peut toujours lever une porte verrouillé
 Avancer le bélier jusqu’à la porte puis frapper quatre fois (ou deux tirs de
 catapulte) ouvre le passage. L’approche avec le troll est une mission d’élimination.
 
+### Fronts simultanés et seconde phase du boss
+
+Le scénario de siège inclut deux défenses distinctes dans la salle du trône :
+meurtrières et brasier. Les gardes peuvent les déclencher lorsqu'une cible entre
+dans leurs zones ; les attaquants peuvent saboter chaque mécanisme. À 50 % de PV
+ou moins, le châtelain encore vivant reçoit Haste et appelle deux réservistes
+via une vague bornée. Le nouveau trigger `hp_below` est validé à l'édition
+(pourcentage entier 1..99 et identifiant d'unité existante), ne se déclenche
+qu'une fois et conserve la sémantique du replay.
+
+Le moteur multi-fronts permet de focaliser un secteur tout en appliquant une
+résolution agrégée aux autres à chaque `advance()`. Les pertes d'un front encore
+jamais ouvert sont appliquées à ses unités lors du premier switch. La reprise
+fiable utilise le journal `MultiFrontSession.recording()` et non un chargement
+direct de `Battle.state()`. Voir [API et limites multi-fronts](MULTI_FRONT.md).
+
 ### Remparts, défenses et salle du trône
 
 Les exemples proposent désormais sept missions. Le scénario complet passe par
