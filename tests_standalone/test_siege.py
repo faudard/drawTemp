@@ -152,4 +152,48 @@ class SiegeTests(unittest.TestCase):
             with self.assertRaises(RuleError): Content.from_dict(c)
 
 
+    def test_throne_room_defenses_and_sabotage(self):
+        b = Battle(siege_content(), 'castle_throne', seed=11)
+        b.execute({'kind': 'start_battle'})
+        self.assertEqual(len([o for o in b.mission.objects if o['kind'] == 'defense']), 2)
+        b.unit('captain').pos = (6, 3)
+        self.activate(b, 'royal_guard_left')
+        b.execute({'kind': 'interact', 'object': 'throne_arrow_slit'})
+        self.assertEqual(b.unit('captain').hp, 29)
+        slit = next(o for o in b.mission.objects if o['id'] == 'throne_arrow_slit')
+        self.assertEqual(slit['charges'], 2)
+        self.activate(b, 'captain')
+        b.unit('captain').pos = (9, 3)
+        b.execute({'kind': 'interact', 'object': 'throne_arrow_slit'})
+        self.assertTrue(slit['disabled'])
+        self.assertTrue(any(e['kind'] == 'defense_sabotaged' for e in b.events))
+        self.activate(b, 'royal_guard_left')
+        with self.assertRaises(RuleError):
+            b.execute({'kind': 'interact', 'object': 'throne_arrow_slit'})
+
+    def test_castellan_second_phase_queues_bounded_reinforcements_once(self):
+        b = Battle(siege_content(), 'castle_throne', seed=11)
+        b.execute({'kind': 'start_battle'})
+        self.assertNotIn('haste', b.unit('castellan').statuses)
+        b.unit('castellan').hp = 32
+        b._triggers()
+        self.assertIn('haste', b.unit('castellan').statuses)
+        self.assertTrue(any(u.id == 'throne_reserve_north' for u in b.units))
+        self.assertTrue(any(u.id == 'throne_reserve_south' for u in b.units))
+        before = len([e for e in b.events if e['kind'] == 'reinforcement_wave'])
+        b._triggers()
+        self.assertEqual(len([e for e in b.events if e['kind'] == 'reinforcement_wave']), before)
+        self.assertEqual(len([e for e in b.events if e['kind'] == 'trigger'
+                              and e['id'] == 'castellan_second_phase']), 1)
+
+    def test_castellan_phase_authoring_rejects_invalid_thresholds(self):
+        for value in (0, 100, -1, '50'):
+            data = siege_content().to_dict()
+            throne = next(m for m in data['missions'] if m['id'] == 'castle_throne')
+            phase = next(t for t in throne['triggers'] if t['id'] == 'castellan_second_phase')
+            phase['percent'] = value
+            with self.assertRaises(RuleError):
+                Content.from_dict(data)
+
+
 if __name__=='__main__': unittest.main()
