@@ -121,6 +121,20 @@ class StudioPanels:
         ttk.Button(resize,text='Redimensionner (sans perdre les entités)',command=lambda: self._run(
             lambda: self._change(lambda d,m: authoring.resize_map(
                 d,m,int(self.width.get()),int(self.height.get()))))).pack(side='left',padx=10)
+        mission_form=ttk.LabelFrame(outer,text='Mission : titre, objectif et progression')
+        mission_form.pack(fill='x',padx=10,pady=5)
+        self.mission_name,_=self._field(mission_form,0,'Titre mission')
+        self.objective,_=self._field(mission_form,1,'Objectif','eliminate',
+            choices=['eliminate','survive','extract','hold','crown'])
+        self.reward,_=self._field(mission_form,2,'Récompense','100')
+        self.next_missions,_=self._field(mission_form,3,'Missions suivantes (id,id)')
+        ttk.Button(mission_form,text='Appliquer la mission',command=lambda: self._run(
+            lambda: self._change(lambda d,m: authoring.set_mission_properties(
+                d,m,name=self.mission_name.get(),objective=self.objective.get(),
+                reward=int(self.reward.get()),
+                next_missions=[s.strip() for s in self.next_missions.get().split(',') if s.strip()])))).grid(
+                    row=4,column=0,columnspan=2,pady=5)
+        mission_form.columnconfigure(1,weight=1)
 
     def _selected(self, listing):
         choices = listing.curselection()
@@ -319,6 +333,10 @@ class StudioPanels:
             return
         missions=self.doc().data['missions']
         chosen=next((m for m in missions if m['id']==self.mission()), missions[0])
+        self.mission_name.set(chosen['name'])
+        self.objective.set(chosen['objective'])
+        self.reward.set(str(chosen['reward']))
+        self.next_missions.set(', '.join(chosen.get('next_missions',[])))
         self.width.set(str(chosen['board']['width']))
         self.height.set(str(chosen['board']['height']))
         self.cell_label.config(text=f'Case choisie : {self.selection()} | Mission : {chosen["name"]}')
