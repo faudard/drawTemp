@@ -33,6 +33,12 @@ class EncounterDirector:
         active = sum(u.alive for u in battle.units)
         if active + len(wave["actors"]) > self.max_active:
             return []
+        # Occupied deployment cells are transient; keep the wave queued.
+        # All other validation errors must surface rather than silently stall.
+        positions = [tuple(actor["pos"]) for actor in wave["actors"]]
+        occupied = set().union(*(unit.occupied_cells() for unit in battle.units if unit.alive))
+        if any(pos in occupied for pos in positions):
+            return []
         spawned = battle.spawn_wave(wave["actors"], lifetime=wave["lifetime"],
                                     max_active=self.max_active)
         self.pending.pop(0)
