@@ -20,8 +20,9 @@ class SiegeCampaign:
                 {"final_front", "required_fronts", "partial", "negotiation", "retreat"}
                 <= set(spec) <=
                 {"final_front", "required_fronts", "partial", "negotiation", "retreat",
-                 "routes", "recovery"}
-                and ("routes" in spec) == ("recovery" in spec),
+                 "routes", "recovery", "treaties"}
+                and (("routes" in spec) == ("recovery" in spec)
+                     == ("treaties" in spec)),
             "Invalid campaign structure")
         final = spec["final_front"]
         require(isinstance(final, str) and final in missions,
@@ -178,6 +179,8 @@ class CampaignChoicesMixin:
         _battle, rule = self._campaign_choice(front, "negotiation")
         require(self.logistics is not None and self.logistics.supplies is not None,
                 "Campaign negotiations need strategic supplies")
+        if self.route_policy is not None:
+            self.route_policy.verify_treaty(self, front)
         snapshot = deepcopy((self.timeline, self.battles, self.logistics))
         try:
             self.logistics.spend_supplies("player", rule["supplies"])
