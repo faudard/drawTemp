@@ -16,8 +16,12 @@ OUTCOMES = {"victory", "defeat", "withdrawn", "negotiated", "partial"}
 
 class SiegeCampaign:
     def __init__(self, spec, content, missions):
-        require(isinstance(spec, dict) and set(spec) == {
-            "final_front", "required_fronts", "partial", "negotiation", "retreat"},
+        require(isinstance(spec, dict) and
+                {"final_front", "required_fronts", "partial", "negotiation", "retreat"}
+                <= set(spec) <=
+                {"final_front", "required_fronts", "partial", "negotiation", "retreat",
+                 "routes", "recovery"}
+                and ("routes" in spec) == ("recovery" in spec),
             "Invalid campaign structure")
         final = spec["final_front"]
         require(isinstance(final, str) and final in missions,
@@ -78,6 +82,8 @@ class SiegeCampaign:
                     for key in keys), "Invalid campaign losses/costs")
 
     def allowed(self, session):
+        if session.route_policy is not None:
+            return session.route_policy.checked(session)
         return {front: {"status": session.timeline.fronts[front]["status"],
                         "accepted": session.timeline.fronts[front]["status"] in statuses}
                 for front, statuses in self.spec["required_fronts"].items()}
@@ -107,9 +113,18 @@ class SiegeCampaign:
             status = "throne_unlocked"
         else:
             status = "in_progress"
-        return {"final_front": self.final, "status": status,
-                "unlocked": accepted, "required": checked,
-                "policy": deepcopy(self.spec)}
+        state = {"final_front": self.final, "status": status,
+                 "unlocked": accepted, "required": checked,
+                 "policy": deepcopy(self.spec)}
+        if session.route_policy is not None:
+            state["route"] = session.route_selected
+            state["route_committed"] = session.route_locked
+            state["available_routes"] = sorted(session.route_policy.routes)
+            state["recovery_outcomes"] = deepcopy(session.recovery_outcomes)
+            state["recovery_battles"] = {
+                front: battle.state()
+                for front, battle in sorted(session.recovery_battles.items())}
+        return state
 
 
 class CampaignChoicesMixin:
