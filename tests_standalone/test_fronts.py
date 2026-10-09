@@ -66,5 +66,90 @@ class FrontTests(unittest.TestCase):
             self.assertEqual(session.timeline.fronts["walls"]["status"], "victory")
 
 
+    def test_unopened_front_materializes_offscreen_losses(self):
+        from examples.siege_scenarios import siege_content
+        s = MultiFrontSession(
+            siege_content(), {"gate": "castle_ram", "walls": "castle_ramparts"},
+            "gate", specs={"gate": {"strength": 8, "opposition": 8},
+                           "walls": {"strength": 5, "opposition": 11,
+                                     "doctrine": "assault"}})
+        s.advance()
+        s.advance()
+        self.assertEqual(s.timeline.fronts["walls"]["opposition"], 5)
+        s.switch("walls")
+        # Prior losses must not evaporate when a front is opened for the first time.
+        self.assertEqual(s.active.unit("defender").hp, 34)
+        s.switch("gate")
+        s.switch("walls")
+        self.assertEqual(s.active.unit("defender").hp, 34)
+
+    def test_replay_interleaves_deployment_orders_and_waves(self):
+        from examples.siege_scenarios import siege_content
+        s = MultiFrontSession(
+            siege_content(), {"gate": "castle_ram", "walls": "castle_ramparts"},
+            "gate", seed=7,
+            specs={"gate": {"strength": 8, "opposition": 8},
+                   "walls": {"strength": 8, "opposition": 12}})
+        s.execute({"kind": "start_battle"})
+        s.set_doctrine("walls", "assault")
+        s.reinforce("walls", [{"id": "reserve", "name": "Reserve", "team": "enemy",
+                               "pos": [11, 7]}], lifetime=50)
+        s.advance()
+        s.switch("walls")
+        self.assertEqual(s.active.unit("defender").hp, 37)
+        s.execute({"kind": "start_battle"})
+        self.assertTrue(any(e["kind"] == "encounter_wave_queued"
+                            for e in s.active.events))
+        s.set_doctrine("gate", "delay")
+        s.advance()
+        recording = s.recording()
+        replayed = MultiFrontSession.replay(recording)
+        self.assertEqual(replayed.state(), s.state())
+        self.assertEqual(replayed.digest(), s.digest())
+        self.assertEqual(len(replayed.history), len(s.history))
+
+        restored = MultiFrontSession(
+            siege_content(), {"gate": "castle_ram", "walls": "castle_ramparts"},
+            "gate", seed=7)
+        restored.restore(recording)
+        self.assertEqual(restored.digest(), s.digest())
+
+    def test_replay_detects_out_of_band_changes_and_tampering(self):
+        from copy import deepcopy
+        from examples.siege_scenarios import siege_content
+        s = MultiFrontSession(siege_content(), {"gate": "castle_ram",
+                             "walls": "castle_ramparts"}, "gate")
+        s.execute({"kind": "start_battle"})
+        good = s.recording()
+        changed = deepcopy(good)
+        changed["operations"][0]["command"] = {"kind": "start_battle", "extra": "x"}
+        # Unknown extra keys are presently tolerated; the final checksum remains
+        # the authority for semantic state, so change an actual operation.
+        changed["operations"][0]["command"] = {"kind": "end"}
+        with self.assertRaises(RuleError):
+            MultiFrontSession.replay(changed)
+        s.active.unit("captain").hp -= 1
+        with self.assertRaises(RuleError):
+            MultiFrontSession.replay(s.recording())
+        before = deepcopy(s.state())
+        with self.assertRaises(RuleError):
+            s.restore(before)
+        self.assertEqual(s.state(), before)
+
+    def test_failed_orders_do_not_modify_journal(self):
+        from examples.siege_scenarios import siege_content
+        s = MultiFrontSession(siege_content(), {"gate": "castle_ram",
+                             "walls": "castle_ramparts"}, "gate")
+        before = s.digest()
+        with self.assertRaises(RuleError):
+            s.set_doctrine("walls", "unsupported")
+        with self.assertRaises(RuleError):
+            s.reinforce("walls", [{"id": "x", "pos": [0, 0]}] * 15)
+        with self.assertRaises(RuleError):
+            s.execute({"kind": "move", "cell": [0, 0]})
+        self.assertEqual(s.history, [])
+        self.assertEqual(s.digest(), before)
+
+
 if __name__ == "__main__":
     unittest.main()
