@@ -8,6 +8,9 @@ class FakeUnit:
     def __init__(self, alive=True):
         self.alive = alive
 
+    def occupied_cells(self):
+        return set()
+
 
 class FakeBattle:
     def __init__(self, count):
