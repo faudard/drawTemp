@@ -109,12 +109,13 @@ rejouent exactement les transferts, arrivées et pertes.
 
 ```sh
 python -m examples.siege_command                # vue d'ensemble du siège
-python -m examples.siege_command --interactive  # ordres et timeline
+python -m examples.siege_command --gui          # fenêtre de commandement Tk
+python -m examples.siege_command --interactive  # ordres et timeline en terminal
 python -m examples.siege_command --demo         # embuscade + secours
 python -m unittest discover -s tests_standalone -p test_command_center.py -v
 ```
 
-Le tableau de commandement texte présente tous les fronts, convois et ETA.
+Le tableau Tk et le terminal présentent tous les fronts, convois et ETA.
 Routes dangereuses, escorte limitée, provisions et ordre de sauvetage sont
 facultatifs et vérifiés par replay. L'interface graphique viendra ensuite.
 
