@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "title": "Sporebound Tactics",
+  "subtitle": "Campagnes tactiques — prototype",
+  "campaigns": [
+    {
+      "id": "main",
+      "name": "Chroniques du jardin",
+      "description": "Découvrir le moteur tactique.",
+      "start_mission": "garden"
+    },
+    {
+      "id": "relique",
+      "name": "Le défi de la couronne",
+      "description": "Un scénario alternatif centré sur la relique.",
+      "start_mission": "crown"
+    }
+  ],
+  "options": {
+    "language": "fr",
+    "music_volume": 70,
+    "effects_volume": 70,
+    "fullscreen": false
+  },
+  "save_slots": 3
+}
