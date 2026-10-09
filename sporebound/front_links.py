@@ -68,10 +68,10 @@ def validate(content, missions, links):
             kind = effect["kind"]
             fields = ({"kind", "front", "object"} if kind in
                       {"open_door", "disable_defense"} else
-                      {"kind", "front", "amount"} if kind in {"reduce_opposition", "reduce_strength"}:
+                      {"kind", "front", "amount"} if kind in {"reduce_opposition", "reduce_strength"}
                       else {"kind", "front"})
             require(set(effect) == fields, "Invalid front effect fields")
-            if kind in {"reduce_opposition", "reduce_strength"}
+            if kind in {"reduce_opposition", "reduce_strength"}:
                 amount = effect["amount"]
                 require(type(amount) is int and 1 <= amount <= 10000,
                         "Invalid front opposition reduction")
