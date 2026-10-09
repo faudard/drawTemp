@@ -29,6 +29,7 @@ def launch(content_path, project_path=None, profile_path=None):
     mission_var=tk.StringVar()
     command_var=tk.StringVar(value='move')
     facing_var=tk.StringVar(value='south')
+    deploy_var=tk.StringVar()
     selected=[0,0]
     view=tk.Frame(root)
     view.pack(fill='both',expand=True)
@@ -146,6 +147,13 @@ def launch(content_path, project_path=None, profile_path=None):
                 actions=[]
             if command_var.get() not in actions:
                 command_var.set(actions[0] if actions else '')
+            if battle.deploying:
+                players=[u.id for u in battle.units if u.team=='player' and u.alive]
+                if deploy_var.get() not in players:
+                    deploy_var.set(players[0] if players else '')
+                ttk.Label(controls,text='Unité').pack(side='left')
+                ttk.Combobox(controls,textvariable=deploy_var,values=players,
+                             state='readonly',width=11).pack(side='left',padx=5)
             ttk.Label(controls,text='Action').pack(side='left')
             ttk.Combobox(controls,textvariable=command_var,values=actions,
                          state='readonly',width=20).pack(side='left',padx=8)
@@ -195,10 +203,9 @@ def launch(content_path, project_path=None, profile_path=None):
             command={'kind':'start_battle'}
         elif kind=='deploy':
             # Follow the existing deployment contract: selected actor first.
-            actor=next((u for u in battle.units if u.team=='player' and u.alive),None)
-            if actor is None:
-                raise RuleError('No player available for deployment')
-            command={'kind':'deploy','unit':actor.id,'cell':list(selected),'facing':facing}
+            if not deploy_var.get():
+                raise RuleError('Choose a player to deploy')
+            command={'kind':'deploy','unit':deploy_var.get(),'cell':list(selected),'facing':facing}
         elif kind=='move':
             command={'kind':'move','cell':list(selected)}
         elif kind.startswith('item:'):
