@@ -170,6 +170,21 @@ class MultiFrontSession:
             unit.hp -= damage
             remaining -= damage
 
+    def restore(self, state):
+        """Restore strategic data; tactical battles must be reconstructed separately.
+
+        Reject mismatched missions rather than silently mixing unrelated fronts.
+        """
+        require(isinstance(state, dict) and state.get("missions") == self.missions,
+                "Incompatible multi-front save")
+        require(isinstance(state.get("front_snapshots", {}), dict),
+                "Invalid front checkpoints")
+        self.timeline.restore(state["timeline"])
+        self.front_snapshots = deepcopy(state.get("front_snapshots", {}))
+        # Battle.state() is a public snapshot, not a deserializer. Do not
+        # pretend to restore live combat objects from it.
+        require(not state.get("battles"), "Tactical battle restoration requires replay")
+
     def state(self):
         return {"timeline": self.timeline.state(), "missions": dict(self.missions),
                 "battles": {name: battle.state() for name, battle in self.battles.items()},
