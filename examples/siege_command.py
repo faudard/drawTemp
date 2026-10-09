@@ -94,6 +94,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Headless castle command center")
     parser.add_argument("--campaign", action="store_true",
                         help="Enable throne progression gates and siege negotiations")
+    parser.add_argument("--paths", action="store_true",
+                        help="Enable paid routes, secret tunnels and lost-sector recovery")
     parser.add_argument("--gui", action="store_true",
                         help="Open the graphical Tk command centre")
     parser.add_argument("--interactive", action="store_true",
@@ -108,7 +110,8 @@ if __name__ == "__main__":
     if options.gui:
         from sporebound.strategic_ui import launch
         launch(siege_session(contested=True, decisions=True,
-                             campaign=options.campaign))
+                             campaign=options.campaign or options.paths,
+                             paths=options.paths))
     elif options.choices_demo:
         print(branching_convoy_demo())
         print("Verified branching convoy replay: OK")
