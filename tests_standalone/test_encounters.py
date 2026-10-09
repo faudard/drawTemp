@@ -5,8 +5,9 @@ from sporebound.model import RuleError
 
 
 class FakeUnit:
-    def __init__(self, alive=True):
+    def __init__(self, alive=True, id="fake"):
         self.alive = alive
+        self.id = id
 
     def occupied_cells(self):
         return set()
