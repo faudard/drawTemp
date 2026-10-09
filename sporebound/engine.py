@@ -14,7 +14,7 @@ from .model import Cell, Content, Effect, RuleError, Skill, Tile, Unit, distance
 
 
 class Battle:
-    def __init__(self, content: Content, mission_id: str, seed: int = 1, battle_id: str | None = None, *, rules=None):
+    def __init__(self, content: Content, mission_id: str, seed: int = 1, battle_id: str | None = None, *, rules=None, initial_state=None):
         self.rules = rules if rules is not None else default_rules()
         for key in ('damage', 'hit_chance', 'mitigation'):
             self.rules.formulas.get(key)
@@ -42,6 +42,8 @@ class Battle:
         self.prepared_reactions: dict[str, dict] = {}
         self.inventory = {"player": {"potion": 3, "ether": 2, "phoenix": 1},
                           "enemy": {"potion": 1, "ether": 0, "phoenix": 0}}
+        self.initial_state = deepcopy(initial_state if initial_state is not None else {})
+        self._apply_initial_state()
         self.loot = 0
         self.relic_pos = self.mission.relic
         self.carrier = None
@@ -54,6 +56,30 @@ class Battle:
             for unit in self.units:
                 self._collect(unit)
             self._advance()
+
+    def _apply_initial_state(self):
+        setup = self.initial_state
+        require(isinstance(setup, dict) and set(setup) <= {'units', 'inventory'}, 'Invalid initial battle state')
+        units = setup.get('units', {})
+        require(isinstance(units, dict), 'Invalid initial roster')
+        for uid, row in units.items():
+            unit = next((u for u in self.units if u.id == uid and u.team == 'player'), None)
+            require(unit is not None and isinstance(row, dict)
+                    and set(row) == {'hp', 'mp', 'statuses'}, 'Invalid initial player state')
+            for key, limit in (('hp', unit.max_hp), ('mp', unit.max_mp)):
+                require(type(row[key]) is int and 0 <= row[key] <= limit, 'Invalid initial resource')
+                setattr(unit, key, row[key])
+            require(isinstance(row['statuses'], dict), 'Invalid initial statuses')
+            for status, duration in row['statuses'].items():
+                require(status in self.rules.statuses and type(duration) is int and duration > 0,
+                        'Invalid initial status')
+            unit.statuses = deepcopy(row['statuses'])
+        if 'inventory' in setup:
+            inventory = setup['inventory']
+            require(isinstance(inventory, dict) and set(inventory) == set(self.inventory['player'])
+                    and all(type(v) is int and 0 <= v <= 1000000 for v in inventory.values()),
+                    'Invalid initial inventory')
+            self.inventory['player'] = deepcopy(inventory)
 
     @property
     def active(self) -> Unit | None:
@@ -561,7 +587,8 @@ class Battle:
         return hashlib.sha256(json.dumps(self.state(), sort_keys=True).encode()).hexdigest()
 
     def recording(self) -> dict:
-        return {"version": 3, "rules": self.rules.manifest(), "battle_id": self.battle_id, "mission": self.mission.id,
+        return {**({"initial_state": deepcopy(self.initial_state)} if self.initial_state else {}),
+                "version": 3, "rules": self.rules.manifest(), "battle_id": self.battle_id, "mission": self.mission.id,
                 "seed": self.seed, "content": self.content.to_dict(),
                 "commands": deepcopy(self.commands), "digest": self.digest()}
 
@@ -582,7 +609,7 @@ class Battle:
         else:
             require(rules.manifest() == default_rules().manifest(), 'Legacy replay requires default rules')
         battle = cls(Content.from_dict(recording["content"], rules=rules), recording["mission"],
-                     recording["seed"], recording["battle_id"], rules=rules)
+                     recording["seed"], recording["battle_id"], rules=rules, initial_state=recording.get("initial_state"))
         for command in recording["commands"]:
             battle.execute(command)
         require(battle.digest() == recording["digest"], "Replay checksum mismatch")

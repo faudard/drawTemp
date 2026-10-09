@@ -35,3 +35,15 @@ def load_battle(path, *, rules=None):
 
 def save_battle(path, battle):
     write_json(path, battle.recording())
+
+
+def save_scenario(path, session):
+    write_json(path, session.recording())
+
+
+def load_scenario(path, *, rules=None):
+    from .scenarios import ScenarioSession
+    try:
+        return ScenarioSession.replay(json.loads(Path(path).read_text(encoding='utf-8')), rules=rules)
+    except (KeyError, TypeError, ValueError, StopIteration, AttributeError) as exc:
+        raise RuleError(f'Invalid scenario save: {exc}') from exc

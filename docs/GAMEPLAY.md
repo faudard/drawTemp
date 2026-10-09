@@ -202,9 +202,9 @@ python -m sporebound play --content siege.json --mission castle_ramparts
 ```
 
 Le lanceur de campagne terminal joue automatiquement les défenseurs et propose
-les choix entre les phases. C’est un parcours en mémoire : les sauvegardes de
-combat de la CLI habituelle restent propres à une mission, sans reprise globale
-de campagne. L’éditeur permet de tester chaque mission séparément.
+les choix entre les phases. Il sauvegarde automatiquement le scénario complet
+dans `saves/siege-campaign.json`. L’éditeur permet de tester chaque mission
+séparément ; ses sauvegardes de combat restent propres à une mission.
 
 **Remparts.** Installer `grapple` avec `interact grapple`, puis se déplacer sur
 son point de départ `(7,1)` et vers le rempart `(8,1)`. Atteindre le levier
@@ -231,3 +231,37 @@ Un adversaire adjacent peut neutraliser définitivement le poste par interaction
 L’éditeur colore les zones menacées en orange, dessine les liaisons et affiche
 leurs états ainsi que les charges restantes. Le dessin est utilitaire ; l’huile
 inflige des dégâts immédiats et ne crée pas encore de nappe persistante.
+
+
+### Reprendre le siège et conséquences du choix d’assaut
+
+```sh
+python -m examples.siege_campaign --play --save saves/mon-siege.json
+python -m examples.siege_campaign --load saves/mon-siege.json --save saves/mon-siege.json
+```
+
+Le checkpoint automatique couvre chaque commande acceptée, les tours IA et les
+changements de phase. `save CHEMIN` permet une sauvegarde distincte. `item potion x y`
+permet d’utiliser les provisions conservées entre les combats. Un siège terminé
+peut également être chargé pour vérifier son journal complet.
+
+La sauvegarde embarque le contenu, le scénario, la seed, le manifeste des règles,
+les commandes de chaque combat, les choix et les empreintes d’état. La reprise
+rejoue les phases dans l’ordre et vérifie chaque empreinte. Les PV, MP, statuts et
+provisions sont appliqués **avant** l’activation initiale du combat suivant ; une
+unité tombée reste à 0 PV. Le contenu d’origine n’est pas modifié. Une transition
+invalide est annulée intégralement, y compris son temps, ses choix et ses ressources.
+L’écriture du fichier utilise un remplacement atomique. Les empreintes détectent
+les incohérences, sans constituer une signature de sécurité. Les très longues
+campagnes demanderont plus tard des checkpoints pour réduire le coût du replay.
+
+Les `entry_effects` d’une phase peuvent tester un flag, modifier `disabled`,
+`charges` ou `enabled` d’un objet et appliquer des statuts aux unités. Dans la cour :
+
+- **Infiltration** : le poste `stone_drop` est neutralisé.
+- **Artillerie** : `courtyard_guard` commence ralenti pendant 20 ticks.
+- **Bélier** : le dispositif intérieur reste intact.
+
+Ces conséquences sont définies dans le scénario et reconstruites à l’identique
+au chargement. Le cumul `elapsed_ticks` reste un compteur des combats terminés ;
+il n’avance pas automatiquement les autres fronts de `MultiFrontSession`.
