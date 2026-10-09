@@ -2,6 +2,7 @@
 from copy import deepcopy
 import unittest
 
+from examples.siege_command import tactical_rescue_demo
 from examples.siege_fronts import siege_session
 from examples.siege_scenarios import siege_content
 from sporebound.command_center import dashboard, handle
@@ -23,6 +24,11 @@ def stranded():
 
 
 class ConvoyRescueTests(unittest.TestCase):
+    def test_complete_scripted_mission_can_be_played_and_replayed(self):
+        board = tactical_rescue_demo()
+        self.assertIn("convoy_rescue_victory", board)
+        self.assertIn("RESCUE RESULTS", board)
+
     def test_enter_real_rescue_battle_and_block_global_clock(self):
         s = stranded()
         rescue = s.start_rescue("convoy_1")
