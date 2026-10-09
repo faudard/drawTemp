@@ -297,11 +297,20 @@ class Content:
                 require(obj["id"] not in object_ids, "Duplicate object")
                 object_ids.add(obj["id"])
                 cell(obj["pos"], b)
-                require(obj["kind"] in {"door", "switch", "chest"}, "Unknown object kind")
+                require(obj["kind"] in {"door", "switch", "chest", "ram", "catapult"}, "Unknown object kind")
                 integer(obj.get("amount", 1), 0, 10000, "object.amount")
+                if obj["kind"] == "door":
+                    integer(obj.get("hp", 1), 1, 10000, "door.hp")
+                if obj["kind"] in {"ram", "catapult"}:
+                    integer(obj.get("power", 1), 1, 10000, "siege.power")
+                    require(obj.get("link") != obj["id"], "Siege engine cannot target itself")
             for obj in m.objects:
                 require(obj["kind"] != "switch" or any(o["id"] == obj.get("link") and o["kind"] == "door" for o in m.objects), "Switch needs a door")
                 require(obj["kind"] != "door" or tuple(obj["pos"]) not in occupied, "Door on spawn")
+            for obj in m.objects:
+                if obj["kind"] in {"ram", "catapult"}:
+                    require(any(o["id"] == obj.get("link") and o["kind"] == "door" for o in m.objects),
+                            "Siege engine needs a gate target")
             trigger_ids = set()
             for trigger in m.triggers:
                 require(trigger["id"] not in trigger_ids, "Duplicate trigger")
