@@ -21,6 +21,9 @@ HELP = """Commands:
   transfer FRONT ID X Y          Transfer an idle player from focused front
   escort CONVOY_ID               Spend one escort to avoid one ambush
   rescue CONVOY_ID               Supply a stranded convoy, resume journey
+  skirmish CONVOY_ID             Start playable convoy rescue battle
+  rescue-act CONVOY_ID JSON      Execute one tactical rescue command
+  abandon CONVOY_ID              Lose stranded convoy / withdraw from rescue
   tactical JSON                  Execute one normal Battle command
   save PATH                      Atomic JSON checkpoint with verified replay
   load PATH                      Verify and resume a multi-front recording
@@ -59,6 +62,15 @@ def dashboard(session, *, event_count=8):
             )
         if not logistics.in_transit:
             lines.append("  none")
+    if session.rescue_battles:
+        lines.append("RESCUE BATTLES  [convoy | active unit | cart HP]")
+        for cid, battle in sorted(session.rescue_battles.items()):
+            cart = battle.unit(battle.mission.protected_id)
+            lines.append(f"  {cid} | {battle.active_id or 'none'} "
+                         f"| {cart.hp}/{cart.max_hp}")
+    if session.rescue_outcomes:
+        lines.append("RESCUE RESULTS  " + ", ".join(
+            f"{cid}={outcome}" for cid, outcome in sorted(session.rescue_outcomes.items())))
     if session.blocked_reinforcements:
         lines.append("INTERDICTED: " + ", ".join(sorted(session.blocked_reinforcements)))
     if event_count:
@@ -101,6 +113,11 @@ def handle(session, line):
         command = json.loads(line.partition(" ")[2])
         session.execute(command)
         return session, "Tactical command accepted.", False
+    if line.startswith("rescue-act "):
+        parts = line.split(" ", 2)
+        require(len(parts) == 3, "Expected rescue-act CONVOY_ID JSON")
+        session.execute_rescue(parts[1], json.loads(parts[2]))
+        return session, dashboard(session), False
     # Filesystem paths are not shell arguments. In particular shlex's POSIX
     # mode would strip Windows backslashes (e.g. C:\\Users\\...).
     if line.startswith(("save ", "load ")):
@@ -154,11 +171,15 @@ def handle(session, line):
         else:
             convoy = session.transfer_units(front, {uid: position})
         return session, f"Ordered {convoy} to {front}.", False
-    if action in {"escort", "rescue"} and len(fields) == 1:
+    if action in {"escort", "rescue", "skirmish", "abandon"} and len(fields) == 1:
         if action == "escort":
             session.escort_convoy(fields[0])
-        else:
+        elif action == "rescue":
             session.rescue_convoy(fields[0])
+        elif action == "skirmish":
+            session.start_rescue(fields[0])
+        else:
+            session.abandon_convoy(fields[0])
         return session, dashboard(session), False
     raise RuleError("Unknown command or arguments. Type 'help'.")
 
