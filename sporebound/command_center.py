@@ -24,6 +24,12 @@ HELP = """Commands:
   skirmish CONVOY_ID             Start playable convoy rescue battle
   rescue-act CONVOY_ID JSON      Execute one tactical rescue command
   abandon CONVOY_ID              Lose stranded convoy / withdraw from rescue
+  evacuate CONVOY_ID             Save people, forfeit cargo
+  salvage CONVOY_ID              Partial recovery after defeating a raider
+  negotiate CONVOY_ID            Pay ransom mid-skirmish, keep cargo
+  pursue CONVOY_ID               Chase fleeing raiders for lost cargo
+  pursuit-act CONVOY_ID JSON     Play pursuit using normal Battle commands
+  giveup-pursuit CONVOY_ID       Stop pursuing, lose remaining loot
   tactical JSON                  Execute one normal Battle command
   save PATH                      Atomic JSON checkpoint with verified replay
   load PATH                      Verify and resume a multi-front recording
@@ -71,6 +77,17 @@ def dashboard(session, *, event_count=8):
     if session.rescue_outcomes:
         lines.append("RESCUE RESULTS  " + ", ".join(
             f"{cid}={outcome}" for cid, outcome in sorted(session.rescue_outcomes.items())))
+    if session.pursuit_targets:
+        lines.append("RECOVERABLE LOOT  " + ", ".join(
+            f"{cid}={row['loot']} supplies ({row['front']})"
+            for cid, row in sorted(session.pursuit_targets.items())))
+    if session.pursuit_battles:
+        lines.append("PURSUIT BATTLES  " + ", ".join(
+            f"{cid} active={battle.active_id or 'none'}"
+            for cid, battle in sorted(session.pursuit_battles.items())))
+    if session.pursuit_outcomes:
+        lines.append("PURSUIT RESULTS  " + ", ".join(
+            f"{cid}={result}" for cid, result in sorted(session.pursuit_outcomes.items())))
     if session.blocked_reinforcements:
         lines.append("INTERDICTED: " + ", ".join(sorted(session.blocked_reinforcements)))
     if event_count:
@@ -113,10 +130,13 @@ def handle(session, line):
         command = json.loads(line.partition(" ")[2])
         session.execute(command)
         return session, "Tactical command accepted.", False
-    if line.startswith("rescue-act "):
+    if line.startswith(("rescue-act ", "pursuit-act ")):
         parts = line.split(" ", 2)
-        require(len(parts) == 3, "Expected rescue-act CONVOY_ID JSON")
-        session.execute_rescue(parts[1], json.loads(parts[2]))
+        require(len(parts) == 3, "Expected side-battle CONVOY_ID JSON")
+        if parts[0] == "rescue-act":
+            session.execute_rescue(parts[1], json.loads(parts[2]))
+        else:
+            session.execute_pursuit(parts[1], json.loads(parts[2]))
         return session, dashboard(session), False
     # Filesystem paths are not shell arguments. In particular shlex's POSIX
     # mode would strip Windows backslashes (e.g. C:\\Users\\...).
@@ -171,15 +191,27 @@ def handle(session, line):
         else:
             convoy = session.transfer_units(front, {uid: position})
         return session, f"Ordered {convoy} to {front}.", False
-    if action in {"escort", "rescue", "skirmish", "abandon"} and len(fields) == 1:
+    if action in {"escort", "rescue", "skirmish", "abandon",
+                  "evacuate", "salvage", "negotiate", "pursue",
+                  "giveup-pursuit"} and len(fields) == 1:
         if action == "escort":
             session.escort_convoy(fields[0])
         elif action == "rescue":
             session.rescue_convoy(fields[0])
         elif action == "skirmish":
             session.start_rescue(fields[0])
-        else:
+        elif action == "abandon":
             session.abandon_convoy(fields[0])
+        elif action == "evacuate":
+            session.evacuate_convoy(fields[0])
+        elif action == "salvage":
+            session.salvage_convoy(fields[0])
+        elif action == "negotiate":
+            session.negotiate_convoy(fields[0])
+        elif action == "pursue":
+            session.start_pursuit(fields[0])
+        else:
+            session.abandon_pursuit(fields[0])
         return session, dashboard(session), False
     raise RuleError("Unknown command or arguments. Type 'help'.")
 
