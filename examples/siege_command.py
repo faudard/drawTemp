@@ -59,12 +59,45 @@ def tactical_rescue_demo():
     return dashboard(session, event_count=40)
 
 
+def branching_convoy_demo():
+    """Evacuate convoy crew, then hunt the stolen supplies in another battle."""
+    session = siege_session(seed=4, contested=True, decisions=True)
+    session.set_doctrine("walls", "hold")
+    convoy = session.send_reserves("walls", [
+        {"id": "evacuated_scout", "name": "Evacuated Scout",
+         "team": "player", "pos": [3, 6]}])
+    session.advance()
+    session.evacuate_convoy(convoy)
+    pursuit = session.start_pursuit(convoy)
+    assert pursuit.mission.id == "castle_convoy_pursuit"
+    for _ in range(100):
+        if not session.pursuit_battles:
+            break
+        battle = session.pursuit_battles[convoy]
+        if battle.active_id == "pursuit_ranger" and not battle.active.acted:
+            enemy = next((u for u in battle.units
+                          if u.team == "enemy" and u.alive), None)
+            if enemy is not None:
+                session.execute_pursuit(convoy, {
+                    "kind": "act", "skill": "attack", "cell": list(enemy.pos)})
+                continue
+        session.execute_pursuit(convoy, {"kind": "end"})
+    assert session.pursuit_outcomes[convoy] == "victory"
+    for _ in range(3):
+        session.advance()
+    assert session.pending_reinforcements["walls"][0]["actors"][0]["id"] == "evacuated_scout"
+    assert MultiFrontSession.replay(session.recording()).digest() == session.digest()
+    return dashboard(session, event_count=50)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Headless castle command center")
     parser.add_argument("--gui", action="store_true",
                         help="Open the graphical Tk command centre")
     parser.add_argument("--interactive", action="store_true",
                         help="Use a small command-driven dashboard")
+    parser.add_argument("--choices-demo", action="store_true",
+                        help="Evacuate the crew and play a raider-pursuit mission")
     parser.add_argument("--rescue-demo", action="store_true",
                         help="Play the tactical wagon rescue through real Battle commands")
     parser.add_argument("--demo", action="store_true",
@@ -73,6 +106,9 @@ if __name__ == "__main__":
     if options.gui:
         from sporebound.strategic_ui import launch
         launch(siege_session(contested=True))
+    elif options.choices_demo:
+        print(branching_convoy_demo())
+        print("Verified branching convoy replay: OK")
     elif options.rescue_demo:
         print(tactical_rescue_demo())
         print("Verified tactical convoy-rescue replay: OK")
