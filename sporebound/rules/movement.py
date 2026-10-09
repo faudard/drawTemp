@@ -73,7 +73,7 @@ def engagement_range(battle, u: Unit) -> int:
 def engaged_by(battle, u: Unit) -> list[Unit]:
     return [e for e in battle.units if e.alive and e.team != u.team
             and battle.engagement_range(e) > 0
-            and distance(e.pos, u.pos) <= battle.engagement_range(e)
+            and min(distance(a, b) for a in e.occupied_cells() for b in u.occupied_cells()) <= battle.engagement_range(e)
             and battle.line_of_sight(e.pos, u.pos)]
 
 
@@ -83,7 +83,7 @@ def engagement_threats(battle, cell: Cell, moving_team: str) -> list[dict]:
         if not enemy.alive or enemy.team == moving_team:
             continue
         radius = battle.engagement_range(enemy)
-        if radius and distance(enemy.pos, cell) <= radius and battle.line_of_sight(enemy.pos, cell):
+        if radius and min(distance(a, cell) for a in enemy.occupied_cells()) <= radius and battle.line_of_sight(enemy.pos, cell):
             result.append({"unit": enemy.id, "kind": "engagement", "range": radius})
     return result
 
@@ -141,7 +141,10 @@ def _displace(battle, caster, target, amount, pull=False):
         direction = -direction[0], -direction[1]
     for _ in range(amount):
         nxt = target.pos[0] + direction[0], target.pos[1] + direction[1]
-        if not battle.board.contains(nxt) or battle.board.tile(nxt).blocked or battle.at(nxt):
+        cells = target.occupied_cells(nxt)
+        if any(not battle.board.contains(c) or battle.board.tile(c).blocked
+               or any(other.alive and other.id != target.id and c in other.occupied_cells()
+                      for other in battle.units) for c in cells):
             break
         drop = battle.board.tile(target.pos).height - battle.board.tile(nxt).height
         if drop < -target.jump:
