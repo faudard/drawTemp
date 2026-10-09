@@ -66,7 +66,7 @@ class StoryEditor:
         self.cid,_=self._field(cf,0,'ID choix','choice')
         self.clabel,_=self._field(cf,1,'Texte bouton','Faire ce choix')
         self.condition,self.condition_box=self._field(cf,2,'Condition','toujours',
-            choices=['toujours','flag =','flag ≥','mission terminée','or ≥'])
+            choices=['toujours','flag =','flag ≥','mission terminée','or ≥','avancée (conservée)'])
         self.cond_flag,_=self._field(cf,3,'Flag / mission')
         self.cond_value,_=self._field(cf,4,'Valeur','true')
         self.cnext,self.cnext_box=self._field(cf,5,'Scène suivante',choices=[])
@@ -203,6 +203,8 @@ class StoryEditor:
             elif 'gold_gte' in when:
                 self.condition.set('or ≥')
                 self.cond_value.set(str(when['gold_gte']))
+            else:
+                self.condition.set('avancée (conservée)')
         self._display_effects()
 
     def _display_effects(self):
@@ -258,9 +260,11 @@ class StoryEditor:
         self._choices()
 
     def update_choice(self):
+        condition = (None if self.condition.get()=='avancée (conservée)'
+                     else self._condition())
         self._apply(lambda project,content:edit.update_choice(
             project,content,self.scene_id,self.choice_id,
-            label=self.clabel.get(),when=self._condition(),clear_condition=(
+            label=self.clabel.get(),when=condition,clear_condition=(
                 self.condition.get()=='toujours'),next_scene=self.cnext.get()))
 
     def delete_choice(self):
