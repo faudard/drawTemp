@@ -429,8 +429,22 @@ class Battle:
         if obj["kind"] in {"ram", "catapult"}:
             target = next(o for o in self.mission.objects if o["id"] == obj["link"])
             require(not target.get("open", False), "Gate already breached")
-            require(obj["kind"] != "ram" or distance(obj["pos"], target["pos"]) <= 1,
-                    "Ram must reach the gate")
+            if obj["kind"] == "ram" and distance(obj["pos"], target["pos"]) > 1:
+                origin = tuple(obj["pos"])
+                choices = sorted(
+                    (cell for cell in self.board.neighbors(origin)
+                     if distance(cell, tuple(target["pos"])) < distance(origin, tuple(target["pos"]))
+                     and not self.board.tile(cell).blocked
+                     and not any(unit.alive and unit.pos == cell for unit in self.units)
+                     and not any(other is not obj and tuple(other["pos"]) == cell
+                                 for other in self.mission.objects)),
+                    key=lambda cell: (distance(cell, tuple(target["pos"])), cell[1], cell[0]))
+                require(bool(choices), "Ram path blocked")
+                obj["pos"] = choices[0]
+                self.emit("ram_advanced", unit=u.id, engine=obj["id"], pos=choices[0])
+                u.acted = True
+                u.cast = None
+                return
             require(obj["kind"] != "catapult" or distance(obj["pos"], target["pos"]) <= obj.get("range", 8),
                     "Gate out of catapult range")
             target["hp"] = max(0, target.get("hp", 1) - obj.get("power", 1))
