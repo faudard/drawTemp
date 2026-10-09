@@ -63,6 +63,7 @@ def siege_session(seed=1, focused="supplies", *, contested=False):
         logistics.update(
             supplies={"player": 5, "enemy": 0},
             escorts=1,
+            rescue_mission="castle_convoy_rescue",
             ambushes=[{"from": "reserve", "to": "walls",
                        "casualties": 0, "delay": 2, "charges": 2},
                       {"from": "supplies", "to": "courtyard",
