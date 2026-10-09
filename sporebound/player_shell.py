@@ -92,18 +92,38 @@ def launch(content_path, project_path=None, profile_path=None):
         clear()
         title_bar(view,project.campaign(session.campaign_id)['name'])
         ttk.Label(view,text=f"Or : {session.progress.gold}   Missions terminées : {len(session.progress.completed)}").pack(pady=8)
-        available=session.available_missions()
-        ttk.Label(view,text='Sélectionner une mission disponible :').pack(pady=5)
-        if not available:
-            ttk.Label(view,text='Campagne terminée : aucune nouvelle mission disponible.').pack(pady=8)
-        for mid in available:
-            mission=content.missions[mid]
-            ttk.Button(view,text=f'{mission.name}  —  {mission.objective}',
-                       command=safe(lambda target=mid: start_battle(target))).pack(fill='x',padx=170,pady=5)
+        scene=session.active_scene()
+        if scene is not None:
+            chapter=ttk.LabelFrame(view,text=scene['title'])
+            chapter.pack(fill='both',expand=True,padx=95,pady=15)
+            if scene['speaker']:
+                ttk.Label(chapter,text=scene['speaker'],
+                          font=('TkDefaultFont',12,'bold')).pack(pady=(15,7))
+            ttk.Label(chapter,text=scene['text'],wraplength=760,
+                      justify='left').pack(padx=25,pady=15)
+            ttk.Label(chapter,text='Votre décision :').pack(pady=(5,10))
+            for choice in session.available_choices():
+                ttk.Button(chapter,text=choice['label'],
+                           command=safe(lambda selected=choice['id']: choose_story(selected))).pack(
+                               fill='x',padx=70,pady=6)
+        else:
+            available=session.available_missions()
+            ttk.Label(view,text='Sélectionner une mission disponible :').pack(pady=5)
+            if not available:
+                ttk.Label(view,text='Campagne terminée : aucune nouvelle mission disponible.').pack(pady=8)
+            for mid in available:
+                mission=content.missions[mid]
+                ttk.Button(view,text=f'{mission.name}  —  {mission.objective}',
+                           command=safe(lambda target=mid: start_battle(target))).pack(
+                               fill='x',padx=170,pady=5)
         actions=ttk.Frame(view);actions.pack(pady=16)
         ttk.Button(actions,text='Sauvegarder',command=safe(lambda: (session.save(),messagebox.showinfo(
             'Sauvegarde','Progression enregistrée.')))).pack(side='left',padx=8)
         ttk.Button(actions,text='Menu principal',command=title_screen).pack(side='left',padx=8)
+
+    def choose_story(choice_id):
+        session.choose_story(choice_id)
+        campaign_screen()
 
     def start_battle(mid):
         session.begin(mid)
