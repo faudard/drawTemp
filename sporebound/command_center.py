@@ -101,6 +101,30 @@ def handle(session, line):
         command = json.loads(line.partition(" ")[2])
         session.execute(command)
         return session, "Tactical command accepted.", False
+    # Filesystem paths are not shell arguments. In particular shlex's POSIX
+    # mode would strip Windows backslashes (e.g. C:\\Users\\...).
+    if line.startswith(("save ", "load ")):
+        action, raw_path = line.split(" ", 1)
+        raw_path = raw_path.strip()
+        require(bool(raw_path), "Missing checkpoint filename")
+        if raw_path.startswith('"'):
+            try:
+                filename = json.loads(raw_path)
+            except json.JSONDecodeError:
+                filename = raw_path.strip('"')
+        else:
+            filename = raw_path.strip("'")
+        require(isinstance(filename, str) and bool(filename),
+                "Invalid checkpoint filename")
+        if action == "save":
+            recording = session.recording()
+            require(MultiFrontSession.replay(recording, rules=session.rules).digest()
+                    == session.digest(), "Replay verification failed")
+            _save(filename, recording)
+            return session, "Verified checkpoint saved.", False
+        recording = json.loads(Path(filename).read_text(encoding="utf-8"))
+        restored = MultiFrontSession.replay(recording, rules=session.rules)
+        return restored, dashboard(restored), False
     args = shlex.split(line)
     action, fields = args[0], args[1:]
     if action == "quit" and not fields:
@@ -136,17 +160,6 @@ def handle(session, line):
         else:
             session.rescue_convoy(fields[0])
         return session, dashboard(session), False
-    if action == "save" and len(fields) == 1:
-        recording = session.recording()
-        # A checkpoint must be self-consistent before replacing an older save.
-        require(MultiFrontSession.replay(recording, rules=session.rules).digest()
-                == session.digest(), "Replay verification failed")
-        _save(fields[0], recording)
-        return session, "Verified checkpoint saved.", False
-    if action == "load" and len(fields) == 1:
-        recording = json.loads(Path(fields[0]).read_text(encoding="utf-8"))
-        restored = MultiFrontSession.replay(recording, rules=session.rules)
-        return restored, dashboard(restored), False
     raise RuleError("Unknown command or arguments. Type 'help'.")
 
 
