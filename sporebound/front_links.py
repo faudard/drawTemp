@@ -11,6 +11,7 @@ from .model import require
 EVENTS = {"interact", "gate_breached", "defense_sabotaged",
           "passage_installed", "battle_end"}
 EFFECTS = {"open_door", "disable_defense", "reduce_opposition",
+           "reduce_strength",
            "block_reinforcements"}
 EVENT_FIELDS = {"interact": "object", "gate_breached": "gate",
                 "defense_sabotaged": "object", "passage_installed": "object",
@@ -67,10 +68,10 @@ def validate(content, missions, links):
             kind = effect["kind"]
             fields = ({"kind", "front", "object"} if kind in
                       {"open_door", "disable_defense"} else
-                      {"kind", "front", "amount"} if kind == "reduce_opposition"
+                      {"kind", "front", "amount"} if kind in {"reduce_opposition", "reduce_strength"}
                       else {"kind", "front"})
             require(set(effect) == fields, "Invalid front effect fields")
-            if kind == "reduce_opposition":
+            if kind in {"reduce_opposition", "reduce_strength"}
                 amount = effect["amount"]
                 require(type(amount) is int and 1 <= amount <= 10000,
                         "Invalid front opposition reduction")
@@ -120,22 +121,22 @@ def _modify_object(session, front, oid, patch):
     battle.emit("front_object_changed", object=oid, patch=deepcopy(patch))
 
 
-def _reduce_opposition(session, front, amount):
+def _reduce_force(session, front, amount, *, field, losing_team, result):
     row = session.timeline.fronts[front]
     if row["status"] != "active":
         return
-    loss = min(amount, row["opposition"])
-    row["opposition"] -= loss
+    loss = min(amount, row[field])
+    row[field] -= loss
     battle = session.battles.get(front)
     if battle is not None:
-        session._apply_attrition(battle, "enemy", loss)
-    if row["opposition"] == 0:
-        row["status"] = "victory"
+        session._apply_attrition(battle, losing_team, loss)
+    if row[field] == 0:
+        row["status"] = result
         if battle is not None and battle.result is None:
-            session._apply_attrition(battle, "enemy", 1000000)
-            battle.result = "victory"
+            session._apply_attrition(battle, losing_team, 1000000)
+            battle.result = result
             battle.active_id = None
-            battle.emit("battle_end", result="victory")
+            battle.emit("battle_end", result=result)
 
 
 def apply(session, link):
@@ -147,7 +148,11 @@ def apply(session, link):
         elif kind == "disable_defense":
             _modify_object(session, front, effect["object"], {"disabled": True})
         elif kind == "reduce_opposition":
-            _reduce_opposition(session, front, effect["amount"])
+            _reduce_force(session, front, effect["amount"], field="opposition",
+                          losing_team="enemy", result="victory")
+        elif kind == "reduce_strength":
+            _reduce_force(session, front, effect["amount"], field="strength",
+                          losing_team="player", result="defeat")
         else:
             session.blocked_reinforcements.add(front)
             session.pending_reinforcements.pop(front, None)
