@@ -47,7 +47,27 @@ SIEGE_LINKS = [
 ]
 
 
-def siege_session(seed=1, focused="supplies"):
+def siege_session(seed=1, focused="supplies", *, contested=False):
+    logistics = {
+        "reserves": {"player": 3, "enemy": 0},
+        "capacity": 4,
+        "routes": [
+            {"from": "reserve", "to": "walls", "turns": 2},
+            {"from": "reserve", "to": "gate", "turns": 1},
+            {"from": "supplies", "to": "courtyard", "turns": 2},
+            {"from": "walls", "to": "courtyard", "turns": 1},
+            {"from": "courtyard", "to": "throne", "turns": 2},
+        ],
+    }
+    if contested:
+        logistics.update(
+            supplies={"player": 5, "enemy": 0},
+            escorts=1,
+            ambushes=[{"from": "reserve", "to": "walls",
+                       "casualties": 0, "delay": 2, "charges": 2},
+                      {"from": "supplies", "to": "courtyard",
+                       "casualties": 1, "delay": 2, "charges": 1}],
+        )
     return MultiFrontSession(
         siege_content(),
         {"walls": "castle_ramparts", "gate": "castle_ram",
@@ -62,17 +82,7 @@ def siege_session(seed=1, focused="supplies"):
             "throne": {"strength": 7, "opposition": 18, "doctrine": "hold"},
         },
         links=SIEGE_LINKS,
-        logistics={
-            "reserves": {"player": 3, "enemy": 0},
-            "capacity": 4,
-            "routes": [
-                {"from": "reserve", "to": "walls", "turns": 2},
-                {"from": "reserve", "to": "gate", "turns": 1},
-                {"from": "supplies", "to": "courtyard", "turns": 2},
-                {"from": "walls", "to": "courtyard", "turns": 1},
-                {"from": "courtyard", "to": "throne", "turns": 2},
-            ],
-        },
+        logistics=logistics,
     )
 
 
