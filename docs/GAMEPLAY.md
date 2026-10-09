@@ -347,6 +347,7 @@ python -m examples.siege_command --interactive
 # Une fois un convoy immobilisé :
 # skirmish convoy_1
 # rescue-act convoy_1 {"kind":"end"}
+python -m examples.siege_command --rescue-demo
 python -m unittest discover -s tests_standalone -p test_convoy_rescue.py -v
 ```
 
