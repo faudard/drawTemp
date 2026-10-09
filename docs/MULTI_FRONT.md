@@ -354,6 +354,79 @@ Terminal commands: `evacuate ID`, `salvage ID`, `negotiate ID`,
 **Négocier**, **Poursuivre pillards** and **Abandon poursuite**; the normal
 tactical input automatically routes actions to the current pursuit battle.
 
+## Campaign-level choices and locked throne (save format v5)
+
+A new **opt-in** `MultiFrontSession(..., campaign={...})` policy validates
+prerequisite fronts and authored alternatives to an outright tactical victory.
+It is distinct from the existing sequential `examples.siege_campaign` runner
+and does not alter the older v1-v4 multi-front session format.
+
+```python
+{
+    "final_front": "throne",
+    "required_fronts": {
+        "gate": ["victory", "negotiated"],
+        "courtyard": ["victory", "partial"],
+    },
+    "partial": {
+        "courtyard": {
+            "event": "defense_sabotaged", "object": "stone_drop",
+            "cost": 1, "target": "throne", "target_loss": 2,
+        },
+    },
+    "negotiation": {
+        "gate": {"supplies": 2, "target": "throne", "target_loss": 1},
+    },
+    "retreat": {
+        "gate": {"target": "courtyard", "target_loss": 3},
+        "courtyard": {"target": "throne", "target_loss": 3},
+    },
+}
+```
+
+With this siege policy, the throne is **locked** until the gate is
+either truly won or negotiated and the courtyard either truly won or
+secured in part. A tactical Battle win sets the corresponding front
+status at the normal `session.execute(command)` journal boundary.
+An unfocused front can also reach an ordinary victory via the pre-existing
+deterministic strategic resolution.
+
+- **`negotiate_front("gate")`**: an explicit strategic truce at a safe
+  tactical turn boundary, costs two actual provisions and permanently reduces
+  friendly strength on the throne front by one. An authored agreement
+  cannot be used if the gate fight is already lost.
+- **`partial_front("courtyard")`**: requires an actual
+  `defense_sabotaged` event from the `stone_drop` objective, not a fake
+  battle result. The remaining courtyard garrison is reduced by one and
+  the eventual throne attackers by two; the courtyard records a distinct
+  `partial` outcome, even if enemies survive. Choosing this outcome
+  is allowed only at a safe activation boundary.
+- **`withdraw_front("gate")`**: permanently yields the gate, weakens
+  the friendly courtyard garrison by three, and blocks this campaign route
+  to the throne. Retreat doctrine on an *unfocused* gate applies the same
+  adjacent-front cost exactly once when the front becomes withdrawn.
+- **Final result**: the actual throne `Battle` must end in victory before
+  `campaign.status` reports `victory`. Loss of a required front without an
+  accepted outcome yields `blocked`; failure on the throne yields `defeat`.
+  This does not invent automatic tactical combat for the other fronts.
+
+All campaign choices, diplomacy payments, authenticated tactical objective
+events, penalties and offscreen withdrawals are part of a deterministic
+global journal. Campaigned sessions record **version 5**, including the
+complete policy in the checksummed state. Older saves retain their previous
+semantics and checksum. A tampered policy is rejected at replay.
+
+Terminal: `partial FRONT`, `parley FRONT`, `withdraw FRONT`,
+and `focus throne` once unlocked. The Tk command center provides the
+same choices and the campaign's gate status.
+
+```sh
+python -m examples.siege_strategy_demo  # gate diplomacy, courtyard partial, boss victory
+python -m examples.siege_command --gui --campaign
+python -m examples.siege_command --interactive --campaign
+python -m unittest discover -s tests_standalone -p test_siege_campaign.py -v
+```
+
 ## Contracts and limitations
 
 - **Bounded tactical maps**: a front keeps its own units, CT, statuses and
@@ -387,7 +460,6 @@ tactical input automatically routes actions to the current pursuit battle.
   Opening an already simulated front applies HP attrition but does not
   reconstruct hypothetical individual offscreen moves. This is intentional.
 
-Next milestones: route-specific rescue and pursuit mission templates,
-supply-line protection objectives, authored negotiation consequences,
-graphical arrival-zone and global timeline editing, and a unified
-campaign victory/failure gate.
+Next milestones: alternate breach routes, stronger diplomacy consequences,
+campaign-level recovery after a lost prerequisite, authored treaty branches,
+and graphical arrival-zone / global timeline editing.
