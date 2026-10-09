@@ -294,6 +294,8 @@ class MultiFrontSession:
         remaining = sum(u.alive and u.team == "player"
                         and u.id not in placements for u in battle.units)
         require(remaining > 0, "A front must retain a friendly defender")
+        require(self.timeline.fronts[source]["strength"] > len(selected),
+                "Cannot empty the source strategic front")
         snapshot = deepcopy((self.timeline, self.battles, self.logistics))
         try:
             validated = self._check_convoy_destination(destination, selected)
