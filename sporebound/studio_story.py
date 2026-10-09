@@ -20,7 +20,10 @@ class StoryEditor:
         self.scene_id=''
         self.choice_id=''
         self._refreshing=False
+        self.notebook=notebook
         self._build(notebook)
+        from .studio_story_graph import StoryGraphEditor
+        self.graph=StoryGraphEditor(self,notebook)
 
     def _field(self, parent, row, label, default='', choices=None):
         return self.owner._field(parent,row,label,default,choices=choices,width=28)
@@ -33,6 +36,7 @@ class StoryEditor:
         ttk=self.ttk
         root=ttk.Frame(notebook)
         notebook.add(root,text='Scénario & dialogues')
+        self.tab=root
         header=ttk.Frame(root);header.pack(fill='x',padx=8,pady=6)
         ttk.Label(header,text='Narration conditionnelle, sauvegardée avec la campagne.').pack(side='left')
         self._button(header,'Annuler scénario',self.undo)
@@ -311,6 +315,15 @@ class StoryEditor:
             project,content,self.after_mission.get(),
             '' if clear else self.after_scene.get()))
 
+    def select_graph_target(self, scene_id, choice_id=''):
+        """Open the canonical definition selected from any tree occurrence."""
+        self._highlight_scene(scene_id)
+        if choice_id:
+            self.choice_id=choice_id
+            self._choices()
+            self._select_choice()
+        self.notebook.select(self.tab)
+
     def _highlight_scene(self,scene_id):
         for index,scene in enumerate(self._scenes()):
             if scene['id']==scene_id:
@@ -350,12 +363,15 @@ class StoryEditor:
             self.after_mission.set(self.owner.doc().data['missions'][0]['id'])
         if not self.effect_mission.get() and self.owner.doc().data['missions']:
             self.effect_mission.set(self.owner.doc().data['missions'][0]['id'])
+        self.graph.refresh()
 
     def reset_project(self):
         self.undo_stack=[]
         self.redo_stack=[]
         self.scene_id=''
         self.choice_id=''
+        self.graph.collapsed.clear()
+        self.graph._fingerprint=None
         self.refresh()
 
     def preview(self):
