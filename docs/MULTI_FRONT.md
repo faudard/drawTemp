@@ -174,6 +174,74 @@ be authored with `reduce_strength`, `reduce_opposition`, and the existing
 object/wave effects. This allows sacrifices and withdrawals to have lasting
 consequences without simulating hundreds of combatants.
 
+## Command centre 2.0: contested routes and rescue orders
+
+The same `MultiFrontSession` drives a small terminal **command centre**
+(without Tk, Godot or a full army simulation):
+
+```sh
+python -m examples.siege_command
+python -m examples.siege_command --demo
+python -m examples.siege_command --interactive
+```
+
+The screen shows the global strategic turn, every front's doctrine/strength/
+opposition/status, focused zone, finite reserves and supplies, convoy progress
+and ETA, rescue requirements and recent strategic events. The interactive
+commands are `status`, `focus FRONT`, `doctrine FRONT DOCTRINE`,
+`turn [N]`, `reserve FRONT ID X Y`, `transfer FRONT ID X Y`,
+`escort CONVOY`, `rescue CONVOY`, `tactical JSON`,
+`save FILE`, `load FILE`, `help` and `quit`.
+
+Unlike rendering, every order is sent to the session API. A saved checkpoint
+is JSON written via an atomic replace only after its replay checksum passes.
+Loading verifies the journal before adopting the reconstructed session.
+
+### Optional supply and ambush rules
+
+Add these fields to `logistics` in an authored scenario, or omit them to
+preserve the pre-existing free-travel rules:
+
+```python
+{
+    "supplies": {"player": 5, "enemy": 0},
+    "escorts": 1,
+    "ambushes": [
+        {"from": "reserve", "to": "walls",
+         "casualties": 0, "delay": 2, "charges": 2}
+    ],
+}
+```
+
+- **Provision costs**: deploying a convoy requires one supply point per
+  character; transferring an existing unit has the same cost. Rescuing an
+  immobilized convoy costs one additional point. A shortage rejects the
+  order atomically. Scenario configs without `supplies` preserve the former
+  unlimited-provision behavior.
+- **Ambush**: an authored route gets a fixed number of interceptions. On the
+  next strategic synchronization, an unescorted convoy loses up to the
+  configured number of actors, chosen in stable roster order from the rear.
+  If survivors remain they become stranded; they cannot arrive until rescued,
+  and their ETA includes the imposed delay. A totally destroyed convoy is
+  permanently lost. The attack is deterministic, uses no per-soldier AI, and
+  consumes one authored ambush charge.
+- **Escort**: `escort_convoy(ID)` consumes one limited escort slot before
+  the convoy is intercepted. It prevents the encounter from consuming an
+  ambush charge and preserves the convoy's original ETA.
+- **Rescue**: `rescue_convoy(ID)` sends a logistical recovery order for a
+  *stranded surviving* convoy only. Spending one additional supply unblocks
+  the convoy; it reaches the destination no earlier than the following turn.
+  This is a strategic recovery action, **not** a playable rescue skirmish yet.
+- **Determinism and migration**: sessions with the optional enhanced
+  logistics fields use multi-front replay format **v4**. Records from
+  versions 1, 2 and 3 remain accepted with their previous semantics.
+  A replay reconstructs supply costs, ambush charges, actor losses,
+  escort orders and rescue orders, then checks the complete state digest.
+
+Examples keep tactical missions small and set transport capacity independently
+from the active-combatant cap. Convoy rescue, supply usage and front orders can
+be run from a terminal before an animated UI is developed.
+
 ## Contracts and limitations
 
 - **Bounded tactical maps**: a front keeps its own units, CT, statuses and
@@ -207,6 +275,6 @@ consequences without simulating hundreds of combatants.
   Opening an already simulated front applies HP attrition but does not
   reconstruct hypothetical individual offscreen moves. This is intentional.
 
-Next milestones: selected landing zones in the editor, doctrine presets,
-convoy interception/delay events, supply-line protection objectives, and
-campaign-level victory and defeat conditions across the global timeline.
+Next milestones: visual dashboard / timeline, landing-zone selection,
+playable convoy-rescue tactical encounters, supply-line protection objectives,
+and a unified campaign victory/failure gate across the global timeline.
