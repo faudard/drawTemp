@@ -116,7 +116,8 @@ class ConvoyChoicesMixin:
         """Optional follow-up: recover lost cargo from fleeing pillagers."""
         from .engine import Battle
         choices = self._choices()
-        require(not self.rescue_battles and not self.pursuit_battles,
+        require(not self.rescue_battles and not self.pursuit_battles
+                and not self.recovery_battles,
                 "Resolve the current tactical side mission first")
         require(convoy_id in self.pursuit_targets
                 and convoy_id not in self.pursuit_outcomes,
