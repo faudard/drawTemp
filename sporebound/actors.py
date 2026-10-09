@@ -29,6 +29,7 @@ class ActorFactory:
         require(not key or key in self.archetypes, f'Unknown archetype: {key}')
         values = {**deepcopy(self.archetypes.get(key, {})), **deepcopy(spawn)}
         values['pos'] = tuple(values['pos'])
+        values['footprint'] = tuple(values.get('footprint', (1, 1)))
         values['facing'] = tuple(values.get('facing', (0, 1)))
         values.setdefault('hp', values.get('max_hp', 40))
         values.setdefault('mp', values.get('max_mp', 12))
@@ -41,6 +42,8 @@ def validate_actor(u, skills, archetypes, rules):
         require(type(value) is int and low <= value <= high, f'{label}: expected integer {low}..{high}')
 
     require(u.kind in ACTOR_KINDS, f"{u.id}: actor kind")
+    require(len(u.footprint) == 2 and all(type(n) is int and 1 <= n <= 4 for n in u.footprint),
+            f"{u.id}: footprint")
     require(u.behavior in rules.behaviors, f"{u.id}: unknown behavior")
     require(not u.archetype or u.archetype in archetypes, f"{u.id}: unknown archetype")
     require(isinstance(u.tags, list) and all(isinstance(tag, str) and tag for tag in u.tags)
