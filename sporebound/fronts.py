@@ -245,6 +245,7 @@ class MultiFrontSession:
                     "Insufficient strategic reserves")
             convoy_id = self.logistics.order(
                 "reserve", destination, validated, team, self.timeline.turn)
+            self.logistics.spend_supplies(team, len(validated))
             self.logistics.reserves[team] -= len(validated)
             self.timeline.events.append({
                 "turn": self.timeline.turn, "kind": "reserves_dispatched",
@@ -301,6 +302,7 @@ class MultiFrontSession:
             validated = self._check_convoy_destination(destination, selected)
             convoy_id = self.logistics.order(source, destination, validated,
                                              "player", self.timeline.turn)
+            self.logistics.spend_supplies("player", len(validated))
             for definition in selected:
                 battle.despawn_actor(definition["id"])
             own_front = self.timeline.fronts[source]
@@ -315,6 +317,73 @@ class MultiFrontSession:
         self.history.append({"kind": "transfer_units", "destination": destination,
                              "placements": deepcopy(placements)})
         return convoy_id
+
+    def escort_convoy(self, convoy_id):
+        """Commit one limited escort token before an ambush is evaluated."""
+        require(self.logistics is not None, "Strategic logistics not configured")
+        convoy = self.logistics.convoy(convoy_id)
+        require(not convoy.get("stranded") and not convoy.get("ambushed")
+                and not convoy.get("escorted"), "Convoy cannot be escorted now")
+        require(self.logistics.escorts > 0, "No escort orders remaining")
+        self.logistics.escorts -= 1
+        convoy["escorted"] = True
+        self.timeline.events.append({
+            "turn": self.timeline.turn, "kind": "escort_assigned",
+            "convoy": convoy_id})
+        self.history.append({"kind": "escort_convoy", "convoy": convoy_id})
+
+    def rescue_convoy(self, convoy_id):
+        """Recover an ambushed stranded convoy using one provision."""
+        require(self.logistics is not None, "Strategic logistics not configured")
+        convoy = self.logistics.convoy(convoy_id)
+        require(convoy.get("stranded") is True and convoy["actors"],
+                "Only a stranded surviving convoy can be rescued")
+        self.logistics.spend_supplies(convoy["team"], 1)
+        convoy.pop("stranded")
+        convoy["arrival"] = max(convoy["arrival"], self.timeline.turn + 1)
+        self.timeline.events.append({
+            "turn": self.timeline.turn, "kind": "convoy_rescued",
+            "convoy": convoy_id, "arrival": convoy["arrival"]})
+        self.history.append({"kind": "rescue_convoy", "convoy": convoy_id})
+
+    def _resolve_ambushes(self):
+        """One deterministic ambush opportunity per convoy; no tactical AI."""
+        if self.logistics is None:
+            return
+        for convoy in list(self.logistics.in_transit):
+            key = (convoy["from"], convoy["to"])
+            hazard = self.logistics.ambushes.get(key)
+            if (hazard is None or hazard["charges"] == 0
+                    or convoy.get("ambushed")):
+                continue
+            if self.timeline.fronts[convoy["to"]]["status"] != "active":
+                continue
+            convoy["ambushed"] = True
+            if convoy.get("escorted"):
+                self.timeline.events.append({
+                    "turn": self.timeline.turn, "kind": "ambush_prevented",
+                    "convoy": convoy["id"]})
+                continue
+            hazard["charges"] -= 1
+            removed = convoy["actors"][-hazard["casualties"]:] if hazard["casualties"] else []
+            if removed:
+                del convoy["actors"][-len(removed):]
+            self.timeline.events.append({
+                "turn": self.timeline.turn, "kind": "convoy_ambushed",
+                "convoy": convoy["id"], "lost": [u["id"] for u in removed],
+                "survivors": len(convoy["actors"]), "route": list(key)})
+            if not convoy["actors"]:
+                self.logistics.in_transit.remove(convoy)
+                self.timeline.events.append({
+                    "turn": self.timeline.turn, "kind": "convoy_lost",
+                    "convoy": convoy["id"], "front": convoy["to"],
+                    "reason": "ambush"})
+                continue
+            convoy["stranded"] = True
+            convoy["arrival"] = max(convoy["arrival"], self.timeline.turn) + hazard["delay"]
+            self.timeline.events.append({
+                "turn": self.timeline.turn, "kind": "convoy_stranded",
+                "convoy": convoy["id"], "arrival": convoy["arrival"]})
 
     def _arrive_convoys(self):
         if self.logistics is None:
@@ -349,6 +418,7 @@ class MultiFrontSession:
                     self.timeline.fronts[name]["status"] = battle.result
             before = deepcopy(self.timeline.fronts)
             self.timeline.advance()
+            self._resolve_ambushes()
             self._arrive_convoys()
             self._deliver_reinforcements(self.timeline.focused)
             for name, battle in self.battles.items():
@@ -415,7 +485,9 @@ class MultiFrontSession:
 
     def recording(self):
         """Portable journal; replay proves all tactical and strategic mutations."""
-        return {"version": 3 if self.logistics is not None else 2, "kind": "multi_front",
+        extended = self.logistics is not None and self.logistics._extended
+        return {"version": 4 if extended else 3 if self.logistics is not None else 2,
+                "kind": "multi_front",
                 "content": self.content.to_dict(), "missions": dict(self.missions),
                 "focused": self.initial_focus, "specs": deepcopy(self.initial_specs),
                 "links": deepcopy(self.links),
@@ -428,7 +500,7 @@ class MultiFrontSession:
     def replay(cls, recording, *, rules=None):
         from .model import Content
         from .rules import default_rules
-        require(isinstance(recording, dict) and recording.get("version") in {1, 2, 3}
+        require(isinstance(recording, dict) and recording.get("version") in {1, 2, 3, 4}
                 and recording.get("kind") == "multi_front", "Unsupported multi-front save")
         effective_rules = rules if rules is not None else default_rules()
         require(recording.get("rules") == effective_rules.manifest(),
@@ -438,7 +510,7 @@ class MultiFrontSession:
                       seed=recording["seed"], rules=effective_rules,
                       specs=recording["specs"],
                       links=recording.get("links", []) if recording["version"] >= 2 else [],
-                      logistics=recording["logistics"] if recording["version"] == 3 else None)
+                      logistics=recording["logistics"] if recording["version"] in {3, 4} else None)
         for operation in recording["operations"]:
             kind = operation["kind"]
             if kind == "execute":
@@ -456,6 +528,10 @@ class MultiFrontSession:
                 session.send_reserves(operation["front"], operation["actors"])
             elif kind == "transfer_units":
                 session.transfer_units(operation["destination"], operation["placements"])
+            elif kind == "escort_convoy":
+                session.escort_convoy(operation["convoy"])
+            elif kind == "rescue_convoy":
+                session.rescue_convoy(operation["convoy"])
             else:
                 require(False, "Unknown multi-front operation")
         require(session.digest() == recording["digest"], "Multi-front checksum mismatch")
