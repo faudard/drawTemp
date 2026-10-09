@@ -17,9 +17,14 @@ def siege_content():
     ram = {"id": "ram", "kind": "ram", "pos": [3, 3], "link": "main_gate", "power": 1}
     catapult = {"id": "catapult", "kind": "catapult", "pos": [2, 5], "link": "main_gate",
                 "power": 2, "range": 10}
+    troll = {**unit("siege_troll", "enemy", [4, 1]), "kind": "monster",
+             "footprint": [2, 2], "max_hp": 150, "hp": 150, "move": 2,
+             "attack": 16, "weapon_power": 12}
     return Content.from_dict({
         "version": 1, "skills": [],
         "missions": [
+            {**mission("castle_troll", "Stop the siege troll", [gate.copy()], [], [10, 3]),
+             "units": [unit("captain", "player", [1, 3]), unit("engineer", "player", [1, 5]), troll]},
             mission("castle_ram", "Break the gate with a ram", [gate.copy(), ram], [
                 {"id": "gate_warning", "condition": "tick", "value": 8,
                  "actions": [{"kind": "message", "text": "Archers defend the ramparts!"}]}
