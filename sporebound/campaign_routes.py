@@ -1,0 +1,195 @@
+"""Opt-in multi-route siege policy and bounded tactical counterattack missions.
+
+Routes change which *verified* fronts unlock the throne; they never invent a
+combat win. One paid alternative route can be selected per campaign. A lost
+front may be reclaimed only through a genuine, separate tactical Battle.
+"""
+from copy import deepcopy
+from .model import require
+from . import front_links
+
+
+ACCEPTED = {"victory", "partial", "negotiated", "reclaimed"}
+
+
+class CampaignRoutesPolicy:
+    def __init__(self, spec, content, missions, final_front):
+        require(isinstance(spec, dict) and set(spec) == {"routes", "recovery"},
+                "Invalid alternative-route configuration")
+        routes = spec["routes"]
+        require(isinstance(routes, dict) and "breach" in routes and
+                len(routes) >= 2, "Routes must include breach and an alternative")
+        self.routes = deepcopy(routes)
+        for name, row in routes.items():
+            require(isinstance(name, str) and bool(name)
+                    and isinstance(row, dict)
+                    and set(row) == {"required", "supplies", "strength_loss"},
+                    "Invalid route definition")
+            required = row["required"]
+            require(isinstance(required, dict)
+                    and final_front not in required, "Invalid route prerequisites")
+            for front, statuses in required.items():
+                require(isinstance(front, str) and front in missions
+                        and isinstance(statuses, list) and bool(statuses)
+                        and all(isinstance(status, str) for status in statuses)
+                        and set(statuses) <= ACCEPTED
+                        and len(set(statuses)) == len(statuses),
+                        "Invalid route-required front or status")
+            require(type(row["supplies"]) is int
+                    and 0 <= row["supplies"] <= 10000
+                    and type(row["strength_loss"]) is int
+                    and 0 <= row["strength_loss"] <= 10000,
+                    "Invalid route costs")
+            if not required:
+                require(row["supplies"] > 0 and row["strength_loss"] > 0,
+                        "An unrestricted assault must expend supplies and troops")
+        require(routes["breach"]["supplies"] == 0
+                and routes["breach"]["strength_loss"] == 0,
+                "Default breach cannot charge at initial session creation")
+        recovery = spec["recovery"]
+        require(isinstance(recovery, dict), "Invalid recovery rules")
+        self.recovery = deepcopy(recovery)
+        for front, row in recovery.items():
+            require(isinstance(front, str) and front in missions
+                    and front != final_front and
+                    isinstance(row, dict) and set(row) == {
+                        "mission", "supplies", "strength_loss"},
+                    "Invalid recovery definition")
+            require(isinstance(row["mission"], str)
+                    and row["mission"] in content.missions,
+                    "Unknown recovery tactical mission")
+            mission = content.missions[row["mission"]]
+            require(mission.objective == "eliminate" and
+                    any(u.team == "player" for u in mission.units)
+                    and any(u.team == "enemy" for u in mission.units),
+                    "Recovery mission must contain both teams and elimination objective")
+            require(type(row["supplies"]) is int and 1 <= row["supplies"] <= 10000
+                    and type(row["strength_loss"]) is int
+                    and 0 <= row["strength_loss"] <= 10000,
+                    "Invalid recovery costs")
+
+    def checked(self, session):
+        required = self.routes[session.route_selected]["required"]
+        return {name: {"status": session.timeline.fronts[name]["status"],
+                       "accepted": session.timeline.fronts[name]["status"] in outcomes}
+                for name, outcomes in required.items()}
+
+
+class CampaignRoutesMixin:
+    def select_route(self, name):
+        """Select one paid route exactly once, before the throne is entered."""
+        require(self.route_policy is not None, "Alternative routes are not enabled")
+        require(name in self.route_policy.routes, "Unknown authored siege route")
+        require(not self.route_locked and name != "breach",
+                "An alternative route has already been committed")
+        require(self.timeline.focused != self.campaign.final
+                and self.timeline.fronts[self.campaign.final]["status"] == "active",
+                "Cannot change the route after entering the throne")
+        require(not self.rescue_battles and not self.pursuit_battles
+                and not self.recovery_battles,
+                "Finish the tactical side encounter first")
+        row = self.route_policy.routes[name]
+        if row["supplies"]:
+            require(self.logistics is not None
+                    and self.logistics.supplies is not None,
+                    "Route choice requires a finite supply pool")
+            require(self.logistics.supplies["player"] >= row["supplies"],
+                    "Not enough provisions for route")
+        throne = self.timeline.fronts[self.campaign.final]
+        require(throne["strength"] > row["strength_loss"],
+                "Not enough fighters remain to storm the throne")
+        snapshot = deepcopy((self.logistics, self.timeline, self.battles))
+        try:
+            if row["supplies"]:
+                self.logistics.spend_supplies("player", row["supplies"])
+            if row["strength_loss"]:
+                front_links._reduce_force(
+                    self, self.campaign.final, row["strength_loss"],
+                    field="strength", losing_team="player", result="defeat")
+            self.route_selected = name
+            self.route_locked = True
+            self.timeline.events.append({
+                "turn": self.timeline.turn, "kind": "campaign_route_selected",
+                "route": name, "supplies": row["supplies"],
+                "troop_losses": row["strength_loss"]})
+        except Exception:
+            self.logistics, self.timeline, self.battles = snapshot
+            raise
+        self.history.append({"kind": "select_route", "route": name})
+
+    def start_recovery(self, front):
+        """Recover a lost required front by playing a separate small encounter."""
+        from .engine import Battle
+        require(self.route_policy is not None, "Campaign recovery is not enabled")
+        require(front in self.route_policy.recovery,
+                "No authored counterattack for this front")
+        require(not self.recovery_battles and not self.rescue_battles
+                and not self.pursuit_battles,
+                "Finish the current tactical side encounter")
+        require(self.timeline.fronts[front]["status"] in {"defeat", "withdrawn"},
+                "Counterattack requires a lost or withdrawn front")
+        require(self.timeline.fronts[self.campaign.final]["status"] == "active"
+                and self.timeline.focused != self.campaign.final,
+                "The final battle has already begun or finished")
+        rule = self.route_policy.recovery[front]
+        require(self.logistics is not None and self.logistics.supplies is not None,
+                "Counterattack requires strategic supplies")
+        require(self.logistics.supplies["player"] >= rule["supplies"],
+                "Insufficient supplies to stage counterattack")
+        require(self.timeline.fronts[front]["strength"] > rule["strength_loss"],
+                "Insufficient fighters for counterattack")
+        # Create Battle first so malformed mission content cannot spend money.
+        battle = Battle(self.content, rule["mission"],
+                        seed=self.seed + 30000 + sorted(self.missions).index(front),
+                        rules=self.rules)
+        snapshot = deepcopy((self.timeline, self.logistics, self.battles))
+        try:
+            self.logistics.spend_supplies("player", rule["supplies"])
+            if rule["strength_loss"]:
+                front_links._reduce_force(
+                    self, front, rule["strength_loss"],
+                    field="strength", losing_team="player", result="defeat")
+            self.recovery_battles[front] = battle
+            self.timeline.events.append({
+                "turn": self.timeline.turn, "kind": "campaign_recovery_started",
+                "front": front, "mission": rule["mission"],
+                "supplies": rule["supplies"]})
+        except Exception:
+            self.timeline, self.logistics, self.battles = snapshot
+            raise
+        self.history.append({"kind": "start_recovery", "front": front})
+        return battle
+
+    def execute_recovery(self, front, command):
+        require(isinstance(command, dict) and front in self.recovery_battles,
+                "Invalid command or unknown active counterattack")
+        snapshot = deepcopy((self.recovery_battles, self.recovery_outcomes,
+                             self.timeline, self.battles))
+        try:
+            battle = self.recovery_battles[front]
+            battle.execute(deepcopy(command))
+            if battle.result in {"victory", "defeat"}:
+                self.recovery_outcomes[front] = battle.result
+                if battle.result == "victory":
+                    self.timeline.fronts[front]["status"] = "reclaimed"
+                del self.recovery_battles[front]
+                self.timeline.events.append({
+                    "turn": self.timeline.turn,
+                    "kind": "campaign_recovery_" + battle.result,
+                    "front": front})
+        except Exception:
+            (self.recovery_battles, self.recovery_outcomes,
+             self.timeline, self.battles) = snapshot
+            raise
+        self.history.append({"kind": "execute_recovery", "front": front,
+                             "command": deepcopy(command)})
+
+    def abandon_recovery(self, front):
+        require(front in self.recovery_battles,
+                "No active recovery mission to abandon")
+        del self.recovery_battles[front]
+        self.recovery_outcomes[front] = "abandoned"
+        self.timeline.events.append({
+            "turn": self.timeline.turn, "kind": "campaign_recovery_abandoned",
+            "front": front})
+        self.history.append({"kind": "abandon_recovery", "front": front})
