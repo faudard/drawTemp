@@ -191,7 +191,7 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                 "Resolve the tactical side mission first")
         if self.campaign is not None:
             require(self.timeline.fronts[self.timeline.focused]["status"]
-                    not in {"partial", "negotiated", "withdrawn"},
+                    not in {"partial", "negotiated", "withdrawn", "reclaimed"},
                     "Resolved campaign front cannot accept more tactical orders")
         require(isinstance(command, dict), "Expected tactical command")
         # Battle.execute is transactional. Linking other fronts must be just as
