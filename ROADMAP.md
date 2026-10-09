@@ -20,6 +20,33 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Progression, jobs, boutique/équipement, campagne et replays.
 - [x] Notre éditeur de carte avec playtest, JSON, undo/redo et journal.
 
+## 2.0b — Game Studio (PR #14)
+
+- [x] Opérations d'authoring data-driven et validées : unités, objets interactifs,
+  triggers simples, taille de carte, propriétés et chaînage des missions.
+- [x] Assistant carte vierge + duplication de mission, avec playtest et undo/redo.
+- [x] Onglets Tk dédiés aux personnages, événements et configuration globale.
+- [x] Manifeste distinct `GameProject` : titre, sous-titre, campagnes,
+  langue, options audio, plein écran, nombre de slots.
+- [x] Aperçu de la page de garde : nouvelle partie, continuer, charger et options.
+- [x] Sauvegardes de progression par campagne/slot via `Campaign.save` ;
+  progression de mission acquise avec `Campaign.finish`.
+- [x] Exemple de projet embarqué, tests headless et smoke Tk/Xvfb.
+- [ ] **Studio 2.1** : éditeur de tilesets / brosses / pinceaux rectangles,
+  groupes, rotation, copier-coller, sélection multiple et palettes d'acteurs.
+- [ ] **Studio 2.2** : éditeur visuel des archétypes, compétences, inventaires,
+  vague de renforts, arbres d'événements, dialogue et cutscenes.
+- [ ] **Studio 2.3** : graphe de campagne, branches conditionnelles, checkpoints,
+  transitions, aperçu de progression et validation des cycles/impasses.
+- [ ] **Player Shell 1.0** : page titre → choix de sauvegarde → carte de
+  campagne → bataille → résultats, séparé de l'atelier d'édition.
+- [ ] **Persistence 2.0** : identité projet/version de contenu dans les slots,
+  détection de slots incompatibles, migration et autosave.
+
+Les options de présentation restent de la configuration, pas un renderer/audio.
+Les sauvegardes multi-fronts ne sont pas encore intégrées au manifeste général.
+Voir [docs/STUDIO.md](docs/STUDIO.md).
+
 ## 2.1 — profondeur tactique
 
 - [x] Combat 1.1 framework : engagement, zones de contrôle, Guard/Vigilance/Brace/Intercept, Disengage, portée LOS/falloff, threat forecast.
