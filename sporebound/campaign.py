@@ -38,6 +38,11 @@ class Campaign:
     known_tactics: dict[str, list[str]] = field(default_factory=dict)
     prepared_tactics: dict[str, list[str]] = field(default_factory=dict)
     tracked_battles: list[str] = field(default_factory=list)
+    story_flags: dict = field(default_factory=dict)
+    story_history: list[dict] = field(default_factory=list)
+    story_pending: str = ''
+    story_started: bool = False
+    story_digest: str = ''
 
     def hero(self, uid):
         return self.heroes.setdefault(uid, HeroProgress())
@@ -202,7 +207,7 @@ class Campaign:
         prepared.validate(rules=ruleset)
         return Battle(prepared, mission_id, seed, rules=ruleset)
 
-    def finish(self, battle, playtest=False, tactic_rules=None):
+    def finish(self, battle, playtest=False, tactic_rules=None, *, unlock_next=True):
         if playtest or battle.result not in {"victory", "defeat"}:
             return False
         rules = battle.content.tactic_unlocks if tactic_rules is None else tactic_rules
@@ -219,9 +224,10 @@ class Campaign:
                 hero = self.hero(unit.id)
                 hero.xp += 100
                 hero.job_xp[hero.job] = hero.job_xp.get(hero.job, 0) + 50
-        for mission in battle.mission.next_missions:
-            if mission not in self.unlocked:
-                self.unlocked.append(mission)
+        if unlock_next:
+            for mission in battle.mission.next_missions:
+                if mission not in self.unlocked:
+                    self.unlocked.append(mission)
         if rules:
             self.evaluate_tactic_unlocks(rules, battle.mission.id, battle.events, ruleset=battle.rules)
         return True
@@ -254,6 +260,20 @@ class Campaign:
                     for k, v in result.prepared_tactics.items()), "Invalid prepared tactics")
         require(len(result.tracked_battles) == len(set(result.tracked_battles))
                 and all(isinstance(b, str) for b in result.tracked_battles), "Invalid tracked battles")
+        require(type(result.story_started) is bool and isinstance(result.story_pending, str)
+                and len(result.story_pending) <= 64 and isinstance(result.story_digest, str)
+                and len(result.story_digest) <= 64, 'Invalid narrative state')
+        require(isinstance(result.story_flags, dict) and len(result.story_flags) <= 1000
+                and all(isinstance(k, str) and 0 < len(k) <= 64 and
+                        type(v) in (str, int, bool) and
+                        (type(v) is not str or len(v) <= 120) and
+                        (type(v) is not int or -1000000 <= v <= 1000000)
+                        for k, v in result.story_flags.items()), 'Invalid narrative flags')
+        require(isinstance(result.story_history, list) and len(result.story_history) <= 10000
+                and all(isinstance(row, dict) and set(row) == {'scene', 'choice'}
+                        and all(isinstance(value, str) and 0 < len(value) <= 64
+                                for value in row.values())
+                        for row in result.story_history), 'Invalid narrative choice history')
         for h in result.heroes.values():
             require(type(h.xp) is int and h.xp >= 0 and all(type(n) is int and n >= 0 for n in h.job_xp.values()), "Invalid XP")
         return result
