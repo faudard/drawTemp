@@ -82,3 +82,54 @@ class FrontDirector:
         self.focused = state["focused"]
         self.fronts = deepcopy(state["fronts"])
         self.events = deepcopy(state["events"])
+
+
+class MultiFrontSession:
+    """Synchronize tactical battles with a single strategic timeline.
+
+    Only the focused front accepts direct tactical commands. Switching occurs
+    between strategic turns; inactive fronts use the aggregate FrontDirector.
+    """
+
+    def __init__(self, content, missions, focused, *, seed=1, rules=None, specs=None):
+        from .engine import Battle
+        require(isinstance(missions, dict) and missions and focused in missions,
+                "Invalid multi-front missions")
+        require(all(isinstance(mid, str) and mid in content.missions
+                    for mid in missions.values()), "Unknown front mission")
+        self.content = content
+        self.missions = dict(missions)
+        self.rules = rules
+        self.seed = seed
+        self.timeline = FrontDirector(
+            specs or {name: {} for name in missions}, focused, seed=seed)
+        self.battles = {}
+        self.battles[focused] = Battle(content, missions[focused], seed=seed, rules=rules)
+
+    @property
+    def active(self):
+        return self.battles[self.timeline.focused]
+
+    def switch(self, front):
+        from .engine import Battle
+        require(front in self.missions, "Unknown front")
+        require(self.active.active is None or self.active.active.moved is False
+                and self.active.active.acted is False,
+                "Finish the active unit turn before switching fronts")
+        self.timeline.switch(front)
+        if front not in self.battles:
+            self.battles[front] = Battle(
+                self.content, self.missions[front],
+                seed=self.seed + sorted(self.missions).index(front), rules=self.rules)
+        return self.active
+
+    def advance(self):
+        """Advance the strategic clock once, then reconcile finished tactical fronts."""
+        for name, battle in self.battles.items():
+            if battle.result in {"victory", "defeat"}:
+                self.timeline.fronts[name]["status"] = battle.result
+        return self.timeline.advance()
+
+    def state(self):
+        return {"timeline": self.timeline.state(), "missions": dict(self.missions),
+                "battles": {name: battle.state() for name, battle in self.battles.items()}}
