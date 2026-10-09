@@ -131,7 +131,26 @@ def siege_content():
         {**unit("road_raider", "enemy", [6, 4]),
          "hp": 12, "max_hp": 12, "speed": 8},
     ]
-    data['missions'].extend([ramparts, courtyard, throne, supply, rescue])
+    pursuit = mission("castle_convoy_pursuit", "Hunt the fleeing raiders",
+                      [], [], [7, 3])
+    pursuit["objective"] = "eliminate"
+    pursuit["board"] = {"width": 9, "height": 7,
+                        "tiles": [{"pos": [4, 2], "blocked": True},
+                                  {"pos": [4, 4], "blocked": True},
+                                  {"pos": [5, 3], "cost": 2}]}
+    pursuit["deployment"] = []
+    pursuit["units"] = [
+        {**unit("pursuit_ranger", "player", [1, 3]),
+         "speed": 18, "attack": 15, "weapon": "ranged",
+         "weapon_power": 11, "attack_range": 6},
+        {**unit("pursuit_vanguard", "player", [2, 5]),
+         "speed": 12, "attack": 10},
+        {**unit("fleeing_bandit", "enemy", [6, 2]),
+         "hp": 11, "max_hp": 11, "speed": 8},
+        {**unit("fleeing_raider", "enemy", [6, 4]),
+         "hp": 11, "max_hp": 11, "speed": 8},
+    ]
+    data['missions'].extend([ramparts, courtyard, throne, supply, rescue, pursuit])
     return Content.from_dict(data)
 
 if __name__ == "__main__":
