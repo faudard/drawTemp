@@ -144,7 +144,7 @@ def add_blank_mission(data, mid, name, width=8, height=8):
     actors = []
     for team, pos in [('player', [1, height - 2]), ('enemy', [width - 2, 1])]:
         original = next((u for m in new['missions'] for u in m['units']
-                         if u['team'] == team and u.get('footprint', [1, 1]) == [1, 1]), None)
+                         if u['team'] == team and tuple(u.get('footprint', (1, 1))) == (1, 1)), None)
         require(original is not None, f'A single-cell {team} actor is required')
         actor = deepcopy(original)
         actor['pos'] = pos
