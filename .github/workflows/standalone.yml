@@ -40,6 +40,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_studio_gui.py -v
+      - name: Exercise advanced graph and standalone player UI
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_studio_advanced_gui.py -v
       - name: Exercise the real command center
         env:
           SPOREBOUND_GUI_SMOKE: '1'
