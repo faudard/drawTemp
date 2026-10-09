@@ -47,9 +47,13 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Salle du trône : deux postes défensifs sabotables et renforts déclenchés à 50 % des PV du châtelain.
 - [x] Liens événementiels déclaratifs entre fronts : herse → porte/cour, sabotage → défense neutralisée, réserves coupées → vagues bloquées.
 - [x] Validation des références, effets différés sur fronts non ouverts, application atomique et replay multi-fronts v2 (compatibilité v1).
-- [ ] Transmission d'ordres et de ressources entre fronts, budget logistique limité et délais de transfert.
-- [ ] Choix de la zone d'arrivée des réserves et déploiement visuel multi-fronts.
-- [ ] Conséquences stratégiques des objectifs tactiques (porte, remparts, ravitaillement).
+- [x] Logistique v1 : routes orientées, réserves finies, capacité de transport, ordres à délai en tours stratégiques.
+- [x] Transfert de véritables unités entre fronts avec PV/MP/statuts conservés, garnissons minimales, arrivées et retraites.
+- [x] Défaite du front de la porte → attrition alliée de la cour ; replay stratégique v3 + lecture des formats v1/v2.
+- [x] Tests d'ordres invalides, de duplication, de perte de convoy et de replay déterministe (validation CI en attente).
+- [ ] Interception et retard des convois, zones d'arrivée choisies dans l'éditeur, optimisation de la composition d'escouade.
+- [ ] Sélecteur visuel des zones d'arrivée et de l'ordre de mission pour chaque convoy.
+- [x] Conséquences stratégiques des objectifs tactiques (porte, remparts, ravitaillement et défaite locale).
 - [ ] Tests longue campagne, simulations d'équilibrage et UX de la timeline globale.
 
 Voir [contrats multi-fronts](docs/MULTI_FRONT.md).
