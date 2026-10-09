@@ -3,6 +3,7 @@ from copy import deepcopy
 import unittest
 
 from examples.siege_fronts import siege_session, SIEGE_CAMPAIGN_PATHS
+from examples.siege_routes_demo import demo as three_routes_demo
 from examples.siege_scenarios import siege_content
 from sporebound.command_center import dashboard, handle
 from sporebound.fronts import MultiFrontSession
@@ -64,6 +65,15 @@ def play_small_battle(session, *, front, recovery=False):
 
 
 class SiegeRoutesTests(unittest.TestCase):
+    def test_three_paths_have_replayable_final_boss_victory(self):
+        results = three_routes_demo()
+        self.assertEqual(set(results), {
+            "direct", "tunnels", "recaptured_gate"})
+        self.assertTrue(all(result["status"] == "victory"
+                            for result in results.values()))
+        self.assertLess(results["direct"]["supplies"],
+                        results["tunnels"]["supplies"])
+
     def test_legacy_campaign_remains_identical_without_opt_in(self):
         s = siege_session(contested=True, campaign=True)
         self.assertIsNone(s.route_policy)
