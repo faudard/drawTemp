@@ -39,37 +39,51 @@ class Document:
             self.data = self.redo_stack.pop()
 
     def tile(self, mid, cell, brush):
+        self.paint_many(mid, [cell], brush)
+
+    def paint_many(self, mid, cells, brush):
+        """A brush stroke is one validated, undoable change."""
         data = deepcopy(self.data)
         mission = next(m for m in data['missions'] if m['id'] == mid)
+        width, height = mission['board']['width'], mission['board']['height']
         tiles = mission['board']['tiles']
-        old = next((t for t in tiles if tuple(t['pos']) == cell), {'pos': list(cell)})
-        tiles[:] = [t for t in tiles if tuple(t['pos']) != cell]
-        new = {**old}
-        if brush == 'erase':
-            new = {'pos': list(cell)}
-        elif brush == 'wall':
-            new['blocked'] = not old.get('blocked', False)
-        elif brush == 'height+':
-            new['height'] = min(99, old.get('height', 0) + 1)
-        elif brush == 'height-':
-            new['height'] = max(0, old.get('height', 0) - 1)
-        elif brush == 'mud':
-            new['cost'] = 2
-        elif brush == 'hazard':
-            new['hazard'] = 4
-        elif brush == 'cover':
-            new['cover'] = 20
-        elif brush == 'goal':
-            goal = [list(c) for c in mission.get('goal', [])]
-            if list(cell) in goal:
-                goal.remove(list(cell))
+        seen = set()
+        for cell in cells:
+            cell = tuple(cell)
+            if cell in seen:
+                continue
+            seen.add(cell)
+            if not (0 <= cell[0] < width and 0 <= cell[1] < height):
+                raise RuleError(f'Case hors carte : {cell}')
+            old = next((t for t in tiles if tuple(t['pos']) == cell), {'pos': list(cell)})
+            new = {**old}
+            if brush == 'erase':
+                new = {'pos': list(cell)}
+            elif brush == 'wall':
+                new['blocked'] = not old.get('blocked', False)
+            elif brush == 'height+':
+                new['height'] = min(99, old.get('height', 0) + 1)
+            elif brush == 'height-':
+                new['height'] = max(0, old.get('height', 0) - 1)
+            elif brush == 'mud':
+                new['cost'] = 2
+            elif brush == 'hazard':
+                new['hazard'] = 4
+            elif brush == 'cover':
+                new['cover'] = 20
+            elif brush == 'goal':
+                goal = [list(c) for c in mission.get('goal', [])]
+                if list(cell) in goal:
+                    goal.remove(list(cell))
+                else:
+                    goal.append(list(cell))
+                mission['goal'] = goal
             else:
-                goal.append(list(cell))
-            mission['goal'] = goal
-        else:
-            raise RuleError('Unknown brush')
-        tiles.append(new)
-        self.replace(data)
+                raise RuleError('Unknown brush')
+            tiles[:] = [t for t in tiles if tuple(t['pos']) != cell]
+            tiles.append(new)
+        if seen:
+            self.replace(data)
 
     def place_unit(self, mid, uid, cell):
         data = deepcopy(self.data)
@@ -100,6 +114,7 @@ def launch(path):
     campaign_session = None
     campaign_battle = False
     selected_cell = (0, 0)
+    stroke_cells = []
     tile_size = 54
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
@@ -292,16 +307,44 @@ def launch(path):
 
     @guarded
     def click(event):
-        nonlocal selected_cell
+        nonlocal selected_cell, stroke_cells
+        stroke_cells = []
         selected_cell = int(canvas.canvasx(event.x) // tile_size), int(canvas.canvasy(event.y) // tile_size)
         if battle:
             refresh()
+        else:
+            stroke_cells = [selected_cell]
         else:
             brush = brush_var.get()
             if brush == 'unit':
                 design_change(lambda: doc.place_unit(mission_var.get(), unit_var.get(), selected_cell))
             else:
                 design_change(lambda: doc.tile(mission_var.get(), selected_cell, brush))
+
+    def drag(event):
+        if battle or brush_var.get() == 'unit' or not stroke_cells:
+            return
+        cell = (int(canvas.canvasx(event.x) // tile_size),
+                int(canvas.canvasy(event.y) // tile_size))
+        mission = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
+        if not (0 <= cell[0] < mission['board']['width'] and
+                0 <= cell[1] < mission['board']['height']):
+            return
+        if cell not in stroke_cells:
+            stroke_cells.append(cell)
+            x, y = cell[0] * tile_size, cell[1] * tile_size
+            canvas.create_rectangle(x+3, y+3, x+tile_size-3, y+tile_size-3,
+                                    outline='#2a61ff', width=3, tags='stroke_preview')
+
+    @guarded
+    def end_stroke(_event):
+        nonlocal selected_cell, stroke_cells
+        if not battle and brush_var.get() != 'unit' and len(stroke_cells) > 1:
+            cells = stroke_cells[1:]
+            selected_cell = stroke_cells[-1]
+            design_change(lambda: doc.paint_many(mission_var.get(), cells, brush_var.get()))
+        stroke_cells = []
+        canvas.delete('stroke_preview')
 
     def refresh(*args):
         nonlocal selected_cell, campaign_battle
@@ -437,6 +480,8 @@ def launch(path):
     canvas.configure(xscrollcommand=xs.set,yscrollcommand=ys.set)
     xs.pack(side='bottom',fill='x'); ys.pack(side='right',fill='y'); canvas.pack(fill='both',expand=True)
     canvas.bind('<Button-1>',click)
+    canvas.bind('<B1-Motion>',drag)
+    canvas.bind('<ButtonRelease-1>',end_stroke)
     inspector = tk.Text(work,width=43,wrap='word')
     inspector.pack(side='right',fill='y')
     source_frame = ttk.Frame(notebook)
