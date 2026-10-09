@@ -105,12 +105,17 @@ def validate_wave(context, action):
         context.integer(action['max_active'], 1, 100)
 
 
+def queue_wave(battle, action):
+    battle.queue_wave(action['actors'], lifetime=action.get('lifetime'))
+
+
 def default_trigger_actions():
     return Registry((
         ('hazard', TriggerActionRule(hazard, validate_hazard)),
         ('status', TriggerActionRule(lambda b, a: b._status(b.unit(a['unit']), a['status'], a['duration']), validate_status)),
         ('message', TriggerActionRule(lambda b, a: b.emit('message', text=a.get('text', '')), lambda c, a: None)),
         ('spawn', TriggerActionRule(spawn_actor, validate_spawn)),
+        ('queue_wave', TriggerActionRule(queue_wave, validate_wave)),
         ('wave', TriggerActionRule(lambda b, a: b.spawn_wave(a['actors'], lifetime=a.get('lifetime'), max_active=a.get('max_active', 14)), validate_wave)),
         ('despawn', TriggerActionRule(lambda b, a: b.despawn_actor(a['unit']), validate_despawn)),
     ))
