@@ -39,6 +39,19 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [ ] Renforts, escortes, capture multi-zones, objectifs secondaires, difficultés et règles de défaite.
 - [ ] Tests d’équilibrage et longues campagnes reproductibles avant de figer les valeurs.
 
+## 2.1b — Assaut multi-fronts et boss (PR #14)
+
+- [x] Horloge stratégique partagée, changement de zone et résolution automatique des fronts non focalisés.
+- [x] Application déterministe des pertes stratégiques aux unités, y compris lors de la première ouverture d'un front.
+- [x] Journal de commandes multi-fronts, replay vérifié, sauvegarde/restauration par reconstruction.
+- [x] Salle du trône : deux postes défensifs sabotables et renforts déclenchés à 50 % des PV du châtelain.
+- [ ] Transmission d'ordres et de ressources entre fronts, budget logistique limité et délais de transfert.
+- [ ] Choix de la zone d'arrivée des réserves et déploiement visuel multi-fronts.
+- [ ] Conséquences stratégiques des objectifs tactiques (porte, remparts, ravitaillement).
+- [ ] Tests longue campagne, simulations d'équilibrage et UX de la timeline globale.
+
+Voir [contrats multi-fronts](docs/MULTI_FRONT.md).
+
 ## 2.2 — contenu et migration vérifiée
 
 - [ ] Inventaire exhaustif des anciens effets, passifs, missions et ressources réellement utilisés.
