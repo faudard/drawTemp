@@ -105,6 +105,8 @@ class Battle:
     def spawn_wave(self, actors, *, lifetime=None):
         """Spawn an entire reinforcement wave atomically, including RNG and events."""
         require(isinstance(actors, list) and bool(actors), "Wave needs actors")
+        require(sum(u.alive for u in self.units) + len(actors) <= 14,
+                "Too many active combatants for a tactical encounter")
         snapshot = deepcopy(self.__dict__)
         try:
             spawned = [self.spawn_actor(spec, lifetime=lifetime) for spec in actors]
