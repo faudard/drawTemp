@@ -60,6 +60,10 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Secours à embranchements optionnel : sauver l'équipage sans cargaison, négocier pendant le combat, récupérer un butin partiel après une élimination.
 - [x] Poursuite jouable des pillards, récupération de ressources limitée et réduction bornée de l'opposition du front cible.
 - [x] Contrats et tests de replay v4 (anciens scénarios inchangés) pour les choix, inventaires et combats annexes.
+- [x] Campagne multi-fronts v5 optionnelle : verrou du trône, conditions de victoire acceptées et confirmation par véritable combat final.
+- [x] Négociation du passage, retraite avec pertes inter-fronts, victoire partielle liée à une interaction tactique réelle ; validations et replay.
+- [x] Commandement Tk / terminal : état d'avancement campagne, décisions et interdiction du passage au trône jusqu'au déverrouillage.
+- [ ] Choix d'autres itinéraires après une retraite, trêves conditionnelles et branches diplomatiques à conséquences persistantes.
 - [x] Journaux/replays des combats de sauvetage en cours et de leurs conclusions, sans duplications des voyageurs ; tests de compatibilité.
 - [ ] Défense prolongée des lignes de ravitaillement, choix négociation/fuite, plusieurs variantes de carte et chargements.
 
