@@ -136,6 +136,41 @@ class ConvoyChoicesTests(unittest.TestCase):
         self.assertEqual(MultiFrontSession.replay(session.recording()).digest(),
                          session.digest())
 
+    def test_pursuit_defeat_forfeits_only_loot_not_evacuated_heroes(self):
+        raw = siege_content().to_dict()
+        pursuit = next(m for m in raw["missions"]
+                       if m["id"] == "castle_convoy_pursuit")
+        pursuit["units"] = [
+            {"id": "pursuit_ranger", "name": "Pursuit Ranger",
+             "team": "player", "pos": [1, 3], "hp": 1},
+            {"id": "fleeing_bandit", "name": "Fleeing Bandit",
+             "team": "enemy", "pos": [2, 3], "speed": 100,
+             "attack": 80, "weapon_power": 50},
+        ]
+        example = siege_session(contested=True, decisions=True)
+        session = MultiFrontSession(Content.from_dict(raw), example.missions,
+                 "supplies", seed=4, specs=example.initial_specs,
+                 links=example.links, logistics=example.initial_logistics)
+        session.set_doctrine("walls", "hold")
+        session.send_reserves("walls", [
+            {"id": "surviving_hero", "name": "Surviving Hero",
+             "team": "player", "pos": [3, 6]}])
+        session.advance()
+        session.evacuate_convoy("convoy_1")
+        supplies = session.logistics.supplies["player"]
+        session.start_pursuit("convoy_1")
+        self.assertEqual(session.pursuit_battles["convoy_1"].active_id,
+                         "fleeing_bandit")
+        session.execute_pursuit("convoy_1", {
+            "kind": "act", "skill": "attack", "cell": [1, 3]})
+        self.assertEqual(session.pursuit_outcomes["convoy_1"], "defeat")
+        self.assertFalse(session.pursuit_targets)
+        self.assertEqual(session.logistics.supplies["player"], supplies)
+        self.assertEqual(session.logistics.convoy("convoy_1")["actors"][0]["id"],
+                         "surviving_hero")
+        self.assertEqual(MultiFrontSession.replay(session.recording()).digest(),
+                         session.digest())
+
     def test_abandon_pursuit_retains_crew_but_forfeits_loot(self):
         session = stranded()
         session.evacuate_convoy("convoy_1")
