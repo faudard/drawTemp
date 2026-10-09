@@ -44,7 +44,7 @@ class AuthoringTests(unittest.TestCase):
 
     def test_event_create_and_undo(self):
         doc=Document(self.content)
-        updated=add_event(doc.data,self.mid,'visit','enter','message',
+        updated=add_event(doc.data,self.mid,'visit',condition='enter',action='message',
                           pos=self.cell,text='Un ennemi approche')
         doc.replace(updated)
         self.assertTrue(doc.dirty)
@@ -56,14 +56,14 @@ class AuthoringTests(unittest.TestCase):
         self.assertIsNotNone(Content.from_dict(doc.data))
 
     def test_triggers_are_engine_validated(self):
-        updated=add_event(self.data,self.mid,'clock','tick','hazard',
+        updated=add_event(self.data,self.mid,'clock',condition='tick',action='hazard',
                           pos=self.cell,tick=15,amount=3)
         self.assertIsNotNone(Content.from_dict(updated))
         with self.assertRaises(RuleError):
             add_event(self.data,self.mid,'clock','tick','hazard',
                       pos=self.cell,tick=-1,amount=3)
         with self.assertRaises(RuleError):
-            add_event(self.data,self.mid,'badunit','defeated','message',
+            add_event(self.data,self.mid,'badunit',condition='defeated',action='message',
                       pos=self.cell,unit='nope')
 
     def test_resize_rejects_losing_actor_or_object(self):
