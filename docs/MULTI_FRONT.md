@@ -242,6 +242,67 @@ Examples keep tactical missions small and set transport capacity independently
 from the active-combatant cap. Convoy rescue, supply usage and front orders can
 be run from a terminal before an animated UI is developed.
 
+## Playable convoy rescue: tactical wagon encounter
+
+When a convoy is stranded after a route ambush, the commander now has
+**three distinct choices**:
+
+1. `rescue_convoy(id)`: pay one provision for an automatic recovery order
+   (the older logistics behavior remains supported).
+2. `start_rescue(id)`: fight a genuine, small tactical battle. The side
+   encounter uses ordinary `Battle.execute` actions, weapons, AI and the
+   existing objective system. Its mission declares a **protected player wagon**;
+   eliminate the ambushers while keeping that wagon alive.
+3. `abandon_convoy(id)`: abandon the stranded convoy, lose its travelling
+   actors and release their transport capacity. The order also permits
+   withdrawing from an already-started rescue skirmish.
+
+Enable the tactical option by adding
+`"rescue_mission": "castle_convoy_rescue"` to the `logistics`
+configuration. The referenced mission must exist, use the `eliminate`
+objective and name a friendly `protected_id`. This validates at session
+construction. The opt-in siege preset is
+`siege_session(contested=True)`.
+
+```python
+session.send_reserves("walls", [
+    {"id": "road_guard", "name": "Road Guard",
+     "team": "player", "pos": [3, 6]}])
+session.advance()                       # ambush strands convoy_1
+encounter = session.start_rescue("convoy_1")
+# Play until the encounter resolves, one normal tactical command at a time:
+session.execute_rescue("convoy_1", {"kind": "end"})
+```
+
+The active rescue skirmish **freezes strategic advancement and front
+switching**, so a convoy cannot simultaneously arrive while its wagon is
+under attack. The convoy actors remain held in transit until resolution;
+the skirmish contains a separate bounded escort and wagon, **never a second
+copy of travelling heroes**.
+
+- **Victory**: on elimination of the last ambusher while the wagon survives,
+  the convoy is unstranded, retains its remaining actors, resumes with ETA no
+  earlier than the next strategic turn, and salvages one provision when the
+  optional supply pool exists.
+- **Defeat**: if the wagon dies or the rescue squad is eliminated, the entire
+  remaining convoy is lost. It cannot be respawned or re-used.
+- **Abandonment**: loses the remaining convoy and frees capacity; no reward.
+- **Determinism**: `start_rescue`, `execute_rescue`, and
+  `abandon_convoy` are explicitly journaled. A mid-battle save includes the
+  rescue Battle state; replay rebuilds every tactical command and checks the
+  aggregate digest. No direct side-battle mutations are replayable.
+- **Interfaces**: from `python -m examples.siege_command --interactive`,
+  use `skirmish convoy_1`, then
+  `rescue-act convoy_1 {"kind":"end"}` (or other normal tactical commands),
+  and `abandon convoy_1` if required. The Tk command center shows wagon HP,
+  the active fighter and separate **Combat de secours** / **Abandonner** actions.
+
+This is a reusable **mission reference**, not an extra always-simulated front.
+No global turn is advanced by tactical rescue actions. The encounter is a
+deliberately bounded proof of the architecture; scenario authors may replace
+the map, enemies, defensive positions or wagon stats without modifying
+strategic code.
+
 ## Contracts and limitations
 
 - **Bounded tactical maps**: a front keeps its own units, CT, statuses and
@@ -275,6 +336,6 @@ be run from a terminal before an animated UI is developed.
   Opening an already simulated front applies HP attrition but does not
   reconstruct hypothetical individual offscreen moves. This is intentional.
 
-Next milestones: visual dashboard / timeline, landing-zone selection,
-playable convoy-rescue tactical encounters, supply-line protection objectives,
-and a unified campaign victory/failure gate across the global timeline.
+Next milestones: route-specific rescue templates, supply-line protection
+objectives, graphical arrival-zone and global timeline editing, mission-choice
+branches (fight, negotiate, escape), and unified campaign victory/failure gates.
