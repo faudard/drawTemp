@@ -375,3 +375,29 @@ commandes tactiques. Ce mode avancé reste explicitement optionnel.
 python -m examples.siege_command --choices-demo
 python -m unittest discover -s tests_standalone -p test_convoy_choices.py -v
 ```
+
+
+### Campagne multi-fronts : passage négocié, prise partielle et retraite
+
+Un `MultiFrontSession` peut recevoir une politique de campagne déclarative
+qui réserve l'accès au trône tant que la porte et la cour ne sont pas
+suffisamment sécurisées. L'accès peut résulter d'une **vraie victoire**,
+d'une **négociation coûteuse** pour la porte ou d'une **victoire partielle**
+sur la cour prouvée par un événement tactique vérifié. Une retraite du front
+de la porte empêche ce chemin d'accès et affaiblit le secteur voisin.
+
+La fin de la campagne exige toujours une victoire sur le boss dans le
+moteur `Battle`. Le déroulement synchronise états des fronts,
+déplacements et coûts de provisions avec les replays v5 ; sans cette option
+les anciennes sauvegardes v1-v4 ne changent pas.
+
+```sh
+python -m examples.siege_strategy_demo
+python -m examples.siege_command --interactive --campaign
+python -m examples.siege_command --gui --campaign
+python -m unittest discover -s tests_standalone -p test_siege_campaign.py -v
+```
+
+Le module existant `examples.siege_campaign` conserve son ancien mode
+de campagne **séquentielle** ; ce nouveau flux est un système stratégique
+**simultané** distinct, avec un unique journal multi-fronts.
