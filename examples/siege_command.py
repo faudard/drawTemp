@@ -14,14 +14,15 @@ from .siege_fronts import siege_session
 def demo():
     battle = siege_session(seed=4, contested=True)
     battle.execute({"kind": "start_battle"})
+    battle.set_doctrine("walls", "hold")
     convoy = battle.send_reserves("walls", [
         {"id": "reinforcement", "name": "Reinforcement", "team": "player",
          "pos": [3, 6]}])
     battle.advance()  # trap on the reserve route: stalled awaiting a rescue
     assert battle.logistics.convoy(convoy).get("stranded")
     battle.rescue_convoy(convoy)
-    battle.advance()
-    battle.advance()
+    for _ in range(3):
+        battle.advance()
     recording = battle.recording()
     verified = MultiFrontSession.replay(recording)
     assert verified.digest() == battle.digest()
