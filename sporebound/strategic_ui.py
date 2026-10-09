@@ -86,6 +86,10 @@ def launch(session):
     ttk.Label(second, text="Y").pack(side="left")
     ttk.Entry(second, textvariable=y_value, width=4).pack(side="left", padx=4)
 
+    fourth = ttk.Frame(controls, padding=5)
+    fourth.pack(fill="x")
+    ttk.Label(fourth, text="Décisions de convoi").pack(side="left", padx=4)
+
     third = ttk.Frame(controls, padding=5)
     third.pack(fill="x")
     ttk.Label(third, text="Commande tactique JSON").pack(side="left")
@@ -112,6 +116,10 @@ def launch(session):
             wagon = battle.unit(battle.mission.protected_id)
             rescue_text = (f" | SAUVETAGE {cid}: "
                            f"actif={battle.active_id or 'aucun'}, chariot={wagon.hp} PV")
+        if s.pursuit_battles:
+            cid, battle = next(iter(s.pursuit_battles.items()))
+            rescue_text = (f" | POURSUITE {cid}: "
+                           f"actif={battle.active_id or 'aucun'}")
         status.set(f"Tour {s.timeline.turn} | Focus : {s.timeline.focused} | {stock}"
                    + rescue_text)
         front_selector.configure(values=sorted(s.missions))
@@ -163,6 +171,15 @@ def launch(session):
             raise RuleError("Sélectionnez un convoi dans le tableau")
         return chosen[0]
 
+    def selected_pursuit():
+        selected = convoys.selection()
+        if selected and selected[0] in current[0].pursuit_targets:
+            return selected[0]
+        targets = current[0].pursuit_targets
+        if len(targets) == 1:
+            return next(iter(targets))
+        raise RuleError("Sélectionnez une cible de poursuite")
+
     def placement():
         if not unit_id.get().strip():
             raise RuleError("Indiquez l'identifiant d'une unité")
@@ -206,10 +223,29 @@ def launch(session):
     ttk.Button(second, text="Abandonner",
                command=lambda: guarded(lambda: current[0].abandon_convoy(
                    selected_convoy()))).pack(side="right", padx=3)
+    ttk.Button(fourth, text="Évacuer équipage",
+               command=lambda: guarded(lambda: current[0].evacuate_convoy(
+                   selected_convoy()))).pack(side="left", padx=3)
+    ttk.Button(fourth, text="Butin partiel",
+               command=lambda: guarded(lambda: current[0].salvage_convoy(
+                   selected_convoy()))).pack(side="left", padx=3)
+    ttk.Button(fourth, text="Négocier",
+               command=lambda: guarded(lambda: current[0].negotiate_convoy(
+                   selected_convoy()))).pack(side="left", padx=3)
+    ttk.Button(fourth, text="Poursuivre pillards",
+               command=lambda: guarded(lambda: current[0].start_pursuit(
+                   selected_pursuit()))).pack(side="left", padx=3)
+    ttk.Button(fourth, text="Abandon poursuite",
+               command=lambda: guarded(lambda: current[0].abandon_pursuit(
+                   selected_pursuit()))).pack(side="left", padx=3)
+
     def play_tactical():
         command = json.loads(tactical.get())
         s = current[0]
-        if s.rescue_battles:
+        if s.pursuit_battles:
+            cid = next(iter(s.pursuit_battles))
+            s.execute_pursuit(cid, command)
+        elif s.rescue_battles:
             cid = next(iter(s.rescue_battles))
             s.execute_rescue(cid, command)
         else:
