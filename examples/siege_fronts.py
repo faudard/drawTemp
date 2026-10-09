@@ -5,6 +5,7 @@
 The example prints the front rules and a verified save/replay smoke run.
 Use `session.execute(...)` for every tactical command if saving a session.
 """
+from copy import deepcopy
 from sporebound.fronts import MultiFrontSession
 from .siege_scenarios import siege_content
 
@@ -69,8 +70,34 @@ SIEGE_CAMPAIGN = {
 }
 
 
+SIEGE_CAMPAIGN_PATHS = deepcopy(SIEGE_CAMPAIGN)
+SIEGE_CAMPAIGN_PATHS["routes"] = {
+    "breach": {
+        "required": {"gate": ["victory", "negotiated", "reclaimed"],
+                     "courtyard": ["victory", "partial"]},
+        "supplies": 0, "strength_loss": 0,
+    },
+    "tunnels": {
+        "required": {"tunnels": ["victory"]},
+        "supplies": 1, "strength_loss": 2,
+    },
+    "direct": {
+        "required": {},
+        "supplies": 3, "strength_loss": 4,
+    },
+}
+SIEGE_CAMPAIGN_PATHS["recovery"] = {
+    "gate": {"mission": "castle_gate_recovery", "supplies": 1,
+             "strength_loss": 1, "reclaimed_strength": 2},
+}
+SIEGE_CAMPAIGN_PATHS["treaties"] = {
+    "gate": {"requires_front": "supplies", "event": "interact",
+             "object": "supply_cache"},
+}
+
+
 def siege_session(seed=1, focused="supplies", *, contested=False, decisions=False,
-                  campaign=False):
+                  campaign=False, paths=False):
     logistics = {
         "reserves": {"player": 3, "enemy": 0},
         "capacity": 4,
@@ -100,13 +127,16 @@ def siege_session(seed=1, focused="supplies", *, contested=False, decisions=Fals
             "pursuit_mission": "castle_convoy_pursuit",
             "pursuit_reward": 2,
         }
+    if paths and not campaign:
+        raise ValueError("Alternative routes need campaign mode")
     if campaign and not contested:
         raise ValueError("Siege campaign choices need contested supplies")
     return MultiFrontSession(
         siege_content(),
         {"walls": "castle_ramparts", "gate": "castle_ram",
          "courtyard": "castle_courtyard", "supplies": "castle_supply",
-         "throne": "castle_throne"},
+         "throne": "castle_throne",
+         **({"tunnels": "castle_tunnels"} if paths else {})},
         focused=focused, seed=seed,
         specs={
             "walls": {"strength": 8, "opposition": 12, "doctrine": "assault"},
@@ -114,10 +144,13 @@ def siege_session(seed=1, focused="supplies", *, contested=False, decisions=Fals
             "courtyard": {"strength": 9, "opposition": 16, "doctrine": "delay"},
             "supplies": {"strength": 6, "opposition": 10, "doctrine": "hold"},
             "throne": {"strength": 7, "opposition": 18, "doctrine": "hold"},
+            **({"tunnels": {"strength": 6, "opposition": 8,
+                            "doctrine": "hold"}} if paths else {}),
         },
         links=SIEGE_LINKS,
         logistics=logistics,
-        campaign=SIEGE_CAMPAIGN if campaign else None,
+        campaign=(SIEGE_CAMPAIGN_PATHS if paths else
+                  SIEGE_CAMPAIGN if campaign else None),
     )
 
 
