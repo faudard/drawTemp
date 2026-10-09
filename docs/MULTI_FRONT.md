@@ -427,6 +427,67 @@ python -m examples.siege_command --interactive --campaign
 python -m unittest discover -s tests_standalone -p test_siege_campaign.py -v
 ```
 
+## Alternative castle routes and tactical counterattacks (opt-in v5)
+
+The existing `SiegeCampaign` retains its single breach route by default.
+With `siege_session(contested=True, campaign=True, paths=True)`, the campaign
+adds a **route policy** with mutually exclusive commitments:
+
+| Approach | Proof needed | Up-front cost |
+| --- | --- | --- |
+| **Breach** (default) | Gate won, negotiated or tactically reclaimed; courtyard won or secured in part | No extra route cost |
+| **Secret tunnels** | Actual tactical victory at the sewer-front `castle_tunnels` | 1 provision, 2 allied strength on the throne front |
+| **Direct assault** | No intermediate-front prerequisite, but a real throne Battle is still mandatory | 3 provisions, 4 allied strength on the throne front |
+
+`select_route(name)` commits a single paid alternative; repeating or changing
+this selection is rejected, preventing free rescoring/refunds. Supply or manpower
+shortages reject the order without modifying the strategic state. The selected
+route, costs and prerequisites are recorded in the global event history and
+authenticated state digest.
+
+### Recovering an abandoned front
+
+If the gate was withdrawn or lost, `start_recovery("gate")` creates an
+independent `castle_gate_recovery` tactical Battle with a bounded relief squad.
+`execute_recovery(front, normal_battle_command)` runs the **same combat
+engine** as other encounters. This recovery consumes 1 provision and 1 point
+of final-assault strength upfront. Victory marks the gate `reclaimed` with
+at least 2 allied strength and satisfies the breach prerequisite. A defeat or
+`abandon_recovery` forfeits the committed costs without claiming a victory.
+The original lost-front combat is not resurrected or given an invented result.
+
+Only one tactical recovery may run at a time. While one is underway, the
+strategic turn clock, focus switching and unrelated tactical actions are
+frozen. Mid-counterattack save/replay is fully reconstructed from journaled
+actions; replay checks all route choices, costs, casualties and outcomes.
+
+### Conditional truce
+
+The gate may be **negotiated** only after the actual `supply_cache`
+interaction in the supply-raid Battle has been recorded. Merely selecting a
+route or claiming intelligence in the interface is not sufficient. The
+original diplomacy provision cost still applies. This condition is
+declarative and validated against a real mission object.
+
+Use from the terminal: `route tunnels`, `route direct`,
+`recapture gate`, `recovery-act gate {"kind":"end"}`, or
+`giveup-recovery gate`. The Tk dashboard supports route selection,
+counterattack and tactical input. Standard `focus` and `tactical` commands
+play the tunnels and throne, respectively.
+
+```sh
+python -m examples.siege_routes_demo
+python -m examples.siege_command --gui --paths
+python -m examples.siege_command --interactive --paths
+python -m unittest discover -s tests_standalone -p test_siege_routes.py -v
+```
+
+Older campaign configurations **without** `routes/recovery/treaties`
+continue using their original checksums, prerequisites and replay v5 format.
+Non-campaign games still use the earlier replay formats. Alternate routes
+do not simulate hundreds of units: each encounter remains a small, explicit
+tactical map with separate authored actors.
+
 ## Contracts and limitations
 
 - **Bounded tactical maps**: a front keeps its own units, CT, statuses and
