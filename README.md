@@ -60,21 +60,30 @@ Quatre scénarios de travail (`garden`, `escape`, `hold`, `crown`), quatre class
 trois équipements sont fournis. Ils servent de terrain d’essai ; l’équilibrage
 et les valeurs sont propres au prototype autonome.
 
-## Utiliser notre éditeur
+## Studio de création (cartes et jeu complet)
 
-1. Choisir une mission ; peindre murs, relief, boue, dangers, couvert ou objectifs.
-2. Choisir le pinceau `unit` et une unité pour déplacer son point de départ.
-3. Dans **Données JSON**, modifier stats, compétences, IA via loadouts, objectifs,
-   objets, triggers, classes et équipement ; **Valider et appliquer**.
-4. **Playtest**, choisir une commande puis une case et **Exécuter**. Le panneau donne
-   PV/MP/CT, disponibilité des actions et prévisions. **Fin** valide l’orientation.
-5. **IA : 1 tour** délègue une activation ; le journal explique le déroulement.
-6. **Éditer** revient au document intact. Annuler/rétablir, duplication de mission,
-   ouverture/enregistrement et reprise de combat sont disponibles.
+Lancer `python -m sporebound editor`. Le studio comprend maintenant :
 
-Le playtest n’écrit aucune progression de campagne. Les éditeurs spécialisés
-(formulaires de compétences/classes et graphes de triggers) restent à construire ;
-le JSON validé permet déjà de tout configurer sans modifier le code du moteur.
+- **Carte et combat** : peinture de cases, positionnement, prévisions, playtest isolé.
+- **Carte vierge** : assistant de nouvelle mission avec dimensions et acteurs de base.
+- **Personnages et événements** : ajouter/supprimer personnages et monstres,
+  objets interactifs, conditions et actions de triggers simples, sans écrire du JSON.
+- **Mission** : titre, objectif, récompense, progression vers les missions suivantes
+  et redimensionnement sûr de carte.
+- **Jeu, campagnes et sauvegardes** : écran titre, configuration audio/langue/plein
+  écran, plusieurs campagnes, partie nouvelle ou chargée, 1 à 9 slots et
+  lancement de mission avec progression `Campaign`.
+
+Les modifications de gameplay sont validées avant d'être inscrites dans
+l'historique undo/redo. Le `*.game.json` de présentation reste indépendant du
+fichier des missions ; les sauvegardes de campagne n'écrasent pas les replays.
+**Playtest** ne modifie pas la progression, contrairement à **Jouer campagne**.
+Pour les règles, équipements, vagues et acteurs complexes, l'onglet **Données JSON**
+reste disponible. L'écran titre est à ce stade un **aperçu interactif Tk** et
+non un frontend de jeu autonome finalisé.
+
+Voir le [guide détaillé du Studio](docs/STUDIO.md) pour les actions disponibles,
+les conventions de sauvegarde et les limites.
 
 ## Campagne et équipement
 
@@ -142,6 +151,7 @@ Les opérations et les batailles sont vérifiées par replay v5.
 - [Règles modulaires, personnages et monstres](docs/MODULAR_ENGINE.md)
 - [Exemple de siège multi-fronts avec logistique, reserves et transferts](examples/siege_fronts.py)
 - [Chronologie stratégique, fronts et replays](docs/MULTI_FRONT.md)
+- [Studio de création de cartes, campagnes et écrans de jeu](docs/STUDIO.md)
 - [Roadmap gameplay et éditeur](ROADMAP.md)
 - Historique Godot : [README](docs/legacy/GODOT_README.md),
   [architecture](docs/legacy/GODOT_ARCHITECTURE.md), documents `FFT_*` à la racine.
