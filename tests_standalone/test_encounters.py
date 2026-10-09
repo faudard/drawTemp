@@ -30,7 +30,7 @@ class EncounterTests(unittest.TestCase):
     def test_wave_waits_until_capacity_available(self):
         director = EncounterDirector(max_active=4)
         battle = FakeBattle(3)
-        director.queue([{"id": "a"}, {"id": "b"}])
+        director.queue([{"id": "a", "pos": [1, 1]}, {"id": "b", "pos": [2, 1]}])
         self.assertEqual(director.dispatch(battle), [])
         self.assertEqual(len(director.pending), 1)
         battle.units[0].alive = False
@@ -41,7 +41,7 @@ class EncounterTests(unittest.TestCase):
         director = EncounterDirector(max_active=4)
         battle = FakeBattle(3)
         director.queue([{"id": "a"}, {"id": "b"}])
-        director.queue([{"id": "c"}])
+        director.queue([{"id": "c", "pos": [3, 1]}])
         self.assertEqual(director.dispatch(battle), [])
         self.assertEqual(len(director.pending), 2)
 
