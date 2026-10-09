@@ -133,7 +133,7 @@ def apply(session, link):
     for effect in link["effects"]:
         kind, front = effect["kind"], effect["front"]
         if kind == "open_door":
-            _modify_object(session, front, effect["object"], {"open": True, "hp": 0})
+            _modify_object(session, front, effect["object"], {"open": True})
         elif kind == "disable_defense":
             _modify_object(session, front, effect["object"], {"disabled": True})
         elif kind == "reduce_opposition":
