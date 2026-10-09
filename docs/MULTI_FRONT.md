@@ -304,6 +304,56 @@ deliberately bounded proof of the architecture; scenario authors may replace
 the map, enemies, defensive positions or wagon stats without modifying
 strategic code.
 
+## Branching convoy outcomes: evacuation, ransom, salvage, pursuit
+
+Scenario authors can opt into `logistics["choices"]` without changing
+existing v1-v4 recordings. This requires a configured `rescue_mission` and
+a finite `supplies` pool:
+
+```python
+"choices": {
+    "ransom": 2,
+    "pursuit_mission": "castle_convoy_pursuit",
+    "pursuit_reward": 2,
+}
+```
+
+For a stranded **friendly** convoy, the commander now chooses:
+
+| Order | Conditions | Survivor/cargo consequences |
+| --- | --- | --- |
+| `evacuate_convoy(id)` | Stranded crew (before or during skirmish) | All remaining crew survives and can arrive after at least two more strategic turns; cargo is lost, creating a pursuit target |
+| `salvage_convoy(id)` | Active rescue skirmish; wagon and escort alive; at least one, but not all, ambushers eliminated | Withdraw crew and half the cargo, rounded down; abandoned cargo may be pursued |
+| `negotiate_convoy(id)` | Active rescue skirmish; wagon alive; 2 provisions available in default scenario | Pay an immediate ransom and save the entire crew/cargo; no recovered supplies are awarded |
+| `start_pursuit(id)` | Lost loot from evacuation or partial salvage, destination front still active | Launch a second small `Battle`, hunting the escaping pillards |
+| `abandon_pursuit(id)` | An unresolved pursuit target | Give up its loot without endangering an already evacuated convoy |
+
+Cargo in this opt-in model is a **fixed two-point value per transported
+actor**. This is **potential loot**, not extra inventory awarded at dispatch.
+Full rescue remains unchanged; voluntary partial recovery credits the saved
+share to the supply pool. The separate pursuit awards up to
+`pursuit_reward` provisions and removes **one enemy opposition point** on
+the destination front after a genuine tactical victory (without granting
+an automatic strategic victory). Pursuit defeat forfeits the remaining loot,
+but cannot resurrect or destroy actors that already evacuated.
+
+As with wagon rescue, **time freezes** during an active pursuit battle;
+all outcomes, tactical commands, and chosen paths are appended to the
+single strategic operation journal. The same replay **v4** format covers
+these opt-in branches; absent `choices`, no state keys, defaults or old
+checksums change.
+
+```sh
+python -m examples.siege_command --choices-demo
+python -m unittest discover -s tests_standalone -p test_convoy_choices.py -v
+```
+
+Terminal commands: `evacuate ID`, `salvage ID`, `negotiate ID`,
+`pursue ID`, `pursuit-act ID {"kind":"end"}`,
+`giveup-pursuit ID`. Tk adds **Évacuer équipage**, **Butin partiel**,
+**Négocier**, **Poursuivre pillards** and **Abandon poursuite**; the normal
+tactical input automatically routes actions to the current pursuit battle.
+
 ## Contracts and limitations
 
 - **Bounded tactical maps**: a front keeps its own units, CT, statuses and
@@ -337,6 +387,7 @@ strategic code.
   Opening an already simulated front applies HP attrition but does not
   reconstruct hypothetical individual offscreen moves. This is intentional.
 
-Next milestones: route-specific rescue templates, supply-line protection
-objectives, graphical arrival-zone and global timeline editing, mission-choice
-branches (fight, negotiate, escape), and unified campaign victory/failure gates.
+Next milestones: route-specific rescue and pursuit mission templates,
+supply-line protection objectives, authored negotiation consequences,
+graphical arrival-zone and global timeline editing, and a unified
+campaign victory/failure gate.
