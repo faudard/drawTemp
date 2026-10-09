@@ -92,6 +92,8 @@ def branching_convoy_demo():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Headless castle command center")
+    parser.add_argument("--campaign", action="store_true",
+                        help="Enable throne progression gates and siege negotiations")
     parser.add_argument("--gui", action="store_true",
                         help="Open the graphical Tk command centre")
     parser.add_argument("--interactive", action="store_true",
@@ -105,7 +107,8 @@ if __name__ == "__main__":
     options = parser.parse_args()
     if options.gui:
         from sporebound.strategic_ui import launch
-        launch(siege_session(contested=True, decisions=True))
+        launch(siege_session(contested=True, decisions=True,
+                             campaign=options.campaign))
     elif options.choices_demo:
         print(branching_convoy_demo())
         print("Verified branching convoy replay: OK")
@@ -117,7 +120,9 @@ if __name__ == "__main__":
         print("Verified command replay: OK")
     elif options.interactive:
         print("Enter 'help' for a list of commands.")
-        run(siege_session(contested=True, decisions=True))
+        run(siege_session(contested=True, decisions=True,
+                          campaign=options.campaign))
     else:
-        print(dashboard(siege_session(contested=True, decisions=True)))
+        print(dashboard(siege_session(contested=True, decisions=True,
+                                      campaign=options.campaign)))
         print("For orders: python -m examples.siege_command --interactive")
