@@ -75,7 +75,7 @@ class AdvancedStudio:
     def _open_selected(self):
         if self.from_var.get():
             self.owner.mission.set(self.from_var.get())
-            self.owner.refresh()
+            self.owner.mission_change()
 
     def _click_graph(self, event):
         tag_ids = self.graph_canvas.gettags('current')
