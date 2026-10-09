@@ -47,7 +47,30 @@ SIEGE_LINKS = [
 ]
 
 
-def siege_session(seed=1, focused="supplies", *, contested=False, decisions=False):
+SIEGE_CAMPAIGN = {
+    "final_front": "throne",
+    "required_fronts": {
+        "gate": ["victory", "negotiated"],
+        "courtyard": ["victory", "partial"],
+    },
+    "partial": {
+        "courtyard": {
+            "event": "defense_sabotaged", "object": "stone_drop",
+            "cost": 1, "target": "throne", "target_loss": 2,
+        },
+    },
+    "negotiation": {
+        "gate": {"supplies": 2, "target": "throne", "target_loss": 1},
+    },
+    "retreat": {
+        "gate": {"target": "courtyard", "target_loss": 3},
+        "courtyard": {"target": "throne", "target_loss": 3},
+    },
+}
+
+
+def siege_session(seed=1, focused="supplies", *, contested=False, decisions=False,
+                  campaign=False):
     logistics = {
         "reserves": {"player": 3, "enemy": 0},
         "capacity": 4,
@@ -77,6 +100,8 @@ def siege_session(seed=1, focused="supplies", *, contested=False, decisions=Fals
             "pursuit_mission": "castle_convoy_pursuit",
             "pursuit_reward": 2,
         }
+    if campaign and not contested:
+        raise ValueError("Siege campaign choices need contested supplies")
     return MultiFrontSession(
         siege_content(),
         {"walls": "castle_ramparts", "gate": "castle_ram",
@@ -92,6 +117,7 @@ def siege_session(seed=1, focused="supplies", *, contested=False, decisions=Fals
         },
         links=SIEGE_LINKS,
         logistics=logistics,
+        campaign=SIEGE_CAMPAIGN if campaign else None,
     )
 
 
