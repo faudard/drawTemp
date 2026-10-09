@@ -36,6 +36,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_editor_gui.py -v
+      - name: Exercise guided studio and title/campaign flows
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_studio_gui.py -v
       - name: Exercise the real command center
         env:
           SPOREBOUND_GUI_SMOKE: '1'
