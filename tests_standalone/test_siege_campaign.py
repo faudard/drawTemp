@@ -4,6 +4,7 @@ import unittest
 
 from examples.siege_fronts import SIEGE_CAMPAIGN, siege_session
 from examples.siege_scenarios import siege_content
+from examples.siege_strategy_demo import demo as strategy_demo
 from sporebound.fronts import MultiFrontSession
 from sporebound.model import Content, RuleError
 
@@ -157,6 +158,26 @@ class SiegeCampaignTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             s.negotiate_front("gate")
         self.assertEqual(s.digest(), before)
+
+    def test_complete_negotiated_and_partial_throne_demo(self):
+        session = strategy_demo()
+        self.assertEqual(session.state()["campaign"]["status"], "victory")
+        self.assertEqual(session.timeline.fronts["gate"]["status"], "negotiated")
+        self.assertEqual(session.timeline.fronts["courtyard"]["status"], "partial")
+        self.assertEqual(MultiFrontSession.replay(session.recording()).digest(),
+                         session.digest())
+
+    def test_campaign_policy_tamper_is_detected_even_without_actions(self):
+        session = fixture()
+        original = session.recording()
+        tampered = deepcopy(original)
+        tampered["campaign"]["negotiation"]["gate"]["supplies"] = 1
+        with self.assertRaises(RuleError):
+            MultiFrontSession.replay(tampered)
+        tampered = deepcopy(original)
+        tampered["campaign"]["required_fronts"]["gate"] = ["victory"]
+        with self.assertRaises(RuleError):
+            MultiFrontSession.replay(tampered)
 
     def test_legacy_v4_session_and_mid_campaign_restore(self):
         old = siege_session(contested=True, decisions=True)
