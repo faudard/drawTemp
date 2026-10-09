@@ -13,11 +13,12 @@ from .model import Content, RuleError
 
 class StudioPanels:
     def __init__(self, notebook, tk, ttk, dialogs, *, doc, content_path,
-                 mission, selection, design_change, play_campaign, status):
+                 mission, selection, design_change, play_campaign, status, mission_change=None):
         self.tk, self.ttk, self.dialogs = tk, ttk, dialogs
         self.doc, self.content_path = doc, content_path
         self.mission, self.selection = mission, selection
         self.design_change, self.play_campaign = design_change, play_campaign
+        self.mission_change = mission_change or self.refresh
         self.status = status
         self.project = None
         self.project_path = None
@@ -173,7 +174,7 @@ class StudioPanels:
         left.columnconfigure(1,weight=1)
 
         self.campaign_id, cb = self._field(right,0,'Campagne','main',choices=[])
-        cb.bind('<<ComboboxSelected>>',lambda _event: self._show_campaign())
+        cb.bind('<<ComboboxSelected>>',lambda _event: (self._show_campaign(), self.advanced.draw_graph()))
         self.campaign_box=cb
         self.cname, _ = self._field(right,1,'Nom campagne')
         self.cdesc, _ = self._field(right,2,'Description')
