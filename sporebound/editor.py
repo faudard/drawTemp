@@ -96,6 +96,9 @@ def launch(path):
     doc = Document(Content.load(path))
     current_path = Path(path)
     battle = None
+    studio = None
+    campaign_session = None
+    campaign_battle = False
     selected_cell = (0, 0)
     tile_size = 54
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
@@ -117,7 +120,7 @@ def launch(path):
         return source.get('1.0', 'end-1c').strip() != json.dumps(doc.data, indent=2, ensure_ascii=False)
 
     def discard_ok():
-        return not (doc.dirty or source_pending()) or messagebox.askyesno('Modifications', 'Abandonner les modifications non enregistrées ?')
+        return not (doc.dirty or source_pending() or (studio is not None and studio.dirty())) or messagebox.askyesno('Modifications', 'Abandonner les modifications non enregistrées ?')
 
     def refresh_source():
         source.delete('1.0', 'end')
@@ -142,6 +145,8 @@ def launch(path):
             candidate = Document(Content.load(name))
             doc, current_path, battle = candidate, Path(name), None
             mission_var.set(doc.data['missions'][0]['id'])
+            if studio is not None:
+                studio.reload_project()
             refresh_source()
             refresh()
 
@@ -182,7 +187,8 @@ def launch(path):
 
     @guarded
     def start():
-        nonlocal battle
+        nonlocal battle, campaign_battle
+        campaign_battle = False
         if source_pending():
             doc.replace(json.loads(source.get('1.0', 'end')))
             refresh_source()
@@ -191,10 +197,24 @@ def launch(path):
         status_var.set('Playtest isolé. Choisir une commande, cliquer une cible, puis Exécuter.')
 
     def stop():
-        nonlocal battle
+        nonlocal battle, campaign_battle
+        campaign_battle = False
         battle = None
         refresh()
         status_var.set('Retour à l’édition. Progression de campagne inchangée.')
+
+    @guarded
+    def start_campaign(progress, mid):
+        nonlocal battle, campaign_session, campaign_battle
+        if source_pending():
+            raise RuleError('Appliquer ou abandonner les modifications JSON avant de jouer.')
+        campaign_session = progress
+        battle = progress.prepare(Content.from_dict(doc.data), mid)
+        campaign_battle = True
+        mission_var.set(mid)
+        notebook.select(work)
+        refresh()
+        status_var.set('Campagne : mission lancée. La progression sera validée à la fin du combat.')
 
     @guarded
     def ai_turn():
@@ -241,7 +261,8 @@ def launch(path):
 
     @guarded
     def load_game():
-        nonlocal battle
+        nonlocal battle, campaign_battle
+        campaign_battle = False
         name = filedialog.askopenfilename(filetypes=[('Combat/replay', '*.json')])
         if name:
             battle = load_battle(name)
@@ -261,7 +282,11 @@ def launch(path):
                 design_change(lambda: doc.tile(mission_var.get(), selected_cell, brush))
 
     def refresh(*args):
-        nonlocal selected_cell
+        nonlocal selected_cell, campaign_battle
+        if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
+            campaign_session.finish(battle)
+            campaign_battle = False
+            status_var.set('Résultat de campagne enregistré : ' + battle.result)
         mids = [m['id'] for m in doc.data['missions']]
         mission_box['values'] = mids
         if mission_var.get() not in mids:
@@ -354,6 +379,8 @@ def launch(path):
             text += '\nÉdition des règles, compétences, unités, jobs, équipement et objectifs dans l’onglet Données JSON.\nValider avant de lancer le playtest.\n\nPinceaux : relief, murs, terrain, dangers, objectifs et placement des unités.'
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
+        if studio is not None:
+            studio.refresh()
 
     bar = ttk.Frame(root)
     bar.pack(fill='x')
@@ -397,6 +424,17 @@ def launch(path):
     source.pack(fill='both',expand=True)
     journal = tk.Text(notebook,wrap='word')
     notebook.add(journal,text='Journal de combat')
+    from types import SimpleNamespace
+    from .studio_panels import StudioPanels
+    studio = StudioPanels(
+        notebook, tk, ttk,
+        SimpleNamespace(showerror=messagebox.showerror,
+                        askstring=simpledialog.askstring,
+                        asksaveasfilename=filedialog.asksaveasfilename),
+        doc=lambda: doc, content_path=lambda: current_path,
+        mission=mission_var.get, selection=lambda: selected_cell,
+        design_change=design_change, play_campaign=start_campaign,
+        status=status_var)
     ttk.Label(root,textvariable=status_var).pack(fill='x')
     root.protocol('WM_DELETE_WINDOW',lambda: root.destroy() if discard_ok() else None)
     refresh_source()
