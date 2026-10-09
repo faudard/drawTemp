@@ -44,6 +44,7 @@ class FrontTests(unittest.TestCase):
                 self.mission_id = mission_id
                 self.active = None
                 self.result = None
+                self.units = []
 
             def state(self):
                 return {"mission": self.mission_id}
