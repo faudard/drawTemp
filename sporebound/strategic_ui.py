@@ -116,6 +116,8 @@ def launch(session):
                    + rescue_text)
         front_selector.configure(values=sorted(s.missions))
         dest_selector.configure(values=sorted(s.missions))
+        selected_fronts = fronts.selection()
+        selected_convoys = convoys.selection()
         for item in fronts.get_children():
             fronts.delete(item)
         for name, info in sorted(s.timeline.fronts.items()):
@@ -123,6 +125,9 @@ def launch(session):
                           values=(("▶ " if name == s.timeline.focused else "") + name,
                                   info["doctrine"], info["strength"],
                                   info["opposition"], info["status"]))
+        for item in selected_fronts:
+            if fronts.exists(item):
+                fronts.selection_add(item)
         for item in convoys.get_children():
             convoys.delete(item)
         if logistics is not None:
@@ -134,6 +139,9 @@ def launch(session):
                                values=(entry["id"], entry["from"], entry["to"],
                                        len(entry["actors"]),
                                        max(0, entry["arrival"] - s.timeline.turn), state))
+        for item in selected_convoys:
+            if convoys.exists(item):
+                convoys.selection_add(item)
         events.configure(state="normal")
         events.delete("1.0", "end")
         for e in s.timeline.events[-30:]:
