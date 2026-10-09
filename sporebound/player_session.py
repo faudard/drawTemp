@@ -4,11 +4,13 @@ A campaign is saved atomically per slot. A tactical battle is NOT silently
 serialized as campaign progression. Completed battles are committed once.
 """
 from pathlib import Path
+from copy import deepcopy
 
 from .ai import play_activation
 from .campaign import Campaign
 from .game_project import GameProject, load_slot, save_slot
 from .model import Content, require
+from .narrative import StoryBook
 
 
 class PlayerSession:
@@ -17,6 +19,7 @@ class PlayerSession:
         self.content=content
         self.project=project
         self.profile=Path(profile)
+        self.story=StoryBook(project.story, content, project.campaigns)
         self.campaign_id=None
         self.slot=None
         self.progress=None
@@ -53,12 +56,33 @@ class PlayerSession:
         require(self.battle is None or self.finalized, 'Finish the battle before saving campaign progression')
         return save_slot(self.profile,self.project,self.content,self.campaign_id,self.slot,self.progress)
 
+    def active_scene(self):
+        require(self.progress is not None, 'No campaign loaded')
+        return self.story.active_scene(self.progress)
+
+    def available_choices(self):
+        require(self.progress is not None, 'No campaign loaded')
+        return self.story.choices(self.progress)
+
+    def choose_story(self, choice_id):
+        require(self.progress is not None and (self.battle is None or self.finalized),
+                'Cannot choose dialogue during combat')
+        updated = self.story.choose(self.progress, choice_id)
+        # Persist one coherent snapshot containing campaign and narrative state.
+        save_slot(self.profile, self.project, self.content,
+                  self.campaign_id, self.slot, updated)
+        self.progress = updated
+        return self.active_scene()
+
     def available_missions(self):
         require(self.progress is not None, 'No campaign loaded')
+        if self.progress.story_pending:
+            return []
         return [mid for mid in self.progress.unlocked if mid not in self.progress.completed]
 
     def begin(self, mission_id):
         require(self.progress is not None and self.battle is None, 'Return to campaign before starting a mission')
+        require(not self.progress.story_pending, 'Resolve the pending dialogue first')
         require(mission_id in self.available_missions(), 'Mission is not currently available')
         self.battle=self.progress.prepare(self.content,mission_id)
         self.finalized=False
@@ -80,9 +104,18 @@ class PlayerSession:
 
     def _finish_if_done(self):
         if self.battle is not None and self.battle.result in ('victory','defeat') and not self.finalized:
-            self.progress.finish(self.battle)
-            self.finalized=True
-            self.save()
+            updated = deepcopy(self.progress)
+            mission_id = self.battle.mission.id
+            route_choice = (self.battle.result == 'victory'
+                            and mission_id in self.story.after)
+            changed = updated.finish(self.battle, unlock_next=not route_choice)
+            if changed and route_choice:
+                self.story.after_victory(updated, mission_id)
+            # Commit only if both reward and narrative state persist successfully.
+            save_slot(self.profile, self.project, self.content,
+                      self.campaign_id, self.slot, updated)
+            self.progress = updated
+            self.finalized = True
 
     def return_to_campaign(self):
         require(self.battle is None or self.finalized, 'Cannot abandon an unresolved battle without confirmation')
