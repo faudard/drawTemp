@@ -85,60 +85,99 @@ class FrontDirector:
 
 
 class MultiFrontSession:
-    """Synchronize tactical battles with a single strategic timeline.
+    """Deterministic tactical/strategic session with an explicit command journal.
 
-    Only the focused front accepts direct tactical commands. Switching occurs
-    between strategic turns; inactive fronts use the aggregate FrontDirector.
+    Use execute() rather than calling active.execute() directly when a session
+    must be saved or replayed. Strategic changes are not Battle commands: only
+    the multi-front journal can reconstruct offscreen attrition.
     """
 
     def __init__(self, content, missions, focused, *, seed=1, rules=None, specs=None):
         from .engine import Battle
-        require(isinstance(missions, dict) and missions and focused in missions,
+        from .rules import default_rules
+        require(isinstance(missions, dict) and bool(missions) and focused in missions,
                 "Invalid multi-front missions")
-        require(all(isinstance(mid, str) and mid in content.missions
-                    for mid in missions.values()), "Unknown front mission")
-        self.content = content
+        require(all(isinstance(name, str) and name and isinstance(mid, str)
+                    and mid in content.missions for name, mid in missions.items()),
+                "Unknown front mission")
+        definitions = deepcopy(specs) if specs is not None else {name: {} for name in missions}
+        require(isinstance(definitions, dict) and set(definitions) == set(missions),
+                "Front specifications must match mission names")
+        self.content = deepcopy(content)
         self.missions = dict(missions)
-        self.rules = rules
+        self.rules = rules if rules is not None else default_rules()
         self.seed = seed
-        self.timeline = FrontDirector(
-            specs or {name: {} for name in missions}, focused, seed=seed)
+        self.initial_focus = focused
+        self.initial_specs = deepcopy(definitions)
+        self.timeline = FrontDirector(definitions, focused, seed=seed)
+        self.initial_fronts = deepcopy(self.timeline.fronts)
         self.battles = {}
         self.front_snapshots = {}
         self.pending_reinforcements = {}
-        self.battles[focused] = Battle(content, missions[focused], seed=seed, rules=rules)
+        self.history = []
+        self.battles[focused] = Battle(self.content, missions[focused], seed=seed,
+                                       rules=self.rules)
 
     @property
     def active(self):
         return self.battles[self.timeline.focused]
 
+    def execute(self, command):
+        """Execute exactly one player/AI command on the focused front."""
+        require(isinstance(command, dict), "Expected tactical command")
+        # Battle.execute is itself transactional; journal only successful commands.
+        self.active.execute(deepcopy(command))
+        self.history.append({"kind": "execute", "command": deepcopy(command)})
+
+    def set_doctrine(self, front, doctrine):
+        self.timeline.set_doctrine(front, doctrine)
+        self.history.append({"kind": "doctrine", "front": front, "doctrine": doctrine})
+
     def switch(self, front):
         from .engine import Battle
         require(front in self.missions, "Unknown front")
-        require(self.active.active is None or self.active.active.moved is False
-                and self.active.active.acted is False,
+        require(self.active.active is None or (not self.active.active.moved
+                and not self.active.active.acted),
                 "Finish the active unit turn before switching fronts")
-        self.timeline.switch(front)
-        if front in self.front_snapshots:
-            # A previously simulated offscreen front is reopened at its latest
-            # strategic checkpoint; it must not resume a stale tactical turn.
-            self.front_snapshots.pop(front)
-        if front not in self.battles:
-            self.battles[front] = Battle(
-                self.content, self.missions[front],
-                seed=self.seed + sorted(self.missions).index(front), rules=self.rules)
-        self._deliver_reinforcements(front)
+        snapshot = deepcopy((self.timeline, self.battles, self.front_snapshots,
+                             self.pending_reinforcements))
+        try:
+            self.timeline.switch(front)
+            if front not in self.battles:
+                self.battles[front] = Battle(
+                    self.content, self.missions[front],
+                    seed=self.seed + sorted(self.missions).index(front),
+                    rules=self.rules)
+                # An unopened front has already fought its offscreen turns.
+                # Materialize those losses once when it first gains focus.
+                initial = self.initial_fronts[front]
+                current = self.timeline.fronts[front]
+                self._apply_attrition(self.battles[front], "player",
+                                      initial["strength"] - current["strength"])
+                self._apply_attrition(self.battles[front], "enemy",
+                                      initial["opposition"] - current["opposition"])
+            self.front_snapshots.pop(front, None)
+            self._deliver_reinforcements(front)
+        except Exception:
+            (self.timeline, self.battles, self.front_snapshots,
+             self.pending_reinforcements) = snapshot
+            raise
+        self.history.append({"kind": "switch", "front": front})
         return self.active
 
     def reinforce(self, front, actors, *, lifetime=None):
-        """Queue concrete actors for a front, even if its battle is not yet loaded."""
+        """Queue a concrete wave for either a loaded or an unopened front."""
+        from .encounters import EncounterDirector
         require(front in self.missions and self.timeline.fronts[front]["status"] == "active",
                 "Unknown or inactive reinforcement front")
-        require(isinstance(actors, list) and bool(actors), "Reinforcements need actors")
+        # Validate capacity and lifetime now, not after the player switches.
+        EncounterDirector().queue(actors, lifetime=lifetime)
         self.pending_reinforcements.setdefault(front, []).append(
             {"actors": deepcopy(actors), "lifetime": lifetime})
         self.timeline.events.append({"turn": self.timeline.turn, "kind": "reinforcement_queued",
                                      "front": front, "count": len(actors)})
+        self.history.append({"kind": "reinforce", "front": front,
+                             "actors": deepcopy(actors), "lifetime": lifetime})
 
     def _deliver_reinforcements(self, front):
         battle = self.battles[front]
@@ -147,66 +186,113 @@ class MultiFrontSession:
             battle.queue_wave(wave["actors"], lifetime=wave["lifetime"])
 
     def advance(self):
-        """Advance the strategic clock once, then reconcile finished tactical fronts."""
-        for name, battle in self.battles.items():
-            if battle.result in {"victory", "defeat"}:
-                self.timeline.fronts[name]["status"] = battle.result
-        before = deepcopy(self.timeline.fronts)
-        state = self.timeline.advance()
-        self._deliver_reinforcements(self.timeline.focused)
-        for name, battle in self.battles.items():
-            if name == self.timeline.focused or battle.result is not None:
-                continue
-            old, new = before[name], self.timeline.fronts[name]
-            if old["status"] != "active":
-                continue
-            # Aggregate strategic losses become actual tactical HP losses.
-            # Apply in stable unit order; never resurrect or reposition units.
-            self._apply_attrition(battle, "player",
-                                  old["strength"] - new["strength"])
-            self._apply_attrition(battle, "enemy",
-                                  old["opposition"] - new["opposition"])
-            if new["status"] == "victory":
-                self._apply_attrition(battle, "enemy", 1000000)
-                battle.result = "victory"
-            elif new["status"] == "defeat":
-                self._apply_attrition(battle, "player", 1000000)
-                battle.result = "defeat"
-        for name, front in self.timeline.fronts.items():
-            if name != self.timeline.focused and name in self.battles:
-                self.front_snapshots[name] = deepcopy(front)
-        return state
+        """One strategic turn; automatic fights never execute tactical AI."""
+        snapshot = deepcopy((self.timeline, self.battles, self.front_snapshots,
+                             self.pending_reinforcements))
+        try:
+            for name, battle in self.battles.items():
+                if battle.result in {"victory", "defeat"}:
+                    self.timeline.fronts[name]["status"] = battle.result
+            before = deepcopy(self.timeline.fronts)
+            self.timeline.advance()
+            self._deliver_reinforcements(self.timeline.focused)
+            for name, battle in self.battles.items():
+                if name == self.timeline.focused or battle.result is not None:
+                    continue
+                old, new = before[name], self.timeline.fronts[name]
+                if old["status"] != "active":
+                    continue
+                self._apply_attrition(battle, "player",
+                                      old["strength"] - new["strength"])
+                self._apply_attrition(battle, "enemy",
+                                      old["opposition"] - new["opposition"])
+                if new["status"] in {"victory", "defeat"}:
+                    loser = "enemy" if new["status"] == "victory" else "player"
+                    self._apply_attrition(battle, loser, 1000000)
+                    battle.result = new["status"]
+                    battle.active_id = None
+                    battle.emit("battle_end", result=battle.result)
+            for name, front in self.timeline.fronts.items():
+                if name != self.timeline.focused and name in self.battles:
+                    self.front_snapshots[name] = deepcopy(front)
+        except Exception:
+            (self.timeline, self.battles, self.front_snapshots,
+             self.pending_reinforcements) = snapshot
+            raise
+        self.history.append({"kind": "advance"})
+        return self.timeline.state()
 
     @staticmethod
     def _apply_attrition(battle, team, amount):
-        """Distribute offscreen HP loss without changing the initiative clock."""
+        """Apply strategic losses in stable unit order without running CT ticks."""
         remaining = max(0, amount)
+        total = 0
         for unit in sorted((u for u in battle.units if u.team == team and u.alive),
                            key=lambda u: u.id):
             if remaining == 0:
                 break
             damage = min(unit.hp, remaining)
             unit.hp -= damage
+            total += damage
             remaining -= damage
-
-    def restore(self, state):
-        """Restore strategic data; tactical battles must be reconstructed separately.
-
-        Reject mismatched missions rather than silently mixing unrelated fronts.
-        """
-        require(isinstance(state, dict) and state.get("missions") == self.missions,
-                "Incompatible multi-front save")
-        require(isinstance(state.get("front_snapshots", {}), dict),
-                "Invalid front checkpoints")
-        self.timeline.restore(state["timeline"])
-        self.front_snapshots = deepcopy(state.get("front_snapshots", {}))
-        self.pending_reinforcements = deepcopy(state.get("pending_reinforcements", {}))
-        # Battle.state() is a public snapshot, not a deserializer. Do not
-        # pretend to restore live combat objects from it.
-        require(not state.get("battles"), "Tactical battle restoration requires replay")
+        if total:
+            battle.emit("strategic_attrition", team=team, amount=total)
 
     def state(self):
         return {"timeline": self.timeline.state(), "missions": dict(self.missions),
-                "battles": {name: battle.state() for name, battle in self.battles.items()},
+                "battles": {name: battle.state() for name, battle in sorted(self.battles.items())},
                 "front_snapshots": deepcopy(self.front_snapshots),
                 "pending_reinforcements": deepcopy(self.pending_reinforcements)}
+
+    def digest(self):
+        import hashlib
+        import json
+        return hashlib.sha256(json.dumps(self.state(), sort_keys=True).encode()).hexdigest()
+
+    def recording(self):
+        """Portable journal; replay proves all tactical and strategic mutations."""
+        return {"version": 1, "kind": "multi_front",
+                "content": self.content.to_dict(), "missions": dict(self.missions),
+                "focused": self.initial_focus, "specs": deepcopy(self.initial_specs),
+                "seed": self.seed, "rules": self.rules.manifest(),
+                "operations": deepcopy(self.history), "digest": self.digest()}
+
+    @classmethod
+    def replay(cls, recording, *, rules=None):
+        from .model import Content
+        from .rules import default_rules
+        require(isinstance(recording, dict) and recording.get("version") == 1
+                and recording.get("kind") == "multi_front", "Unsupported multi-front save")
+        effective_rules = rules if rules is not None else default_rules()
+        require(recording.get("rules") == effective_rules.manifest(),
+                "Multi-front ruleset mismatch")
+        session = cls(Content.from_dict(recording["content"], rules=effective_rules),
+                      recording["missions"], recording["focused"],
+                      seed=recording["seed"], rules=effective_rules, specs=recording["specs"])
+        for operation in recording["operations"]:
+            kind = operation["kind"]
+            if kind == "execute":
+                session.execute(operation["command"])
+            elif kind == "switch":
+                session.switch(operation["front"])
+            elif kind == "advance":
+                session.advance()
+            elif kind == "doctrine":
+                session.set_doctrine(operation["front"], operation["doctrine"])
+            elif kind == "reinforce":
+                session.reinforce(operation["front"], operation["actors"],
+                                  lifetime=operation["lifetime"])
+            else:
+                require(False, "Unknown multi-front operation")
+        require(session.digest() == recording["digest"], "Multi-front checksum mismatch")
+        return session
+
+    def restore(self, recording):
+        """Reconstruct combat from an authenticated journal, never from Battle.state()."""
+        require(isinstance(recording, dict) and recording.get("kind") == "multi_front",
+                "Pass a multi-front recording, not a public state snapshot")
+        restored = self.replay(recording, rules=self.rules)
+        require(restored.missions == self.missions
+                and restored.content.to_dict() == self.content.to_dict(),
+                "Incompatible multi-front save")
+        self.__dict__.update(restored.__dict__)
