@@ -12,7 +12,7 @@ from .model import require
 
 class LogisticsDirector:
     def __init__(self, config, missions):
-        require(isinstance(config, dict) and set(config) <= {"routes", "reserves", "capacity", "ambushes", "supplies", "escorts"},
+        require(isinstance(config, dict) and set(config) <= {"routes", "reserves", "capacity", "ambushes", "supplies", "escorts", "rescue_mission"},
                 "Invalid logistics configuration")
         require("reserve" not in missions, "reserve is a reserved strategic origin")
         reserves = config.get("reserves", {})
@@ -69,8 +69,12 @@ class LogisticsDirector:
             self.ambushes[key] = {"casualties": hazard["casualties"],
                                   "delay": hazard["delay"],
                                   "charges": hazard["charges"]}
-        self._extended = {key for key in ("supplies", "escorts", "ambushes")
-                          if key in config}
+        self.rescue_mission = config.get("rescue_mission")
+        require(self.rescue_mission is None or
+                isinstance(self.rescue_mission, str) and bool(self.rescue_mission),
+                "Invalid rescue mission id")
+        self._extended = {key for key in ("supplies", "escorts", "ambushes",
+                                         "rescue_mission") if key in config}
         self.in_transit = []
         self.serial = 0
 
@@ -133,6 +137,8 @@ class LogisticsDirector:
             result["ambushes"] = [
                 {"from": src, "to": dst, **deepcopy(data)}
                 for (src, dst), data in sorted(self.ambushes.items())]
+        if "rescue_mission" in self._extended:
+            result["rescue_mission"] = self.rescue_mission
         return result
 
 
