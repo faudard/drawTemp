@@ -229,7 +229,7 @@ class Battle:
 
     def _target(self, u: Unit, s: Skill, cell: Cell):
         require(self.board.contains(cell), "Target outside board")
-        require(s.min_range <= distance(u.pos, cell) <= s.range, "Target outside range")
+        require(s.min_range <= min(distance(origin, cell) for origin in u.occupied_cells()) <= s.range, "Target outside range")
         require(not s.los or self.line_of_sight(u.pos, cell), "Line of sight blocked")
         target = self.at(cell, alive=s.target != "downed")
         require(s.target == "ground" or target is not None, "No valid target")
@@ -250,7 +250,7 @@ class Battle:
 
     def _affected(self, caster: Unit, skill: Skill, cell: Cell, effect: Effect):
         area = self._area(cell, skill)
-        return [t for t in self.units if t.pos in area and (not t.alive if self.rules.effects.get(effect.kind).targets_downed else t.alive)
+        return [t for t in self.units if not t.occupied_cells().isdisjoint(area) and (not t.alive if self.rules.effects.get(effect.kind).targets_downed else t.alive)
                 and (effect.scope in {"all", "target"} or (t.team == caster.team) == (effect.scope == "allies"))]
 
     def hit_chance(self, caster: Unit, target: Unit, skill: Skill) -> float:
@@ -424,7 +424,7 @@ class Battle:
     def _interact(self, u, object_id):
         require(not u.acted and not self.status_blocks(u, "act"), "Action unavailable")
         obj = next((o for o in self.mission.objects if o["id"] == object_id), None)
-        require(obj is not None and distance(u.pos, tuple(obj["pos"])) <= 1 and not obj.get("used", False), "Object unavailable")
+        require(obj is not None and min(distance(c, tuple(obj["pos"])) for c in u.occupied_cells()) <= 1 and not obj.get("used", False), "Object unavailable")
         require(u.team == "player", "Only players can interact")
         if obj["kind"] in {"ram", "catapult"}:
             target = next(o for o in self.mission.objects if o["id"] == obj["link"])
