@@ -26,6 +26,9 @@ class StudioPanels:
         self.session_campaign = ''
         self._entities_tab(notebook)
         self._project_tab(notebook)
+        from .studio_advanced import AdvancedStudio
+        self.advanced=AdvancedStudio(self, notebook)
+        self._last_mission_signature=None
         self.reload_project()
         self.refresh()
 
@@ -206,6 +209,7 @@ class StudioPanels:
         self.project=(GameProject.load(self.project_path,content) if self.project_path.exists()
                       else GameProject.default(content))
         self.project_saved=json.dumps(self.project.to_dict(),sort_keys=True)
+        self._last_mission_signature=None
         self.session=None
         self.session_campaign=''
         self.title.set(self.project.title);self.subtitle.set(self.project.subtitle)
@@ -333,12 +337,15 @@ class StudioPanels:
             return
         missions=self.doc().data['missions']
         chosen=next((m for m in missions if m['id']==self.mission()), missions[0])
-        self.mission_name.set(chosen['name'])
-        self.objective.set(chosen['objective'])
-        self.reward.set(str(chosen['reward']))
-        self.next_missions.set(', '.join(chosen.get('next_missions',[])))
-        self.width.set(str(chosen['board']['width']))
-        self.height.set(str(chosen['board']['height']))
+        signature=json.dumps(chosen,sort_keys=True)
+        if signature!=self._last_mission_signature:
+            self.mission_name.set(chosen['name'])
+            self.objective.set(chosen['objective'])
+            self.reward.set(str(chosen['reward']))
+            self.next_missions.set(', '.join(chosen.get('next_missions',[])))
+            self.width.set(str(chosen['board']['width']))
+            self.height.set(str(chosen['board']['height']))
+            self._last_mission_signature=signature
         self.cell_label.config(text=f'Case choisie : {self.selection()} | Mission : {chosen["name"]}')
         for listing,items in ((self.unit_list,chosen['units']),
                               (self.object_list,chosen.get('objects',[])),
@@ -350,3 +357,4 @@ class StudioPanels:
         self.campaign_box['values']=[c['id'] for c in self.project.campaigns]
         if self.session is not None:
             self.project_status.config(text=f'Campagne active : {self.session_campaign} | Missions : {len(self.session.completed)} terminées | Or : {self.session.gold}')
+        self.advanced.refresh()
