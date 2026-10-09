@@ -150,7 +150,44 @@ def siege_content():
         {**unit("fleeing_raider", "enemy", [6, 4]),
          "hp": 11, "max_hp": 11, "speed": 8},
     ]
-    data['missions'].extend([ramparts, courtyard, throne, supply, rescue, pursuit])
+    tunnels = mission("castle_tunnels", "Infiltrate the throne by the old sewers",
+                      [], [], [7, 3])
+    tunnels["objective"] = "eliminate"
+    tunnels["deployment"] = []
+    tunnels["board"] = {"width": 9, "height": 7,
+                        "tiles": [{"pos": [4, 1], "blocked": True},
+                                  {"pos": [4, 5], "blocked": True},
+                                  {"pos": [5, 1], "height": 1}]}
+    tunnels["units"] = [
+        {**unit("tunnel_sapper", "player", [1, 3]), "speed": 20,
+         "attack": 13, "weapon": "ranged", "attack_range": 6,
+         "weapon_power": 10},
+        {**unit("tunnel_scout", "player", [2, 5]), "speed": 13, "attack": 9},
+        {**unit("sewer_sentry", "enemy", [6, 2]), "speed": 8,
+         "hp": 18, "max_hp": 18},
+        {**unit("sewer_warden", "enemy", [6, 4]), "speed": 8,
+         "hp": 18, "max_hp": 18},
+    ]
+    recovery = mission("castle_gate_recovery", "Retake the fallen gate",
+                       [], [], [7, 3])
+    recovery["objective"] = "eliminate"
+    recovery["deployment"] = []
+    recovery["board"] = {"width": 9, "height": 7,
+                         "tiles": [{"pos": [4, 0], "blocked": True},
+                                   {"pos": [4, 6], "blocked": True}]}
+    recovery["units"] = [
+        {**unit("relief_captain", "player", [1, 3]),
+         "speed": 20, "attack": 15, "weapon": "ranged",
+         "attack_range": 6, "weapon_power": 11},
+        {**unit("relief_guard", "player", [2, 5]), "speed": 12,
+         "attack": 10},
+        {**unit("occupying_sergeant", "enemy", [6, 2]), "speed": 8,
+         "hp": 18, "max_hp": 18},
+        {**unit("occupying_soldier", "enemy", [6, 4]), "speed": 8,
+         "hp": 18, "max_hp": 18},
+    ]
+    data['missions'].extend([ramparts, courtyard, throne, supply, rescue,
+                             pursuit, tunnels, recovery])
     return Content.from_dict(data)
 
 if __name__ == "__main__":
