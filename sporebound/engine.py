@@ -59,7 +59,7 @@ class Battle:
         return next(u for u in self.units if u.id == uid)
 
     def at(self, pos: Cell, alive: bool = True) -> Unit | None:
-        return next((u for u in self.units if u.pos == pos and u.alive == alive), None)
+        return next((u for u in self.units if pos in u.occupied_cells() and u.alive == alive), None)
 
     def emit(self, kind: str, **data):
         self.events.append({"tick": self.tick, "kind": kind, **data})
