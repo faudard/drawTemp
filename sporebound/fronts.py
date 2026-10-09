@@ -104,6 +104,7 @@ class MultiFrontSession:
         self.timeline = FrontDirector(
             specs or {name: {} for name in missions}, focused, seed=seed)
         self.battles = {}
+        self.front_snapshots = {}
         self.battles[focused] = Battle(content, missions[focused], seed=seed, rules=rules)
 
     @property
@@ -117,6 +118,10 @@ class MultiFrontSession:
                 and self.active.active.acted is False,
                 "Finish the active unit turn before switching fronts")
         self.timeline.switch(front)
+        if front in self.front_snapshots:
+            # A previously simulated offscreen front is reopened at its latest
+            # strategic checkpoint; it must not resume a stale tactical turn.
+            self.front_snapshots.pop(front)
         if front not in self.battles:
             self.battles[front] = Battle(
                 self.content, self.missions[front],
@@ -128,8 +133,13 @@ class MultiFrontSession:
         for name, battle in self.battles.items():
             if battle.result in {"victory", "defeat"}:
                 self.timeline.fronts[name]["status"] = battle.result
-        return self.timeline.advance()
+        state = self.timeline.advance()
+        for name, front in self.timeline.fronts.items():
+            if name != self.timeline.focused and name in self.battles:
+                self.front_snapshots[name] = deepcopy(front)
+        return state
 
     def state(self):
         return {"timeline": self.timeline.state(), "missions": dict(self.missions),
-                "battles": {name: battle.state() for name, battle in self.battles.items()}}
+                "battles": {name: battle.state() for name, battle in self.battles.items()},
+                "front_snapshots": deepcopy(self.front_snapshots)}
