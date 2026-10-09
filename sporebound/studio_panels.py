@@ -317,6 +317,8 @@ class StudioPanels:
         self.apply_project()
         if self.session is None or self.session_campaign!=self.campaign_id.get():
             self.new_game()
+        if self.session.story_pending:
+            raise RuleError('Un dialogue narratif est en attente : utiliser le client joueur pour répondre.')
         mid=next((m for m in self.session.unlocked if m not in self.session.completed),
                  self.project.campaign(self.campaign_id.get())['start_mission'])
         self.play_campaign(self.session,mid)
