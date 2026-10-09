@@ -40,9 +40,12 @@ class PlayerSession:
         return progress
 
     def load_game(self, campaign_id, slot):
+        require(self.project.campaign(campaign_id) is not None, 'Unknown campaign')
+        require(type(slot) is int and 1 <= slot <= self.project.save_slots, 'Invalid slot')
+        # A corrupt/missing slot must not replace a valid current session.
+        loaded=load_slot(self.profile,self.project,self.content,campaign_id,slot)
         self._select(campaign_id,slot)
-        # Only commit progress after loading succeeds.
-        self.progress=load_slot(self.profile,self.project,self.content,campaign_id,slot)
+        self.progress=loaded
         return self.progress
 
     def save(self):
