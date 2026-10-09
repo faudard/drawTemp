@@ -56,6 +56,21 @@ class AuthoringTests(unittest.TestCase):
         doc.replace(remove_event(doc.data,self.mid,'visit'))
         self.assertIsNotNone(Content.from_dict(doc.data))
 
+    def test_batch_paint_is_one_undo_step(self):
+        doc=Document(self.content)
+        # Keep the paint safely away from actors and blocked tiles.
+        cells=[c for c in self.content.missions[self.mid].board.cells()
+               if c not in {cell for u in self.content.missions[self.mid].units
+                            for cell in u.occupied_cells()}
+               and not self.content.missions[self.mid].board.tile(c).blocked]
+        chosen=cells[:3]
+        doc.paint_many(self.mid,chosen,'cover')
+        self.assertEqual(len(doc.undo_stack),1)
+        board=Content.from_dict(doc.data).missions[self.mid].board
+        self.assertTrue(all(board.tile(c).cover==20 for c in chosen))
+        doc.undo()
+        self.assertEqual(doc.data,self.content.to_dict())
+
     def test_triggers_are_engine_validated(self):
         updated=add_event(self.data,self.mid,'clock',condition='tick',action='hazard',
                           pos=self.cell,tick=15,amount=3)
