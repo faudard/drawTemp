@@ -102,9 +102,15 @@ class CampaignRoutesPolicy:
 
     def checked(self, session):
         required = self.routes[session.route_selected]["required"]
-        return {name: {"status": session.timeline.fronts[name]["status"],
-                       "accepted": session.timeline.fronts[name]["status"] in outcomes}
-                for name, outcomes in required.items()}
+        result = {}
+        for name, outcomes in required.items():
+            status = session.timeline.fronts[name]["status"]
+            accepted = status in outcomes
+            if session.route_selected != "breach" and status == "victory":
+                battle = session.battles.get(name)
+                accepted = accepted and battle is not None and battle.result == "victory"
+            result[name] = {"status": status, "accepted": accepted}
+        return result
 
 
 class CampaignRoutesMixin:
