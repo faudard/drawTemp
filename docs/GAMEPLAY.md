@@ -401,3 +401,25 @@ python -m unittest discover -s tests_standalone -p test_siege_campaign.py -v
 Le module existant `examples.siege_campaign` conserve son ancien mode
 de campagne **séquentielle** ; ce nouveau flux est un système stratégique
 **simultané** distinct, avec un unique journal multi-fronts.
+
+
+### Routes de campagne, reconquête et trêve conditionnelle
+
+Le mode `siege_session(contested=True, campaign=True, paths=True)`
+propose trois chemins vers le trône : avancer par la porte et la cour,
+neutraliser la garnison d'un tunnel ancien, ou financer un assaut direct
+coûteux. Une défaite ou retraite sur la porte n'est plus irréversible :
+une contre-attaque jouable peut reprendre le secteur, avec des unités
+spécifiques et une véritable victoire à obtenir.
+
+La négociation avec les défenseurs de la porte requiert dans ce mode un
+renseignement obtenu en pillant la réserve royale (`supply_cache`).
+Les points de ravitaillement, pertes du corps principal et résultats des
+contre-attaques sont enregistrés et contrôlés par replay.
+
+```sh
+python -m examples.siege_routes_demo
+python -m examples.siege_command --interactive --paths
+python -m examples.siege_command --gui --paths
+python -m unittest discover -s tests_standalone -p test_siege_routes.py -v
+```
