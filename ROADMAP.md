@@ -54,7 +54,8 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Économie optionnelle de provisions, interception de convois, pertes, escorte limitée et secours en cas d'embuscade.
 - [x] Tableau de commandement terminal des fronts, chronologie globale, ressources, convois, ETA et opérations.
 - [x] Sauvegarde JSON atomique + restauration vérifiée depuis le commandement ; replay inter-fronts v4 rétrocompatible.
-- [ ] Interface Tk/Qt de commandement visuel, placement graphique et chronologie éditable.
+- [x] Première fenêtre Tk de commandement : tableau des fronts, état des convois, commandes, sauvegardes et journal global (test Xvfb).
+- [ ] Commandement visuel avancé : carte des fronts, timeline cliquable, drag/drop, placement graphique, prévision d'ordres et finition UX.
 - [ ] Missions tactiques de libération d'un convoi immobilisé, défense des lignes de ravitaillement et options de négociation.
 - [ ] Sélecteur visuel des zones d'arrivée et de l'ordre de mission pour chaque convoy.
 - [x] Conséquences stratégiques des objectifs tactiques (porte, remparts, ravitaillement et défaite locale).
