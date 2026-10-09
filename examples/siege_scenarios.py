@@ -105,7 +105,33 @@ def siege_content():
     supply["units"].append(unit("supply_scout", "player", [1, 6]))
     supply["units"].append(unit("supply_outrider", "player", [1, 4]))
     supply["board"]["tiles"] = []
-    data['missions'].extend([ramparts, courtyard, throne, supply])
+    # Self-contained, bounded rescue skirmish. The wagon is a genuine
+    # protected player actor: destroying it ends the battle in defeat.
+    # The convoy survivors themselves remain in the strategic cargo manifest
+    # until resolution, so the encounter cannot duplicate transferred heroes.
+    rescue = mission("castle_convoy_rescue", "Recover the stranded supply cart",
+                     [], [], [7, 3])
+    rescue["objective"] = "eliminate"
+    rescue["protected_id"] = "rescue_wagon"
+    rescue["board"] = {"width": 9, "height": 7,
+                       "tiles": [{"pos": [4, 0], "blocked": True},
+                                 {"pos": [4, 6], "blocked": True},
+                                 {"pos": [5, 5], "height": 1}]}
+    rescue["deployment"] = []
+    rescue["units"] = [
+        {**unit("rescue_wagon", "player", [3, 3]),
+         "max_hp": 45, "hp": 45, "move": 0, "attack": 0, "weapon_power": 1},
+        {**unit("rescue_leader", "player", [1, 3]),
+         "speed": 20, "weapon": "ranged", "attack_range": 6,
+         "attack": 16, "weapon_power": 10},
+        {**unit("rescue_scout", "player", [2, 5]),
+         "speed": 12, "attack": 9},
+        {**unit("road_bandit", "enemy", [6, 2]),
+         "hp": 12, "max_hp": 12, "speed": 8},
+        {**unit("road_raider", "enemy", [6, 4]),
+         "hp": 12, "max_hp": 12, "speed": 8},
+    ]
+    data['missions'].extend([ramparts, courtyard, throne, supply, rescue])
     return Content.from_dict(data)
 
 if __name__ == "__main__":
