@@ -16,8 +16,10 @@ DEFAULT_CONTENT = Path(__file__).parent / 'content' / 'core.json'
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Sporebound standalone gameplay workbench')
-    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','campaign','roster','balance'])
+    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance'])
     parser.add_argument('--content', type=Path, default=DEFAULT_CONTENT)
+    parser.add_argument('--project', type=Path, help='Game presentation manifest for player')
+    parser.add_argument('--profile', type=Path, help='Writable player profile path')
     parser.add_argument('--mission', default='garden')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--limit', type=int, default=1000)
@@ -33,6 +35,10 @@ def main(argv=None):
     parser.add_argument('--unequip', choices=['weapon','armor','accessory'])
     args = parser.parse_args(argv)
     try:
+        if args.command == 'player':
+            from .player_shell import launch as launch_player
+            launch_player(args.content, args.project, args.profile)
+            return 0
         if args.command == 'editor':
             from .editor import launch
             launch(args.content)
