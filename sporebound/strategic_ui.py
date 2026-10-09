@@ -106,7 +106,14 @@ def launch(session):
                      + " | Escortes:" + str(logistics.escorts))
             if logistics.supplies is not None:
                 stock += " | Provisions J:" + str(logistics.supplies["player"])
-        status.set(f"Tour {s.timeline.turn} | Focus : {s.timeline.focused} | {stock}")
+        rescue_text = ""
+        if s.rescue_battles:
+            cid, battle = next(iter(s.rescue_battles.items()))
+            wagon = battle.unit(battle.mission.protected_id)
+            rescue_text = (f" | SAUVETAGE {cid}: "
+                           f"actif={battle.active_id or 'aucun'}, chariot={wagon.hp} PV")
+        status.set(f"Tour {s.timeline.turn} | Focus : {s.timeline.focused} | {stock}"
+                   + rescue_text)
         front_selector.configure(values=sorted(s.missions))
         dest_selector.configure(values=sorted(s.missions))
         for item in fronts.get_children():
@@ -120,8 +127,9 @@ def launch(session):
             convoys.delete(item)
         if logistics is not None:
             for entry in logistics.in_transit:
-                state = ("Rescue required" if entry.get("stranded") else
-                         "Escorted" if entry.get("escorted") else "Travelling")
+                state = ("FIGHTING" if entry["id"] in s.rescue_battles
+                         else "Rescue required" if entry.get("stranded")
+                         else "Escorted" if entry.get("escorted") else "Travelling")
                 convoys.insert("", "end", iid=entry["id"],
                                values=(entry["id"], entry["from"], entry["to"],
                                        len(entry["actors"]),
@@ -184,9 +192,23 @@ def launch(session):
     ttk.Button(second, text="Secours",
                command=lambda: guarded(lambda: current[0].rescue_convoy(
                    selected_convoy()))).pack(side="right", padx=3)
+    ttk.Button(second, text="Combat de secours",
+               command=lambda: guarded(lambda: current[0].start_rescue(
+                   selected_convoy()))).pack(side="right", padx=3)
+    ttk.Button(second, text="Abandonner",
+               command=lambda: guarded(lambda: current[0].abandon_convoy(
+                   selected_convoy()))).pack(side="right", padx=3)
+    def play_tactical():
+        command = json.loads(tactical.get())
+        s = current[0]
+        if s.rescue_battles:
+            cid = next(iter(s.rescue_battles))
+            s.execute_rescue(cid, command)
+        else:
+            s.execute(command)
+
     ttk.Button(third, text="Jouer tactique",
-               command=lambda: guarded(lambda: current[0].execute(
-                   json.loads(tactical.get())))).pack(side="left", padx=3)
+               command=lambda: guarded(play_tactical)).pack(side="left", padx=3)
     ttk.Button(third, text="Enregistrer",
                command=lambda: guarded(check_saved)).pack(side="right", padx=3)
     ttk.Button(third, text="Reprendre",
