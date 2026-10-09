@@ -164,5 +164,44 @@ class StrategicGUITests(unittest.TestCase):
             showerror.assert_not_called()
 
 
+    def test_campaign_gui_navigates_negotiated_gate_and_shows_locked_throne(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.strategic_ui import launch
+
+        session = siege_session(contested=True, campaign=True)
+        session.switch("gate")
+        session.execute({"kind": "start_battle"})
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        def inspect(root):
+            try:
+                root.update()
+                widgets = list(descendants(root))
+                buttons = {w.cget("text"): w for w in widgets
+                           if isinstance(w, ttk.Button)}
+                status_before = [w.cget("text") for w in widgets
+                                 if isinstance(w, ttk.Label)]
+                self.assertTrue(any("Trône:verrouillé" in t
+                                    for t in status_before))
+                buttons["Négocier passage"].invoke()
+                self.assertEqual(session.timeline.fronts["gate"]["status"],
+                                 "negotiated")
+                self.assertEqual(session.logistics.supplies["player"], 3)
+                self.assertEqual(session.state()["campaign"]["status"],
+                                 "in_progress")
+            finally:
+                root.destroy()
+
+        with patch.object(tk.Tk, "mainloop", inspect), \
+             patch("tkinter.messagebox.showerror") as showerror:
+            launch(session)
+            showerror.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
