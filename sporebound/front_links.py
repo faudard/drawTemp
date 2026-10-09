@@ -33,7 +33,9 @@ def validate(content, missions, links):
         require(isinstance(lid, str) and bool(lid) and lid not in seen,
                 "Duplicate or invalid front link id")
         seen.add(lid)
-        require(source in missions and event in EVENTS, "Invalid front event source")
+        require(isinstance(source, str) and source in missions
+                and isinstance(event, str) and event in EVENTS,
+                "Invalid front event source")
         require(isinstance(link["match"], dict)
                 and set(link["match"]) == {EVENT_FIELDS[event]},
                 "Front event match must specify its event field")
@@ -53,8 +55,11 @@ def validate(content, missions, links):
                 and 0 < len(link["effects"]) <= 16,
                 "Front link needs 1..16 effects")
         for effect in link["effects"]:
-            require(isinstance(effect, dict) and effect.get("kind") in EFFECTS
-                    and effect.get("front") in missions, "Unknown front effect")
+            require(isinstance(effect, dict)
+                    and isinstance(effect.get("kind"), str)
+                    and effect["kind"] in EFFECTS
+                    and isinstance(effect.get("front"), str)
+                    and effect["front"] in missions, "Unknown front effect")
             require(effect["front"] != source, "Front links must cross fronts")
             kind = effect["kind"]
             fields = ({"kind", "front", "object"} if kind in
