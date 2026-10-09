@@ -97,6 +97,7 @@ Les récompenses ne sont accordées qu’une fois par mission, même après rech
 - [Contrats du moteur et règles détaillées](docs/GAMEPLAY.md)
 - [Architecture autonome](ARCHITECTURE.md)
 - [Règles modulaires, personnages et monstres](docs/MODULAR_ENGINE.md)
+- [Chronologie stratégique, fronts et replays](docs/MULTI_FRONT.md)
 - [Roadmap gameplay et éditeur](ROADMAP.md)
 - Historique Godot : [README](docs/legacy/GODOT_README.md),
   [architecture](docs/legacy/GODOT_ARCHITECTURE.md), documents `FFT_*` à la racine.
