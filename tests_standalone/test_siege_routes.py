@@ -169,6 +169,37 @@ class SiegeRoutesTests(unittest.TestCase):
         self.assertEqual(s.recovery_outcomes["gate"], "victory")
         self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
 
+    def test_failed_counterattack_spends_supplies_without_fake_recapture(self):
+        raw = siege_content().to_dict()
+        mission = next(m for m in raw["missions"]
+                       if m["id"] == "castle_gate_recovery")
+        mission["units"] = [
+            {"id": "relief_captain", "name": "Relief Captain",
+             "team": "player", "pos": [1, 3], "hp": 1},
+            {"id": "occupying_sergeant", "name": "Occupying Sergeant",
+             "team": "enemy", "pos": [2, 3], "speed": 100,
+             "attack": 80, "weapon_power": 50},
+        ]
+        template = siege_session(contested=True, campaign=True, paths=True)
+        s = MultiFrontSession(Content.from_dict(raw), template.missions,
+                  "supplies", seed=3, specs=template.initial_specs,
+                  links=template.links, logistics=template.initial_logistics,
+                  campaign=SIEGE_CAMPAIGN_PATHS)
+        s.switch("gate")
+        s.execute({"kind": "start_battle"})
+        s.withdraw_front("gate")
+        supplies = s.logistics.supplies["player"]
+        s.start_recovery("gate")
+        self.assertEqual(s.recovery_battles["gate"].active_id,
+                         "occupying_sergeant")
+        s.execute_recovery("gate", {
+            "kind": "act", "skill": "attack", "cell": [1, 3]})
+        self.assertEqual(s.recovery_outcomes["gate"], "defeat")
+        self.assertEqual(s.timeline.fronts["gate"]["status"], "withdrawn")
+        self.assertEqual(s.logistics.supplies["player"], supplies - 1)
+        self.assertFalse(s.recovery_battles)
+        self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
+
     def test_mid_counterattack_checkpoint_and_abandon(self):
         s = session_with_easy_side_encounters()
         s.switch("gate")
