@@ -500,7 +500,7 @@ def launch(path):
         doc=lambda: doc, content_path=lambda: current_path,
         mission=mission_var.get, selection=lambda: selected_cell,
         design_change=design_change, play_campaign=start_campaign,
-        status=status_var)
+        status=status_var, mission_change=stop)
     ttk.Label(root,textvariable=status_var).pack(fill='x')
     root.protocol('WM_DELETE_WINDOW',lambda: root.destroy() if discard_ok() else None)
     refresh_source()
