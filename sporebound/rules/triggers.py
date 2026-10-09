@@ -101,6 +101,8 @@ def validate_wave(context, action):
         require(not archetype or (context.archetypes is not None and archetype in context.archetypes), 'Unknown wave archetype')
     if 'lifetime' in action:
         context.integer(action['lifetime'], 1, 100000)
+    if 'max_active' in action:
+        context.integer(action['max_active'], 1, 100)
 
 
 def default_trigger_actions():
@@ -109,7 +111,7 @@ def default_trigger_actions():
         ('status', TriggerActionRule(lambda b, a: b._status(b.unit(a['unit']), a['status'], a['duration']), validate_status)),
         ('message', TriggerActionRule(lambda b, a: b.emit('message', text=a.get('text', '')), lambda c, a: None)),
         ('spawn', TriggerActionRule(spawn_actor, validate_spawn)),
-        ('wave', TriggerActionRule(lambda b, a: b.spawn_wave(a['actors'], lifetime=a.get('lifetime')), validate_wave)),
+        ('wave', TriggerActionRule(lambda b, a: b.spawn_wave(a['actors'], lifetime=a.get('lifetime'), max_active=a.get('max_active', 14)), validate_wave)),
         ('despawn', TriggerActionRule(lambda b, a: b.despawn_actor(a['unit']), validate_despawn)),
     ))
 
