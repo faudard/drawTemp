@@ -115,6 +115,9 @@ python -m examples.siege_command --demo         # embuscade + secours
 python -m examples.siege_command --rescue-demo  # vrai combat : victoire + replay
 python -m examples.siege_command --choices-demo # évacuation + poursuite + replay
 python -m examples.siege_strategy_demo         # négociation, cour partielle, trône
+python -m examples.siege_routes_demo          # 3 chemins jouables / replay
+python -m examples.siege_command --gui --paths
+python -m unittest discover -s tests_standalone -p test_siege_routes.py -v
 python -m examples.siege_command --gui --campaign
 python -m unittest discover -s tests_standalone -p test_siege_campaign.py -v
 python -m unittest discover -s tests_standalone -p test_command_center.py -v
@@ -128,6 +131,8 @@ protéger un chariot, négocier, évacuer les survivants, récupérer un butin
 partiel, poursuivre les pillards ou abandonner le convoi.
 La campagne multi-fronts optionnelle verrouille aussi le trône jusqu'aux
 victoires requises ou aux négociations et conquêtes partielles autorisées.
+Le mode `--paths` ajoute trois routes (porte, souterrains, assaut direct),
+des trêves conditionnelles et une mission de reconquête d'un secteur perdu.
 Les opérations et les batailles sont vérifiées par replay v5.
 
 ## Documentation
