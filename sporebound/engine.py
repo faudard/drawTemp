@@ -115,9 +115,10 @@ class Battle:
 
     def despawn_actor(self, actor_id):
         from .lifecycle import despawn
+        actor = despawn(self, actor_id)
         self.lifetimes.pop(actor_id, None)
         self.summon_owners.pop(actor_id, None)
-        return despawn(self, actor_id)
+        return actor
 
     def _expire_actors(self):
         for uid, deadline in list(self.lifetimes.items()):
@@ -487,7 +488,7 @@ class Battle:
     def state(self) -> dict:
         return {"tick": self.tick, "active": self.active_id, "result": self.result,
                 "units": [self._unit_state(u) for u in self.units], "inventory": self.inventory,
-                "zones": self.zones, "lifetimes": self.lifetimes, "prepared_reactions": self.prepared_reactions,
+                "zones": self.zones, "lifetimes": self.lifetimes, "summon_owners": self.summon_owners, "prepared_reactions": self.prepared_reactions,
                 "fired": self.fired, "loot": self.loot,
                 "hold_ticks": self.hold_ticks, "objects": self.mission.objects,
                 "relic_pos": self.relic_pos, "carrier": self.carrier,
