@@ -102,6 +102,7 @@ def siege_content():
                      [{"id": "supply_cache", "kind": "chest", "pos": [2, 3],
                        "amount": 25}], [], [10, 3])
     supply["objective"] = "eliminate"
+    supply["units"].append(unit("supply_scout", "player", [1, 6]))
     supply["board"]["tiles"] = []
     data['missions'].extend([ramparts, courtyard, throne, supply])
     return Content.from_dict(data)
