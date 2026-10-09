@@ -92,12 +92,25 @@ Les achats nécessitent de l’or ; les classes avancées demandent Brave niveau
 Par défaut, la campagne est dans `saves/campaign.json` ; `--campaign-file` la remplace.
 Les récompenses ne sont accordées qu’une fois par mission, même après rechargement.
 
+## Siège et logistique multi-fronts
+
+```sh
+python -m examples.siege_fronts
+python -m unittest discover -s tests_standalone -p test_logistics.py -v
+```
+
+Cet exemple relie les remparts, la herse, la cour, le ravitaillement
+et le trône : les actions tactiques influencent les autres secteurs.
+Les réserves sont finies ; les déplacements d'escouades entre fronts
+consomment des tours stratégiques. Les sauvegardes multi-fronts v3
+rejouent exactement les transferts, arrivées et pertes.
+
 ## Documentation
 
 - [Contrats du moteur et règles détaillées](docs/GAMEPLAY.md)
 - [Architecture autonome](ARCHITECTURE.md)
 - [Règles modulaires, personnages et monstres](docs/MODULAR_ENGINE.md)
-- [Exemple de siège multi-fronts : herse, remparts, ravitaillement et trône](examples/siege_fronts.py)
+- [Exemple de siège multi-fronts avec logistique, reserves et transferts](examples/siege_fronts.py)
 - [Chronologie stratégique, fronts et replays](docs/MULTI_FRONT.md)
 - [Roadmap gameplay et éditeur](ROADMAP.md)
 - Historique Godot : [README](docs/legacy/GODOT_README.md),
