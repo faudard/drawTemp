@@ -214,3 +214,54 @@ présentation Tk reste volontairement sobre et sans assets audio/vidéo.
 python -m unittest discover -s tests_standalone -p test_studio_advanced.py -v
 SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_studio_advanced_gui.py -v
 ```
+
+## Arbre narratif : scènes partagées dans plusieurs embranchements
+
+L'onglet **Arbre narratif** complète **Scénario & dialogues**. Il représente
+chaque **chemin** séparément, même lorsque plusieurs choix aboutissent à la
+même scène.
+
+```text
+                   ┌─ Aider la garde ──> Salle du trône (#1)
+Prologue ──────────┤
+                   └─ Passer seul ─────> Salle du trône (#2)
+```
+
+Les deux occurrences renvoient au même identifiant de scène. Modifier l'une
+modifie la définition partagée (une seule source de vérité). Les occurrences
+réutilisées sont bleues ; la sélection est jaune. Les flèches indiquent les
+choix, leurs conditions et leurs conséquences, détaillés dans l'inspecteur.
+
+**Mode d'emploi :**
+
+1. Choisir la racine : introduction de campagne, scène après une victoire,
+   ou scène particulière.
+2. Cliquer une scène ou la flèche d'un choix. Dans le panneau droit,
+   sélectionner le choix à modifier.
+3. **Créer et relier en une fois** : fournir un nouvel ID et un titre.
+   La création et le raccordement sont validés dans une seule transaction.
+4. **Relier** : faire converger le choix vers une scène existante sans
+   dupliquer celle-ci. **Délier** : terminer le parcours à cet endroit.
+5. **Éditer scène / choix** : accéder directement au formulaire du
+   storyboard pour modifier dialogue, condition, effets et destination.
+6. **Replier / déplier** : masquer uniquement les descendants de
+   l'occurrence choisie ; les autres occurrences de la même scène restent
+   visibles. Zoom 70/100/130 %, défilement horizontal/vertical et
+   **Tout déplier** sont proposés.
+
+Le graphe est une projection de `GameProject.story`, jamais un second
+format de scénario. Seuls les changements validés par `story_authoring`
+sont enregistrés dans le manifeste `*.game.json`. Les cycles sont
+rejetés par la validation des scènes.
+
+Pour éviter qu'un scénario immense bloque Tk, l'arbre se limite à
+**350 occurrences** et **24 niveaux** affichés. Les branches limitées
+sont signalées, sans supprimer ni modifier les données. L'undo/redo
+du storyboard couvre les créations et les liens.
+
+### Tests d'arbre narratif
+
+```sh
+python -m unittest discover -s tests_standalone -p test_story_graph.py -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_story_graph_gui.py -v
+```
