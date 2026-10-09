@@ -139,7 +139,7 @@ class AdvancedStudio:
         self.arch_attack,_=self._field(form,3,'Attaque','5')
         self.arch_speed,_=self._field(form,4,'Vitesse','10')
         self.arch_move,_=self._field(form,5,'Déplacement','4')
-        self.arch_from,_=self._field(form,6,'Copier unité existante',choices=[])
+        self.arch_from,self.arch_from_box=self._field(form,6,'Copier unité existante',choices=[])
         self.arch_unit,_=self._field(form,7,'Nouvelle unité ID','catalog_actor')
         self.arch_name,_=self._field(form,8,'Nom de l’unité','Créature')
         self.arch_team,_=self._field(form,9,'Équipe','enemy',choices=['player','enemy'])
@@ -185,13 +185,13 @@ class AdvancedStudio:
         self.event_box.bind('<<ComboboxSelected>>',lambda e:self._load_event())
         self.cond_kind,_=self._field(form,1,'Condition','enter',choices=['tick','enter','defeated','hp_below'])
         self.cond_value,_=self._field(form,2,'Tick / % PV','20')
-        self.cond_unit,_=self._field(form,3,'Unité surveillée',choices=[])
+        self.cond_unit,self.cond_unit_box=self._field(form,3,'Unité surveillée',choices=[])
         self.action_kind,_=self._field(form,4,'Nouvelle action','message',
                                          choices=['message','hazard','status','spawn','despawn'])
         self.action_text,_=self._field(form,5,'Texte / Nom spawn','Événement')
         self.action_value,_=self._field(form,6,'Puissance / Durée','4')
         self.action_unit,_=self._field(form,7,'Unité / ID spawn')
-        self.action_status,_=self._field(form,8,'Statut / archétype',choices=[])
+        self.action_status,self.action_status_box=self._field(form,8,'Statut / archétype',choices=[])
         self.action_team,_=self._field(form,9,'Camp spawn','enemy',choices=['player','enemy'])
         ttk.Label(outer,text='Actions (dans l’ordre d’exécution)').pack(anchor='w',padx=8,pady=(7,0))
         self.blocks_list=self.tk.Listbox(outer,height=7,exportselection=False)
@@ -277,15 +277,16 @@ class AdvancedStudio:
             self.to_var.set(ids[min(1,len(ids)-1)])
         current=next(m for m in missions if m['id']==self.owner.mission())
         actor_ids=[unit['id'] for unit in current['units']]
-        self.arch_from['values']=actor_ids
+        self.arch_from_box['values']=actor_ids
         if self.arch_from.get() not in actor_ids:
             self.arch_from.set(actor_ids[0] if actor_ids else '')
+        self.cond_unit_box['values']=actor_ids
         self.cond_unit.set(self.cond_unit.get() if self.cond_unit.get() in actor_ids else (actor_ids[0] if actor_ids else ''))
         status_choices=['haste','poison','slow','protect','regen',*data.get('archetypes',{})]
+        self.action_status_box['values']=status_choices
         self.action_status.set(self.action_status.get() if self.action_status.get() in status_choices else status_choices[0])
         # Combobox entry may be a new event name: preserve it.
         self.event_box['values']=[row['id'] for row in current.get('triggers',[])]
-        self.cond_unit._name  # no-op: ensure the variable remains bound to the widget
         self.library_list.delete(0,'end')
         for name,definition in sorted(data.get('archetypes',{}).items()):
             self.library_list.insert('end',f"{name}  — {definition.get('kind','character')}")
