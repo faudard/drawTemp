@@ -57,6 +57,9 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Première fenêtre Tk de commandement : tableau des fronts, état des convois, commandes, sauvegardes et journal global (test Xvfb).
 - [ ] Commandement visuel avancé : carte des fronts, timeline cliquable, drag/drop, placement graphique, prévision d'ordres et finition UX.
 - [x] Mission tactique de secours du convoi : chariot protégé, élimination des pillards, victoire/défaite réelle, abandon explicite.
+- [x] Secours à embranchements optionnel : sauver l'équipage sans cargaison, négocier pendant le combat, récupérer un butin partiel après une élimination.
+- [x] Poursuite jouable des pillards, récupération de ressources limitée et réduction bornée de l'opposition du front cible.
+- [x] Contrats et tests de replay v4 (anciens scénarios inchangés) pour les choix, inventaires et combats annexes.
 - [x] Journaux/replays des combats de sauvetage en cours et de leurs conclusions, sans duplications des voyageurs ; tests de compatibilité.
 - [ ] Défense prolongée des lignes de ravitaillement, choix négociation/fuite, plusieurs variantes de carte et chargements.
 
