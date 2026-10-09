@@ -52,7 +52,7 @@ class FrontDirector:
         """One strategic turn; automatic results do not depend on iteration order."""
         self.turn += 1
         for name in sorted(self.fronts):
-            if name == self.focused:
+            if name == self.focused or name in getattr(self, "tactical_only", ()):
                 continue
             front = self.fronts[name]
             if front["status"] != "active":
@@ -132,6 +132,13 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                 self.content, self.missions, self.campaign.final)
         self.route_selected = "breach"
         self.route_locked = False
+        if self.route_policy is not None:
+            # These fronts require *played* tactical wins; an aggregate
+            # off-screen battle may never unlock a route or the final boss.
+            extra = {front for route in self.route_policy.routes.values()
+                     for front in route["required"]
+                     if front not in self.campaign.spec["required_fronts"]}
+            self.timeline.tactical_only = extra | {self.campaign.final}
         self.recovery_battles = {}
         self.recovery_outcomes = {}
         if self.campaign is not None:
