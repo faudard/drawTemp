@@ -97,6 +97,7 @@ Les récompenses ne sont accordées qu’une fois par mission, même après rech
 - [Contrats du moteur et règles détaillées](docs/GAMEPLAY.md)
 - [Architecture autonome](ARCHITECTURE.md)
 - [Règles modulaires, personnages et monstres](docs/MODULAR_ENGINE.md)
+- [Exemple de siège multi-fronts : herse, remparts, ravitaillement et trône](examples/siege_fronts.py)
 - [Chronologie stratégique, fronts et replays](docs/MULTI_FRONT.md)
 - [Roadmap gameplay et éditeur](ROADMAP.md)
 - Historique Godot : [README](docs/legacy/GODOT_README.md),
