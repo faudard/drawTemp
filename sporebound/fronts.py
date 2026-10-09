@@ -5,6 +5,7 @@ The focused front is never auto-resolved. All fronts share one clock.
 """
 from copy import deepcopy
 from .model import require
+from . import front_links
 
 DOCTRINES = {"hold", "assault", "delay", "retreat"}
 
@@ -92,7 +93,7 @@ class MultiFrontSession:
     the multi-front journal can reconstruct offscreen attrition.
     """
 
-    def __init__(self, content, missions, focused, *, seed=1, rules=None, specs=None):
+    def __init__(self, content, missions, focused, *, seed=1, rules=None, specs=None, links=None):
         from .engine import Battle
         from .rules import default_rules
         require(isinstance(missions, dict) and bool(missions) and focused in missions,
@@ -115,8 +116,23 @@ class MultiFrontSession:
         self.front_snapshots = {}
         self.pending_reinforcements = {}
         self.history = []
-        self.battles[focused] = Battle(self.content, missions[focused], seed=seed,
-                                       rules=self.rules)
+        self.links = deepcopy(links if links is not None else [])
+        front_links.validate(self.content, self.missions, self.links)
+        self.applied_links = set()
+        self.front_overrides = {}
+        self.blocked_reinforcements = set()
+        self.battles[focused] = self._new_battle(focused)
+
+    def _new_battle(self, front):
+        from .engine import Battle
+        prepared = deepcopy(self.content)
+        front_links.configure_mission(
+            prepared, self.missions[front], self.front_overrides.get(front, {}),
+            front in self.blocked_reinforcements)
+        return Battle(prepared, self.missions[front],
+                      seed=self.seed + sorted(self.missions).index(front)
+                      if front != self.initial_focus else self.seed,
+                      rules=self.rules)
 
     @property
     def active(self):
@@ -125,8 +141,25 @@ class MultiFrontSession:
     def execute(self, command):
         """Execute exactly one player/AI command on the focused front."""
         require(isinstance(command, dict), "Expected tactical command")
-        # Battle.execute is itself transactional; journal only successful commands.
-        self.active.execute(deepcopy(command))
+        # Battle.execute is transactional. Linking other fronts must be just as
+        # atomic, including their events, aggregate scores and future overrides.
+        snapshot = deepcopy((self.timeline, self.battles, self.front_overrides,
+                             self.blocked_reinforcements, self.pending_reinforcements,
+                             self.applied_links))
+        source = self.timeline.focused
+        try:
+            start = len(self.active.events)
+            self.active.execute(deepcopy(command))
+            for event in self.battles[source].events[start:]:
+                for link in self.links:
+                    if (link["source"] == source and link["id"] not in self.applied_links
+                            and front_links.match(link, event)):
+                        front_links.apply(self, link)
+        except Exception:
+            (self.timeline, self.battles, self.front_overrides,
+             self.blocked_reinforcements, self.pending_reinforcements,
+             self.applied_links) = snapshot
+            raise
         self.history.append({"kind": "execute", "command": deepcopy(command)})
 
     def set_doctrine(self, front, doctrine):
@@ -134,7 +167,6 @@ class MultiFrontSession:
         self.history.append({"kind": "doctrine", "front": front, "doctrine": doctrine})
 
     def switch(self, front):
-        from .engine import Battle
         require(front in self.missions, "Unknown front")
         require(self.active.active is None or (not self.active.active.moved
                 and not self.active.active.acted),
@@ -144,10 +176,7 @@ class MultiFrontSession:
         try:
             self.timeline.switch(front)
             if front not in self.battles:
-                self.battles[front] = Battle(
-                    self.content, self.missions[front],
-                    seed=self.seed + sorted(self.missions).index(front),
-                    rules=self.rules)
+                self.battles[front] = self._new_battle(front)
                 # An unopened front has already fought its offscreen turns.
                 # Materialize those losses once when it first gains focus.
                 initial = self.initial_fronts[front]
@@ -170,6 +199,8 @@ class MultiFrontSession:
         from .encounters import EncounterDirector
         require(front in self.missions and self.timeline.fronts[front]["status"] == "active",
                 "Unknown or inactive reinforcement front")
+        require(front not in self.blocked_reinforcements,
+                "Reinforcements interdicted on this front")
         # Validate capacity and lifetime now, not after the player switches.
         EncounterDirector().queue(actors, lifetime=lifetime)
         self.pending_reinforcements.setdefault(front, []).append(
@@ -239,10 +270,17 @@ class MultiFrontSession:
             battle.emit("strategic_attrition", team=team, amount=total)
 
     def state(self):
-        return {"timeline": self.timeline.state(), "missions": dict(self.missions),
-                "battles": {name: battle.state() for name, battle in sorted(self.battles.items())},
-                "front_snapshots": deepcopy(self.front_snapshots),
-                "pending_reinforcements": deepcopy(self.pending_reinforcements)}
+        state = {"timeline": self.timeline.state(), "missions": dict(self.missions),
+                 "battles": {name: battle.state() for name, battle in sorted(self.battles.items())},
+                 "front_snapshots": deepcopy(self.front_snapshots),
+                 "pending_reinforcements": deepcopy(self.pending_reinforcements)}
+        # Preserve version-1 checksum semantics for sessions without links.
+        if self.links:
+            state["links"] = deepcopy(self.links)
+            state["applied_links"] = sorted(self.applied_links)
+            state["front_overrides"] = deepcopy(self.front_overrides)
+            state["blocked_reinforcements"] = sorted(self.blocked_reinforcements)
+        return state
 
     def digest(self):
         import hashlib
@@ -251,9 +289,10 @@ class MultiFrontSession:
 
     def recording(self):
         """Portable journal; replay proves all tactical and strategic mutations."""
-        return {"version": 1, "kind": "multi_front",
+        return {"version": 2, "kind": "multi_front",
                 "content": self.content.to_dict(), "missions": dict(self.missions),
                 "focused": self.initial_focus, "specs": deepcopy(self.initial_specs),
+                "links": deepcopy(self.links),
                 "seed": self.seed, "rules": self.rules.manifest(),
                 "operations": deepcopy(self.history), "digest": self.digest()}
 
@@ -261,14 +300,16 @@ class MultiFrontSession:
     def replay(cls, recording, *, rules=None):
         from .model import Content
         from .rules import default_rules
-        require(isinstance(recording, dict) and recording.get("version") == 1
+        require(isinstance(recording, dict) and recording.get("version") in {1, 2}
                 and recording.get("kind") == "multi_front", "Unsupported multi-front save")
         effective_rules = rules if rules is not None else default_rules()
         require(recording.get("rules") == effective_rules.manifest(),
                 "Multi-front ruleset mismatch")
         session = cls(Content.from_dict(recording["content"], rules=effective_rules),
                       recording["missions"], recording["focused"],
-                      seed=recording["seed"], rules=effective_rules, specs=recording["specs"])
+                      seed=recording["seed"], rules=effective_rules,
+                      specs=recording["specs"],
+                      links=recording.get("links", []) if recording["version"] == 2 else [])
         for operation in recording["operations"]:
             kind = operation["kind"]
             if kind == "execute":
@@ -293,6 +334,7 @@ class MultiFrontSession:
                 "Pass a multi-front recording, not a public state snapshot")
         restored = self.replay(recording, rules=self.rules)
         require(restored.missions == self.missions
-                and restored.content.to_dict() == self.content.to_dict(),
+                and restored.content.to_dict() == self.content.to_dict()
+                and restored.links == self.links,
                 "Incompatible multi-front save")
         self.__dict__.update(restored.__dict__)
