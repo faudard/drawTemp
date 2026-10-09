@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sporebound.lifecycle import spawn, despawn
+from sporebound.engine import Battle
 
 
 class LifecycleTests(unittest.TestCase):
@@ -41,6 +42,30 @@ class LifecycleTests(unittest.TestCase):
         with self.assertRaises(Exception):
             despawn(battle, 'hero')
         self.assertEqual(len(battle.units), 1)
+
+    def test_wave_rolls_back_after_partial_spawn(self):
+        battle = self.make_battle()
+        battle.lifetimes = {}
+        battle.summon_owners = {}
+        battle.tick = 4
+        battle.__class__ = type("WaveBattle", (Battle,), {})
+        with patch('sporebound.lifecycle.validate_actor'):
+            with self.assertRaises(Exception):
+                battle.spawn_wave([
+                    {'id': 'a', 'name': 'A', 'team': 'enemy', 'pos': [1, 1]},
+                    {'id': 'b', 'name': 'B', 'team': 'enemy', 'pos': [1, 1]},
+                ])
+        self.assertEqual(battle.units, [])
+        self.assertEqual(battle.events, [])
+        self.assertEqual(battle.lifetimes, {})
+
+    def test_fallback_nearest_is_stable(self):
+        battle = self.make_battle()
+        with patch('sporebound.lifecycle.validate_actor'):
+            spawn(battle, {'id': 'a', 'name': 'A', 'team': 'enemy', 'pos': [2, 2]})
+            second = spawn(battle, {'id': 'b', 'name': 'B', 'team': 'enemy',
+                                    'pos': [2, 2], 'fallback_nearest': True})
+        self.assertEqual(second.pos, (2, 1))
 
 
 if __name__ == '__main__':
