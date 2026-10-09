@@ -31,12 +31,17 @@ def demo():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Headless castle command center")
+    parser.add_argument("--gui", action="store_true",
+                        help="Open the graphical Tk command centre")
     parser.add_argument("--interactive", action="store_true",
                         help="Use a small command-driven dashboard")
     parser.add_argument("--demo", action="store_true",
                         help="Run an ambush and convoy rescue with verified replay")
     options = parser.parse_args()
-    if options.demo:
+    if options.gui:
+        from sporebound.strategic_ui import launch
+        launch(siege_session(contested=True))
+    elif options.demo:
         print(demo())
         print("Verified command replay: OK")
     elif options.interactive:
