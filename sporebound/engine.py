@@ -426,7 +426,20 @@ class Battle:
         obj = next((o for o in self.mission.objects if o["id"] == object_id), None)
         require(obj is not None and distance(u.pos, tuple(obj["pos"])) <= 1 and not obj.get("used", False), "Object unavailable")
         require(u.team == "player", "Only players can interact")
-        if obj["kind"] == "door":
+        if obj["kind"] in {"ram", "catapult"}:
+            target = next(o for o in self.mission.objects if o["id"] == obj["link"])
+            require(not target.get("open", False), "Gate already breached")
+            require(obj["kind"] != "ram" or distance(obj["pos"], target["pos"]) <= 1,
+                    "Ram must reach the gate")
+            require(obj["kind"] != "catapult" or distance(obj["pos"], target["pos"]) <= obj.get("range", 8),
+                    "Gate out of catapult range")
+            target["hp"] = max(0, target.get("hp", 1) - obj.get("power", 1))
+            self.emit("siege_hit", unit=u.id, engine=obj["id"], gate=target["id"], hp=target["hp"])
+            if target["hp"] == 0:
+                target["open"] = True
+                self.board.tiles[tuple(target["pos"])].blocked = False
+                self.emit("gate_breached", gate=target["id"])
+        elif obj["kind"] == "door":
             require(not obj.get("open", False), "Door already open")
             obj["open"] = True
             self.board.tiles[tuple(obj["pos"])].blocked = False
@@ -436,7 +449,8 @@ class Battle:
             self.board.tiles[tuple(door["pos"])].blocked = False
         else:
             self.loot += obj.get("amount", 25)
-        obj["used"] = True
+        if obj["kind"] not in {"ram", "catapult"}:
+            obj["used"] = True
         u.acted = True
         u.cast = None
         self.emit("interact", unit=u.id, object=object_id)
