@@ -49,9 +49,11 @@ class Battle:
             if obj["kind"] == "door":
                 self.board.tiles[tuple(obj["pos"])] = deepcopy(self.board.tile(tuple(obj["pos"])))
                 self.board.tiles[tuple(obj["pos"])].blocked = not obj.get("open", False)
-        for unit in self.units:
-            self._collect(unit)
-        self._advance()
+        self.deploying = bool(self.mission.deployment)
+        if not self.deploying:
+            for unit in self.units:
+                self._collect(unit)
+            self._advance()
 
     @property
     def active(self) -> Unit | None:
@@ -446,7 +448,7 @@ class Battle:
                     (cell for cell in self.board.neighbors(origin)
                      if distance(cell, tuple(target["pos"])) < distance(origin, tuple(target["pos"]))
                      and not self.board.tile(cell).blocked
-                     and not any(unit.alive and unit.pos == cell for unit in self.units)
+                     and not any(unit.alive and cell in unit.occupied_cells() for unit in self.units)
                      and not any(other is not obj and tuple(other["pos"]) == cell
                                  for other in self.mission.objects)),
                     key=lambda cell: (distance(cell, tuple(target["pos"])), cell[1], cell[0]))
@@ -465,6 +467,7 @@ class Battle:
                 self.board.tiles[tuple(target["pos"])].blocked = False
                 self.emit("gate_breached", gate=target["id"])
         elif obj["kind"] == "door":
+            require(not obj.get("locked", False), "Gate locked: use a siege engine or its switch")
             require(not obj.get("open", False), "Door already open")
             obj["open"] = True
             self.board.tiles[tuple(obj["pos"])].blocked = False
@@ -496,9 +499,14 @@ class Battle:
 
     def execute(self, command: dict):
         """Atomic command boundary for UI, AI and replay; invalid input changes nothing."""
-        require(self.active is not None and not self.result, "Battle is not accepting commands")
+        require((self.deploying or self.active is not None) and not self.result, "Battle is not accepting commands")
         snapshot = deepcopy(self.__dict__)
         try:
+            if self.deploying:
+                from .deployment import execute
+                execute(self, command)
+                self.commands.append(deepcopy(command))
+                return
             u = self.active
             require(command.get("unit", u.id) == u.id, "Not this unit's turn")
             self.rules.commands.get(command.get("kind")).execute(self, u, command)
@@ -526,7 +534,8 @@ class Battle:
         return row
 
     def state(self) -> dict:
-        return {"tick": self.tick, "active": self.active_id, "result": self.result,
+        return {**({"deploying": self.deploying} if self.mission.deployment else {}),
+                "tick": self.tick, "active": self.active_id, "result": self.result,
                 "units": [self._unit_state(u) for u in self.units], "inventory": self.inventory,
                 "zones": self.zones, "encounter": self.encounter.state(), "lifetimes": self.lifetimes, "summon_owners": self.summon_owners, "prepared_reactions": self.prepared_reactions,
                 "fired": self.fired, "loot": self.loot,

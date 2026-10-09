@@ -7,13 +7,15 @@ def siege_content():
         return {"id": uid, "name": uid.replace("_", " ").title(), "team": team, "pos": pos}
     def mission(mid, title, objects, triggers, goal):
         return {
-            "id": mid, "name": title, "board": {"width": 12, "height": 8},
+            "id": mid, "name": title, "board": {"width": 12, "height": 8,
+                      "tiles": [{"pos": [8, y], "blocked": True} for y in range(8) if y != 3]},
             "units": [unit("captain", "player", [1, 3]), unit("engineer", "player", [1, 5]),
                       unit("defender", "enemy", [9, 3])],
-            "objective": "reach", "goal": [goal],
+            "deployment": [{"id": "assault_camp", "cells": [[x,y] for x in range(3) for y in range(2,7)]}],
+            "objective": "extract", "goal": [goal],
             "objects": objects, "triggers": triggers
         }
-    gate = {"id": "main_gate", "kind": "door", "pos": [8, 3], "open": False, "hp": 4}
+    gate = {"id": "main_gate", "kind": "door", "pos": [8, 3], "open": False, "hp": 4, "locked": True}
     ram = {"id": "ram", "kind": "ram", "pos": [3, 3], "link": "main_gate", "power": 1}
     catapult = {"id": "catapult", "kind": "catapult", "pos": [2, 5], "link": "main_gate",
                 "power": 2, "range": 10}
@@ -24,7 +26,8 @@ def siege_content():
         "version": 1, "skills": [],
         "missions": [
             {**mission("castle_troll", "Stop the siege troll", [gate.copy()], [], [10, 3]),
-             "units": [unit("captain", "player", [1, 3]), unit("engineer", "player", [1, 5]), troll]},
+             "units": [unit("captain", "player", [1, 3]), unit("engineer", "player", [1, 5]), troll],
+             "objective": "eliminate"},
             mission("castle_ram", "Break the gate with a ram", [gate.copy(), ram], [
                 {"id": "gate_warning", "condition": "tick", "value": 8,
                  "actions": [{"kind": "message", "text": "Archers defend the ramparts!"}]}
@@ -43,4 +46,4 @@ def siege_content():
 
 if __name__ == "__main__":
     data = siege_content()
-    print(json.dumps({"missions": list(data.missions)}, indent=2))
+    print(json.dumps(data.to_dict(), indent=2))

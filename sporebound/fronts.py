@@ -105,6 +105,7 @@ class MultiFrontSession:
             specs or {name: {} for name in missions}, focused, seed=seed)
         self.battles = {}
         self.front_snapshots = {}
+        self.pending_reinforcements = {}
         self.battles[focused] = Battle(content, missions[focused], seed=seed, rules=rules)
 
     @property

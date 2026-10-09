@@ -214,7 +214,13 @@ def launch(path):
         if not battle:
             return
         action = action_var.get()
-        if action == 'move':
+        if action == 'start_battle':
+            cmd = {'kind': 'start_battle'}
+        elif action == 'deploy':
+            directions = dict(north=[0,-1], south=[0,1], east=[1,0], west=[-1,0])
+            cmd = {'kind': 'deploy', 'unit': unit_var.get(), 'cell': list(selected_cell),
+                   'facing': directions[facing_var.get()]}
+        elif action == 'move':
             cmd = {'kind': 'move', 'cell': list(selected_cell)}
         elif action.startswith('item:'):
             cmd = {'kind': 'item', 'item': action[5:], 'cell': list(selected_cell)}
@@ -264,12 +270,14 @@ def launch(path):
         mission = battle.mission if battle else content.missions[mission_var.get()]
         board = battle.board if battle else mission.board
         units = battle.units if battle else mission.units
-        unit_box['values'] = [u.id for u in units]
+        unit_box['values'] = [u.id for u in units if not battle or not battle.deploying
+                              or u.team == 'player' and u.alive]
         if unit_var.get() not in unit_box['values']:
-            unit_var.set(units[0].id)
+            unit_var.set(unit_box['values'][0] if unit_box['values'] else '')
         canvas.delete('all')
         canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
         reachable = battle.reachable() if battle else {}
+        deployment_cells = {tuple(c) for z in mission.deployment for c in z['cells']}
         for c in board.cells():
             t = board.tile(c)
             color = '#dddddd'
@@ -278,6 +286,7 @@ def launch(path):
             if t.height: color = '#c3c3df'
             if t.hazard: color = '#eead93'
             if t.blocked: color = '#555555'
+            if c in deployment_cells and (not battle or battle.deploying): color = '#a8dce8'
             if c in mission.goal: color = '#d7c469'
             x, y = c[0] * tile_size, c[1] * tile_size
             canvas.create_rectangle(x, y, x+tile_size, y+tile_size, fill=color,
@@ -306,6 +315,10 @@ def launch(path):
             text += f'Tick : {battle.tick} | Résultat : {battle.result or "en cours"}\nTenue : {battle.hold_ticks}/{mission.target_ticks}\n'
             if mission.objective == 'crown':
                 text += f'Couronne : {battle.carrier or battle.relic_pos}\n'
+            if battle.deploying:
+                text += 'DÉPLOIEMENT — horloge arrêtée.\nChoisir une unité, une case bleue et son orientation, puis deploy / Exécuter.\nChoisir start_battle / Exécuter pour lancer l’assaut.\n'
+                action_box['values'] = ['deploy', 'start_battle']
+                if action_var.get() not in action_box['values']: action_var.set('deploy')
             if battle.active:
                 u = battle.active
                 text += f'Actif : {u.name} ({u.team})\nPV {u.hp}/{u.max_hp} | MP {u.mp}/{u.max_mp} | CT {u.ct}\nDéplacement : {"utilisé" if u.moved else "libre"}\nAction : {"utilisée" if u.acted else "libre"}\n'

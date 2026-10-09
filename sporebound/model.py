@@ -173,6 +173,7 @@ class Mission:
     reward: int = 100
     next_missions: list[str] = field(default_factory=list)
     relic: Cell | None = None
+    deployment: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -302,6 +303,8 @@ class Content:
             require(any(u.team == "enemy" for u in m.units), "Mission needs an enemy")
             require(not m.protected_id or m.protected_id in ids, "Unknown protected unit")
             require(all(n in self.missions for n in m.next_missions), "Unknown next mission")
+            from .deployment import validate as validate_deployment
+            validate_deployment(m)
             object_ids = set()
             for obj in m.objects:
                 require(obj["id"] not in object_ids, "Duplicate object")
@@ -311,6 +314,7 @@ class Content:
                 integer(obj.get("amount", 1), 0, 10000, "object.amount")
                 if obj["kind"] == "door":
                     integer(obj.get("hp", 1), 1, 10000, "door.hp")
+                    require(type(obj.get("locked", False)) is bool, "door.locked must be boolean")
                 if obj["kind"] in {"ram", "catapult"}:
                     integer(obj.get("power", 1), 1, 10000, "siege.power")
                     require(obj.get("link") != obj["id"], "Siege engine cannot target itself")

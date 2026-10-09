@@ -77,10 +77,14 @@ def main(argv=None):
         if args.command in {'simulate','campaign'}:
             print(json.dumps(simulate(battle,max_commands=args.limit)))
         else:
-            print('Commands: move x y | attack x y | skill ID x y | item ID x y | interact ID | end [N/S/E/W] | ai | save FILE | quit')
+            print('Commands: deploy UNIT x y [N/S/E/W] | start | move x y | attack x y | skill ID x y | item ID x y | interact ID | end [N/S/E/W] | ai | save FILE | quit')
             while not battle.result:
                 u = battle.active
-                print(f't={battle.tick} {u.id}({u.team}) at {u.pos}: HP={u.hp}, MP={u.mp}, CT={u.ct}')
+                if battle.deploying:
+                    print('Deployment: '+json.dumps(battle.mission.deployment))
+                    print([(u.id, u.pos) for u in battle.units if u.team == 'player'])
+                else:
+                    print(f't={battle.tick} {u.id}({u.team}) at {u.pos}: HP={u.hp}, MP={u.mp}, CT={u.ct}')
                 try:
                     words = input('> ').split()
                     if not words: continue
@@ -88,7 +92,11 @@ def main(argv=None):
                     if kind == 'quit': break
                     if kind == 'save': save_battle(words[1],battle); continue
                     if kind == 'ai': play_activation(battle); continue
-                    if kind == 'move': command = dict(kind='move',cell=list(map(int,words[1:3])))
+                    if kind == 'start': command = dict(kind='start_battle')
+                    elif kind == 'deploy':
+                        command = dict(kind='deploy', unit=words[1], cell=list(map(int,words[2:4])))
+                        if len(words)>4: command['facing'] = {'N':[0,-1],'S':[0,1],'E':[1,0],'W':[-1,0]}[words[4]]
+                    elif kind == 'move': command = dict(kind='move',cell=list(map(int,words[1:3])))
                     elif kind == 'attack': command = dict(kind='act',skill='attack',cell=list(map(int,words[1:3])))
                     elif kind == 'skill': command = dict(kind='act',skill=words[1],cell=list(map(int,words[2:4])))
                     elif kind == 'item': command = dict(kind='item',item=words[1],cell=list(map(int,words[2:4])))

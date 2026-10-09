@@ -148,3 +148,39 @@ La dernière commande concerne Linux. Le test Tk édite réellement une case, an
 enregistre le JSON, lance le playtest, joue une activation IA et revient à l’éditeur.
 Les règles et le document de l’éditeur sont testables sans affichage ; le test Tk est
 explicitement ignoré lorsqu’aucun affichage de test n’a été demandé.
+
+## Déploiement et assaut du château
+
+Générer les quatre missions de siège puis les ouvrir dans l’éditeur :
+
+```sh
+python -m examples.siege_scenarios > siege.json
+python -m sporebound editor --content siege.json
+python -m sporebound play --content siege.json --mission castle_ram
+```
+
+Chaque mission commence à t=0, sans unité active. Les zones bleues de l’éditeur
+sont les zones de déploiement : sélectionner l’unité dans la liste, cliquer une
+case, choisir une orientation et exécuter `deploy`. Répéter librement, puis
+exécuter `start_battle`. Au terminal : `deploy captain 0 2 E`, puis `start`.
+La formation proposée est déjà valide : démarrer sans la modifier est possible.
+L’IA et les simulations acceptent cette formation explicitement.
+
+Le déploiement ne consomme ni CT, ni action, ni aléatoire et ne déclenche aucun
+renfort, statut ou objectif. Toute l’empreinte d’un grand acteur doit tenir dans
+une même zone, sans chevauchement. Seuls les personnages joueurs vivants peuvent
+être placés. Une fois l’assaut lancé, le placement libre est verrouillé.
+Sauvegarde/reprise et replay incluent les commandes de préparation.
+
+Dans les données, `deployment` est une liste de zones
+`{"id": "camp", "cells": [[0, 2], [1, 2]]}`. Les positions initiales des joueurs
+doivent tenir dans ces zones. Sans zone, le comportement historique reste
+inchangé : activation immédiate. Les zones s’éditent dans l’onglet JSON.
+Cette étape place le groupe déjà prévu dans la mission ; sélection d’une réserve,
+budget d’armée et placement des machines ne sont pas encore implémentés.
+
+Les missions bélier/artillerie/renforts disposent maintenant d’une enceinte fermée
+et d’une porte `locked: true` : impossible de contourner le mur ou d’ouvrir la
+porte à la main. Un interrupteur lié peut toujours lever une porte verrouillée.
+Avancer le bélier jusqu’à la porte puis frapper quatre fois (ou deux tirs de
+catapulte) ouvre le passage. L’approche avec le troll est une mission d’élimination.

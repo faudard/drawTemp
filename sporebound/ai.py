@@ -147,6 +147,8 @@ def simulate(battle, max_commands=1000):
 
 def choose_command(battle):
     """Actor behavior selects intent; execution always uses Battle.execute."""
+    if battle.deploying:
+        return {"kind": "start_battle"}
     actor = battle.active
     if actor is None:
         raise RuleError('No active unit')
