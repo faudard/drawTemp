@@ -178,7 +178,7 @@ def launch(path):
             return
         def edit():
             data = deepcopy(doc.data)
-            template = deepcopy(data['missions'][0])
+            template = deepcopy(next(m for m in data['missions'] if m['id'] == mission_var.get()))
             template.update(id=mid, name=mid, next_missions=[])
             data['missions'].append(template)
             doc.replace(data)
