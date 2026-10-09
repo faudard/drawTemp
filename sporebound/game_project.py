@@ -23,6 +23,7 @@ class GameProject:
         'fullscreen': False,
     })
     save_slots: int = 3
+    story: dict = field(default_factory=dict)
     version: int = 1
 
     @classmethod
@@ -48,7 +49,8 @@ class GameProject:
     def to_dict(self):
         return {'version': self.version, 'title': self.title, 'subtitle': self.subtitle,
                 'campaigns': deepcopy(self.campaigns), 'options': deepcopy(self.options),
-                'save_slots': self.save_slots}
+                'save_slots': self.save_slots,
+                **({'story': deepcopy(self.story)} if self.story else {})}
 
     def validate(self, content):
         require(type(self.version) is int and self.version == 1, 'Unsupported game project version')
@@ -84,6 +86,8 @@ class GameProject:
                     'Campaign description too long')
             require(campaign['start_mission'] in content.missions,
                     f'Unknown starting mission: {campaign["start_mission"]}')
+        from .narrative import validate_story
+        validate_story(self.story, content, self.campaigns)
 
     def save(self, path, content):
         self.validate(content)
@@ -96,7 +100,10 @@ class GameProject:
         self.validate(content)
         campaign = self.campaign(campaign_id)
         require(campaign is not None, 'Unknown campaign')
-        return Campaign(unlocked=[campaign['start_mission']])
+        progress = Campaign(unlocked=[campaign['start_mission']])
+        from .narrative import StoryBook
+        StoryBook(self.story, content, self.campaigns).initialize(progress, campaign_id)
+        return progress
 
 
 def _slot_path(project_path, project, campaign_id, slot):
@@ -113,6 +120,8 @@ def save_slot(project_path, project, content, campaign_id, slot, progress):
     require(set(progress.unlocked + progress.completed) <= set(content.missions),
             'Campaign references a mission that no longer exists')
     path = _slot_path(project_path, project, campaign_id, slot)
+    from .narrative import StoryBook
+    StoryBook(project.story, content, project.campaigns).initialize(progress, campaign_id)
     progress.save(path)
     return path
 
@@ -121,6 +130,8 @@ def load_slot(project_path, project, content, campaign_id, slot):
     project.validate(content)
     path = _slot_path(project_path, project, campaign_id, slot)
     progress = Campaign.load(path)
+    from .narrative import StoryBook
+    StoryBook(project.story, content, project.campaigns).initialize(progress, campaign_id)
     require(set(progress.unlocked + progress.completed) <= set(content.missions),
             'Save references a mission that no longer exists')
     return progress
