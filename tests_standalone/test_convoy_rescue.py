@@ -108,6 +108,31 @@ class ConvoyRescueTests(unittest.TestCase):
                       [e["kind"] for e in s.timeline.events])
         self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
 
+    def test_defeat_when_entire_escort_falls_but_wagon_survives(self):
+        raw = siege_content().to_dict()
+        rescue = next(m for m in raw["missions"] if m["id"] == "castle_convoy_rescue")
+        rescue["units"] = [u for u in rescue["units"]
+                           if u["id"] != "rescue_scout"]
+        captain = next(u for u in rescue["units"] if u["id"] == "rescue_leader")
+        captain["hp"] = 1
+        enemy = next(u for u in rescue["units"] if u["id"] == "road_bandit")
+        enemy.update(pos=[2, 3], speed=100, attack=100)
+        base = siege_session(contested=True)
+        s = MultiFrontSession(
+            Content.from_dict(raw), base.missions, "supplies",
+            seed=base.seed, specs=base.initial_specs,
+            links=base.links, logistics=base.initial_logistics)
+        s.set_doctrine("walls", "hold")
+        s.send_reserves("walls", [survivor("road_guard")])
+        s.advance()
+        battle = s.start_rescue("convoy_1")
+        self.assertEqual(battle.active_id, "road_bandit")
+        s.execute_rescue("convoy_1", {
+            "kind": "act", "skill": "attack", "cell": [1, 3]})
+        self.assertEqual(s.rescue_outcomes["convoy_1"], "defeat")
+        self.assertEqual(s.logistics.in_transit, [])
+        self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
+
     def test_voluntary_abandonment_loses_transit_units_and_frees_capacity(self):
         for started in (False, True):
             with self.subTest(started=started):
