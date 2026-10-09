@@ -1,6 +1,7 @@
 """Global front timeline tests."""
 import unittest
-from sporebound.fronts import FrontDirector
+from sporebound.fronts import FrontDirector, MultiFrontSession
+from unittest.mock import patch
 from sporebound.model import RuleError
 
 
@@ -36,6 +37,32 @@ class FrontTests(unittest.TestCase):
         self.assertEqual(restored.state(), state)
         with self.assertRaises(RuleError):
             restored.switch("unknown")
+
+    def test_multifront_lazily_creates_battles_and_keeps_focus(self):
+        class FakeBattle:
+            def __init__(self, content, mission_id, seed=1, rules=None):
+                self.mission_id = mission_id
+                self.active = None
+                self.result = None
+
+            def state(self):
+                return {"mission": self.mission_id}
+
+        class FakeContent:
+            missions = {"gate": object(), "walls": object()}
+
+        with patch("sporebound.engine.Battle", FakeBattle):
+            session = MultiFrontSession(FakeContent(),
+                                        {"gate": "gate", "walls": "walls"}, "gate")
+            self.assertEqual(len(session.battles), 1)
+            session.advance()
+            self.assertEqual(session.timeline.turn, 1)
+            session.switch("walls")
+            self.assertEqual(len(session.battles), 2)
+            self.assertEqual(session.active.mission_id, "walls")
+            session.active.result = "victory"
+            session.advance()
+            self.assertEqual(session.timeline.fronts["walls"]["status"], "victory")
 
 
 if __name__ == "__main__":
