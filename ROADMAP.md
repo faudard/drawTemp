@@ -63,7 +63,11 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Campagne multi-fronts v5 optionnelle : verrou du trône, conditions de victoire acceptées et confirmation par véritable combat final.
 - [x] Négociation du passage, retraite avec pertes inter-fronts, victoire partielle liée à une interaction tactique réelle ; validations et replay.
 - [x] Commandement Tk / terminal : état d'avancement campagne, décisions et interdiction du passage au trône jusqu'au déverrouillage.
-- [ ] Choix d'autres itinéraires après une retraite, trêves conditionnelles et branches diplomatiques à conséquences persistantes.
+- [x] Routes alternatives optionnelles : brèche classique, souterrains tactiques, assaut direct coûteux (déduction immédiate de provisions et de forces).
+- [x] Contre-attaque jouable pour reconquérir la porte après retrait/défaite, avec coûts, état `reclaimed`, journal et reprise.
+- [x] Trêve conditionnelle : preuve d'interaction dans une mission de ravitaillement avant négociation.
+- [x] Démonstration de trois fins de siège, tests d'ownership des décisions et replays v5 stables.
+- [ ] Routes adaptatives complexes, ennemis capables de rouvrir un front, tactiques d'infiltration plus élaborées et diplomatie à plusieurs étapes.
 - [x] Journaux/replays des combats de sauvetage en cours et de leurs conclusions, sans duplications des voyageurs ; tests de compatibilité.
 - [ ] Défense prolongée des lignes de ravitaillement, choix négociation/fuite, plusieurs variantes de carte et chargements.
 
