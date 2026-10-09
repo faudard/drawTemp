@@ -112,6 +112,7 @@ python -m examples.siege_command                # vue d'ensemble du siège
 python -m examples.siege_command --gui          # fenêtre de commandement Tk
 python -m examples.siege_command --interactive  # ordres et timeline en terminal
 python -m examples.siege_command --demo         # embuscade + secours
+python -m examples.siege_command --rescue-demo  # vrai combat : victoire + replay
 python -m unittest discover -s tests_standalone -p test_command_center.py -v
 python -m unittest discover -s tests_standalone -p test_convoy_rescue.py -v
 ```
