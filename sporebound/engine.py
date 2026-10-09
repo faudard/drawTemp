@@ -102,10 +102,11 @@ class Battle:
             self.summon_owners[actor.id] = owner_id
         return actor
 
-    def spawn_wave(self, actors, *, lifetime=None):
+    def spawn_wave(self, actors, *, lifetime=None, max_active=14):
         """Spawn an entire reinforcement wave atomically, including RNG and events."""
         require(isinstance(actors, list) and bool(actors), "Wave needs actors")
-        require(sum(u.alive for u in self.units) + len(actors) <= 14,
+        require(type(max_active) is int and 1 <= max_active <= 100, "Invalid encounter cap")
+        require(sum(u.alive for u in self.units) + len(actors) <= max_active,
                 "Too many active combatants for a tactical encounter")
         snapshot = deepcopy(self.__dict__)
         try:
