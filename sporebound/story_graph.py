@@ -114,16 +114,20 @@ def build_story_tree(story, root_scene, *, collapsed=(), max_depth=24, max_nodes
     root_path=(root_scene,)
     visit(root_scene,root_path,0,())
     positions={}
-    # Children are already in preorder. Assign leaf rows bottom-up; each
-    # parent sits halfway between its first and last visible descendants.
-    for node in reversed(nodes):
-        children=child_paths[node['path']]
+    depth_by_path={node['path']:node['depth'] for node in nodes}
+    # Traverse children in author-defined choice order. A reversed preorder
+    # pass would inadvertently draw the last choice above the first.
+    def place(path):
+        children=child_paths[path]
         if not children:
             y=90+next_y[0]*125
             next_y[0]+=1
         else:
-            y=(positions[children[0]][1]+positions[children[-1]][1])/2
-        positions[node['path']]=(90+node['depth']*320,y)
+            rows=[place(child) for child in children]
+            y=(rows[0]+rows[-1])/2
+        positions[path]=(90+depth_by_path[path]*320,y)
+        return y
+    place(root_path)
     width=max((x for x,y in positions.values()),default=90)+270
     height=max((y for x,y in positions.values()),default=90)+130
     return {'root':root_scene,'nodes':nodes,'edges':edges,
