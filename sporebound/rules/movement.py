@@ -9,10 +9,15 @@ def reachable(battle, unit: Unit | None = None) -> dict[Cell, tuple[int, list[Ce
     u = unit or battle.active
     if not u or not u.alive or u.moved or battle.status_blocks(u, "move"):
         return {}
-    blocked = {o.pos for o in battle.units if o.alive and o.id != u.id}
+    blocked = set().union(*(o.occupied_cells() for o in battle.units if o.alive and o.id != u.id))
+    def free(anchor):
+        cells = u.occupied_cells(anchor)
+        return all(battle.board.contains(c) and c not in blocked and not battle.board.tile(c).blocked
+                   for c in cells)
+
     if battle.rules.movements.get(u.movement).teleport:
         return {c: (distance(u.pos, c), [u.pos, c]) for c in battle.board.cells()
-                if c not in blocked and not battle.board.tile(c).blocked and distance(u.pos, c) <= battle.movement_budget(u) + 5}
+                if free(c) and distance(u.pos, c) <= battle.movement_budget(u) + 5}
     result = {u.pos: (0, [u.pos])}
     queue = [(0, u.pos)]
     while queue:
@@ -21,7 +26,7 @@ def reachable(battle, unit: Unit | None = None) -> dict[Cell, tuple[int, list[Ce
             continue
         for nxt in battle.board.neighbors(c):
             tile = battle.board.tile(nxt)
-            if tile.blocked or nxt in blocked:
+            if not free(nxt):
                 continue
             if not battle.can_step_height(u, c, nxt):
                 continue
