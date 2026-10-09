@@ -260,9 +260,11 @@ class AdvancedStudio:
 
     def _save_event(self):
         kind=self.cond_kind.get()
-        position=[int(x.strip()) for x in self.event_pos.get().split(',')]
-        if len(position)!=2:
-            raise RuleError('Position de déclencheur : saisir x,y')
+        position=self.owner.selection()
+        if kind=='enter':
+            position=[int(x.strip()) for x in self.event_pos.get().split(',')]
+            if len(position)!=2:
+                raise RuleError('Position de déclencheur : saisir x,y')
         spec=event_composer.condition(kind,pos=position,
                                       tick=int(self.cond_value.get()),
                                       unit=self.cond_unit.get(),
