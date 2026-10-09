@@ -44,12 +44,17 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(len(battle.units), 1)
 
     def test_wave_rolls_back_after_partial_spawn(self):
-        battle = self.make_battle()
-        battle.lifetimes = {}
-        battle.summon_owners = {}
-        battle.tick = 4
-        battle.spawn_actor = lambda spec, lifetime=None: spawn(battle, spec)
-        battle.spawn_wave = lambda actors, lifetime=None: Battle.spawn_wave(battle, actors, lifetime=lifetime)
+        from copy import deepcopy
+        source = self.make_battle()
+        source.lifetimes = {}
+        source.summon_owners = {}
+        source.tick = 4
+
+        class WaveBattle(Battle):
+            def __init__(self, original):
+                self.__dict__.update(deepcopy(original.__dict__))
+
+        battle = WaveBattle(source)
         with patch('sporebound.lifecycle.validate_actor'):
             with self.assertRaises(Exception):
                 battle.spawn_wave([
