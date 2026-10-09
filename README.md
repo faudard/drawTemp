@@ -119,6 +119,25 @@ sont pour l'instant les `next_missions` existants : après une victoire,
 tous les successeurs déclarés sont débloqués. Les choix conditionnels,
 dialogues/cinématiques et renderer/audio dédiés restent à développer.
 
+## Arbre narratif — scènes réutilisables
+
+Le studio contient aussi un onglet **Arbre narratif** où chaque embranchement
+est déplié en occurrences. Si deux choix aboutissent à la même scène, elle
+apparaît deux fois dans l'arbre, mais sa définition reste unique.
+
+- Choix de la racine par campagne, victoire de mission ou scène.
+- Cliquer un nœud ou une flèche pour inspecter les conditions, conséquences
+  et scènes de destination.
+- Créer et relier une nouvelle scène en une seule modification validée,
+  raccorder plusieurs branches à une scène existante ou délier un choix.
+- Replier individuellement un chemin, zoomer et accéder directement aux
+  formulaires « Scénario & dialogues ».
+- Protection contre les cycles et limitation du nombre d'occurrences
+  affichées, sans aucune perte de données.
+
+L'exemple `core.game.json` illustre des branches qui se rejoignent.
+Voir [les instructions de l'arbre narratif](docs/STUDIO.md#arbre-narratif--scènes-partagées-dans-plusieurs-embranchements).
+
 ## Campagne et équipement
 
 ```sh
