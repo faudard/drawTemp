@@ -120,6 +120,16 @@ class MultiFrontSession:
         self.initial_logistics = deepcopy(logistics) if logistics is not None else None
         self.logistics = (LogisticsDirector(self.initial_logistics, self.missions)
                           if self.initial_logistics is not None else None)
+        self.rescue_battles = {}
+        self.rescue_outcomes = {}
+        if self.logistics is not None and self.logistics.rescue_mission is not None:
+            mid = self.logistics.rescue_mission
+            require(mid in self.content.missions, "Unknown rescue mission")
+            mission = self.content.missions[mid]
+            require(mission.objective == "eliminate" and mission.protected_id
+                    and any(u.id == mission.protected_id and u.team == "player"
+                            for u in mission.units),
+                    "Rescue mission needs a protected friendly wagon and elimination goal")
         self.links = deepcopy(links if links is not None else [])
         front_links.validate(self.content, self.missions, self.links)
         self.applied_links = set()
@@ -144,6 +154,7 @@ class MultiFrontSession:
 
     def execute(self, command):
         """Execute exactly one player/AI command on the focused front."""
+        require(not self.rescue_battles, "Resolve the tactical convoy rescue first")
         require(isinstance(command, dict), "Expected tactical command")
         # Battle.execute is transactional. Linking other fronts must be just as
         # atomic, including their events, aggregate scores and future overrides.
@@ -171,6 +182,7 @@ class MultiFrontSession:
         self.history.append({"kind": "doctrine", "front": front, "doctrine": doctrine})
 
     def switch(self, front):
+        require(not self.rescue_battles, "Resolve the tactical convoy rescue first")
         require(front in self.missions, "Unknown front")
         require(self.active.active is None or (not self.active.active.moved
                 and not self.active.active.acted),
@@ -336,6 +348,8 @@ class MultiFrontSession:
         """Recover an ambushed stranded convoy using one provision."""
         require(self.logistics is not None, "Strategic logistics not configured")
         convoy = self.logistics.convoy(convoy_id)
+        require(convoy_id not in self.rescue_battles,
+                "Cannot bypass an active tactical rescue")
         require(convoy.get("stranded") is True and convoy["actors"],
                 "Only a stranded surviving convoy can be rescued")
         self.logistics.spend_supplies(convoy["team"], 1)
@@ -345,6 +359,91 @@ class MultiFrontSession:
             "turn": self.timeline.turn, "kind": "convoy_rescued",
             "convoy": convoy_id, "arrival": convoy["arrival"]})
         self.history.append({"kind": "rescue_convoy", "convoy": convoy_id})
+
+    def start_rescue(self, convoy_id):
+        """Enter a genuine small tactical Battle for one stranded convoy."""
+        from .engine import Battle
+        require(self.logistics is not None and self.logistics.rescue_mission is not None,
+                "Tactical convoy rescue is not enabled")
+        require(not self.rescue_battles, "Finish the current rescue battle first")
+        require(convoy_id not in self.rescue_outcomes, "Rescue already resolved")
+        convoy = self.logistics.convoy(convoy_id)
+        require(convoy.get("stranded") is True and convoy["actors"],
+                "Only a stranded surviving convoy can enter a rescue mission")
+        require(self.timeline.fronts[convoy["to"]]["status"] == "active",
+                "Cannot rescue a convoy heading to a resolved front")
+        # The rescue mission's fighters are a separate escort squad; travelling
+        # roster actors remain in the convoy manifest until the outcome is known.
+        battle = Battle(self.content, self.logistics.rescue_mission,
+                        seed=self.seed + 10000 + self.logistics.serial,
+                        rules=self.rules)
+        self.rescue_battles[convoy_id] = battle
+        self.timeline.events.append({"turn": self.timeline.turn,
+                                     "kind": "convoy_rescue_started",
+                                     "convoy": convoy_id,
+                                     "mission": battle.mission.id})
+        self.history.append({"kind": "start_rescue", "convoy": convoy_id})
+        return battle
+
+    def _finish_rescue(self, convoy_id):
+        """Apply an actual Battle outcome, not a fabricated strategic victory."""
+        battle = self.rescue_battles[convoy_id]
+        require(battle.result in {"victory", "defeat"},
+                "Rescue battle must have a final result")
+        convoy = self.logistics.convoy(convoy_id)
+        if battle.result == "victory":
+            require(convoy.get("stranded") is True,
+                    "Cannot finish a convoy which is no longer stranded")
+            convoy.pop("stranded")
+            convoy["arrival"] = max(convoy["arrival"], self.timeline.turn + 1)
+            # Recover a small amount of supplies from the raider camp.
+            if self.logistics.supplies is not None:
+                team = convoy["team"]
+                self.logistics.supplies[team] = min(
+                    10000, self.logistics.supplies[team] + 1)
+            event_kind = "convoy_rescue_victory"
+        else:
+            self.logistics.in_transit.remove(convoy)
+            event_kind = "convoy_rescue_defeat"
+        self.rescue_outcomes[convoy_id] = battle.result
+        del self.rescue_battles[convoy_id]
+        self.timeline.events.append({"turn": self.timeline.turn,
+                                     "kind": event_kind, "convoy": convoy_id,
+                                     "units": [u["id"] for u in convoy["actors"]]})
+
+    def execute_rescue(self, convoy_id, command):
+        """Execute one normal Battle command and settle victory/defeat atomically."""
+        require(isinstance(command, dict) and convoy_id in self.rescue_battles,
+                "Unknown active rescue battle or invalid command")
+        snapshot = deepcopy((self.rescue_battles, self.rescue_outcomes,
+                             self.logistics, self.timeline))
+        try:
+            battle = self.rescue_battles[convoy_id]
+            battle.execute(deepcopy(command))
+            if battle.result is not None:
+                self._finish_rescue(convoy_id)
+        except Exception:
+            (self.rescue_battles, self.rescue_outcomes,
+             self.logistics, self.timeline) = snapshot
+            raise
+        self.history.append({"kind": "execute_rescue", "convoy": convoy_id,
+                             "command": deepcopy(command)})
+
+    def abandon_convoy(self, convoy_id):
+        """Explicit no-resource-cost withdrawal: lose the cargo and its actors."""
+        require(self.logistics is not None, "Strategic logistics not configured")
+        convoy = self.logistics.convoy(convoy_id)
+        require(convoy.get("stranded") is True, "Only stranded convoys can be abandoned")
+        if self.rescue_battles:
+            require(convoy_id in self.rescue_battles,
+                    "A different tactical rescue is in progress")
+            del self.rescue_battles[convoy_id]
+        self.logistics.in_transit.remove(convoy)
+        self.rescue_outcomes[convoy_id] = "abandoned"
+        self.timeline.events.append({
+            "turn": self.timeline.turn, "kind": "convoy_abandoned",
+            "convoy": convoy_id, "lost": [u["id"] for u in convoy["actors"]]})
+        self.history.append({"kind": "abandon_convoy", "convoy": convoy_id})
 
     def _resolve_ambushes(self):
         """One deterministic ambush opportunity per convoy; no tactical AI."""
@@ -410,6 +509,8 @@ class MultiFrontSession:
 
     def advance(self):
         """One strategic turn; automatic fights never execute tactical AI."""
+        require(not self.rescue_battles,
+                "Resolve the tactical convoy rescue before advancing the timeline")
         snapshot = deepcopy((self.timeline, self.battles, self.front_snapshots,
                              self.pending_reinforcements, self.logistics))
         try:
@@ -471,6 +572,10 @@ class MultiFrontSession:
         # Preserve version-1 checksum semantics for sessions without links.
         if self.logistics is not None:
             state["logistics"] = self.logistics.state()
+            if self.logistics.rescue_mission is not None:
+                state["rescue_battles"] = {
+                    key: battle.state() for key, battle in sorted(self.rescue_battles.items())}
+                state["rescue_outcomes"] = deepcopy(self.rescue_outcomes)
         if self.links:
             state["links"] = deepcopy(self.links)
             state["applied_links"] = sorted(self.applied_links)
@@ -532,6 +637,12 @@ class MultiFrontSession:
                 session.escort_convoy(operation["convoy"])
             elif kind == "rescue_convoy":
                 session.rescue_convoy(operation["convoy"])
+            elif kind == "start_rescue":
+                session.start_rescue(operation["convoy"])
+            elif kind == "execute_rescue":
+                session.execute_rescue(operation["convoy"], operation["command"])
+            elif kind == "abandon_convoy":
+                session.abandon_convoy(operation["convoy"])
             else:
                 require(False, "Unknown multi-front operation")
         require(session.digest() == recording["digest"], "Multi-front checksum mismatch")
