@@ -95,7 +95,15 @@ def siege_content():
                  unit("throne_reserve_south", "enemy", [11, 6])]},
          ]},
     ]
-    data['missions'].extend([ramparts, courtyard, throne])
+    # Optional concurrent front: a small supply raid, independent of the
+    # sequential castle campaign. Sabotaging its cache can interdict the
+    # castellan's *future* reserve waves in a linked multi-front session.
+    supply = mission("castle_supply", "Cut the royal supply and reinforcements",
+                     [{"id": "supply_cache", "kind": "chest", "pos": [2, 3],
+                       "amount": 25}], [], [10, 3])
+    supply["objective"] = "eliminate"
+    supply["board"]["tiles"] = []
+    data['missions'].extend([ramparts, courtyard, throne, supply])
     return Content.from_dict(data)
 
 if __name__ == "__main__":
