@@ -135,8 +135,8 @@ def siege_content():
                       [], [], [7, 3])
     pursuit["objective"] = "eliminate"
     pursuit["board"] = {"width": 9, "height": 7,
-                        "tiles": [{"pos": [4, 2], "blocked": True},
-                                  {"pos": [4, 4], "blocked": True},
+                        "tiles": [{"pos": [4, 0], "blocked": True},
+                                  {"pos": [4, 6], "blocked": True},
                                   {"pos": [5, 3], "cost": 2}]}
     pursuit["deployment"] = []
     pursuit["units"] = [
