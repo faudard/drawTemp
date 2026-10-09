@@ -105,6 +105,19 @@ Les réserves sont finies ; les déplacements d'escouades entre fronts
 consomment des tours stratégiques. Les sauvegardes multi-fronts v3
 rejouent exactement les transferts, arrivées et pertes.
 
+## Centre de commandement multi-fronts
+
+```sh
+python -m examples.siege_command                # vue d'ensemble du siège
+python -m examples.siege_command --interactive  # ordres et timeline
+python -m examples.siege_command --demo         # embuscade + secours
+python -m unittest discover -s tests_standalone -p test_command_center.py -v
+```
+
+Le tableau de commandement texte présente tous les fronts, convois et ETA.
+Routes dangereuses, escorte limitée, provisions et ordre de sauvetage sont
+facultatifs et vérifiés par replay. L'interface graphique viendra ensuite.
+
 ## Documentation
 
 - [Contrats du moteur et règles détaillées](docs/GAMEPLAY.md)
