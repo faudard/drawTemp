@@ -33,6 +33,10 @@ HELP = """Commands:
   partial FRONT                  Claim a real completed tactical objective
   parley FRONT                   Negotiate passage in exchange for supplies
   withdraw FRONT                 Evacuate and permanently abandon this front
+  route breach|tunnels|direct    Commit one alternative path and pay its costs
+  recapture FRONT                Launch a real battle to retake a lost sector
+  recovery-act FRONT JSON        Play one recovery Battle command
+  giveup-recovery FRONT          Abandon a counterattack, keep its costs
   tactical JSON                  Execute one normal Battle command
   save PATH                      Atomic JSON checkpoint with verified replay
   load PATH                      Verify and resume a multi-front recording
@@ -98,6 +102,17 @@ def dashboard(session, *, event_count=8):
                      + str(campaign["unlocked"]))
         for front, info in sorted(campaign["required"].items()):
             lines.append(f"  {front}: {info['status']} | accepted={info['accepted']}")
+        if session.route_policy is not None:
+            lines.append("ROUTE " + session.route_selected
+                         + " | committed=" + str(session.route_locked)
+                         + " | choices=" + ", ".join(sorted(session.route_policy.routes)))
+            if session.recovery_battles:
+                for front, battle in sorted(session.recovery_battles.items()):
+                    lines.append(f"COUNTERATTACK {front} | active={battle.active_id}")
+            if session.recovery_outcomes:
+                lines.append("COUNTERATTACK RESULTS " + ", ".join(
+                    f"{front}={status}"
+                    for front, status in sorted(session.recovery_outcomes.items())))
     if session.blocked_reinforcements:
         lines.append("INTERDICTED: " + ", ".join(sorted(session.blocked_reinforcements)))
     if event_count:
@@ -140,13 +155,15 @@ def handle(session, line):
         command = json.loads(line.partition(" ")[2])
         session.execute(command)
         return session, "Tactical command accepted.", False
-    if line.startswith(("rescue-act ", "pursuit-act ")):
+    if line.startswith(("rescue-act ", "pursuit-act ", "recovery-act ")):
         parts = line.split(" ", 2)
         require(len(parts) == 3, "Expected side-battle CONVOY_ID JSON")
         if parts[0] == "rescue-act":
             session.execute_rescue(parts[1], json.loads(parts[2]))
-        else:
+        elif parts[0] == "pursuit-act":
             session.execute_pursuit(parts[1], json.loads(parts[2]))
+        else:
+            session.execute_recovery(parts[1], json.loads(parts[2]))
         return session, dashboard(session), False
     # Filesystem paths are not shell arguments. In particular shlex's POSIX
     # mode would strip Windows backslashes (e.g. C:\\Users\\...).
@@ -185,6 +202,14 @@ def handle(session, line):
         return session, dashboard(session), False
     if action == "doctrine" and len(fields) == 2:
         session.set_doctrine(*fields)
+        return session, dashboard(session), False
+    if action in {"route", "recapture", "giveup-recovery"} and len(fields) == 1:
+        if action == "route":
+            session.select_route(fields[0])
+        elif action == "recapture":
+            session.start_recovery(fields[0])
+        else:
+            session.abandon_recovery(fields[0])
         return session, dashboard(session), False
     if action in {"partial", "parley", "withdraw"} and len(fields) == 1:
         if action == "partial":
