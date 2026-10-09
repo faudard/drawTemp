@@ -93,9 +93,11 @@ class StoryGraphEditor:
         ttk.Separator(details,orient='horizontal').pack(fill='x',padx=8,pady=9)
         ttk.Label(details,text='Créer une nouvelle scène sur ce choix').pack(
             anchor='w',padx=8)
-        self.new_id,self.new_id_box=self.owner._field(details,0,'ID','new_branch')
-        # _field uses grid, so place its own gridded form inside a frame.
-        # Existing fields are relocated in _build_form below.
+        form=ttk.Frame(details)
+        form.pack(fill='x',padx=6,pady=3)
+        self.new_id,_=self.owner._field(form,0,'ID','new_branch',width=17)
+        self.new_title,_=self.owner._field(form,1,'Titre','Nouvelle scène',width=17)
+        self._button(details,'Créer et relier en une fois',self.create_branch)
         self.status=self.tk.StringVar(value='Choisir une scène ou une flèche pour agir.')
         ttk.Label(page,textvariable=self.status,wraplength=1000).pack(
             fill='x',padx=10,pady=6)
@@ -328,6 +330,16 @@ class StoryGraphEditor:
         scene,choice=self._selection()
         self._apply(lambda project,content:edit.link_choice(
             project,content,scene,choice,destination))
+
+    def create_branch(self):
+        source,choice=self._selection()
+        destination=self.new_id.get()
+        title=self.new_title.get()
+        self._apply(lambda project,content:edit.create_linked_scene(
+            project,content,source,choice,destination,title,
+            'Nouvelle étape à écrire.',speaker=''))
+        self.new_id.set('new_branch')
+        self.new_title.set('Nouvelle scène')
 
     def expand_all(self):
         self.collapsed.clear()
