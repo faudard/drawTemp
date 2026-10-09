@@ -25,7 +25,7 @@ def demo():
     recording = battle.recording()
     verified = MultiFrontSession.replay(recording)
     assert verified.digest() == battle.digest()
-    return dashboard(battle)
+    return dashboard(battle, event_count=20)
 
 
 if __name__ == "__main__":
