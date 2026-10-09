@@ -14,7 +14,7 @@ ACCEPTED = {"victory", "partial", "negotiated", "reclaimed"}
 
 class CampaignRoutesPolicy:
     def __init__(self, spec, content, missions, final_front):
-        require(isinstance(spec, dict) and set(spec) == {"routes", "recovery"},
+        require(isinstance(spec, dict) and set(spec) == {"routes", "recovery", "treaties"},
                 "Invalid alternative-route configuration")
         routes = spec["routes"]
         require(isinstance(routes, dict) and "breach" in routes and
@@ -49,11 +49,31 @@ class CampaignRoutesPolicy:
         recovery = spec["recovery"]
         require(isinstance(recovery, dict), "Invalid recovery rules")
         self.recovery = deepcopy(recovery)
+        treaties = spec["treaties"]
+        require(isinstance(treaties, dict)
+                and set(treaties) <= set(missions) - {final_front},
+                "Invalid treaty conditions")
+        self.treaties = deepcopy(treaties)
+        for front, rule in treaties.items():
+            require(isinstance(rule, dict)
+                    and set(rule) == {"requires_front", "event", "object"}
+                    and rule["requires_front"] in missions
+                    and rule["requires_front"] != front
+                    and rule["event"] in {"interact", "defense_sabotaged"}
+                    and isinstance(rule["object"], str),
+                    "Invalid treaty prerequisite")
+            mission = content.missions[missions[rule["requires_front"]]]
+            obj = next((o for o in mission.objects
+                        if o["id"] == rule["object"]), None)
+            require(obj is not None
+                    and (obj["kind"] == "defense" if rule["event"] == "defense_sabotaged"
+                         else obj["kind"] not in {"defense", "passage"}),
+                    "Treaty prerequisite needs a valid tactical object")
         for front, row in recovery.items():
             require(isinstance(front, str) and front in missions
                     and front != final_front and
                     isinstance(row, dict) and set(row) == {
-                        "mission", "supplies", "strength_loss"},
+                        "mission", "supplies", "strength_loss", "reclaimed_strength"},
                     "Invalid recovery definition")
             require(isinstance(row["mission"], str)
                     and row["mission"] in content.missions,
@@ -65,8 +85,20 @@ class CampaignRoutesPolicy:
                     "Recovery mission must contain both teams and elimination objective")
             require(type(row["supplies"]) is int and 1 <= row["supplies"] <= 10000
                     and type(row["strength_loss"]) is int
-                    and 0 <= row["strength_loss"] <= 10000,
+                    and 0 <= row["strength_loss"] <= 10000
+                    and type(row["reclaimed_strength"]) is int
+                    and 1 <= row["reclaimed_strength"] <= 10000,
                     "Invalid recovery costs")
+
+    def verify_treaty(self, session, front):
+        if front not in self.treaties:
+            return
+        row = self.treaties[front]
+        source = session.battles.get(row["requires_front"])
+        require(source is not None and
+                any(e["kind"] == row["event"] and e.get("object") == row["object"]
+                    for e in source.events),
+                "Treaty needs the authenticated supply/intelligence objective")
 
     def checked(self, session):
         required = self.routes[session.route_selected]["required"]
@@ -136,8 +168,9 @@ class CampaignRoutesMixin:
                 "Counterattack requires strategic supplies")
         require(self.logistics.supplies["player"] >= rule["supplies"],
                 "Insufficient supplies to stage counterattack")
-        require(self.timeline.fronts[front]["strength"] > rule["strength_loss"],
-                "Insufficient fighters for counterattack")
+        require(self.timeline.fronts[self.campaign.final]["strength"]
+                > rule["strength_loss"],
+                "Insufficient final-assault forces for counterattack")
         # Create Battle first so malformed mission content cannot spend money.
         battle = Battle(self.content, rule["mission"],
                         seed=self.seed + 30000 + sorted(self.missions).index(front),
@@ -147,7 +180,7 @@ class CampaignRoutesMixin:
             self.logistics.spend_supplies("player", rule["supplies"])
             if rule["strength_loss"]:
                 front_links._reduce_force(
-                    self, front, rule["strength_loss"],
+                    self, self.campaign.final, rule["strength_loss"],
                     field="strength", losing_team="player", result="defeat")
             self.recovery_battles[front] = battle
             self.timeline.events.append({
@@ -171,7 +204,11 @@ class CampaignRoutesMixin:
             if battle.result in {"victory", "defeat"}:
                 self.recovery_outcomes[front] = battle.result
                 if battle.result == "victory":
-                    self.timeline.fronts[front]["status"] = "reclaimed"
+                    row = self.timeline.fronts[front]
+                    row["status"] = "reclaimed"
+                    row["strength"] = max(
+                        row["strength"],
+                        self.route_policy.recovery[front]["reclaimed_strength"])
                 del self.recovery_battles[front]
                 self.timeline.events.append({
                     "turn": self.timeline.turn,
