@@ -126,7 +126,24 @@ class MultiFrontSession:
             self.battles[front] = Battle(
                 self.content, self.missions[front],
                 seed=self.seed + sorted(self.missions).index(front), rules=self.rules)
+        self._deliver_reinforcements(front)
         return self.active
+
+    def reinforce(self, front, actors, *, lifetime=None):
+        """Queue concrete actors for a front, even if its battle is not yet loaded."""
+        require(front in self.missions and self.timeline.fronts[front]["status"] == "active",
+                "Unknown or inactive reinforcement front")
+        require(isinstance(actors, list) and bool(actors), "Reinforcements need actors")
+        self.pending_reinforcements.setdefault(front, []).append(
+            {"actors": deepcopy(actors), "lifetime": lifetime})
+        self.timeline.events.append({"turn": self.timeline.turn, "kind": "reinforcement_queued",
+                                     "front": front, "count": len(actors)})
+
+    def _deliver_reinforcements(self, front):
+        battle = self.battles[front]
+        waves = self.pending_reinforcements.pop(front, [])
+        for wave in waves:
+            battle.queue_wave(wave["actors"], lifetime=wave["lifetime"])
 
     def advance(self):
         """Advance the strategic clock once, then reconcile finished tactical fronts."""
@@ -135,6 +152,7 @@ class MultiFrontSession:
                 self.timeline.fronts[name]["status"] = battle.result
         before = deepcopy(self.timeline.fronts)
         state = self.timeline.advance()
+        self._deliver_reinforcements(self.timeline.focused)
         for name, battle in self.battles.items():
             if name == self.timeline.focused or battle.result is not None:
                 continue
@@ -181,6 +199,7 @@ class MultiFrontSession:
                 "Invalid front checkpoints")
         self.timeline.restore(state["timeline"])
         self.front_snapshots = deepcopy(state.get("front_snapshots", {}))
+        self.pending_reinforcements = deepcopy(state.get("pending_reinforcements", {}))
         # Battle.state() is a public snapshot, not a deserializer. Do not
         # pretend to restore live combat objects from it.
         require(not state.get("battles"), "Tactical battle restoration requires replay")
@@ -188,4 +207,5 @@ class MultiFrontSession:
     def state(self):
         return {"timeline": self.timeline.state(), "missions": dict(self.missions),
                 "battles": {name: battle.state() for name, battle in self.battles.items()},
-                "front_snapshots": deepcopy(self.front_snapshots)}
+                "front_snapshots": deepcopy(self.front_snapshots),
+                "pending_reinforcements": deepcopy(self.pending_reinforcements)}
