@@ -95,3 +95,43 @@ since saving, re-create a new session instead of replaying incompatible data.
 - [ ] Visual edit of advanced logistics, alternative-route costs, treaties and
   counteroffensive policies (separate enhancement; core engine already supports
   these mechanisms)
+
+## 2.5.4.2 — Play the Studio siege in the normal Player
+
+The Player now reads the optional `GameProject.sieges` collection directly.
+To use it:
+
+1. In the Studio, create at least one front and save both the tactical
+   `content.json` and game `content.game.json` project.
+2. Run `python -m sporebound player --content content.json --project content.game.json`.
+3. Choose the parent campaign/slot and click **Nouvelle partie** or **Continuer**.
+4. In the campaign screen, **Sièges créés dans le Studio** lists the plans
+   for that campaign. A locked siege shows the *mission ids* still required.
+   When every front mission is unlocked, select **Jouer le siège : …**.
+5. The standard tactical view, **Timeline / Fronts**, doctrines, switching
+   and autosave now operate on the Studio blueprint; **Continuer** restores
+   its original id and exact replay-verified multi-front state.
+
+A configured siege never bypasses campaign unlocks or pending dialogue.
+Distinct front ids **must reference distinct missions** at play time, even
+though the 2.5.4 authoring schema still permits a duplicated mission to
+support editing before launch. Every mutation passes through the existing
+PlayerController rollback and version-2 SessionStore with a backup generation.
+No separate siege save format is introduced in Player. The Studio's older
+**Sauver partie** / **Charger siège** independent checkpoint files remain
+separate and are **not** silently imported into Player slots.
+
+Compatibility: older GameSession checkpoints have no `siege_id` field;
+ad-hoc multi-front encounters continue to omit it. An authored siege
+checkpoint includes a siege id and verifies its parent campaign, initial
+front/focus/specs, link rules and finale against the current project on load.
+Editing the project/content after saving requires a new compatible session.
+
+### Acceptance tests
+
+```shell
+python -m unittest tests_standalone.test_configured_siege_player -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_configured_siege_player_gui.py -v
+```
+
+Next: 2.5.4.3 visual logistics/routes and 2.5.4.4 route/diplomacy policies.
