@@ -267,6 +267,12 @@ def save_siege_slot(project_path, blueprint, slot, session, *, narrative=None):
             and session.initial_logistics == blueprint.get("logistics"),
             "Session no longer matches the siege definition")
     path = _save_path(project_path, blueprint["id"], slot)
+    if narrative is None and path.is_file():
+        import json
+        previous = json.loads(path.read_text(encoding="utf-8"))
+        require("narrative" not in previous,
+                "This slot contains narrative decisions; save it in the "
+                "graphical Siege Player to preserve their journal")
     write_json(path, {"version": 1, "siege_id": blueprint["id"],
                       "recording": session.recording(),
                       **({"narrative": narrative} if narrative is not None else {})})
