@@ -71,7 +71,7 @@ class SessionStore:
             data = json.loads(path.read_text(encoding="utf-8"))
             result = self._decode(data, content, project, rules=rules)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError,
-                AttributeError) as exc:
+                AttributeError, RecursionError) as exc:
             raise RuleError(f"Invalid checkpoint {path.name}: {exc}") from exc
         return data, result
 
