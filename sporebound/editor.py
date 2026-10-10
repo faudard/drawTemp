@@ -600,12 +600,12 @@ def launch(path):
             journal.insert('1.0','\n'.join(json.dumps(e,ensure_ascii=False) for e in battle.events[-100:]))
             journal.see('end')
         else:
-            text += ('\\nCarte : sélectionner une zone, Ctrl+C, choisir le point '
+            text += ('\nCarte : sélectionner une zone, Ctrl+C, choisir le point '
                      'd’ancrage, Ctrl+V ou l’outil Collage.'
-                     f'\\nCases sélectionnées : {len(selected_tiles)}'
+                     f'\nCases sélectionnées : {len(selected_tiles)}'
                      f' | Presse-papiers : {len(terrain_clipboard.offsets) if terrain_clipboard else 0}'
-                     '\\nCouches : visibilité d’édition seulement ; règles inchangées.'
-                     '\\nDonnées tactiques avancées : onglet JSON.')
+                     '\nCouches : visibilité d’édition seulement ; règles inchangées.'
+                     '\nDonnées tactiques avancées : onglet JSON.')
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
         if studio is not None:
