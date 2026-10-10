@@ -238,7 +238,10 @@ Existing slots without this optional field still load via the original API.
 Loading an already-started legacy siege suppresses a belated introduction;
 the next save upgrades the slot to include the narrative chronicle. The
 regular Campaign/GameSession and Castle Vertical Slice save formats remain
-unchanged.
+unchanged. The legacy strategic Command Center may read the tactical portion of
+a narrative-enabled siege slot, but cannot overwrite that slot without
+discarding decisions; this overwrite is now rejected. Save narrative games in
+the graphical Siege Player.
 
 ### Presentation
 
