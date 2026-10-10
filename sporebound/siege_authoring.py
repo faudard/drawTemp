@@ -134,9 +134,13 @@ def set_finale(blueprint, final, required):
             "Final sector must exist and differ from the initial focus")
     require(isinstance(required, dict) and bool(required),
             "A finale needs at least one required tactical front")
-    result["campaign"] = {"final_front": final,
-                          "required_fronts": deepcopy(required),
-                          "partial": {}, "negotiation": {}, "retreat": {}}
+    current = result["campaign"]
+    if current is not None and current["final_front"] == final:
+        current["required_fronts"] = deepcopy(required)
+    else:
+        result["campaign"] = {"final_front": final,
+                              "required_fronts": deepcopy(required),
+                              "partial": {}, "negotiation": {}, "retreat": {}}
     return result
 
 
@@ -181,20 +185,26 @@ def remove_wave(data, mission_id, event_id):
     require(mission is not None, "Unknown mission")
     trigger = next((t for t in mission.get("triggers", [])
                     if t["id"] == event_id), None)
-    require(trigger is not None and any(a["kind"] == "queue_wave"
-            for a in trigger["actions"]), "Not a queued reinforcement wave")
+    require(trigger is not None and len(trigger["actions"]) == 1
+            and trigger["actions"][0]["kind"] == "queue_wave",
+            "Only a dedicated reinforcement trigger can be removed here")
     mission["triggers"] = [t for t in mission["triggers"] if t["id"] != event_id]
     return Content.from_dict(result).to_dict()
 
 
 def waves_for(content, missions):
-    return [(front, trigger["id"], trigger["value"], actor["id"],
-             actor.get("archetype", ""))
-            for front, mid in missions.items()
-            for trigger in content.missions[mid].triggers
-            if trigger.get("condition") == "tick"
-            for act in trigger["actions"] if act["kind"] == "queue_wave"
-            for actor in act["actors"]]
+    result = []
+    for front, mid in missions.items():
+        for trigger in content.missions[mid].triggers:
+            if trigger.get("condition") != "tick":
+                continue
+            for act in trigger["actions"]:
+                if act["kind"] == "queue_wave":
+                    actors = act["actors"]
+                    result.append((front, trigger["id"], trigger["value"],
+                                   ", ".join(actor["id"] for actor in actors),
+                                   ", ".join(actor.get("archetype", "") for actor in actors)))
+    return result
 
 
 def timeline_preview(blueprint, *, turns=8):
