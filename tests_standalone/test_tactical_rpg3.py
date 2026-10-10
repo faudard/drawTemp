@@ -11,7 +11,7 @@ from sporebound.campaign import Campaign
 from sporebound.coordinated_ai import squad_focus_preview
 from sporebound.engine import Battle
 from sporebound.formations3 import formation_preview, formation_control_map
-from sporebound.model import Board, Content, Effect, Mission, RuleError, Skill, Unit
+from sporebound.model import Board, Content, Effect, Mission, RuleError, Skill, Tile, Unit
 from sporebound.rules import default_rules
 from sporebound.synergies3 import synergy_readiness
 from sporebound.tactical_rpg3 import tactical_rpg_rules
@@ -144,6 +144,27 @@ class FormationTests(unittest.TestCase):
         battle.unit("b").tags = []
         unlinked = battle.damage(caster, battle.unit("e"), skill, skill.effects[0])
         self.assertGreater(linked, unlinked)
+
+    def test_terrain_affects_formation_damage_and_preview(self):
+        battle = self.setup_battle(["formation:shield_wall"])
+        enemy, shield = battle.unit("e"), battle.unit("a")
+        skill = battle._basic(enemy)
+        bare = battle.damage(enemy, shield, skill, skill.effects[0])
+        battle.board.tiles[(1, 1)] = Tile(cover=30)
+        fortified = battle.damage(enemy, shield, skill, skill.effects[0])
+        view = formation_preview(battle, "a")
+        self.assertTrue(view["fortified"])
+        self.assertEqual(view["terrain_cover"], 30)
+        self.assertLess(fortified, bare)
+
+        battle = self.setup_battle(["formation:phalanx"])
+        spear, enemy = battle.unit("a"), battle.unit("e")
+        skill = battle._basic(spear)
+        level = battle.damage(spear, enemy, skill, skill.effects[0])
+        battle.board.tiles[(1, 1)] = Tile(height=3)
+        hill = battle.damage(spear, enemy, skill, skill.effects[0])
+        self.assertGreater(hill, level)
+        self.assertEqual(formation_preview(battle, "a")["elevation"], 3)
 
     def test_phalanx_hold_contested_corridor_and_replay(self):
         a = Unit("a", "Spear A", "player", (2, 1), weapon="spear",
