@@ -74,15 +74,24 @@ def tactical_intents(battle, *, max_cells=1024):
                 for pos in cells:
                     danger[("cast", pos)] = {"kind": "cast", "cell": list(pos),
                                             "unit": actor.id, "certainty": "scheduled"}
-        # Only telegraph a possible lane, not a promised future boss command.
-        if (actor.team == "enemy" and actor.behavior == "phase_boss"
-                and "charge" in battle.rules.commands):
+        # All melee enemies may threaten a charge, not just phase bosses.
+        # This is a CONDITIONAL corridor if they chose charge immediately,
+        # not a prediction of the next AI activation or a committed attack.
+        if actor.team == "enemy" and "charge" in battle.rules.commands:
             for option in battle.charge_options(actor)[:4]:
+                landing = tuple(option["landing"])
+                step = ((1 if landing[0] > actor.pos[0] else -1), 0) if (
+                    landing[0] != actor.pos[0]) else (
+                    0, 1 if landing[1] > actor.pos[1] else -1)
+                corridor = [(actor.pos[0] + step[0] * index,
+                             actor.pos[1] + step[1] * index)
+                            for index in range(1, option["distance"] + 1)]
                 result["charges"].append({
                     "unit": actor.id, "target": option["target"],
-                    "landing": list(option["landing"]),
+                    "landing": list(landing),
+                    "path": [list(pos) for pos in corridor],
                     "certainty": "possible"})
-                for cell in (option["landing"], option["cell"]):
+                for cell in [*corridor, option["cell"]]:
                     danger[("charge", tuple(cell))] = {
                         "kind": "charge", "cell": list(cell),
                         "unit": actor.id, "certainty": "possible"}
