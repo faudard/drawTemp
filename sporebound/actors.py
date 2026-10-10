@@ -29,6 +29,7 @@ class ActorFactory:
         require(not key or key in self.archetypes, f'Unknown archetype: {key}')
         values = {**deepcopy(self.archetypes.get(key, {})), **deepcopy(spawn)}
         values['pos'] = tuple(values['pos'])
+        values['patrol_route'] = tuple(tuple(cell) for cell in values.get('patrol_route', ()))
         values['footprint'] = tuple(values.get('footprint', (1, 1)))
         values['facing'] = tuple(values.get('facing', (0, 1)))
         values.setdefault('hp', values.get('max_hp', 40))
@@ -45,6 +46,16 @@ def validate_actor(u, skills, archetypes, rules):
     require(len(u.footprint) == 2 and all(type(n) is int and 1 <= n <= 4 for n in u.footprint),
             f"{u.id}: footprint")
     require(u.behavior in rules.behaviors, f"{u.id}: unknown behavior")
+    require(isinstance(u.patrol_route, (tuple, list))
+            and all(isinstance(cell, (tuple, list)) and len(cell) == 2
+                    and all(type(value) is int for value in cell)
+                    for cell in u.patrol_route), f"{u.id}: invalid patrol route")
+    require(not u.patrol_route or len(u.patrol_route) >= 2,
+            f"{u.id}: patrol route needs at least two waypoints")
+    require(len({tuple(cell) for cell in u.patrol_route}) == len(u.patrol_route),
+            f"{u.id}: duplicate patrol waypoint")
+    require(u.behavior != 'patrol' or len(u.patrol_route) >= 2,
+            f"{u.id}: patrol behavior needs a route")
     require(not u.archetype or u.archetype in archetypes, f"{u.id}: unknown archetype")
     require(isinstance(u.tags, list) and all(isinstance(tag, str) and tag for tag in u.tags)
             and len(set(u.tags)) == len(u.tags), f"{u.id}: invalid tags")
