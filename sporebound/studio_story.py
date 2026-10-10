@@ -171,6 +171,8 @@ class StoryEditor:
         self._set_dialogue(scene['text'])
         self.choice_id=''
         self._choices()
+        if hasattr(self, 'condition_editor'):
+            self.condition_editor.refresh(scene=self.scene_id)
 
     def _choices(self):
         self._refreshing=True
@@ -212,6 +214,8 @@ class StoryEditor:
             else:
                 self.condition.set('avancée (conservée)')
         self._display_effects()
+        if hasattr(self, 'condition_editor'):
+            self.condition_editor.refresh(scene=self.scene_id, choice=self.choice_id)
 
     def _display_effects(self):
         try:
