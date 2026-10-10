@@ -323,7 +323,10 @@ class CastlePlayerApplication:
         body.pack(fill="both", expand=True, pady=6)
         self.canvas = self.tk.Canvas(body, background="#172638", highlightthickness=0)
         self.canvas.pack(side="left", fill="both", expand=True)
-        self.renderer = CanvasRenderer(self.canvas)
+        self.renderer = CanvasRenderer(
+            self.canvas,
+            registry=getattr(self, "presentation_registry", None),
+            asset_root=getattr(self, "presentation_asset_root", None))
         self.canvas.bind("<Button-1>", self._select_cell)
         self.canvas.bind("<MouseWheel>", self._zoom)
         self.canvas.bind("<Button-4>", lambda _: self._zoom_step(1))
