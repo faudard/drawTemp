@@ -83,6 +83,20 @@ class StudioPanels:
         self.unit_list.grid(row=4,column=0,columnspan=2,sticky='nsew',padx=6,pady=4)
         ttk.Button(units,text='Supprimer le personnage sélectionné',command=lambda: self._run(
             lambda: self._change(lambda d,m: authoring.remove_unit(d,m,self._selected(self.unit_list))))).grid(row=5,column=0,columnspan=2,pady=4)
+        self.tactical_role, _ = self._field(
+            units, 6, 'Rôle tactique', 'none',
+            choices=['none', 'medic', 'protector'])
+        self.initial_formation, _ = self._field(
+            units, 7, 'Formation initiale', 'none',
+            choices=['none', 'shield_wall', 'phalanx', 'escort'])
+        self.escort_id, _ = self._field(units, 8, 'Protéger le personnage ID')
+        ttk.Button(units, text='Appliquer rôle et formation', command=lambda: self._run(
+            lambda: self._change(lambda d, m: authoring.set_unit_combat_role(
+                d, m, self._selected(self.unit_list),
+                role=self.tactical_role.get(),
+                formation=self.initial_formation.get(),
+                escort_target=self.escort_id.get().strip())))).grid(
+                    row=9, column=0, columnspan=2, pady=5)
         units.columnconfigure(1,weight=1); units.rowconfigure(4,weight=1)
 
         objects = ttk.Frame(groups)
