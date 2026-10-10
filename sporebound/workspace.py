@@ -14,6 +14,7 @@ from .model import Content, RuleError, require
 GROUPS = (
     ('game', 'Jeu et menus'),
     ('campaign', 'Campagnes'),
+    ('siege', 'Sièges multi-fronts'),
     ('mission', 'Cartes et missions'),
     ('scene', 'Scénarios et dialogues'),
     ('actor', 'Personnages et monstres'),
@@ -57,6 +58,13 @@ class ProjectWorkspaceIndex:
             result['campaign'].append(WorkspaceNode(
                 'campaign', campaign['id'], campaign['name'],
                 f'Départ : {campaign["start_mission"]}\n{campaign["description"]}'))
+        for siege in self.project.sieges:
+            result['siege'].append(WorkspaceNode(
+                'siege', siege['id'], siege['id'],
+                f"Campagne : {siege['campaign_id']} | "
+                f"Fronts : {', '.join(siege['fronts'])}\n"
+                f"Départ : {siege['focused']} | "
+                f"Finale : {(siege['campaign'] or {}).get('final_front', 'aucune')}"))
         for mission in self.content.missions.values():
             result['mission'].append(WorkspaceNode(
                 'mission', mission.id, mission.name,
