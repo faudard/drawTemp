@@ -184,6 +184,14 @@ class AuthoredSiegeController:
     def abandon_recovery(self, front):
         return self._apply(self.session.fronts.abandon_recovery, front)
 
+    def transfer(self, destination, unit, cell):
+        return self._apply(self.session.fronts.transfer_units,
+                           destination, {unit: cell})
+
+    def dispatch(self, destination, actors):
+        return self._apply(self.session.fronts.send_reserves,
+                           destination, actors)
+
     def escort(self, convoy):
         return self._apply(self.session.fronts.escort_convoy, convoy)
 
