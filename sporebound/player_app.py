@@ -60,6 +60,7 @@ class PlayerApplication:
         self._typewriter_job = None
         self._stage_job = None
         self._explore_feedback = ""
+        self._explore_scene_id = None
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.bind("<Escape>", lambda event: self.root.attributes("-fullscreen", False))
         self.title_screen()
@@ -248,6 +249,9 @@ class PlayerApplication:
         self._change(apply)
 
     def _exploration_screen(self, scene, stage):
+        if self._explore_scene_id != scene["id"]:
+            self._explore_feedback = ""
+            self._explore_scene_id = scene["id"]
         self._heading(stage["title"], "Explorer les champs avant l'appel des voix.")
         area = self.ttk.Frame(self.view)
         area.pack(fill="both", expand=True)
