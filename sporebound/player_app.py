@@ -29,6 +29,7 @@ class PlayerApplication:
         profile = (Path(profile_path) if profile_path is not None
                    else Path.home() / ".sporebound" / project_path.name)
         self.player = PlayerController(content, project, profile)
+        self.project_path = project_path
         self.project = project
         self.registry = project.asset_registry()
         self.asset_root = project_path.parent
@@ -130,6 +131,10 @@ class PlayerApplication:
         # core content. Show its entry only when that source is available.
         castle_example = Path(__file__).resolve().parent.parent / "examples" / "castle_vertical_slice.py"
         row = 4
+        if self.project.sieges:
+            self._button(panel, "Sièges créés dans le Studio", self._authored_siege_menu).grid(
+                row=row, column=0, columnspan=2, sticky="ew", pady=4)
+            row += 1
         if castle_example.is_file():
             self._button(panel, "Campagne Château (2.8)", self._open_castle).grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=4)
@@ -138,6 +143,34 @@ class PlayerApplication:
             row=row, column=0, columnspan=2, sticky="ew", pady=4)
         self._button(panel, "Quitter", self.close).grid(
             row=row + 1, column=0, columnspan=2, sticky="ew", pady=4)
+
+    def _authored_siege_menu(self):
+        self._clear()
+        self._heading("Sièges du Studio", "Jouer vos fronts, missions et événements personnalisés")
+        selected = self.tk.StringVar(value=self.project.sieges[0]["id"])
+        slot = self.tk.StringVar(value="1")
+        frame = self.ttk.LabelFrame(self.view, text="Choisir le scénario et la sauvegarde",
+                                    padding=18)
+        frame.pack(fill="x", padx=100, pady=30)
+        self.ttk.Combobox(frame, textvariable=selected, state="readonly",
+                          values=[bp["id"] for bp in self.project.sieges],
+                          width=28).pack(pady=8)
+        self.ttk.Combobox(frame, textvariable=slot, state="readonly",
+                          values=[str(i) for i in range(1, 10)], width=10).pack(pady=8)
+
+        def launch_selected():
+            from .studio_siege_player_app import launch
+            from .tactical_rpg3 import authored_rules_for_document
+            blueprint = next(bp for bp in self.project.sieges if bp["id"] == selected.get())
+            content = self.player.content
+            rules = authored_rules_for_document(content.to_dict())
+            launch(content, blueprint, self.project, self.project_path,
+                   int(slot.get()), rules=rules, master=self.root)
+
+        self._button(frame, "Ouvrir ce siège", launch_selected).pack(
+            fill="x", pady=8)
+        self._button(frame, "Retour", self.title_screen).pack(
+            fill="x", pady=5)
 
     def _open_castle(self):
         from examples.castle_vertical_slice import castle_content, castle_blueprint

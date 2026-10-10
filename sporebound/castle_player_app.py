@@ -13,12 +13,13 @@ from .tk_renderer import CanvasRenderer
 
 
 class CastlePlayerApplication:
-    def __init__(self, content, blueprint, save_path, *, rules, master=None):
+    def __init__(self, content, blueprint, save_path, *, rules, master=None, controller=None):
         import tkinter as tk
         from tkinter import ttk, messagebox
 
         self.tk, self.ttk, self.messagebox = tk, ttk, messagebox
-        self.controller = CastlePlayerController(content, blueprint, save_path, rules=rules)
+        self.controller = (controller if controller is not None else
+                           CastlePlayerController(content, blueprint, save_path, rules=rules))
         self.root = tk.Toplevel(master) if master is not None else tk.Tk()
         self.root.title("Sporebound — Siège du château 2.8")
         self.root.geometry("1170x820")
@@ -264,11 +265,15 @@ class CastlePlayerApplication:
                 parent=self.root):
             self._change(self.controller.concede)
 
+    def _current_battle(self):
+        """Player overrides this for an active recovery/convoy side mission."""
+        return self.controller.session.fronts.active
+
     def battle_screen(self):
         self.page = "battle"
         self._clear()
         game = self.controller.session
-        battle = game.fronts.active
+        battle = self._current_battle()
         self._heading(battle.mission.name,
                       f"Secteur : {game.fronts.timeline.focused}  |  Tick : {battle.tick}"
                       + (f"  |  Résultat : {battle.result}" if battle.result
@@ -364,7 +369,7 @@ class CastlePlayerApplication:
     def _redraw(self):
         if self.canvas is None:
             return
-        battle = self.controller.session.fronts.active
+        battle = self._current_battle()
         skill = self.action_var.get()
         if skill != "attack" and (battle.active is None or
                                   skill not in battle.active.skills):
@@ -383,14 +388,14 @@ class CastlePlayerApplication:
         self.info.configure(state="disabled")
 
     def _select_cell(self, event):
-        battle = self.controller.session.fronts.active
+        battle = self._current_battle()
         point = self.camera.screen_to_cell(event.x, event.y)
         if battle.board.contains(point):
             self.selection = point
             self._redraw()
 
     def _select_delta(self, dx, dy):
-        battle = self.controller.session.fronts.active
+        battle = self._current_battle()
         point = (self.selection[0] + dx, self.selection[1] + dy)
         if battle.board.contains(point):
             self.selection = point
