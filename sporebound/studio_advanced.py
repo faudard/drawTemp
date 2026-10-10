@@ -19,6 +19,8 @@ class AdvancedStudio:
         self._graph_tab(notebook)
         self._catalog_tab(notebook)
         self._events_tab(notebook)
+        from .studio_event_graph import EventGraphStudio
+        self.event_graph=EventGraphStudio(self,notebook)
 
     def _field(self, parent, row, title, default='', choices=None):
         return self.owner._field(parent, row, title, default, choices=choices)
@@ -87,6 +89,7 @@ class AdvancedStudio:
         else:
             self.from_var.set(chosen)
         self.draw_graph()
+        self.event_graph.refresh()
 
     def draw_graph(self):
         if self.owner.project is None:
@@ -178,6 +181,7 @@ class AdvancedStudio:
         ttk=self.ttk
         outer=ttk.Frame(notebook)
         notebook.add(outer,text='Événements par blocs')
+        self.events_tab=outer
         ttk.Label(outer,text='Composer des conditions et plusieurs actions séquentielles, puis valider en une opération.').pack(anchor='w',padx=8,pady=6)
         form=ttk.Frame(outer);form.pack(fill='x',padx=8)
         self.event_id,self.event_box=self._field(form,0,'ID événement','new_script',choices=[])

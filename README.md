@@ -264,6 +264,25 @@ Le mode `--paths` ajoute trois routes (porte, souterrains, assaut direct),
 des trêves conditionnelles et une mission de reconquête d'un secteur perdu.
 Les opérations et les batailles sont vérifiées par replay v5.
 
+## Graphe d'événements tactiques — 2.5.2
+
+Le Studio propose le **Graphe des événements** : conditions de mission,
+actions ordonnées, apparition d'acteurs, vagues de renforts, réorganisation
+de priorités et édition depuis les nœuds. Les actions utilisent les règles
+existantes du moteur, avec validation et Undo/Redo.
+
+Voir [le guide du graphe des événements](docs/TACTICAL_EVENT_GRAPH.md).
+
+## Conditions narratives visuelles — 2.5.2
+
+L’onglet **Conditions & variables** permet de composer les règles
+**ET / OU / NON**, les comparaisons de flags, l’or et les missions
+terminées, puis de prévisualiser la visibilité des choix sans modifier
+une sauvegarde. L’arbre narratif propose désormais un accès direct
+aux conditions de chaque branche.
+
+Voir [le guide des conditions narratives](docs/NARRATIVE_CONDITIONS_3.md).
+
 ## Documentation
 
 - [Contrats du moteur et règles détaillées](docs/GAMEPLAY.md)
