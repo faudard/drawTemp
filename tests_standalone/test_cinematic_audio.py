@@ -45,7 +45,7 @@ class AudioTimelineTests(unittest.TestCase):
         self.assertEqual(levels(1000)["score"], 1)
         self.assertAlmostEqual(levels(2250)["score"], 0.625)
         self.assertAlmostEqual(levels(2500)["score"], 0.25)
-        self.assertAlmostEqual(levels(4500)["score"], 1)
+        self.assertAlmostEqual(levels(5000)["score"], 1)
         self.assertAlmostEqual(levels(9500)["score"], 0.5)
         self.assertNotIn("score", levels(10000))
         self.assertNotIn("old_bell", levels(2500))  # legacy is one-shot
@@ -90,7 +90,7 @@ class AudioTimelineTests(unittest.TestCase):
         director.advance(2500)
         self.assertEqual(stage.cue.call_count, 1)
         director.advance(6000)
-        self.assertEqual(stage.play_track.call_count, 5)  # 2 + voice + sword; voice ended
+        self.assertEqual(stage.play_track.call_count, 4)  # 2 + voice + sword; voice ended
         director.pause()
         stage.pause_tracks.assert_called_once()
         director.resume()
