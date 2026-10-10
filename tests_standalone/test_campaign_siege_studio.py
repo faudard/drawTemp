@@ -106,8 +106,9 @@ class CampaignSiegeStudioTests(unittest.TestCase):
         from sporebound.actor_catalog import create_archetype
         data = self.content.to_dict()
         # Same validated archetype creation API as the Character Studio.
-        data = create_archetype(data, "guard_wave", "monster",
-                                hp=20, attack=4, speed=8, move=3)
+        data = create_archetype(data, "guard_wave", kind="monster",
+                                max_hp=20, attack=4, speed=8, move=3)
+        before = deepcopy(data)
         updated = edit.add_wave(data, "castle_ram", "reinforcements_t3", 3,
                                 "enemy_backup", "guard_wave", [10, 5])
         content = Content.from_dict(updated)
@@ -122,7 +123,7 @@ class CampaignSiegeStudioTests(unittest.TestCase):
                           "bad", "missing_arch", [1, 1])
         restored = edit.remove_wave(updated, "castle_ram", "reinforcements_t3")
         self.assertFalse(edit.waves_for(Content.from_dict(restored), bp["fronts"]))
-        self.assertEqual(data, self.content.to_dict() | {"archetypes": data["archetypes"]})
+        self.assertEqual(data, before)
 
     def test_save_slot_is_replayable_and_rejects_wrong_siege(self):
         bp = self.blueprint()
