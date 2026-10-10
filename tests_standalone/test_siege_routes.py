@@ -34,7 +34,8 @@ def play_small_battle(session, *, front, recovery=False):
         battle = session.start_recovery(front)
     else:
         session.switch(front)
-        session.execute({"kind": "start_battle"})
+        if session.active.deploying:
+            session.execute({"kind": "start_battle"})
         battle = session.active
     for _ in range(100):
         if recovery:
