@@ -70,6 +70,7 @@ def set_formation(battle, actor, command):
     if mode != "none":
         actor.tags.append(PREFIX + mode + (":" + target if mode == "escort" else ""))
     actor.acted = True
+    actor.cast = None
     battle.emit("formation", unit=actor.id, mode=mode,
                 **({"target": target} if target is not None else {}))
 
