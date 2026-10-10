@@ -5,6 +5,8 @@ and all user intents are delegated to authored_siege_player controller.
 """
 from pathlib import Path
 
+from .audio_stage import AudioStage
+from .tk_renderer import CanvasRenderer
 from .authored_siege_player import AuthoredSiegeController
 from .castle_player_app import CastlePlayerApplication
 from .presentation import strategy_frame
@@ -14,9 +16,16 @@ class StudioSiegePlayerApplication(CastlePlayerApplication):
     def __init__(self, content, blueprint, project, project_path, slot=1,
                  *, rules=None, master=None, controller=None):
         self.authored_project = project
-        self.intro_seen = False
+        self._narrative_job = None
+        self.presentation_registry = project.asset_registry()
+        self.presentation_asset_root = Path(project_path).parent
+        self.narrative_audio = AudioStage(
+            self.presentation_registry, self.presentation_asset_root,
+            effects_volume=project.options["effects_volume"],
+            music_volume=project.options["music_volume"])
         managed = controller or AuthoredSiegeController(
-            content, blueprint, project_path, slot, rules=rules)
+            content, blueprint, project_path, slot, rules=rules,
+            project=project)
         super().__init__(content, blueprint, managed.save_path, rules=rules,
                          master=master, controller=managed)
         self.root.title(project.title + " — " + blueprint["id"])
@@ -45,40 +54,92 @@ class StudioSiegePlayerApplication(CastlePlayerApplication):
                 fill="x", pady=6)
         self._button(box, "Fermer", self.close).pack(fill="x", pady=6)
 
-    def _authored_scene(self, scene_id):
-        return next((scene for scene in self.authored_project.story.get("scenes", [])
-                     if scene["id"] == scene_id), None)
+    def _clear(self):
+        if self._narrative_job is not None:
+            self.root.after_cancel(self._narrative_job)
+            self._narrative_job = None
+        super()._clear()
 
     def show(self):
-        if self.controller.session is not None and not self.intro_seen:
-            campaign_id = self.controller.blueprint["campaign_id"]
-            entry_id = self.authored_project.story.get("entry_scenes", {}).get(campaign_id)
-            if entry_id and not self.controller.session.fronts.history:
-                scene = self._authored_scene(entry_id)
-                if scene is not None:
-                    self._scene_screen(scene, self._acknowledge_intro, "Entrer en bataille")
-                    return
-            self.intro_seen = True
+        if self.controller.session is not None:
+            scene = self.controller.active_scene()
+            if scene is not None:
+                self._scene_screen(scene)
+                return
         super().show()
 
-    def _acknowledge_intro(self):
-        self.intro_seen = True
-        self.show()
-
-    def _scene_screen(self, scene, on_continue, button_text):
+    def _scene_screen(self, scene):
+        """Interactive narrative gate; StoryBook owns all conditions/effects."""
         self._clear()
-        self._heading(scene["title"], scene["speaker"])
-        text = self.tk.Text(self.view, wrap="word", height=16,
-                            fg="#e9f2fc", bg="#182a40", relief="flat")
-        text.pack(fill="both", expand=True, pady=12, padx=12)
-        text.insert("1.0", scene["text"])
-        text.configure(state="disabled")
-        self._button(self.view, button_text, on_continue).pack(pady=12)
-        self.ttk.Label(self.view, text="Transition narrative : aperçu de la scène "
-                       "du Studio. Les choix narratifs et leurs effets sont "
-                       "jouables dans la campagne principale, pas dans ce mode siège.",
-                       style="Castle.TLabel", wraplength=1050).pack(anchor="w")
+        self.narrative_audio.music_for("scene_" + scene["id"],
+                                      "speaker_" + scene["speaker"], "dialogue")
+        self.narrative_audio.cue("scene_open")
+        self._heading(scene["title"], "Scène interactive — " +
+                      (scene["speaker"] or "Narration"))
+        panel = self.ttk.LabelFrame(self.view, text=scene["speaker"] or "Narrateur",
+                                    padding=18)
+        panel.pack(fill="both", expand=True, padx=50, pady=10)
+        picture = CanvasRenderer(
+            panel, registry=self.presentation_registry,
+            asset_root=self.presentation_asset_root).image(
+                "portrait", scene["speaker"])
+        if picture is not None:
+            portrait = self.ttk.Label(panel, image=picture)
+            portrait.image = picture
+            portrait.pack(anchor="w", pady=8)
+        elif scene["speaker"]:
+            self.ttk.Label(panel, text=scene["speaker"][:2].upper(),
+                           font=("TkDefaultFont", 28, "bold")).pack(
+                               anchor="w", pady=8)
+        dialogue = self.tk.Label(panel, text="", anchor="nw", justify="left",
+                                 fg="#e9f2fc", bg="#101a2b", wraplength=900,
+                                 font=("TkDefaultFont", 13))
+        dialogue.pack(fill="x", pady=12)
+        message = scene["text"]
+
+        def reveal(count=0):
+            if not dialogue.winfo_exists():
+                return
+            dialogue.configure(text=message[:count])
+            if count < len(message):
+                self._narrative_job = self.root.after(
+                    12, reveal, min(count + 4, len(message)))
+            else:
+                self._narrative_job = None
+
+        reveal()
+        def skip_text():
+            if self._narrative_job is not None:
+                self.root.after_cancel(self._narrative_job)
+                self._narrative_job = None
+            dialogue.configure(text=message)
+
+        self._button(panel, "Afficher tout le dialogue", skip_text).pack(
+            anchor="w", pady=6)
+        choices = self.controller.available_choices()
+        for choice in choices:
+            self._button(panel, choice["label"], lambda cid=choice["id"]:
+                         self._change(lambda:
+                             self.controller.choose_story_option(cid))).pack(
+                                 fill="x", padx=18, pady=5)
+        if not choices:
+            self.ttk.Label(panel, text="Aucun choix disponible. Corriger les "
+                           "conditions dans le Studio.",
+                           style="Castle.TLabel").pack(anchor="w", pady=9)
+        self.ttk.Label(panel, text="Or : " +
+                       str(self.controller.story.progress.gold) +
+                       "   |   Drapeaux : " +
+                       str(self.controller.story.progress.story_flags),
+                       style="Castle.TLabel").pack(anchor="w", pady=12)
         self._footer()
+
+    def close(self):
+        try:
+            super().close()
+        finally:
+            # The audio stage is presentation-only and optional.
+            if not self.root.winfo_exists():
+                self.narrative_audio.close()
 
     def _current_battle(self):
         return self.controller.current_battle()
@@ -244,6 +305,8 @@ class StudioSiegePlayerApplication(CastlePlayerApplication):
         self._footer()
 
     def epilogue_screen(self):
+        self.narrative_audio.music_for("ending_" +
+                                      str(self.controller.session.ending), "epilogue")
         self._clear()
         game = self.controller.session
         self._heading("Siège terminé — " + game.ending,

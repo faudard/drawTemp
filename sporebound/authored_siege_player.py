@@ -10,6 +10,7 @@ from . import siege_authoring
 from .fronts import MultiFrontSession
 from .model import require
 from .rules import default_rules
+from .siege_story import SiegeStory
 from .ai import choose_command
 
 
@@ -49,7 +50,8 @@ class AuthoredSiegeRun:
 
 
 class AuthoredSiegeController:
-    def __init__(self, content, blueprint, project_path, slot=1, *, rules=None):
+    def __init__(self, content, blueprint, project_path, slot=1, *, rules=None,
+                 project=None):
         siege_authoring.validate_blueprint(blueprint, content,
                                           {blueprint["campaign_id"]})
         self.content, self.blueprint = deepcopy(content), deepcopy(blueprint)
@@ -58,6 +60,13 @@ class AuthoredSiegeController:
         self.save_path = siege_authoring._save_path(
             self.project_path, blueprint["id"], slot)
         self.rules = rules if rules is not None else default_rules()
+        if project is not None:
+            project.validate(content)
+            require(project.campaign(blueprint["campaign_id"]) is not None
+                    and any(row == blueprint for row in project.sieges),
+                    "Narrative siege does not belong to the authored project")
+        self.project = deepcopy(project) if project is not None else None
+        self.story = None
         self.session = None
 
     def _check(self, fronts):
@@ -81,8 +90,12 @@ class AuthoredSiegeController:
         candidate = siege_authoring.make_session(
             self.blueprint, self.content, seed=seed, rules=self.rules)
         self._check(candidate)
+        story = (SiegeStory(self.project, self.content, self.blueprint, candidate)
+                 if self.project is not None else None)
         siege_authoring.save_siege_slot(
-            self.project_path, self.blueprint, self.slot, candidate)
+            self.project_path, self.blueprint, self.slot, candidate,
+            narrative=story.recording() if story else None)
+        self.story = story
         return self._replace(candidate)
 
     def adopt(self, fronts, *, overwrite=False):
@@ -90,32 +103,77 @@ class AuthoredSiegeController:
         require(overwrite or not self.save_path.exists(),
                 "A save exists in this siege slot")
         self._check(fronts)
+        story = (SiegeStory(self.project, self.content, self.blueprint, fronts)
+                 if self.project is not None else None)
         siege_authoring.save_siege_slot(
-            self.project_path, self.blueprint, self.slot, fronts)
+            self.project_path, self.blueprint, self.slot, fronts,
+            narrative=story.recording() if story else None)
+        self.story = story
         return self._replace(fronts)
 
     def continue_game(self):
-        candidate = siege_authoring.load_siege_slot(
+        candidate, narrative = siege_authoring.load_siege_slot(
             self.project_path, self.blueprint, self.slot,
-            self.content, rules=self.rules)
-        return self._replace(candidate)
+            self.content, rules=self.rules, _with_narrative=True)
+        if narrative is not None:
+            require(self.project is not None,
+                    "Narrative save needs its original project manifest")
+            story = SiegeStory.replay(
+                narrative, self.project, self.content, self.blueprint,
+                candidate.recording(), rules=self.rules)
+        else:
+            story = (SiegeStory(self.project, self.content, self.blueprint, candidate)
+                     if self.project is not None else None)
+        self._replace(candidate)
+        self.story = story
+        return self.session
 
     def save(self):
         require(self.session is not None, "No siege is active")
         return siege_authoring.save_siege_slot(
-            self.project_path, self.blueprint, self.slot, self.session.fronts)
+            self.project_path, self.blueprint, self.slot, self.session.fronts,
+            narrative=self.story.recording() if self.story is not None else None)
 
     def _apply(self, method, *args):
         require(self.session is not None, "No siege is active")
+        require(self.story is None or self.story.active_scene() is None,
+                "Finish the pending narrative scene before tactical orders")
         old = self.session.fronts.recording()
+        old_story = self.story.recording() if self.story is not None else None
         try:
             result = method(*args)
+            if self.story is not None:
+                self.story.sync(self.session.fronts)
             self.save()
             return result
         except Exception:
             # Reconstruct from the exact previous journal rather than trusting
             # a partially applied tactical/strategic in-memory mutation.
             self._replace(MultiFrontSession.replay(old, rules=self.rules))
+            if old_story is not None:
+                self.story = SiegeStory.replay(
+                    old_story, self.project, self.content, self.blueprint,
+                    old, rules=self.rules)
+            raise
+
+    def active_scene(self):
+        return self.story.active_scene() if self.story is not None else None
+
+    def available_choices(self):
+        return self.story.choices() if self.story is not None else []
+
+    def choose_story_option(self, choice):
+        require(self.story is not None and self.session is not None,
+                "No active narrative session")
+        old = self.story.recording()
+        try:
+            self.story.choose(choice, len(self.session.fronts.history))
+            self.save()
+            return self.active_scene()
+        except Exception:
+            self.story = SiegeStory.replay(
+                old, self.project, self.content, self.blueprint,
+                self.session.fronts.recording(), rules=self.rules)
             raise
 
     def active_encounter(self):
