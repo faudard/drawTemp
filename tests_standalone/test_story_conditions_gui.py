@@ -63,8 +63,8 @@ class ConditionBuilderGUITests(unittest.TestCase):
                     preset.set('flag ≥')
                     entries = [w for w in children if isinstance(w, ttk.Entry)]
                     # Find the variables and value entries using their Tk textvariable.
-                    variable = next(w for w in entries if w.get() == 'trust')
-                    value = next(w for w in entries if w.get() == '1')
+                    variable = entries[0]  # Condition key, not preview flag
+                    value = entries[1]  # Condition value, regardless of selected preset
                     variable.delete(0, 'end')
                     variable.insert(0, 'trust')
                     value.delete(0, 'end')
