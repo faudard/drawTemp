@@ -320,3 +320,4 @@ python -m examples.castle_vertical_slice --load saves/castle-2.8.json
 ```
 
 Voir [le guide 2.8](docs/VERTICAL_SLICE_2_8.md). Le parcours 2.8 est pour l'instant jouable au terminal ; l'intégration graphique Player / Studio reste à réaliser.
+\n### 2.8.1 — Castle Player GUI\n\nDepuis le dépôt source, lancer `python -m examples.castle_player` (ou **Campagne Château (2.8)** depuis le menu du Player). Carte tactique 2D, préparation de l'équipe, commandement multi-fronts, diplomatie, boss et épilogues, sauvegarde/reprise automatique vérifiée. Voir [le guide 2.8](docs/VERTICAL_SLICE_2_8.md).\n
