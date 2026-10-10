@@ -315,7 +315,7 @@ class Campaign:
                         for key, value in h.spent_jp.items()), "Invalid talent JP")
             require(isinstance(h.learned_talents, dict) and
                     all(isinstance(key, str) and isinstance(value, list)
-                        and len(value) == len(set(value))
                         and all(isinstance(item, str) for item in value)
+                        and len(value) == len(set(value))
                         for key, value in h.learned_talents.items()), "Invalid learned talents")
         return result
