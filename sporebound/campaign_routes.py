@@ -56,9 +56,16 @@ class CampaignRoutesPolicy:
                 and set(treaties) <= set(missions) - {final_front},
                 "Invalid treaty conditions")
         self.treaties = deepcopy(treaties)
+        final_mission = content.missions[missions[final_front]]
+        final_enemy_ids = {unit.id for unit in final_mission.units
+                           if unit.team == "enemy"}
+        final_trigger_ids = {trigger["id"] for trigger in final_mission.triggers}
+        stood_down = set()
         for front, rule in treaties.items():
             require(isinstance(rule, dict)
-                    and set(rule) == {"requires_front", "event", "object"}
+                    and {"requires_front", "event", "object"} <= set(rule)
+                    and set(rule) <= {"requires_front", "event", "object",
+                                      "final_stand_down"}
                     and rule["requires_front"] in missions
                     and rule["requires_front"] != front
                     and rule["event"] in {"interact", "defense_sabotaged"}
@@ -71,6 +78,18 @@ class CampaignRoutesPolicy:
                     and (obj["kind"] == "defense" if rule["event"] == "defense_sabotaged"
                          else obj["kind"] not in {"defense", "passage"}),
                     "Treaty prerequisite needs a valid tactical object")
+            if "final_stand_down" in rule:
+                actors = rule["final_stand_down"]
+                require(isinstance(actors, list)
+                        and all(isinstance(uid, str) and uid in final_enemy_ids
+                                for uid in actors)
+                        and len(set(actors)) == len(actors),
+                        "Treaty stand-down must name distinct final enemies")
+                stood_down.update(actors)
+        require(final_enemy_ids - stood_down,
+                "Treaty terms cannot stand down every final enemy")
+        require("diplomatic_stand_down" not in final_trigger_ids,
+                "Final mission reserves the diplomatic trigger id")
         for front, row in recovery.items():
             require(isinstance(front, str) and front in missions
                     and front != final_front and
@@ -124,6 +143,38 @@ class CampaignRoutesPolicy:
                 any(e["kind"] == row["event"] and e.get("object") == row["object"]
                     for e in source.events),
                 "Treaty needs the authenticated supply/intelligence objective")
+
+    def apply_final_terms(self, session, content, final_front):
+        """Apply negotiated, authenticated stand-down terms to the real final Battle."""
+        if final_front != session.campaign.final:
+            return []
+        stood_down = []
+        for front, rule in self.treaties.items():
+            if (session.timeline.fronts[front]["status"] == "negotiated"
+                    and rule.get("final_stand_down")):
+                stood_down.extend(rule["final_stand_down"])
+        if not stood_down:
+            return []
+        mission = content.missions[session.missions[final_front]]
+        mission.units = [unit for unit in mission.units if unit.id not in stood_down]
+        mission.triggers.append({
+            "id": "diplomatic_stand_down", "condition": "tick", "value": 0,
+            "actions": [{"kind": "message",
+                         "text": "The gate garrison honors the treaty and refuses to fight."}],
+        })
+        return sorted(stood_down)
+
+    def diplomatic_state(self, session):
+        agreements = {}
+        for front, rule in self.treaties.items():
+            if (session.timeline.fronts[front]["status"] == "negotiated"
+                    and rule.get("final_stand_down")):
+                agreements[front] = {
+                    "status": ("honored" if session.campaign.final in session.battles
+                               else "in_force"),
+                    "final_stand_down": list(rule["final_stand_down"]),
+                }
+        return agreements
 
     def checked(self, session):
         required = self.routes[session.route_selected]["required"]
