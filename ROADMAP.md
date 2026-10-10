@@ -50,8 +50,8 @@ jalons suivants décrivent leur intégration produit, pas une réécriture.
 
 | PR | Chantier | Livrable restant |
 | --- | --- | --- |
-| 2.5.5 | Project Workspace — à réaliser en premier | Projet unique, campagnes/missions, cartes, personnages, classes, événements, assets, menus et configuration ; import relatif et diagnostics partagés |
-| 2.5.1 | Map Editor 3.0 | Multi-sélection, copie/collage, pinceaux, calques, relief, déploiement, personnages/objets et aperçu réel |
+| 2.5.5 | Project Workspace — fondation en PR | Index global, navigation vers les panneaux, création/duplication de missions et campagnes, diagnostic assets ; éditeurs par famille à compléter |
+| 2.5.1 | Map Editor 3.0 — fondation en PR | Sélection multiple, collage de terrain/objectifs, couches de visibilité, zones de déploiement, placement validé unités/objets ; restent tilesets, rotation, entités groupées et aperçu sprites |
 | 2.5.2 | Event & Narrative Graph 3.0 | Conditions ET/OU, variables, dialogues et choix ; conserver les scènes partagées et l'arbre à occurrences multiples |
 | 2.5.3 | Character & Rules Studio | Héros, monstres, classes, compétences, équipements, réactions, synergies et profils IA sans JSON manuel |
 | 2.5.4 | Campaign & Siege Studio | Campagnes, fronts, renforts, routes, doctrines, transitions et chronologie stratégique |
@@ -95,9 +95,10 @@ Gate : choix tactiques distincts selon équipe, terrain, adversaire et objectif.
 6. Épilogue : victoire, défaite ou alternative, récompenses et sauvegarde.
 
 Cette campagne doit devenir simultanément une démo jouable, un exemple
-d'authoring et un test d'intégration. Ordre immédiat : **2.5.5 Project Workspace**,
-en raccordant le Studio et le joueur à
-`GameSession` (2.4.5) avant de multiplier les panneaux indépendants.
+d'authoring et un test d'intégration. La fondation **2.5.5 Project Workspace**
+introduit l'index global sans dupliquer les données. **2.4.5** doit ensuite
+raccorder le client joueur à GameSession ; **2.5.1–2.5.4** achèveront les
+outils d'édition. Voir [le guide](docs/WORKSPACE.md).
 
 ## 2.0 alpha — socle implémenté
 

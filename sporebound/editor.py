@@ -6,6 +6,9 @@ from pathlib import Path
 from .ai import play_activation
 from .engine import Battle
 from .model import Content, RuleError
+from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
+                            move_unit, paint_deployment, paste_terrain,
+                            selected_cells as validate_selection)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 
@@ -136,6 +139,10 @@ def launch(path):
     selected_cell = (0, 0)
     stroke_cells = []
     rectangle_anchor = None
+    selected_tiles = set()
+    selection_mission = ''
+    selection_additive = False
+    terrain_clipboard = None
     tile_size = 54
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
@@ -143,6 +150,10 @@ def launch(path):
     unit_var = tk.StringVar()
     action_var = tk.StringVar(value='move')
     facing_var = tk.StringVar(value='south')
+    object_var = tk.StringVar()
+    zone_var = tk.StringVar(value='attackers')
+    layer_vars = {name: tk.BooleanVar(value=True) for name in
+                  ('Terrain', 'Relief', 'Déploiement', 'Objectifs', 'Objets', 'Unités')}
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
 
     def guarded(fn):
@@ -331,15 +342,102 @@ def launch(path):
             battle = load_battle(name)
             refresh()
 
+    def _selection_for_current_map():
+        if battle:
+            raise RuleError('Quitter le combat pour modifier la carte.')
+        if not selected_tiles:
+            raise RuleError('Utiliser l’outil Sélection pour choisir des cases.')
+        return validate_selection(doc.data, mission_var.get(), selected_tiles)
+
+    @guarded
+    def copy_selection():
+        nonlocal terrain_clipboard
+        if source_pending():
+            raise RuleError('Appliquer ou abandonner les changements JSON avant la copie.')
+        terrain_clipboard = copy_terrain(doc.data, mission_var.get(),
+                                         _selection_for_current_map())
+        status_var.set(f'Copié : {len(terrain_clipboard.offsets)} cases de terrain '
+                       '(acteurs et objets non copiés).')
+        refresh()
+
+    def paste_at(anchor):
+        nonlocal selected_tiles
+        if battle:
+            raise RuleError('Le collage est réservé à l’éditeur.')
+        if terrain_clipboard is None:
+            raise RuleError('Copier d’abord une sélection de terrain.')
+        if source_pending():
+            raise RuleError('Appliquer ou abandonner les modifications JSON avant le collage.')
+        design_change(lambda: doc.replace(paste_terrain(doc.data, mission_var.get(),
+                                                         terrain_clipboard, anchor)))
+        selected_tiles = {(anchor[0]+dx, anchor[1]+dy)
+                          for dx, dy in terrain_clipboard.offsets}
+        status_var.set(f'Collage validé en {anchor} ({len(selected_tiles)} cases).')
+        refresh()
+
+    @guarded
+    def paste_selection():
+        paste_at(selected_cell)
+
+    def paint_cells(cells, brush):
+        if brush == 'unit':
+            design_change(lambda: doc.replace(move_unit(
+                doc.data, mission_var.get(), unit_var.get(), cells[-1])))
+        elif brush == 'object':
+            design_change(lambda: doc.replace(move_object(
+                doc.data, mission_var.get(), object_var.get(), cells[-1])))
+        elif brush in ('zone+', 'zone-'):
+            design_change(lambda: doc.replace(paint_deployment(
+                doc.data, mission_var.get(), zone_var.get(), cells,
+                erase=brush == 'zone-')))
+        else:
+            design_change(lambda: doc.paint_many(mission_var.get(), cells, brush))
+
+    def paste_preview(event):
+        canvas.delete('paste_preview')
+        if battle or tool_var.get() != 'Collage' or terrain_clipboard is None:
+            return
+        cell = (int(canvas.canvasx(event.x) // tile_size),
+                int(canvas.canvasy(event.y) // tile_size))
+        mission = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
+        offsets = terrain_clipboard.offsets
+        if len(offsets) > 512:
+            # Mouse-motion rendering stays bounded for huge selections.
+            width, height = terrain_clipboard.width, terrain_clipboard.height
+            valid = 0 <= cell[0] and 0 <= cell[1] and (
+                cell[0] + width <= mission['board']['width']) and (
+                cell[1] + height <= mission['board']['height'])
+            canvas.create_rectangle(cell[0]*tile_size+4, cell[1]*tile_size+4,
+                                    (cell[0]+width)*tile_size-4,
+                                    (cell[1]+height)*tile_size-4,
+                                    outline='#36a16c' if valid else '#e05252',
+                                    width=3, dash=(4, 3), tags='paste_preview')
+            return
+        for dx, dy in offsets:
+            x, y = cell[0] + dx, cell[1] + dy
+            inside = 0 <= x < mission['board']['width'] and 0 <= y < mission['board']['height']
+            canvas.create_rectangle(x*tile_size+4, y*tile_size+4,
+                                    (x+1)*tile_size-4, (y+1)*tile_size-4,
+                                    outline='#36a16c' if inside else '#e05252',
+                                    width=3, dash=(4, 3), tags='paste_preview')
+
     @guarded
     def click(event):
-        nonlocal selected_cell, stroke_cells, rectangle_anchor
+        nonlocal selected_cell, stroke_cells, rectangle_anchor, selection_additive
+        canvas.focus_set()
         stroke_cells = []
-        selected_cell = int(canvas.canvasx(event.x) // tile_size), int(canvas.canvasy(event.y) // tile_size)
+        selected_cell = (int(canvas.canvasx(event.x) // tile_size),
+                         int(canvas.canvasy(event.y) // tile_size))
+        validate_selection(doc.data, mission_var.get(), [selected_cell])
+        tool, brush = tool_var.get(), brush_var.get()
+        canvas.delete('stroke_preview')
         if battle:
             refresh()
-        elif tool_var.get() == 'Rectangle' and brush_var.get() != 'unit':
+        elif tool == 'Collage':
+            paste_at(selected_cell)
+        elif tool in ('Sélection', 'Rectangle') and (tool == 'Sélection' or brush not in ('unit', 'object')):
             rectangle_anchor = selected_cell
+            selection_additive = bool(event.state & 0x0001)
             stroke_cells = [selected_cell]
             x, y = selected_cell[0] * tile_size, selected_cell[1] * tile_size
             canvas.create_rectangle(x+3, y+3, x+tile_size-3, y+tile_size-3,
@@ -347,14 +445,12 @@ def launch(path):
         else:
             rectangle_anchor = None
             stroke_cells = [selected_cell]
-            brush = brush_var.get()
-            if brush == 'unit':
-                design_change(lambda: doc.place_unit(mission_var.get(), unit_var.get(), selected_cell))
-            else:
-                design_change(lambda: doc.tile(mission_var.get(), selected_cell, brush))
+            paint_cells([selected_cell], brush)
 
     def drag(event):
-        if battle or brush_var.get() == 'unit' or not stroke_cells:
+        if battle or not stroke_cells or tool_var.get() == 'Collage':
+            return
+        if tool_var.get() not in ('Sélection', 'Rectangle') and brush_var.get() in ('unit', 'object'):
             return
         cell = (int(canvas.canvasx(event.x) // tile_size),
                 int(canvas.canvasy(event.y) // tile_size))
@@ -362,7 +458,7 @@ def launch(path):
         if not (0 <= cell[0] < mission['board']['width'] and
                 0 <= cell[1] < mission['board']['height']):
             return
-        if tool_var.get() == 'Rectangle' and rectangle_anchor is not None:
+        if tool_var.get() in ('Sélection', 'Rectangle') and rectangle_anchor is not None:
             stroke_cells[:] = [cell]
             canvas.delete('stroke_preview')
             ax, ay = rectangle_anchor
@@ -379,24 +475,33 @@ def launch(path):
 
     @guarded
     def end_stroke(_event):
-        nonlocal selected_cell, stroke_cells, rectangle_anchor
-        if (not battle and brush_var.get() != 'unit' and
-                tool_var.get() == 'Rectangle' and rectangle_anchor is not None and stroke_cells):
+        nonlocal selected_cell, stroke_cells, rectangle_anchor, selected_tiles
+        tool, brush = tool_var.get(), brush_var.get()
+        if not battle and tool == 'Sélection' and rectangle_anchor is not None and stroke_cells:
+            cells = cells_in_rectangle(doc.data, mission_var.get(), rectangle_anchor,
+                                       stroke_cells[-1])
+            selected_tiles = selected_tiles | set(cells) if selection_additive else set(cells)
+            selected_cell = stroke_cells[-1]
+            refresh()
+        elif not battle and tool == 'Rectangle' and rectangle_anchor is not None and stroke_cells and brush not in ('unit', 'object'):
             end = stroke_cells[-1]
             selected_cell = end
-            start = rectangle_anchor
-            design_change(lambda: doc.paint_rectangle(mission_var.get(), start, end,
-                                                       brush_var.get()))
-        elif not battle and brush_var.get() != 'unit' and len(stroke_cells) > 1:
-            cells = stroke_cells[1:]
+            if brush in ('zone+', 'zone-'):
+                paint_cells(cells_in_rectangle(doc.data, mission_var.get(),
+                                               rectangle_anchor, end), brush)
+            else:
+                design_change(lambda: doc.paint_rectangle(mission_var.get(),
+                                                          rectangle_anchor, end, brush))
+        elif not battle and tool == 'Pinceau' and brush not in ('unit', 'object') and len(stroke_cells) > 1:
             selected_cell = stroke_cells[-1]
-            design_change(lambda: doc.paint_many(mission_var.get(), cells, brush_var.get()))
+            paint_cells(stroke_cells[1:], brush)
         stroke_cells = []
         rectangle_anchor = None
         canvas.delete('stroke_preview')
 
+
     def refresh(*args):
-        nonlocal selected_cell, campaign_battle
+        nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
             from .narrative import StoryBook
             story = StoryBook(studio.project.story, Content.from_dict(doc.data),
@@ -411,6 +516,9 @@ def launch(path):
         mission_box['values'] = mids
         if mission_var.get() not in mids:
             mission_var.set(mids[0])
+        if selection_mission != mission_var.get():
+            selected_tiles.clear()
+            selection_mission = mission_var.get()
         content = Content.from_dict(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
         board = battle.board if battle else mission.board
@@ -419,31 +527,38 @@ def launch(path):
                               or u.team == 'player' and u.alive]
         if unit_var.get() not in unit_box['values']:
             unit_var.set(unit_box['values'][0] if unit_box['values'] else '')
+        object_box['values'] = [o['id'] for o in mission.objects]
+        if object_var.get() not in object_box['values']:
+            object_var.set(object_box['values'][0] if object_box['values'] else '')
+        selected_tiles.intersection_update(set(board.cells()))
         canvas.delete('all')
         canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
         reachable = battle.reachable() if battle else {}
-        deployment_cells = {tuple(c) for z in mission.deployment for c in z['cells']}
-        danger_cells = {tuple(c) for o in mission.objects if o['kind'] == 'defense'
-                        and not o.get('disabled') and o.get('charges', 2) > 0 for c in o['cells']}
+        deployment_cells = ({tuple(c) for z in mission.deployment for c in z['cells']}
+                            if layer_vars['Déploiement'].get() else set())
+        danger_cells = ({tuple(c) for o in mission.objects if o['kind'] == 'defense'
+                         and not o.get('disabled') and o.get('charges', 2) > 0
+                         for c in o['cells']} if layer_vars['Objets'].get() else set())
         for c in board.cells():
             t = board.tile(c)
             color = '#dddddd'
-            if t.cost > 1: color = '#b29f78'
-            if t.cover: color = '#b0c9a8'
-            if t.height: color = '#c3c3df'
-            if t.hazard: color = '#eead93'
-            if t.blocked: color = '#555555'
+            if layer_vars['Terrain'].get():
+                if t.cost > 1: color = '#b29f78'
+                if t.cover: color = '#b0c9a8'
+                if t.hazard: color = '#eead93'
+                if t.blocked: color = '#555555'
+            if layer_vars['Relief'].get() and t.height: color = '#c3c3df'
             if c in deployment_cells and (not battle or battle.deploying): color = '#a8dce8'
-            if c in mission.goal: color = '#d7c469'
+            if c in mission.goal and layer_vars['Objectifs'].get(): color = '#d7c469'
             if c in danger_cells: color = '#f0a181'
             x, y = c[0] * tile_size, c[1] * tile_size
             canvas.create_rectangle(x, y, x+tile_size, y+tile_size, fill=color,
                                     outline='#288949' if c in reachable else '#999999', width=3 if c in reachable else 1)
-            if t.height:
+            if t.height and layer_vars['Relief'].get():
                 canvas.create_text(x+8, y+8, text=str(t.height), anchor='nw')
-            if t.hazard:
+            if t.hazard and layer_vars['Terrain'].get():
                 canvas.create_text(x+tile_size-3, y+tile_size-3, text=f'!{t.hazard}', anchor='se')
-        for obj in mission.objects:
+        for obj in mission.objects if layer_vars['Objets'].get() else ():
             x,y = obj['pos']
             if obj['kind'] == 'passage':
                 dx,dy = obj['destination']
@@ -453,15 +568,19 @@ def launch(path):
                                    dash=() if obj.get('enabled', True) else (4, 3))
             canvas.create_text(x*tile_size+tile_size//2,y*tile_size+8,text=obj['kind'][:2], fill='#5b3294')
         relic = battle.relic_pos if battle else mission.relic
-        if relic is not None:
+        if relic is not None and layer_vars['Objectifs'].get():
             canvas.create_text(relic[0]*tile_size+tile_size//2,relic[1]*tile_size+tile_size//2,text='R',fill='#a06c00',font=('TkDefaultFont',16))
-        for u in units:
+        for u in units if layer_vars['Unités'].get() else ():
             x,y = (v*tile_size for v in u.pos)
             color = '#cce2ff' if u.team == 'player' else '#ffc8bc'
             if not u.alive: color = '#aaaaaa'
             canvas.create_oval(x+6,y+10,x+tile_size-6,y+tile_size-4,fill=color,outline='#111111',width=3 if battle and u.id==battle.active_id else 1)
             canvas.create_text(x+tile_size//2,y+tile_size//2,text=u.name[:3])
             canvas.create_text(x+tile_size//2,y+tile_size-10,text=str(u.hp),font=('TkDefaultFont',8))
+        for sx, sy in sorted(selected_tiles):
+            canvas.create_rectangle(sx*tile_size+4, sy*tile_size+4,
+                                    (sx+1)*tile_size-4, (sy+1)*tile_size-4,
+                                    outline='#1f6e9a', width=3, tags='selection')
         x,y = (v*tile_size for v in selected_cell)
         canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
         text = f'{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
@@ -496,7 +615,12 @@ def launch(path):
             journal.insert('1.0','\n'.join(json.dumps(e,ensure_ascii=False) for e in battle.events[-100:]))
             journal.see('end')
         else:
-            text += '\nÉdition des règles, compétences, unités, jobs, équipement et objectifs dans l’onglet Données JSON.\nValider avant de lancer le playtest.\n\nPinceaux : relief, murs, terrain, dangers, objectifs et placement des unités.'
+            text += ('\nCarte : sélectionner une zone, Ctrl+C, choisir le point '
+                     'd’ancrage, Ctrl+V ou l’outil Collage.'
+                     f'\nCases sélectionnées : {len(selected_tiles)}'
+                     f' | Presse-papiers : {len(terrain_clipboard.offsets) if terrain_clipboard else 0}'
+                     '\nCouches : visibilité d’édition seulement ; règles inchangées.'
+                     '\nDonnées tactiques avancées : onglet JSON.')
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
         if studio is not None:
@@ -513,12 +637,17 @@ def launch(path):
     mission_box.pack(side='left')
     mission_box.bind('<<ComboboxSelected>>', lambda e: stop())
     ttk.Label(controls,text='Outil').pack(side='left')
-    ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=10,
-                 values=['Pinceau','Rectangle']).pack(side='left')
+    ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=11,
+                 values=['Pinceau','Rectangle','Sélection','Collage']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
-    ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,values=['wall','erase','height+','height-','mud','hazard','cover','goal','unit']).pack(side='left')
+    ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
+                 values=['wall','erase','height+','height-','mud','hazard',
+                         'cover','goal','unit','object','zone+','zone-']).pack(side='left')
     unit_box = ttk.Combobox(controls,textvariable=unit_var,state='readonly',width=12)
     unit_box.pack(side='left')
+    ttk.Label(controls,text='Objet').pack(side='left')
+    object_box = ttk.Combobox(controls,textvariable=object_var,state='readonly',width=12)
+    object_box.pack(side='left')
     ttk.Label(controls,text='Commande').pack(side='left')
     action_box = ttk.Combobox(controls,textvariable=action_var,state='readonly',width=18)
     action_box.pack(side='left')
@@ -527,19 +656,32 @@ def launch(path):
     ttk.Combobox(controls,textvariable=facing_var,state='readonly',width=6,values=['north','south','east','west']).pack(side='left')
     ttk.Button(controls,text='Fin',command=end_turn).pack(side='left')
     ttk.Button(controls,text='IA : 1 tour',command=ai_turn).pack(side='left')
+    authoring_controls = ttk.Frame(root)
+    authoring_controls.pack(fill='x', padx=5)
+    ttk.Button(authoring_controls, text='Copier cases', command=copy_selection).pack(side='left',padx=2)
+    ttk.Button(authoring_controls, text='Coller terrain', command=paste_selection).pack(side='left',padx=2)
+    ttk.Label(authoring_controls, text='Zone').pack(side='left',padx=(9,2))
+    ttk.Entry(authoring_controls, textvariable=zone_var, width=14).pack(side='left')
+    ttk.Label(authoring_controls, text='Couche visible :').pack(side='left',padx=(8,2))
+    for name, var in layer_vars.items():
+        ttk.Checkbutton(authoring_controls, text=name, variable=var,
+                        command=refresh).pack(side='left',padx=2)
     notebook = ttk.Notebook(root)
     notebook.pack(fill='both',expand=True)
     work = ttk.Frame(notebook)
     notebook.add(work,text='Carte et combat')
     canvas_frame = ttk.Frame(work)
     canvas_frame.pack(side='left',fill='both',expand=True)
-    canvas = tk.Canvas(canvas_frame,background='#eeeeee')
+    canvas = tk.Canvas(canvas_frame,background='#eeeeee',takefocus=1)
     xs,ys = ttk.Scrollbar(canvas_frame,orient='horizontal',command=canvas.xview),ttk.Scrollbar(canvas_frame,orient='vertical',command=canvas.yview)
     canvas.configure(xscrollcommand=xs.set,yscrollcommand=ys.set)
     xs.pack(side='bottom',fill='x'); ys.pack(side='right',fill='y'); canvas.pack(fill='both',expand=True)
     canvas.bind('<Button-1>',click)
     canvas.bind('<B1-Motion>',drag)
     canvas.bind('<ButtonRelease-1>',end_stroke)
+    canvas.bind('<Motion>',paste_preview)
+    canvas.bind('<Control-c>',lambda _e: copy_selection())
+    canvas.bind('<Control-v>',lambda _e: paste_selection())
     inspector = tk.Text(work,width=43,wrap='word')
     inspector.pack(side='right',fill='y')
     source_frame = ttk.Frame(notebook)
@@ -551,6 +693,13 @@ def launch(path):
     notebook.add(journal,text='Journal de combat')
     from types import SimpleNamespace
     from .studio_panels import StudioPanels
+
+    def select_workspace_mission(mid):
+        if mid not in {m['id'] for m in doc.data['missions']}:
+            raise RuleError(f'Unknown mission: {mid}')
+        mission_var.set(mid)
+        stop()
+
     studio = StudioPanels(
         notebook, tk, ttk,
         SimpleNamespace(showerror=messagebox.showerror,
@@ -559,7 +708,8 @@ def launch(path):
         doc=lambda: doc, content_path=lambda: current_path,
         mission=mission_var.get, selection=lambda: selected_cell,
         design_change=design_change, play_campaign=start_campaign,
-        status=status_var, mission_change=stop)
+        status=status_var, mission_change=stop,
+        select_mission=select_workspace_mission)
     ttk.Label(root,textvariable=status_var).pack(fill='x')
     root.protocol('WM_DELETE_WINDOW',lambda: root.destroy() if discard_ok() else None)
     refresh_source()
