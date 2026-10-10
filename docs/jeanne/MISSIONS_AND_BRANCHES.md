@@ -129,7 +129,7 @@ L'expérience doit réutiliser la PR de vertical slice existante **#31** et le C
 | **a4_02a_captivite** | Fortin de captivité | Évasion par tactique, coopération de compagnon ou négociation vérifiée | Blessures, perte temporaire de matériel, témoin gagné |
 | **a4_02b_secours** | Camp avancé | Secourir un prisonnier/chef de milice sans Jeanne captive | Sauvetages et preuves supplémentaires |
 | **a4_03_avel** | Front de trêve | Gagner un duel d'objectifs, évacuer civils ou tenir une position | Alliance limitée / respect / hostilité |
-| **a4_04_voix** | Ermitage, archives de la Confrérie | Réunir témoins et comparer les deux ensembles de visions | La manip ulation du Veilleur est soupçonnée |
+| **a4_04_voix** | Ermitage, archives de la Confrérie | Réunir témoins et comparer les deux ensembles de visions | La manipulation du Veilleur est soupçonnée |
 
 **Important :** le système décide entre captivité et secours avant de déverrouiller la mission ; les deux chemins rejoignent la mission Aveline. Refuser l'alliance ne bloque ni la révélation ni la possibilité de vaincre le Veilleur.
 
