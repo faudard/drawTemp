@@ -28,14 +28,14 @@ class CharacterRulesStudio:
         self.ttk.Label(page, textvariable=self.status, wraplength=1000).pack(
             fill='x', padx=8, pady=4)
 
-    def _field(self, parent, label, *, default='', values=None, row=0, col=0, width=24):
+    def _field(self, parent, label, *, default='', values=None, editable=False, row=0, col=0, width=24):
         ttk = self.ttk
         variable = self.tk.StringVar(value=default)
         ttk.Label(parent, text=label).grid(row=row, column=col*2,
                                            sticky='w', padx=5, pady=3)
         if values is not None:
             control = ttk.Combobox(parent, textvariable=variable, width=width,
-                                   state='readonly', values=values)
+                                   state='normal' if editable else 'readonly', values=values)
         else:
             control = ttk.Entry(parent, textvariable=variable, width=width)
         control.grid(row=row, column=col*2+1, sticky='ew', padx=5, pady=3)
@@ -148,7 +148,7 @@ class CharacterRulesStudio:
         self.tabs.add(page, text='Archétypes')
         header = self.ttk.Frame(page)
         header.pack(fill='x', padx=8, pady=7)
-        self.a_id, self.a_box = self._field(header, 'Modèle', row=0)
+        self.a_id, self.a_box = self._field(header, 'Modèle', row=0, values=[], editable=True)
         self.a_box.bind('<<ComboboxSelected>>', lambda e: self._load_archetype())
         form = self.ttk.LabelFrame(page, text='Fiche de modèle réutilisable')
         form.pack(fill='x', padx=8, pady=5)
@@ -215,7 +215,7 @@ class CharacterRulesStudio:
         self.tabs.add(page, text='Compétences')
         header = self.ttk.Frame(page)
         header.pack(fill='x', padx=7, pady=5)
-        self.s_id, self.s_box = self._field(header, 'Compétence / nouvel ID', row=0)
+        self.s_id, self.s_box = self._field(header, 'Compétence / nouvel ID', row=0, values=[], editable=True)
         self.s_box.bind('<<ComboboxSelected>>', lambda e: self._load_skill())
         form = self.ttk.LabelFrame(page, text='Paramètres de la compétence')
         form.pack(fill='x', padx=8, pady=4)
@@ -353,7 +353,7 @@ class CharacterRulesStudio:
     def _jobs_tab(self):
         page = self.ttk.Frame(self.tabs)
         self.tabs.add(page, text='Classes')
-        self.j_id, self.j_box = self._field(page, 'Classe / nouvel ID', row=0)
+        self.j_id, self.j_box = self._field(page, 'Classe / nouvel ID', row=0, values=[], editable=True)
         self.j_box.bind('<<ComboboxSelected>>', lambda e: self._load_job())
         self.j_name, _ = self._field(page, 'Nom', default='Nouvelle classe', row=1)
         self.j_requires, self.j_requires_box = self._field(
@@ -403,7 +403,7 @@ class CharacterRulesStudio:
     def _equipment_tab(self):
         page = self.ttk.Frame(self.tabs)
         self.tabs.add(page, text='Équipement')
-        self.i_id, self.i_box = self._field(page, 'Objet / nouvel ID', row=0)
+        self.i_id, self.i_box = self._field(page, 'Objet / nouvel ID', row=0, values=[], editable=True)
         self.i_box.bind('<<ComboboxSelected>>', lambda e: self._load_item())
         self.i_name, _ = self._field(page, 'Nom', default='Nouvel équipement', row=1)
         self.i_slot, _ = self._field(page, 'Emplacement', default='weapon',
