@@ -74,6 +74,17 @@ def validate_blueprint(blueprint, content, campaign_ids):
         policy = SiegeCampaign(campaign, content, missions)
         require(blueprint["focused"] != policy.final,
                 "Initial focus cannot be the locked final sector")
+        if "routes" in campaign:
+            from .campaign_routes import CampaignRoutesPolicy
+            CampaignRoutesPolicy(
+                {"routes": campaign["routes"], "recovery": campaign["recovery"],
+                 "treaties": campaign["treaties"],
+                 **({"counteroffensives": campaign["counteroffensives"]}
+                    if "counteroffensives" in campaign else {})},
+                content, missions, policy.final)
+            require("logistics" in blueprint and
+                    "supplies" in blueprint["logistics"],
+                    "Alternative approaches need a finite supply pool")
 
 
 def validate_all(sieges, content, campaigns):
