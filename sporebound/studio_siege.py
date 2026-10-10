@@ -454,10 +454,12 @@ class SiegeStudio:
             content, bp, self.owner.project_path, slot, rules=rules)
         if self.session is not None and self.session_id == bp["id"]:
             exists = controller.save_path.exists()
-            if (exists and not self.owner.dialogs.askyesno(
+            from tkinter import messagebox
+            if (exists and not messagebox.askyesno(
                     "Écraser le slot ?",
                     "Lancer l'état actuellement chargé dans le Studio remplacera "
-                    "le checkpoint du slot. Continuer ?")):
+                    "le checkpoint du slot. Continuer ?",
+                    parent=self.tab)):
                 return
             controller.adopt(self.session, overwrite=exists)
         app = launch(content, bp, self.owner.project, self.owner.project_path,
