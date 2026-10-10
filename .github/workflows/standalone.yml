@@ -5,6 +5,10 @@ on:
   pull_request:
 permissions:
   contents: read
+# Obsolete PR heads must not monopolize the 9-run Python/OS matrix.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   rules:
     strategy:
