@@ -347,3 +347,7 @@ Depuis le dépôt source, lancer `python -m examples.castle_player` (ou **Campag
 ### 2.8.2 — Campaign & Siege Studio → Player
 
 Dans le Studio (`python -m sporebound editor <contenu.json>`), onglet **Campagne & siège** : créer les fronts, configurer éventuellement les convois/logistiques et cliquer **Jouer dans Player 2.8**. Dans le Player (`python -m sporebound player --content <contenu.json> --project <jeu.game.json>`), cliquer **Sièges créés dans le Studio**, sélectionner le siège et son emplacement. Sauvegardes de siège indépendantes, contrôlées par rejeu.
+
+### 2.8.3 — Narrative & Presentation
+
+Les sièges du Studio acceptent désormais des **choix narratifs réels** : conditions, drapeaux, or de campagne narratif, chaînes de scènes et scènes **après victoire d'une mission**. Les opérations de combat restent pilotées par le moteur tactique et sont bloquées pendant les choix de dialogue. Les sauvegardes enregistrent les décisions dans un journal complémentaire contrôlé par rejeu. Portraits PNG, sprites PNG et pistes audio WAV/OGG utilisent le registre d'assets du projet ; un repli sans images/son existe. Voir [guide 2.8](docs/VERTICAL_SLICE_2_8.md).
