@@ -4,6 +4,59 @@
 
 L'objectif est de commencer une histoire de Jeanne d'Arc **uchronique** dans le Player existant, sans casser les tests et les scénarios historiques de Sporebound. Le moteur de combat et les sauvegardes restent identiques.
 
+## 3.0.3.1 — Exploration narrative et séquences visuelles
+
+Cette évolution ajoute le contrat optionnel `GameProject.exploration` sans
+changer les schémas existants de Content, Battle, Campaign et GameSession.
+
+- **Champs** : déplacement 2D sur une carte narrative (flèches, ZQSD, WASD
+  ou clic sur une case adjacente), examen des blés, du médaillon, des fleurs
+  et du vieux chêne. Deux souvenirs sont requis avant le déclenchement de
+  la vision.
+- **Domrémy en flammes** : après le combat, exploration des ruines :
+  la maison de Jacques, les appels de la grange et les traces des soldats.
+  Le choix de secours ou de poursuite ne devient accessible qu'après les
+  deux découvertes essentielles.
+- **Mise en scène** : illustrations vectorielles procédurales Tk, motifs de
+  blé et d'incendie, séquences de vision et de fumée avec animation légère.
+  Aucune image externe n'est obligatoire.
+- **Sauvegarde** : positions et visites sont conservées dans
+  `Campaign.story_flags`, checkpointées par le `GameSession` normal.
+  Déplacement interdit hors carte, sur un obstacle ou par saut diagonal.
+  Les hotspots inaccessibles sont refusés à la validation de projet.
+- **Accessibilité** : boutons d'interaction affichés quand Jeanne est à
+  une case, commandes clavier et clic pour les déplacements voisins.
+- **Compatibilité** : sans section `exploration`, un projet ancien conserve
+  strictement ses scènes et sa sérialisation actuelles.
+
+L'exploration est **headless** : les contrôles passent de
+`PlayerController` à `GameSession` puis à `Exploration`, tandis que
+`exploration_view` ne modifie aucune donnée métier.
+
+La transition du village vers l'une des deux missions utilise toujours les
+choix et effets de `StoryBook` déjà validés. Les flammes sont visuelles :
+elles n'appliquent pas de dégâts d'exploration et ne doivent pas être présentées
+comme un nouveau moteur tactique.
+
+### Tests dédiés
+
+```sh
+python -m unittest tests_standalone.test_exploration_stage -v
+python -m unittest tests_standalone.test_jeanne_prologue -v
+```
+
+### Limites restantes
+
+- Pas encore de déplacement libre continu hors grille.
+- Les habitants ne possèdent pas encore de routines de déplacement dans
+  les cartes d'exploration ; sauvetages/escortes demeurent des objectifs
+  tactiques.
+- Les cinématiques sont des vignettes vectorielles, non des animations
+  dessinées image par image ou des vidéos.
+- Pas de gestion étendue des choix dialogués sur la carte d'exploration
+  ni de doublage.
+- Aucun changement de règles du combat ou de contenu de l'acte I.
+
 ## Lancer le jeu
 
 Depuis la racine du dépôt, sous Python 3.10+ :
@@ -25,10 +78,10 @@ L'éditeur permet d'inspecter les cartes et les unités. Les scènes de dialogue
 
 ## Scènes et parcours jouables
 
-1. **Les champs** : introduction dialoguée ; écouter les voix ou les repousser. Le déplacement libre dans les champs n'est **pas encore** disponible et nécessite une extension de Player/carte d'exploration.
+1. **Les champs** : découverte des souvenirs sur une petite carte explorable, puis écoute ou rejet des voix.
 2. **La vision** : bannière, couronne, bûcher ; Jeanne découvre la fumée.
 3. **Souvenir de Renaud** : mission tactique « leçon d'armes », combat de formation non létal dans l'histoire ; objectif du moteur = vaincre le partenaire d'entraînement.
-4. **Domrémy en flammes** : vrai combat contre deux pillards, puis choix exclusif.
+4. **Domrémy en flammes** : vrai combat contre deux pillards, exploration des ruines puis choix exclusif.
 5. **Secours** : tenir la défense jusqu'à l'évacuation ; protéger Margot.
 6. **Poursuite** : vaincre le garde et le porteur de sceau pour récupérer un indice.
 7. **Fuite** : atteindre les cases d'extraction à l'est en gardant en vie un rescapé.
