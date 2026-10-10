@@ -1,58 +1,66 @@
-# Architecture V1.9.6 — Native 2D / 2.5D Level Design
+# Architecture autonome
 
-## Contrat de map
+Le cœur ne dépend ni de Tk, ni de Godot, ni du filesystem. La même frontière
+`Battle.execute(command)` est utilisée par le terminal, l’éditeur, l’IA et les replays.
 
-```text
-MissionDefinition.tres
-		|
-		+-- map_scene_path --> maps/*.tscn
-								|
-								+-- SporeMap2D (@tool)
-								+-- Ground / Height / Terrain / Objectives (TileMapLayer)
-								+-- SporeHeroSpawn2D / SporeEnemySpawn2D
-								+-- SporeMapInteractable2D
-								+-- SporeMapZone2D (Polygon2D)
+| Module | Responsabilité |
+| --- | --- |
+| `model.py` | Contrats typés, contenu JSON versionné, validation des références et valeurs |
+| `engine.py` | État de combat, horloge CT, transactions, événements, RNG et replay |
+| `rules/` | Douze registres immuables : commandes, effets, formules, objectifs, IA, statuts, mouvements, réactions, préparations, synergies et triggers |
+| `actors.py` | Fabrique d’acteurs et archétypes JSON ; personnage/monstre/invocation |
+| `ai.py` | Évaluation déterministe des actions et positions avec les prévisions du moteur |
+| `campaign.py` | Progression, jobs, achats, inventaire, loadouts et récompenses uniques |
+| `storage.py` | Écriture JSON temporaire puis remplacement atomique, chargement vérifié |
+| `editor.py` | Document validé, undo/redo, authoring de carte et interface Tk de playtest |
+| `__main__.py` | CLI, simulation, équilibrage multi-seeds, parties manuelles et campagne |
+| `content/core.json` | Contenu autonome de travail, embarqué dans le paquet |
+
+## Source de vérité
+
+Les positions sont des couples entiers `(x, y)`, les hauteurs des niveaux entiers.
+La carte est clairsemée : une case absente a les propriétés par défaut. La sauvegarde
+ne contient pas de widgets, textures, objets Godot ou références externes.
+Les objets de mission et unités sont copiés dans chaque combat ; le document auteur
+reste indépendant du playtest et de la progression.
+
+## Commandes
+
+Exemples :
+
+```json
+{"kind": "move", "cell": [2, 3]}
+{"kind": "act", "skill": "flare", "cell": [5, 3]}
+{"kind": "item", "item": "potion", "cell": [2, 3]}
+{"kind": "interact", "object": "switch"}
+{"kind": "end", "facing": [0, -1]}
 ```
 
-`MissionCatalog.environment()` instancie la scène et appelle `SporeMap2D.to_environment()`. V1.9.5 ajoute `zones`, chaque entrée contenant `id`, `type`, `team`, `enabled` et les cellules couvertes.
+Le champ optionnel `unit` doit correspondre à l’unité active. Toute commande illégale
+restaure l’état, les événements, le journal et le RNG. Les interfaces doivent conserver
+les identifiants plutôt que des références d’objets entre commandes : le rollback
+peut remplacer les instances. Les commandes acceptées sont enregistrées pour le replay.
 
-## Zones
+L’IA peut inspecter les règles mais n’a pas de chemin d’exécution privilégié. Les
+prévisions n’avancent pas le RNG. Les égalités CT sont départagées par l’ordre initial
+des unités ; les choix IA ont un départage explicite, sans dépendre des adresses mémoire.
 
-`SporeMapZone2D` ne stocke pas une liste de cellules : la forme auteur est le polygone natif Godot. `occupied_cells(map)` calcule les cellules dont le centre tombe dans le polygone. Cela garde une édition libre tout en conservant un runtime tactique discret.
+## Sauvegarde et compatibilité
 
-Les triggers `player_enters_zone` / `enemy_enters_zone` comparent la position logique de l’unité aux cellules exportées par la zone.
+Une sauvegarde embarque le contenu initial, la mission, la seed, l’identifiant de
+combat et les commandes. Le chargement reconstruit le combat puis compare le hash
+SHA-256 de l’état, RNG et événements inclus. Il détecte les fichiers corrompus ou les
+règles incompatibles. C’est un format de replay vérifié, pas une signature de sécurité.
 
-## Playtest depuis la viewport
+Le format JSON est versionné. Les sauvegardes sont garanties pour les mêmes règles ;
+une future modification des règles nécessite une migration/version de simulation.
+Le chargement coûte le temps de rejouer la partie ; des checkpoints seront nécessaires
+pour les très longues sessions. Le rollback copie actuellement l’état pour privilégier
+la correction ; il devra être profilé avant de viser de très grandes batailles.
 
-`SporeNativeMapEditor.play_current_map()` :
+Les versions Godot sont des références historiques, sans import au runtime autonome.
 
-1. sauvegarde les scènes ouvertes ;
-2. retrouve la `MissionDefinition` liée au `scene_file_path` courant ;
-3. écrit `user://sporebound_editor_test.json` avec `autostart=true` ;
-4. lance `main.tscn`.
+## Extension du moteur
 
-`BattleController.consume_editor_test_request()` consomme ce fichier. En `editor_test_mode`, `save_campaign()` devient un no-op afin qu’un playtest de level design ne modifie pas la progression persistante.
-
-## Création rapide
-
-Le menu `+ Objet` de la toolbar crée les nœuds avec `EditorUndoRedoManager`, leur attribue l’owner de scène et les sélectionne immédiatement. Le placement vise la case survolée, puis la sélection, puis le centre de map.
-
-## Templates
-
-Les templates de mission ne sont pas des formats parallèles : ils initialisent simplement une `MissionDefinition`, puis `_create_native_map_scene()` produit la même scène Godot native que toute autre mission.
-
-## Contrat 2.5D / 3D
-
-`SporeMap3D` est une seconde implémentation du contrat de map. Les cellules sont des `SporeTacticalTile3D` avec une coordonnée logique `Vector2i`, une `elevation` entière et un `terrain_type`. Les spawns/objets 3D exportent les mêmes données que leurs équivalents 2D. `MissionCatalog` reste donc indépendant de la représentation auteur.
-
-```text
-MissionDefinition.tres
-		|
-		+-- map_scene_path --> SporeMap2D  -> TileMapLayer
-						   \-> SporeMap3D  -> Tiles/SporeTacticalTile3D
-											  SporeHeroSpawn3D
-											  SporeEnemySpawn3D
-											  SporeMapInteractable3D
-```
-
-La hauteur 3D est convertie vers le dictionnaire runtime `heights[Vector2i] = int`. Les coordonnées X/Z de la scène ne deviennent jamais la source de vérité : `cell` et `elevation` le sont.
+Voir [règles modulaires et acteurs](docs/MODULAR_ENGINE.md) pour les contrats, exemples,
+limites et règles de compatibilité des replays v1/v2/v3.

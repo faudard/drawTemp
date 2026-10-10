@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "title": "Sporebound Tactics",
+  "subtitle": "Campagnes tactiques — prototype",
+  "campaigns": [
+    {
+      "id": "main",
+      "name": "Chroniques du jardin",
+      "description": "Découvrir le moteur tactique.",
+      "start_mission": "garden"
+    },
+    {
+      "id": "relique",
+      "name": "Le défi de la couronne",
+      "description": "Un scénario alternatif centré sur la relique.",
+      "start_mission": "crown"
+    }
+  ],
+  "options": {
+    "language": "fr",
+    "music_volume": 70,
+    "effects_volume": 70,
+    "fullscreen": false
+  },
+  "save_slots": 3,
+  "story": {
+    "entry_scenes": {
+      "relique": "oath"
+    },
+    "after_mission": {
+      "garden": "council"
+    },
+    "scenes": [
+      {
+        "id": "oath",
+        "title": "L'engagement",
+        "speaker": "Capitaine de la garde",
+        "text": "Avant de combattre pour la Couronne Beatbox, accepterez-vous de soutenir la garde ?",
+        "choices": [
+          {
+            "id": "guard",
+            "label": "Je protégerai la garde.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "guard_oath",
+                "value": true
+              }
+            ],
+            "next_scene": "oath_reward"
+          },
+          {
+            "id": "alone",
+            "label": "Je garderai ma liberté.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "guard_oath",
+                "value": false
+              }
+            ],
+            "next_scene": "oath_reward"
+          }
+        ]
+      },
+      {
+        "id": "oath_reward",
+        "title": "L'intendant",
+        "speaker": "Intendant",
+        "text": "Vos intentions décideront du soutien accordé.",
+        "choices": [
+          {
+            "id": "provisions",
+            "label": "Accepter l'aide de la garde (+25 or)",
+            "when": {
+              "flag": "guard_oath",
+              "eq": true
+            },
+            "effects": [
+              {
+                "kind": "gold",
+                "amount": 25
+              }
+            ]
+          },
+          {
+            "id": "proceed",
+            "label": "Partir sans aide supplémentaire.",
+            "effects": []
+          }
+        ]
+      },
+      {
+        "id": "council",
+        "title": "Le conseil du jardin",
+        "speaker": "Éclaireuse",
+        "text": "Le jardin est sécurisé. Choisissez l'opération suivante : les souterrains, la défense ou la quête de la couronne.",
+        "choices": [
+          {
+            "id": "tunnel",
+            "label": "Passer par les souterrains.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "chosen_route",
+                "value": "tunnel"
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "escape"
+              }
+            ]
+          },
+          {
+            "id": "defend",
+            "label": "Tenir notre position.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "chosen_route",
+                "value": "defend"
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "hold"
+              }
+            ]
+          },
+          {
+            "id": "relic",
+            "label": "Financer la recherche de la couronne (100 or).",
+            "when": {
+              "gold_gte": 100
+            },
+            "effects": [
+              {
+                "kind": "gold",
+                "amount": -100
+              },
+              {
+                "kind": "set_flag",
+                "flag": "chosen_route",
+                "value": "relic"
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "crown"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

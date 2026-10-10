@@ -1,0 +1,1357 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "id": "flare",
+      "name": "Tir prismatique",
+      "effects": [
+        {
+          "kind": "damage",
+          "power": 8,
+          "element": "prism"
+        }
+      ],
+      "cost": 3,
+      "range": 4,
+      "magical": true
+    },
+    {
+      "id": "heal",
+      "name": "Sauvetage élastique",
+      "effects": [
+        {
+          "kind": "heal",
+          "power": 24
+        },
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "guard",
+          "duration": 12
+        }
+      ],
+      "cost": 3,
+      "range": 3,
+      "target": "ally",
+      "magical": true
+    },
+    {
+      "id": "firestorm",
+      "name": "Fournaise",
+      "effects": [
+        {
+          "kind": "damage",
+          "power": 10,
+          "element": "fire",
+          "scope": "all"
+        }
+      ],
+      "cost": 5,
+      "range": 4,
+      "radius": 1,
+      "target": "ground",
+      "cast_ticks": 5,
+      "magical": true
+    },
+    {
+      "id": "comet",
+      "name": "Comète poursuivante",
+      "effects": [
+        {
+          "kind": "damage",
+          "power": 12,
+          "element": "prism"
+        }
+      ],
+      "cost": 6,
+      "range": 5,
+      "cast_ticks": 8,
+      "magical": true,
+      "lock": "unit"
+    },
+    {
+      "id": "revive",
+      "name": "Second souffle",
+      "effects": [
+        {
+          "kind": "revive",
+          "power": 20
+        }
+      ],
+      "cost": 5,
+      "range": 3,
+      "target": "downed",
+      "magical": true,
+      "cast_ticks": 3,
+      "lock": "unit"
+    },
+    {
+      "id": "shove",
+      "name": "Poussée",
+      "effects": [
+        {
+          "kind": "damage",
+          "power": 1
+        },
+        {
+          "kind": "push",
+          "power": 2
+        }
+      ],
+      "range": 1
+    },
+    {
+      "id": "pull",
+      "name": "Liane",
+      "effects": [
+        {
+          "kind": "pull",
+          "power": 2
+        }
+      ],
+      "range": 3
+    },
+    {
+      "id": "cleanse",
+      "name": "Antidote",
+      "effects": [
+        {
+          "kind": "cleanse",
+          "power": 1,
+          "status": "poison"
+        }
+      ],
+      "cost": 1,
+      "range": 3,
+      "target": "ally"
+    },
+    {
+      "id": "focus",
+      "name": "Concentration",
+      "effects": [
+        {
+          "kind": "mp",
+          "power": 5
+        }
+      ],
+      "range": 0,
+      "target": "self"
+    },
+    {
+      "id": "spore_field",
+      "name": "Champ de spores",
+      "effects": [
+        {
+          "kind": "zone",
+          "power": 4,
+          "scope": "enemies",
+          "duration": 24
+        }
+      ],
+      "cost": 4,
+      "range": 3,
+      "radius": 1,
+      "target": "ground"
+    },
+    {
+      "id": "haste",
+      "name": "Hâte",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "haste",
+          "duration": 32
+        }
+      ],
+      "cost": 3,
+      "range": 3,
+      "target": "ally",
+      "magical": true,
+      "accuracy": 100
+    },
+    {
+      "id": "slow",
+      "name": "Lenteur",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "slow",
+          "duration": 32
+        }
+      ],
+      "cost": 3,
+      "range": 3,
+      "target": "enemy",
+      "magical": true,
+      "accuracy": 85
+    },
+    {
+      "id": "poison",
+      "name": "Poison",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "poison",
+          "duration": 32
+        }
+      ],
+      "cost": 2,
+      "range": 3,
+      "target": "enemy",
+      "magical": true,
+      "accuracy": 85
+    },
+    {
+      "id": "regen",
+      "name": "Régénération",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "regen",
+          "duration": 32
+        }
+      ],
+      "cost": 3,
+      "range": 3,
+      "target": "ally",
+      "magical": true,
+      "accuracy": 100
+    },
+    {
+      "id": "protect",
+      "name": "Protection",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "protect",
+          "duration": 32
+        }
+      ],
+      "cost": 2,
+      "range": 3,
+      "target": "ally",
+      "magical": true,
+      "accuracy": 100
+    },
+    {
+      "id": "shell",
+      "name": "Barrière",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "shell",
+          "duration": 32
+        }
+      ],
+      "cost": 2,
+      "range": 3,
+      "target": "ally",
+      "magical": true,
+      "accuracy": 100
+    },
+    {
+      "id": "silence",
+      "name": "Silence",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "silence",
+          "duration": 32
+        }
+      ],
+      "cost": 2,
+      "range": 3,
+      "target": "enemy",
+      "magical": true,
+      "accuracy": 85
+    },
+    {
+      "id": "sleep",
+      "name": "Sommeil",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "sleep",
+          "duration": 20
+        }
+      ],
+      "cost": 3,
+      "range": 3,
+      "target": "enemy",
+      "magical": true,
+      "accuracy": 85
+    },
+    {
+      "id": "stop",
+      "name": "Stop",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "stop",
+          "duration": 20
+        }
+      ],
+      "cost": 5,
+      "range": 3,
+      "target": "enemy",
+      "magical": true,
+      "accuracy": 85
+    },
+    {
+      "id": "dont_move",
+      "name": "Entrave",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "dont_move",
+          "duration": 32
+        }
+      ],
+      "cost": 2,
+      "range": 3,
+      "target": "enemy",
+      "magical": true,
+      "accuracy": 85
+    },
+    {
+      "id": "dont_act",
+      "name": "Sceau",
+      "effects": [
+        {
+          "kind": "status",
+          "power": 1,
+          "status": "dont_act",
+          "duration": 32
+        }
+      ],
+      "cost": 4,
+      "range": 3,
+      "target": "enemy",
+      "magical": true,
+      "accuracy": 85
+    }
+  ],
+  "missions": [
+    {
+      "id": "garden",
+      "name": "Escarmouche du jardin",
+      "board": {
+        "width": 8,
+        "height": 7,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              2
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              3
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              4,
+              2
+            ],
+            "height": 2
+          },
+          {
+            "pos": [
+              4,
+              3
+            ],
+            "height": 1
+          },
+          {
+            "pos": [
+              4,
+              4
+            ],
+            "cost": 2,
+            "cover": 20
+          },
+          {
+            "pos": [
+              5,
+              4
+            ],
+            "hazard": 3
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "ziggy",
+          "name": "Ziggy",
+          "team": "player",
+          "pos": [
+            1,
+            5
+          ],
+          "max_hp": 48,
+          "max_mp": 20,
+          "attack": 4,
+          "magic": 8,
+          "speed": 12,
+          "weapon": "focus",
+          "weapon_power": 2,
+          "attack_range": 3,
+          "skills": [
+            "flare",
+            "firestorm",
+            "slow",
+            "spore_field"
+          ],
+          "reaction": "mp_switch",
+          "faith": 76
+        },
+        {
+          "id": "momo",
+          "name": "Momo",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 70,
+          "max_mp": 8,
+          "attack": 7,
+          "magic": 3,
+          "speed": 9,
+          "skills": [
+            "shove",
+            "protect"
+          ],
+          "reaction": "counter",
+          "support": "defense_up"
+        },
+        {
+          "id": "luma",
+          "name": "Luma",
+          "team": "player",
+          "pos": [
+            0,
+            5
+          ],
+          "max_hp": 42,
+          "max_mp": 24,
+          "attack": 3,
+          "magic": 7,
+          "speed": 11,
+          "skills": [
+            "heal",
+            "revive",
+            "haste",
+            "cleanse",
+            "focus"
+          ],
+          "reaction": "auto_potion",
+          "faith": 80
+        },
+        {
+          "id": "grincheux",
+          "name": "Grincheux",
+          "team": "enemy",
+          "pos": [
+            6,
+            1
+          ],
+          "max_hp": 65,
+          "attack": 6,
+          "speed": 10,
+          "skills": [
+            "shove"
+          ],
+          "reaction": "opportunity",
+          "facing": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "baveux",
+          "name": "Baveux",
+          "team": "enemy",
+          "pos": [
+            6,
+            4
+          ],
+          "max_hp": 48,
+          "max_mp": 15,
+          "attack": 4,
+          "magic": 7,
+          "speed": 10,
+          "skills": [
+            "poison",
+            "slow",
+            "heal"
+          ],
+          "reaction": "auto_potion"
+        },
+        {
+          "id": "comptable",
+          "name": "Comptable",
+          "team": "enemy",
+          "pos": [
+            7,
+            2
+          ],
+          "max_hp": 38,
+          "attack": 5,
+          "speed": 11,
+          "weapon": "ranged",
+          "attack_range": 4,
+          "min_range": 2,
+          "skills": [
+            "silence"
+          ],
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
+        }
+      ],
+      "objective": "eliminate",
+      "goal": [],
+      "target_ticks": 100,
+      "reward": 100,
+      "next_missions": [
+        "escape"
+      ],
+      "objects": [
+        {
+          "id": "gate",
+          "kind": "door",
+          "pos": [
+            4,
+            1
+          ]
+        },
+        {
+          "id": "switch",
+          "kind": "switch",
+          "pos": [
+            2,
+            4
+          ],
+          "link": "gate"
+        },
+        {
+          "id": "chest",
+          "kind": "chest",
+          "pos": [
+            2,
+            0
+          ],
+          "amount": 40
+        }
+      ],
+      "triggers": [
+        {
+          "id": "spore_pulse",
+          "condition": "tick",
+          "value": 20,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Le jardin libère des spores."
+            },
+            {
+              "kind": "hazard",
+              "pos": [
+                4,
+                5
+              ],
+              "amount": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "escape",
+      "name": "Percée vers la sortie",
+      "board": {
+        "width": 8,
+        "height": 7,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              2
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              3
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              4,
+              2
+            ],
+            "height": 2
+          },
+          {
+            "pos": [
+              4,
+              3
+            ],
+            "height": 1
+          },
+          {
+            "pos": [
+              4,
+              4
+            ],
+            "cost": 2,
+            "cover": 20
+          },
+          {
+            "pos": [
+              5,
+              4
+            ],
+            "hazard": 3
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "ziggy",
+          "name": "Ziggy",
+          "team": "player",
+          "pos": [
+            1,
+            5
+          ],
+          "max_hp": 48,
+          "max_mp": 20,
+          "attack": 4,
+          "magic": 8,
+          "speed": 12,
+          "weapon": "focus",
+          "weapon_power": 2,
+          "attack_range": 3,
+          "skills": [
+            "flare",
+            "firestorm",
+            "slow",
+            "spore_field"
+          ],
+          "reaction": "mp_switch",
+          "faith": 76
+        },
+        {
+          "id": "momo",
+          "name": "Momo",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 70,
+          "max_mp": 8,
+          "attack": 7,
+          "magic": 3,
+          "speed": 9,
+          "skills": [
+            "shove",
+            "protect"
+          ],
+          "reaction": "counter",
+          "support": "defense_up"
+        },
+        {
+          "id": "luma",
+          "name": "Luma",
+          "team": "player",
+          "pos": [
+            0,
+            5
+          ],
+          "max_hp": 42,
+          "max_mp": 24,
+          "attack": 3,
+          "magic": 7,
+          "speed": 11,
+          "skills": [
+            "heal",
+            "revive",
+            "haste",
+            "cleanse",
+            "focus"
+          ],
+          "reaction": "auto_potion",
+          "faith": 80
+        },
+        {
+          "id": "grincheux",
+          "name": "Grincheux",
+          "team": "enemy",
+          "pos": [
+            6,
+            1
+          ],
+          "max_hp": 65,
+          "attack": 6,
+          "speed": 10,
+          "skills": [
+            "shove"
+          ],
+          "reaction": "opportunity",
+          "facing": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "baveux",
+          "name": "Baveux",
+          "team": "enemy",
+          "pos": [
+            6,
+            4
+          ],
+          "max_hp": 48,
+          "max_mp": 15,
+          "attack": 4,
+          "magic": 7,
+          "speed": 10,
+          "skills": [
+            "poison",
+            "slow",
+            "heal"
+          ],
+          "reaction": "auto_potion"
+        },
+        {
+          "id": "comptable",
+          "name": "Comptable",
+          "team": "enemy",
+          "pos": [
+            7,
+            2
+          ],
+          "max_hp": 38,
+          "attack": 5,
+          "speed": 11,
+          "weapon": "ranged",
+          "attack_range": 4,
+          "min_range": 2,
+          "skills": [
+            "silence"
+          ],
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
+        }
+      ],
+      "objective": "extract",
+      "goal": [
+        [
+          7,
+          0
+        ],
+        [
+          7,
+          1
+        ]
+      ],
+      "target_ticks": 100,
+      "reward": 100,
+      "next_missions": [
+        "hold"
+      ]
+    },
+    {
+      "id": "hold",
+      "name": "Tenir la scène",
+      "board": {
+        "width": 8,
+        "height": 7,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              2
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              4,
+              2
+            ],
+            "height": 2
+          },
+          {
+            "pos": [
+              4,
+              3
+            ],
+            "height": 1
+          },
+          {
+            "pos": [
+              4,
+              4
+            ],
+            "cost": 2,
+            "cover": 20
+          },
+          {
+            "pos": [
+              5,
+              4
+            ],
+            "hazard": 3
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "ziggy",
+          "name": "Ziggy",
+          "team": "player",
+          "pos": [
+            1,
+            5
+          ],
+          "max_hp": 48,
+          "max_mp": 20,
+          "attack": 4,
+          "magic": 8,
+          "speed": 12,
+          "weapon": "focus",
+          "weapon_power": 2,
+          "attack_range": 3,
+          "skills": [
+            "flare",
+            "firestorm",
+            "slow",
+            "spore_field"
+          ],
+          "reaction": "mp_switch",
+          "faith": 76
+        },
+        {
+          "id": "momo",
+          "name": "Momo",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 70,
+          "max_mp": 8,
+          "attack": 7,
+          "magic": 3,
+          "speed": 9,
+          "skills": [
+            "shove",
+            "protect"
+          ],
+          "reaction": "counter",
+          "support": "defense_up"
+        },
+        {
+          "id": "luma",
+          "name": "Luma",
+          "team": "player",
+          "pos": [
+            0,
+            5
+          ],
+          "max_hp": 42,
+          "max_mp": 24,
+          "attack": 3,
+          "magic": 7,
+          "speed": 11,
+          "skills": [
+            "heal",
+            "revive",
+            "haste",
+            "cleanse",
+            "focus"
+          ],
+          "reaction": "auto_potion",
+          "faith": 80
+        },
+        {
+          "id": "grincheux",
+          "name": "Grincheux",
+          "team": "enemy",
+          "pos": [
+            6,
+            1
+          ],
+          "max_hp": 65,
+          "attack": 6,
+          "speed": 10,
+          "skills": [
+            "shove"
+          ],
+          "reaction": "opportunity",
+          "facing": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "baveux",
+          "name": "Baveux",
+          "team": "enemy",
+          "pos": [
+            6,
+            4
+          ],
+          "max_hp": 48,
+          "max_mp": 15,
+          "attack": 4,
+          "magic": 7,
+          "speed": 10,
+          "skills": [
+            "poison",
+            "slow",
+            "heal"
+          ],
+          "reaction": "auto_potion"
+        },
+        {
+          "id": "comptable",
+          "name": "Comptable",
+          "team": "enemy",
+          "pos": [
+            7,
+            2
+          ],
+          "max_hp": 38,
+          "attack": 5,
+          "speed": 11,
+          "weapon": "ranged",
+          "attack_range": 4,
+          "min_range": 2,
+          "skills": [
+            "silence"
+          ],
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
+        }
+      ],
+      "objective": "hold",
+      "goal": [
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "target_ticks": 24,
+      "reward": 100,
+      "next_missions": [
+        "crown"
+      ],
+      "protected_id": "luma"
+    },
+    {
+      "id": "crown",
+      "name": "La Couronne Beatbox — prototype autonome",
+      "board": {
+        "width": 8,
+        "height": 7,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              2
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              3
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              4,
+              2
+            ],
+            "height": 2
+          },
+          {
+            "pos": [
+              4,
+              3
+            ],
+            "height": 1
+          },
+          {
+            "pos": [
+              4,
+              4
+            ],
+            "cost": 2,
+            "cover": 20
+          },
+          {
+            "pos": [
+              5,
+              4
+            ],
+            "hazard": 3
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "ziggy",
+          "name": "Ziggy",
+          "team": "player",
+          "pos": [
+            1,
+            5
+          ],
+          "max_hp": 48,
+          "max_mp": 20,
+          "attack": 4,
+          "magic": 8,
+          "speed": 12,
+          "weapon": "focus",
+          "weapon_power": 2,
+          "attack_range": 3,
+          "skills": [
+            "flare",
+            "firestorm",
+            "slow",
+            "spore_field"
+          ],
+          "reaction": "mp_switch",
+          "faith": 76
+        },
+        {
+          "id": "momo",
+          "name": "Momo",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 70,
+          "max_mp": 8,
+          "attack": 7,
+          "magic": 3,
+          "speed": 9,
+          "skills": [
+            "shove",
+            "protect"
+          ],
+          "reaction": "counter",
+          "support": "defense_up"
+        },
+        {
+          "id": "luma",
+          "name": "Luma",
+          "team": "player",
+          "pos": [
+            0,
+            5
+          ],
+          "max_hp": 42,
+          "max_mp": 24,
+          "attack": 3,
+          "magic": 7,
+          "speed": 11,
+          "skills": [
+            "heal",
+            "revive",
+            "haste",
+            "cleanse",
+            "focus"
+          ],
+          "reaction": "auto_potion",
+          "faith": 80
+        },
+        {
+          "id": "grincheux",
+          "name": "Grincheux",
+          "team": "enemy",
+          "pos": [
+            6,
+            1
+          ],
+          "max_hp": 65,
+          "attack": 6,
+          "speed": 10,
+          "skills": [
+            "shove"
+          ],
+          "reaction": "opportunity",
+          "facing": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "baveux",
+          "name": "Baveux",
+          "team": "enemy",
+          "pos": [
+            6,
+            4
+          ],
+          "max_hp": 48,
+          "max_mp": 15,
+          "attack": 4,
+          "magic": 7,
+          "speed": 10,
+          "skills": [
+            "poison",
+            "slow",
+            "heal"
+          ],
+          "reaction": "auto_potion"
+        },
+        {
+          "id": "comptable",
+          "name": "Comptable",
+          "team": "enemy",
+          "pos": [
+            7,
+            2
+          ],
+          "max_hp": 38,
+          "attack": 5,
+          "speed": 11,
+          "weapon": "ranged",
+          "attack_range": 4,
+          "min_range": 2,
+          "skills": [
+            "silence"
+          ],
+          "class_evade": 10,
+          "attack_range_mode": "los",
+          "optimal_range": 4,
+          "falloff_per_tile": 8
+        }
+      ],
+      "objective": "crown",
+      "goal": [
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ]
+      ],
+      "target_ticks": 100,
+      "reward": 200,
+      "next_missions": [],
+      "relic": [
+        7,
+        0
+      ]
+    }
+  ],
+  "jobs": {
+    "brave": {
+      "name": "Brave",
+      "bonuses": {
+        "max_hp": 5
+      },
+      "skills": {
+        "shove": 1
+      }
+    },
+    "spore_maestro": {
+      "name": "Maestro des spores",
+      "requires": "brave",
+      "requires_level": 2,
+      "bonuses": {
+        "magic": 2,
+        "max_mp": 5
+      },
+      "skills": {
+        "comet": 1,
+        "firestorm": 2,
+        "stop": 3
+      }
+    },
+    "field_medic": {
+      "name": "Médecin de terrain",
+      "requires": "brave",
+      "requires_level": 2,
+      "bonuses": {
+        "max_mp": 8
+      },
+      "skills": {
+        "heal": 1,
+        "revive": 2,
+        "regen": 3
+      }
+    },
+    "bulwark": {
+      "name": "Rempart",
+      "requires": "brave",
+      "requires_level": 2,
+      "bonuses": {
+        "defense": 3,
+        "max_hp": 15
+      },
+      "skills": {
+        "protect": 1,
+        "shell": 2
+      }
+    }
+  },
+  "equipment": {
+    "mycelium_plate": {
+      "name": "Armure de mycélium",
+      "slot": "armor",
+      "bonuses": {
+        "max_hp": 12,
+        "defense": 2
+      },
+      "price": 80
+    },
+    "rhythm_boots": {
+      "name": "Bottes rythmiques",
+      "slot": "accessory",
+      "bonuses": {
+        "move": 1
+      },
+      "price": 60
+    },
+    "echo_lens": {
+      "name": "Lentille d’écho",
+      "slot": "weapon",
+      "bonuses": {
+        "magic": 2,
+        "weapon_power": 1
+      },
+      "price": 100
+    }
+  },
+  "tactic_unlocks": [
+    {
+      "id": "pincer",
+      "members": [
+        "ziggy",
+        "momo"
+      ],
+      "unlock": {
+        "any": [
+          {
+            "all": [
+              {
+                "completed_mission": "garden"
+              },
+              {
+                "stat": "shared_kills",
+                "gte": 2
+              }
+            ]
+          },
+          {
+            "sequence": [
+              {
+                "kind": "status",
+                "status": "slow"
+              },
+              {
+                "kind": "forced_move",
+                "mode": "push"
+              },
+              {
+                "kind": "damage"
+              }
+            ],
+            "same_target": true,
+            "max_ticks": 10,
+            "require_sources": "all_members"
+          }
+        ]
+      }
+    },
+    {
+      "id": "encirclement",
+      "members": [
+        "ziggy",
+        "momo",
+        "luma"
+      ],
+      "hints": {
+        "hidden": "Trois combattants semblent pouvoir transformer leur placement en une seule manoeuvre.",
+        "clue": "Le trio doit combattre ensemble et participer au meme ennemi.",
+        "near": "Le trio est proche de maitriser une prise d'encerclement.",
+        "unlocked": "Encirclement : trois axes autour d'une cible declenchent deux suivis coordonnes."
+      },
+      "unlock": {
+        "all": [
+          {
+            "stat": "missions_together",
+            "gte": 2
+          },
+          {
+            "stat": "shared_kills",
+            "gte": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "relay",
+      "members": [
+        "ziggy",
+        "luma"
+      ],
+      "hints": {
+        "hidden": "Un duo pourrait apprendre a convertir son tour en mouvement pour son partenaire.",
+        "clue": "Ziggy et Luma doivent traverser ensemble une mission de fuite.",
+        "near": "Le duo est proche de maitriser un relais de position.",
+        "unlocked": "Relay : depenser l'action du lanceur et 20 CT du partenaire pour un repositionnement court."
+      },
+      "unlock": {
+        "all": [
+          {
+            "completed_mission": "escape"
+          },
+          {
+            "stat": "missions_together",
+            "gte": 2
+          }
+        ]
+      }
+    }
+  ]
+}

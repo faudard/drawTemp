@@ -1,0 +1,170 @@
+"""Validated, undo-friendly operations used by the Tk authoring tools.
+
+All operations return a new document; callers decide when to commit it to
+their undo stack.  No mutation reaches a live Battle or Campaign.
+"""
+from copy import deepcopy
+
+from .model import Content, RuleError, require
+
+
+def _mission(data, mid):
+    return next((m for m in data['missions'] if m['id'] == mid), None)
+
+
+def _edit(data, mid, change):
+    new = deepcopy(data)
+    mission = _mission(new, mid)
+    require(mission is not None, f'Unknown mission: {mid}')
+    change(new, mission)
+    return Content.from_dict(new).to_dict()
+
+
+def _identifier(value, label):
+    require(isinstance(value, str) and value.strip() and
+            all(c.isalnum() or c in '_-' for c in value) and len(value) <= 64,
+            f'{label} must be a unique identifier (letters, digits, _ or -)')
+    return value
+
+
+def _cell(m, pos):
+    require(isinstance(pos, (list, tuple)) and len(pos) == 2 and
+            all(type(x) is int for x in pos) and
+            0 <= pos[0] < m['board']['width'] and 0 <= pos[1] < m['board']['height'],
+            'Choose a cell inside the map')
+    return list(pos)
+
+
+def resize_map(data, mid, width, height):
+    require(type(width) is int and type(height) is int and 1 <= width <= 128 and
+            1 <= height <= 128, 'Map size must be between 1 and 128')
+    def change(_, m):
+        m['board']['width'], m['board']['height'] = width, height
+        # Shrinking may not silently discard objectives, objects, or actors.
+        m['board']['tiles'] = [t for t in m['board']['tiles']
+                                if t['pos'][0] < width and t['pos'][1] < height]
+    return _edit(data, mid, change)
+
+
+def add_unit(data, mid, uid, name, team, pos):
+    _identifier(uid, 'Unit id')
+    require(team in ('player', 'enemy', 'neutral'), 'Invalid team')
+    require(isinstance(name, str) and bool(name.strip()), 'Unit needs a name')
+    def change(doc, m):
+        cell = _cell(m, pos)
+        require(all(u['id'] != uid for u in m['units']), 'Unit id already exists')
+        # Inherit the complete working combat contract, not a partial actor.
+        source = next((u for candidate in [m, *doc['missions']]
+                       for u in candidate['units'] if u['team'] == team), None)
+        require(source is not None, f'No existing {team} unit to use as a template')
+        unit = deepcopy(source)
+        unit.update(id=uid, name=name.strip(), team=team, pos=cell)
+        unit['hp'] = unit['max_hp']
+        unit['mp'] = unit['max_mp']
+        m['units'].append(unit)
+    return _edit(data, mid, change)
+
+
+def remove_unit(data, mid, uid):
+    def change(_, m):
+        require(any(u['id'] == uid for u in m['units']), 'Unknown unit')
+        m['units'] = [u for u in m['units'] if u['id'] != uid]
+    return _edit(data, mid, change)
+
+
+def add_object(data, mid, oid, kind, pos, *, link='', destination=None):
+    _identifier(oid, 'Object id')
+    require(kind in ('door', 'switch', 'chest', 'ram', 'catapult', 'passage', 'defense'),
+            'Unknown object type')
+    def change(_, m):
+        cell = _cell(m, pos)
+        require(all(o['id'] != oid for o in m['objects']), 'Object id already exists')
+        obj = {'id': oid, 'kind': kind, 'pos': cell}
+        if kind in ('switch', 'ram', 'catapult'):
+            require(any(o['id'] == link and o['kind'] == 'door' for o in m['objects']),
+                    'Choose an existing door id for this object')
+            obj['link'] = link
+        elif kind == 'passage':
+            obj['destination'] = _cell(m, destination)
+        elif kind == 'defense':
+            obj.update(team='enemy', cells=[cell], charges=2, power=15)
+        m['objects'].append(obj)
+    return _edit(data, mid, change)
+
+
+def remove_object(data, mid, oid):
+    def change(_, m):
+        require(any(o['id'] == oid for o in m['objects']), 'Unknown object')
+        m['objects'] = [o for o in m['objects'] if o['id'] != oid]
+    return _edit(data, mid, change)
+
+
+def add_event(data, mid, eid, *, condition, action='message', pos=None,
+              tick=10, unit='', text='', amount=4):
+    """Small guided subset of engine trigger rules; JSON retains advanced rules."""
+    _identifier(eid, 'Event id')
+    require(condition in ('tick', 'enter', 'defeated', 'hp_below'), 'Unknown condition')
+    require(action in ('message', 'hazard'), 'Unknown action')
+    def change(_, m):
+        require(all(t['id'] != eid for t in m['triggers']), 'Event id already exists')
+        event = {'id': eid, 'condition': condition}
+        if condition == 'tick':
+            event['value'] = tick
+        elif condition == 'enter':
+            event['pos'] = _cell(m, pos)
+        elif condition in ('defeated', 'hp_below'):
+            require(any(u['id'] == unit for u in m['units']), 'Select an existing unit')
+            event['unit'] = unit
+            if condition == 'hp_below':
+                event['percent'] = 50
+        if action == 'message':
+            event['actions'] = [{'kind': 'message', 'text': text}]
+        else:
+            event['actions'] = [{'kind': 'hazard', 'pos': _cell(m, pos), 'amount': amount}]
+        m['triggers'].append(event)
+    return _edit(data, mid, change)
+
+
+def remove_event(data, mid, eid):
+    def change(_, m):
+        require(any(e['id'] == eid for e in m['triggers']), 'Unknown event')
+        m['triggers'] = [e for e in m['triggers'] if e['id'] != eid]
+    return _edit(data, mid, change)
+
+
+def add_blank_mission(data, mid, name, width=8, height=8):
+    """Create a playable blank board with two existing actor templates."""
+    _identifier(mid, 'Mission id')
+    require(isinstance(name, str) and bool(name.strip()), 'Mission needs a name')
+    require(type(width) is int and type(height) is int and 4 <= width <= 128 and
+            4 <= height <= 128, 'Blank map size must be between 4 and 128')
+    new = deepcopy(data)
+    require(_mission(new, mid) is None, 'Mission id already exists')
+    template = new['missions'][0]
+    actors = []
+    for team, pos in [('player', [1, height - 2]), ('enemy', [width - 2, 1])]:
+        original = next((u for m in new['missions'] for u in m['units']
+                         if u['team'] == team and tuple(u.get('footprint', (1, 1))) == (1, 1)), None)
+        require(original is not None, f'A single-cell {team} actor is required')
+        actor = deepcopy(original)
+        actor['pos'] = pos
+        actors.append(actor)
+    mission = deepcopy(template)
+    mission.update(id=mid, name=name.strip(),
+                   board={'width': width, 'height': height, 'tiles': []},
+                   units=actors, objective='eliminate', goal=[], objects=[],
+                   triggers=[], deployment=[], protected_id='', relic=None,
+                   next_missions=[])
+    new['missions'].append(mission)
+    return Content.from_dict(new).to_dict()
+
+
+def set_mission_properties(data, mid, *, name, objective, reward, next_missions):
+    require(isinstance(name, str) and bool(name.strip()), 'Mission needs a name')
+    require(isinstance(next_missions, list), 'Next missions must be a list')
+    def change(_, m):
+        m['name'] = name.strip()
+        m['objective'] = objective
+        m['reward'] = reward
+        m['next_missions'] = next_missions
+    return _edit(data, mid, change)
