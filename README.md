@@ -11,6 +11,21 @@ sont conservés dans [`assets/`](assets/README.md) ; leur utilisation par un fut
 renderer est un chantier distinct. La conversion des anciennes cartes et sauvegardes
 n'est pas garantie. Voir [les limites de la migration](docs/GAMEPLAY.md#migration-de-godot).
 
+## Nouveau contenu : Jeanne d'Arc (prologue jouable)
+
+Une campagne indépendante, **Jeanne d'Arc — Les Cendres du Royaume**, propose
+sept scènes narratives et cinq missions tactiques, avec un embranchement
+secours / poursuite, un flashback d'entraînement et une fuite finale. Les
+anciens exemples Sporebound restent conservés.
+
+```sh
+python -m sporebound validate --content sporebound/content/jeanne.json --project sporebound/content/jeanne.game.json
+python -m sporebound player --content sporebound/content/jeanne.json --project sporebound/content/jeanne.game.json
+```
+
+Cette tranche ne contient pas encore les actes I–V ni l'exploration libre
+et les cinématiques 2D. Voir [le guide du prologue](docs/JEANNE_PROLOGUE.md).
+
 ## Player & Presentation 2.6
 
 Le client `python -m sporebound player` utilise désormais `GameSession` et les
