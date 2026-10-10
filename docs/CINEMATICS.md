@@ -90,8 +90,11 @@ n'est pas sérialisé. Les nouveaux projets ajoutant des cinématiques ont
 normalement un nouveau digest de projet, ce qui exige de nouvelles sessions
 ou un mécanisme explicite de migration pour les anciennes sauvegardes.
 
-Ce jalon **ne** fournit **pas encore** de pistes musicales mixées,
-de panoramas importés, d'animations articulées de sprites, d'effets
+Le jalon **2.9.1** complète désormais cette base par des pistes musicales
+et ambiances mixées, des voix, des crossfades et du ducking, décrits dans
+[`CINEMATIC_AUDIO_2.md`](CINEMATIC_AUDIO_2.md).
+
+Il ne fournit toujours pas de panoramas importés, d'animations articulées de sprites, d'effets
 de particules, de montage vidéo, de lipsync, de branches interactives au sein
 d'une cinématique, de keyframes de poses articulées ou de synchronisation avec
 l'animation d'une bataille en cours. Les embranchements interactifs doivent
