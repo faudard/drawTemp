@@ -55,6 +55,15 @@ class SynergyUnlockGUITests(unittest.TestCase):
                                    and w.get() == "ziggy,momo")
                     members.delete(0, "end")
                     members.insert(0, "momo,luma")
+                    # Tree selection loads the existing "missions_together >= 1".
+                    # Set the intended predicate explicitly, as a real author does.
+                    stat = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                and "shared_kills" in tuple(w["values"]))
+                    stat.set("shared_kills")
+                    threshold = next(w for w in widgets if type(w) is ttk.Entry
+                                     and w.get() == "1")
+                    threshold.delete(0, "end")
+                    threshold.insert(0, "2")
                     buttons["Remplacer"].invoke()
                     root.update()
                     buttons["Créer / enregistrer"].invoke()
