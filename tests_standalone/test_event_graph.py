@@ -6,9 +6,10 @@ from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.engine import Battle
 from sporebound.model import Content, RuleError
 from sporebound import event_composer
-from sporebound.event_graph import (add_action, build_event_graph, delete_event,
-                                   duplicate_event, remove_action, reorder_action,
-                                   reorder_event, update_action, update_condition)
+from sporebound.event_graph import (add_action, append_wave_actor, build_event_graph,
+                                   delete_event, duplicate_event, remove_action,
+                                   remove_wave_actor, reorder_action, reorder_event,
+                                   update_action, update_condition)
 
 
 class TacticalEventGraphTests(unittest.TestCase):
@@ -122,6 +123,33 @@ class TacticalEventGraphTests(unittest.TestCase):
                                        Content.from_dict(updated).missions[self.mid].triggers])
         with self.assertRaises(RuleError):
             duplicate_event(updated, self.mid, 'wave_demo', 'other_wave')
+
+    def test_multi_actor_wave_authoring_is_atomic_and_runtime_compatible(self):
+        data = deepcopy(self.data)
+        data.setdefault('archetypes', {})['light_foe'] = {'max_hp': 24}
+        first = event_composer.action(
+            'wave', pos=[2, 0], actor_id='wave_one',
+            archetype='light_foe', name='Sentinelle')
+        second = event_composer.action(
+            'wave', pos=[2, 1], actor_id='wave_two',
+            archetype='light_foe', name='Archer')['actors'][0]
+        data = event_composer.save_event(
+            data, self.mid, 'wave_multi',
+            event_composer.condition('tick', tick=50), [first])
+        original = deepcopy(data)
+        updated = append_wave_actor(data, self.mid, 'wave_multi', 0, second)
+        wave = next(e for e in Content.from_dict(updated).missions[self.mid].triggers
+                    if e['id'] == 'wave_multi')['actions'][0]
+        self.assertEqual([a['id'] for a in wave['actors']],
+                         ['wave_one', 'wave_two'])
+        self.assertEqual(data, original)
+        with self.assertRaises(RuleError):
+            append_wave_actor(updated, self.mid, 'wave_multi', 0, second)
+        self.assertEqual(data, original)
+        reverted = remove_wave_actor(updated, self.mid, 'wave_multi', 0)
+        self.assertEqual(reverted, data)
+        with self.assertRaises(RuleError):
+            remove_wave_actor(data, self.mid, 'wave_multi', 0)
 
     def test_graph_budget_is_deterministic(self):
         data = event_composer.save_event(
