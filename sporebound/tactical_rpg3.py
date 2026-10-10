@@ -19,6 +19,20 @@ def tactical_rpg_rules(base=None):
     from .bosses3 import install_bosses, phase_boss_command
 
     rules = base if base is not None else default_rules()
+    original_tactical = rules.behaviors.get("tactical").choose
+
+    def tactical_with_roles(battle):
+        actor = battle.active
+        # Starting roles authored in the Studio opt in without changing the
+        # stored legacy "tactical" behavior. Preserve custom patrol routes.
+        if (actor is not None and not actor.patrol_route
+                and any(tag in actor.tags for tag in ("medic", "healer", "protector"))):
+            return coordinated_command(battle)
+        return original_tactical(battle)
+
+    rules = rules.with_family("behaviors", rules.behaviors.with_rule(
+        "tactical", BehaviorRule(tactical_with_roles, version="2.7.1-role"),
+        replace_existing=True))
     rules = rules.with_family("behaviors", rules.behaviors.with_rule(
         "coordinated", BehaviorRule(coordinated_command, version="2.7.1")))
     rules = rules.with_family("behaviors", rules.behaviors.with_rule(
