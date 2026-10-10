@@ -248,6 +248,24 @@ class CastleIntegrationTests(unittest.TestCase):
                          Battle.replay(battle.recording(), rules=rules).digest())
 
 
+class BossBehaviorTests(unittest.TestCase):
+    def test_second_phase_charge_is_legal_and_replayable(self):
+        hero = Unit("hero", "Hero", "player", (5, 2))
+        boss = Unit("boss", "Boss", "enemy", (1, 2), speed=20,
+                    behavior="phase_boss", tags=["boss_phase:2"])
+        content = Content({}, {"m": Mission("m", "M", Board(8, 5), [hero, boss])})
+        rules = tactical_rpg_rules()
+        battle = Battle(content, "m", seed=2, rules=rules)
+        before = battle.digest()
+        cmd = choose_command(battle)
+        self.assertEqual(cmd, {"kind": "charge", "cell": [5, 2]})
+        self.assertEqual(battle.digest(), before)
+        battle.execute(cmd)
+        self.assertTrue(any(event["kind"] == "charge" for event in battle.events))
+        self.assertEqual(battle.digest(), Battle.replay(
+            battle.recording(), rules=rules).digest())
+
+
 class BalanceTests(unittest.TestCase):
     def test_seeded_metrics_percentiles_and_reproducibility(self):
         content = arena()
