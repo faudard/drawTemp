@@ -48,6 +48,7 @@ class CharacterRulesGUITests(unittest.TestCase):
                     self.assertEqual(tab_names[:5],
                                      ['Héros / monstres', 'Archétypes', 'Compétences',
                                       'Classes', 'Équipement'])
+                    self.assertIn('Synergies & secrets', tab_names)
                     self.assertIn('Graphe des classes', tab_names)
                     self.assertIn('IA & patrouilles', tab_names)
 

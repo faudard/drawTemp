@@ -1,6 +1,6 @@
 """Tk Character & Rules Studio 2.5.3.
 
-Five guided panels share the Content document and the existing Document
+Guided panels share the Content document and the existing Document
 undo/redo stack. No gameplay import or secondary mutable actor registry.
 """
 from . import actor_catalog, character_authoring as edit
@@ -24,6 +24,8 @@ class CharacterRulesStudio:
         self._skills_tab()
         self._jobs_tab()
         self._equipment_tab()
+        from .studio_synergy_unlocks import SynergyUnlockStudio
+        self.synergy_unlocks = SynergyUnlockStudio(self, self.tabs)
         from .studio_class_ai import ClassAIStudio
         self.class_ai = ClassAIStudio(self, self.tabs)
         self.status = self.tk.StringVar(value='Édits vérifiés et annulables par le Studio.')
@@ -354,7 +356,6 @@ class CharacterRulesStudio:
 
     def _jobs_tab(self):
         page = self.ttk.Frame(self.tabs)
-        self.jobs_tab = page
         self.tabs.add(page, text='Classes')
         self.j_id, self.j_box = self._field(page, 'Classe / nouvel ID', row=0, values=[], editable=True)
         self.j_box.bind('<<ComboboxSelected>>', lambda e: self._load_job())
@@ -477,4 +478,5 @@ class CharacterRulesStudio:
             self._load_job()
         if self.i_id.get() in data.get('equipment',{}):
             self._load_item()
+        self.synergy_unlocks.refresh()
         self.class_ai.refresh()
