@@ -8,6 +8,7 @@ from .game_project import GameProject
 from .model import Content, RuleError
 from .player_session import PlayerSession
 from .siege import available_operations
+from .tactical_ui import tactical_snapshot
 
 
 def launch(content_path, project_path=None, profile_path=None):
@@ -147,6 +148,7 @@ def launch(content_path, project_path=None, profile_path=None):
             campaign_screen()
             return
         title_bar(view,battle.mission.name)
+        tactical = tactical_snapshot(battle, selected)
         ttk.Label(view,text=f'Tick {battle.tick}  |  '+(
             f'Résultat : {battle.result}' if battle.result else
             'Déploiement' if battle.deploying else
@@ -165,6 +167,11 @@ def launch(content_path, project_path=None, profile_path=None):
                 actions=['move','attack',*battle.active.skills,'item:potion','item:ether',
                          'item:phoenix',*['object:'+o['id'] for o in battle.mission.objects],
                          *available_operations(battle,battle.active)]
+                if tactical["enhanced"]:
+                    if not battle.active.acted:
+                        actions.extend('formation:'+mode for mode in
+                                       ('shield_wall','phalanx','escort','none'))
+                        actions.append('prepare:phalanx_hold')
             else:
                 actions=[]
             if command_var.get() not in actions:
@@ -196,6 +203,15 @@ def launch(content_path, project_path=None, profile_path=None):
             color='#475569' if tile.blocked else '#fed7aa' if tile.hazard else '#ddd6fe' if tile.height else '#e2e8f0'
             canvas.create_rectangle(x*scale,y*scale,(x+1)*scale,(y+1)*scale,
                                     fill=color,outline='#94a3b8')
+        # Only armed corridors are threats; incomplete formations are cosmetic.
+        for zone in tactical["zones"]:
+            if not zone["armed"]:
+                continue
+            for zx,zy in zone["cells"]:
+                canvas.create_rectangle(zx*scale+3,zy*scale+3,
+                                        (zx+1)*scale-3,(zy+1)*scale-3,
+                                        outline='#dc2626' if zone["team"]=='enemy' else '#15803d',
+                                        width=2)
         for unit in battle.units:
             x,y=unit.pos
             fill='#60a5fa' if unit.team=='player' else '#fb7185'
@@ -211,6 +227,27 @@ def launch(content_path, project_path=None, profile_path=None):
         info.pack(side='right',fill='y')
         rows=[f'Case sélectionnée : {tuple(selected)}','', 'Unités :']
         rows.extend(f'{u.name}: PV {u.hp}/{u.max_hp} MP {u.mp}/{u.max_mp}' for u in battle.units)
+        if tactical["enhanced"]:
+            rows.extend(['', 'Tactique :'])
+            for formation in tactical["formations"]:
+                active = 'actif' if (formation["shield_wall"] or
+                                    formation["phalanx"] or formation["escort"]) else 'incomplet'
+                rows.append(f'{formation["unit"]}: {formation["mode"]} ({active})')
+            for boss in tactical["bosses"]:
+                order = boss["command"]
+                intent = order["kind"] if order else 'hors tour'
+                rows.append(f'Boss {boss["unit"]} phase {boss["phase"]}: {intent}')
+            for combo in tactical["synergies"]:
+                rows.append(f'Combo {combo["tactic"]}: {", ".join(combo["members"])}')
+            for item in tactical["attack"]:
+                rows.append(f'Prévision {item["kind"]}: {item["amount"]} '+
+                            f'({item["chance"]:.0%}) sur {item["unit"]}')
+            for threat in tactical["movement_threats"]:
+                rows.append(f'Danger {threat["kind"]}: {threat["unit"]}')
+            if tactical["focus"]:
+                leader = tactical["focus"][0]
+                rows.append(f'Cible prioritaire: {leader["target"]} '+
+                            f'({leader["expected_damage"]} dégâts attendus)')
         rows.extend(['','Journal :'])
         rows.extend(str(item) for item in battle.events[-25:])
         info.insert('1.0','\n'.join(rows)); info.configure(state='disabled')
@@ -230,6 +267,16 @@ def launch(content_path, project_path=None, profile_path=None):
             command={'kind':'deploy','unit':deploy_var.get(),'cell':list(selected),'facing':facing}
         elif kind=='move':
             command={'kind':'move','cell':list(selected)}
+        elif kind.startswith('formation:'):
+            mode=kind.split(':',1)[1]
+            command={'kind':'formation','mode':mode}
+            if mode=='escort':
+                ally=battle.at(tuple(selected))
+                if ally is None or ally.team!=battle.active.team or ally.id==battle.active.id:
+                    raise RuleError('Sélectionner la case d’un allié à escorter')
+                command['target']=ally.id
+        elif kind.startswith('prepare:'):
+            command={'kind':'prepare','mode':kind.split(':',1)[1]}
         elif kind.startswith('item:'):
             command={'kind':'item','item':kind[5:],'cell':list(selected)}
         elif kind.startswith('object:'):
