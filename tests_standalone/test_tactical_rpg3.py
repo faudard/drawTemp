@@ -8,7 +8,7 @@ from sporebound.bosses3 import boss_preview
 from sporebound.builds3 import talent_catalog
 from sporebound.campaign import Campaign
 from sporebound.engine import Battle
-from sporebound.formations3 import formation_preview
+from sporebound.formations3 import formation_preview, formation_control_map
 from sporebound.model import Board, Content, Effect, Mission, RuleError, Skill, Unit
 from sporebound.rules import default_rules
 from sporebound.synergies3 import synergy_readiness
@@ -95,6 +95,41 @@ class FormationTests(unittest.TestCase):
         battle.unit("b").tags = []
         unlinked = battle.damage(caster, battle.unit("e"), skill, skill.effects[0])
         self.assertGreater(linked, unlinked)
+
+    def test_phalanx_hold_contested_corridor_and_replay(self):
+        a = Unit("a", "Spear A", "player", (2, 1), weapon="spear",
+                 tags=["formation:phalanx"])
+        b = Unit("b", "Spear B", "player", (2, 2), weapon="spear",
+                 tags=["formation:phalanx"])
+        e = Unit("e", "Raider", "enemy", (5, 1))
+        c = Content({}, {"m": Mission("m", "M", Board(7, 5), [a, b, e])})
+        rules = tactical_rpg_rules()
+        battle = Battle(c, "m", seed=3, rules=rules)
+        original = battle.digest()
+        self.assertEqual(formation_control_map(battle, "player")[0]["armed"], False)
+        self.assertEqual(original, battle.digest())
+        battle.execute({"kind": "prepare", "mode": "phalanx_hold"})
+        self.assertEqual(formation_control_map(battle, "player")[0]["armed"], True)
+        self.assertEqual(
+            [row["unit"] for row in battle.reaction_threats((3, 1), "enemy")],
+            ["a"])
+        battle.execute({"kind": "end"})
+        battle.execute({"kind": "end"})
+        before = battle.unit("e").hp
+        battle.execute({"kind": "move", "cell": [3, 1]})
+        self.assertLess(battle.unit("e").hp, before)
+        self.assertTrue(any(ev["kind"] == "prepared_triggered"
+                            and ev["mode"] == "phalanx_hold"
+                            for ev in battle.events))
+        self.assertEqual(battle.digest(),
+                         Battle.replay(battle.recording(), rules=rules).digest())
+
+    def test_phalanx_hold_without_partner_rejected_atomically(self):
+        battle = self.setup_battle()
+        original = battle.digest()
+        with self.assertRaises(RuleError):
+            battle.execute({"kind": "prepare", "mode": "phalanx_hold"})
+        self.assertEqual(battle.digest(), original)
 
     def test_atomic_command_replay_and_escort_forecast(self):
         battle = self.setup_battle()
