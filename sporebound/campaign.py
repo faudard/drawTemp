@@ -144,13 +144,13 @@ class Campaign:
         return rows
 
     def talent_catalog(self, content, uid, job_id):
-        from .builds3 import talent_catalog
-        content.validate()
+        from .builds3 import talent_catalog, validate_talent_trees
+        validate_talent_trees(content)
         return talent_catalog(content, self.hero(uid), job_id)
 
     def learn_talent(self, content, uid, job_id, talent_id):
-        from .builds3 import learn_talent
-        content.validate()
+        from .builds3 import learn_talent, validate_talent_trees
+        validate_talent_trees(content)
         learn_talent(content, self.hero(uid), job_id, talent_id)
 
     def set_job(self, content, uid, job):
