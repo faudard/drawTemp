@@ -19,6 +19,8 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Objectifs, couronne, objets interactifs et triggers simples.
 - [x] Progression, jobs, boutique/équipement, campagne et replays.
 - [x] Notre éditeur de carte avec playtest, JSON, undo/redo et journal.
+- [x] Nettoyage de l'ancien projet Godot ; illustrations et kits réutilisables conservés.
+- [x] Test de non-régression empêchant la réintroduction d'artefacts Godot.
 
 ## 2.0b — Game Studio (PR #14)
 

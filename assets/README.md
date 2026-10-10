@@ -1,9 +1,17 @@
-# Sporebound Tactics visual assets
+# Bibliothèque graphique Sporebound
 
-Place imported art under these folders and select it from **Sporebound Studio > Visuals/VFX**:
+Ce dossier conserve les visuels **réutilisables sans Godot** pour le futur
+client graphique : portraits, illustrations, sprites, icônes et kits PNG/JPG.
 
-- `assets/portraits/` — dialogue/unit portraits (`png`, `jpg`, `webp`, `svg`)
-- `assets/sprites/` — unit sprite sheets (`png`, `jpg`, `webp`)
-- `assets/vfx/` — optional VFX textures/sprite sheets
+- `portraits/` : portraits de personnages et visuels de dialogue
+- `sprites/` : planches et conventions de sprites directionnels
+- `hero_parts/` : éléments modulaires de personnage par direction
+- `hero_kits/` : kits graphiques et manifestes `kit.json`
+- `status_icons/` et `vfx/` : icônes, références et effets graphiques
+- `catalog.json` : ancien inventaire d'illustrations, converti en chemins
+  relatifs ; ce catalogue sert de **référence**, non de source runtime active
 
-The game keeps its procedural mushroom rendering when no sprite sheet is assigned, so art can be migrated one unit at a time.
+Les anciens fichiers `.import`, ressources `.tres`, matériaux et shaders Godot
+ont été retirés. Le moteur et l'éditeur Python actuels ne chargent pas
+automatiquement ces images. Leur intégration exige un contrat graphique
+et des tests dédiés ; ne pas confondre catalogue d'art et contenu jouable.

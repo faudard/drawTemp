@@ -58,7 +58,8 @@ Le chargement coûte le temps de rejouer la partie ; des checkpoints seront néc
 pour les très longues sessions. Le rollback copie actuellement l’état pour privilégier
 la correction ; il devra être profilé avant de viser de très grandes batailles.
 
-Les versions Godot sont des références historiques, sans import au runtime autonome.
+L'ancien projet Godot est conservé dans l'historique Git uniquement. Aucune
+ressource de ce moteur n'est importée par le runtime Python autonome.
 
 ## Extension du moteur
 

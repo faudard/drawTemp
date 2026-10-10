@@ -1,14 +1,15 @@
 # Sporebound Tactics — gameplay autonome 2.0 alpha
 
-**Le développement actif quitte Godot.** Le moteur tactique, les données et notre
-éditeur sont désormais dans `sporebound/`, en Python 3.10+ sans dépendance tierce.
-L’interface Tk est volontairement utilitaire : la priorité est aux règles,
-aux scénarios, à l’équilibrage et aux tests.
+**Le runtime actif est désormais 100 % Python 3.10+**, sans dépendance tierce pour
+le moteur tactique. L'éditeur et le client joueur sont dans `sporebound/` et
+utilisent Tk. La priorité reste aux règles, scénarios, tests et outils d'authoring.
 
-Les anciens scripts/scènes/assets Godot sont conservés comme sources de référence.
-Ils ne sont ni chargés ni nécessaires au nouveau runtime. Cette version est une
-base jouable substantielle, **pas encore une conversion intégrale** de l’ancien jeu.
-Voir [la migration et ses limites](docs/GAMEPLAY.md#migration-de-godot).
+Les sources, scènes, plug-ins, ressources et anciens tests Godot ont été supprimés
+de la branche active. Leur historique reste consultable via Git, mais ils ne sont
+plus exécutés ni maintenus. Les illustrations PNG/JPG et les kits réutilisables
+sont conservés dans [`assets/`](assets/README.md) ; leur utilisation par un futur
+renderer est un chantier distinct. La conversion des anciennes cartes et sauvegardes
+n'est pas garantie. Voir [les limites de la migration](docs/GAMEPLAY.md#migration-de-godot).
 
 ## Démarrer
 
@@ -206,8 +207,9 @@ Les opérations et les batailles sont vérifiées par replay v5.
 - [Chronologie stratégique, fronts et replays](docs/MULTI_FRONT.md)
 - [Studio de création de cartes, campagnes et écrans de jeu](docs/STUDIO.md)
 - [Roadmap gameplay et éditeur](ROADMAP.md)
-- Historique Godot : [README](docs/legacy/GODOT_README.md),
-  [architecture](docs/legacy/GODOT_ARCHITECTURE.md), documents `FFT_*` à la racine.
+- [Bibliothèque graphique réutilisable](assets/README.md) — images et catalogue JSON
+- Ancien projet Godot : consulter l'historique Git antérieur au nettoyage ;
+  les fichiers de l'ancien moteur ne sont plus présents dans cette branche.
 
 La CI vérifie Python 3.10/3.12/3.14 sur Windows/Linux/macOS, les règles, les replays
 et l’installation. Un job Linux teste l’interface Tk réelle sous Xvfb.

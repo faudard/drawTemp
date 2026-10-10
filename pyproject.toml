@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sporebound-tactics"
 version = "2.0.0a1"
-description = "Godot-independent tactical gameplay engine and mission workbench"
+description = "Standalone Python tactical gameplay engine and mission workbench"
 requires-python = ">=3.10"
 dependencies = []
 

@@ -117,23 +117,23 @@ d’activation pendant 10 000 ticks devient un match nul explicite.
 
 ## Migration de Godot
 
-**Actif et autonome :** `sporebound/`, `tests_standalone/`, `pyproject.toml` et la CI
-`standalone.yml`. Godot n’est utilisé par aucune commande du nouveau runtime.
+Le seul runtime maintenu est le moteur Python `sporebound/`, avec ses scénarios
+JSON, le Studio Tk, le client joueur et les tests `tests_standalone/`.
+La CI `standalone.yml` ne dépend pas de Godot.
 
-**Conservé pour référence :** `scripts/`, `scenes/`, `maps/`, `addons/`, `data/*.tres`,
-`project.godot`, assets, anciens tests `.gd` et documents versionnés. L’ancien README et
-l’ancienne architecture sont dans `docs/legacy/` ; leurs anciens liens étaient relatifs
-à la racine du dépôt. Les anciens points d’entrée Godot restent exécutables séparément.
+L'ancien projet Godot (scènes `.tscn`, ressources `.tres`, scripts `.gd`,
+plug-in Studio, tests et anciens patchs) a été retiré de la branche active.
+Ses sources sont toujours récupérables dans l'historique Git précédent ce
+nettoyage. Les visuels PNG/JPG, kits de héros et un catalogue de ressources
+aux chemins relatifs ont été conservés sous `assets/`, **sans intégration
+automatique au renderer Python**.
 
-Les JSON fournis reprennent les personnages et l’esprit tactique du projet, mais ce sont
-quatre scénarios de travail, avec stats/compétences rééquilibrées, pas une conversion
-fidèle des trois maps `.tscn`. Il n’existe pas encore d’import automatique `.tres/.tscn`
-ou des anciennes sauvegardes. Ne pas supprimer ces sources avant migration vérifiée.
-
-Restent notamment : compatibilité zodiacale/sexe, Intercept, décompte de disparition des
-corps, arbres de progression historiques, tous les passifs et effets custom, renforts,
-cinématiques/dialogues, créateur de héros et pipeline d’assets. Aucun de ces systèmes
-n’est déclaré porté par cette PR. Le nouveau runtime n’est pas un clone FFT exact.
+Les missions JSON fournies sont des scénarios autonomes rééquilibrés,
+pas une conversion fidèle des anciennes maps. Il n'existe pas d'importeur
+maintenu pour les scènes, ressources ou sauvegardes Godot ; consulter l'historique
+Git si une migration de contenu supplémentaire est envisagée.
+Les mécaniques historiques n'ont pas toutes une correspondance dans le
+moteur actuel : aucune parité intégrale FFT/Godot n'est revendiquée.
 
 ## Validation
 
