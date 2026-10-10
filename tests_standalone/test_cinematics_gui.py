@@ -55,8 +55,9 @@ class CinematicGUITests(unittest.TestCase):
                     root.update()
                     self.assertEqual(showerror.call_args_list, [],
                                      "Cinematic preview was rejected")
+                    # Toplevel is parented to the Studio tab, not the Tk root.
                     self.assertTrue(any(isinstance(w, tk.Toplevel)
-                                        for w in root.winfo_children()))
+                                        for w in all_widgets(root)))
                     skip = next(w for w in all_widgets(root)
                                 if isinstance(w, ttk.Button)
                                 and w.cget("text") == "Passer la cinématique")
