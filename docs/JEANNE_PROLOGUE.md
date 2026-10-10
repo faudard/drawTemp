@@ -98,7 +98,7 @@ Le graphe conserve un chemin neutre après les deux options ; **aucun** \`Missio
 ## Gameplay et limites
 
 - Les personnages sont des combattants humains. Les compétences « Estoc », « Frappe de garde » et « Premiers soins » utilisent les règles physiques/soins existantes, sans magie de combat, invocation ou démons.
-- L'apparence utilise le renderer Tk actuel, sans sprites ou cinématiques spécifiques : portraits, feu animé, fumée, champ traversable et coupe narrative sont des travaux de **présentation ultérieurs**.
+- Le Player Tk affiche maintenant deux scènes explorables et des vignettes vectorielles animées pour le feu et les visions. Les sprites de personnages, illustrations finales, animations avancées et cinématiques complètes restent à créer.
 - Le flashback est matérialisé par une mission d'entraînement qui se termine lorsque Renaud perd tous ses PV : il ne meurt **pas** dans l'histoire ; les objectifs avancés de duel sans élimination feront partie de l'itération suivante.
 - La mission « Secours » vérifie que Margot survit et que suffisamment de temps s'écoule ; elle ne simule pas individuellement chaque habitant. La fin « Fuite » exige une unité jouable dans une case d'extraction **et** la survie du rescapé protégé, mais pas son déplacement physique dans la zone. Un véritable objectif multi-unité d'extraction est futur.
 - Les conséquences exactes des choix sont persistées pour l'acte I. Les drapeaux sont du contenu data-driven dans \`GameProject.story\` et ne requièrent aucune modification des règles ni de version de sauvegarde.
@@ -117,7 +117,8 @@ La suite dédiée charge réellement Content et GameProject, conduit chaque chem
 
 - **3.0.2 — terminé dans cette tranche** : nouveau contenu autonome, unités, jobs, équipements, titre et scènes.
 - **3.0.3 — tranche jouable** : sept scènes et cinq rencontres ; les deux variantes de mission sont exclusives ; sauvegarde/reprise et tests.
-- **3.0.3 suite** : déplacement libre dans les champs, cases de civils à sauver, animation d'incendie, caméra narrative, interactions et portraits propres à Jeanne.
+- **3.0.3.1 — livré** : exploration sur grille des champs et des ruines, interactions persistantes et vignettes animées.
+- **3.0.3 suite** : habitants réellement évacuables et interactifs, caméra narrative avancée, portraits spécifiques, animation d'incendie plus riche.
 - **3.1** : actes I et relations, premières preuves et retour de Guillaume.
 - **3.3** : château de Valcroix (réemploi des moteurs de siège validés).
 - **3.4** : démons tardifs et embranchements majeurs.
