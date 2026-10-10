@@ -104,6 +104,10 @@ class PlayerController:
         require(len(missions) >= 2, "Choose at least two sectors")
         return self._apply(self.session.start_fronts, missions, focused)
 
+    def start_configured_siege(self):
+        """Autosaved launch; failed mission gates restore the previous state."""
+        return self._apply(self.session.start_configured_siege)
+
     def switch_front(self, name):
         return self._apply(self.session.switch_front, name)
 

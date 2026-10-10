@@ -87,6 +87,15 @@ class GameSession:
         self._settle()
         return battle
 
+    def start_configured_siege(self):
+        """Start the siege authored for this campaign; preserve mission locks."""
+        from .siege_authoring import validate_plan
+        plan = self.project.sieges.get(self.campaign_id)
+        require(plan is not None, 'No siege plan configured for this campaign')
+        plan = validate_plan(plan, self.content)
+        return self.start_fronts(plan['missions'], plan['focused'],
+                                 specs=plan['specs'], logistics=plan['logistics'])
+
     def start_fronts(self, missions, focused, *, specs=None, links=None,
                      logistics=None, campaign=None):
         require(self.mode == "campaign", "End the current encounter first")

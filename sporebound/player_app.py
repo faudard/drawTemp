@@ -197,6 +197,11 @@ class PlayerApplication:
                              lambda mid=mission_id: self._change(
                                  lambda: self.player.start_mission(mid))).pack(
                                      fill="x", padx=80, pady=5)
+            plan = self.project.sieges.get(session.campaign_id)
+            if plan is not None and set(plan['missions'].values()) <= set(available):
+                self._button(self.view, 'Déployer le siège scénarisé',
+                             lambda: self._change(self.player.start_configured_siege)).pack(
+                                 pady=10)
             if len(available) >= 2:
                 self._button(self.view, "Commandement multi-fronts",
                              lambda: self.front_setup(available)).pack(pady=16)
