@@ -309,3 +309,14 @@ Voir [le guide des conditions narratives](docs/NARRATIVE_CONDITIONS_3.md).
 
 La CI vérifie Python 3.10/3.12/3.14 sur Windows/Linux/macOS, les règles, les replays
 et l’installation. Un job Linux teste l’interface Tk réelle sous Xvfb.
+
+### 2.8 — Castle Vertical Slice
+
+Parcours château jouable : préparation, classes et équipement, choix du bélier / remparts / souterrains / négociation / assaut direct, fronts simultanés, salle du trône à phases, trois fins et reprise vérifiée.
+
+```bash
+python -m examples.castle_vertical_slice --save saves/castle-2.8.json
+python -m examples.castle_vertical_slice --load saves/castle-2.8.json
+```
+
+Voir [le guide 2.8](docs/VERTICAL_SLICE_2_8.md). Le parcours 2.8 est pour l'instant jouable au terminal ; l'intégration graphique Player / Studio reste à réaliser.
