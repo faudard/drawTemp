@@ -9,6 +9,7 @@ from pathlib import Path
 from . import siege_authoring
 from .fronts import MultiFrontSession
 from .model import require
+from .rules import default_rules
 from .ai import choose_command
 
 
@@ -56,7 +57,7 @@ class AuthoredSiegeController:
         self.slot = slot
         self.save_path = siege_authoring._save_path(
             self.project_path, blueprint["id"], slot)
-        self.rules = rules
+        self.rules = rules if rules is not None else default_rules()
         self.session = None
 
     def _check(self, fronts):
@@ -65,7 +66,8 @@ class AuthoredSiegeController:
                 and fronts.initial_specs == self.blueprint["specs"]
                 and fronts.links == self.blueprint["links"]
                 and fronts.initial_campaign == self.blueprint["campaign"]
-                and fronts.initial_logistics == self.blueprint.get("logistics"),
+                and fronts.initial_logistics == self.blueprint.get("logistics")
+                and fronts.rules.manifest() == self.rules.manifest(),
                 "Current session differs from authored siege definition")
 
     def _replace(self, fronts):
