@@ -241,6 +241,21 @@ class TacticalStudioTests(unittest.TestCase):
         document.undo()
         self.assertEqual(document.data, before)
 
+    def test_studio_playtest_opts_in_only_for_tactical_tags(self):
+        from sporebound.editor import Document
+
+        source = arena()
+        normal = Document(source).playtest("arena", seed=9)
+        self.assertEqual(normal.rules.manifest(), default_rules().manifest())
+        source.missions["arena"].units[1].tags = ["protector"]
+        battle = Document(source).playtest("arena", seed=9)
+        self.assertIn("formation", battle.rules.commands)
+        self.assertEqual(battle.rules.behaviors.get("tactical").version,
+                         "2.7.1-role")
+        self.assertEqual(battle.unit("enemy").tags, ["protector"])
+        self.assertEqual(battle.digest(),
+                         Battle.replay(battle.recording(), rules=tactical_rpg_rules()).digest())
+
     def test_phalanx_authoring_rejects_non_spear_and_keeps_role_tags(self):
         from sporebound.authoring import set_unit_combat_role
         content = arena()
