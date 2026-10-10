@@ -96,7 +96,8 @@ Gate : choix tactiques distincts selon équipe, terrain, adversaire et objectif.
 
 - [x] **2.8 foundation** : préparation des héros (équipe, classes, équipement), cinq approches tactiques/narratives, fronts liés, ressources, diplomatie conditionnelle, boss à phases et trois épilogues.
 - [x] **2.8 fiabilité** : journaux de préparation + bataille/stratégie, sauvegarde atomique et reprise par replay vérifié, tests multi-branches headless.
-- [ ] **2.8 Player / Studio** : intégrer le parcours dans l'interface graphique du Player, transitions et scènes d'introduction/épilogue, autoriser l'édition intégrale depuis Campaign & Siege Studio 2.5.4.
+- [x] **2.8.1 Castle Player GUI** : préparation, cinq approches, rendu tactique, carte stratégique, choix de doctrine/diplomatie, épilogues, sauvegardes/reprises avec contrôle de rollback ; entrée depuis le menu Player en checkout source.
+- [ ] **2.8.2 Studio → Player** : jouer les sièges personnalisés depuis Campaign & Siege Studio 2.5.4, reprendre les combats annexes (convoi/contre-attaque), transitions narratives/portraits et polissage UX.
 
 Lancement terminal : `python -m examples.castle_vertical_slice --save saves/castle-2.8.json`.
 Contrat, limites et gate : [Vertical Slice 2.8](docs/VERTICAL_SLICE_2_8.md).
