@@ -154,6 +154,27 @@ class TalentTests(unittest.TestCase):
         battle.execute({"kind": "end"})
         self.assertEqual(Battle.replay(battle.recording()).digest(), battle.digest())
 
+    def test_advanced_rules_survive_game_session_save_and_resume(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from sporebound.__main__ import DEFAULT_CONTENT
+        from sporebound.game_project import GameProject
+        from sporebound.game_session import GameSession
+
+        content = Content.load(DEFAULT_CONTENT)
+        project = GameProject.load(
+            Path(DEFAULT_CONTENT).with_suffix(".game.json"), content)
+        rules = tactical_rpg_rules()
+        session = GameSession.new(content, project, "main", seed=17, rules=rules)
+        session.start_mission("garden")
+        session.execute({"kind": "formation", "mode": "shield_wall"})
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "session.json"
+            session.save(path)
+            resumed = GameSession.load(path, content, project, rules=rules)
+            self.assertEqual(resumed.recording(), session.recording())
+            self.assertEqual(resumed.battle.digest(), session.battle.digest())
+
     def test_cycle_is_rejected_before_any_purchase(self):
         content = self.content()
         content.jobs["brave"]["talents"]["guard"]["requires"] = ["warcry"]
