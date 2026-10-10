@@ -40,6 +40,8 @@ class RoutesDiplomacyAuthoringTests(unittest.TestCase):
 
     def configured(self):
         bp = enable(self.blueprint(), self.content)
+        # The authored castle scenario makes the shortcut costly on purpose.
+        bp = route(bp, self.content, "direct", {}, 3, 4)
         bp = route(bp, self.content, "tunnels",
                    {"tunnels": ["victory"]}, 1, 2)
         bp = recovery(bp, self.content, "gate", "castle_gate_recovery",
