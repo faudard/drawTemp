@@ -148,6 +148,10 @@ class EventGraphStudio:
         self._button(buttons, '↑', lambda: self.move_action(-1))
         self._button(buttons, '↓', lambda: self.move_action(1))
         self._button(buttons, 'Éditeur par blocs', self.open_blocks)
+        wave_buttons = ttk.Frame(actions_tab)
+        wave_buttons.pack(fill='x', padx=4, pady=2)
+        self._button(wave_buttons, '+ acteur dans vague', self.add_wave_actor)
+        self._button(wave_buttons, '− dernier acteur vague', self.remove_wave_actor)
         ttk.Label(tab, textvariable=self.status, wraplength=1030).pack(
             fill='x', padx=9, pady=5)
 
@@ -246,6 +250,24 @@ class EventGraphStudio:
         index = self._selected_index()
         self._edit(lambda doc: event_graph.update_action(
             doc, self.owner.mission(), event['id'], index, self._action()))
+
+    def add_wave_actor(self):
+        event = self._event()
+        index = self._selected_index()
+        current = event['actions'][index]
+        require(current['kind'] in ('wave', 'queue_wave'),
+                'Sélectionner une vague de renforts')
+        require(self.action_kind.get() == current['kind'],
+                'Conserver le type de la vague sélectionnée')
+        actor = self._action()['actors'][0]
+        self._edit(lambda doc: event_graph.append_wave_actor(
+            doc, self.owner.mission(), event['id'], index, actor))
+
+    def remove_wave_actor(self):
+        event = self._event()
+        index = self._selected_index()
+        self._edit(lambda doc: event_graph.remove_wave_actor(
+            doc, self.owner.mission(), event['id'], index))
 
     def remove_action(self):
         event = self._event()
