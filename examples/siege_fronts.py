@@ -92,7 +92,8 @@ SIEGE_CAMPAIGN_PATHS["recovery"] = {
 }
 SIEGE_CAMPAIGN_PATHS["treaties"] = {
     "gate": {"requires_front": "supplies", "event": "interact",
-             "object": "supply_cache"},
+             "object": "supply_cache",
+             "final_stand_down": ["royal_guard_left"]},
 }
 SIEGE_CAMPAIGN_PATHS["counteroffensives"] = {
     "gate": {"after_turn": 5, "mission": "castle_gate_recovery",
