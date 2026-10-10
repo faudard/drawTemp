@@ -126,10 +126,27 @@ class PlayerApplication:
             row=2, column=0, columnspan=2, sticky="ew", pady=(20, 4))
         self._button(panel, "Continuer", self._load_game).grid(
             row=3, column=0, columnspan=2, sticky="ew", pady=4)
+        # The authored castle example is a repository demo, not packaged
+        # core content. Show its entry only when that source is available.
+        castle_example = Path(__file__).resolve().parent.parent / "examples" / "castle_vertical_slice.py"
+        row = 4
+        if castle_example.is_file():
+            self._button(panel, "Campagne Château (2.8)", self._open_castle).grid(
+                row=row, column=0, columnspan=2, sticky="ew", pady=4)
+            row += 1
         self._button(panel, "Options", self.options_screen).grid(
-            row=4, column=0, columnspan=2, sticky="ew", pady=4)
+            row=row, column=0, columnspan=2, sticky="ew", pady=4)
         self._button(panel, "Quitter", self.close).grid(
-            row=5, column=0, columnspan=2, sticky="ew", pady=4)
+            row=row + 1, column=0, columnspan=2, sticky="ew", pady=4)
+
+    def _open_castle(self):
+        from examples.castle_vertical_slice import castle_content, castle_blueprint
+        from .tactical_rpg3 import tactical_rpg_rules
+        from .castle_player_app import launch as launch_castle
+        save_path = self.player.profile.with_name(
+            self.player.profile.stem + "_castle.json")
+        return launch_castle(castle_content(), castle_blueprint(), save_path,
+                             rules=tactical_rpg_rules(), master=self.root)
 
     def _new_game(self):
         cid, slot = self.campaign_var.get(), int(self.slot_var.get())
