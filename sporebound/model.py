@@ -403,6 +403,8 @@ class Content:
             require(set(job.get("bonuses", {})) <= {"max_hp", "max_mp", "attack", "magic", "defense", "magic_defense", "move", "speed"}, "Unknown job bonus")
             for bonus in job.get("bonuses", {}).values():
                 integer(bonus, 0, 100, "job bonus")
+        from .builds3 import validate_talent_trees
+        validate_talent_trees(self)
         for item in self.equipment.values():
             integer(item.get("price", 0), 0, 1000000, "equipment price")
             require(item["slot"] in {"weapon", "armor", "accessory"}, "Unknown equipment slot")
