@@ -200,6 +200,7 @@ class SiegeStudio:
         self._button(toolbar, "Simuler 8 tours", self.preview)
         self._button(toolbar, "Démarrer / rejouer", self.start_siege)
         self._button(toolbar, "Jouer dans Command Center", self.play_siege)
+        self._button(toolbar, "Jouer dans Player 2.8", self.play_in_player)
         ttk.Label(toolbar, text="Slot (1–9)").pack(side="left", padx=(12, 2))
         ttk.Entry(toolbar, textvariable=self.slot, width=4).pack(side="left")
         self._button(toolbar, "Sauver partie", self.save_session)
@@ -438,6 +439,36 @@ class SiegeStudio:
         from .strategic_ui import launch
         self.session = launch(self.session)
         self.status.set("Retour du Command Center. Sauvegarder la partie si nécessaire.")
+
+    def play_in_player(self):
+        """Launch the same authored siege in 2D Player, with verified slots."""
+        from .authored_siege_player import AuthoredSiegeController
+        from .studio_siege_player_app import launch
+        from .tactical_rpg3 import authored_rules_for_document
+
+        bp = self._require()
+        content = self.owner._content()
+        rules = authored_rules_for_document(self.owner.doc().data)
+        slot = int(self.slot.get())
+        controller = AuthoredSiegeController(
+            content, bp, self.owner.project_path, slot, rules=rules)
+        if self.session is not None and self.session_id == bp["id"]:
+            exists = controller.save_path.exists()
+            if (exists and not self.owner.dialogs.askyesno(
+                    "Écraser le slot ?",
+                    "Lancer l'état actuellement chargé dans le Studio remplacera "
+                    "le checkpoint du slot. Continuer ?")):
+                return
+            controller.adopt(self.session, overwrite=exists)
+        app = launch(content, bp, self.owner.project, self.owner.project_path,
+                     slot, rules=rules, master=self.tab.winfo_toplevel(),
+                     controller=controller)
+        app.root.wait_window()
+        if controller.session is not None:
+            self.session = controller.session.fronts
+            self.session_id = bp["id"]
+            self.status.set("Retour du Player. Siège et checkpoint vérifiés ; "
+                            "le slot est automatiquement sauvegardé.")
 
     def save_session(self):
         bp, session = self._session()
