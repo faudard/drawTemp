@@ -237,11 +237,30 @@ class Campaign:
 
     @classmethod
     def load(cls, path, *, ruleset=None):
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")),
+                             ruleset=ruleset)
+
+    @classmethod
+    def from_dict(cls, payload, *, ruleset=None):
+        """Validate an in-memory campaign snapshot with the legacy slot contract."""
         ruleset = ruleset or default_rules()
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        require(data.pop("version", None) == 1, "Unsupported campaign version")
-        data["heroes"] = {uid: HeroProgress(**p) for uid, p in data["heroes"].items()}
-        result = cls(**data)
+        require(isinstance(payload, dict), "Campaign must be an object")
+        data = deepcopy(payload)
+        require(type(data.pop("version", None)) is int and payload["version"] == 1,
+                "Unsupported campaign version")
+        require(set(data) <= set(cls.__dataclass_fields__), "Unknown campaign fields")
+        try:
+            data["heroes"] = {uid: HeroProgress(**p)
+                              for uid, p in data.get("heroes", {}).items()}
+            result = cls(**data)
+        except (KeyError, TypeError, AttributeError) as exc:
+            from .model import RuleError
+            raise RuleError(f"Invalid campaign structure: {exc}") from exc
+        require(isinstance(result.unlocked, list) and
+                all(isinstance(m, str) for m in result.unlocked) and
+                isinstance(result.completed, list) and
+                all(isinstance(m, str) for m in result.completed),
+                "Invalid campaign missions")
         require(type(result.gold) is int and result.gold >= 0, "Invalid gold")
         require(all(type(n) is int and n >= 0 for n in result.inventory.values()), "Invalid inventory")
         require(all(isinstance(k, str) and all(type(v) is int and v >= 0 for v in stats.values())
