@@ -70,6 +70,37 @@ def boss_preview(battle, boss_id):
             "hp_percent": 100 * unit.hp // unit.max_hp, "pending": pending}
 
 
+def phase_boss_command(battle):
+    """Phase-specific commander using only Battle's legal tactical command API.
+
+    Phase 1 defends an approach, phase 2+ favors long straight charges when
+    paths and CT rules make them available. Otherwise use the standard
+    coordinated/tactical combat AI (including siege objects).
+    """
+    from .coordinated_ai import coordinated_command
+    from .model import distance
+
+    actor = battle.active
+    if actor is None or actor.cast:
+        return coordinated_command(battle)
+    phase = int(next((tag[len(PHASE):] for tag in actor.tags
+                      if tag.startswith(PHASE)), "1"))
+    enemies = [u for u in battle.units if u.alive and u.team != actor.team]
+    if phase >= 2 and "charge" in battle.rules.commands and enemies:
+        options = battle.charge_options(actor)
+        if options:
+            best = min(options, key=lambda row: (
+                sum(threat["amount"] * threat["chance"] for threat in row["threats"]),
+                -row["distance"], row["target"]))
+            return {"kind": "charge", "cell": list(best["cell"])}
+    if (phase == 1 and not actor.acted and not battle.status_blocks(actor, "act")
+            and "prepare" in battle.rules.commands and "guard" in battle.rules.preparations
+            and battle.engagement_range(actor) > 0
+            and any(distance(actor.pos, enemy.pos) <= 2 for enemy in enemies)):
+        return {"kind": "prepare", "mode": "guard"}
+    return coordinated_command(battle)
+
+
 def install_bosses(rules):
     from .rules.registry import TriggerActionRule
     return rules.with_family("trigger_actions", rules.trigger_actions.with_rule(
