@@ -138,8 +138,7 @@ def launch(content_path, project_path=None, profile_path=None):
         first=project.campaign(session.campaign_id)['start_mission']
         heroes=sorted({u.id for u in content.missions[first].units
                        if u.team=='player'})
-        jobs=sorted(jid for jid, job in content.jobs.items()
-                    if job.get('talents'))
+        jobs=sorted(content.jobs)
         if not heroes or not jobs:
             ttk.Label(view,text='Aucun talent disponible dans ce projet.').pack()
             ttk.Button(view,text='Retour',command=campaign_screen).pack()
@@ -163,6 +162,13 @@ def launch(content_path, project_path=None, profile_path=None):
                      lambda _e: talent_screen(hero_var.get(),job_var.get()))
         progress=session.progress.heroes.get(hero_var.get(),HeroProgress())
         catalog=talent_catalog(content,progress,job_var.get())
+        selected_job_spec=content.jobs[job_var.get()]
+        prerequisite=selected_job_spec.get('requires', '')
+        gate=('Aucun' if not prerequisite else
+              prerequisite+' niveau '+str(selected_job_spec.get('requires_level', 1)))
+        ttk.Label(view,text=('Classe actuelle : '+progress.job+
+                  ' | Niveau : '+str(progress.level)+
+                  ' | Prérequis : '+gate)).pack(pady=4)
         ttk.Label(view,text=f'JP disponibles : {catalog["available_jp"]}  |  '+
                   'Sélectionnez un talent pour le débloquer.').pack(pady=6)
         tree=ttk.Treeview(view,show='tree',height=14)
@@ -194,6 +200,11 @@ def launch(content_path, project_path=None, profile_path=None):
                 raise RuleError('Sélectionnez un talent')
             session.learn_talent(hero_var.get(),job_var.get(),selected[0])
             talent_screen(hero_var.get(),job_var.get())
+        def change_job():
+            session.set_job(hero_var.get(),job_var.get())
+            talent_screen(hero_var.get(),job_var.get())
+        ttk.Button(view,text='Choisir cette classe',
+                   command=safe(change_job)).pack(pady=4)
         ttk.Button(view,text='Apprendre le talent',
                    command=safe(purchase)).pack(pady=6)
         ttk.Button(view,text='Retour à la campagne',
