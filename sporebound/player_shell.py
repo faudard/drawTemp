@@ -288,6 +288,21 @@ def launch(content_path, project_path=None, profile_path=None):
                                         (zx+1)*scale-3,(zy+1)*scale-3,
                                         outline='#dc2626' if zone["team"]=='enemy' else '#15803d',
                                         width=2)
+        # Boss intentions are truthful only on the active boss's turn;
+        # telegraph the actual engine-selected destination rather than guessing.
+        for boss in tactical["bosses"]:
+            intent=boss["command"]
+            if not intent or intent.get("kind") not in ("charge","act"):
+                continue
+            cell=intent.get("cell")
+            if not cell:
+                continue
+            bx,by=cell
+            canvas.create_rectangle(bx*scale+5,by*scale+5,
+                                    (bx+1)*scale-5,(by+1)*scale-5,
+                                    outline='#d97706',width=4)
+            canvas.create_text((bx+.5)*scale,(by+.15)*scale,
+                               text='!',fill='#92400e')
         for unit in battle.units:
             x,y=unit.pos
             fill='#60a5fa' if unit.team=='player' else '#fb7185'
