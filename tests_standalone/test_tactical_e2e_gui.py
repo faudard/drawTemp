@@ -129,6 +129,11 @@ class TacticalEndToEndGUITests(unittest.TestCase):
                     root.update()
                     self.assertIn("Abandonner et revenir à la campagne",
                                   buttons(root))
+                    inspectors = [w.get("1.0", "end") for w in children(root)
+                                  if isinstance(w, tk.Text)]
+                    self.assertTrue(any("Hero:" in panel and "DEF 3" in panel
+                                        for panel in inspectors),
+                                    "Purchased defense talent must appear in real combat HUD")
                 finally:
                     root.destroy()
 
