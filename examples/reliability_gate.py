@@ -23,7 +23,7 @@ def fixture():
         missions.append({'id': mid, 'name': mid, 'board': {'width': 4, 'height': 3},
                          'reward': 100, 'units': [
             {'id': 'captain', 'name': 'Captain', 'team': 'player', 'pos': [1, 1],
-             'max_hp': 100, 'hp': 100, 'attack': 20, 'speed': 20},
+             'max_hp': 100, 'hp': 100, 'attack': 5, 'speed': 20},
             {'id': 'guard', 'name': 'Guard', 'team': 'enemy', 'pos': [2, 1],
              'max_hp': 35, 'hp': 35, 'attack': 2, 'speed': 10},
         ]})

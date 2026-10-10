@@ -68,6 +68,8 @@ class ReliabilityTests(unittest.TestCase):
                 self.assertEqual(session.recording(), control.recording())
 
     def test_checkpoint_size_is_measured_as_actual_written_utf8_bytes(self):
+        self.project.story['scenes'][0]['choices'][0]['effects'].append(
+            {'kind': 'set_flag', 'flag': 'note', 'value': 'Épée du château — 勝利'})
         session = self.new()
         with TemporaryDirectory() as folder:
             full = SessionStore(Path(folder) / 'full.json')
@@ -168,11 +170,21 @@ class ReliabilityTests(unittest.TestCase):
         session = self.new()
         session.start_fronts({'gate': 'gate', 'walls': 'walls'}, 'gate')
         record = session.recording()
+        restored = GameSession.from_recording(record, self.content, self.project)
+        self.assertEqual(restored.active_battle.battle_id, session.active_battle.battle_id)
+        for _ in range(200):
+            if session.active_battle.result:
+                break
+            command = choose_command(session.active_battle)
+            session.execute(command)
+            restored.execute(command)
+        self.assertEqual(session.active_battle.result, 'victory')
+        self.assertEqual(restored.recording(), session.recording())
         legacy = deepcopy(record)
         del legacy['front_battle_ids']
         legacy['digest'] = digest({k: v for k, v in legacy.items() if k != 'digest'})
         loaded = GameSession.from_recording(legacy, self.content, self.project)
-        self.assertEqual(loaded.fronts.digest(), session.fronts.digest())
+        self.assertEqual(loaded.fronts.digest(), record['tactical']['digest'])
         for value in (None, {}, {'battles': {'ghost': 'id'}, 'rescue_battles': {},
                                 'pursuit_battles': {}, 'recovery_battles': {}}):
             altered = deepcopy(record)

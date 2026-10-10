@@ -25,17 +25,21 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
   PNG, sons WAV/OGG et animations par images ; références typées, confinement des
   chemins, diagnostics de fichiers, intégration manifeste/CLI et exemple en CI.
   Contrats et limites : [Asset Pipeline](docs/ASSET_PIPELINE.md).
-- [ ] **2.4.4 Reliability & scale** : longues campagnes, perf replay/checkpoint,
-  fuzz des commandes/chargements et tests multi-seeds.
+- [x] **2.4.4 Reliability gate** : campagnes complètes à deux fins/multi-seeds,
+  comparaison partie continue/reprise, intégration des vrais fronts du château,
+  entrées invalides, interruptions disque, journal de 120 commandes et rapports CI.
+  Contrats et limites : [Reliability](docs/RELIABILITY.md).
+- [ ] **2.4.4 suite — scale** : campagnes de plusieurs heures, profils de stress
+  massifs et budgets p95/p99 reproductibles pour replay/checkpoint.
 - [ ] **2.4.5 Player migration** : connecter le client Tk et le Studio à GameSession
   en conservant une couche d'adaptation pour les anciens slots.
 
 Contrats : [Game Session](docs/UNIFIED_SESSION.md).
 
-Gate 2.4 à certifier avec 2.4.4 : commencer une campagne, prendre une décision
+Gate 2.4 couvert par les tests headless 2.4.4 : commencer une campagne, prendre une décision
 narrative, combattre sur plusieurs fronts, sauvegarder, quitter et retrouver
-exactement le même état après rechargement. Les fondations livrées ne remplacent
-pas cette validation de bout en bout.
+exactement le même état après rechargement, puis continuer avec le même résultat.
+Le parcours joueur graphique et la campagne château complète restent à livrer.
 
 ## Priorités suivantes — RPG complet et facile à créer
 
@@ -91,8 +95,8 @@ Gate : choix tactiques distincts selon équipe, terrain, adversaire et objectif.
 6. Épilogue : victoire, défaite ou alternative, récompenses et sauvegarde.
 
 Cette campagne doit devenir simultanément une démo jouable, un exemple
-d'authoring et un test d'intégration. Ordre immédiat : **2.4.4 Reliability**,
-puis **2.5.5 Project Workspace**, en raccordant le Studio et le joueur à
+d'authoring et un test d'intégration. Ordre immédiat : **2.5.5 Project Workspace**,
+en raccordant le Studio et le joueur à
 `GameSession` (2.4.5) avant de multiplier les panneaux indépendants.
 
 ## 2.0 alpha — socle implémenté
