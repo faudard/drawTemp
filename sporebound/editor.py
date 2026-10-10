@@ -486,7 +486,7 @@ def launch(path):
 
 
     def refresh(*args):
-        nonlocal selected_cell, campaign_battle
+        nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
             from .narrative import StoryBook
             story = StoryBook(studio.project.story, Content.from_dict(doc.data),
@@ -501,6 +501,9 @@ def launch(path):
         mission_box['values'] = mids
         if mission_var.get() not in mids:
             mission_var.set(mids[0])
+        if selection_mission != mission_var.get():
+            selected_tiles.clear()
+            selection_mission = mission_var.get()
         content = Content.from_dict(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
         board = battle.board if battle else mission.board
@@ -509,31 +512,38 @@ def launch(path):
                               or u.team == 'player' and u.alive]
         if unit_var.get() not in unit_box['values']:
             unit_var.set(unit_box['values'][0] if unit_box['values'] else '')
+        object_box['values'] = [o['id'] for o in mission.objects]
+        if object_var.get() not in object_box['values']:
+            object_var.set(object_box['values'][0] if object_box['values'] else '')
+        selected_tiles.intersection_update(set(board.cells()))
         canvas.delete('all')
         canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
         reachable = battle.reachable() if battle else {}
-        deployment_cells = {tuple(c) for z in mission.deployment for c in z['cells']}
-        danger_cells = {tuple(c) for o in mission.objects if o['kind'] == 'defense'
-                        and not o.get('disabled') and o.get('charges', 2) > 0 for c in o['cells']}
+        deployment_cells = ({tuple(c) for z in mission.deployment for c in z['cells']}
+                            if layer_vars['Déploiement'].get() else set())
+        danger_cells = ({tuple(c) for o in mission.objects if o['kind'] == 'defense'
+                         and not o.get('disabled') and o.get('charges', 2) > 0
+                         for c in o['cells']} if layer_vars['Objets'].get() else set())
         for c in board.cells():
             t = board.tile(c)
             color = '#dddddd'
-            if t.cost > 1: color = '#b29f78'
-            if t.cover: color = '#b0c9a8'
-            if t.height: color = '#c3c3df'
-            if t.hazard: color = '#eead93'
-            if t.blocked: color = '#555555'
+            if layer_vars['Terrain'].get():
+                if t.cost > 1: color = '#b29f78'
+                if t.cover: color = '#b0c9a8'
+                if t.hazard: color = '#eead93'
+                if t.blocked: color = '#555555'
+            if layer_vars['Relief'].get() and t.height: color = '#c3c3df'
             if c in deployment_cells and (not battle or battle.deploying): color = '#a8dce8'
-            if c in mission.goal: color = '#d7c469'
+            if c in mission.goal and layer_vars['Objectifs'].get(): color = '#d7c469'
             if c in danger_cells: color = '#f0a181'
             x, y = c[0] * tile_size, c[1] * tile_size
             canvas.create_rectangle(x, y, x+tile_size, y+tile_size, fill=color,
                                     outline='#288949' if c in reachable else '#999999', width=3 if c in reachable else 1)
-            if t.height:
+            if t.height and layer_vars['Relief'].get():
                 canvas.create_text(x+8, y+8, text=str(t.height), anchor='nw')
-            if t.hazard:
+            if t.hazard and layer_vars['Terrain'].get():
                 canvas.create_text(x+tile_size-3, y+tile_size-3, text=f'!{t.hazard}', anchor='se')
-        for obj in mission.objects:
+        for obj in mission.objects if layer_vars['Objets'].get() else ():
             x,y = obj['pos']
             if obj['kind'] == 'passage':
                 dx,dy = obj['destination']
@@ -543,15 +553,19 @@ def launch(path):
                                    dash=() if obj.get('enabled', True) else (4, 3))
             canvas.create_text(x*tile_size+tile_size//2,y*tile_size+8,text=obj['kind'][:2], fill='#5b3294')
         relic = battle.relic_pos if battle else mission.relic
-        if relic is not None:
+        if relic is not None and layer_vars['Objectifs'].get():
             canvas.create_text(relic[0]*tile_size+tile_size//2,relic[1]*tile_size+tile_size//2,text='R',fill='#a06c00',font=('TkDefaultFont',16))
-        for u in units:
+        for u in units if layer_vars['Unités'].get() else ():
             x,y = (v*tile_size for v in u.pos)
             color = '#cce2ff' if u.team == 'player' else '#ffc8bc'
             if not u.alive: color = '#aaaaaa'
             canvas.create_oval(x+6,y+10,x+tile_size-6,y+tile_size-4,fill=color,outline='#111111',width=3 if battle and u.id==battle.active_id else 1)
             canvas.create_text(x+tile_size//2,y+tile_size//2,text=u.name[:3])
             canvas.create_text(x+tile_size//2,y+tile_size-10,text=str(u.hp),font=('TkDefaultFont',8))
+        for sx, sy in sorted(selected_tiles):
+            canvas.create_rectangle(sx*tile_size+4, sy*tile_size+4,
+                                    (sx+1)*tile_size-4, (sy+1)*tile_size-4,
+                                    outline='#1f6e9a', width=3, tags='selection')
         x,y = (v*tile_size for v in selected_cell)
         canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
         text = f'{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
@@ -586,7 +600,12 @@ def launch(path):
             journal.insert('1.0','\n'.join(json.dumps(e,ensure_ascii=False) for e in battle.events[-100:]))
             journal.see('end')
         else:
-            text += '\nÉdition des règles, compétences, unités, jobs, équipement et objectifs dans l’onglet Données JSON.\nValider avant de lancer le playtest.\n\nPinceaux : relief, murs, terrain, dangers, objectifs et placement des unités.'
+            text += ('\\nCarte : sélectionner une zone, Ctrl+C, choisir le point '
+                     'd’ancrage, Ctrl+V ou l’outil Collage.'
+                     f'\\nCases sélectionnées : {len(selected_tiles)}'
+                     f' | Presse-papiers : {len(terrain_clipboard.offsets) if terrain_clipboard else 0}'
+                     '\\nCouches : visibilité d’édition seulement ; règles inchangées.'
+                     '\\nDonnées tactiques avancées : onglet JSON.')
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
         if studio is not None:
@@ -603,12 +622,17 @@ def launch(path):
     mission_box.pack(side='left')
     mission_box.bind('<<ComboboxSelected>>', lambda e: stop())
     ttk.Label(controls,text='Outil').pack(side='left')
-    ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=10,
-                 values=['Pinceau','Rectangle']).pack(side='left')
+    ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=11,
+                 values=['Pinceau','Rectangle','Sélection','Collage']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
-    ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,values=['wall','erase','height+','height-','mud','hazard','cover','goal','unit']).pack(side='left')
+    ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
+                 values=['wall','erase','height+','height-','mud','hazard',
+                         'cover','goal','unit','object','zone+','zone-']).pack(side='left')
     unit_box = ttk.Combobox(controls,textvariable=unit_var,state='readonly',width=12)
     unit_box.pack(side='left')
+    ttk.Label(controls,text='Objet').pack(side='left')
+    object_box = ttk.Combobox(controls,textvariable=object_var,state='readonly',width=12)
+    object_box.pack(side='left')
     ttk.Label(controls,text='Commande').pack(side='left')
     action_box = ttk.Combobox(controls,textvariable=action_var,state='readonly',width=18)
     action_box.pack(side='left')
@@ -617,19 +641,32 @@ def launch(path):
     ttk.Combobox(controls,textvariable=facing_var,state='readonly',width=6,values=['north','south','east','west']).pack(side='left')
     ttk.Button(controls,text='Fin',command=end_turn).pack(side='left')
     ttk.Button(controls,text='IA : 1 tour',command=ai_turn).pack(side='left')
+    authoring_controls = ttk.Frame(root)
+    authoring_controls.pack(fill='x', padx=5)
+    ttk.Button(authoring_controls, text='Copier cases', command=copy_selection).pack(side='left',padx=2)
+    ttk.Button(authoring_controls, text='Coller terrain', command=paste_selection).pack(side='left',padx=2)
+    ttk.Label(authoring_controls, text='Zone').pack(side='left',padx=(9,2))
+    ttk.Entry(authoring_controls, textvariable=zone_var, width=14).pack(side='left')
+    ttk.Label(authoring_controls, text='Couche visible :').pack(side='left',padx=(8,2))
+    for name, var in layer_vars.items():
+        ttk.Checkbutton(authoring_controls, text=name, variable=var,
+                        command=refresh).pack(side='left',padx=2)
     notebook = ttk.Notebook(root)
     notebook.pack(fill='both',expand=True)
     work = ttk.Frame(notebook)
     notebook.add(work,text='Carte et combat')
     canvas_frame = ttk.Frame(work)
     canvas_frame.pack(side='left',fill='both',expand=True)
-    canvas = tk.Canvas(canvas_frame,background='#eeeeee')
+    canvas = tk.Canvas(canvas_frame,background='#eeeeee',takefocus=1)
     xs,ys = ttk.Scrollbar(canvas_frame,orient='horizontal',command=canvas.xview),ttk.Scrollbar(canvas_frame,orient='vertical',command=canvas.yview)
     canvas.configure(xscrollcommand=xs.set,yscrollcommand=ys.set)
     xs.pack(side='bottom',fill='x'); ys.pack(side='right',fill='y'); canvas.pack(fill='both',expand=True)
     canvas.bind('<Button-1>',click)
     canvas.bind('<B1-Motion>',drag)
     canvas.bind('<ButtonRelease-1>',end_stroke)
+    canvas.bind('<Motion>',paste_preview)
+    canvas.bind('<Control-c>',lambda _e: copy_selection())
+    canvas.bind('<Control-v>',lambda _e: paste_selection())
     inspector = tk.Text(work,width=43,wrap='word')
     inspector.pack(side='right',fill='y')
     source_frame = ttk.Frame(notebook)
