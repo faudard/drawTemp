@@ -84,7 +84,7 @@ class PlayerApplication:
         if self._stage_job is not None:
             self.root.after_cancel(self._stage_job)
             self._stage_job = None
-        for key in ("<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "e"):
+        for key in ("<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q", "e"):
             self.root.unbind(key)
         if self.renderer:
             self.renderer.dispose()
@@ -284,7 +284,8 @@ class PlayerApplication:
                        wraplength=300).pack(anchor="w", pady=12)
         moves = {"<Up>": (0, -1), "<Down>": (0, 1),
                  "<Left>": (-1, 0), "<Right>": (1, 0),
-                 "w": (0, -1), "a": (-1, 0), "s": (0, 1), "d": (1, 0)}
+                 "w": (0, -1), "z": (0, -1), "a": (-1, 0),
+                 "q": (-1, 0), "s": (0, 1), "d": (1, 0)}
         for key, delta in moves.items():
             self.root.bind(key, lambda event, vector=delta:
                            self._safe(lambda: self._exploration_step(*vector)))
