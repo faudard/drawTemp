@@ -141,7 +141,8 @@ class MapEditorGUITests(unittest.TestCase):
                     root.update()
                     widgets = list(descendants(root))
                     canvases = [w for w in widgets if isinstance(w, tk.Canvas)]
-                    main_canvas = max(canvases, key=lambda w: int(w.cget('width')))
+                    # Map canvas is the first canvas constructed by the editor.
+                    main_canvas = canvases[0]
                     # The minimap has a full tactical overview (184x184).
                     mini = next(w for w in canvases if int(w.cget('width')) == 184)
                     self.assertTrue(mini.find_all())
