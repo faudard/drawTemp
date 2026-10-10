@@ -52,6 +52,7 @@ class PlayerApplication:
         self.front_var = tk.StringVar()
         self.doctrine_var = tk.StringVar(value="hold")
         self.logistics_dest_var = tk.StringVar()
+        self.logistics_transfer_dest_var = tk.StringVar()
         self.logistics_actor_var = tk.StringVar(value="reserve_1")
         self.logistics_x_var = tk.StringVar(value="1")
         self.logistics_y_var = tk.StringVar(value="1")
@@ -557,13 +558,13 @@ class PlayerApplication:
         orders.pack(fill="x", pady=5)
         destinations = sorted({r["to"] for r in routes
                                if r["from"] == "reserve"})
-        if not destinations:
-            # Transfer routes can still be used from the active sector.
-            destinations = sorted({r["to"] for r in routes
-                                   if r["from"] == fronts.timeline.focused})
+        transfers = sorted({r["to"] for r in routes
+                            if r["from"] == fronts.timeline.focused})
         if self.logistics_dest_var.get() not in destinations:
             self.logistics_dest_var.set(destinations[0] if destinations else "")
-        self.ttk.Label(orders, text="Vers").pack(side="left")
+        if self.logistics_transfer_dest_var.get() not in transfers:
+            self.logistics_transfer_dest_var.set(transfers[0] if transfers else "")
+        self.ttk.Label(orders, text="Vers (réserves)").pack(side="left")
         self.ttk.Combobox(
             orders, textvariable=self.logistics_dest_var,
             values=destinations, width=14, state="readonly").pack(
@@ -575,7 +576,7 @@ class PlayerApplication:
             self.ttk.Label(orders, text=caption).pack(side="left", padx=(5, 1))
             self.ttk.Entry(orders, textvariable=variable, width=width).pack(
                 side="left")
-        if any(r["from"] == "reserve" for r in routes):
+        if destinations:
             self._button(orders, "Envoyer réserves", lambda: self._change(
                 lambda: self.player.send_reserves(
                     self.logistics_dest_var.get(),
@@ -585,10 +586,17 @@ class PlayerApplication:
                       "pos": [int(self.logistics_x_var.get()),
                               int(self.logistics_y_var.get())]}]))).pack(
                                   side="left", padx=4)
-        if any(r["from"] == fronts.timeline.focused for r in routes):
-            self._button(orders, "Transférer unité", lambda: self._change(
+        if transfers:
+            transfers_row = self.ttk.Frame(panel)
+            transfers_row.pack(anchor="w", pady=3)
+            self.ttk.Label(transfers_row, text="Vers (transfert)").pack(side="left")
+            self.ttk.Combobox(
+                transfers_row, textvariable=self.logistics_transfer_dest_var,
+                values=transfers, width=14, state="readonly").pack(
+                    side="left", padx=4)
+            self._button(transfers_row, "Transférer unité", lambda: self._change(
                 lambda: self.player.transfer_units(
-                    self.logistics_dest_var.get(),
+                    self.logistics_transfer_dest_var.get(),
                     {self.logistics_actor_var.get():
                      [int(self.logistics_x_var.get()),
                       int(self.logistics_y_var.get())]}))).pack(
