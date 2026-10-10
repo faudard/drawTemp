@@ -101,6 +101,35 @@ class TalentEditorTests(unittest.TestCase):
 
 
 class PlayerIntegrationTests(unittest.TestCase):
+    def test_player_learns_talent_atomically_and_reloads_slot(self):
+        content = sample()
+        data = upsert_job_talent(content.to_dict(), "brave", "training",
+                                 jp=2, stat="defense", bonus=3)
+        content = Content.from_dict(data)
+        project = GameProject.default(content)
+        with TemporaryDirectory() as folder:
+            session = PlayerSession(content, project,
+                                    Path(folder) / "profile.json")
+            session.new_game("main", 1)
+            session.progress.hero("hero").job_xp["brave"] = 150
+            session.save()
+            result = session.learn_talent("hero", "brave", "training")
+            self.assertEqual(result["available_jp"], 1)
+            self.assertEqual(session.progress.hero("hero").spent_jp["brave"], 2)
+            with self.assertRaises(RuleError):
+                session.learn_talent("hero", "brave", "training")
+            self.assertEqual(session.progress.hero("hero").spent_jp["brave"], 2)
+            restored = PlayerSession(content, project,
+                                     Path(folder) / "profile.json")
+            restored.load_game("main", 1)
+            self.assertEqual(
+                restored.progress.hero("hero").learned_talents["brave"],
+                ["training"])
+            restored.begin("arena")
+            self.assertEqual(restored.battle.unit("hero").defense, 3)
+            with self.assertRaises(RuleError):
+                restored.learn_talent("hero", "brave", "training")
+
     def test_authored_tactical_roles_enable_rules_on_player_mission_only(self):
         for advanced in (False, True):
             with self.subTest(advanced=advanced):
