@@ -9,19 +9,24 @@ from .authoring import _cell, _identifier, _mission
 from .model import Content, require
 
 
-def condition(kind, *, pos=None, tick=10, unit='', percent=50):
-    require(kind in {'tick', 'enter', 'defeated', 'hp_below'}, 'Unknown event condition')
+def condition(kind, *, pos=None, tick=10, unit='', percent=50,
+              max_alive=4, team='enemy'):
+    require(kind in {'tick', 'enter', 'defeated', 'hp_below', 'wave_capacity'},
+            'Unknown event condition')
     if kind == 'tick':
         return {'condition': kind, 'value': tick}
     if kind == 'enter':
         return {'condition': kind, 'pos': list(pos)}
     if kind == 'hp_below':
         return {'condition': kind, 'unit': unit, 'percent': percent}
+    if kind == 'wave_capacity':
+        return {'condition': kind, 'max_alive': max_alive, 'team': team}
     return {'condition': kind, 'unit': unit}
 
 
 def action(kind, *, pos=None, text='', amount=4, unit='', status='haste',
-           duration=10, actor_id='', archetype='', team='enemy', name='Renfort'):
+           duration=10, actor_id='', archetype='', team='enemy', name='Renfort',
+           max_active=14, lifetime=None):
     if kind == 'message':
         return {'kind': kind, 'text': text}
     if kind == 'hazard':
@@ -30,13 +35,27 @@ def action(kind, *, pos=None, text='', amount=4, unit='', status='haste',
         return {'kind': kind, 'unit': unit, 'status': status, 'duration': duration}
     if kind == 'despawn':
         return {'kind': kind, 'unit': unit}
-    if kind == 'spawn':
+    if kind in ('spawn', 'wave', 'queue_wave'):
         _identifier(actor_id, 'Spawn actor id')
         require(archetype, 'Choose an actor archetype')
         require(team in ('player', 'enemy'), 'Unknown team')
-        return {'kind': kind, 'actor': {'id': actor_id, 'name': name,
-                                          'team': team, 'pos': list(pos),
-                                          'archetype': archetype}}
+        require(isinstance(pos, (tuple, list)) and len(pos) == 2 and
+                all(type(v) is int for v in pos), 'Choose a valid spawn cell')
+        actor = {'id': actor_id, 'name': name, 'team': team,
+                 'pos': list(pos), 'archetype': archetype}
+        if kind == 'spawn':
+            result = {'kind': kind, 'actor': actor}
+        else:
+            result = {'kind': kind, 'actors': [actor]}
+            if kind == 'wave':
+                require(type(max_active) is int and 1 <= max_active <= 100,
+                        'Invalid maximum active reinforcements')
+                result['max_active'] = max_active
+        if lifetime is not None:
+            require(type(lifetime) is int and lifetime >= 1,
+                    'Invalid reinforcement lifetime')
+            result['lifetime'] = lifetime
+        return result
     raise ValueError(f'Unknown event action: {kind}')
 
 
