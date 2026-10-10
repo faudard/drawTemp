@@ -99,6 +99,42 @@ class StudioPanels:
                     row=9, column=0, columnspan=2, pady=5)
         units.columnconfigure(1,weight=1); units.rowconfigure(4,weight=1)
 
+        # Declarative JP talent graph: Treeview nodes and structured fields,
+        # never a free-form JSON editor. Stored in the global job catalogue.
+        talents = ttk.Frame(groups)
+        groups.add(talents, text='Talents / classes')
+        self.talent_job, self.talent_job_box = self._field(
+            talents, 0, 'Classe', choices=[])
+        self.talent_id, _ = self._field(talents, 1, 'Talent ID')
+        self.talent_jp, _ = self._field(talents, 2, 'Coût JP', '1')
+        self.talent_requires, _ = self._field(
+            talents, 3, 'Prérequis (ID, ID)')
+        self.talent_exclusive, _ = self._field(
+            talents, 4, 'Spécialisation')
+        from .builds3 import STATS
+        self.talent_stat, _ = self._field(
+            talents, 5, 'Stat modifiée', '',
+            choices=['', *sorted(STATS)])
+        self.talent_bonus, _ = self._field(talents, 6, 'Bonus', '0')
+        self.talent_skills, _ = self._field(
+            talents, 7, 'Compétences (ID, ID)')
+        self.talent_tree = ttk.Treeview(talents, show='tree', height=7)
+        self.talent_tree.grid(row=8, column=0, columnspan=2,
+                              sticky='nsew', padx=6, pady=6)
+        self.talent_tree.bind('<<TreeviewSelect>>', self._select_talent_node)
+        self.talent_job_box.bind('<<ComboboxSelected>>',
+                                 lambda _e: self._refresh_talent_tree())
+        talent_buttons = ttk.Frame(talents)
+        talent_buttons.grid(row=9, column=0, columnspan=2, pady=6)
+        ttk.Button(talent_buttons, text='Créer / mettre à jour',
+                   command=lambda: self._run(self._save_talent)).pack(
+                       side='left', padx=4)
+        ttk.Button(talent_buttons, text='Supprimer le talent',
+                   command=lambda: self._run(self._delete_talent)).pack(
+                       side='left', padx=4)
+        talents.columnconfigure(1, weight=1)
+        talents.rowconfigure(8, weight=1)
+
         objects = ttk.Frame(groups)
         groups.add(objects, text='Objets interactifs')
         self.oid, _ = self._field(objects,0,'Identifiant','new_object')
@@ -159,6 +195,72 @@ class StudioPanels:
                 next_missions=[s.strip() for s in self.next_missions.get().split(',') if s.strip()])))).grid(
                     row=4,column=0,columnspan=2,pady=5)
         mission_form.columnconfigure(1,weight=1)
+
+    def _refresh_talent_tree(self):
+        jobs = self.doc().data.get('jobs', {})
+        values = sorted(jobs)
+        self.talent_job_box['values'] = values
+        if self.talent_job.get() not in jobs:
+            self.talent_job.set(values[0] if values else '')
+        current = self.talent_job.get()
+        talents = jobs.get(current, {}).get('talents', {})
+        self.talent_tree.delete(*self.talent_tree.get_children())
+        inserted = set()
+        def add_node(tid):
+            if tid in inserted:
+                return
+            spec = talents[tid]
+            deps = spec.get('requires', [])
+            parent = sorted(dep for dep in deps if dep in talents)[0] if deps else ''
+            if parent:
+                add_node(parent)
+            suffix = '  ← ' + ', '.join(deps) if deps else ''
+            self.talent_tree.insert(parent, 'end', iid=tid,
+                text=f"{tid}  —  {spec.get('jp', 1)} JP{suffix}")
+            inserted.add(tid)
+        for tid in sorted(talents):
+            add_node(tid)
+
+    def _select_talent_node(self, _event):
+        chosen = self.talent_tree.selection()
+        if not chosen:
+            return
+        tid = chosen[0]
+        spec = self.doc().data.get('jobs', {}).get(
+            self.talent_job.get(), {}).get('talents', {}).get(tid)
+        if spec is None:
+            return
+        bonuses = spec.get('bonuses', {})
+        stat = sorted(bonuses)[0] if bonuses else ''
+        self.talent_id.set(tid)
+        self.talent_jp.set(str(spec.get('jp', 1)))
+        self.talent_requires.set(', '.join(spec.get('requires', [])))
+        self.talent_exclusive.set(spec.get('exclusive', ''))
+        self.talent_stat.set(stat)
+        self.talent_bonus.set(str(bonuses.get(stat, 0)))
+        self.talent_skills.set(', '.join(spec.get('skills', [])))
+
+    def _save_talent(self):
+        deps = [v.strip() for v in self.talent_requires.get().split(',')
+                if v.strip()]
+        skills = [v.strip() for v in self.talent_skills.get().split(',')
+                  if v.strip()]
+        job, tid = self.talent_job.get(), self.talent_id.get().strip()
+        def action(data, _mission):
+            return authoring.upsert_job_talent(
+                data, job, tid, jp=int(self.talent_jp.get()),
+                requires=deps, exclusive=self.talent_exclusive.get().strip(),
+                stat=self.talent_stat.get(),
+                bonus=int(self.talent_bonus.get()), skills=skills)
+        self._change(action)
+
+    def _delete_talent(self):
+        selection = self.talent_tree.selection()
+        if not selection:
+            raise RuleError('Sélectionnez un talent à supprimer')
+        job, tid = self.talent_job.get(), selection[0]
+        self._change(lambda data, _mission: authoring.remove_job_talent(
+            data, job, tid))
 
     def _selected(self, listing):
         choices = listing.curselection()
@@ -381,6 +483,7 @@ class StudioPanels:
         self.campaign_box['values']=[c['id'] for c in self.project.campaigns]
         if self.session is not None:
             self.project_status.config(text=f'Campagne active : {self.session_campaign} | Missions : {len(self.session.completed)} terminées | Or : {self.session.gold}')
+        self._refresh_talent_tree()
         self.advanced.refresh()
         self.story_editor.refresh()
         self.workspace.refresh()
