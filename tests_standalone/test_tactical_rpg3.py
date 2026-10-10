@@ -177,6 +177,24 @@ class BossTests(unittest.TestCase):
             battle.recording(), rules=rules).digest())
 
 
+class CastleIntegrationTests(unittest.TestCase):
+    def test_existing_siege_phase_upgrades_without_changing_original_fixture(self):
+        from examples.siege_scenarios import siege_content
+        from examples.tactical_rpg3_castle import advanced_castle_content
+
+        original = siege_content()
+        enhanced = advanced_castle_content()
+        self.assertNotIn("boss_phase", [a["kind"] for a in
+                         next(t for t in original.missions["castle_throne"].triggers
+                              if t["id"] == "castellan_second_phase")["actions"]])
+        rules = tactical_rpg_rules()
+        battle = Battle(enhanced, "castle_throne", seed=42, rules=rules)
+        battle.execute({"kind": "start_battle"})
+        self.assertTrue(boss_preview(battle, "castellan")["pending"])
+        self.assertEqual(battle.digest(),
+                         Battle.replay(battle.recording(), rules=rules).digest())
+
+
 class BalanceTests(unittest.TestCase):
     def test_seeded_metrics_percentiles_and_reproducibility(self):
         content = arena()
