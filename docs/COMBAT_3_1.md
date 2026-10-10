@@ -28,7 +28,7 @@ view of:
 - **Scheduled casts:** exact current target (cell/unit lock), area and ticks
   remaining. A moving unit-locked target can move the future hit area.
 - **Armed reactions:** projected enemy prepared-threat cells.
-- **Possible boss charges:** legal lanes *if selected now*, not a promise that
+- **Possible melee charges:** legal corridors for knights, spears and bosses *if selected now*, not a promise that
   the boss will select that action on a future activation.
 - **Terrain dangers:** existing hazard tiles.
 
