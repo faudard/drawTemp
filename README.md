@@ -140,6 +140,10 @@ Trois onglets d'authoring supplémentaires sont disponibles :
 - **Graphe des missions** : afficher les nœuds, relier/délier deux missions,
   repérer les cycles et les missions inaccessibles depuis une campagne ;
   la navigation vers une mission actualise la carte tactique.
+- **Character & Rules Studio 2.5.3** : éditeur guidé des héros et monstres,
+  archétypes, compétences multi-effets, classes et équipements ;
+  validation transactionnelle et Undo/Redo. Voir
+  [la documentation](docs/CHARACTER_RULES_STUDIO.md).
 - **Bibliothèque d'acteurs** : définir des archétypes de personnages/monstres,
   capturer une unité existante, puis instancier le modèle sur plusieurs cartes.
   Les unités placées sont des copies de données et restent indépendantes.
