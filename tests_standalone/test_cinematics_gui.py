@@ -53,6 +53,8 @@ class CinematicGUITests(unittest.TestCase):
                         for w in widgets), "Sample cinematic missing from Studio list")
                     buttons["Lecture complète"].invoke()
                     root.update()
+                    self.assertEqual(showerror.call_args_list, [],
+                                     "Cinematic preview was rejected")
                     self.assertTrue(any(isinstance(w, tk.Toplevel)
                                         for w in root.winfo_children()))
                     skip = next(w for w in all_widgets(root)
