@@ -32,8 +32,10 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] Sauvegardes de progression par campagne/slot via `Campaign.save` ;
   progression de mission acquise avec `Campaign.finish`.
 - [x] Exemple de projet embarqué, tests headless et smoke Tk/Xvfb.
-- [ ] **Studio 2.1** : éditeur de tilesets / brosses / pinceaux rectangles,
-  groupes, rotation, copier-coller, sélection multiple et palettes d'acteurs.
+- [x] **Studio 2.1 foundation** : pinceau de terrain et remplissage rectangulaire inclusif,
+  groupés en une transaction avec undo/redo.
+- [ ] **Studio 2.1 suite** : tilesets réutilisables, groupes, rotation,
+  copier-coller, sélection multiple et palettes d'acteurs.
 - [x] **Studio 2.2 foundation** : bibliothèque réutilisable d'acteurs,
   formulaires d'archétypes, conditions et actions d'événements ordonnées.
 - [ ] **Studio 2.2 closure** : éditeurs de compétences/inventaire,

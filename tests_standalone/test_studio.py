@@ -71,6 +71,42 @@ class AuthoringTests(unittest.TestCase):
         doc.undo()
         self.assertEqual(doc.data,self.content.to_dict())
 
+    def test_rectangle_paint_is_inclusive_and_one_undo_step(self):
+        doc=Document(self.content)
+        doc.paint_rectangle(self.mid,(1,1),(3,2),'cover')
+        board=Content.from_dict(doc.data).missions[self.mid].board
+        self.assertTrue(all(board.tile((x,y)).cover==20
+                            for x in range(1,4) for y in range(1,3)))
+        self.assertEqual(len(doc.undo_stack),1)
+        doc.undo()
+        self.assertEqual(doc.data,self.content.to_dict())
+        doc.redo()
+        self.assertEqual(len(doc.undo_stack),1)
+        self.assertTrue(all(Content.from_dict(doc.data).missions[self.mid].board.tile((x,y)).cover==20
+                            for x in range(1,4) for y in range(1,3)))
+
+    def test_rectangle_rejects_outside_corner_without_mutation(self):
+        doc=Document(self.content)
+        before=deepcopy(doc.data)
+        with self.assertRaises(RuleError):
+            doc.paint_rectangle(self.mid,(0,0),(128,0),'cover')
+        self.assertEqual(doc.data,before)
+        self.assertEqual(doc.undo_stack,[])
+
+    def test_fill_brushes_are_idempotent_and_erase_clears_goal(self):
+        doc=Document(self.content)
+        doc.paint_many(self.mid,[(1,1)],'wall')
+        doc.paint_many(self.mid,[(1,1)],'wall')
+        board=Content.from_dict(doc.data).missions[self.mid].board
+        self.assertTrue(board.tile((1,1)).blocked)
+        doc.paint_many(self.mid,[(2,1)],'goal')
+        doc.paint_many(self.mid,[(2,1)],'goal')
+        mission=next(m for m in doc.data['missions'] if m['id']==self.mid)
+        self.assertEqual([tuple(c) for c in mission['goal']].count((2,1)),1)
+        doc.paint_many(self.mid,[(2,1)],'erase')
+        updated=next(m for m in doc.data['missions'] if m['id']==self.mid)
+        self.assertNotIn((2,1),[tuple(c) for c in updated['goal']])
+
     def test_triggers_are_engine_validated(self):
         updated=add_event(self.data,self.mid,'clock',condition='tick',action='hazard',
                           pos=self.cell,tick=15,amount=3)
@@ -156,3 +192,4 @@ class GameProjectTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

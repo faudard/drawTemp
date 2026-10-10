@@ -60,8 +60,10 @@ class Document:
             new = {**old}
             if brush == 'erase':
                 new = {'pos': list(cell)}
+                mission['goal'] = [goal for goal in mission.get('goal', [])
+                                   if tuple(goal) != cell]
             elif brush == 'wall':
-                new['blocked'] = not old.get('blocked', False)
+                new['blocked'] = True
             elif brush == 'height+':
                 new['height'] = min(99, old.get('height', 0) + 1)
             elif brush == 'height-':
@@ -74,9 +76,7 @@ class Document:
                 new['cover'] = 20
             elif brush == 'goal':
                 goal = [list(c) for c in mission.get('goal', [])]
-                if list(cell) in goal:
-                    goal.remove(list(cell))
-                else:
+                if list(cell) not in goal:
                     goal.append(list(cell))
                 mission['goal'] = goal
             else:
@@ -85,6 +85,25 @@ class Document:
             tiles.append(new)
         if seen:
             self.replace(data)
+
+    def paint_rectangle(self, mid, start, end, brush):
+        """Fill the inclusive rectangle between two map cells in one edit."""
+        mission = next((m for m in self.data['missions'] if m['id'] == mid), None)
+        if mission is None:
+            raise RuleError(f'Unknown mission: {mid}')
+        width, height = mission['board']['width'], mission['board']['height']
+        if not isinstance(start, (list, tuple)) or not isinstance(end, (list, tuple)):
+            raise RuleError('Rectangle corners must be inside the map')
+        if (len(start) != 2 or len(end) != 2 or
+                any(type(v) is not int for v in (*start, *end)) or
+                not (0 <= start[0] < width and 0 <= start[1] < height and
+                     0 <= end[0] < width and 0 <= end[1] < height)):
+            raise RuleError('Rectangle corners must be inside the map')
+        start, end = tuple(start), tuple(end)
+        x1, x2 = sorted((start[0], end[0]))
+        y1, y2 = sorted((start[1], end[1]))
+        cells = [(x, y) for y in range(y1, y2 + 1) for x in range(x1, x2 + 1)]
+        self.paint_many(mid, cells, brush)
 
     def place_unit(self, mid, uid, cell):
         data = deepcopy(self.data)
@@ -116,9 +135,11 @@ def launch(path):
     campaign_battle = False
     selected_cell = (0, 0)
     stroke_cells = []
+    rectangle_anchor = None
     tile_size = 54
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
+    tool_var = tk.StringVar(value='Pinceau')
     unit_var = tk.StringVar()
     action_var = tk.StringVar(value='move')
     facing_var = tk.StringVar(value='south')
@@ -312,12 +333,19 @@ def launch(path):
 
     @guarded
     def click(event):
-        nonlocal selected_cell, stroke_cells
+        nonlocal selected_cell, stroke_cells, rectangle_anchor
         stroke_cells = []
         selected_cell = int(canvas.canvasx(event.x) // tile_size), int(canvas.canvasy(event.y) // tile_size)
         if battle:
             refresh()
+        elif tool_var.get() == 'Rectangle' and brush_var.get() != 'unit':
+            rectangle_anchor = selected_cell
+            stroke_cells = [selected_cell]
+            x, y = selected_cell[0] * tile_size, selected_cell[1] * tile_size
+            canvas.create_rectangle(x+3, y+3, x+tile_size-3, y+tile_size-3,
+                                    outline='#2a61ff', width=3, tags='stroke_preview')
         else:
+            rectangle_anchor = None
             stroke_cells = [selected_cell]
             brush = brush_var.get()
             if brush == 'unit':
@@ -334,7 +362,16 @@ def launch(path):
         if not (0 <= cell[0] < mission['board']['width'] and
                 0 <= cell[1] < mission['board']['height']):
             return
-        if cell not in stroke_cells:
+        if tool_var.get() == 'Rectangle' and rectangle_anchor is not None:
+            stroke_cells[:] = [cell]
+            canvas.delete('stroke_preview')
+            ax, ay = rectangle_anchor
+            x1, x2 = sorted((ax, cell[0]))
+            y1, y2 = sorted((ay, cell[1]))
+            canvas.create_rectangle(x1*tile_size+3, y1*tile_size+3,
+                                    (x2+1)*tile_size-3, (y2+1)*tile_size-3,
+                                    outline='#2a61ff', width=3, tags='stroke_preview')
+        elif cell not in stroke_cells:
             stroke_cells.append(cell)
             x, y = cell[0] * tile_size, cell[1] * tile_size
             canvas.create_rectangle(x+3, y+3, x+tile_size-3, y+tile_size-3,
@@ -342,12 +379,20 @@ def launch(path):
 
     @guarded
     def end_stroke(_event):
-        nonlocal selected_cell, stroke_cells
-        if not battle and brush_var.get() != 'unit' and len(stroke_cells) > 1:
+        nonlocal selected_cell, stroke_cells, rectangle_anchor
+        if (not battle and brush_var.get() != 'unit' and
+                tool_var.get() == 'Rectangle' and rectangle_anchor is not None and stroke_cells):
+            end = stroke_cells[-1]
+            selected_cell = end
+            start = rectangle_anchor
+            design_change(lambda: doc.paint_rectangle(mission_var.get(), start, end,
+                                                       brush_var.get()))
+        elif not battle and brush_var.get() != 'unit' and len(stroke_cells) > 1:
             cells = stroke_cells[1:]
             selected_cell = stroke_cells[-1]
             design_change(lambda: doc.paint_many(mission_var.get(), cells, brush_var.get()))
         stroke_cells = []
+        rectangle_anchor = None
         canvas.delete('stroke_preview')
 
     def refresh(*args):
@@ -467,7 +512,10 @@ def launch(path):
     mission_box = ttk.Combobox(controls,textvariable=mission_var,state='readonly',width=14)
     mission_box.pack(side='left')
     mission_box.bind('<<ComboboxSelected>>', lambda e: stop())
-    ttk.Label(controls,text='Pinceau').pack(side='left')
+    ttk.Label(controls,text='Outil').pack(side='left')
+    ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=10,
+                 values=['Pinceau','Rectangle']).pack(side='left')
+    ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,values=['wall','erase','height+','height-','mud','hazard','cover','goal','unit']).pack(side='left')
     unit_box = ttk.Combobox(controls,textvariable=unit_var,state='readonly',width=12)
     unit_box.pack(side='left')

@@ -13,8 +13,16 @@ requis qu'au lancement du studio.
   deux acteurs de référence (joueur et adversaire), sans objets ni triggers.
 - **Nouvelle mission** : duplique la première mission existante pour fabriquer
   rapidement une variante complète.
-- **Carte et combat** : peindre hauteur, murs, boue, couvert, danger,
-  objectif et déplacer une unité sélectionnée. Undo / redo et playtest isolé.
+- **Peinture de terrain** : pinceaux mur, effacement, relief, boue, couvert,
+  danger et objectif ; peindre au clic ou au glisser. Les pinceaux mur et
+  objectif s'appliquent sans basculer leur état, et l'effacement retire aussi
+  l'objectif de la case.
+- **Remplissage rectangulaire** : choisir l'outil Rectangle, faire glisser
+  entre deux coins pour prévisualiser une zone inclusive, puis appliquer le
+  pinceau sélectionné. Toute la zone passe par une validation et un seul
+  undo/redo.
+- **Carte et combat** : déplacer une unité sélectionnée, undo / redo et
+  playtest isolé.
 - **Personnages et événements** : ajouter une unité par copie d'un acteur
   fonctionnel du même camp, placer des portes, coffres, interrupteurs,
   béliers, catapultes, passages, défenses et triggers simples.

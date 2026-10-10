@@ -37,6 +37,14 @@ class StudioGUITests(unittest.TestCase):
                     notebooks=[w for w in widgets if isinstance(w,ttk.Notebook)]
                     self.assertTrue(any(len(w.tabs()) >= 5 for w in notebooks))
                     buttons={w.cget('text'):w for w in widgets if isinstance(w,ttk.Button)}
+                    canvas=next(w for w in widgets if isinstance(w,tk.Canvas))
+                    tool=next(w for w in widgets if isinstance(w,ttk.Combobox)
+                              and 'Rectangle' in w.cget('values'))
+                    tool.set('Rectangle')
+                    canvas.event_generate('<Button-1>',x=81,y=81)
+                    canvas.event_generate('<B1-Motion>',x=189,y=135,state=256)
+                    canvas.event_generate('<ButtonRelease-1>',x=189,y=135)
+                    root.update()
                     buttons['Créer événement sur la case'].invoke()
                     root.update()
                     buttons['Nouvelle partie'].invoke()
@@ -62,3 +70,4 @@ class StudioGUITests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
