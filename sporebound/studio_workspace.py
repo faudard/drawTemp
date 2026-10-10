@@ -128,6 +128,10 @@ class ProjectWorkspaceTab:
             self.owner.campaign_id.set(node.id)
             self.owner._show_campaign()
             self._show_tab('Jeu, campagnes et sauvegardes')
+        elif node.kind == 'siege':
+            self.owner.siege_studio.siege_id.set(node.id)
+            self.owner.siege_studio.refresh()
+            self._show_tab('Campagne & siège')
         elif node.kind == 'scene':
             self.owner.story_editor.scene_id = node.id
             self.owner.story_editor.refresh()
