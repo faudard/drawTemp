@@ -101,14 +101,14 @@ class TacticalEventGraphTests(unittest.TestCase):
                      [event_composer.action('message', text='second')])
         result = reorder_event(data, self.mid, 'second_rule', -1)
         ids = [e['id'] for e in Content.from_dict(result).missions[self.mid].triggers]
-        self.assertEqual(ids[-3:-1], ['second_rule', 'first_rule'])
+        self.assertEqual(ids[-2:], ['second_rule', 'first_rule'])
         self.assertEqual(self.data, self.before)
         # The view is not a second serialization or a different runtime format.
         self.assertEqual(Content.from_dict(result).to_dict(), result)
 
     def test_wave_and_queue_wave_use_existing_trigger_contracts(self):
         data = deepcopy(self.data)
-        data.setdefault('archetypes', {})['light_foe'] = {'max_hp': 24, 'hp': 24}
+        data.setdefault('archetypes', {})['light_foe'] = {'max_hp': 24}
         a = event_composer.action('queue_wave', pos=(2, 0), actor_id='wave_f1',
                                   archetype='light_foe', name='Garde')
         b = event_composer.action('wave', pos=(2, 1), actor_id='wave_f2',
@@ -124,7 +124,12 @@ class TacticalEventGraphTests(unittest.TestCase):
             duplicate_event(updated, self.mid, 'wave_demo', 'other_wave')
 
     def test_graph_budget_is_deterministic(self):
-        graph = build_event_graph(self.data, self.mid, max_nodes=2)
+        data = event_composer.save_event(
+            self.data, self.mid, 'budget_demo',
+            event_composer.condition('tick', tick=99),
+            [event_composer.action('message', text='A'),
+             event_composer.action('message', text='B')])
+        graph = build_event_graph(data, self.mid, max_nodes=2)
         self.assertTrue(graph['truncated'])
         self.assertLessEqual(len(graph['nodes']), 2)
         for invalid in (0, -1, True, 3001):
