@@ -76,7 +76,7 @@ class AuthoringTests(unittest.TestCase):
                           pos=self.cell,tick=15,amount=3)
         self.assertIsNotNone(Content.from_dict(updated))
         with self.assertRaises(RuleError):
-            add_event(self.data,self.mid,'clock','tick','hazard',
+            add_event(self.data,self.mid,'clock',condition='tick',action='hazard',
                       pos=self.cell,tick=-1,amount=3)
         with self.assertRaises(RuleError):
             add_event(self.data,self.mid,'badunit',condition='defeated',action='message',
