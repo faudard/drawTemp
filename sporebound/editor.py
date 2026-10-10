@@ -9,6 +9,8 @@ from .model import Content, RuleError
 from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
                             move_unit, paint_deployment, paste_terrain,
                             selected_cells as validate_selection)
+from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
+                            transform_terrain)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 
@@ -378,6 +380,77 @@ def launch(path):
     @guarded
     def paste_selection():
         paste_at(selected_cell)
+
+    @guarded
+    def rotate_or_flip(operation):
+        nonlocal terrain_clipboard
+        if battle:
+            raise RuleError('Quitter le combat avant de transformer le terrain.')
+        if terrain_clipboard is None:
+            raise RuleError('Copier une sélection avant rotation ou symétrie.')
+        terrain_clipboard = transform_terrain(terrain_clipboard, operation)
+        status_var.set(f'Terrain transformé : {terrain_clipboard.width} × '
+                       f'{terrain_clipboard.height} cases. Cliquer pour coller.')
+        tool_var.set('Collage')
+        refresh()
+
+    @guarded
+    def save_terrain_stamp():
+        if battle or source_pending():
+            raise RuleError('Terminer les modifications avant de sauvegarder un modèle.')
+        if terrain_clipboard is None:
+            raise RuleError('Copier une sélection avant de créer un modèle.')
+        name = simpledialog.askstring('Modèle de terrain', 'Nom du modèle :')
+        if name is None:
+            return
+        output = filedialog.asksaveasfilename(
+            defaultextension='.stamp.json',
+            filetypes=[('Modèle terrain JSON', '*.json')], initialfile='terrain.stamp.json')
+        if output:
+            save_stamp(output, terrain_clipboard, name)
+            status_var.set(f'Modèle terrain enregistré : {output}')
+
+    @guarded
+    def open_terrain_stamp():
+        nonlocal terrain_clipboard
+        if battle:
+            raise RuleError('Quitter le combat avant de charger un modèle.')
+        filename = filedialog.askopenfilename(
+            filetypes=[('Modèle terrain JSON', '*.json')])
+        if filename:
+            terrain_clipboard = load_stamp(filename)
+            tool_var.set('Collage')
+            status_var.set(f'Modèle prêt : {terrain_clipboard.width} × '
+                           f'{terrain_clipboard.height} cases.')
+            refresh()
+
+    @guarded
+    def shift_entity_group(dx, dy):
+        nonlocal selected_tiles
+        if battle or source_pending():
+            raise RuleError('Terminer les modifications et quitter le combat.')
+        cells = _selection_for_current_map()
+        unit_ids, object_ids = group_entities(doc.data, mission_var.get(), cells)
+        if not unit_ids and not object_ids:
+            raise RuleError('Aucun acteur ni objet de la sélection à déplacer.')
+        design_change(lambda: doc.replace(move_group(
+            doc.data, mission_var.get(), unit_ids, object_ids, dx=dx, dy=dy)))
+        # Keep the entity group selected at its new coordinates (within bounds).
+        mission = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
+        selected_tiles = {(x+dx, y+dy) for x, y in selected_tiles
+                          if 0 <= x+dx < mission['board']['width'] and
+                          0 <= y+dy < mission['board']['height']}
+        status_var.set(f'Groupe déplacé : {len(unit_ids)} unités, '
+                       f'{len(object_ids)} objets ; Δ({dx}, {dy}).')
+        refresh()
+
+    def set_zoom(delta):
+        nonlocal tile_size
+        next_size = max(24, min(96, tile_size + delta))
+        if next_size != tile_size:
+            tile_size = next_size
+            refresh()
+            status_var.set(f'Zoom carte : {tile_size}px/case')
 
     def paint_cells(cells, brush):
         if brush == 'unit':
