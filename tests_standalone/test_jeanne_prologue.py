@@ -27,15 +27,78 @@ class JeannePrologueTests(unittest.TestCase):
     def new_session(self):
         return GameSession.new(self.content, self.project, "jeanne", seed=17)
 
+    def visit_point(self, session, ident):
+        """Walk to a hotspot through valid cardinal cells, then interact."""
+        from collections import deque
+        stage = session.exploration_state()
+        point = next(x for x in stage["interactions"] if x["id"] == ident)
+        dest = tuple(point["pos"])
+        origin = tuple(stage["position"])
+        blocked = {tuple(x) for x in stage["blocked"]}
+        queue = deque([(origin, [])])
+        seen = {origin}
+        moves = ((0, -1), (0, 1), (-1, 0), (1, 0))
+        route = None
+        while queue:
+            cell, path = queue.popleft()
+            if sum(abs(a - b) for a, b in zip(cell, dest)) <= 1:
+                route = path
+                break
+            for dx, dy in moves:
+                other = (cell[0] + dx, cell[1] + dy)
+                if (0 <= other[0] < stage["width"]
+                        and 0 <= other[1] < stage["height"]
+                        and other not in blocked and other not in seen):
+                    seen.add(other)
+                    queue.append((other, path + [(dx, dy)]))
+        self.assertIsNotNone(route, "Unreachable hotspot: " + ident)
+        for dx, dy in route:
+            session.explore_move(dx, dy)
+        return session.explore_interact(ident)
+
     def intro(self, session, response="ecouter"):
         self.assertEqual(session.active_scene()["id"], "sc_p0_champs")
         self.assertEqual(session.available_missions(), [])
+        self.assertEqual(session.available_choices(), [])
+        self.visit_point(session, "ble")
+        self.visit_point(session, "medaillon")
+        self.visit_point(session, "chene")
+        self.assertTrue(session.exploration_state()["completed"])
         session.choose_story_option(response)
         self.assertEqual(session.active_scene()["id"], "sc_p0_visions")
         session.choose_story_option("repondre")
         self.assertEqual(session.active_scene()["id"], "sc_p0_fumee")
         session.choose_story_option("souvenir")
         self.assertEqual(session.available_missions(), ["p0_01_lame"])
+
+    def test_fields_exploration_is_saved_and_checked(self):
+        session = self.new_session()
+        with self.assertRaises(RuleError):
+            session.choose_story_option("ecouter")
+        with self.assertRaises(RuleError):
+            session.explore_move(2, 0)
+        with self.assertRaises(RuleError):
+            session.explore_interact("chene")
+        self.visit_point(session, "ble")
+        self.assertFalse(session.exploration_state()["completed"])
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "fields.json"
+            session.save(path)
+            restored = GameSession.load(path, self.content, self.project)
+            self.assertEqual(restored.exploration_state(), session.exploration_state())
+            with self.assertRaises(RuleError):
+                restored.choose_story_option("resister")
+            self.visit_point(restored, "medaillon")
+            self.visit_point(restored, "chene")
+            self.assertTrue(restored.exploration_state()["completed"])
+            self.assertEqual(len(restored.available_choices()), 2)
+            restored.choose_story_option("resister")
+            self.assertEqual(restored.active_scene()["id"], "sc_p0_visions")
+            restored.save(path)
+            reloaded = GameSession.load(path, self.content, self.project)
+            self.assertEqual(reloaded.active_scene()["id"], "sc_p0_visions")
+            self.assertEqual(reloaded.progress.story_flags,
+                             restored.progress.story_flags)
 
     def win_mission(self, session, mission_id, limit=700):
         self.assertIn(mission_id, session.available_missions())
