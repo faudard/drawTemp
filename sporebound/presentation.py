@@ -88,6 +88,10 @@ class BattleFrame:
     reachable: tuple[tuple[int, int], ...]
     forecast: tuple[dict, ...]
     events: tuple[dict, ...]
+    danger: tuple[dict, ...] = ()
+    timeline: tuple[dict, ...] = ()
+    casts: tuple[dict, ...] = ()
+    charges: tuple[dict, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -113,6 +117,8 @@ def battle_frame(battle, selected=None, skill=None):
     """Take an engine-owned frame without modifying Battle or advancing RNG."""
     if battle is None:
         return None
+    from .tactical_intents import tactical_intents
+    intel = tactical_intents(battle)
     board = battle.board
     selected = tuple(selected) if selected is not None else None
     reachable = ()
@@ -139,7 +145,11 @@ def battle_frame(battle, selected=None, skill=None):
         objects=tuple(ObjectView(o["id"], o["kind"], tuple(o["pos"]),
                                  bool(o.get("open", False))) for o in battle.mission.objects),
         selected=selected, reachable=reachable, forecast=forecast,
-        events=tuple(deepcopy(battle.events[-30:])))
+        events=tuple(deepcopy(battle.events[-30:])),
+        danger=tuple(deepcopy(intel["danger"])),
+        timeline=tuple(deepcopy(intel["timeline"])),
+        casts=tuple(deepcopy(intel["casts"])),
+        charges=tuple(deepcopy(intel["charges"])))
 
 
 def strategy_frame(fronts):
