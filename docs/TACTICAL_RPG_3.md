@@ -150,10 +150,14 @@ verify_budgets(report, max_p95_commands=500, allow_limits=False)
 ```
 
 Reports contain per-seed outcomes, win rate, allied downed mean, and
-nearest-rank p50/p95/p99 for command count and ticks. Re-running identical
-seeds and content must produce identical reports. `allow_limits=False`
-rejects encounters that fail to terminate within the cap. These are **gameplay
-budgets**, not wall-clock CPU performance metrics.
+nearest-rank p50/p95/p99 for command count and ticks. Every seed also
+records a verified battle digest, event counts, team tactic activations and
+damage received by player units. Aggregated telemetry supports comparing
+formation-heavy encounters with direct damage builds; the optional
+`max_mean_damage_taken` CI gate guards against overtuned enemy teams.
+Re-running identical seeds and content must produce identical reports.
+`allow_limits=False` rejects encounters that fail to terminate within the cap.
+These are **gameplay budgets**, not wall-clock CPU performance metrics.
 
 ## Gate / integration checklist
 
