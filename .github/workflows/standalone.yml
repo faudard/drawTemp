@@ -118,3 +118,7 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_castle_player_gui.py -v
+      - name: Exercise 2.8.2 Studio-authored siege Player and narrative bridge
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_authored_siege_gui.py -v
