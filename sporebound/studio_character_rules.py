@@ -24,6 +24,8 @@ class CharacterRulesStudio:
         self._skills_tab()
         self._jobs_tab()
         self._equipment_tab()
+        from .studio_synergy_unlocks import SynergyUnlockStudio
+        self.synergy_unlocks = SynergyUnlockStudio(self, self.tabs)
         self.status = self.tk.StringVar(value='Édits vérifiés et annulables par le Studio.')
         self.ttk.Label(page, textvariable=self.status, wraplength=1000).pack(
             fill='x', padx=8, pady=4)
@@ -474,3 +476,4 @@ class CharacterRulesStudio:
             self._load_job()
         if self.i_id.get() in data.get('equipment',{}):
             self._load_item()
+        self.synergy_unlocks.refresh()

@@ -155,6 +155,10 @@ Trois onglets d'authoring supplémentaires sont disponibles :
 - **Graphe des missions** : afficher les nœuds, relier/délier deux missions,
   repérer les cycles et les missions inaccessibles depuis une campagne ;
   la navigation vers une mission actualise la carte tactique.
+- **Synergy & Unlock Studio 2.5.3.2** : éditeur visuel des duos/trios,
+  secrets, conditions ET/OU, compteurs et séquences de combat, avec
+  simulateur sans effet de bord. Guide :
+  [Synergies et déverrouillage](docs/SYNERGY_UNLOCK_STUDIO.md).
 - **Character & Rules Studio 2.5.3** : éditeur guidé des héros et monstres,
   archétypes, compétences multi-effets, classes et équipements ;
   validation transactionnelle et Undo/Redo. Voir

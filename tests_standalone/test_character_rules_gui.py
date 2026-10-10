@@ -47,7 +47,7 @@ class CharacterRulesGUITests(unittest.TestCase):
                     self.assertEqual(
                         [inner.tab(tab, 'text') for tab in inner.tabs()],
                         ['Héros / monstres', 'Archétypes', 'Compétences',
-                         'Classes', 'Équipement'])
+                         'Classes', 'Équipement', 'Synergies & secrets'])
 
                     def open_tab(name):
                         idx = next(i for i in range(len(inner.tabs()))
