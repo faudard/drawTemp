@@ -418,8 +418,11 @@ deterministic strategic resolution.
 
 - **`negotiate_front("gate")`**: an explicit strategic truce at a safe
   tactical turn boundary, costs two actual provisions and permanently reduces
-  friendly strength on the throne front by one. An authored agreement
-  cannot be used if the gate fight is already lost.
+  friendly strength on the throne front by one. An authenticated gate treaty
+  also persists to the throne: its final stand-down terms remove the named
+  royal guard from the final Battle, emit a treaty message, and appear in
+  `campaign.diplomacy` (`in_force` before entry, `honored` after). These terms
+  apply only after the recorded supply objective proves the treaty.
 - **`partial_front("courtyard")`**: requires an actual
   `defense_sabotaged` event from the `stone_drop` objective, not a fake
   battle result. The remaining courtyard garrison is reduced by one and
