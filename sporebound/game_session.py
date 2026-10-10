@@ -58,7 +58,12 @@ class GameSession:
 
     @property
     def active_battle(self):
-        return self.fronts.active if self.fronts is not None else self.battle
+        if self.fronts is not None:
+            if self.fronts.recovery_battles:
+                return self.fronts.recovery_battles[
+                    sorted(self.fronts.recovery_battles)[0]]
+            return self.fronts.active
+        return self.battle
 
     def active_scene(self):
         return self.story.active_scene(self.progress)
@@ -168,7 +173,11 @@ class GameSession:
                            self.finalized, self.settled_fronts))
         try:
             if self.fronts is not None:
-                self.fronts.execute(command)
+                if self.fronts.recovery_battles:
+                    front = sorted(self.fronts.recovery_battles)[0]
+                    self.fronts.execute_recovery(front, command)
+                else:
+                    self.fronts.execute(command)
             else:
                 require(not self.finalized, "Combat already completed")
                 self.battle.execute(command)
@@ -201,6 +210,36 @@ class GameSession:
         require(self.fronts is not None and not self.progress.story_pending,
                 "No available multi-front encounter")
         self.fronts.set_doctrine(front, doctrine)
+
+    def select_route(self, route):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        self.fronts.select_route(route)
+
+    def negotiate_front(self, front):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        self.fronts.negotiate_front(front)
+
+    def partial_front(self, front):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        self.fronts.partial_front(front)
+
+    def withdraw_front(self, front):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        self.fronts.withdraw_front(front)
+
+    def start_recovery(self, front):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        return self.fronts.start_recovery(front)
+
+    def abandon_recovery(self, front):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        self.fronts.abandon_recovery(front)
 
     def ai_turn(self):
         require(self.mode == "battle" and not self.finalized and
