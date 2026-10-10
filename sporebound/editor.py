@@ -366,6 +366,8 @@ def launch(path):
             raise RuleError('Le collage est réservé à l’éditeur.')
         if terrain_clipboard is None:
             raise RuleError('Copier d’abord une sélection de terrain.')
+        if source_pending():
+            raise RuleError('Appliquer ou abandonner les modifications JSON avant le collage.')
         design_change(lambda: doc.replace(paste_terrain(doc.data, mission_var.get(),
                                                          terrain_clipboard, anchor)))
         selected_tiles = {(anchor[0]+dx, anchor[1]+dy)
@@ -398,7 +400,20 @@ def launch(path):
         cell = (int(canvas.canvasx(event.x) // tile_size),
                 int(canvas.canvasy(event.y) // tile_size))
         mission = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
-        for dx, dy in terrain_clipboard.offsets:
+        offsets = terrain_clipboard.offsets
+        if len(offsets) > 512:
+            # Mouse-motion rendering stays bounded for huge selections.
+            width, height = terrain_clipboard.width, terrain_clipboard.height
+            valid = 0 <= cell[0] and 0 <= cell[1] and (
+                cell[0] + width <= mission['board']['width']) and (
+                cell[1] + height <= mission['board']['height'])
+            canvas.create_rectangle(cell[0]*tile_size+4, cell[1]*tile_size+4,
+                                    (cell[0]+width)*tile_size-4,
+                                    (cell[1]+height)*tile_size-4,
+                                    outline='#36a16c' if valid else '#e05252',
+                                    width=3, dash=(4, 3), tags='paste_preview')
+            return
+        for dx, dy in offsets:
             x, y = cell[0] + dx, cell[1] + dy
             inside = 0 <= x < mission['board']['width'] and 0 <= y < mission['board']['height']
             canvas.create_rectangle(x*tile_size+4, y*tile_size+4,
