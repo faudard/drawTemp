@@ -51,6 +51,7 @@ class PlayerApplication:
         self.unit_var = tk.StringVar()
         self.facing_var = tk.StringVar(value="south")
         self.front_var = tk.StringVar()
+        self.route_var = tk.StringVar(value="breach")
         self.doctrine_var = tk.StringVar(value="hold")
         self.selection = (0, 0)
         self.camera = Camera(52, 8, 8)
@@ -355,6 +356,11 @@ class PlayerApplication:
         nav.pack(fill="x", pady=4)
         if session.mode == "fronts":
             self._button(nav, "Timeline / Fronts", self.strategy_screen).pack(side="left", padx=4)
+            if session.fronts.recovery_battles:
+                self.ttk.Label(
+                    nav, text="Reconquête tactique : " +
+                    sorted(session.fronts.recovery_battles)[0]).pack(
+                        side="left", padx=6)
         elif session.finalized:
             self._button(nav, "Résultats → Campagne",
                          lambda: self._change(self.player.return_to_campaign)).pack(
@@ -547,6 +553,8 @@ class PlayerApplication:
             self.player.advance_fronts)).pack(side="left", padx=4)
         self._button(controls, "Jouer le secteur", self.battle_screen).pack(
             side="left", padx=4)
+        if session.fronts.campaign is not None:
+            self._campaign_routes_panel(session.fronts)
         log = self.tk.Text(self.view, height=9, fg="#e9f2fc", bg="#182a40",
                            wrap="word", relief="flat")
         log.pack(fill="both", expand=True, pady=8)
@@ -559,6 +567,80 @@ class PlayerApplication:
         if all(f.status != "active" for f in frame.fronts):
             self._button(footer, "Résultats → Campagne", lambda: self._change(
                 self.player.return_to_campaign)).pack(side="right", padx=6)
+
+    def _campaign_routes_panel(self, fronts):
+        """Only genuine tactical results/events can unlock routes or treaties."""
+        policy = fronts.campaign.state(fronts)
+        panel = self.ttk.LabelFrame(self.view, text="Routes, accords et reconquête",
+                                    padding=7)
+        panel.pack(fill="x", pady=5)
+        self.ttk.Label(panel, text=(
+            "Finale : " + policy["final_front"] +
+            "   | Statut : " + policy["status"] +
+            "   | Accès : " + ("ouvert" if policy["unlocked"] else "verrouillé") +
+            "   | Conditions : " + ", ".join(
+                name + "=" + row["status"] +
+                (" ✓" if row["accepted"] else " ✗")
+                for name, row in policy["required"].items())),
+            wraplength=1050).pack(anchor="w", pady=3)
+
+        if fronts.route_policy is not None:
+            routes = fronts.route_policy.routes
+            if self.route_var.get() not in routes:
+                self.route_var.set("breach")
+            line = self.ttk.Frame(panel)
+            line.pack(fill="x")
+            self.ttk.Label(line, text="Approche").pack(side="left", padx=3)
+            self.ttk.Combobox(
+                line, textvariable=self.route_var, state="readonly",
+                values=sorted(routes), width=16).pack(side="left", padx=4)
+            self._button(line, "Engager itinéraire",
+                         lambda: self._change(
+                            lambda: self.player.select_route(
+                                self.route_var.get()))).pack(side="left", padx=4)
+            self.ttk.Label(
+                line, text="Choix actuel : " + fronts.route_selected +
+                (" (définitif)" if fronts.route_locked else ""),
+                wraplength=400).pack(side="left", padx=5)
+            current = routes[self.route_var.get()]
+            self.ttk.Label(
+                panel, text=("Coûts : " + str(current["supplies"]) + " vivres, " +
+                            str(current["strength_loss"]) +
+                            " soldats ; conditions : " +
+                            str(current["required"])), wraplength=1050).pack(
+                                anchor="w", pady=2)
+
+        decisions = self.ttk.Frame(panel)
+        decisions.pack(fill="x", pady=4)
+        front = fronts.timeline.focused
+        if fronts.recovery_battles:
+            recovering = sorted(fronts.recovery_battles)[0]
+            self._button(decisions, "Reprendre reconquête", self.battle_screen).pack(
+                side="left", padx=4)
+            self._button(
+                decisions, "Abandonner reconquête", lambda: self._change(
+                    lambda: self.player.abandon_recovery(recovering))).pack(
+                        side="left", padx=4)
+            return
+        for category, label, action in (
+            ("negotiation", "Négocier le passage", self.player.negotiate_front),
+            ("partial", "Valider objectif partiel", self.player.partial_front),
+            ("retreat", "Ordre de retraite", self.player.withdraw_front)):
+            if front in fronts.campaign.spec[category] and (
+                    fronts.timeline.fronts[front]["status"] == "active"):
+                self._button(
+                    decisions, label,
+                    lambda selected=front, perform=action: self._change(
+                        lambda: perform(selected))).pack(side="left", padx=4)
+        chosen = self.front_var.get()
+        if (fronts.route_policy is not None
+                and chosen in fronts.route_policy.recovery
+                and fronts.timeline.fronts[chosen]["status"] in
+                ("defeat", "withdrawn")):
+            self._button(
+                decisions, "Reconquérir ce secteur", lambda: self._change(
+                    lambda: self.player.start_recovery(
+                        self.front_var.get()))).pack(side="left", padx=4)
 
     def close(self):
         if self.player.session is not None:
