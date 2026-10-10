@@ -52,7 +52,7 @@ jalons suivants décrivent leur intégration produit, pas une réécriture.
 | --- | --- | --- |
 | 2.5.5 | Project Workspace — fondation en PR | Index global, navigation vers les panneaux, création/duplication de missions et campagnes, diagnostic assets ; éditeurs par famille à compléter |
 | 2.5.1 | Map Editor 3.0 — fondation en PR | Sélection multiple, collage de terrain/objectifs, couches de visibilité, zones de déploiement, placement validé unités/objets ; restent tilesets, rotation, entités groupées et aperçu sprites |
-| 2.5.2 | Event & Narrative Graph 3.0 | Conditions ET/OU, variables, dialogues et choix ; conserver les scènes partagées et l'arbre à occurrences multiples |
+| 2.5.2 | Event & Narrative Graph 3.0 — fondation en PR | Éditeur visuel ET/OU/NON, choix conditionnels, aperçu flags/or/missions, édition canonique depuis le graphe ; reste le graphe des triggers tactiques |
 | 2.5.3 | Character & Rules Studio | Héros, monstres, classes, compétences, équipements, réactions, synergies et profils IA sans JSON manuel |
 | 2.5.4 | Campaign & Siege Studio | Campagnes, fronts, renforts, routes, doctrines, transitions et chronologie stratégique |
 
