@@ -76,8 +76,11 @@ class ConditionBuilderGUITests(unittest.TestCase):
                     preview_gold.delete(0, 'end')
                     preview_gold.insert(0, '150')
                     buttons['Tester la condition'].invoke()
-                    labels = [w.cget('text') for w in children if isinstance(w, ttk.Label)]
-                    self.assertTrue(any('VISIBLE' in str(label) for label in labels))
+                    statuses = [w.getvar(w.cget('textvariable'))
+                                for w in children if isinstance(w, ttk.Label)
+                                and str(w.cget('textvariable'))]
+                    self.assertTrue(any('VISIBLE' in str(status)
+                                        for status in statuses))
                     buttons['Enregistrer projet de jeu…'].invoke()
                     saved = GameProject.load(output, Content.load(DEFAULT_CONTENT))
                     council = next(s for s in saved.story['scenes'] if s['id'] == 'council')
