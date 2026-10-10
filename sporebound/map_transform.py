@@ -158,9 +158,9 @@ def parse_stamp(data):
             'Malformed stamp cell')
     require(isinstance(data['goals'], list), 'Invalid stamp goals')
     clip = TerrainClipboard(*data['size'],
-                            tuple(item['offset'] for item in cells),
+                            tuple(tuple(item['offset']) for item in cells),
                             tuple(item['terrain'] for item in cells),
-                            tuple(data['goals']))
+                            tuple(tuple(goal) for goal in data['goals']))
     return _validate_clipboard(clip)
 
 
