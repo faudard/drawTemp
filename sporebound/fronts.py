@@ -716,7 +716,7 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
         if self.initial_event_graph:
             state["event_graph"] = deepcopy(self.initial_event_graph)
             state["fired_graph"] = sorted(self.fired_graph)
-        if self.links:
+        if self.links or self.initial_event_graph:
             state["links"] = deepcopy(self.links)
             state["applied_links"] = sorted(self.applied_links)
             state["front_overrides"] = deepcopy(self.front_overrides)
