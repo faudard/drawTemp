@@ -252,7 +252,10 @@ class StudioSiegePlayerApplication(CastlePlayerApplication):
         final = (fronts.campaign.final if fronts.campaign is not None
                  else next(iter(self.controller.blueprint["fronts"])))
         mission = fronts.missions[final]
-        scene_id = self.authored_project.story.get("after_mission", {}).get(mission)
+        # StoryBook.after_mission is an after-*victory* hook. Defeat never
+        # borrows a victorious epilogue or fires any story choice effects.
+        scene_id = (self.authored_project.story.get("after_mission", {}).get(mission)
+                    if game.ending == "victory" else None)
         scene = self._authored_scene(scene_id) if scene_id else None
         if scene is not None:
             self.ttk.Label(self.view, text=scene["title"] + " — " + scene["speaker"],
