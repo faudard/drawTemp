@@ -122,9 +122,82 @@ def launch(content_path, project_path=None, profile_path=None):
                            command=safe(lambda target=mid: start_battle(target))).pack(
                                fill='x',padx=170,pady=5)
         actions=ttk.Frame(view);actions.pack(pady=16)
+        if any(job.get('talents') for job in content.jobs.values()):
+            ttk.Button(actions,text='Talents / classes',
+                       command=talent_screen).pack(side='left',padx=8)
         ttk.Button(actions,text='Sauvegarder',command=safe(lambda: (session.save(),messagebox.showinfo(
             'Sauvegarde','Progression enregistrée.')))).pack(side='left',padx=8)
         ttk.Button(actions,text='Menu principal',command=title_screen).pack(side='left',padx=8)
+
+    def talent_screen(selected_hero=None, selected_job=None):
+        """Graphical campaign JP purchases; editing the rules belongs to Studio."""
+        from .campaign import HeroProgress
+        from .builds3 import talent_catalog
+        clear()
+        title_bar(view,'Arbre de talents')
+        first=project.campaign(session.campaign_id)['start_mission']
+        heroes=sorted({u.id for u in content.missions[first].units
+                       if u.team=='player'})
+        jobs=sorted(jid for jid, job in content.jobs.items()
+                    if job.get('talents'))
+        if not heroes or not jobs:
+            ttk.Label(view,text='Aucun talent disponible dans ce projet.').pack()
+            ttk.Button(view,text='Retour',command=campaign_screen).pack()
+            return
+        hero_var=tk.StringVar(value=selected_hero if selected_hero in heroes
+                             else heroes[0])
+        job_var=tk.StringVar(value=selected_job if selected_job in jobs
+                            else jobs[0])
+        selectors=ttk.Frame(view);selectors.pack(pady=8)
+        ttk.Label(selectors,text='Héros').pack(side='left')
+        hero_box=ttk.Combobox(selectors,textvariable=hero_var,
+                              state='readonly',values=heroes,width=15)
+        hero_box.pack(side='left',padx=8)
+        ttk.Label(selectors,text='Classe').pack(side='left')
+        job_box=ttk.Combobox(selectors,textvariable=job_var,
+                             state='readonly',values=jobs,width=15)
+        job_box.pack(side='left',padx=8)
+        hero_box.bind('<<ComboboxSelected>>',
+                      lambda _e: talent_screen(hero_var.get(),job_var.get()))
+        job_box.bind('<<ComboboxSelected>>',
+                     lambda _e: talent_screen(hero_var.get(),job_var.get()))
+        progress=session.progress.heroes.get(hero_var.get(),HeroProgress())
+        catalog=talent_catalog(content,progress,job_var.get())
+        ttk.Label(view,text=f'JP disponibles : {catalog["available_jp"]}  |  '+
+                  'Sélectionnez un talent pour le débloquer.').pack(pady=6)
+        tree=ttk.Treeview(view,show='tree',height=14)
+        tree.pack(fill='both',expand=True,padx=65,pady=10)
+        specs=content.jobs[job_var.get()].get('talents',{})
+        states={row['id']:row for row in catalog['talents']}
+        inserted=set()
+        def add(tid):
+            if tid in inserted:
+                return
+            spec=specs[tid]
+            deps=spec.get('requires',[])
+            parent=sorted(deps)[0] if deps else ''
+            if parent:
+                add(parent)
+            status=('Acquis' if states[tid]['owned'] else
+                    'Disponible' if states[tid]['available'] else 'Verrouillé')
+            tree.insert(parent,'end',iid=tid,text=(
+                f'{tid} — {states[tid]["jp"]} JP [{status}]'
+                + (' ← '+', '.join(deps) if deps else '')
+                + (' / '+', '.join(spec.get('skills',[]))
+                   if spec.get('skills') else '')))
+            inserted.add(tid)
+        for tid in sorted(specs):
+            add(tid)
+        def purchase():
+            selected=tree.selection()
+            if not selected:
+                raise RuleError('Sélectionnez un talent')
+            session.learn_talent(hero_var.get(),job_var.get(),selected[0])
+            talent_screen(hero_var.get(),job_var.get())
+        ttk.Button(view,text='Apprendre le talent',
+                   command=safe(purchase)).pack(pady=6)
+        ttk.Button(view,text='Retour à la campagne',
+                   command=campaign_screen).pack(pady=7)
 
     def choose_story(choice_id):
         session.choose_story(choice_id)
