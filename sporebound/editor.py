@@ -573,6 +573,59 @@ def launch(path):
         canvas.delete('stroke_preview')
 
 
+    def draw_minimap(board, mission, units):
+        """Compact tactical overview; renders only sparse tiles and entities."""
+        mini_canvas.delete('all')
+        size = 184
+        sx, sy = size / board.width, size / board.height
+        mini_canvas.create_rectangle(0, 0, size, size, fill='#e4e4e4',
+                                     outline='#999999')
+        if layer_vars['Terrain'].get() or layer_vars['Relief'].get():
+            for (x, y), tile in board.tiles.items():
+                color = None
+                if layer_vars['Terrain'].get():
+                    if tile.blocked: color = '#515151'
+                    elif tile.hazard: color = '#e3a187'
+                    elif tile.cover: color = '#a4c599'
+                    elif tile.cost > 1: color = '#b8a37c'
+                if color is None and layer_vars['Relief'].get() and tile.height:
+                    color = '#b7b9d2'
+                if color:
+                    mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                                 fill=color,outline=color)
+        if layer_vars['Déploiement'].get():
+            for zone in mission.deployment:
+                for x, y in zone['cells']:
+                    mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                                 fill='#a5dbe6',outline='')
+        if layer_vars['Objectifs'].get():
+            for x, y in mission.goal:
+                mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                             fill='#d8c86e',outline='')
+        if layer_vars['Objets'].get():
+            for obj in mission.objects:
+                x,y = obj['pos']
+                mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                        fill='#7047ad',outline='')
+        if layer_vars['Unités'].get():
+            for actor in units:
+                x,y = actor.pos
+                color = '#27649c' if actor.team == 'player' else '#bb503b'
+                mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                        fill=color,outline='')
+        # Current map viewport, useful for navigating large boards.
+        left,right = canvas.xview()
+        top,bottom = canvas.yview()
+        mini_canvas.create_rectangle(left*size,top*size,right*size,bottom*size,
+                                     outline='#2369ac',width=2,tags='viewport')
+
+    def minimap_navigate(event):
+        # Jump to a map area without altering the selected tactical cell.
+        # Fractions are interpreted by the scrollable map's x/y views.
+        canvas.xview_moveto(max(0.0, min(1.0, event.x / 184 - 0.2)))
+        canvas.yview_moveto(max(0.0, min(1.0, event.y / 184 - 0.2)))
+        refresh()
+
     def refresh(*args):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
@@ -698,6 +751,7 @@ def launch(path):
                      '\nDonnées tactiques avancées : onglet JSON.')
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
+        draw_minimap(board, mission, units)
         if studio is not None:
             studio.refresh()
 
@@ -786,6 +840,7 @@ def launch(path):
     mini_canvas = tk.Canvas(side_panel,width=184,height=184,
                             background='#f5f5f5',highlightthickness=1)
     mini_canvas.pack(anchor='w',padx=3,pady=3)
+    mini_canvas.bind('<Button-1>', minimap_navigate)
     inspector = tk.Text(side_panel,width=43,wrap='word')
     inspector.pack(side='top',fill='both',expand=True)
     source_frame = ttk.Frame(notebook)
