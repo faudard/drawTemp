@@ -215,6 +215,49 @@ class FormationTests(unittest.TestCase):
             battle.recording(), rules=tactical_rpg_rules()).digest())
 
 
+class TacticalStudioTests(unittest.TestCase):
+    def test_combat_role_and_escort_authoring_are_atomic_and_undoable(self):
+        from sporebound.authoring import set_unit_combat_role
+        from sporebound.editor import Document
+
+        content = arena()
+        content.missions["arena"].units[1].tags = ["narrative:guard"]
+        document = Document(content)
+        before = deepcopy(document.data)
+        with self.assertRaises(RuleError):
+            set_unit_combat_role(document.data, "arena", "enemy",
+                                 role="protector", formation="escort",
+                                 escort_target="hero")
+        self.assertEqual(document.data, before)
+        updated = set_unit_combat_role(document.data, "arena", "enemy",
+                                        role="protector", formation="escort",
+                                        escort_target="ally")
+        document.replace(updated)
+        unit = next(u for u in document.data["missions"][0]["units"]
+                    if u["id"] == "enemy")
+        self.assertEqual(unit["tags"], ["narrative:guard", "protector",
+                                         "formation:escort:ally"])
+        self.assertTrue(document.dirty)
+        document.undo()
+        self.assertEqual(document.data, before)
+
+    def test_phalanx_authoring_rejects_non_spear_and_keeps_role_tags(self):
+        from sporebound.authoring import set_unit_combat_role
+        content = arena()
+        original = content.to_dict()
+        with self.assertRaises(RuleError):
+            set_unit_combat_role(original, "arena", "enemy",
+                                 formation="phalanx")
+        self.assertEqual(content.to_dict(), original)
+        updated = set_unit_combat_role(original, "arena", "enemy",
+                                        role="medic", formation="shield_wall")
+        updated = set_unit_combat_role(updated, "arena", "enemy",
+                                        role="protector", formation="none")
+        enemy = next(u for u in updated["missions"][0]["units"]
+                     if u["id"] == "enemy")
+        self.assertEqual(enemy["tags"], ["protector"])
+
+
 class TalentTests(unittest.TestCase):
     def content(self):
         content = arena()
