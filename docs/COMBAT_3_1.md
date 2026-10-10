@@ -88,3 +88,44 @@ retreat. The standard multiplatform CI remains the acceptance gate.
 - Adaptive shielding, line-of-sight and footprint-aware terrain control
   for siege monsters over multiple tiles.
 - Encounter-level balance trials with scenario difficulty curves.
+
+## Integrated encounter: Jeanne — courtyard breach
+
+Use the existing castle mission pack with an extra **Jeanne** mission.
+The encounter is alternate-history fiction, not a claim about the real 15th
+century siege. It uses four attackers and six compact defenders; the player
+must break a spear line, neutralize the archer, and deny the medic/officer pair.
+
+The layout has a narrow central passage, cover just outside the breach, and
+two opposing deployment zones. The enemy pair of pikemen can form phalanx,
+the knight screens support, the archer stays behind melee guards, the medic
+heals/retreats, and the officer can escort the medic and cast an observable
+area spell. Every action uses the existing CT schedule and Battle.execute.
+
+```sh
+# Inspect defender roles, positions and initial CT estimates:
+python -m examples.jeanne_combat31 --preview
+
+# Generate an editor-importable JSON scenario alongside castle missions:
+python -m examples.jeanne_combat31 --export jeanne_siege.json
+
+# Exact-seed A/B against identical enemies without squad role tags:
+python -m examples.jeanne_combat31 --compare
+
+# Smaller, faster development check:
+python -m examples.jeanne_combat31 --compare --max-commands 150
+```
+
+A/B reports use `compare_compositions`, the same seeded engine simulation,
+the same player AI in both variants, identical map, unit stats, rosters and
+ruleset; **only the enemy `squad:*` tags change**. Examine victory rate,
+mean damage, downed heroes, command p95 and `formation`/prepared events.
+The numbers are descriptive, not a statistical claim, and seeded automated
+AI is not a substitute for a human playtest.
+
+To calibrate the damage multipliers, choose a target difficulty from the
+measured outcomes and actual manual matches. The current 120% flank and 140%
+rear are provisional (not declared balanced just because CI is green).
+The next gate is a decisive, readable engagement with at least two viable
+player counters: flank the spearholders, or pressure the healer/officer with
+ranged fire while holding the gate.
