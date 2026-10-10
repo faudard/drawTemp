@@ -130,6 +130,18 @@ class PlayerIntegrationTests(unittest.TestCase):
             with self.assertRaises(RuleError):
                 restored.learn_talent("hero", "brave", "training")
 
+    def test_player_auto_opts_in_to_authored_duo_synergy(self):
+        content = sample()
+        content.missions["arena"].units[0].tactics = ["chain_strike"]
+        project = GameProject.default(content)
+        with TemporaryDirectory() as folder:
+            session = PlayerSession(content, project,
+                                    Path(folder) / "profile.json")
+            session.new_game("main", 1)
+            session.begin("arena")
+            self.assertIn("chain_strike", session.battle.rules.tactics)
+            self.assertIn("chain_strike", session.battle.unit("hero").tactics)
+
     def test_authored_tactical_roles_enable_rules_on_player_mission_only(self):
         for advanced in (False, True):
             with self.subTest(advanced=advanced):
