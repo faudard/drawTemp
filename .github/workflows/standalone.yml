@@ -58,6 +58,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_studio_gui.py -v
+      - name: Exercise 2.5.4 visual Campaign & Siege Studio
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_campaign_siege_gui.py -v
       - name: Exercise 2.5.5 workspace navigation and guided creation
         env:
           SPOREBOUND_GUI_SMOKE: '1'
