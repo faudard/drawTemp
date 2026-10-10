@@ -27,14 +27,29 @@ def evaluate(content, mission_id, *, seeds=(1, 7, 42, 99),
     require(type(max_commands) is int and 1 <= max_commands <= 100000,
             "Invalid command budget")
     samples = []
+    total_events = Counter()
+    total_tactics = Counter()
     for seed in seeds:
         battle = Battle(content, mission_id, seed=seed, rules=rules)
         result = simulate(battle, max_commands)
         player_units = [u for u in battle.units if u.team == "player"]
+        unit_team = {u.id: u.team for u in battle.units}
+        events = Counter(e["kind"] for e in battle.events)
+        tactics = Counter(e["tactic"] for e in battle.events
+                          if e["kind"] == "tactic")
+        total_events.update(events)
+        total_tactics.update(tactics)
+        incoming = sum(e.get("amount", 0) for e in battle.events
+                       if e["kind"] == "damage"
+                       and unit_team.get(e["unit"]) == "player")
         samples.append({"seed": seed, "result": result["result"],
                         "ticks": result["ticks"], "commands": result["commands"],
+                        "digest": result["digest"],
                         "allied_downed": sum(not u.alive for u in player_units),
-                        "allied_count": len(player_units)})
+                        "allied_count": len(player_units),
+                        "damage_taken": incoming,
+                        "events": dict(sorted(events.items())),
+                        "tactics": dict(sorted(tactics.items()))})
     counts = Counter(s["result"] for s in samples)
     total = len(samples)
     commands = [s["commands"] for s in samples]
@@ -43,6 +58,9 @@ def evaluate(content, mission_id, *, seeds=(1, 7, 42, 99),
             "outcomes": {key: counts[key] for key in ("victory", "defeat", "draw", "limit")},
             "victory_rate": round(counts["victory"] / total, 4),
             "downed_mean": round(sum(s["allied_downed"] for s in samples) / total, 3),
+            "damage_taken_mean": round(sum(s["damage_taken"] for s in samples) / total, 3),
+            "telemetry": {"events": dict(sorted(total_events.items())),
+                          "tactics": dict(sorted(total_tactics.items()))},
             "commands_p50": percentile(commands, 50),
             "commands_p95": percentile(commands, 95),
             "commands_p99": percentile(commands, 99),
@@ -53,7 +71,7 @@ def evaluate(content, mission_id, *, seeds=(1, 7, 42, 99),
 
 
 def verify_budgets(report, *, max_p95_commands=None, max_difficulty=None,
-                   allow_limits=False):
+                   max_mean_damage_taken=None, allow_limits=False):
     """Explicit CI gate; no reliance on performance of a particular computer."""
     require(isinstance(report, dict) and report.get("runs", 0) > 0,
             "Missing balance report")
@@ -67,6 +85,13 @@ def verify_budgets(report, *, max_p95_commands=None, max_difficulty=None,
                 "Invalid difficulty budget")
         require(1 - report["victory_rate"] <= max_difficulty,
                 "Difficulty budget exceeded")
+    if max_mean_damage_taken is not None:
+        require(type(max_mean_damage_taken) in (int, float)
+                and not isinstance(max_mean_damage_taken, bool)
+                and math.isfinite(max_mean_damage_taken)
+                and max_mean_damage_taken >= 0, "Invalid damage budget")
+        require(report.get("damage_taken_mean", float("inf")) <= max_mean_damage_taken,
+                "Mean allied damage budget exceeded")
     if not allow_limits:
         require(report["outcomes"]["limit"] == 0, "Unresolved seeded encounter")
     return True
