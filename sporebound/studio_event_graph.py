@@ -105,7 +105,9 @@ class EventGraphStudio:
                    command=lambda: self.cond_pos.set(
                        ','.join(map(str, self.owner.selection())))).grid(
                            row=5, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
-        self._button(cond, 'Créer / appliquer condition', self.save_condition)
+        ttk.Button(cond, text='Créer / appliquer condition',
+                   command=lambda: self.owner._run(self.save_condition)).grid(
+                       row=6, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
         ttk.Label(cond, text='Nouvel ID').grid(row=7, column=0, sticky='w', padx=5)
         ttk.Entry(cond, textvariable=self.new_id, width=24).grid(
             row=7, column=1, sticky='ew', padx=5)
@@ -337,8 +339,8 @@ class EventGraphStudio:
         canvas.delete('all')
         scale = int(self.zoom.get().rstrip('%'))/100
         width, height = int(200*scale), int(70*scale)
+        nodes = {n['key']: n for n in graph['nodes']}
         for edge in graph['edges']:
-            nodes = {n['key']: n for n in graph['nodes']}
             a, b = nodes[edge['source']], nodes[edge['target']]
             x1,y1 = int(a['x']*scale), int(a['y']*scale)
             x2,y2 = int(b['x']*scale), int(b['y']*scale)
