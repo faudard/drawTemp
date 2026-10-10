@@ -27,6 +27,7 @@ class GameProject:
     version: int = 1
     assets: dict = field(default_factory=dict)
     sieges: list[dict] = field(default_factory=list)
+    cinematics: list[dict] = field(default_factory=list)
 
     @classmethod
     def default(cls, content):
@@ -54,7 +55,8 @@ class GameProject:
                 'save_slots': self.save_slots,
                 **({'story': deepcopy(self.story)} if self.story else {}),
                 **({'assets': deepcopy(self.assets)} if self.assets else {}),
-                **({'sieges': deepcopy(self.sieges)} if self.sieges else {})}
+                **({'sieges': deepcopy(self.sieges)} if self.sieges else {}),
+                **({'cinematics': deepcopy(self.cinematics)} if self.cinematics else {})}
 
     def asset_registry(self):
         from .assets import AssetRegistry
@@ -98,6 +100,8 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .siege_authoring import validate_all
         validate_all(self.sieges, content, self.campaigns)
+        from .cinematics import validate_cinematics
+        validate_cinematics(self.cinematics, content, self.campaigns)
         from .narrative import validate_story
         validate_story(self.story, content, self.campaigns)
 

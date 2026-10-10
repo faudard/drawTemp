@@ -327,7 +327,9 @@ class Battle:
             direct = next((row for row in result if row["unit"] == target.id and row["kind"] == "damage"), None) if target else None
             if (target is not None and target.team != u.team and direct is not None
                     and direct["amount"] < target.hp):
-                for tactic in self.available_team_tactics(u, target):
+                # Execution selects exactly the first available tactic. Forecast
+                # must not sum alternative combos that cannot all resolve.
+                for tactic in self.available_team_tactics(u, target)[:1]:
                     partner_ids = tactic["partners"] if "partners" in tactic else [tactic["partner"]]
                     divisor = self.rules.tactics.get(tactic["id"]).divisor
                     for partner_id in partner_ids:

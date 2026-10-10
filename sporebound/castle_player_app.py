@@ -9,6 +9,7 @@ from .castle_player_controller import CastlePlayerController
 from .model import RuleError
 from .presentation import Camera, battle_frame, strategy_frame
 from .siege import available_operations
+from .tactical_actions import tactical_action_options, tactical_command
 from .tk_renderer import CanvasRenderer
 
 
@@ -307,7 +308,8 @@ class CastlePlayerApplication:
             options = ["move", "attack", *battle.active.skills,
                        "item:potion", "item:ether", "item:phoenix",
                        *["object:" + o["id"] for o in battle.mission.objects],
-                       *available_operations(battle, battle.active), "end"]
+                       *available_operations(battle, battle.active),
+                       *tactical_action_options(battle), "end"]
             if self.action_var.get() not in options:
                 self.action_var.set(options[0])
             self.ttk.Combobox(bar, state="readonly", textvariable=self.action_var,
@@ -362,6 +364,9 @@ class CastlePlayerApplication:
             cmd = {"kind": "siege_attack", "object": action[len("siege-attack:"):]}
         elif action.startswith("repair-siege:"):
             cmd = {"kind": "repair_siege", "object": action[len("repair-siege:"):]}
+        elif action == "charge" or action == "disengage" or action.startswith(
+                ("formation:", "prepare:", "relay:")):
+            cmd = tactical_command(action, self.selection)
         else:
             cmd = {"kind": "act", "skill": action, "cell": list(self.selection)}
         self._tactical(cmd)
@@ -381,6 +386,18 @@ class CastlePlayerApplication:
                       for u in frame.actors)
         if frame.forecast:
             detail += ["", "Prévisions", *(str(row) for row in frame.forecast)]
+        detail += ["", "Timeline CT (estimée)"]
+        detail += [f"{entry['unit']} : " +
+                   ("actif" if entry["active"] else
+                    "bloqué" if entry["eta_ticks"] is None else
+                    "t+" + str(entry["eta_ticks"])) for entry in frame.timeline]
+        if frame.casts:
+            detail += ["", "Incantations programmées"]
+            detail += [f"{row['unit']} : {row['skill']} t+{row['remaining_ticks']}"
+                       for row in frame.casts]
+        if frame.charges:
+            detail += ["", "Charges possibles (non garanties)"]
+            detail += [f"{row['unit']} → {row['target']}" for row in frame.charges]
         detail += ["", "Événements", *(str(row) for row in frame.events[-15:])]
         self.info.configure(state="normal")
         self.info.delete("1.0", "end")

@@ -138,6 +138,11 @@ def remove_front(blueprint, front):
                     or any(effect["front"] == front for effect in link["effects"])
                     for link in result["links"]),
             "Remove connected event links first")
+    logistics = result.get("logistics")
+    require(logistics is None or not any(
+        route["from"] == front or route["to"] == front
+        for route in logistics.get("routes", [])),
+        "Remove connected logistics routes first")
     require(not strategic_events.references_front(
         result.get("event_graph", []), front),
         "Remove connected strategic events before deleting this front")
@@ -149,6 +154,17 @@ def remove_front(blueprint, front):
     result["specs"].pop(front)
     if result["focused"] == front:
         result["focused"] = next(iter(result["fronts"]))
+    return result
+
+
+def set_logistics(blueprint, config, content):
+    """Attach optional validated logistics without changing old siege manifests."""
+    result = deepcopy(blueprint)
+    if config is None:
+        result.pop("logistics", None)
+    else:
+        result["logistics"] = deepcopy(config)
+    validate_blueprint(result, content, {result["campaign_id"]})
     return result
 
 

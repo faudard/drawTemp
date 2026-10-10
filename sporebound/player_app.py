@@ -3,6 +3,7 @@
 Uses Tk only at launch, and sends every player intent through PlayerController.
 No game mechanics, AI rules, dice or persistence schemas live in this module.
 """
+import json
 from pathlib import Path
 
 from .audio_stage import AudioStage
@@ -11,6 +12,8 @@ from .model import Content, RuleError
 from .player_controller import PlayerController
 from .presentation import Camera, battle_frame, strategy_frame
 from .siege import available_operations
+from .tactical_actions import tactical_action_options, tactical_command
+from .tactical_rpg3 import authored_rules_for_document
 from .tk_renderer import CanvasRenderer
 
 
@@ -23,7 +26,9 @@ class PlayerApplication:
         content_path = Path(content_path)
         project_path = (Path(project_path) if project_path is not None
                         else content_path.with_suffix(".game.json"))
-        content = Content.load(content_path)
+        # Validate advanced formations/bosses with their opt-in rules from load.
+        document = json.loads(content_path.read_text(encoding="utf-8"))
+        content = Content.from_dict(document, rules=authored_rules_for_document(document))
         project = (GameProject.load(project_path, content) if project_path.is_file()
                    else GameProject.default(content))
         profile = (Path(profile_path) if profile_path is not None
@@ -52,11 +57,18 @@ class PlayerApplication:
         self.facing_var = tk.StringVar(value="south")
         self.front_var = tk.StringVar()
         self.doctrine_var = tk.StringVar(value="hold")
+        self.logistics_dest_var = tk.StringVar()
+        self.logistics_transfer_dest_var = tk.StringVar()
+        self.logistics_actor_var = tk.StringVar(value="reserve_1")
+        self.logistics_x_var = tk.StringVar(value="1")
+        self.logistics_y_var = tk.StringVar(value="1")
+        self.convoy_var = tk.StringVar()
         self.selection = (0, 0)
         self.camera = Camera(52, 8, 8)
         self.canvas = None
         self.renderer = None
         self.info = None
+        self.cinematic = None
         self._typewriter_job = None
         self._audible_scene = None
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -77,6 +89,9 @@ class PlayerApplication:
         style.configure("TLabelframe.Label", background="#101a2b", foreground="#e8f0fa")
 
     def _clear(self):
+        if self.cinematic is not None:
+            self.cinematic.close()
+            self.cinematic = None
         if self._typewriter_job is not None:
             self.root.after_cancel(self._typewriter_job)
             self._typewriter_job = None
@@ -191,7 +206,7 @@ class PlayerApplication:
                                                     "Recommencer cet emplacement ?"):
             return
         self.player.new_game(cid, slot, overwrite=exists)
-        self.show()
+        self._cinematic_sequence("campaign_start", cid, self.show)
 
     def _load_game(self):
         self.player.load_game(self.campaign_var.get(), int(self.slot_var.get()))
@@ -230,6 +245,38 @@ class PlayerApplication:
         else:
             self.campaign_screen()
 
+    def _cinematic_sequence(self, kind, target, finished):
+        """Play authored presentation beats without mutating the saved game."""
+        from .cinematics import matching_cinematics
+        from .cinematic_player import CinematicPlayback
+
+        clips = matching_cinematics(self.project, kind, target)
+
+        def next_clip(index=0):
+            self.cinematic = None
+            if index >= len(clips):
+                finished()
+                return
+            self._clear()
+            self.cinematic = CinematicPlayback(
+                self.view, self.tk, self.ttk, clips[index],
+                lambda: next_clip(index + 1), audio=self.audio,
+                registry=self.registry, asset_root=self.asset_root)
+
+        next_clip()
+
+    def _start_mission_with_cinematic(self, mission_id):
+        self._cinematic_sequence(
+            "before_mission", mission_id,
+            lambda: self._safe(lambda: self._change(
+                lambda: self.player.start_mission(mission_id))))
+
+    def _finish_mission_with_cinematic(self):
+        battle = self.player.session.active_battle
+        mission_id = battle.mission.id
+        self.player.return_to_campaign()
+        self._cinematic_sequence("after_mission", mission_id, self.show)
+
     def campaign_screen(self):
         session = self.player.session
         self._clear()
@@ -251,8 +298,7 @@ class PlayerApplication:
             for mission_id in available:
                 mission = self.player.content.missions[mission_id]
                 self._button(self.view, mission.name + " — " + mission.objective,
-                             lambda mid=mission_id: self._change(
-                                 lambda: self.player.start_mission(mid))).pack(
+                             lambda mid=mission_id: self._start_mission_with_cinematic(mid)).pack(
                                      fill="x", padx=80, pady=5)
             # Studio blueprints are distinct from ad-hoc multi-front battles.
             # Locked or duplicate-mission plans remain visible but not playable.
@@ -357,7 +403,7 @@ class PlayerApplication:
             self._button(nav, "Timeline / Fronts", self.strategy_screen).pack(side="left", padx=4)
         elif session.finalized:
             self._button(nav, "Résultats → Campagne",
-                         lambda: self._change(self.player.return_to_campaign)).pack(
+                         self._finish_mission_with_cinematic).pack(
                              side="left", padx=4)
         self._button(nav, "Sauvegarder", self.player.save).pack(side="right", padx=4)
         if not session.finalized and not battle.result:
@@ -383,6 +429,7 @@ class PlayerApplication:
                             "item:potion", "item:ether", "item:phoenix",
                             *["object:" + obj["id"] for obj in battle.mission.objects],
                             *available_operations(battle, battle.active)])
+                options += tactical_action_options(battle)
                 options += ["end"]
             if options:
                 if self.action_var.get() not in options:
@@ -435,6 +482,18 @@ class PlayerApplication:
         if frame.forecast:
             rows.extend(["", "Prévisions"])
             rows.extend(str(item) for item in frame.forecast)
+        rows.extend(["", "Prochaines activations (CT estimé)"])
+        rows.extend(f"{entry['unit']} : " +
+                    ("actif" if entry["active"] else
+                     "bloqué" if entry["eta_ticks"] is None else
+                     "t+" + str(entry["eta_ticks"])) for entry in frame.timeline)
+        if frame.casts:
+            rows.extend(["", "Incantations annoncées"])
+            rows.extend(f"{cast['unit']} : {cast['skill']} dans {cast['remaining_ticks']} ticks"
+                        for cast in frame.casts)
+        if frame.charges:
+            rows.extend(["", "Charges possibles (non garanties)"])
+            rows.extend(f"{charge['unit']} → {charge['target']}" for charge in frame.charges)
         rows.extend(["", "Journal"])
         rows.extend(str(event) for event in frame.events[-15:])
         self.info.configure(state="normal")
@@ -488,6 +547,9 @@ class PlayerApplication:
             command = {"kind": "siege_attack", "object": kind[len("siege-attack:"):]}
         elif kind.startswith("repair-siege:"):
             command = {"kind": "repair_siege", "object": kind[len("repair-siege:"):]}
+        elif kind == "charge" or kind == "disengage" or kind.startswith(
+                ("formation:", "prepare:", "relay:")):
+            command = tactical_command(kind, self.selection)
         else:
             command = {"kind": "act", "skill": kind, "cell": list(self.selection)}
         self._change(lambda: self.player.execute(command))
@@ -547,6 +609,8 @@ class PlayerApplication:
             self.player.advance_fronts)).pack(side="left", padx=4)
         self._button(controls, "Jouer le secteur", self.battle_screen).pack(
             side="left", padx=4)
+        if session.fronts.logistics is not None:
+            self._logistics_panel(session.fronts)
         log = self.tk.Text(self.view, height=9, fg="#e9f2fc", bg="#182a40",
                            wrap="word", relief="flat")
         log.pack(fill="both", expand=True, pady=8)
@@ -559,6 +623,98 @@ class PlayerApplication:
         if all(f.status != "active" for f in frame.fronts):
             self._button(footer, "Résultats → Campagne", lambda: self._change(
                 self.player.return_to_campaign)).pack(side="right", padx=6)
+
+    def _logistics_panel(self, fronts):
+        """Display real convoy state and dispatch orders, never visual-only actors."""
+        logistics = fronts.logistics
+        panel = self.ttk.LabelFrame(self.view, text="Routes et ravitaillement", padding=8)
+        panel.pack(fill="x", pady=7)
+        state = logistics.state()
+        supplies = state.get("supplies")
+        summary = ("Réserves : " + str(state["reserves"]) +
+                   "   Capacité : " + str(state["capacity"]) +
+                   ("   Vivres : " + str(supplies) if supplies is not None else "") +
+                   "   Escorts : " + str(state.get("escorts", 0)))
+        self.ttk.Label(panel, text=summary).pack(anchor="w", pady=2)
+        routes = state["routes"]
+        self.ttk.Label(
+            panel, text="Routes : " + (" ; ".join(
+                r["from"] + " → " + r["to"] + " (" + str(r["turns"]) + " tours)"
+                for r in routes) if routes else "aucune route configurée"),
+            wraplength=1030).pack(anchor="w", pady=2)
+        pending = state["in_transit"]
+        self.ttk.Label(
+            panel, text="Convois : " + (" ; ".join(
+                row["id"] + " → " + row["to"] + " / arrivée T" +
+                str(row["arrival"]) +
+                (" [bloqué]" if row.get("stranded") else "")
+                for row in pending) if pending else "aucun"),
+            wraplength=1030).pack(anchor="w", pady=2)
+
+        orders = self.ttk.Frame(panel)
+        orders.pack(fill="x", pady=5)
+        destinations = sorted({r["to"] for r in routes
+                               if r["from"] == "reserve"})
+        transfers = sorted({r["to"] for r in routes
+                            if r["from"] == fronts.timeline.focused})
+        if self.logistics_dest_var.get() not in destinations:
+            self.logistics_dest_var.set(destinations[0] if destinations else "")
+        if self.logistics_transfer_dest_var.get() not in transfers:
+            self.logistics_transfer_dest_var.set(transfers[0] if transfers else "")
+        self.ttk.Label(orders, text="Vers (réserves)").pack(side="left")
+        self.ttk.Combobox(
+            orders, textvariable=self.logistics_dest_var,
+            values=destinations, width=14, state="readonly").pack(
+                side="left", padx=4)
+        for caption, variable, width in (
+                ("Unité", self.logistics_actor_var, 13),
+                ("X", self.logistics_x_var, 4),
+                ("Y", self.logistics_y_var, 4)):
+            self.ttk.Label(orders, text=caption).pack(side="left", padx=(5, 1))
+            self.ttk.Entry(orders, textvariable=variable, width=width).pack(
+                side="left")
+        if destinations:
+            self._button(orders, "Envoyer réserves", lambda: self._change(
+                lambda: self.player.send_reserves(
+                    self.logistics_dest_var.get(),
+                    [{"id": self.logistics_actor_var.get(),
+                      "name": self.logistics_actor_var.get(),
+                      "team": "player",
+                      "pos": [int(self.logistics_x_var.get()),
+                              int(self.logistics_y_var.get())]}]))).pack(
+                                  side="left", padx=4)
+        if transfers:
+            transfers_row = self.ttk.Frame(panel)
+            transfers_row.pack(anchor="w", pady=3)
+            self.ttk.Label(transfers_row, text="Vers (transfert)").pack(side="left")
+            self.ttk.Combobox(
+                transfers_row, textvariable=self.logistics_transfer_dest_var,
+                values=transfers, width=14, state="readonly").pack(
+                    side="left", padx=4)
+            self._button(transfers_row, "Transférer unité", lambda: self._change(
+                lambda: self.player.transfer_units(
+                    self.logistics_transfer_dest_var.get(),
+                    {self.logistics_actor_var.get():
+                     [int(self.logistics_x_var.get()),
+                      int(self.logistics_y_var.get())]}))).pack(
+                          side="left", padx=4)
+        if pending:
+            convoy_ids = [r["id"] for r in pending]
+            if self.convoy_var.get() not in convoy_ids:
+                self.convoy_var.set(convoy_ids[0])
+            convoy_actions = self.ttk.Frame(panel)
+            convoy_actions.pack(anchor="w", pady=3)
+            self.ttk.Label(convoy_actions, text="Convoi").pack(side="left")
+            self.ttk.Combobox(
+                convoy_actions, textvariable=self.convoy_var,
+                values=convoy_ids, state="readonly", width=17).pack(
+                    side="left", padx=5)
+            self._button(convoy_actions, "Assigner escorte", lambda: self._change(
+                lambda: self.player.escort_convoy(self.convoy_var.get()))).pack(
+                    side="left", padx=4)
+            self._button(convoy_actions, "Secourir (vivres)", lambda: self._change(
+                lambda: self.player.rescue_convoy(self.convoy_var.get()))).pack(
+                    side="left", padx=4)
 
     def close(self):
         if self.player.session is not None:

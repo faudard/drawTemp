@@ -103,12 +103,17 @@ class SiegeStudio:
         waves = ttk.Frame(pages)
         timeline = ttk.Frame(pages)
         logistics = ttk.Frame(pages)
+        visual_logistics = ttk.Frame(pages)
         strategic = ttk.Frame(pages)
         pages.add(fronts, text="Fronts et finale")
         pages.add(links, text="Événements inter-fronts")
         pages.add(waves, text="Vagues de renforts")
         pages.add(timeline, text="Chronologie / jouer")
         pages.add(logistics, text="Logistique & convois")
+        pages.add(visual_logistics, text="Routes & ressources")
+        from .studio_logistics import LogisticsStudio
+        self.logistics_editor = LogisticsStudio(self, visual_logistics)
+
         pages.add(strategic, text="Graphe stratégique")
         from .studio_strategic_events import StrategicEventsStudio
         self.strategic_editor = StrategicEventsStudio(self, strategic)
@@ -778,6 +783,7 @@ class SiegeStudio:
                     self.wave_tree.insert("", "end", iid=front + ":" + eid,
                         text=front, values=(eid, tick, actor, arch))
             self._draw(bp)
+            self.logistics_editor.refresh(bp)
             self.strategic_editor.refresh(bp)
             self._object_choices()
         finally:

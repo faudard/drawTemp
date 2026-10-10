@@ -205,6 +205,26 @@ class GameSession:
                 "No available multi-front encounter")
         self.fronts.set_doctrine(front, doctrine)
 
+    def send_reserves(self, destination, actors):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        return self.fronts.send_reserves(destination, actors)
+
+    def transfer_units(self, destination, placements):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        return self.fronts.transfer_units(destination, placements)
+
+    def escort_convoy(self, convoy_id):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        return self.fronts.escort_convoy(convoy_id)
+
+    def rescue_convoy(self, convoy_id):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        return self.fronts.rescue_convoy(convoy_id)
+
     def ai_turn(self):
         require(self.mode == "battle" and not self.finalized and
                 not self.battle.deploying, "No standalone AI combat")
