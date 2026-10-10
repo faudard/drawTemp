@@ -72,6 +72,47 @@ def remove_unit(data, mid, uid):
     return _edit(data, mid, change)
 
 
+
+def set_unit_combat_role(data, mid, uid, *, role="none", formation="none",
+                         escort_target=""):
+    """Studio 2.7 authoring: preserve unrelated tags and undo via one document edit.
+
+    These are loadout/initial formation tags; the enhanced 2.7 ruleset owns
+    their runtime effects. Legacy content and editors remain valid.
+    """
+    require(role in {"none", "medic", "protector"}, "Unknown tactical role")
+    require(formation in {"none", "shield_wall", "phalanx", "escort"},
+            "Unknown initial formation")
+    require(isinstance(escort_target, str), "Invalid escort target")
+
+    def change(_, mission):
+        unit = next((u for u in mission["units"] if u["id"] == uid), None)
+        require(unit is not None, "Unknown tactical unit")
+        if formation == "phalanx":
+            require(unit["weapon"] == "spear", "Phalanx requires spear")
+        if formation == "escort":
+            ally = next((u for u in mission["units"]
+                         if u["id"] == escort_target and u["team"] == unit["team"]
+                         and u["id"] != uid and u["hp"] > 0), None)
+            require(ally is not None, "Escort requires an existing allied unit")
+            from .model import distance
+            require(distance(tuple(unit["pos"]), tuple(ally["pos"])) <= 2,
+                    "Escort initial target out of range")
+        else:
+            require(not escort_target.strip(), "Only escort may specify a target")
+        tags = [tag for tag in unit.get("tags", [])
+                if tag not in {"medic", "protector"}
+                and not tag.startswith("formation:")]
+        if role != "none":
+            tags.append(role)
+        if formation != "none":
+            tags.append("formation:" + formation
+                        + (":" + escort_target if formation == "escort" else ""))
+        unit["tags"] = tags
+
+    return _edit(data, mid, change)
+
+
 def add_object(data, mid, oid, kind, pos, *, link='', destination=None):
     _identifier(oid, 'Object id')
     require(kind in ('door', 'switch', 'chest', 'ram', 'catapult', 'passage', 'defense'),
