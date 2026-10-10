@@ -51,16 +51,17 @@ all final validation, cost, rollback and replay semantics.
 Add one tag to actors already using the enhanced ruleset, without inventing a
 new unit/monster schema:
 
-- `squad:pikeman`: when adjacent to a spear comrade, spends Act to join
-  Phalanx. Once the formation is operational and an enemy approaches, uses
-  `phalanx_hold` to defend the corridor.
+- `squad:pikeman`: moves to screen exposed archers, spends Act to join
+  Phalanx alongside a spear comrade, and uses `phalanx_hold` to defend
+  the corridor when an enemy approaches.
 - `squad:vanguard`: takes existing protector positioning, or forms a
   Shield Wall alongside a second vanguard.
 - `squad:officer`: uses a real Escort formation to protect a nearby medic.
 - `squad:medic`: heals using ordinary skill forecast, otherwise retreats
   from imminent melee threats along a legal low-risk path.
-- `squad:archer`: uses the existing tactical ranged handling and
-  disengagement logic; no unconditional free shots or buffs.
+- `squad:archer`: seeks a legal firing position behind nearby melee
+  guards if it cannot currently shoot, then uses ordinary attacks,
+  reactions and disengagement. No unconditional free shots or buffs.
 
 Tags are opt-in through `authored_rules_for_document` or explicit
 `tactical_rpg_rules()`. Unmarked campaigns and old replay manifests are
