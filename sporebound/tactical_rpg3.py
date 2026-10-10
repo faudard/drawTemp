@@ -41,3 +41,30 @@ def tactical_rpg_rules(base=None):
     rules = install_synergies(rules)
     rules = install_bosses(rules)
     return rules
+
+
+def authored_rules_for_document(data):
+    """Choose explicit 2.7 validation for a project's authored advanced actors.
+
+    Used only by authoring/player entrypoints. The default_rules() constructor
+    remains unchanged so old saved battle rule manifests continue to roundtrip.
+    """
+    missions = data.get("missions", []) if isinstance(data, dict) else []
+    unlocks = data.get("tactic_unlocks", []) if isinstance(data, dict) else []
+    advanced = any(
+        unit.get("behavior") in {"coordinated", "phase_boss"}
+        or any(t in {"chain_strike", "trio_burst"} for t in unit.get("tactics", []))
+        or any(t in {"medic", "healer", "protector"}
+               or t.startswith(("formation:", "boss_phase:"))
+               for t in unit.get("tags", []))
+        for mission in missions
+        for unit in mission.get("units", [])
+    ) or any(
+        action.get("kind") == "boss_phase"
+        for mission in missions
+        for trigger in mission.get("triggers", [])
+        for action in trigger.get("actions", [])
+    ) or any(row.get("id") in {"chain_strike", "trio_burst"}
+             for row in unlocks)
+    from .rules import default_rules
+    return tactical_rpg_rules() if advanced else default_rules()
