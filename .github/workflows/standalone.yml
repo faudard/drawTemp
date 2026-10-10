@@ -74,6 +74,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_class_ai_gui.py -v
+      - name: Exercise 2.5.4.1 visual siege authoring and strategic timeline
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_siege_studio_gui.py -v
       - name: Exercise 2.5.3 character and rules Studio authoring
         env:
           SPOREBOUND_GUI_SMOKE: '1'

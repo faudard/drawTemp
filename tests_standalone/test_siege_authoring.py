@@ -95,7 +95,8 @@ class SiegeAuthoringTests(unittest.TestCase):
             self.assertEqual(player.session.fronts.missions, self.plan["missions"])
             self.assertEqual(player.session.fronts.timeline.focused, self.first)
             self.assertEqual(player.session.fronts.initial_specs, self.plan["specs"])
-            restored = GameSession.load(player.path_for("main", 1), self.content, project)
+            other = PlayerController(self.content, project, Path(folder) / "demo.game.json")
+            restored = other.load_game("main", 1)
             self.assertEqual(restored.recording(), player.session.recording())
 
 

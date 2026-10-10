@@ -162,6 +162,9 @@ Trois onglets d'authoring supplémentaires sont disponibles :
 - **Class Progression & AI Studio 2.5.3.3** : deux graphes cliquables
   des classes et talents, création de spécialisations et édition des
   patrouilles sur la carte ; [guide dédié](docs/CLASS_AI_STUDIO.md).
+- **Campaign & Siege Studio 2.5.4.1** : fronts liés aux missions, doctrines,
+  forces, routes et ravitaillement, chronologie stratégique prévisualisable,
+  intégration sauvegardée au Player ; [guide](docs/CAMPAIGN_SIEGE_STUDIO.md).
 - **Character & Rules Studio 2.5.3** : éditeur guidé des héros et monstres,
   archétypes, compétences multi-effets, classes et équipements ;
   validation transactionnelle et Undo/Redo. Voir

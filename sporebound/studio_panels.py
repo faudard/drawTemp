@@ -36,6 +36,8 @@ class StudioPanels:
         self.advanced=AdvancedStudio(self, notebook)
         from .studio_character_rules import CharacterRulesStudio
         self.character_rules=CharacterRulesStudio(self, notebook)
+        from .studio_siege import SiegeStudio
+        self.siege_editor=SiegeStudio(self, notebook)
         from .studio_story import StoryEditor
         self.story_editor=StoryEditor(self, notebook)
         self._last_mission_signature=None
@@ -337,6 +339,9 @@ class StudioPanels:
                       else GameProject.default(content))
         self.project_saved=json.dumps(self.project.to_dict(),sort_keys=True)
         self.story_editor.reset_project()
+        self.siege_editor.undo_stack.clear()
+        self.siege_editor.redo_stack.clear()
+        self.siege_editor._stamp=None
         self._last_mission_signature=None
         self.session=None
         self.session_campaign=''
@@ -490,5 +495,6 @@ class StudioPanels:
         self._refresh_talent_tree()
         self.advanced.refresh()
         self.character_rules.refresh()
+        self.siege_editor.refresh()
         self.story_editor.refresh()
         self.workspace.refresh()
