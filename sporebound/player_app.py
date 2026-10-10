@@ -3,6 +3,7 @@
 Uses Tk only at launch, and sends every player intent through PlayerController.
 No game mechanics, AI rules, dice or persistence schemas live in this module.
 """
+import json
 from pathlib import Path
 
 from .audio_stage import AudioStage
@@ -12,6 +13,7 @@ from .player_controller import PlayerController
 from .presentation import Camera, battle_frame, strategy_frame
 from .siege import available_operations
 from .tactical_actions import tactical_action_options, tactical_command
+from .tactical_rpg3 import authored_rules_for_document
 from .tk_renderer import CanvasRenderer
 
 
@@ -24,7 +26,9 @@ class PlayerApplication:
         content_path = Path(content_path)
         project_path = (Path(project_path) if project_path is not None
                         else content_path.with_suffix(".game.json"))
-        content = Content.load(content_path)
+        # Validate advanced formations/bosses with their opt-in rules from load.
+        document = json.loads(content_path.read_text(encoding="utf-8"))
+        content = Content.from_dict(document, rules=authored_rules_for_document(document))
         project = (GameProject.load(project_path, content) if project_path.is_file()
                    else GameProject.default(content))
         profile = (Path(profile_path) if profile_path is not None
