@@ -182,6 +182,41 @@ class SquadAITests(unittest.TestCase):
                          rules=tactical_rpg_rules()).digest(), b.digest())
 
 
+    def test_archer_seeks_a_shot_behind_vanguard(self):
+        archer = Unit("archer", "Archer", "enemy", (0, 2), ct=100,
+                      weapon="ranged", attack_range=3,
+                      tags=["squad:archer"])
+        guard = Unit("guard", "Guard", "enemy", (4, 2),
+                     tags=["squad:vanguard"])
+        hero = Unit("hero", "Hero", "player", (6, 2))
+        c = Content({}, {"m": Mission("m", "M", Board(8, 5),
+                                      [archer, guard, hero])})
+        rules = tactical_rpg_rules()
+        b = Battle(c, "m", rules=rules)
+        before = b.digest()
+        self.assertEqual(choose_command(b), {"kind": "move", "cell": [3, 2]})
+        self.assertEqual(before, b.digest())
+        b.execute(choose_command(b))
+        self.assertEqual(b.unit("archer").pos, (3, 2))
+        self.assertEqual(Battle.replay(b.recording(), rules=rules).digest(),
+                         b.digest())
+
+    def test_pikeman_moves_to_screen_exposed_archer(self):
+        spear = Unit("spear", "Spear", "enemy", (5, 3), ct=100,
+                     weapon="spear", tags=["squad:pikeman"])
+        archer = Unit("archer", "Archer", "enemy", (4, 2),
+                      weapon="ranged", tags=["squad:archer"])
+        hero = Unit("hero", "Hero", "player", (1, 2))
+        c = Content({}, {"m": Mission("m", "M", Board(8, 5),
+                                      [spear, archer, hero])})
+        b = Battle(c, "m", rules=tactical_rpg_rules())
+        command = choose_command(b)
+        self.assertEqual(command["kind"], "move")
+        self.assertEqual(sum(abs(a - b_) for a, b_ in zip(command["cell"], archer.pos)), 1)
+        self.assertLess(sum(abs(a - b_) for a, b_ in zip(command["cell"], hero.pos)),
+                        sum(abs(a - b_) for a, b_ in zip(archer.pos, hero.pos)))
+
+
 class PlayerActionTests(unittest.TestCase):
     def test_formation_charge_and_preparation_are_reachable_from_player(self):
         player = Unit("spear", "Spear", "player", (1, 1), weapon="spear", ct=100)
