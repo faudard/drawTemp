@@ -83,6 +83,13 @@ les règles. Gate : partie complète sans Studio ni terminal.
 | 2.7.5 | Boss multicases, transformations, phases et siège |
 | 2.7.6 | Équilibrage automatisé, simulations longues et métriques de difficulté |
 
+PR #23 en cours : première intégration headless 2.7.1–2.7.6 sous
+`tactical_rpg_rules()`, opt-in et versionnée pour préserver les anciens
+replays ; tests déterministes et démonstration du trône du château. Voir
+[contrat Tactical RPG 3.0](docs/TACTICAL_RPG_3.md). Les gates restants sont
+les scénarios de charge multi-graines, le tuning de difficulté, le contrôle
+de zones plus riche et l'UX du joueur/Studio (2.5/2.6).
+
 Gate : choix tactiques distincts selon équipe, terrain, adversaire et objectif.
 
 ### Vertical slice — assaut du château
