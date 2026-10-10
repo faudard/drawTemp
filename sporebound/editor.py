@@ -6,6 +6,9 @@ from pathlib import Path
 from .ai import play_activation
 from .engine import Battle
 from .model import Content, RuleError
+from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
+                            move_unit, paint_deployment, paste_terrain,
+                            selected_cells as validate_selection)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 
@@ -136,6 +139,10 @@ def launch(path):
     selected_cell = (0, 0)
     stroke_cells = []
     rectangle_anchor = None
+    selected_tiles = set()
+    selection_mission = ''
+    selection_additive = False
+    terrain_clipboard = None
     tile_size = 54
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
@@ -143,6 +150,10 @@ def launch(path):
     unit_var = tk.StringVar()
     action_var = tk.StringVar(value='move')
     facing_var = tk.StringVar(value='south')
+    object_var = tk.StringVar()
+    zone_var = tk.StringVar(value='attackers')
+    layer_vars = {name: tk.BooleanVar(value=True) for name in
+                  ('Terrain', 'Relief', 'Déploiement', 'Objectifs', 'Objets', 'Unités')}
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
 
     def guarded(fn):
@@ -331,15 +342,87 @@ def launch(path):
             battle = load_battle(name)
             refresh()
 
+    def _selection_for_current_map():
+        if battle:
+            raise RuleError('Quitter le combat pour modifier la carte.')
+        if not selected_tiles:
+            raise RuleError('Utiliser l’outil Sélection pour choisir des cases.')
+        return validate_selection(doc.data, mission_var.get(), selected_tiles)
+
+    @guarded
+    def copy_selection():
+        nonlocal terrain_clipboard
+        if source_pending():
+            raise RuleError('Appliquer ou abandonner les changements JSON avant la copie.')
+        terrain_clipboard = copy_terrain(doc.data, mission_var.get(),
+                                         _selection_for_current_map())
+        status_var.set(f'Copié : {len(terrain_clipboard.offsets)} cases de terrain '
+                       '(acteurs et objets non copiés).')
+        refresh()
+
+    def paste_at(anchor):
+        nonlocal selected_tiles
+        if battle:
+            raise RuleError('Le collage est réservé à l’éditeur.')
+        if terrain_clipboard is None:
+            raise RuleError('Copier d’abord une sélection de terrain.')
+        design_change(lambda: doc.replace(paste_terrain(doc.data, mission_var.get(),
+                                                         terrain_clipboard, anchor)))
+        selected_tiles = {(anchor[0]+dx, anchor[1]+dy)
+                          for dx, dy in terrain_clipboard.offsets}
+        status_var.set(f'Collage validé en {anchor} ({len(selected_tiles)} cases).')
+        refresh()
+
+    @guarded
+    def paste_selection():
+        paste_at(selected_cell)
+
+    def paint_cells(cells, brush):
+        if brush == 'unit':
+            design_change(lambda: doc.replace(move_unit(
+                doc.data, mission_var.get(), unit_var.get(), cells[-1])))
+        elif brush == 'object':
+            design_change(lambda: doc.replace(move_object(
+                doc.data, mission_var.get(), object_var.get(), cells[-1])))
+        elif brush in ('zone+', 'zone-'):
+            design_change(lambda: doc.replace(paint_deployment(
+                doc.data, mission_var.get(), zone_var.get(), cells,
+                erase=brush == 'zone-')))
+        else:
+            design_change(lambda: doc.paint_many(mission_var.get(), cells, brush))
+
+    def paste_preview(event):
+        canvas.delete('paste_preview')
+        if battle or tool_var.get() != 'Collage' or terrain_clipboard is None:
+            return
+        cell = (int(canvas.canvasx(event.x) // tile_size),
+                int(canvas.canvasy(event.y) // tile_size))
+        mission = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
+        for dx, dy in terrain_clipboard.offsets:
+            x, y = cell[0] + dx, cell[1] + dy
+            inside = 0 <= x < mission['board']['width'] and 0 <= y < mission['board']['height']
+            canvas.create_rectangle(x*tile_size+4, y*tile_size+4,
+                                    (x+1)*tile_size-4, (y+1)*tile_size-4,
+                                    outline='#36a16c' if inside else '#e05252',
+                                    width=3, dash=(4, 3), tags='paste_preview')
+
     @guarded
     def click(event):
-        nonlocal selected_cell, stroke_cells, rectangle_anchor
+        nonlocal selected_cell, stroke_cells, rectangle_anchor, selection_additive
+        canvas.focus_set()
         stroke_cells = []
-        selected_cell = int(canvas.canvasx(event.x) // tile_size), int(canvas.canvasy(event.y) // tile_size)
+        selected_cell = (int(canvas.canvasx(event.x) // tile_size),
+                         int(canvas.canvasy(event.y) // tile_size))
+        validate_selection(doc.data, mission_var.get(), [selected_cell])
+        tool, brush = tool_var.get(), brush_var.get()
+        canvas.delete('stroke_preview')
         if battle:
             refresh()
-        elif tool_var.get() == 'Rectangle' and brush_var.get() != 'unit':
+        elif tool == 'Collage':
+            paste_at(selected_cell)
+        elif tool in ('Sélection', 'Rectangle') and (tool == 'Sélection' or brush not in ('unit', 'object')):
             rectangle_anchor = selected_cell
+            selection_additive = bool(event.state & 0x0001)
             stroke_cells = [selected_cell]
             x, y = selected_cell[0] * tile_size, selected_cell[1] * tile_size
             canvas.create_rectangle(x+3, y+3, x+tile_size-3, y+tile_size-3,
@@ -347,14 +430,12 @@ def launch(path):
         else:
             rectangle_anchor = None
             stroke_cells = [selected_cell]
-            brush = brush_var.get()
-            if brush == 'unit':
-                design_change(lambda: doc.place_unit(mission_var.get(), unit_var.get(), selected_cell))
-            else:
-                design_change(lambda: doc.tile(mission_var.get(), selected_cell, brush))
+            paint_cells([selected_cell], brush)
 
     def drag(event):
-        if battle or brush_var.get() == 'unit' or not stroke_cells:
+        if battle or not stroke_cells or tool_var.get() == 'Collage':
+            return
+        if tool_var.get() not in ('Sélection', 'Rectangle') and brush_var.get() in ('unit', 'object'):
             return
         cell = (int(canvas.canvasx(event.x) // tile_size),
                 int(canvas.canvasy(event.y) // tile_size))
@@ -362,7 +443,7 @@ def launch(path):
         if not (0 <= cell[0] < mission['board']['width'] and
                 0 <= cell[1] < mission['board']['height']):
             return
-        if tool_var.get() == 'Rectangle' and rectangle_anchor is not None:
+        if tool_var.get() in ('Sélection', 'Rectangle') and rectangle_anchor is not None:
             stroke_cells[:] = [cell]
             canvas.delete('stroke_preview')
             ax, ay = rectangle_anchor
@@ -379,21 +460,30 @@ def launch(path):
 
     @guarded
     def end_stroke(_event):
-        nonlocal selected_cell, stroke_cells, rectangle_anchor
-        if (not battle and brush_var.get() != 'unit' and
-                tool_var.get() == 'Rectangle' and rectangle_anchor is not None and stroke_cells):
+        nonlocal selected_cell, stroke_cells, rectangle_anchor, selected_tiles
+        tool, brush = tool_var.get(), brush_var.get()
+        if not battle and tool == 'Sélection' and rectangle_anchor is not None and stroke_cells:
+            cells = cells_in_rectangle(doc.data, mission_var.get(), rectangle_anchor,
+                                       stroke_cells[-1])
+            selected_tiles = selected_tiles | set(cells) if selection_additive else set(cells)
+            selected_cell = stroke_cells[-1]
+            refresh()
+        elif not battle and tool == 'Rectangle' and rectangle_anchor is not None and stroke_cells and brush not in ('unit', 'object'):
             end = stroke_cells[-1]
             selected_cell = end
-            start = rectangle_anchor
-            design_change(lambda: doc.paint_rectangle(mission_var.get(), start, end,
-                                                       brush_var.get()))
-        elif not battle and brush_var.get() != 'unit' and len(stroke_cells) > 1:
-            cells = stroke_cells[1:]
+            if brush in ('zone+', 'zone-'):
+                paint_cells(cells_in_rectangle(doc.data, mission_var.get(),
+                                               rectangle_anchor, end), brush)
+            else:
+                design_change(lambda: doc.paint_rectangle(mission_var.get(),
+                                                          rectangle_anchor, end, brush))
+        elif not battle and tool == 'Pinceau' and brush not in ('unit', 'object') and len(stroke_cells) > 1:
             selected_cell = stroke_cells[-1]
-            design_change(lambda: doc.paint_many(mission_var.get(), cells, brush_var.get()))
+            paint_cells(stroke_cells[1:], brush)
         stroke_cells = []
         rectangle_anchor = None
         canvas.delete('stroke_preview')
+
 
     def refresh(*args):
         nonlocal selected_cell, campaign_battle
