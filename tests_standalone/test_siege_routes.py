@@ -200,6 +200,7 @@ class SiegeRoutesTests(unittest.TestCase):
 
         s.select_route("direct")
         s.switch("throne")
+        s.execute({"kind": "start_battle"})
         self.assertIsNone(s.active.result)
         self.assertNotIn("royal_guard_left",
                          {unit.id for unit in s.active.units})
