@@ -38,6 +38,8 @@ class StudioPanels:
         self.character_rules=CharacterRulesStudio(self, notebook)
         from .studio_story import StoryEditor
         self.story_editor=StoryEditor(self, notebook)
+        from .studio_siege import SiegeStudio
+        self.siege_studio=SiegeStudio(self, notebook)
         self._last_mission_signature=None
         self.reload_project()
         self.refresh()
@@ -491,4 +493,5 @@ class StudioPanels:
         self.advanced.refresh()
         self.character_rules.refresh()
         self.story_editor.refresh()
+        self.siege_studio.refresh()
         self.workspace.refresh()
