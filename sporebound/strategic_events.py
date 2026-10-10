@@ -38,8 +38,11 @@ def _condition(node, content, missions, *, depth=0, budget=None, deps=None):
             _condition(item, content, missions, depth=depth+1,
                        budget=budget, deps=deps)
     elif kind == "not":
+        old_dependencies = set(deps)
         _condition(value, content, missions, depth=depth+1,
                    budget=budget, deps=deps)
+        require(deps == old_dependencies,
+                "NOT cannot negate another node's firing (ambiguous ordering)")
     elif kind == "turn_at_least":
         require(type(value) is int and 0 <= value <= 10000,
                 "Invalid strategic turn threshold")
@@ -167,7 +170,7 @@ def matches(session, expression):
             for event in battle.events))
     if kind == "timeline_event":
         return any(e["kind"] == value["kind"] and
-                   e.get("front") == value["front"]
+                   e.get("front", e.get("source")) == value["front"]
                    for e in session.timeline.events)
     raise AssertionError("Unvalidated strategic event condition")
 
@@ -260,3 +263,18 @@ def preview(blueprint, content, turns=8):
                      "fired": sorted(session.fired_graph - before),
                      "state": session.timeline.state()})
     return rows
+
+
+def references_front(graph, front):
+    """True when a validated node references a front, not an incidental substring."""
+    def cond(node):
+        kind, value = next(iter(node.items()))
+        if kind in ("all", "any"):
+            return any(cond(child) for child in value)
+        if kind == "not":
+            return cond(value)
+        return kind in {"front_status", "battle_event", "timeline_event"} and (
+            value["front"] == front)
+    return any(cond(node["when"]) or
+               any(action.get("front") == front for action in node["effects"])
+               for node in graph)
