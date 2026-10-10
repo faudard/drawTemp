@@ -111,6 +111,9 @@ class PlayerSession:
                        or tag.startswith(("formation:", "boss_phase:"))
                        for tag in unit.tags)
                 for unit in mission.units)
+            or any(action.get("kind") == "boss_phase"
+                   for trigger in mission.triggers
+                   for action in trigger.get("actions", []))
             or any(rule.get("id") in {"chain_strike", "trio_burst"}
                    for rule in self.content.tactic_unlocks)
             or any(tactic in {"chain_strike", "trio_burst"}
