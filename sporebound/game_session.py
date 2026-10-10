@@ -195,3 +195,88 @@ class GameSession:
         self.fronts = None
         self.finalized = False
         self.settled_fronts = set()
+
+    def recording(self):
+        """Portable v1 checkpoint; embedded tactical journals verify by replay."""
+        tactical = None
+        if self.battle is not None:
+            tactical = self.battle.recording()
+            Battle.replay(tactical, rules=self.rules)
+        elif self.fronts is not None:
+            tactical = self.fronts.recording()
+            MultiFrontSession.replay(tactical, rules=self.rules)
+        data = {
+            "version": self.VERSION, "kind": "game_session",
+            "campaign_id": self.campaign_id, "seed": self.seed,
+            "content_digest": digest(self.content.to_dict()),
+            "project_digest": digest(self.project.to_dict()),
+            "rules": self.rules.manifest(),
+            "progress": {"version": 1, **asdict(self.progress)},
+            "mode": self.mode, "tactical": tactical,
+            "finalized": self.finalized,
+            "settled_fronts": sorted(self.settled_fronts),
+        }
+        return {**data, "digest": digest(data)}
+
+    def save(self, path):
+        write_json(path, self.recording())
+        return Path(path)
+
+    @classmethod
+    def from_recording(cls, data, content, project, *, rules=None):
+        require(isinstance(data, dict) and data.get("version") == cls.VERSION
+                and data.get("kind") == "game_session", "Unsupported game session")
+        require(set(data) == {"version", "kind", "campaign_id", "seed",
+                "content_digest", "project_digest", "rules", "progress",
+                "mode", "tactical", "finalized", "settled_fronts", "digest"},
+                "Malformed game session")
+        require(data["digest"] == digest({k: v for k, v in data.items()
+                                         if k != "digest"}), "Game session checksum mismatch")
+        rules = rules if rules is not None else default_rules()
+        require(data["content_digest"] == digest(content.to_dict()), "Content mismatch")
+        require(data["project_digest"] == digest(project.to_dict()), "Project mismatch")
+        require(data["rules"] == rules.manifest(), "Ruleset mismatch")
+        session = cls(content, project, data["campaign_id"],
+                      seed=data["seed"], rules=rules)
+        session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
+        session.story.initialize(session.progress, session.campaign_id)
+        require(set(session.progress.unlocked + session.progress.completed)
+                <= set(session.content.missions), "Unknown campaign mission")
+        mode = data["mode"]
+        require(mode in {"campaign", "battle", "fronts"}, "Invalid session mode")
+        settled = data["settled_fronts"]
+        require(isinstance(settled, list) and all(isinstance(s, str) for s in settled)
+                and len(set(settled)) == len(settled), "Invalid settlement log")
+        require(type(data["finalized"]) is bool, "Invalid finalization flag")
+        if mode == "campaign":
+            require(data["tactical"] is None and not data["finalized"] and not settled,
+                    "Idle session has tactical state")
+        elif mode == "battle":
+            require(isinstance(data["tactical"], dict) and not settled,
+                    "Invalid standalone battle state")
+            session.battle = Battle.replay(data["tactical"], rules=rules)
+            require(session.battle.mission.id in content.missions,
+                    "Unknown tactical mission")
+            session.finalized = data["finalized"]
+            require(session.finalized == (session.battle.result in ("victory", "defeat")),
+                    "Battle finalization mismatch")
+        else:
+            require(isinstance(data["tactical"], dict) and not data["finalized"],
+                    "Invalid multi-front state")
+            session.fronts = MultiFrontSession.replay(data["tactical"], rules=rules)
+            require(set(session.fronts.missions.values()) <= set(content.missions)
+                    and set(settled) <= set(session.fronts.missions),
+                    "Unknown multi-front mission or settlement")
+            for front, battle in session.fronts.battles.items():
+                require((front in settled) == (battle.result in ("victory", "defeat")),
+                        "Front finalization mismatch")
+            session.settled_fronts = set(settled)
+        return session
+
+    @classmethod
+    def load(cls, path, content, project, *, rules=None):
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+            return cls.from_recording(data, content, project, rules=rules)
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise RuleError(f"Invalid game session: {exc}") from exc
