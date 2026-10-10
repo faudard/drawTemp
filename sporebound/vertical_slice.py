@@ -220,7 +220,8 @@ class CastleVerticalSlice:
                    "rules": self.rules.manifest(),
                    "preparation": deepcopy(self.preparation),
                    "approach": self.approach, "conceded": self.conceded,
-                   "fronts": self.fronts.recording() if self.fronts else None}
+                   "fronts": (json.loads(json.dumps(self.fronts.recording()))
+                              if self.fronts else None)}
         return {**payload, "digest": digest(payload)}
 
     def save(self, path):
@@ -270,7 +271,7 @@ class CastleVerticalSlice:
                     "Unstarted campaign cannot have a battle or ending")
         else:
             result.start(data["approach"])
-            expected = result.fronts.recording()
+            expected = result.recording()["fronts"]
             stored = data["fronts"]
             require(isinstance(stored, dict) and
                     all(expected[key] == stored.get(key)
