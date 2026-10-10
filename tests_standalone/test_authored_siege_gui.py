@@ -50,7 +50,10 @@ class AuthoredSiegePlayerGuiTests(unittest.TestCase):
                                     and w.cget("text") == name)
                     button("Nouvelle partie").invoke()
                     root.update()
-                    self.assertTrue(any(isinstance(w, tk.Text) for w in descendants(root)))
+                    self.assertTrue(any(
+                        isinstance(w, ttk.LabelFrame)
+                        and w.cget("text") == "La commandante"
+                        for w in descendants(root)))
                     button("À l\u0027attaque").invoke()
                     root.update()
                     self.assertTrue(any(isinstance(w, ttk.Treeview)
