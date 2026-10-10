@@ -129,7 +129,7 @@ class AssetRegistry:
                 path = self.resolve(aid, root)
                 with path.open('rb') as source:
                     header = source.read(12)
-                suffix = path.suffix.lower()
+                suffix = Path(entry['path']).suffix.lower()
                 valid = (header.startswith(b'\x89PNG\r\n\x1a\n') if suffix == '.png' else
                          header.startswith(b'OggS') if suffix == '.ogg' else
                          header.startswith(b'RIFF') and header[8:12] == b'WAVE')

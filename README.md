@@ -244,6 +244,8 @@ Les opérations et les batailles sont vérifiées par replay v5.
 - [Studio de création de cartes, campagnes et écrans de jeu](docs/STUDIO.md)
 - [Roadmap gameplay et éditeur](ROADMAP.md)
 - [Bibliothèque graphique réutilisable](assets/README.md) — images et catalogue JSON
+- [Asset Pipeline 2.4.3](docs/ASSET_PIPELINE.md) — registre portable, animations,
+  références typées et validation avec `validate --project chemin/game.json`.
 - Ancien projet Godot : consulter l'historique Git antérieur au nettoyage ;
   les fichiers de l'ancien moteur ne sont plus présents dans cette branche.
 
