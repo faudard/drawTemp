@@ -25,6 +25,14 @@ jobs:
         run: |
           python examples/asset_pipeline.py --output "${{ runner.temp }}/asset-demo"
           python -m sporebound validate --project "${{ runner.temp }}/asset-demo/game.json"
+      - name: Verify complete campaigns and resumed replays
+        run: python -m examples.reliability_gate --seeds 1 7 42 99 --output reliability.json
+      - name: Preserve reliability measurements
+        uses: actions/upload-artifact@v4
+        with:
+          name: reliability-${{ matrix.os }}-${{ matrix.python }}
+          path: reliability.json
+          if-no-files-found: error
       - run: python -m sporebound simulate --mission garden --seed 42 --save battle.json
       - run: python -m sporebound replay --load battle.json
       - name: Installed package and bundled content outside checkout
