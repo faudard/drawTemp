@@ -203,7 +203,7 @@ class SiegeStudio:
         ttk.Label(toolbar, text="Slot (1–9)").pack(side="left", padx=(12, 2))
         ttk.Entry(toolbar, textvariable=self.slot, width=4).pack(side="left")
         self._button(toolbar, "Sauver partie", self.save_session)
-        self._button(toolbar, "Charger partie", self.load_session)
+        self._button(toolbar, "Charger siège", self.load_session)
         self.timeline_text = self.tk.Text(timeline, wrap="none", height=18)
         self.timeline_text.pack(fill="both", expand=True, padx=7, pady=6)
         ttk.Label(timeline, text="Aperçu stratégique sans IA tactique : les résultats de mission "
