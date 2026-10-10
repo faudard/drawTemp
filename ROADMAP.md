@@ -107,7 +107,8 @@ Voir [docs/STUDIO.md](docs/STUDIO.md).
 - [x] Trêve conditionnelle : preuve d'interaction dans une mission de ravitaillement avant négociation.
 - [x] Démonstration de trois fins de siège, tests d'ownership des décisions et replays v5 stables.
 - [x] Représailles ennemies temporisées : un secteur sécurisé peut être rouvert, avec pression stratégique, puis doit être repris par une vraie bataille tactique et rejouable.
-- [ ] Routes adaptatives complexes, patrouilles d'infiltration plus élaborées et diplomatie à plusieurs étapes.
+- [x] Patrouilles d'infiltration déterministes par waypoints : les gardes reprennent l'IA tactique à vue et les routes sont validées sur la carte.
+- [ ] Routes adaptatives complexes et diplomatie à plusieurs étapes.
 - [x] Journaux/replays des combats de sauvetage en cours et de leurs conclusions, sans duplications des voyageurs ; tests de compatibilité.
 - [ ] Défense prolongée des lignes de ravitaillement, choix négociation/fuite, plusieurs variantes de carte et chargements.
 
