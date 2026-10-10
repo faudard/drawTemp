@@ -8,7 +8,6 @@ from copy import deepcopy
 from . import front_links
 from .campaign_strategy import SiegeCampaign
 from .fronts import FrontDirector, MultiFrontSession
-from .logistics import LogisticsDirector
 from .model import Content, RuleError, require
 from .storage import write_json
 
@@ -24,11 +23,9 @@ def _identifier(value, label):
 
 
 def validate_blueprint(blueprint, content, campaign_ids):
-    base_keys = {"id", "campaign_id", "fronts", "focused",
-                 "specs", "links", "campaign"}
+    required = {"id", "campaign_id", "fronts", "focused", "specs", "links", "campaign"}
     require(isinstance(blueprint, dict)
-            and base_keys <= set(blueprint)
-            and set(blueprint) <= base_keys | {"logistics"},
+            and required <= set(blueprint) <= required | {"logistics"},
             "Invalid siege blueprint structure")
     _identifier(blueprint["id"], "siege id")
     require(blueprint["campaign_id"] in campaign_ids, "Unknown parent campaign")
@@ -50,21 +47,33 @@ def validate_blueprint(blueprint, content, campaign_ids):
     FrontDirector(specs, blueprint["focused"])
     front_links.validate(content, missions, blueprint["links"])
     if "logistics" in blueprint:
-        config = blueprint["logistics"]
-        require(isinstance(config, dict), "Logistics must be configured or omitted")
-        LogisticsDirector(config, missions)
+        from .logistics import LogisticsDirector
+        logistics = LogisticsDirector(blueprint["logistics"], missions)
+        if logistics.rescue_mission is not None:
+            require(logistics.rescue_mission in content.missions,
+                    "Unknown tactical rescue mission")
+            rescue = content.missions[logistics.rescue_mission]
+            require(rescue.objective == "eliminate" and rescue.protected_id
+                    and any(u.id == rescue.protected_id and u.team == "player"
+                            for u in rescue.units)
+                    and any(u.id != rescue.protected_id and u.team == "player"
+                            for u in rescue.units)
+                    and any(u.team == "enemy" for u in rescue.units),
+                    "Rescue mission needs a cart, escorts, enemies and eliminate objective")
+        if logistics.choices is not None:
+            pursuit_id = logistics.choices["pursuit_mission"]
+            require(pursuit_id in content.missions, "Unknown tactical pursuit mission")
+            pursuit = content.missions[pursuit_id]
+            require(pursuit.objective == "eliminate" and not pursuit.deployment
+                    and any(u.team == "player" for u in pursuit.units)
+                    and any(u.team == "enemy" for u in pursuit.units),
+                    "Pursuit mission needs an elimination objective and two teams")
     campaign = blueprint["campaign"]
     if campaign is not None:
         require(len(missions) >= 2, "Finale needs at least two fronts")
         policy = SiegeCampaign(campaign, content, missions)
         require(blueprint["focused"] != policy.final,
                 "Initial focus cannot be the locked final sector")
-    if "logistics" in blueprint:
-        # The live constructor also checks rescue encounters, pursuit rules and
-        # the combined siege + logistics policy, without inventing new rules.
-        MultiFrontSession(content, missions, blueprint["focused"],
-                          specs=specs, links=blueprint["links"],
-                          logistics=blueprint["logistics"], campaign=campaign)
 
 
 def validate_all(sieges, content, campaigns):

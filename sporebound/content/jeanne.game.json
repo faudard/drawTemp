@@ -1,0 +1,222 @@
+{
+  "version": 1,
+  "title": "Jeanne d'Arc — Les Cendres du Royaume",
+  "subtitle": "Prologue : les voix dans les champs",
+  "campaigns": [
+    {
+      "id": "jeanne",
+      "name": "Les Cendres de Domrémy",
+      "description": "Uchronie inspirée de Jeanne d'Arc. Le prologue propose deux chemins exclusifs.",
+      "start_mission": "p0_01_lame"
+    }
+  ],
+  "options": {
+    "language": "fr",
+    "music_volume": 70,
+    "effects_volume": 75,
+    "fullscreen": false
+  },
+  "save_slots": 3,
+  "story": {
+    "entry_scenes": {
+      "jeanne": "sc_p0_champs"
+    },
+    "after_mission": {
+      "p0_01_lame": "sc_p0_apres_lecon",
+      "p0_02_incendie": "sc_p0_cendres",
+      "p0_03a_secours": "sc_p0_apres_branche",
+      "p0_03b_poursuite": "sc_p0_apres_branche",
+      "p0_04_fuite": "sc_p0_au_revoir"
+    },
+    "scenes": [
+      {
+        "id": "sc_p0_champs",
+        "title": "1428 — Les champs de Domrémy",
+        "speaker": "Jeanne",
+        "text": "Le vent caresse les blés. Mon père attend mon retour. Pourtant les oiseaux se taisent, et quelqu'un murmure mon nom entre deux rangs de céréales.",
+        "choices": [
+          {
+            "id": "ecouter",
+            "label": "Écouter les voix.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "civilians_saved",
+                "value": 0
+              },
+              {
+                "kind": "set_flag",
+                "flag": "evidence",
+                "value": 0
+              },
+              {
+                "kind": "set_flag",
+                "flag": "voices_response",
+                "value": "listen"
+              }
+            ],
+            "next_scene": "sc_p0_visions"
+          },
+          {
+            "id": "resister",
+            "label": "Faire taire la peur et continuer.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "civilians_saved",
+                "value": 0
+              },
+              {
+                "kind": "set_flag",
+                "flag": "evidence",
+                "value": 0
+              },
+              {
+                "kind": "set_flag",
+                "flag": "voices_response",
+                "value": "resist"
+              }
+            ],
+            "next_scene": "sc_p0_visions"
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_visions",
+        "title": "Une bannière, une couronne, un bûcher",
+        "speaker": "Les Voix",
+        "text": "Une couronne tachée de sang. Une armée sous une bannière claire. Puis un feu immense. « Tu traverseras les cendres, Jeanne. Le royaume aura besoin de toi. »",
+        "choices": [
+          {
+            "id": "repondre",
+            "label": "« Qui êtes-vous ? »",
+            "effects": [],
+            "next_scene": "sc_p0_fumee"
+          },
+          {
+            "id": "fuir_vision",
+            "label": "Détourner les yeux.",
+            "effects": [],
+            "next_scene": "sc_p0_fumee"
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_fumee",
+        "title": "La fumée au-dessus du village",
+        "speaker": "Jeanne",
+        "text": "Une fumée noire monte de Domrémy. Les cloches sonnent trop vite. Je reconnais le toit de notre maison. Je cours, mais mes jambes se souviennent d'abord de la première fois où Renaud m'a tendu une épée.",
+        "choices": [
+          {
+            "id": "souvenir",
+            "label": "Revivre l'entraînement de Renaud. La leçon d'armes commence.",
+            "effects": []
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_apres_lecon",
+        "title": "Fin du souvenir",
+        "speaker": "Renaud",
+        "text": "« Ne frappe jamais parce que tu es en colère. Frappe seulement lorsque tu sais ce que tu protèges. » Le souvenir se brise. Domrémy brûle réellement.",
+        "choices": [
+          {
+            "id": "courir",
+            "label": "Rejoindre le village.",
+            "effects": [
+              {
+                "kind": "unlock_mission",
+                "mission": "p0_02_incendie"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_cendres",
+        "title": "Les cendres de Domrémy",
+        "speaker": "Jeanne",
+        "text": "Mon père est mort. Les soldats fouillent ses papiers. Des appels viennent d'une grange ; à l'est, le messager qui transportait un sceau prend la fuite. Je ne pourrai pas être aux deux endroits.",
+        "choices": [
+          {
+            "id": "secourir",
+            "label": "Rester pour sauver les villageois.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "prologue_path",
+                "value": "secours"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "civilians_saved",
+                "amount": 10
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "p0_03a_secours"
+              }
+            ]
+          },
+          {
+            "id": "poursuivre",
+            "label": "Poursuivre le messager et récupérer une preuve.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "prologue_path",
+                "value": "poursuite"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "evidence",
+                "amount": 10
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "p0_03b_poursuite"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_apres_branche",
+        "title": "La fuite des survivants",
+        "speaker": "Jeanne",
+        "text": "La nuit tombe sur les ruines. Rien ne ramènera mon père. Ceux qui respirent encore ont besoin d'un chemin vers les collines. Les routes sont surveillées.",
+        "choices": [
+          {
+            "id": "partir",
+            "label": "Ouvrir la route aux rescapés.",
+            "effects": [
+              {
+                "kind": "unlock_mission",
+                "mission": "p0_04_fuite"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_au_revoir",
+        "title": "Une promesse devant les cendres",
+        "speaker": "Jeanne",
+        "text": "De la colline, Domrémy ressemble à une braise dans l'obscurité. Je serre l'épée de mon père. Un jour, je saurai qui a donné l'ordre. Mais, pour l'instant, je dois protéger les vivants.",
+        "choices": [
+          {
+            "id": "promesse",
+            "label": "« Je retrouverai les responsables. »",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "prologue_complete",
+                "value": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

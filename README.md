@@ -11,6 +11,21 @@ sont conservés dans [`assets/`](assets/README.md) ; leur utilisation par un fut
 renderer est un chantier distinct. La conversion des anciennes cartes et sauvegardes
 n'est pas garantie. Voir [les limites de la migration](docs/GAMEPLAY.md#migration-de-godot).
 
+## Nouveau contenu : Jeanne d'Arc (prologue jouable)
+
+Une campagne indépendante, **Jeanne d'Arc — Les Cendres du Royaume**, propose
+sept scènes narratives et cinq missions tactiques, avec un embranchement
+secours / poursuite, un flashback d'entraînement et une fuite finale. Les
+anciens exemples Sporebound restent conservés.
+
+```sh
+python -m sporebound validate --content sporebound/content/jeanne.json --project sporebound/content/jeanne.game.json
+python -m sporebound player --content sporebound/content/jeanne.json --project sporebound/content/jeanne.game.json
+```
+
+Cette tranche ne contient pas encore les actes I–V ni l'exploration libre
+et les cinématiques 2D. Voir [le guide du prologue](docs/JEANNE_PROLOGUE.md).
+
 ## Player & Presentation 2.6
 
 Le client `python -m sporebound player` utilise désormais `GameSession` et les
@@ -145,7 +160,11 @@ Pour les règles, équipements, vagues et acteurs complexes, l'onglet **Données
 reste disponible. L'écran titre du Studio reste un aperçu de création ; la commande
 `sporebound player` lance désormais le client autonome 2.6.
 
-Voir aussi le [guide Project Workspace](docs/WORKSPACE.md).\nLe gate Studio 3.0 reste partiel : l'édition complète des ressources sans JSON\nest prévue dans les PR 2.5.1 à 2.5.4.\n\nVoir le [guide détaillé du Studio](docs/STUDIO.md) pour les actions disponibles,
+Voir aussi le [guide Project Workspace](docs/WORKSPACE.md).
+Le gate Studio 3.0 reste partiel : l'édition complète des ressources sans JSON
+est prévue dans les PR 2.5.1 à 2.5.4.
+
+Voir le [guide détaillé du Studio](docs/STUDIO.md) pour les actions disponibles,
 les conventions de sauvegarde et les limites.
 
 ## Studio avancé et client joueur
@@ -319,5 +338,12 @@ python -m examples.castle_vertical_slice --save saves/castle-2.8.json
 python -m examples.castle_vertical_slice --load saves/castle-2.8.json
 ```
 
-Voir [le guide 2.8](docs/VERTICAL_SLICE_2_8.md). Le parcours 2.8 est pour l'instant jouable au terminal ; l'intégration graphique Player / Studio reste à réaliser.
-\n### 2.8.1 — Castle Player GUI\n\nDepuis le dépôt source, lancer `python -m examples.castle_player` (ou **Campagne Château (2.8)** depuis le menu du Player). Carte tactique 2D, préparation de l'équipe, commandement multi-fronts, diplomatie, boss et épilogues, sauvegarde/reprise automatique vérifiée. Voir [le guide 2.8](docs/VERTICAL_SLICE_2_8.md).\n
+Voir [le guide 2.8](docs/VERTICAL_SLICE_2_8.md). Le parcours 2.8 est jouable au terminal ou dans l'interface graphique ; les sièges créés dans le Studio se jouent également dans le Player 2D.
+
+### 2.8.1 — Castle Player GUI
+
+Depuis le dépôt source, lancer `python -m examples.castle_player` (ou **Campagne Château (2.8)** depuis le menu du Player). Carte tactique 2D, préparation de l'équipe, commandement multi-fronts, diplomatie, boss et épilogues, sauvegarde/reprise automatique vérifiée. Voir [le guide 2.8](docs/VERTICAL_SLICE_2_8.md).
+
+### 2.8.2 — Campaign & Siege Studio → Player
+
+Dans le Studio (`python -m sporebound editor <contenu.json>`), onglet **Campagne & siège** : créer les fronts, configurer éventuellement les convois/logistiques et cliquer **Jouer dans Player 2.8**. Dans le Player (`python -m sporebound player --content <contenu.json> --project <jeu.game.json>`), cliquer **Sièges créés dans le Studio**, sélectionner le siège et son emplacement. Sauvegardes de siège indépendantes, contrôlées par rejeu.

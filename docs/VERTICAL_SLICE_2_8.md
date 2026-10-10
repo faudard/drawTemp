@@ -159,7 +159,51 @@ python -m unittest discover -s tests_standalone -p test_castle_player_controller
 SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_castle_player_gui.py -v
 ```
 
-Remaining 2.8 integration: designer-authored custom castles directly in this
-Player (instead of the bundled repository example), safe interactive convoy
-side-encounter commands and recovery missions, campaign dialogue / cinematics
-and battle result polish.
+Remaining 2.8 integration is tracked by 2.8.2 Studio → Player below.
+
+## 2.8.2 — Custom Campaign & Siege Studio → graphical Player
+
+A Studio siege does **not** need the six castle-demo fronts. The launcher uses
+the authored GameProject `sieges[]` schema, existing mission content, the
+original `MultiFrontSession` journal and the existing `siege_authoring`
+slot format. Existing 2.5.4 game manifests (without logistics) remain valid.
+
+**In the Studio:** open **Campagne & siège**, create fronts/finale/links/waves,
+choose slot 1–9 and click **Jouer dans Player 2.8**. You may still use the
+Command Center. The in-memory Studio session can be passed to Player, but
+overwriting a previously saved slot requires explicit confirmation.
+
+**In the standalone Player:** launch with a project containing saved sieges:
+
+```bash
+python -m sporebound player --content my-missions.json --project my-game.game.json
+```
+
+Select **Sièges créés dans le Studio** in the title screen, choose siege ID
+and slot, then **Nouvelle partie** or **Reprendre sauvegarde**. The Player
+uses the same tactical Canvas, zoom/cell-selection, orders, enemy AI and global
+timeline. Saves are located beside the game manifest at
+`<project-stem>_saves/siege_<siege-id>/slot_<n>.json`. Every accepted command
+is checkpointed, resumed by replay and rejected if mission, rules, logistics
+or siege definition changed.
+
+**New optional visual authoring:** the **Logistique & convois** Studio tab
+can create reserves, provision/escort pools, convoy routes, ambushes, tactical
+rescue and pursuit mission references. These become an optional `logistics`
+field on the siege blueprint; legacy blueprints are unchanged. The player
+includes actual fighter transfers, escort, rescue, pursuit and recovery actions;
+side missions use the same tactical board and journal as main fronts.
+
+**Narrative transition:** introductory campaign scene and final-mission
+epilogue scene authored in **Scénario & dialogues** are displayed in the
+siege GUI if configured. In 2.8.2 these are explicitly **read-only scene
+previews**: the interactive dialogue choices, side effects and flags still
+belong to the existing main campaign mode, not this siege. Those interactive
+narrative integrations plus dynamic portraits are deferred to 2.8.3.
+
+To verify:
+
+```bash
+python -m unittest discover -s tests_standalone -p test_authored_siege_player.py -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_authored_siege_gui.py -v
+```
