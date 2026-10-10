@@ -13,11 +13,14 @@ def _is_healer(unit):
 
 
 def _protective_move(battle, actor):
-    """Place a protector between the closest enemy and an exposed medic."""
+    """Place a frontline actor between an enemy and an exposed support unit."""
     if actor.moved or battle.status_blocks(actor, "move") or "move" not in battle.rules.commands:
         return None
     medics = sorted((u for u in battle.units if u.alive and u.team == actor.team
-                     and u.id != actor.id and _is_healer(u)), key=lambda u: u.id)
+                     and u.id != actor.id and
+                     (_is_healer(u) or
+                      (squad_role(actor) in {"vanguard", "pikeman"}
+                       and squad_role(u) == "archer"))), key=lambda u: u.id)
     foes = [u for u in battle.units if u.alive and u.team != actor.team]
     if not medics or not foes:
         return None
@@ -201,6 +204,47 @@ def squad_medic_retreat(battle, actor):
     return {"kind": "move", "cell": list(min(options)[2])}
 
 
+def squad_archer_cover_move(battle, actor):
+    """Approach a shot from behind a melee screen, not through the frontline."""
+    if (squad_role(actor) != "archer" or actor.weapon != "ranged"
+            or actor.moved or battle.status_blocks(actor, "move")
+            or battle.engaged_by(actor)):
+        return None
+    foes = [u for u in battle.units if u.alive and u.team != actor.team]
+    guards = [u for u in battle.units if u.alive and u.team == actor.team
+              and u.id != actor.id
+              and squad_role(u) in {"pikeman", "vanguard"}]
+    if not foes or not guards:
+        return None
+    basic = battle._basic(actor)
+    if any(basic.min_range <= distance(actor.pos, foe.pos) <= basic.range
+           and battle.line_of_sight(actor.pos, foe.pos) for foe in foes):
+        return None
+    options = []
+    for cell, (cost, path) in battle.reachable(actor).items():
+        if cell == actor.pos:
+            continue
+        if min(distance(cell, guard.pos) for guard in guards) > 2:
+            continue
+        reachable_foes = [foe for foe in foes
+                          if basic.min_range <= distance(cell, foe.pos) <= basic.range
+                          and battle.line_of_sight(cell, foe.pos)
+                          and any(distance(cell, foe.pos) >=
+                                  distance(guard.pos, foe.pos) for guard in guards)]
+        if not reachable_foes:
+            continue
+        risk = sum(row["amount"] * row["chance"]
+                   for row in battle.movement_threats(actor, path))
+        risk += sum(battle.board.tile(pos).hazard for pos in path[1:])
+        if risk:
+            continue
+        cover = battle.board.tile(cell).cover
+        options.append((-cover, cost, cell))
+    if not options:
+        return None
+    return {"kind": "move", "cell": list(min(options)[2])}
+
+
 def squad_plan_preview(battle, actor_id):
     """Read-only companion/role diagnostics for UI and tests."""
     actor = battle.unit(actor_id)
@@ -228,7 +272,7 @@ def coordinated_command(battle):
         healing = _healing_command(battle, actor)
         if healing is not None:
             return healing
-    if "protector" in actor.tags or squad_role(actor) == "vanguard":
+    if "protector" in actor.tags or squad_role(actor) in {"vanguard", "pikeman"}:
         move = _protective_move(battle, actor)
         if move is not None:
             return move
@@ -236,6 +280,10 @@ def coordinated_command(battle):
         retreat = squad_medic_retreat(battle, actor)
         if retreat is not None:
             return retreat
+    if squad_role(actor) == "archer":
+        approach = squad_archer_cover_move(battle, actor)
+        if approach is not None:
+            return approach
     posture = squad_posture_command(battle, actor)
     if posture is not None:
         return posture
