@@ -188,7 +188,8 @@ class GameSession:
                          or self.fronts.recovery_battles),
                     "Finish tactical side missions first")
             require(all(row["status"] != "active"
-                        for row in self.fronts.timeline.fronts.values()),
+                        or self.fronts.battles[name].result is not None
+                        for name, row in self.fronts.timeline.fronts.items()),
                     "Fronts still active; abandon explicitly")
         elif self.battle is not None:
             require(self.finalized, "Combat still active; abandon explicitly")

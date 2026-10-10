@@ -150,7 +150,9 @@ def strategy_frame(fronts):
         turn=timeline.turn, focused=timeline.focused,
         fronts=tuple(
             FrontView(name, fronts.missions[name], row["doctrine"],
-                      row["status"], row["strength"], row["opposition"],
+                      fronts.battles[name].result if row["status"] == "active"
+                      and fronts.battles[name].result is not None else row["status"],
+                      row["strength"], row["opposition"],
                       name == timeline.focused)
             for name, row in sorted(timeline.fronts.items())),
         events=tuple(deepcopy(timeline.events[-40:])))
