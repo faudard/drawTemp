@@ -51,9 +51,9 @@ jalons suivants décrivent leur intégration produit, pas une réécriture.
 | PR | Chantier | Livrable restant |
 | --- | --- | --- |
 | 2.5.5 | Project Workspace — fondation en PR | Index global, navigation vers les panneaux, création/duplication de missions et campagnes, diagnostic assets ; éditeurs par famille à compléter |
-| 2.5.1 | Map Editor 3.0 — fondation en PR | Sélection multiple, collage de terrain/objectifs, couches de visibilité, zones de déploiement, placement validé unités/objets ; restent tilesets, rotation, entités groupées et aperçu sprites |
+| 2.5.1 | Map Editor 3.0 — fondation + outils avancés | Sélection multiple, calques, rotation/symétrie, modèles JSON, groupes unités/objets, déploiement, mini-carte et zoom ; restent tilesets et aperçu sprites |
 | 2.5.2 | Event & Narrative Graph 3.0 — narration + tactique en PRs | Conditions narratives ET/OU/NON, graphe de choix partagé et aperçu variables ; graphe des événements tactiques à conditions simples, actions séquentielles, priorités et vagues ; reste les conditions tactiques composites |
-| 2.5.3 | Character & Rules Studio | Héros, monstres, classes, compétences, équipements, réactions, synergies et profils IA sans JSON manuel |
+| 2.5.3 | Character & Rules Studio — tranche 1 en PR | CRUD guidé d'unités, archétypes, compétences multi-effets, classes et équipements ; réactions/soutiens/IA basiques ; reste l'édition visuelle des unlocks de synergies, des arbres de classes et des profils IA avancés |
 | 2.5.4 | Campaign & Siege Studio | Campagnes, fronts, renforts, routes, doctrines, transitions et chronologie stratégique |
 
 Gate : créer trois missions, des dialogues conditionnels, des personnages
@@ -82,6 +82,12 @@ les règles. Gate : partie complète sans Studio ni terminal.
 | 2.7.4 | Synergies duos/trios, compétences secrètes et relations |
 | 2.7.5 | Boss multicases, transformations, phases et siège |
 | 2.7.6 | Équilibrage automatisé, simulations longues et métriques de difficulté |
+
+PR #23 (en développement) : première intégration opt-in des jalons 2.7.1–2.7.6,
+incluant réaction de couloir Phalanx Hold, IA coordonnée, arbres de talents JP,
+synergies, boss à phases et simulations déterministes. Contrats :
+[TACTICAL_RPG_3.md](docs/TACTICAL_RPG_3.md). Tests CI Python 3.10/3.12/3.14
+et compatibilité avec les anciens replays requis avant fusion.
 
 Gate : choix tactiques distincts selon équipe, terrain, adversaire et objectif.
 

@@ -8,13 +8,17 @@ from .game_project import GameProject
 from .model import Content, RuleError
 from .player_session import PlayerSession
 from .siege import available_operations
+from .tactical_ui import tactical_snapshot
+from .tactical_rpg3 import tactical_rpg_rules
 
 
 def launch(content_path, project_path=None, profile_path=None):
     import tkinter as tk
     from tkinter import ttk, messagebox
 
-    content=Content.load(content_path)
+    # The interactive client must accept authored 2.7 boss behaviors and
+    # advanced team tactics; battle opt-in remains mission-scoped.
+    content=Content.load(content_path, rules=tactical_rpg_rules())
     project_path=Path(project_path) if project_path else Path(content_path).with_suffix('.game.json')
     project=(GameProject.load(project_path,content) if project_path.is_file()
              else GameProject.default(content))
@@ -118,9 +122,82 @@ def launch(content_path, project_path=None, profile_path=None):
                            command=safe(lambda target=mid: start_battle(target))).pack(
                                fill='x',padx=170,pady=5)
         actions=ttk.Frame(view);actions.pack(pady=16)
+        if any(job.get('talents') for job in content.jobs.values()):
+            ttk.Button(actions,text='Talents / classes',
+                       command=talent_screen).pack(side='left',padx=8)
         ttk.Button(actions,text='Sauvegarder',command=safe(lambda: (session.save(),messagebox.showinfo(
             'Sauvegarde','Progression enregistrée.')))).pack(side='left',padx=8)
         ttk.Button(actions,text='Menu principal',command=title_screen).pack(side='left',padx=8)
+
+    def talent_screen(selected_hero=None, selected_job=None):
+        """Graphical campaign JP purchases; editing the rules belongs to Studio."""
+        from .campaign import HeroProgress
+        from .builds3 import talent_catalog
+        clear()
+        title_bar(view,'Arbre de talents')
+        first=project.campaign(session.campaign_id)['start_mission']
+        heroes=sorted({u.id for u in content.missions[first].units
+                       if u.team=='player'})
+        jobs=sorted(jid for jid, job in content.jobs.items()
+                    if job.get('talents'))
+        if not heroes or not jobs:
+            ttk.Label(view,text='Aucun talent disponible dans ce projet.').pack()
+            ttk.Button(view,text='Retour',command=campaign_screen).pack()
+            return
+        hero_var=tk.StringVar(value=selected_hero if selected_hero in heroes
+                             else heroes[0])
+        job_var=tk.StringVar(value=selected_job if selected_job in jobs
+                            else jobs[0])
+        selectors=ttk.Frame(view);selectors.pack(pady=8)
+        ttk.Label(selectors,text='Héros').pack(side='left')
+        hero_box=ttk.Combobox(selectors,textvariable=hero_var,
+                              state='readonly',values=heroes,width=15)
+        hero_box.pack(side='left',padx=8)
+        ttk.Label(selectors,text='Classe').pack(side='left')
+        job_box=ttk.Combobox(selectors,textvariable=job_var,
+                             state='readonly',values=jobs,width=15)
+        job_box.pack(side='left',padx=8)
+        hero_box.bind('<<ComboboxSelected>>',
+                      lambda _e: talent_screen(hero_var.get(),job_var.get()))
+        job_box.bind('<<ComboboxSelected>>',
+                     lambda _e: talent_screen(hero_var.get(),job_var.get()))
+        progress=session.progress.heroes.get(hero_var.get(),HeroProgress())
+        catalog=talent_catalog(content,progress,job_var.get())
+        ttk.Label(view,text=f'JP disponibles : {catalog["available_jp"]}  |  '+
+                  'Sélectionnez un talent pour le débloquer.').pack(pady=6)
+        tree=ttk.Treeview(view,show='tree',height=14)
+        tree.pack(fill='both',expand=True,padx=65,pady=10)
+        specs=content.jobs[job_var.get()].get('talents',{})
+        states={row['id']:row for row in catalog['talents']}
+        inserted=set()
+        def add(tid):
+            if tid in inserted:
+                return
+            spec=specs[tid]
+            deps=spec.get('requires',[])
+            parent=sorted(deps)[0] if deps else ''
+            if parent:
+                add(parent)
+            status=('Acquis' if states[tid]['owned'] else
+                    'Disponible' if states[tid]['available'] else 'Verrouillé')
+            tree.insert(parent,'end',iid=tid,text=(
+                f'{tid} — {states[tid]["jp"]} JP [{status}]'
+                + (' ← '+', '.join(deps) if deps else '')
+                + (' / '+', '.join(spec.get('skills',[]))
+                   if spec.get('skills') else '')))
+            inserted.add(tid)
+        for tid in sorted(specs):
+            add(tid)
+        def purchase():
+            selected=tree.selection()
+            if not selected:
+                raise RuleError('Sélectionnez un talent')
+            session.learn_talent(hero_var.get(),job_var.get(),selected[0])
+            talent_screen(hero_var.get(),job_var.get())
+        ttk.Button(view,text='Apprendre le talent',
+                   command=safe(purchase)).pack(pady=6)
+        ttk.Button(view,text='Retour à la campagne',
+                   command=campaign_screen).pack(pady=7)
 
     def choose_story(choice_id):
         session.choose_story(choice_id)
@@ -147,6 +224,7 @@ def launch(content_path, project_path=None, profile_path=None):
             campaign_screen()
             return
         title_bar(view,battle.mission.name)
+        tactical = tactical_snapshot(battle, selected)
         ttk.Label(view,text=f'Tick {battle.tick}  |  '+(
             f'Résultat : {battle.result}' if battle.result else
             'Déploiement' if battle.deploying else
@@ -165,6 +243,11 @@ def launch(content_path, project_path=None, profile_path=None):
                 actions=['move','attack',*battle.active.skills,'item:potion','item:ether',
                          'item:phoenix',*['object:'+o['id'] for o in battle.mission.objects],
                          *available_operations(battle,battle.active)]
+                if tactical["enhanced"]:
+                    if not battle.active.acted:
+                        actions.extend('formation:'+mode for mode in
+                                       ('shield_wall','phalanx','escort','none'))
+                        actions.append('prepare:phalanx_hold')
             else:
                 actions=[]
             if command_var.get() not in actions:
@@ -196,6 +279,30 @@ def launch(content_path, project_path=None, profile_path=None):
             color='#475569' if tile.blocked else '#fed7aa' if tile.hazard else '#ddd6fe' if tile.height else '#e2e8f0'
             canvas.create_rectangle(x*scale,y*scale,(x+1)*scale,(y+1)*scale,
                                     fill=color,outline='#94a3b8')
+        # Only armed corridors are threats; incomplete formations are cosmetic.
+        for zone in tactical["zones"]:
+            if not zone["armed"]:
+                continue
+            for zx,zy in zone["cells"]:
+                canvas.create_rectangle(zx*scale+3,zy*scale+3,
+                                        (zx+1)*scale-3,(zy+1)*scale-3,
+                                        outline='#dc2626' if zone["team"]=='enemy' else '#15803d',
+                                        width=2)
+        # Boss intentions are truthful only on the active boss's turn;
+        # telegraph the actual engine-selected destination rather than guessing.
+        for boss in tactical["bosses"]:
+            intent=boss["command"]
+            if not intent or intent.get("kind") not in ("charge","act"):
+                continue
+            cell=intent.get("cell")
+            if not cell:
+                continue
+            bx,by=cell
+            canvas.create_rectangle(bx*scale+5,by*scale+5,
+                                    (bx+1)*scale-5,(by+1)*scale-5,
+                                    outline='#d97706',width=4)
+            canvas.create_text((bx+.5)*scale,(by+.15)*scale,
+                               text='!',fill='#92400e')
         for unit in battle.units:
             x,y=unit.pos
             fill='#60a5fa' if unit.team=='player' else '#fb7185'
@@ -210,7 +317,31 @@ def launch(content_path, project_path=None, profile_path=None):
         info=tk.Text(body,width=36,height=24,state='normal',wrap='word')
         info.pack(side='right',fill='y')
         rows=[f'Case sélectionnée : {tuple(selected)}','', 'Unités :']
-        rows.extend(f'{u.name}: PV {u.hp}/{u.max_hp} MP {u.mp}/{u.max_mp}' for u in battle.units)
+        rows.extend(
+            f'{u.name}: PV {u.hp}/{u.max_hp} MP {u.mp}/{u.max_mp} '
+            f'ATK {u.attack} DEF {u.defense}'
+            for u in battle.units)
+        if tactical["enhanced"]:
+            rows.extend(['', 'Tactique :'])
+            for formation in tactical["formations"]:
+                active = 'actif' if (formation["shield_wall"] or
+                                    formation["phalanx"] or formation["escort"]) else 'incomplet'
+                rows.append(f'{formation["unit"]}: {formation["mode"]} ({active})')
+            for boss in tactical["bosses"]:
+                order = boss["command"]
+                intent = order["kind"] if order else 'hors tour'
+                rows.append(f'Boss {boss["unit"]} phase {boss["phase"]}: {intent}')
+            for combo in tactical["synergies"]:
+                rows.append(f'Combo {combo["tactic"]}: {", ".join(combo["members"])}')
+            for item in tactical["attack"]:
+                rows.append(f'Prévision {item["kind"]}: {item["amount"]} '+
+                            f'({item["chance"]:.0%}) sur {item["unit"]}')
+            for threat in tactical["movement_threats"]:
+                rows.append(f'Danger {threat["kind"]}: {threat["unit"]}')
+            if tactical["focus"]:
+                leader = tactical["focus"][0]
+                rows.append(f'Cible prioritaire: {leader["target"]} '+
+                            f'({leader["expected_damage"]} dégâts attendus)')
         rows.extend(['','Journal :'])
         rows.extend(str(item) for item in battle.events[-25:])
         info.insert('1.0','\n'.join(rows)); info.configure(state='disabled')
@@ -230,6 +361,16 @@ def launch(content_path, project_path=None, profile_path=None):
             command={'kind':'deploy','unit':deploy_var.get(),'cell':list(selected),'facing':facing}
         elif kind=='move':
             command={'kind':'move','cell':list(selected)}
+        elif kind.startswith('formation:'):
+            mode=kind.split(':',1)[1]
+            command={'kind':'formation','mode':mode}
+            if mode=='escort':
+                ally=battle.at(tuple(selected))
+                if ally is None or ally.team!=battle.active.team or ally.id==battle.active.id:
+                    raise RuleError('Sélectionner la case d’un allié à escorter')
+                command['target']=ally.id
+        elif kind.startswith('prepare:'):
+            command={'kind':'prepare','mode':kind.split(':',1)[1]}
         elif kind.startswith('item:'):
             command={'kind':'item','item':kind[5:],'cell':list(selected)}
         elif kind.startswith('object:'):

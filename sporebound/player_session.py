@@ -56,6 +56,24 @@ class PlayerSession:
         require(self.battle is None or self.finalized, 'Finish the battle before saving campaign progression')
         return save_slot(self.profile,self.project,self.content,self.campaign_id,self.slot,self.progress)
 
+    def learn_talent(self, unit_id, job_id, talent_id):
+        """Buy one learned talent, committing the save before changing UI state."""
+        require(self.progress is not None and self.campaign_id is not None,
+                'No campaign loaded')
+        require(self.battle is None or self.finalized,
+                'Cannot change the roster during combat')
+        require(any(unit.team == 'player' and unit.id == unit_id
+                    for mission in self.content.missions.values()
+                    for unit in mission.units),
+                'Unknown player hero')
+        updated = deepcopy(self.progress)
+        updated.learn_talent(self.content, unit_id, job_id, talent_id)
+        # Save before assigning; a disk failure cannot spend JP in memory.
+        save_slot(self.profile, self.project, self.content,
+                  self.campaign_id, self.slot, updated)
+        self.progress = updated
+        return self.progress.talent_catalog(self.content, unit_id, job_id)
+
     def active_scene(self):
         require(self.progress is not None, 'No campaign loaded')
         return self.story.active_scene(self.progress)
@@ -84,7 +102,29 @@ class PlayerSession:
         require(self.progress is not None and self.battle is None, 'Return to campaign before starting a mission')
         require(not self.progress.story_pending, 'Resolve the pending dialogue first')
         require(mission_id in self.available_missions(), 'Mission is not currently available')
-        self.battle=self.progress.prepare(self.content,mission_id)
+        mission = self.content.missions[mission_id]
+        advanced = (
+            any(unit.behavior in {"coordinated", "phase_boss"}
+                or any(tactic in {"chain_strike", "trio_burst"}
+                       for tactic in unit.tactics)
+                or any(tag in {"medic", "healer", "protector"}
+                       or tag.startswith(("formation:", "boss_phase:"))
+                       for tag in unit.tags)
+                for unit in mission.units)
+            or any(action.get("kind") == "boss_phase"
+                   for trigger in mission.triggers
+                   for action in trigger.get("actions", []))
+            or any(rule.get("id") in {"chain_strike", "trio_burst"}
+                   for rule in self.content.tactic_unlocks)
+            or any(tactic in {"chain_strike", "trio_burst"}
+                   for prepared in self.progress.prepared_tactics.values()
+                   for tactic in prepared))
+        if advanced:
+            from .tactical_rpg3 import tactical_rpg_rules
+            self.battle = self.progress.prepare(
+                self.content, mission_id, ruleset=tactical_rpg_rules())
+        else:
+            self.battle = self.progress.prepare(self.content, mission_id)
         self.finalized=False
         self._finish_if_done()
         return self.battle

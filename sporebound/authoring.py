@@ -6,6 +6,7 @@ their undo stack.  No mutation reaches a live Battle or Campaign.
 from copy import deepcopy
 
 from .model import Content, RuleError, require
+from .tactical_rpg3 import authored_rules_for_document
 
 
 def _mission(data, mid):
@@ -17,7 +18,8 @@ def _edit(data, mid, change):
     mission = _mission(new, mid)
     require(mission is not None, f'Unknown mission: {mid}')
     change(new, mission)
-    return Content.from_dict(new).to_dict()
+    return Content.from_dict(
+        new, rules=authored_rules_for_document(new)).to_dict()
 
 
 def _identifier(value, label):
@@ -70,6 +72,98 @@ def remove_unit(data, mid, uid):
         require(any(u['id'] == uid for u in m['units']), 'Unknown unit')
         m['units'] = [u for u in m['units'] if u['id'] != uid]
     return _edit(data, mid, change)
+
+
+
+def set_unit_combat_role(data, mid, uid, *, role="none", formation="none",
+                         escort_target=""):
+    """Studio 2.7 authoring: preserve unrelated tags and undo via one document edit.
+
+    These are loadout/initial formation tags; the enhanced 2.7 ruleset owns
+    their runtime effects. Legacy content and editors remain valid.
+    """
+    require(role in {"none", "medic", "protector"}, "Unknown tactical role")
+    require(formation in {"none", "shield_wall", "phalanx", "escort"},
+            "Unknown initial formation")
+    require(isinstance(escort_target, str), "Invalid escort target")
+
+    def change(_, mission):
+        unit = next((u for u in mission["units"] if u["id"] == uid), None)
+        require(unit is not None, "Unknown tactical unit")
+        if formation == "phalanx":
+            require(unit["weapon"] == "spear", "Phalanx requires spear")
+        if formation == "escort":
+            ally = next((u for u in mission["units"]
+                         if u["id"] == escort_target and u["team"] == unit["team"]
+                         and u["id"] != uid and u["hp"] > 0), None)
+            require(ally is not None, "Escort requires an existing allied unit")
+            from .model import distance
+            require(distance(tuple(unit["pos"]), tuple(ally["pos"])) <= 2,
+                    "Escort initial target out of range")
+        else:
+            require(not escort_target.strip(), "Only escort may specify a target")
+        tags = [tag for tag in unit.get("tags", [])
+                if tag not in {"medic", "protector"}
+                and not tag.startswith("formation:")]
+        if role != "none":
+            tags.append(role)
+        if formation != "none":
+            tags.append("formation:" + formation
+                        + (":" + escort_target if formation == "escort" else ""))
+        unit["tags"] = tags
+
+    return _edit(data, mid, change)
+
+
+
+def upsert_job_talent(data, job_id, talent_id, *, jp=1, requires=(),
+                      exclusive="", stat="", bonus=0, skills=()):
+    """Edit one talent in a global job tree, atomically and without raw JSON.
+
+    Talent edges (requires) are validated by Content.validate; cycles and
+    dangling dependencies cannot enter an undoable Studio document.
+    """
+    _identifier(talent_id, "Talent id")
+    require(isinstance(job_id, str) and job_id in data.get("jobs", {}),
+            "Unknown job")
+    require(type(jp) is int and 1 <= jp <= 20, "Talent JP cost must be 1..20")
+    require(isinstance(requires, (tuple, list)) and
+            all(isinstance(x, str) for x in requires), "Invalid prerequisites")
+    require(isinstance(skills, (tuple, list)) and
+            all(isinstance(x, str) for x in skills), "Invalid skill references")
+    require(isinstance(exclusive, str) and isinstance(stat, str),
+            "Invalid talent metadata")
+    from .builds3 import STATS
+    require(stat in STATS or (stat == "" and bonus == 0),
+            "Choose a supported talent stat")
+    require(type(bonus) is int and 0 <= bonus <= 100, "Invalid talent bonus")
+    row = {"jp": jp}
+    if requires:
+        row["requires"] = list(requires)
+    if exclusive:
+        row["exclusive"] = exclusive
+    if stat:
+        row["bonuses"] = {stat: bonus}
+    if skills:
+        row["skills"] = list(skills)
+    new = deepcopy(data)
+    new["jobs"][job_id].setdefault("talents", {})[talent_id] = row
+    return Content.from_dict(
+        new, rules=authored_rules_for_document(new)).to_dict()
+
+
+def remove_job_talent(data, job_id, talent_id):
+    """Prevent dangling edges; removal is a single undoable edit."""
+    require(job_id in data.get("jobs", {}), "Unknown job")
+    new = deepcopy(data)
+    talents = new["jobs"][job_id].get("talents", {})
+    require(talent_id in talents, "Unknown talent")
+    require(not any(talent_id in spec.get("requires", [])
+                    for name, spec in talents.items() if name != talent_id),
+            "Cannot remove a prerequisite used by another talent")
+    del talents[talent_id]
+    return Content.from_dict(
+        new, rules=authored_rules_for_document(new)).to_dict()
 
 
 def add_object(data, mid, oid, kind, pos, *, link='', destination=None):
@@ -156,7 +250,8 @@ def add_blank_mission(data, mid, name, width=8, height=8):
                    triggers=[], deployment=[], protected_id='', relic=None,
                    next_missions=[])
     new['missions'].append(mission)
-    return Content.from_dict(new).to_dict()
+    return Content.from_dict(
+        new, rules=authored_rules_for_document(new)).to_dict()
 
 
 def set_mission_properties(data, mid, *, name, objective, reward, next_missions):

@@ -9,8 +9,11 @@ from .model import Content, RuleError
 from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
                             move_unit, paint_deployment, paste_terrain,
                             selected_cells as validate_selection)
+from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
+                            transform_terrain)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
+from .tactical_rpg3 import authored_rules_for_document
 
 
 class Document:
@@ -26,7 +29,8 @@ class Document:
         return json.dumps(self.data, sort_keys=True) != self.saved
 
     def replace(self, data):
-        validated = Content.from_dict(data).to_dict()
+        validated = Content.from_dict(
+            data, rules=authored_rules_for_document(data)).to_dict()
         self.undo_stack.append(deepcopy(self.data))
         self.undo_stack = self.undo_stack[-50:]
         self.redo_stack.clear()
@@ -115,12 +119,17 @@ class Document:
         self.replace(data)
 
     def save(self, path):
-        Content.from_dict(self.data)
+        Content.from_dict(self.data, rules=authored_rules_for_document(self.data))
         write_json(path, self.data)
         self.saved = json.dumps(self.data, sort_keys=True)
 
     def playtest(self, mid, seed=1):
-        return Battle(Content.from_dict(self.data), mid, seed)
+        # A designer opting into starting tactical roles/formations should see
+        # their actual effects in playtest. Untagged legacy documents keep
+        # their exact default-rules manifest and replay semantics.
+        rules = authored_rules_for_document(self.data)
+        return Battle(Content.from_dict(self.data, rules=rules),
+                      mid, seed, rules=rules)
 
 
 def launch(path):
@@ -130,7 +139,8 @@ def launch(path):
     root = tk.Tk()
     root.title('Sporebound — Atelier gameplay autonome')
     root.geometry('1280x850')
-    doc = Document(Content.load(path))
+    raw = json.loads(Path(path).read_text(encoding='utf-8'))
+    doc = Document(Content.from_dict(raw, rules=authored_rules_for_document(raw)))
     current_path = Path(path)
     battle = None
     studio = None
@@ -190,7 +200,9 @@ def launch(path):
             return
         name = filedialog.askopenfilename(filetypes=[('Projet Sporebound', '*.json')])
         if name:
-            candidate = Document(Content.load(name))
+            raw = json.loads(Path(name).read_text(encoding='utf-8'))
+            candidate = Document(Content.from_dict(
+                raw, rules=authored_rules_for_document(raw)))
             doc, current_path, battle = candidate, Path(name), None
             mission_var.set(doc.data['missions'][0]['id'])
             if studio is not None:
@@ -279,7 +291,9 @@ def launch(path):
         if source_pending():
             raise RuleError('Appliquer ou abandonner les modifications JSON avant de jouer.')
         campaign_session = progress
-        battle = progress.prepare(Content.from_dict(doc.data), mid)
+        rules = authored_rules_for_document(doc.data)
+        battle = progress.prepare(Content.from_dict(doc.data, rules=rules),
+                                  mid, ruleset=rules)
         campaign_battle = True
         mission_var.set(mid)
         notebook.select(work)
@@ -378,6 +392,77 @@ def launch(path):
     @guarded
     def paste_selection():
         paste_at(selected_cell)
+
+    @guarded
+    def rotate_or_flip(operation):
+        nonlocal terrain_clipboard
+        if battle:
+            raise RuleError('Quitter le combat avant de transformer le terrain.')
+        if terrain_clipboard is None:
+            raise RuleError('Copier une sélection avant rotation ou symétrie.')
+        terrain_clipboard = transform_terrain(terrain_clipboard, operation)
+        status_var.set(f'Terrain transformé : {terrain_clipboard.width} × '
+                       f'{terrain_clipboard.height} cases. Cliquer pour coller.')
+        tool_var.set('Collage')
+        refresh()
+
+    @guarded
+    def save_terrain_stamp():
+        if battle or source_pending():
+            raise RuleError('Terminer les modifications avant de sauvegarder un modèle.')
+        if terrain_clipboard is None:
+            raise RuleError('Copier une sélection avant de créer un modèle.')
+        name = simpledialog.askstring('Modèle de terrain', 'Nom du modèle :')
+        if name is None:
+            return
+        output = filedialog.asksaveasfilename(
+            defaultextension='.stamp.json',
+            filetypes=[('Modèle terrain JSON', '*.json')], initialfile='terrain.stamp.json')
+        if output:
+            save_stamp(output, terrain_clipboard, name)
+            status_var.set(f'Modèle terrain enregistré : {output}')
+
+    @guarded
+    def open_terrain_stamp():
+        nonlocal terrain_clipboard
+        if battle:
+            raise RuleError('Quitter le combat avant de charger un modèle.')
+        filename = filedialog.askopenfilename(
+            filetypes=[('Modèle terrain JSON', '*.json')])
+        if filename:
+            terrain_clipboard = load_stamp(filename)
+            tool_var.set('Collage')
+            status_var.set(f'Modèle prêt : {terrain_clipboard.width} × '
+                           f'{terrain_clipboard.height} cases.')
+            refresh()
+
+    @guarded
+    def shift_entity_group(dx, dy):
+        nonlocal selected_tiles
+        if battle or source_pending():
+            raise RuleError('Terminer les modifications et quitter le combat.')
+        cells = _selection_for_current_map()
+        unit_ids, object_ids = group_entities(doc.data, mission_var.get(), cells)
+        if not unit_ids and not object_ids:
+            raise RuleError('Aucun acteur ni objet de la sélection à déplacer.')
+        design_change(lambda: doc.replace(move_group(
+            doc.data, mission_var.get(), unit_ids, object_ids, dx=dx, dy=dy)))
+        # Keep the entity group selected at its new coordinates (within bounds).
+        mission = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
+        selected_tiles = {(x+dx, y+dy) for x, y in selected_tiles
+                          if 0 <= x+dx < mission['board']['width'] and
+                          0 <= y+dy < mission['board']['height']}
+        status_var.set(f'Groupe déplacé : {len(unit_ids)} unités, '
+                       f'{len(object_ids)} objets ; Δ({dx}, {dy}).')
+        refresh()
+
+    def set_zoom(delta):
+        nonlocal tile_size
+        next_size = max(24, min(96, tile_size + delta))
+        if next_size != tile_size:
+            tile_size = next_size
+            refresh()
+            status_var.set(f'Zoom carte : {tile_size}px/case')
 
     def paint_cells(cells, brush):
         if brush == 'unit':
@@ -500,6 +585,59 @@ def launch(path):
         canvas.delete('stroke_preview')
 
 
+    def draw_minimap(board, mission, units):
+        """Compact tactical overview; renders only sparse tiles and entities."""
+        mini_canvas.delete('all')
+        size = 184
+        sx, sy = size / board.width, size / board.height
+        mini_canvas.create_rectangle(0, 0, size, size, fill='#e4e4e4',
+                                     outline='#999999')
+        if layer_vars['Terrain'].get() or layer_vars['Relief'].get():
+            for (x, y), tile in board.tiles.items():
+                color = None
+                if layer_vars['Terrain'].get():
+                    if tile.blocked: color = '#515151'
+                    elif tile.hazard: color = '#e3a187'
+                    elif tile.cover: color = '#a4c599'
+                    elif tile.cost > 1: color = '#b8a37c'
+                if color is None and layer_vars['Relief'].get() and tile.height:
+                    color = '#b7b9d2'
+                if color:
+                    mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                                 fill=color,outline=color)
+        if layer_vars['Déploiement'].get():
+            for zone in mission.deployment:
+                for x, y in zone['cells']:
+                    mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                                 fill='#a5dbe6',outline='')
+        if layer_vars['Objectifs'].get():
+            for x, y in mission.goal:
+                mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                             fill='#d8c86e',outline='')
+        if layer_vars['Objets'].get():
+            for obj in mission.objects:
+                x,y = obj['pos']
+                mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                        fill='#7047ad',outline='')
+        if layer_vars['Unités'].get():
+            for actor in units:
+                x,y = actor.pos
+                color = '#27649c' if actor.team == 'player' else '#bb503b'
+                mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                        fill=color,outline='')
+        # Current map viewport, useful for navigating large boards.
+        left,right = canvas.xview()
+        top,bottom = canvas.yview()
+        mini_canvas.create_rectangle(left*size,top*size,right*size,bottom*size,
+                                     outline='#2369ac',width=2,tags='viewport')
+
+    def minimap_navigate(event):
+        # Jump to a map area without altering the selected tactical cell.
+        # Fractions are interpreted by the scrollable map's x/y views.
+        canvas.xview_moveto(max(0.0, min(1.0, event.x / 184 - 0.2)))
+        canvas.yview_moveto(max(0.0, min(1.0, event.y / 184 - 0.2)))
+        refresh()
+
     def refresh(*args):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
@@ -619,10 +757,13 @@ def launch(path):
                      'd’ancrage, Ctrl+V ou l’outil Collage.'
                      f'\nCases sélectionnées : {len(selected_tiles)}'
                      f' | Presse-papiers : {len(terrain_clipboard.offsets) if terrain_clipboard else 0}'
+                     '\nRotation/symétrie : modifier le modèle puis coller.'
+                     '\nGroupe : sélectionner les unités/objets et utiliser les flèches.'
                      '\nCouches : visibilité d’édition seulement ; règles inchangées.'
                      '\nDonnées tactiques avancées : onglet JSON.')
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
+        draw_minimap(board, mission, units)
         if studio is not None:
             studio.refresh()
 
@@ -666,6 +807,25 @@ def launch(path):
     for name, var in layer_vars.items():
         ttk.Checkbutton(authoring_controls, text=name, variable=var,
                         command=refresh).pack(side='left',padx=2)
+    advanced_controls = ttk.Frame(root)
+    advanced_controls.pack(fill='x', padx=5)
+    for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
+                            ('⇄ Sym. H','mirror_x'), ('⇅ Sym. V','mirror_y')]:
+        ttk.Button(advanced_controls,text=label,
+                   command=lambda op=operation: rotate_or_flip(op)).pack(side='left',padx=2)
+    ttk.Button(advanced_controls,text='Sauver modèle',
+               command=save_terrain_stamp).pack(side='left',padx=2)
+    ttk.Button(advanced_controls,text='Charger modèle',
+               command=open_terrain_stamp).pack(side='left',padx=2)
+    ttk.Label(advanced_controls, text='Groupe :').pack(side='left',padx=(10,2))
+    for label,dx,dy in [('←',-1,0), ('↑',0,-1), ('↓',0,1), ('→',1,0)]:
+        ttk.Button(advanced_controls,text=label,width=3,
+                   command=lambda x=dx,y=dy: shift_entity_group(x,y)).pack(side='left',padx=1)
+    ttk.Label(advanced_controls,text='Zoom :').pack(side='left',padx=(10,2))
+    ttk.Button(advanced_controls,text='−',width=3,
+               command=lambda: set_zoom(-6)).pack(side='left')
+    ttk.Button(advanced_controls,text='+',width=3,
+               command=lambda: set_zoom(6)).pack(side='left')
     notebook = ttk.Notebook(root)
     notebook.pack(fill='both',expand=True)
     work = ttk.Frame(notebook)
@@ -682,8 +842,19 @@ def launch(path):
     canvas.bind('<Motion>',paste_preview)
     canvas.bind('<Control-c>',lambda _e: copy_selection())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
-    inspector = tk.Text(work,width=43,wrap='word')
-    inspector.pack(side='right',fill='y')
+    canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
+    canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
+    canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
+    canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
+    side_panel = ttk.Frame(work)
+    side_panel.pack(side='right',fill='y')
+    ttk.Label(side_panel,text='Vue tactique').pack(anchor='w',padx=3,pady=(3,0))
+    mini_canvas = tk.Canvas(side_panel,width=184,height=184,
+                            background='#f5f5f5',highlightthickness=1)
+    mini_canvas.pack(anchor='w',padx=3,pady=3)
+    mini_canvas.bind('<Button-1>', minimap_navigate)
+    inspector = tk.Text(side_panel,width=43,wrap='word')
+    inspector.pack(side='top',fill='both',expand=True)
     source_frame = ttk.Frame(notebook)
     notebook.add(source_frame,text='Données JSON')
     ttk.Button(source_frame,text='Valider et appliquer',command=apply_json).pack(anchor='w')

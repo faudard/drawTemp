@@ -11,6 +11,18 @@ sont conservés dans [`assets/`](assets/README.md) ; leur utilisation par un fut
 renderer est un chantier distinct. La conversion des anciennes cartes et sauvegardes
 n'est pas garantie. Voir [les limites de la migration](docs/GAMEPLAY.md#migration-de-godot).
 
+## Player & Presentation 2.6
+
+Le client `python -m sporebound player` utilise désormais `GameSession` et les
+checkpoints `SessionStore` (sauvegarde/reprise des combats, scènes et fronts).
+Une interface Tk 2D/2.5D apporte grille, caméra, preview du moteur,
+déploiement, portraits optionnels, chronologie des fronts et commandes de siège.
+Les données du gameplay restent headless. Les anciens slots `PlayerSession`
+restent séparés et inchangés.
+
+Les assets et sons sont entièrement facultatifs. Pour WAV/OGG :
+`python -m pip install pygame-ce`. Voir [Player 2.6](docs/PLAYER_2_6.md).
+
 ## Session unifiée 2.4.1 (API headless)
 
 La façade `sporebound.game_session.GameSession` orchestre campagne, narration,
@@ -26,7 +38,7 @@ session = GameSession.load("saves/session.json", content, project)
 ```
 
 Les checkpoints de session sont distincts des anciens slots `PlayerSession`.
-L'interface joueur Tk n'est pas encore migrée sur cette nouvelle API.
+Le nouveau client `sporebound player` utilise cette façade, tandis que l'ancien `player_shell` et ses slots sont conservés pour compatibilité.
 Voir [contrats et exemples](docs/UNIFIED_SESSION.md).
 
 ## Persistence 2.0 — reprise et sauvegardes de secours
@@ -113,6 +125,9 @@ Lancer `python -m sporebound editor`. Le studio comprend maintenant :
   validé des cases et objectifs, aperçu de collage, couches visibles,
   repositionnement d'unités/objets et édition des zones de déploiement.
   Voir [le guide de l'éditeur de cartes](docs/MAP_EDITOR_3.md).
+- **Map Editor 3.0 — outils avancés** : rotation/symétrie, modèles de
+  terrain portables, déplacement groupé validé, zoom et mini-carte cliquable.
+  Voir [les outils avancés](docs/MAP_EDITOR_3_ADVANCED.md).
 - **Carte vierge** : assistant de nouvelle mission avec dimensions et acteurs de base.
 - **Personnages et événements** : ajouter/supprimer personnages et monstres,
   objets interactifs, conditions et actions de triggers simples, sans écrire du JSON.
@@ -127,8 +142,8 @@ l'historique undo/redo. Le `*.game.json` de présentation reste indépendant du
 fichier des missions ; les sauvegardes de campagne n'écrasent pas les replays.
 **Playtest** ne modifie pas la progression, contrairement à **Jouer campagne**.
 Pour les règles, équipements, vagues et acteurs complexes, l'onglet **Données JSON**
-reste disponible. L'écran titre est à ce stade un **aperçu interactif Tk** et
-non un frontend de jeu autonome finalisé.
+reste disponible. L'écran titre du Studio reste un aperçu de création ; la commande
+`sporebound player` lance désormais le client autonome 2.6.
 
 Voir aussi le [guide Project Workspace](docs/WORKSPACE.md).\nLe gate Studio 3.0 reste partiel : l'édition complète des ressources sans JSON\nest prévue dans les PR 2.5.1 à 2.5.4.\n\nVoir le [guide détaillé du Studio](docs/STUDIO.md) pour les actions disponibles,
 les conventions de sauvegarde et les limites.
@@ -140,6 +155,10 @@ Trois onglets d'authoring supplémentaires sont disponibles :
 - **Graphe des missions** : afficher les nœuds, relier/délier deux missions,
   repérer les cycles et les missions inaccessibles depuis une campagne ;
   la navigation vers une mission actualise la carte tactique.
+- **Character & Rules Studio 2.5.3** : éditeur guidé des héros et monstres,
+  archétypes, compétences multi-effets, classes et équipements ;
+  validation transactionnelle et Undo/Redo. Voir
+  [la documentation](docs/CHARACTER_RULES_STUDIO.md).
 - **Bibliothèque d'acteurs** : définir des archétypes de personnages/monstres,
   capturer une unité existante, puis instancier le modèle sur plusieurs cartes.
   Les unités placées sont des copies de données et restent indépendantes.
@@ -164,26 +183,8 @@ Par défaut, les profils sont écrits dans
 Voir [le guide Studio et Player](docs/STUDIO.md). Les embranchements du graphe
 sont pour l'instant les `next_missions` existants : après une victoire,
 tous les successeurs déclarés sont débloqués. Les choix conditionnels,
-dialogues/cinématiques et renderer/audio dédiés restent à développer.
-
-## Graphe d'événements tactiques — 2.5.2
-
-Le Studio propose le **Graphe des événements** : conditions de mission,
-actions ordonnées, apparition d'acteurs, vagues de renforts, réorganisation
-de priorités et édition depuis les nœuds. Les actions utilisent les règles
-existantes du moteur, avec validation et Undo/Redo.
-
-Voir [le guide du graphe des événements](docs/TACTICAL_EVENT_GRAPH.md).
-
-## Conditions narratives visuelles — 2.5.2
-
-L’onglet **Conditions & variables** permet de composer les règles
-**ET / OU / NON**, les comparaisons de flags, l’or et les missions
-terminées, puis de prévisualiser la visibilité des choix sans modifier
-une sauvegarde. L’arbre narratif propose désormais un accès direct
-aux conditions de chaque branche.
-
-Voir [le guide des conditions narratives](docs/NARRATIVE_CONDITIONS_3.md).
+le client 2.6 ajoute dialogues, renderer Tk et audio optionnel ; les cinématiques
+complexes et les assets animés avancés restent à développer.
 
 ## Arbre narratif — scènes réutilisables
 
@@ -262,6 +263,25 @@ victoires requises ou aux négociations et conquêtes partielles autorisées.
 Le mode `--paths` ajoute trois routes (porte, souterrains, assaut direct),
 des trêves conditionnelles et une mission de reconquête d'un secteur perdu.
 Les opérations et les batailles sont vérifiées par replay v5.
+
+## Graphe d'événements tactiques — 2.5.2
+
+Le Studio propose le **Graphe des événements** : conditions de mission,
+actions ordonnées, apparition d'acteurs, vagues de renforts, réorganisation
+de priorités et édition depuis les nœuds. Les actions utilisent les règles
+existantes du moteur, avec validation et Undo/Redo.
+
+Voir [le guide du graphe des événements](docs/TACTICAL_EVENT_GRAPH.md).
+
+## Conditions narratives visuelles — 2.5.2
+
+L’onglet **Conditions & variables** permet de composer les règles
+**ET / OU / NON**, les comparaisons de flags, l’or et les missions
+terminées, puis de prévisualiser la visibilité des choix sans modifier
+une sauvegarde. L’arbre narratif propose désormais un accès direct
+aux conditions de chaque branche.
+
+Voir [le guide des conditions narratives](docs/NARRATIVE_CONDITIONS_3.md).
 
 ## Documentation
 
