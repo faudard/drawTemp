@@ -28,7 +28,8 @@ def validate_exploration(raw, story):
     for sid, stage in raw.items():
         require(isinstance(sid, str) and sid in scenes,
                 "Exploration references an unknown narrative scene")
-        require(isinstance(stage, dict) and set(stage) ==
+        require(isinstance(stage, dict) and
+                set(stage) - {"actors"} ==
                 {"title", "theme", "width", "height", "start", "blocked", "interactions"},
                 f"{sid}: invalid exploration fields")
         require(isinstance(stage["title"], str) and 0 < len(stage["title"]) <= 120,
@@ -84,6 +85,44 @@ def validate_exploration(raw, story):
         require(all(any(abs(px - x) + abs(py - y) <= 1 for x, y in reached)
                     for px, py in (point["pos"] for point in points)),
                 f"{sid}: unreachable interaction")
+        actors = stage.get("actors", [])
+        require(isinstance(actors, list) and len(actors) <= 12,
+                f"{sid}: invalid actor catalogue")
+        for actor in actors:
+            require(isinstance(actor, dict) and set(actor) ==
+                    {"id", "name", "kind", "route", "dialogue", "rescue_text",
+                     "deadline", "rescue_flag"}, f"{sid}: invalid actor")
+            ident = actor["id"]
+            require(isinstance(ident, str) and 0 < len(ident) <= 24 and
+                    all(char.isalnum() or char == "_" for char in ident) and
+                    ident not in ids, f"{sid}: duplicate actor/point id")
+            ids.add(ident)
+            require(actor["kind"] in {"civilian", "witness"},
+                    f"{sid}: unknown actor kind")
+            require(all(isinstance(actor[field], str) and
+                        0 < len(actor[field]) <= limit
+                        for field, limit in (("name", 100), ("dialogue", 1000),
+                                             ("rescue_text", 1000))),
+                    f"{sid}: invalid actor text")
+            route = actor["route"]
+            require(isinstance(route, list) and 1 <= len(route) <= 20 and
+                    all(_cell(pos, w, h) and tuple(pos) in reached for pos in route),
+                    f"{sid}: blocked or unreachable actor route")
+            require(all(sum(abs(a - b) for a, b in zip(first, second)) == 1
+                        for first, second in zip(route, route[1:])),
+                    f"{sid}: non-cardinal actor route")
+            require(type(actor["deadline"]) is int and
+                    0 <= actor["deadline"] <= 1000,
+                    f"{sid}: invalid rescue deadline")
+            if actor["kind"] == "civilian":
+                flag = actor["rescue_flag"]
+                require(actor["deadline"] > 0 and
+                        isinstance(flag, str) and 0 < len(flag) <= 64 and
+                        all(ch.isalnum() or ch == "_" for ch in flag),
+                        f"{sid}: invalid rescue reward")
+            else:
+                require(actor["deadline"] == 0 and actor["rescue_flag"] == "",
+                        f"{sid}: witness may not be rescued")
 
 
 class Exploration:
@@ -110,12 +149,30 @@ class Exploration:
         result = deepcopy(stage)
         result["scene_id"] = scene_id
         result["position"] = xy
+        result["tick"] = progress.story_flags.get(_key(scene_id, "tick"), 0)
+        require(type(result["tick"]) is int and 0 <= result["tick"] <= 100000,
+                "Invalid exploration clock")
         result["completed"] = progress.story_flags.get(_key(scene_id, "done"), False)
         require(type(result["completed"]) is bool, "Invalid exploration completion")
         for point in result["interactions"]:
             value = progress.story_flags.get(_key(scene_id, point["id"]), False)
             require(type(value) is bool, "Invalid exploration interaction state")
             point["visited"] = value
+        result["actors"] = deepcopy(stage.get("actors", []))
+        for actor in result["actors"]:
+            rescued = progress.story_flags.get(_key(scene_id, actor["id"]), False)
+            require(type(rescued) is bool, "Invalid saved rescue state")
+            index = 0
+            route = actor["route"]
+            if len(route) > 1:
+                period = 2 * (len(route) - 1)
+                step = result["tick"] % period
+                index = min(step, period - step)
+            actor["pos"] = deepcopy(route[index])
+            actor["status"] = (
+                "rescued" if rescued else
+                "lost" if actor["kind"] == "civilian"
+                and result["tick"] >= actor["deadline"] else "active")
         return result
 
     def move(self, progress, scene_id, dx, dy):
@@ -128,6 +185,7 @@ class Exploration:
         require(_cell(next_pos, stage["width"], stage["height"])
                 and next_pos not in stage["blocked"], "Exploration route blocked")
         progress.story_flags[_key(scene_id, "pos")] = ",".join(map(str, next_pos))
+        progress.story_flags[_key(scene_id, "tick")] = stage["tick"] + 1
         return self.state(progress, scene_id)
 
     def interact(self, progress, scene_id, point_id):
@@ -145,3 +203,35 @@ class Exploration:
             progress.story_flags[_key(scene_id, point_id)] = True
         return {"id": point_id, "title": point["title"], "text": point["text"],
                 "finished": point["exit"]}
+
+    def wait(self, progress, scene_id):
+        stage = self.state(progress, scene_id)
+        require(stage is not None and not stage["completed"], "No active exploration")
+        require(stage["tick"] < 100000, "Exploration clock exceeded")
+        progress.story_flags[_key(scene_id, "tick")] = stage["tick"] + 1
+        return self.state(progress, scene_id)
+
+    def actor_action(self, progress, scene_id, actor_id, action):
+        """Talk or rescue exactly once. The caller checkpoints updated flags."""
+        stage = self.state(progress, scene_id)
+        require(stage is not None and not stage["completed"], "No active exploration")
+        require(action in {"talk", "rescue"}, "Unknown actor action")
+        actor = next((row for row in stage["actors"] if row["id"] == actor_id), None)
+        require(actor is not None, "Unknown exploration actor")
+        require(sum(abs(a - b) for a, b in zip(stage["position"], actor["pos"])) <= 1,
+                "Move closer to the inhabitant")
+        require(actor["status"] != "lost", "Too late to reach this inhabitant")
+        if action == "talk":
+            return {"id": actor_id, "title": actor["name"],
+                    "text": actor["dialogue"], "rescued": False}
+        require(actor["kind"] == "civilian" and actor["status"] == "active",
+                "Inhabitant already safe or not rescuable")
+        flag = actor["rescue_flag"]
+        score = progress.story_flags.get(flag, 0)
+        require(type(score) is int and 0 <= score < 1000000,
+                "Invalid rescue score")
+        # All checks precede mutation: no double rewards, no partial updates.
+        progress.story_flags[_key(scene_id, actor_id)] = True
+        progress.story_flags[flag] = score + 1
+        return {"id": actor_id, "title": actor["name"],
+                "text": actor["rescue_text"], "rescued": True}
