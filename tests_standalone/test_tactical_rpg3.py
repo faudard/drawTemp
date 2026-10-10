@@ -7,6 +7,7 @@ from sporebound.balance3 import evaluate, percentile, verify_budgets
 from sporebound.bosses3 import boss_preview
 from sporebound.builds3 import talent_catalog
 from sporebound.campaign import Campaign
+from sporebound.coordinated_ai import squad_focus_preview
 from sporebound.engine import Battle
 from sporebound.formations3 import formation_preview, formation_control_map
 from sporebound.model import Board, Content, Effect, Mission, RuleError, Skill, Unit
@@ -68,6 +69,52 @@ class RulesetTests(unittest.TestCase):
         self.assertEqual(battle.digest(), before)
         battle.execute(cmd)
         self.assertEqual(battle.unit("guard").pos, (3, 2))
+
+
+    def test_coordinated_focus_fire_prioritizes_supported_target(self):
+        leader = Unit("leader", "Leader", "enemy", (2, 2),
+                      behavior="coordinated", move=0)
+        wing = Unit("wing", "Wing", "enemy", (4, 2))
+        fragile = Unit("fragile", "Fragile", "player", (2, 3),
+                       hp=1, max_hp=40)
+        brute = Unit("brute", "Brute", "player", (3, 2))
+        content = Content({}, {"m": Mission("m", "M", Board(7, 5),
+                                            [leader, wing, fragile, brute])})
+        rules = tactical_rpg_rules()
+        battle = Battle(content, "m", seed=19, rules=rules)
+        battle.active_id = "leader"
+        battle.unit("leader").ct = 100
+        original = battle.digest()
+        preview = squad_focus_preview(battle)
+        self.assertEqual(preview[0]["target"], "fragile")
+        supported = next(p for p in preview if p["target"] == "brute")
+        self.assertEqual(supported["supporters"], ["wing"])
+        self.assertEqual(original, battle.digest())
+        command = choose_command(battle)
+        self.assertEqual(command,
+                         {"kind": "act", "skill": "attack", "cell": [3, 2]})
+        self.assertEqual(original, battle.digest())
+        battle.execute(command)
+        self.assertEqual(battle.digest(),
+                         Battle.replay(battle.recording(), rules=rules).digest())
+
+    def test_focus_fire_never_overrides_unsupported_basic_attack(self):
+        leader = Unit("leader", "Leader", "enemy", (2, 2),
+                      behavior="coordinated", move=0)
+        wing = Unit("wing", "Wing", "enemy", (5, 4), acted=True)
+        fragile = Unit("fragile", "Fragile", "player", (2, 3),
+                       hp=1, max_hp=40)
+        brute = Unit("brute", "Brute", "player", (3, 2))
+        content = Content({}, {"m": Mission("m", "M", Board(7, 5),
+                                            [leader, wing, fragile, brute])})
+        battle = Battle(content, "m", seed=19, rules=tactical_rpg_rules())
+        battle.active_id = "leader"
+        battle.unit("leader").ct = 100
+        before = battle.digest()
+        command = choose_command(battle)
+        self.assertEqual(command,
+                         {"kind": "act", "skill": "attack", "cell": [2, 3]})
+        self.assertEqual(battle.digest(), before)
 
 
 class FormationTests(unittest.TestCase):
