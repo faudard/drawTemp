@@ -53,7 +53,7 @@ class LogisticsStudioGuiTests(unittest.TestCase):
                     root.update()
                     button(root, "Créer / modifier route").invoke()
                     root.update()
-                    button(root, "Créer / modifier").invoke()
+                    button(root, "Enregistrer embuscade").invoke()
                     root.update()
                     button(root, "Aperçu moteur").invoke()
                     root.update()
