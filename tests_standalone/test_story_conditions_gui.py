@@ -72,7 +72,10 @@ class ConditionBuilderGUITests(unittest.TestCase):
                     buttons['+ enfant'].invoke()
                     root.update()
                     self.assertEqual(len(tree.get_children('p0')), 2)
-                    preview_gold = next(w for w in entries if w.get() == '0')
+                    preview_flags = entries[4]
+                    preview_flags.delete(0, 'end')
+                    preview_flags.insert(0, 'trust=2')
+                    preview_gold = entries[5]  # Preview field, not an arbitrary zero
                     preview_gold.delete(0, 'end')
                     preview_gold.insert(0, '150')
                     buttons['Tester la condition'].invoke()
@@ -80,7 +83,7 @@ class ConditionBuilderGUITests(unittest.TestCase):
                                 for w in children if isinstance(w, ttk.Label)
                                 and str(w.cget('textvariable'))]
                     self.assertTrue(any('VISIBLE' in str(status)
-                                        for status in statuses))
+                                        for status in statuses), statuses)
                     buttons['Enregistrer projet de jeu…'].invoke()
                     saved = GameProject.load(output, Content.load(DEFAULT_CONTENT))
                     council = next(s for s in saved.story['scenes'] if s['id'] == 'council')
