@@ -24,6 +24,8 @@ class StoryEditor:
         self._build(notebook)
         from .studio_story_graph import StoryGraphEditor
         self.graph=StoryGraphEditor(self,notebook)
+        from .studio_story_conditions import StoryConditionEditor
+        self.condition_editor=StoryConditionEditor(self,notebook)
 
     def _field(self, parent, row, label, default='', choices=None):
         return self.owner._field(parent,row,label,default,choices=choices,width=28)
@@ -315,6 +317,10 @@ class StoryEditor:
             project,content,self.after_mission.get(),
             '' if clear else self.after_scene.get()))
 
+    def select_condition_target(self, scene_id, choice_id):
+        """Open the canonical condition definition of a selected graph edge."""
+        self.condition_editor.open_choice(scene_id, choice_id)
+
     def select_graph_target(self, scene_id, choice_id=''):
         """Open the canonical definition selected from any tree occurrence."""
         self._highlight_scene(scene_id)
@@ -364,6 +370,7 @@ class StoryEditor:
         if not self.effect_mission.get() and self.owner.doc().data['missions']:
             self.effect_mission.set(self.owner.doc().data['missions'][0]['id'])
         self.graph.refresh()
+        self.condition_editor.refresh()
 
     def reset_project(self):
         self.undo_stack=[]
