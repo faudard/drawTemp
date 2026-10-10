@@ -5,6 +5,7 @@ transactions. Preview reuses bonds.unlock_rule_met/unlock_progress unchanged.
 """
 from . import synergy_authoring as edit
 from .model import RuleError, require
+from .rules import default_rules
 
 
 class SynergyUnlockStudio:
@@ -24,7 +25,7 @@ class SynergyUnlockStudio:
                         command=lambda: self.owner._run(callback)).pack(
                             side="left", padx=3, pady=3)
 
-    def _field(self, frame, row, label, default="", choices=None):
+    def _field(self, frame, row, label, default="", choices=None, editable=False):
         ttk = self.ttk
         var = self.tk.StringVar(value=default)
         ttk.Label(frame, text=label).grid(row=row, column=0, padx=5,
@@ -33,7 +34,7 @@ class SynergyUnlockStudio:
             widget = ttk.Entry(frame, textvariable=var, width=28)
         else:
             widget = ttk.Combobox(frame, textvariable=var, values=choices,
-                                  state="readonly", width=26)
+                                  state="normal" if editable else "readonly", width=26)
         widget.grid(row=row, column=1, padx=5, pady=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
         return var, widget
@@ -59,7 +60,7 @@ class SynergyUnlockStudio:
         setup.pack(fill="x", padx=8, pady=5)
         self.tactic, self.tactic_box = self._field(
             setup, 0, "Tactique", "pincer",
-            choices=["pincer", "crossfire", "encirclement", "relay"])
+            choices=[key for key, _ in default_rules().tactics.entries])
         self.members, _ = self._field(setup, 1, "Membres (IDs séparés par ,)",
                                       "ziggy,momo")
         self.hints = {}
@@ -88,7 +89,7 @@ class SynergyUnlockStudio:
         self.kind, _ = self._field(editor, 0, "Type", "stat",
             choices=["stat", "mission", "completed_mission", "sequence"])
         self.stat, self.stat_box = self._field(editor, 1, "Statistique",
-            "shared_kills", choices=list(edit.STAT_PRESETS))
+            "shared_kills", choices=list(edit.STAT_PRESETS), editable=True)
         self.amount, _ = self._field(editor, 2, "Objectif / répétitions", "2")
         self.mission, self.mission_box = self._field(
             editor, 3, "Mission", "", choices=[])
