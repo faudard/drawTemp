@@ -124,6 +124,9 @@ class SiegeCampaign:
                  "unlocked": accepted, "required": checked,
                  "policy": deepcopy(self.spec)}
         if session.route_policy is not None:
+            diplomacy = session.route_policy.diplomatic_state(session)
+            if diplomacy:
+                state["diplomacy"] = diplomacy
             state["route"] = session.route_selected
             state["route_committed"] = session.route_locked
             state["available_routes"] = sorted(session.route_policy.routes)
