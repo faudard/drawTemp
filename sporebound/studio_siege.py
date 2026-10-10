@@ -42,6 +42,20 @@ class SiegeStudio:
         self.wave_y = self.tk.StringVar(value="1")
         self.wave_life = self.tk.StringVar(value="")
         self.slot = self.tk.StringVar(value="1")
+        self.log_reserves = self.tk.StringVar(value="3")
+        self.log_supplies = self.tk.StringVar(value="5")
+        self.log_capacity = self.tk.StringVar(value="4")
+        self.log_escorts = self.tk.StringVar(value="1")
+        self.log_origin = self.tk.StringVar(value="reserve")
+        self.log_destination = self.tk.StringVar()
+        self.log_turns = self.tk.StringVar(value="2")
+        self.log_casualties = self.tk.StringVar(value="0")
+        self.log_delay = self.tk.StringVar(value="2")
+        self.log_charges = self.tk.StringVar(value="1")
+        self.log_rescue = self.tk.StringVar()
+        self.log_pursuit = self.tk.StringVar()
+        self.log_ransom = self.tk.StringVar(value="2")
+        self.log_reward = self.tk.StringVar(value="2")
         self.status = self.tk.StringVar(value="Créer un siège ou sélectionner un siège existant.")
         self._build(notebook)
 
@@ -88,10 +102,12 @@ class SiegeStudio:
         links = ttk.Frame(pages)
         waves = ttk.Frame(pages)
         timeline = ttk.Frame(pages)
+        logistics = ttk.Frame(pages)
         pages.add(fronts, text="Fronts et finale")
         pages.add(links, text="Événements inter-fronts")
         pages.add(waves, text="Vagues de renforts")
         pages.add(timeline, text="Chronologie / jouer")
+        pages.add(logistics, text="Logistique & convois")
 
         lside = ttk.Frame(fronts)
         lside.pack(side="left", fill="both", expand=True)
@@ -194,6 +210,58 @@ class SiegeStudio:
         wbuttons.grid(row=9, column=0, columnspan=2)
         self._button(wbuttons, "Ajouter vague", self.add_wave)
         self._button(wbuttons, "Supprimer vague", self.delete_wave)
+
+        logistic_top = ttk.LabelFrame(
+            logistics, text="Ressources et convois réels (optionnels)", padding=10)
+        logistic_top.pack(fill="x", pady=5)
+        for i, (title, variable) in enumerate((
+                ("Réservistes joueurs", self.log_reserves),
+                ("Provisions joueurs", self.log_supplies),
+                ("Capacité convoyage", self.log_capacity),
+                ("Escortes disponibles", self.log_escorts))):
+            self.ttk.Label(logistic_top, text=title).grid(
+                row=i // 2, column=2 * (i % 2), sticky="w", padx=5)
+            self.ttk.Entry(logistic_top, textvariable=variable, width=7).grid(
+                row=i // 2, column=2 * (i % 2) + 1, padx=6)
+        lbuttons = ttk.Frame(logistics)
+        lbuttons.pack(fill="x")
+        self._button(lbuttons, "Activer / modifier logistique", self.save_logistics)
+        self._button(lbuttons, "Désactiver logistique", self.clear_logistics)
+        routes = ttk.LabelFrame(logistics, text="Routes / Embuscades", padding=10)
+        routes.pack(fill="x", pady=7)
+        self.log_origin_box = self._entry(routes, 0, "Départ", self.log_origin, [])
+        self.log_destination_box = self._entry(routes, 1, "Arrivée", self.log_destination, [])
+        self._entry(routes, 2, "Durée / tours", self.log_turns)
+        routebuttons = ttk.Frame(routes)
+        routebuttons.grid(row=3, column=0, columnspan=2)
+        self._button(routebuttons, "Ajouter / modifier route", self.save_log_route)
+        self._button(routebuttons, "Supprimer route", self.delete_log_route)
+        self._entry(routes, 4, "Pertes en embuscade", self.log_casualties)
+        self._entry(routes, 5, "Retard en embuscade", self.log_delay)
+        self._entry(routes, 6, "Charges d'embuscade", self.log_charges)
+        ab = ttk.Frame(routes)
+        ab.grid(row=7, column=0, columnspan=2)
+        self._button(ab, "Créer embuscade", self.save_ambush)
+        self._button(ab, "Supprimer embuscade", self.remove_ambush)
+        self.log_route_tree = self.ttk.Treeview(
+            logistics, columns=("depart", "arrivee", "tours", "embuscade"),
+            show="headings", height=5)
+        for key, label in (("depart", "Départ"), ("arrivee", "Arrivée"),
+                           ("tours", "Tours"), ("embuscade", "Embuscade")):
+            self.log_route_tree.heading(key, text=label)
+        self.log_route_tree.pack(fill="x", pady=6)
+        rescue = ttk.LabelFrame(logistics, text="Missions de secours et poursuite", padding=8)
+        rescue.pack(fill="x", pady=5)
+        self.log_rescue_box = self._entry(rescue, 0, "Carte de secours", self.log_rescue, [])
+        self.log_pursuit_box = self._entry(rescue, 1, "Carte de poursuite", self.log_pursuit, [])
+        self._entry(rescue, 2, "Rançon en provisions", self.log_ransom)
+        self._entry(rescue, 3, "Récompense de poursuite", self.log_reward)
+        self._button(rescue, "Appliquer les missions annexes",
+                     self.save_side_missions)
+        self.ttk.Label(logistics, text="Les combats annexes sont de vraies missions "
+                       "tactiques préalablement dessinées dans Carte et combat. "
+                       "Les convois exigent une route et des réservistes.").pack(
+                           anchor="w", padx=8, pady=3)
 
         toolbar = ttk.Frame(timeline)
         toolbar.pack(fill="x", padx=6, pady=5)
@@ -422,6 +490,83 @@ class SiegeStudio:
         self.timeline_text.delete("1.0", "end")
         self.timeline_text.insert("1.0", "\n".join(lines))
 
+    def _logistics(self):
+        bp = self._require()
+        require("logistics" in bp, "Activer la logistique d'abord")
+        return deepcopy(bp), deepcopy(bp["logistics"])
+
+    def save_logistics(self):
+        bp = deepcopy(self._require())
+        config = deepcopy(bp.get("logistics", {}))
+        config.update(
+            reserves={"player": int(self.log_reserves.get()), "enemy": 0},
+            supplies={"player": int(self.log_supplies.get()), "enemy": 0},
+            capacity=int(self.log_capacity.get()), escorts=int(self.log_escorts.get()))
+        bp["logistics"] = config
+        self._apply(bp)
+
+    def clear_logistics(self):
+        bp = deepcopy(self._require())
+        bp.pop("logistics", None)
+        self._apply(bp)
+
+    def save_log_route(self):
+        bp, config = self._logistics()
+        src, dst = self.log_origin.get(), self.log_destination.get()
+        rows = [row for row in config.get("routes", [])
+                if (row["from"], row["to"]) != (src, dst)]
+        rows.append({"from": src, "to": dst, "turns": int(self.log_turns.get())})
+        config["routes"] = rows
+        bp["logistics"] = config
+        self._apply(bp)
+
+    def delete_log_route(self):
+        bp, config = self._logistics()
+        src, dst = self.log_origin.get(), self.log_destination.get()
+        config["routes"] = [row for row in config.get("routes", [])
+                            if (row["from"], row["to"]) != (src, dst)]
+        config["ambushes"] = [row for row in config.get("ambushes", [])
+                              if (row["from"], row["to"]) != (src, dst)]
+        bp["logistics"] = config
+        self._apply(bp)
+
+    def save_ambush(self):
+        bp, config = self._logistics()
+        src, dst = self.log_origin.get(), self.log_destination.get()
+        rows = [row for row in config.get("ambushes", [])
+                if (row["from"], row["to"]) != (src, dst)]
+        rows.append({"from": src, "to": dst, "casualties": int(self.log_casualties.get()),
+                     "delay": int(self.log_delay.get()),
+                     "charges": int(self.log_charges.get())})
+        config["ambushes"] = rows
+        bp["logistics"] = config
+        self._apply(bp)
+
+    def remove_ambush(self):
+        bp, config = self._logistics()
+        src, dst = self.log_origin.get(), self.log_destination.get()
+        config["ambushes"] = [row for row in config.get("ambushes", [])
+                              if (row["from"], row["to"]) != (src, dst)]
+        bp["logistics"] = config
+        self._apply(bp)
+
+    def save_side_missions(self):
+        bp, config = self._logistics()
+        rescue, pursuit = self.log_rescue.get(), self.log_pursuit.get()
+        if rescue:
+            config["rescue_mission"] = rescue
+        else:
+            config.pop("rescue_mission", None)
+        if pursuit:
+            require(bool(rescue), "Une poursuite exige une mission de secours")
+            config["choices"] = {"ransom": int(self.log_ransom.get()),
+                                 "pursuit_mission": pursuit,
+                                 "pursuit_reward": int(self.log_reward.get())}
+        else:
+            config.pop("choices", None)
+        bp["logistics"] = config
+        self._apply(bp)
+
     def start_siege(self):
         self.session = edit.make_session(self._require(), self.owner._content())
         self.session_id = self.siege_id.get()
@@ -551,6 +696,32 @@ class SiegeStudio:
                           self.link_target_box, self.wave_front_box):
                 field["values"] = fronts
             self.wave_arch_box["values"] = sorted(self.owner.doc().data.get("archetypes", {}))
+            self.log_origin_box["values"] = ["reserve", *fronts]
+            self.log_destination_box["values"] = fronts
+            self.log_rescue_box["values"] = ["", *missions]
+            self.log_pursuit_box["values"] = ["", *missions]
+            for child in self.log_route_tree.get_children():
+                self.log_route_tree.delete(child)
+            if bp and "logistics" in bp:
+                config = bp["logistics"]
+                self.log_reserves.set(str(config.get("reserves", {}).get("player", 0)))
+                self.log_supplies.set(str(config.get("supplies", {}).get("player", 0)))
+                self.log_capacity.set(str(config.get("capacity", 6)))
+                self.log_escorts.set(str(config.get("escorts", 0)))
+                self.log_rescue.set(config.get("rescue_mission", "") or "")
+                choices = config.get("choices", {})
+                self.log_pursuit.set(choices.get("pursuit_mission", ""))
+                self.log_ransom.set(str(choices.get("ransom", 2)))
+                self.log_reward.set(str(choices.get("pursuit_reward", 2)))
+                ambushes = {(row["from"], row["to"]) for row in config.get("ambushes", [])}
+                for i, route in enumerate(config.get("routes", [])):
+                    src, dst = route["from"], route["to"]
+                    self.log_route_tree.insert(
+                        "", "end", iid=str(i),
+                        values=(src, dst, route["turns"],
+                                "oui" if (src, dst) in ambushes else "non"))
+            if fronts and self.log_destination.get() not in fronts:
+                self.log_destination.set(fronts[0])
             if fronts:
                 if self.front_id.get() not in fronts:
                     self.front_id.set(fronts[0])
