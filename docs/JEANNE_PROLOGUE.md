@@ -4,6 +4,52 @@
 
 L'objectif est de commencer une histoire de Jeanne d'Arc **uchronique** dans le Player existant, sans casser les tests et les scénarios historiques de Sporebound. Le moteur de combat et les sauvegardes restent identiques.
 
+## 3.0.3.2 — Le village vivant
+
+Cette étape enrichit l'exploration de Domrémy avec **quatre habitants** :
+trois personnes à secourir (Colin, Isabeau, Loïse) et un témoin
+(Frère Michel). Chacun suit une petite route déterministe, cohérente avec
+les obstacles de la carte. Les villageois n'utilisent pas l'IA tactique de
+combat : leur déplacement appartient au moteur narratif headless.
+
+- **Parler** : accéder au dialogue si Jeanne se trouve sur une case proche.
+- **Secourir** : faire sortir un civil de la zone dangereuse. Chaque secours
+  est attribué **une seule fois** dans `village_rescued`.
+- **Pression** : chaque déplacement et chaque commande « Attendre » avance
+  une horloge d'exploration. À l'échéance d'un habitant, celui-ci n'est plus
+  secourable. Les échéances sont des tours logiques, jamais du temps réel :
+  mettre en pause ne pénalise pas le joueur.
+- **Échec partiel sans softlock** : même si l'on n'a sauvé personne, Jeanne
+  peut trouver les deux souvenirs obligatoires, atteindre le carrefour,
+  puis choisir secours ou poursuite. Les conséquences persistent.
+- **Impact en combat** : `GameProject.battle_support` définit des bonus
+  d'inventaire tactique conditionnés par un flag numérique. Sauver au moins
+  un habitant ajoute une potion à la défense de la grange ; sauver au moins
+  deux habitants en ajoute une seconde et apporte une potion à la fuite.
+  Cette préparation utilise **Battle.initial_state**, sérialisé et rejoué par
+  les mécanismes normaux de sauvegarde. Elle ne modifie aucune unité après
+  la création de la bataille.
+- **Rétrocompatibilité** : les projets sans `actors` ni `battle_support`
+  restent valides ; les formats antérieurs ne sont pas remplacés.
+
+### Validation
+
+```sh
+python -m unittest tests_standalone.test_living_village -v
+python -m unittest tests_standalone.test_exploration_stage -v
+python -m unittest tests_standalone.test_jeanne_prologue -v
+```
+
+Les tests vérifient : déplacements prévisibles, dialogue, double
+récompense interdite, échéance de sauvetage, sauvegarde/reprise au milieu de
+l'exploration, reprise d'un combat avec inventaire conditionnel, et rejet
+des projets mal configurés.
+
+**Limites :** les civils sont visibles et sauvables **pendant l'exploration**
+et influencent les réserves de la bataille suivante. Ils ne sont pas encore
+des unités d'escorte autonomes dans le combat tactique, ni des habitants
+persistants sur une carte monde.
+
 ## 3.0.3.1 — Exploration narrative et séquences visuelles
 
 Cette évolution ajoute le contrat optionnel `GameProject.exploration` sans
@@ -48,9 +94,9 @@ python -m unittest tests_standalone.test_jeanne_prologue -v
 ### Limites restantes
 
 - Pas encore de déplacement libre continu hors grille.
-- Les habitants ne possèdent pas encore de routines de déplacement dans
-  les cartes d'exploration ; sauvetages/escortes demeurent des objectifs
-  tactiques.
+- Les habitants suivent maintenant de courtes routes dans les cartes
+  d'exploration, mais pas encore une IA d'évacuation multi-unités dans les
+  batailles tactiques.
 - Les cinématiques sont des vignettes vectorielles, non des animations
   dessinées image par image ou des vidéos.
 - Pas de gestion étendue des choix dialogués sur la carte d'exploration
@@ -118,7 +164,8 @@ La suite dédiée charge réellement Content et GameProject, conduit chaque chem
 - **3.0.2 — terminé dans cette tranche** : nouveau contenu autonome, unités, jobs, équipements, titre et scènes.
 - **3.0.3 — tranche jouable** : sept scènes et cinq rencontres ; les deux variantes de mission sont exclusives ; sauvegarde/reprise et tests.
 - **3.0.3.1 — livré** : exploration sur grille des champs et des ruines, interactions persistantes et vignettes animées.
-- **3.0.3 suite** : habitants réellement évacuables et interactifs, caméra narrative avancée, portraits spécifiques, animation d'incendie plus riche.
+- **3.0.3.2 — livré** : habitants mobiles, dialogues, sauvetages chronométrés et fournitures conditionnelles en combat.
+- **3.0.3 suite** : escortes multi-unités dans les missions tactiques, caméra narrative avancée, portraits spécifiques, animation d'incendie plus riche.
 - **3.1** : actes I et relations, premières preuves et retour de Guillaume.
 - **3.3** : château de Valcroix (réemploi des moteurs de siège validés).
 - **3.4** : démons tardifs et embranchements majeurs.
