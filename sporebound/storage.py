@@ -8,16 +8,20 @@ from .engine import Battle
 from .model import RuleError
 
 
+def json_text(data):
+    """Exact on-disk representation, including the terminal newline."""
+    return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+
+
 def write_json(path, data):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     name = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n", dir=path.parent,
                                          prefix=path.name + ".", suffix=".tmp", delete=False) as out:
             name = out.name
-            json.dump(data, out, ensure_ascii=False, indent=2)
-            out.write("\n")
+            out.write(json_text(data))
             out.flush()
             os.fsync(out.fileno())
         os.replace(name, path)

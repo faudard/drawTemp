@@ -13,6 +13,7 @@ from unittest.mock import patch
 from examples.reliability_gate import fixture, run_case
 from sporebound.ai import choose_command
 from sporebound.game_session import GameSession, digest
+from sporebound.game_project import GameProject
 from sporebound.model import RuleError
 from sporebound.persistence import AutosaveSession, SessionStore
 
@@ -162,6 +163,59 @@ class ReliabilityTests(unittest.TestCase):
                                     cwd=Path(__file__).resolve().parents[1],
                                     capture_output=True, text=True, check=True)
             self.assertEqual(result.stdout.strip(), session.recording()['digest'])
+
+    def test_front_identity_metadata_is_optional_but_strict_when_present(self):
+        session = self.new()
+        session.start_fronts({'gate': 'gate', 'walls': 'walls'}, 'gate')
+        record = session.recording()
+        legacy = deepcopy(record)
+        del legacy['front_battle_ids']
+        legacy['digest'] = digest({k: v for k, v in legacy.items() if k != 'digest'})
+        loaded = GameSession.from_recording(legacy, self.content, self.project)
+        self.assertEqual(loaded.fronts.digest(), session.fronts.digest())
+        for value in (None, {}, {'battles': {'ghost': 'id'}, 'rescue_battles': {},
+                                'pursuit_battles': {}, 'recovery_battles': {}}):
+            altered = deepcopy(record)
+            altered['front_battle_ids'] = value
+            altered['digest'] = digest({k: v for k, v in altered.items() if k != 'digest'})
+            with self.subTest(value=value), self.assertRaises(RuleError):
+                GameSession.from_recording(altered, self.content, self.project)
+
+    def test_castle_narrative_multifront_save_quit_reload_and_continue(self):
+        from examples.siege_fronts import siege_session
+        template = siege_session(seed=17)
+        content = template.content
+        project = GameProject.default(content)
+        project.campaigns[0]['start_mission'] = template.missions['gate']
+        project.story = {'entry_scenes': {'main': 'briefing'}, 'scenes': [
+            {'id': 'briefing', 'title': 'Castle', 'speaker': 'Captain', 'text': 'Assault.',
+             'choices': [{'id': 'assault', 'label': 'Open the fronts', 'effects': [
+                 {'kind': 'set_flag', 'flag': 'route', 'value': 'assault'},
+                 *[{'kind': 'unlock_mission', 'mission': mid}
+                   for mid in template.missions.values()]]}]}]}
+        session = GameSession.new(content, project, 'main', seed=17)
+        session.choose_story_option('assault')
+        session.start_fronts(template.missions, 'gate', specs=template.initial_specs,
+                             links=template.links, logistics=template.initial_logistics)
+        session.execute({'kind': 'start_battle'})
+        session.execute({'kind': 'end'})
+        session.advance_fronts()
+        session.switch_front('walls')
+        session.execute({'kind': 'start_battle'})
+        session.execute({'kind': 'end'})
+        before = session.recording()
+        with TemporaryDirectory() as folder:
+            store = SessionStore(Path(folder) / 'castle.json')
+            store.save(session)
+            command = choose_command(session.active_battle)
+            session.execute(command)
+            expected = session.recording()
+            del session
+            loaded = store.load(content, project)
+            self.assertEqual(loaded.recording(), before)
+            loaded.execute(command)
+            self.assertEqual(loaded.recording(), expected)
+            self.assertEqual(loaded.progress.story_flags['route'], 'assault')
 
 
 if __name__ == '__main__':

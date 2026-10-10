@@ -29,6 +29,7 @@ class GameSession:
     and historical battle/multi-front replay formats are untouched.
     """
     VERSION = 1
+    FRONT_BATTLE_GROUPS = ("battles", "rescue_battles", "pursuit_battles", "recovery_battles")
 
     def __init__(self, content, project, campaign_id, *, seed=1, rules=None):
         self.rules = rules if rules is not None else default_rules()
@@ -220,6 +221,13 @@ class GameSession:
             "finalized": self.finalized,
             "settled_fronts": sorted(self.settled_fronts),
         }
+        if self.fronts is not None:
+            # MultiFront journals verify rules/state, but historically recreate
+            # Battle UUIDs. Preserve identities used by Campaign.record_bonds.
+            data["front_battle_ids"] = {
+                group: {key: battle.battle_id for key, battle in
+                        sorted(getattr(self.fronts, group).items())}
+                for group in self.FRONT_BATTLE_GROUPS}
         return {**data, "digest": digest(data)}
 
     def save(self, path):
@@ -228,9 +236,10 @@ class GameSession:
 
     @classmethod
     def from_recording(cls, data, content, project, *, rules=None):
-        require(isinstance(data, dict) and data.get("version") == cls.VERSION
+        require(isinstance(data, dict) and type(data.get("version")) is int
+                and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
-        require(set(data) == {"version", "kind", "campaign_id", "seed",
+        require(set(data) - {"front_battle_ids"} == {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
                 "mode", "tactical", "finalized", "settled_fronts", "digest"},
                 "Malformed game session")
@@ -248,6 +257,8 @@ class GameSession:
                 <= set(session.content.missions), "Unknown campaign mission")
         mode = data["mode"]
         require(mode in {"campaign", "battle", "fronts"}, "Invalid session mode")
+        require("front_battle_ids" not in data or mode == "fronts",
+                "Battle identities require a multi-front session")
         settled = data["settled_fronts"]
         require(isinstance(settled, list) and all(isinstance(s, str) for s in settled)
                 and len(set(settled)) == len(settled), "Invalid settlement log")
@@ -277,6 +288,22 @@ class GameSession:
                 require((front in settled) == (battle.result in ("victory", "defeat")),
                         "Front finalization mismatch")
             session.settled_fronts = set(settled)
+            if "front_battle_ids" in data:
+                identities = data["front_battle_ids"]
+                require(isinstance(identities, dict) and
+                        set(identities) == set(cls.FRONT_BATTLE_GROUPS),
+                        "Invalid front battle identity groups")
+                seen = set()
+                for group in cls.FRONT_BATTLE_GROUPS:
+                    battles = getattr(session.fronts, group)
+                    rows = identities[group]
+                    require(isinstance(rows, dict) and set(rows) == set(battles),
+                            "Front battle identities do not match live battles")
+                    for key, identity in rows.items():
+                        require(isinstance(identity, str) and 0 < len(identity) <= 128
+                                and identity not in seen, "Invalid or duplicate battle identity")
+                        battles[key].battle_id = identity
+                        seen.add(identity)
         return session
 
     @classmethod
