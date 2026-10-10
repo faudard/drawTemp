@@ -70,6 +70,52 @@ def evaluate(content, mission_id, *, seeds=(1, 7, 42, 99),
             "samples": samples}
 
 
+
+def compare_compositions(variants, mission_id, *, baseline=None,
+                         seeds=(1, 7, 42, 99), max_commands=500, rules=None):
+    """Fair deterministic A/B runs: the same seeds and command cap for each roster.
+
+    Variants are fully authored Content objects with the same mission identifier.
+    Each Battle owns a deep copy; neither the supplied content nor RNG state is
+    shared across variants. Deltas are descriptive, not causal confidence bounds.
+    """
+    from .model import Content
+    require(isinstance(variants, dict) and 2 <= len(variants) <= 16
+            and all(isinstance(name, str) and name.strip() and len(name) <= 64
+                    and isinstance(content, Content)
+                    and mission_id in content.missions
+                    for name, content in variants.items()),
+            "Need 2..16 named compositions containing the same mission")
+    labels = sorted(variants)
+    reference = baseline if baseline is not None else labels[0]
+    require(reference in variants, "Unknown comparison baseline")
+    reports = {name: evaluate(variants[name], mission_id, seeds=seeds,
+                              max_commands=max_commands, rules=rules)
+               for name in labels}
+    first = reports[reference]
+    result = []
+    for name in labels:
+        report = reports[name]
+        result.append({
+            "name": name, "baseline": name == reference,
+            "victory_rate": report["victory_rate"],
+            "victory_rate_delta": round(report["victory_rate"] -
+                                        first["victory_rate"], 4),
+            "downed_mean": report["downed_mean"],
+            "downed_delta": round(report["downed_mean"] -
+                                  first["downed_mean"], 3),
+            "damage_taken_mean": report["damage_taken_mean"],
+            "damage_taken_delta": round(report["damage_taken_mean"] -
+                                         first["damage_taken_mean"], 3),
+            "commands_p95": report["commands_p95"],
+            "commands_p95_delta": report["commands_p95"] - first["commands_p95"],
+            "report": report,
+        })
+    return {"mission": mission_id, "baseline": reference,
+            "seeds": list(seeds), "max_commands": max_commands,
+            "compositions": result}
+
+
 def verify_budgets(report, *, max_p95_commands=None, max_difficulty=None,
                    max_mean_damage_taken=None, allow_limits=False):
     """Explicit CI gate; no reliance on performance of a particular computer."""
