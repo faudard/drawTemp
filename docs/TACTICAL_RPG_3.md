@@ -18,8 +18,8 @@ restored = Battle.replay(recording, rules=tactical_rpg_rules())
 assert restored.digest() == battle.digest()
 ```
 
-The opt-in ruleset adds one behavior, one command, two team tactics, one boss
-trigger action, and two formula versions. Existing commands retain their atomic
+The opt-in ruleset adds two behaviors, one formation command, a Phalanx Hold
+preparation, two team tactics, one boss trigger action, and two formula versions. Existing commands retain their atomic
 rollback. Always pass the same ruleset on replay, import and mission preparation.
 The 2.7 gameplay modules have no Tk, pygame or PySide dependency.
 
@@ -28,8 +28,14 @@ The 2.7 gameplay modules have no Tk, pygame or PySide dependency.
 Set `Unit.behavior = "coordinated"` to opt in. `Unit.tags` can include
 `medic` (prioritizes legal restorative actions) and `protector` (tries to
 stand next to an endangered medic, considering path costs and threats).
-Otherwise the existing tactical/siege AI takes over. This is a bounded
-deterministic per-activation planner, **not** a multi-turn search.
+An optional focus-fire pass ranks enemy targets by real combat forecast,
+potential lethality and immediately available allied basic attacks. It may
+change the target of an already-selected basic attack; it never overrides
+healing, siege interactions, spells or movement. Use
+`squad_focus_preview(battle)` to render the predicted target and supporting
+actors without consuming RNG. Otherwise the existing tactical/siege AI takes
+over. This is a bounded deterministic per-activation planner, **not** a
+multi-turn search.
 
 ### 2.7.2 — Formations
 
@@ -44,8 +50,11 @@ battle.execute({"kind": "end"})
 
 A unit can keep one formation. `shield_wall` reduces nonmagical damage while
 two marked allies are adjacent. `phalanx` increases spear basic attack damage
-while adjacent to another spear ally in phalanx. `escort` reduces nonmagical
-damage and hit probability for its assigned adjacent ally.
+while adjacent to another spear ally in phalanx. Taking the high ground
+adds a further spear bonus; a Shield Wall on terrain with cover ≥20 mitigates
+more physical damage. Both use the exact same formula in forecast and attack
+resolution. `escort` reduces nonmagical damage and hit probability for its
+assigned adjacent ally.
 
 `formation_preview(battle, unit_id)` is side-effect free and can power
 Studio/player previews. Formations persist as `Unit.tags`; the formation
@@ -91,7 +100,11 @@ The example requires a `morale` skill defined in content. JP budget is
 `HeroProgress`/Campaign v1 slots, with default empty fields for old saves.
 Call `Campaign.learn_talent(content, hero_id, job_id, talent_id)`, then
 `Campaign.prepare(..., ruleset=rules)`. No implicit refunds; respec and a
-Studio point-and-click authoring UI are future work.
+complete Studio talent-tree editing UI are future work. The actor inspector
+already exposes initial tactical roles (`medic`, `protector`) and starting
+formations with validated, undoable edits. This writes role/formation tags,
+not the opt-in `coordinated` behavior; use `tactical_rpg_rules()` when the
+created content enters combat.
 
 ### 2.7.4 — Proximity synergies
 
@@ -131,7 +144,9 @@ Other actions on the trigger can enqueue siege waves.
 Phase transitions fire once via the existing `fired` trigger journal. Invalid
 growth into walls or occupied cells is rejected atomically. Form is metadata
 for the renderer, not a sprite loader. `boss_preview()` exposes the current
-form and upcoming thresholds.
+form and upcoming thresholds. `boss_intent_preview()` returns the current
+active boss's chosen command and, where applicable, its charge or skill
+threat forecast; off-turn plans are intentionally not guessed.
 
 The optional `Unit.behavior = "phase_boss"` selects a defensive Guard policy
 at close range during phase one, legal long-lane Charge attempts in later phases,
@@ -142,7 +157,7 @@ with this behavior while leaving the original siege fixtures unchanged.
 ### 2.7.6 — Balance gates
 
 ```python
-from sporebound.balance3 import evaluate, verify_budgets
+from sporebound.balance3 import compare_compositions, evaluate, verify_budgets
 
 report = evaluate(content, "mission_id", seeds=[1, 7, 42, 99],
                   max_commands=500, rules=tactical_rpg_rules())
@@ -151,12 +166,17 @@ verify_budgets(report, max_p95_commands=500, allow_limits=False)
 
 Reports contain per-seed outcomes, win rate, allied downed mean, and
 nearest-rank p50/p95/p99 for command count and ticks. Every seed also
-records a verified battle digest, event counts, team tactic activations and
+records a deterministic battle digest, event counts, team tactic activations and
 damage received by player units. Aggregated telemetry supports comparing
 formation-heavy encounters with direct damage builds; the optional
 `max_mean_damage_taken` CI gate guards against overtuned enemy teams.
 Re-running identical seeds and content must produce identical reports.
 `allow_limits=False` rejects encounters that fail to terminate within the cap.
+Use `compare_compositions({"default": content_a, "elite": content_b},
+"mission_id", baseline="default", seeds=[1, 7, 42, 99])` for controlled
+paired-seed comparisons. The returned win-rate, damage and casualty deltas are
+descriptive, not statistical significance tests.
+
 These are **gameplay budgets**, not wall-clock CPU performance metrics.
 
 ## Gate / integration checklist
@@ -166,8 +186,9 @@ These are **gameplay budgets**, not wall-clock CPU performance metrics.
 - New commands fail atomically and replay using `tactical_rpg_rules()`.
 - Save/replay preserves formation choice, phase transitions and CT combos.
 - Tests exercise a multi-cell boss and seeded difficulty reports.
-- The 2.5 Studio and 2.6 player must consume these APIs; adding UI logic
-  that duplicates the headless formulas is expressly disallowed.
+- The 2.5 Studio's role and formation inspector uses one undoable document
+  transaction; 2.6 Player should consume the pure focus, boss and terrain
+  overlays rather than duplicate the headless formulas.
 
 ### Boundaries
 
