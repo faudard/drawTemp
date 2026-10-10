@@ -13,6 +13,7 @@ from sporebound.tactical_rpg3 import tactical_rpg_rules
 def advanced_castle_content():
     content = siege_content()
     throne = content.missions["castle_throne"]
+    next(unit for unit in throne.units if unit.id == "castellan").behavior = "phase_boss"
     trigger = next(t for t in throne.triggers if t["id"] == "castellan_second_phase")
     # Enhance the old phase trigger instead of creating a competing scheduler.
     trigger["actions"].insert(0, {
