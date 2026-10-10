@@ -128,7 +128,7 @@ class SynergyUnlockStudio:
         self.preview_completed, _ = self._field(
             preview, 2, "Missions terminées", "")
         self.preview_events, _ = self._field(
-            preview, 3, "Événements: kind@tick@source@target",
+            preview, 3, "Événements : type@tick@source@cible@champ=valeur",
             "")
         preview_controls = ttk.Frame(preview)
         preview_controls.grid(row=4, column=0, columnspan=2, sticky="w")
@@ -330,15 +330,24 @@ class SynergyUnlockStudio:
             if not item.strip():
                 continue
             parts = [v.strip() for v in item.split("@")]
-            require(1 <= len(parts) <= 4 and parts[0], "Événement attendu : kind@tick@source@target")
+            require(1 <= len(parts) <= 5 and parts[0],
+                    "Événement attendu : type@tick@source@cible@champ=valeur")
             row = {"kind": parts[0]}
             if len(parts) >= 2 and parts[1]:
                 require(parts[1].isdecimal(), "Tick d'événement invalide")
                 row["tick"] = int(parts[1])
             if len(parts) >= 3 and parts[2]:
                 row["source"] = parts[2]
-            if len(parts) == 4 and parts[3]:
+            if len(parts) >= 4 and parts[3]:
                 row["unit"] = parts[3]
+            if len(parts) == 5 and parts[4]:
+                for field in parts[4].split("|"):
+                    require(field.count("=") == 1, "Utiliser champ=valeur")
+                    name, value = [part.strip() for part in field.split("=")]
+                    require(name in edit.EVENT_FIELDS and name != "kind"
+                            and name not in row and bool(value),
+                            "Champ d'événement inconnu ou dupliqué")
+                    row[name] = value
             result.append(row)
         return result
 
