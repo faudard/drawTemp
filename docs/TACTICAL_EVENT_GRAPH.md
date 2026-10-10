@@ -65,11 +65,15 @@ conditions, positions et références invalides.
 | `wave` | Déclencher une vague suivant la capacité du moteur |
 
 Les renforts sont authorés depuis un identifiant et un archétype existant
-dans le catalogue, puis validés à la création. La version actuelle du
-formulaire permet un seul nouveau personnage par bloc de vague ; les
-groupes multi-personnages peuvent encore être composés par l'éditeur
-avancé et le JSON validé. Une duplication d'événement est refusée pour
-les actions `spawn` et `wave` afin de ne pas dupliquer silencieusement
+dans le catalogue, puis validés à la création. Pour composer une
+**vague multi-personnages**, sélectionner le bloc `wave` ou `queue_wave`,
+saisir le nouvel identifiant, l'archétype et sa position, puis
+**+ acteur dans vague**. **− dernier acteur vague** retire le dernier acteur
+tout en conservant au moins un membre. Chaque ajout est validé et
+annulable, y compris l'unicité des IDs au sein d'une vague.
+
+Une duplication d'événement est refusée pour les actions `spawn`,
+`wave` et `queue_wave` afin de ne pas dupliquer silencieusement
 les identifiants d'acteurs.
 
 ## Architecture et tests
