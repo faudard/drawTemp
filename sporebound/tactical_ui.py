@@ -14,6 +14,8 @@ def tactical_snapshot(battle, cell=None):
     from .coordinated_ai import squad_focus_preview
     from .formations3 import formation_control_map, formation_preview
     from .synergies3 import synergy_readiness
+    from .spatial3 import positional_preview
+    from .tactical_intents import tactical_intents
 
     if cell is not None:
         require(isinstance(cell, (tuple, list)) and len(cell) == 2
@@ -22,7 +24,8 @@ def tactical_snapshot(battle, cell=None):
     selected = tuple(cell) if cell is not None else None
     enhanced = "formation" in battle.rules.commands
     view = {"selected": list(selected) if selected else None,
-            "enhanced": enhanced, "formations": [], "zones": [],
+            "enhanced": enhanced, "intents": tactical_intents(battle),
+            "position": None, "formations": [], "zones": [],
             "bosses": [], "focus": [], "synergies": [],
             "attack": [], "movement_threats": []}
     if not enhanced:
@@ -45,6 +48,7 @@ def tactical_snapshot(battle, cell=None):
         return view
     victim = battle.at(selected)
     if victim is not None and victim.alive and victim.team != actor.team:
+        view["position"] = positional_preview(battle, actor.id, victim.id)
         if not actor.acted:
             try:
                 view["attack"] = battle.forecast("attack", selected, actor)

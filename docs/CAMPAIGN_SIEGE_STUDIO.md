@@ -135,3 +135,46 @@ SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standal
 ```
 
 Next: 2.5.4.3 visual logistics/routes and 2.5.4.4 route/diplomacy policies.
+
+## 2.5.4.3 — Routes & ressources (opt-in)
+
+The **Routes & ressources** subtab now edits real `LogisticsDirector`
+settings in the selected siege. It stores an optional `logistics` field in
+the same `GameProject.sieges[]` blueprint and does not introduce a second
+route schema or duplicate campaign/actor logic.
+
+- **Ressources:** player/enemy reserves (0–10000), live convoy capacity
+  (1–100), player/enemy supplies (0–10000), and limited escort orders.
+- **Routes:** directed `reserve/front → front` edges, 1–100 strategic
+  turns per traversal. The graph displays route costs; clicking a route
+  selects it in the editor.
+- **Embuscades:** attach bounded casualties, delay and charges to an existing
+  route. An attacked convoy can become stranded, and can be rescued only
+  through the existing tactical or provision-cost mechanisms.
+- **Mission de secours:** choose an actual authored mission satisfying the
+  engine's rescue encounter contract; invalid maps are rejected.
+- **Aperçu moteur:** inspects the initial `LogisticsDirector` state, not
+  fictitious convoy victories or simulated player commands.
+
+To play it, save the content and game project, launch the normal Player and
+start the configured siege. **Timeline / Fronts** displays routes, supplies,
+reserves, capacity, in-transit convoys and arrival turns. Dispatch a real
+reserve actor with a unique id/valid destination landing cell, or move an
+eligible idle unit across an authored route. Escorts and provision-cost rescues
+use the same journaled engine operations and replay-verified autosave as all
+other player actions.
+
+**Important restrictions:** previously authored sieges without `logistics`
+serialize and behave exactly as before; zero resources are not invented.
+When deleting a front, remove its logistics edges first; when removing a
+route with ambush rules, remove the ambush before the route. Logistical
+edits invalidate old checkpoints as intentional content identity changes.
+Tactical side-mission UI for convoy rescue, branching ransom/pursuit and
+fully interactive route/formation drag-and-drop are follow-up features.
+
+### Acceptance
+
+```shell
+python -m unittest tests_standalone.test_logistics_studio -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_logistics_studio_gui.py -v
+```
