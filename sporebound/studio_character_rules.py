@@ -21,6 +21,8 @@ class CharacterRulesStudio:
         self.tabs.pack(fill='both', expand=True, padx=8, pady=6)
         self._units_tab()
         self._archetypes_tab()
+        from .studio_bestiary import MedievalBestiaryStudio
+        self.medieval_bestiary = MedievalBestiaryStudio(self, self.tabs)
         self._skills_tab()
         self._jobs_tab()
         self._equipment_tab()
@@ -478,5 +480,6 @@ class CharacterRulesStudio:
             self._load_job()
         if self.i_id.get() in data.get('equipment',{}):
             self._load_item()
+        self.medieval_bestiary.refresh()
         self.synergy_unlocks.refresh()
         self.class_ai.refresh()
