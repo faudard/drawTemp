@@ -138,10 +138,8 @@ def remove_front(blueprint, front):
                     or any(effect["front"] == front for effect in link["effects"])
                     for link in result["links"]),
             "Remove connected event links first")
-    require(not any(
-        front in str(row["when"]) or any(
-            action.get("front") == front for action in row["effects"])
-        for row in result.get("event_graph", [])),
+    require(not strategic_events.references_front(
+        result.get("event_graph", []), front),
         "Remove connected strategic events before deleting this front")
     campaign = result["campaign"]
     require(campaign is None or (front != campaign["final_front"]
