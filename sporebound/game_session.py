@@ -110,6 +110,7 @@ class GameSession:
         # No parallel rules or save format: use the same validated GameSession.
         self.start_fronts(blueprint["fronts"], blueprint["focused"],
                           specs=blueprint["specs"], links=blueprint["links"],
+                          logistics=blueprint.get("logistics"),
                           campaign=blueprint["campaign"])
         self.siege_id = siege_id
         return self.fronts
@@ -375,7 +376,8 @@ class GameSession:
                         and session.fronts.initial_focus == bp["focused"]
                         and session.fronts.initial_specs == bp["specs"]
                         and session.fronts.links == bp["links"]
-                        and session.fronts.initial_campaign == bp["campaign"],
+                        and session.fronts.initial_campaign == bp["campaign"]
+                        and session.fronts.initial_logistics == bp.get("logistics"),
                         "Authored siege no longer matches saved front configuration")
                 session.siege_id = data["siege_id"]
             if "front_battle_ids" in data:
