@@ -40,6 +40,8 @@ class StudioPanels:
         self.story_editor=StoryEditor(self, notebook)
         from .studio_siege import SiegeStudio
         self.siege_studio=SiegeStudio(self, notebook)
+        from .studio_audio import AudioStudio
+        self.audio_studio = AudioStudio(self, notebook)
         self._last_mission_signature=None
         self.reload_project()
         self.refresh()
@@ -339,6 +341,8 @@ class StudioPanels:
                       else GameProject.default(content))
         self.project_saved=json.dumps(self.project.to_dict(),sort_keys=True)
         self.story_editor.reset_project()
+        self.audio_studio.stop()
+        self.audio_studio.refresh()
         self._last_mission_signature=None
         self.session=None
         self.session_campaign=''
@@ -494,4 +498,5 @@ class StudioPanels:
         self.character_rules.refresh()
         self.story_editor.refresh()
         self.siege_studio.refresh()
+        self.audio_studio.refresh()
         self.workspace.refresh()
