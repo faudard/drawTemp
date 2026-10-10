@@ -8,6 +8,7 @@ from copy import deepcopy
 from . import front_links
 from .campaign_strategy import SiegeCampaign
 from .fronts import FrontDirector, MultiFrontSession
+from .logistics import LogisticsDirector
 from .model import Content, RuleError, require
 from .storage import write_json
 
@@ -23,9 +24,11 @@ def _identifier(value, label):
 
 
 def validate_blueprint(blueprint, content, campaign_ids):
+    base_keys = {"id", "campaign_id", "fronts", "focused",
+                 "specs", "links", "campaign"}
     require(isinstance(blueprint, dict)
-            and set(blueprint) == {"id", "campaign_id", "fronts", "focused",
-                                   "specs", "links", "campaign"},
+            and base_keys <= set(blueprint)
+            and set(blueprint) <= base_keys | {"logistics"},
             "Invalid siege blueprint structure")
     _identifier(blueprint["id"], "siege id")
     require(blueprint["campaign_id"] in campaign_ids, "Unknown parent campaign")
@@ -46,12 +49,22 @@ def validate_blueprint(blueprint, content, campaign_ids):
                 "Invalid strategic front fields")
     FrontDirector(specs, blueprint["focused"])
     front_links.validate(content, missions, blueprint["links"])
+    if "logistics" in blueprint:
+        config = blueprint["logistics"]
+        require(isinstance(config, dict), "Logistics must be configured or omitted")
+        LogisticsDirector(config, missions)
     campaign = blueprint["campaign"]
     if campaign is not None:
         require(len(missions) >= 2, "Finale needs at least two fronts")
         policy = SiegeCampaign(campaign, content, missions)
         require(blueprint["focused"] != policy.final,
                 "Initial focus cannot be the locked final sector")
+    if "logistics" in blueprint:
+        # The live constructor also checks rescue encounters, pursuit rules and
+        # the combined siege + logistics policy, without inventing new rules.
+        MultiFrontSession(content, missions, blueprint["focused"],
+                          specs=specs, links=blueprint["links"],
+                          logistics=blueprint["logistics"], campaign=campaign)
 
 
 def validate_all(sieges, content, campaigns):
@@ -113,6 +126,11 @@ def remove_front(blueprint, front):
                     or any(effect["front"] == front for effect in link["effects"])
                     for link in result["links"]),
             "Remove connected event links first")
+    logistics = result.get("logistics")
+    require(logistics is None or not any(
+        route["from"] == front or route["to"] == front
+        for route in logistics.get("routes", [])),
+        "Remove connected logistics routes first")
     campaign = result["campaign"]
     require(campaign is None or (front != campaign["final_front"]
             and front not in campaign["required_fronts"]),
@@ -121,6 +139,17 @@ def remove_front(blueprint, front):
     result["specs"].pop(front)
     if result["focused"] == front:
         result["focused"] = next(iter(result["fronts"]))
+    return result
+
+
+def set_logistics(blueprint, config, content):
+    """Attach optional validated logistics without changing old siege manifests."""
+    result = deepcopy(blueprint)
+    if config is None:
+        result.pop("logistics", None)
+    else:
+        result["logistics"] = deepcopy(config)
+    validate_blueprint(result, content, {result["campaign_id"]})
     return result
 
 
@@ -225,6 +254,7 @@ def make_session(blueprint, content, *, seed=1, rules=None):
     return MultiFrontSession(content, blueprint["fronts"], blueprint["focused"],
                              seed=seed, rules=rules, specs=blueprint["specs"],
                              links=blueprint["links"],
+                             logistics=blueprint.get("logistics"),
                              campaign=blueprint["campaign"])
 
 
@@ -240,7 +270,8 @@ def save_siege_slot(project_path, blueprint, slot, session):
     require(session.missions == blueprint["fronts"]
             and session.initial_specs == blueprint["specs"]
             and session.links == blueprint["links"]
-            and session.initial_campaign == blueprint["campaign"],
+            and session.initial_campaign == blueprint["campaign"]
+            and session.initial_logistics == blueprint.get("logistics"),
             "Session no longer matches the siege definition")
     path = _save_path(project_path, blueprint["id"], slot)
     write_json(path, {"version": 1, "siege_id": blueprint["id"],
@@ -262,6 +293,7 @@ def load_siege_slot(project_path, blueprint, slot, content, *, rules=None):
     require(session.missions == blueprint["fronts"]
             and session.initial_specs == blueprint["specs"]
             and session.links == blueprint["links"]
-            and session.initial_campaign == blueprint["campaign"],
+            and session.initial_campaign == blueprint["campaign"]
+            and session.initial_logistics == blueprint.get("logistics"),
             "Checkpoint belongs to an older siege definition")
     return session
