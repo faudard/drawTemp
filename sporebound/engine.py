@@ -570,6 +570,8 @@ class Battle:
         for key, default in {'archetype': '', 'kind': 'character', 'tags': [], 'behavior': 'tactical'}.items():
             if row[key] == default:
                 del row[key]
+        if not row['patrol_route']:
+            del row['patrol_route']
         return row
 
     def state(self) -> dict:
