@@ -9,6 +9,7 @@ from pathlib import Path
 from . import authoring
 from .game_project import GameProject, load_slot, save_slot
 from .model import Content, RuleError
+from .tactical_rpg3 import authored_rules_for_document
 
 
 class StudioPanels:
@@ -315,7 +316,8 @@ class StudioPanels:
         right.columnconfigure(1,weight=1)
 
     def _content(self):
-        return Content.from_dict(self.doc().data)
+        return Content.from_dict(self.doc().data,
+                                 rules=authored_rules_for_document(self.doc().data))
 
     def _show_campaign(self):
         if self.project is None:
