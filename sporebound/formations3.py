@@ -42,10 +42,13 @@ def formation_preview(battle, unit_id):
     """Pure UI/AI forecast, with no hidden formation activation."""
     unit = next((u for u in battle.units if u.id == unit_id), None)
     require(unit is not None, "Unknown formation unit")
+    tile = battle.board.tile(unit.pos)
     return {"unit": unit.id, "mode": _formation_tag(unit)[len(PREFIX):] or "none",
             "shield_wall": bool(shield_wall(battle, unit)),
             "phalanx": bool(phalanx(battle, unit)),
-            "escort": bool(escorted(battle, unit))}
+            "escort": bool(escorted(battle, unit)),
+            "terrain_cover": tile.cover, "elevation": tile.height,
+            "fortified": bool(shield_wall(battle, unit) and tile.cover >= 20)}
 
 
 def set_formation(battle, actor, command):
@@ -127,8 +130,12 @@ def install_formations(rules):
             return damage
         if phalanx(battle, caster) and skill.id == "attack":
             damage = damage * 5 // 4
+            if battle.board.tile(caster.pos).height > battle.board.tile(target.pos).height:
+                damage = damage * 11 // 10
         if shield_wall(battle, target):
             damage = damage * 4 // 5
+            if battle.board.tile(target.pos).cover >= 20:
+                damage = damage * 9 // 10
         if escorted(battle, target):
             damage = damage * 17 // 20
         return damage
@@ -146,6 +153,6 @@ def install_formations(rules):
     rules = rules.with_family("commands", rules.commands.with_rule(
         "formation", CommandRule(set_formation, version="2.7.2")))
     rules = rules.with_family("formulas", rules.formulas.with_rule(
-        "mitigation", FormulaRule(mitigate, version="2.7.2"), replace_existing=True))
+        "mitigation", FormulaRule(mitigate, version="2.7.2.1"), replace_existing=True))
     return rules.with_family("formulas", rules.formulas.with_rule(
         "hit_chance", FormulaRule(hit_chance, version="2.7.2"), replace_existing=True))
