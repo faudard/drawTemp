@@ -10,7 +10,8 @@ from sporebound.fronts import MultiFrontSession
 from sporebound.model import Content, RuleError
 
 
-def session_with_easy_side_encounters(*, counteroffensive_after_turn=5):
+def session_with_easy_side_encounters(*, counteroffensive_after_turn=5,
+                                      include_royal_guards=False):
     raw = siege_content().to_dict()
     for mission in raw["missions"]:
         if mission["id"] in {"castle_tunnels", "castle_gate_recovery"}:
@@ -19,10 +20,14 @@ def session_with_easy_side_encounters(*, counteroffensive_after_turn=5):
                     unit["hp"] = 1
                     unit["max_hp"] = 1
         if mission["id"] == "castle_throne":
-            mission["units"] = [u for u in mission["units"]
-                                if u["id"] in {"captain", "engineer", "castellan"}]
+            if not include_royal_guards:
+                mission["units"] = [u for u in mission["units"]
+                                    if u["id"] in {"captain", "engineer", "castellan"}]
             boss = next(u for u in mission["units"] if u["id"] == "castellan")
             boss.update(pos=[2, 3], hp=1, max_hp=1, speed=5)
+            for unit in mission["units"]:
+                if unit["id"].startswith("royal_guard_"):
+                    unit.update(hp=1, max_hp=1, speed=5)
     template = siege_session(contested=True, campaign=True, paths=True)
     policy = deepcopy(SIEGE_CAMPAIGN_PATHS)
     policy["counteroffensives"]["gate"]["after_turn"] = counteroffensive_after_turn
@@ -180,6 +185,33 @@ class SiegeRoutesTests(unittest.TestCase):
         self.assertEqual(s.logistics.supplies["player"], 3)
         self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
 
+    def test_honored_gate_treaty_stands_down_guard_in_final_battle(self):
+        s = session_with_easy_side_encounters(include_royal_guards=True)
+        s.switch("gate")
+        s.execute({"kind": "start_battle"})
+        s.switch("supplies")
+        s.execute({"kind": "start_battle"})
+        s.execute({"kind": "interact", "object": "supply_cache"})
+        s.execute({"kind": "end"})
+        s.switch("gate")
+        s.negotiate_front("gate")
+        self.assertEqual(s.state()["campaign"]["diplomacy"]["gate"]["status"],
+                         "in_force")
+
+        s.select_route("direct")
+        s.switch("throne")
+        self.assertIsNone(s.active.result)
+        self.assertNotIn("royal_guard_left",
+                         {unit.id for unit in s.active.units})
+        self.assertIn("royal_guard_right", {unit.id for unit in s.active.units})
+        self.assertEqual(s.state()["campaign"]["diplomacy"]["gate"],
+                         {"status": "honored",
+                          "final_stand_down": ["royal_guard_left"]})
+        self.assertTrue(any("honors the treaty" in event.get("text", "")
+                            for event in s.active.events))
+        self.assertEqual(MultiFrontSession.replay(s.recording()).digest(),
+                         s.digest())
+
     def test_retake_withdrawn_gate_via_playable_counterattack(self):
         s = session_with_easy_side_encounters()
         s.switch("gate")
@@ -285,6 +317,8 @@ class SiegeRoutesTests(unittest.TestCase):
             lambda p: p["routes"]["direct"].update(supplies=0),
             lambda p: p["routes"]["tunnels"]["required"].update(tunnels=["active"]),
             lambda p: p["treaties"]["gate"].update(object="missing"),
+            lambda p: p["treaties"]["gate"].update(
+                final_stand_down=["not_a_final_guard"]),
             lambda p: p["recovery"]["gate"].update(mission="missing"),
             lambda p: p["recovery"]["gate"].update(supplies=True),
             lambda p: p["counteroffensives"]["gate"].update(after_turn=True),
