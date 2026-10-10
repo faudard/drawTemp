@@ -27,6 +27,7 @@ class GameProject:
     version: int = 1
     assets: dict = field(default_factory=dict)
     sieges: list[dict] = field(default_factory=list)
+    exploration: dict = field(default_factory=dict)
 
     @classmethod
     def default(cls, content):
@@ -54,7 +55,8 @@ class GameProject:
                 'save_slots': self.save_slots,
                 **({'story': deepcopy(self.story)} if self.story else {}),
                 **({'assets': deepcopy(self.assets)} if self.assets else {}),
-                **({'sieges': deepcopy(self.sieges)} if self.sieges else {})}
+                **({'sieges': deepcopy(self.sieges)} if self.sieges else {}),
+                **({'exploration': deepcopy(self.exploration)} if self.exploration else {})}
 
     def asset_registry(self):
         from .assets import AssetRegistry
@@ -100,6 +102,8 @@ class GameProject:
         validate_all(self.sieges, content, self.campaigns)
         from .narrative import validate_story
         validate_story(self.story, content, self.campaigns)
+        from .exploration import validate_exploration
+        validate_exploration(self.exploration, self.story)
 
     def save(self, path, content):
         self.validate(content)
