@@ -259,7 +259,7 @@ def _save_path(project_path, blueprint_id, slot):
     return p.with_name(p.stem + "_saves") / ("siege_" + blueprint_id) / f"slot_{slot}.json"
 
 
-def save_siege_slot(project_path, blueprint, slot, session):
+def save_siege_slot(project_path, blueprint, slot, session, *, narrative=None):
     require(session.missions == blueprint["fronts"]
             and session.initial_specs == blueprint["specs"]
             and session.links == blueprint["links"]
@@ -268,16 +268,19 @@ def save_siege_slot(project_path, blueprint, slot, session):
             "Session no longer matches the siege definition")
     path = _save_path(project_path, blueprint["id"], slot)
     write_json(path, {"version": 1, "siege_id": blueprint["id"],
-                      "recording": session.recording()})
+                      "recording": session.recording(),
+                      **({"narrative": narrative} if narrative is not None else {})})
     return path
 
 
-def load_siege_slot(project_path, blueprint, slot, content, *, rules=None):
+def load_siege_slot(project_path, blueprint, slot, content, *, rules=None, _with_narrative=False):
     import json
     from pathlib import Path
     path = _save_path(project_path, blueprint["id"], slot)
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    require(isinstance(data, dict) and set(data) == {"version", "siege_id", "recording"}
+    required = {"version", "siege_id", "recording"}
+    require(isinstance(data, dict) and
+            required <= set(data) <= required | {"narrative"}
             and data["version"] == 1 and data["siege_id"] == blueprint["id"],
             "Invalid siege checkpoint")
     session = MultiFrontSession.replay(data["recording"], rules=rules)
@@ -289,4 +292,4 @@ def load_siege_slot(project_path, blueprint, slot, content, *, rules=None):
             and session.initial_campaign == blueprint["campaign"]
             and session.initial_logistics == blueprint.get("logistics"),
             "Checkpoint belongs to an older siege definition")
-    return session
+    return (session, data.get("narrative")) if _with_narrative else session
