@@ -9,7 +9,7 @@ from .model import RuleError, distance, require
 
 
 def _is_healer(unit):
-    return "healer" in unit.tags or "medic" in unit.tags
+    return "healer" in unit.tags or "medic" in unit.tags or "squad:medic" in unit.tags
 
 
 def _protective_move(battle, actor):
@@ -124,6 +124,96 @@ def _focus_command(battle, actor):
     return None
 
 
+def squad_role(actor):
+    """Data-driven role. Legacy tags retain their existing behavior."""
+    for tag in actor.tags:
+        if tag in {"squad:pikeman", "squad:vanguard", "squad:archer",
+                   "squad:medic", "squad:officer"}:
+            return tag.split(":", 1)[1]
+    return ""
+
+
+def squad_posture_command(battle, actor):
+    """Spend a real action to assemble a legal defensive formation.
+
+    Formation partners must be present; no synthetic squad bonuses or hidden
+    movement are granted by the AI. Other actions keep their normal priority.
+    """
+    if (actor.acted or battle.status_blocks(actor, "act")
+            or "formation" not in battle.rules.commands):
+        return None
+    role = squad_role(actor)
+    has_formation = any(tag.startswith("formation:") for tag in actor.tags)
+    neighbors = [u for u in battle.units if u.alive and u.team == actor.team
+                 and u.id != actor.id and distance(u.pos, actor.pos) == 1]
+    if role == "pikeman" and actor.weapon == "spear":
+        from .formations3 import phalanx
+        if phalanx(battle, actor) and "phalanx_hold" in battle.rules.preparations:
+            # Prepare the real spear reaction only if an enemy can approach.
+            foes = [u for u in battle.units if u.alive and u.team != actor.team]
+            if foes and min(distance(actor.pos, foe.pos) for foe in foes) <= 4:
+                return {"kind": "prepare", "mode": "phalanx_hold"}
+        if (not has_formation and any(u.weapon == "spear" for u in neighbors)):
+            return {"kind": "formation", "mode": "phalanx"}
+    if role == "vanguard" and not has_formation:
+        if any(squad_role(u) == "vanguard" or
+               "formation:shield_wall" in u.tags for u in neighbors):
+            return {"kind": "formation", "mode": "shield_wall"}
+    if role == "officer" and not has_formation:
+        medics = sorted((u for u in battle.units if u.alive and u.team == actor.team
+                         and u.id != actor.id and
+                         (squad_role(u) == "medic" or _is_healer(u))
+                         and distance(actor.pos, u.pos) <= 2),
+                        key=lambda u: (u.hp / max(1, u.max_hp), u.id))
+        if medics:
+            return {"kind": "formation", "mode": "escort", "target": medics[0].id}
+    return None
+
+
+def squad_medic_retreat(battle, actor):
+    """Keep a threatened medic behind defenders without teleporting or cheating."""
+    if (actor.moved or battle.status_blocks(actor, "move")
+            or squad_role(actor) != "medic"):
+        return None
+    foes = [u for u in battle.units if u.alive and u.team != actor.team]
+    if not foes:
+        return None
+    current = min(distance(actor.pos, foe.pos) for foe in foes)
+    if current > 2:
+        return None
+    guards = [u for u in battle.units if u.alive and u.team == actor.team
+              and u.id != actor.id and (squad_role(u) in {"vanguard", "pikeman"}
+                                         or "protector" in u.tags)]
+    options = []
+    for cell, (cost, path) in battle.reachable(actor).items():
+        separation = min(distance(cell, foe.pos) for foe in foes)
+        if cell == actor.pos or separation <= current:
+            continue
+        cover = battle.board.tile(cell).cover
+        guard_distance = min((distance(cell, u.pos) for u in guards), default=4)
+        risk = sum(row["amount"] * row["chance"]
+                   for row in battle.movement_threats(actor, path))
+        hazard = sum(battle.board.tile(pos).hazard for pos in path[1:])
+        score = separation * 10 + cover * .05 - guard_distance - risk - hazard - cost * .05
+        options.append((-score, cost, cell))
+    if not options:
+        return None
+    return {"kind": "move", "cell": list(min(options)[2])}
+
+
+def squad_plan_preview(battle, actor_id):
+    """Read-only companion/role diagnostics for UI and tests."""
+    actor = battle.unit(actor_id)
+    comrades = sorted((u for u in battle.units if u.alive and u.team == actor.team
+                        and u.id != actor.id), key=lambda u: u.id)
+    return {"unit": actor.id, "role": squad_role(actor),
+            "frontline": [u.id for u in comrades
+                          if squad_role(u) in {"vanguard", "pikeman"}],
+            "support": [u.id for u in comrades
+                        if _is_healer(u) or squad_role(u) == "medic"],
+            "officers": [u.id for u in comrades if squad_role(u) == "officer"]}
+
+
 def coordinated_command(battle):
     """Medic recovery > protector positioning > standard objective-aware AI.
 
@@ -138,10 +228,17 @@ def coordinated_command(battle):
         healing = _healing_command(battle, actor)
         if healing is not None:
             return healing
-    if "protector" in actor.tags:
+    if "protector" in actor.tags or squad_role(actor) == "vanguard":
         move = _protective_move(battle, actor)
         if move is not None:
             return move
+    if squad_role(actor) == "medic":
+        retreat = squad_medic_retreat(battle, actor)
+        if retreat is not None:
+            return retreat
+    posture = squad_posture_command(battle, actor)
+    if posture is not None:
+        return posture
     baseline = _choose_tactical_command(battle)
     # Do not override siege interactions, healing, special spells, or
     # pathfinding: squad focus only resolves a choice of normal basic attack.
