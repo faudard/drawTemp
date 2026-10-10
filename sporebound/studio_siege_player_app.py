@@ -193,6 +193,36 @@ class StudioSiegePlayerApplication(CastlePlayerApplication):
                     lambda: f(self.convoy_var.get()),
                     page="battle" if f in (controller.rescue, controller.pursue)
                     else "strategy")).pack(side="left", padx=3)
+            dispatch = self.ttk.Frame(convoy_frame)
+            dispatch.pack(fill="x", pady=5)
+            if not hasattr(self, "destination_var"):
+                self.destination_var = self.tk.StringVar(value=frame.focused)
+                self.transfer_unit_var = self.tk.StringVar()
+                self.transfer_x_var = self.tk.StringVar(value="1")
+                self.transfer_y_var = self.tk.StringVar(value="1")
+            self.ttk.Label(dispatch, text="Transférer combattant :",
+                           style="Castle.TLabel").pack(side="left", padx=4)
+            active_players = [u.id for u in fronts.active.units
+                              if u.team == "player" and u.alive]
+            if self.transfer_unit_var.get() not in active_players:
+                self.transfer_unit_var.set(active_players[0] if active_players else "")
+            self.ttk.Combobox(dispatch, textvariable=self.transfer_unit_var,
+                              values=active_players, state="readonly", width=15).pack(
+                                  side="left", padx=4)
+            self.ttk.Combobox(dispatch, textvariable=self.destination_var,
+                              values=list(fronts.missions), state="readonly", width=13).pack(
+                                  side="left", padx=4)
+            for name, variable in (("X", self.transfer_x_var),
+                                   ("Y", self.transfer_y_var)):
+                self.ttk.Label(dispatch, text=name,
+                               style="Castle.TLabel").pack(side="left")
+                self.ttk.Entry(dispatch, textvariable=variable, width=3).pack(
+                    side="left", padx=3)
+            self._button(dispatch, "Expédier le convoi", lambda: self._change(
+                lambda: controller.transfer(
+                    self.destination_var.get(), self.transfer_unit_var.get(),
+                    [int(self.transfer_x_var.get()), int(self.transfer_y_var.get())]))
+                         ).pack(side="left", padx=4)
             if convoy_ids:
                 details = [f"{c['id']}: {c['from']} → {c['to']} / "
                            + ("intercepté" if c.get("stranded") else "en route")
