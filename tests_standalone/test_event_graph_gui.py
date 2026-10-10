@@ -46,12 +46,19 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     buttons = {w.cget('text'): w for w in widgets
                                if isinstance(w, ttk.Button)}
                     event_graph = next(w for w in widgets if isinstance(w, tk.Canvas))
-                    self.assertTrue(any('event_node_' in tag
-                                        for item in event_graph.find_all()
-                                        for tag in event_graph.gettags(item)))
+                    # A mission without triggers legitimately has an empty
+                    # graph. Validate that creating its first event draws a
+                    # selectable condition/action node.
+                    existing = any('event_node_' in tag
+                                   for item in event_graph.find_all()
+                                   for tag in event_graph.gettags(item))
+                    self.assertFalse(existing)
 
                     buttons['Créer événement'].invoke()
                     root.update()
+                    self.assertTrue(any('event_node_' in tag
+                                        for item in event_graph.find_all()
+                                        for tag in event_graph.gettags(item)))
                     event_box = next(w for w in widgets
                                      if isinstance(w, ttk.Combobox)
                                      and 'event_new' in tuple(w['values']))
