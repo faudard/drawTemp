@@ -78,12 +78,24 @@ class ConditionBuilderGUITests(unittest.TestCase):
                     preview_gold = entries[5]  # Preview field, not an arbitrary zero
                     preview_gold.delete(0, 'end')
                     preview_gold.insert(0, '150')
+                    self.assertEqual(preview_flags.get(), 'trust=2')
+                    self.assertEqual(preview_gold.get(), '150')
+                    buttons['Enregistrer projet de jeu…'].invoke()
+                    debug_saved = GameProject.load(output, Content.load(DEFAULT_CONTENT))
+                    debug_council = next(sc for sc in debug_saved.story['scenes']
+                                         if sc['id'] == 'council')
+                    debug_relic = next(ch for ch in debug_council['choices']
+                                       if ch['id'] == 'relic')
+                    self.assertEqual(debug_relic.get('when'), {
+                        'all': [{'gold_gte': 100},
+                                {'flag': 'trust', 'gte': 2}]})
                     buttons['Tester la condition'].invoke()
                     statuses = [w.getvar(w.cget('textvariable'))
                                 for w in children if isinstance(w, ttk.Label)
                                 and str(w.cget('textvariable'))]
                     self.assertTrue(any('VISIBLE' in str(status)
-                                        for status in statuses), statuses)
+                                        for status in statuses),
+                                    (statuses, [w.get() for w in entries]))
                     buttons['Enregistrer projet de jeu…'].invoke()
                     saved = GameProject.load(output, Content.load(DEFAULT_CONTENT))
                     council = next(s for s in saved.story['scenes'] if s['id'] == 'council')
