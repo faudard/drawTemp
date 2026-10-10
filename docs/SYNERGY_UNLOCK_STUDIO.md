@@ -83,11 +83,13 @@ Il accepte des statistiques de test séparées par virgules, une
 mission actuelle et des missions terminées. Des événements de combat
 hypothétiques peuvent être saisis avec la notation :
 
-`status@2@ziggy@boss; forced_move@4@momo@boss; damage@6@ziggy@boss`
+`status@2@ziggy@boss@status=slow; forced_move@4@momo@boss@mode=push; damage@6@ziggy@boss`
 
-Chaque entrée décrit `type@tick@source@cible`. Les éventuels
-filtres de statut et de mode sont présents dans la définition des
-étapes. L'affichage indique si le combo est débloqué et un
+Chaque entrée décrit `type@tick@source@cible`, avec un cinquième
+champ facultatif pour simuler les propriétés contrôlées dans les
+étapes, comme `@status=slow` ou `@mode=push`. Plusieurs propriétés
+peuvent être séparées par `|`. Les événements sont des données de
+simulation, jamais des scripts exécutables. L'affichage indique si le combo est débloqué et un
 pourcentage de progression estimé, **sans modifier le joueur, les
 flags, les replays ni aucun fichier de sauvegarde**.
 
