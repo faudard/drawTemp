@@ -10,6 +10,7 @@ import json
 from .ai import play_activation
 from .campaign import Campaign
 from .engine import Battle
+from .exploration import Exploration
 from .fronts import MultiFrontSession
 from .model import RuleError, require
 from .narrative import StoryBook
@@ -40,6 +41,7 @@ class GameSession:
         self.content, self.project = deepcopy(content), deepcopy(project)
         self.campaign_id, self.seed = campaign_id, seed
         self.story = StoryBook(project.story, content, project.campaigns)
+        self.exploration = Exploration(project.exploration, project.story)
         self.progress = project.new_game(campaign_id, content)
         self.battle = None
         self.fronts = None
@@ -63,7 +65,26 @@ class GameSession:
     def active_scene(self):
         return self.story.active_scene(self.progress)
 
+    def exploration_state(self):
+        scene = self.active_scene()
+        return self.exploration.state(self.progress, scene["id"]) if scene else None
+
+    def explore_move(self, dx, dy):
+        require(self.mode == "campaign", "Exploration unavailable during combat")
+        scene = self.active_scene()
+        require(scene is not None, "No active narrative scene")
+        return self.exploration.move(self.progress, scene["id"], dx, dy)
+
+    def explore_interact(self, point_id):
+        require(self.mode == "campaign", "Exploration unavailable during combat")
+        scene = self.active_scene()
+        require(scene is not None, "No active narrative scene")
+        return self.exploration.interact(self.progress, scene["id"], point_id)
+
     def available_choices(self):
+        stage = self.exploration_state()
+        if stage is not None and not stage["completed"]:
+            return []
         return self.story.choices(self.progress)
 
     def available_missions(self):
@@ -74,6 +95,8 @@ class GameSession:
     def choose_story_option(self, choice_id):
         require(self.active_battle is None or self.active_battle.result is not None,
                 "Finish combat before choosing dialogue")
+        stage = self.exploration_state()
+        require(stage is None or stage["completed"], "Explore the area first")
         updated = self.story.choose(self.progress, choice_id)
         self.progress = updated
         return self.active_scene()
