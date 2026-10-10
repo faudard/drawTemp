@@ -13,18 +13,22 @@ from .model import Content, RuleError
 
 class StudioPanels:
     def __init__(self, notebook, tk, ttk, dialogs, *, doc, content_path,
-                 mission, selection, design_change, play_campaign, status, mission_change=None):
+                 mission, selection, design_change, play_campaign, status, mission_change=None,
+                 select_mission=None):
         self.tk, self.ttk, self.dialogs = tk, ttk, dialogs
         self.doc, self.content_path = doc, content_path
         self.mission, self.selection = mission, selection
         self.design_change, self.play_campaign = design_change, play_campaign
         self.mission_change = mission_change or self.refresh
+        self.select_mission = select_mission or (lambda _mid: None)
         self.status = status
         self.project = None
         self.project_path = None
         self.project_saved = ''
         self.session = None
         self.session_campaign = ''
+        from .studio_workspace import ProjectWorkspaceTab
+        self.workspace = ProjectWorkspaceTab(self, notebook)
         self._entities_tab(notebook)
         self._project_tab(notebook)
         from .studio_advanced import AdvancedStudio
@@ -365,3 +369,4 @@ class StudioPanels:
             self.project_status.config(text=f'Campagne active : {self.session_campaign} | Missions : {len(self.session.completed)} terminées | Or : {self.session.gold}')
         self.advanced.refresh()
         self.story_editor.refresh()
+        self.workspace.refresh()
