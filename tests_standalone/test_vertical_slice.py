@@ -26,9 +26,16 @@ def compact_content():
     return Content.from_dict(raw, rules=tactical_rpg_rules())
 
 
+def compact_blueprint():
+    """Compact boss has no guard to stand down; preserve the intel treaty gate."""
+    blueprint = castle_blueprint()
+    blueprint["campaign"]["treaties"]["gate"].pop("final_stand_down")
+    return blueprint
+
+
 class CastleVerticalSliceTests(unittest.TestCase):
     def fresh(self):
-        return CastleVerticalSlice(compact_content(), castle_blueprint(),
+        return CastleVerticalSlice(compact_content(), compact_blueprint(),
                                    seed=3, rules=tactical_rpg_rules())
 
     def throne_victory(self, game):
@@ -99,7 +106,7 @@ class CastleVerticalSliceTests(unittest.TestCase):
             path = Path(folder) / "castle.json"
             game.save(path)
             restored = CastleVerticalSlice.load(
-                path, compact_content(), castle_blueprint(),
+                path, compact_content(), compact_blueprint(),
                 rules=tactical_rpg_rules())
             self.assertEqual(restored.recording(), game.recording())
             self.assertEqual(restored.state(), game.state())
@@ -108,7 +115,7 @@ class CastleVerticalSliceTests(unittest.TestCase):
             path.write_text(json.dumps(raw), encoding="utf-8")
             with self.assertRaises(RuleError):
                 CastleVerticalSlice.load(
-                    path, compact_content(), castle_blueprint(),
+                    path, compact_content(), compact_blueprint(),
                     rules=tactical_rpg_rules())
 
     def test_direct_route_needs_true_throne_victory(self):
@@ -123,7 +130,7 @@ class CastleVerticalSliceTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             game.advance()
         restored = CastleVerticalSlice.from_recording(
-            game.recording(), compact_content(), castle_blueprint(),
+            game.recording(), compact_content(), compact_blueprint(),
             rules=tactical_rpg_rules())
         self.assertEqual(restored.ending, "victory")
 
@@ -147,7 +154,7 @@ class CastleVerticalSliceTests(unittest.TestCase):
         self.assertEqual(game.ending, "accord")
         self.assertEqual(
             CastleVerticalSlice.from_recording(
-                game.recording(), compact_content(), castle_blueprint(),
+                game.recording(), compact_content(), compact_blueprint(),
                 rules=tactical_rpg_rules()).ending, "accord")
 
     def test_defeat_is_explicit_and_persists(self):
@@ -158,7 +165,7 @@ class CastleVerticalSliceTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             game.switch("walls")
         restored = CastleVerticalSlice.from_recording(
-            game.recording(), compact_content(), castle_blueprint(),
+            game.recording(), compact_content(), compact_blueprint(),
             rules=tactical_rpg_rules())
         self.assertEqual(restored.ending, "defeat")
 
