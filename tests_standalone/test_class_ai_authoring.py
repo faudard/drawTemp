@@ -94,7 +94,8 @@ class ClassAIStudioTests(unittest.TestCase):
         route = parse_cells("2,1; 4,1; 5,1")
         valid = set_unit_ai(self.data, "garden", "grincheux",
                             roles=["protector", "leader"],route=route)
-        self.assertEqual(valid["missions"][0]["units"][3]["patrol_route"], route)
+        self.assertEqual(valid["missions"][0]["units"][3]["patrol_route"],
+                         tuple(tuple(point) for point in route))
         report = ai_preview(valid, "garden", "grincheux")
         self.assertEqual(report["mode"], "patrol")
         self.assertEqual(report["roles"], ["protector", "leader"])
