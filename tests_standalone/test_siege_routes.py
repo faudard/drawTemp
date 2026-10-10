@@ -31,6 +31,8 @@ def session_with_easy_side_encounters(*, counteroffensive_after_turn=5,
     template = siege_session(contested=True, campaign=True, paths=True)
     policy = deepcopy(SIEGE_CAMPAIGN_PATHS)
     policy["counteroffensives"]["gate"]["after_turn"] = counteroffensive_after_turn
+    if not include_royal_guards:
+        policy["treaties"]["gate"].pop("final_stand_down")
     return MultiFrontSession(Content.from_dict(raw), template.missions,
            "supplies", seed=3, specs=template.initial_specs, links=template.links,
            logistics=template.initial_logistics, campaign=policy)
