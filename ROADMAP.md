@@ -11,6 +11,22 @@ La profondeur tactique n'est plus développée comme une liste ouverte de featur
 
 Ordre de recherche : combat fundamentals → jobs/builds/progression → encounter design → tactical AI → campagne/meta → authoring UX → balance/telemetry → renderer/player UX.
 
+## 2.4 — intégration des systèmes autonomes
+
+- [x] **2.4.1 Unified Game Session** : façade unique campagne/narration/combat/fronts,
+  récompenses engagées une seule fois, replays intégrés, sauvegarde atomique v1,
+  vérification des identités de contenu/projet/règles, tests headless.
+- [ ] **2.4.2 Persistence 2.0** : versionnement et migration des fichiers de session,
+  checkpoints incrémentaux, autosave, recovery et API d'import des anciens slots.
+- [ ] **2.4.3 Asset Pipeline** : contrats PNG/sprites/audio indépendants du renderer,
+  registre d'assets et diagnostics de références.
+- [ ] **2.4.4 Reliability & scale** : longues campagnes, perf replay/checkpoint,
+  fuzz des commandes/chargements et tests multi-seeds.
+- [ ] **2.4.5 Player migration** : connecter le client Tk et le Studio à GameSession
+  en conservant une couche d'adaptation pour les anciens slots.
+
+Contrats : [Game Session](docs/UNIFIED_SESSION.md).
+
 ## 2.0 alpha — socle implémenté
 
 - [x] Moteur headless, contenu JSON validé, commandes atomiques et événements.
