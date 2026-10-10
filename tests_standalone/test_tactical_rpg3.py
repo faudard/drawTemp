@@ -101,7 +101,7 @@ class RulesetTests(unittest.TestCase):
     def test_focus_fire_never_overrides_unsupported_basic_attack(self):
         leader = Unit("leader", "Leader", "enemy", (2, 2),
                       behavior="coordinated", move=0)
-        wing = Unit("wing", "Wing", "enemy", (5, 4), acted=True)
+        wing = Unit("wing", "Wing", "enemy", (5, 4))
         fragile = Unit("fragile", "Fragile", "player", (2, 3),
                        hp=1, max_hp=40)
         brute = Unit("brute", "Brute", "player", (3, 2))
@@ -110,6 +110,7 @@ class RulesetTests(unittest.TestCase):
         battle = Battle(content, "m", seed=19, rules=tactical_rpg_rules())
         battle.active_id = "leader"
         battle.unit("leader").ct = 100
+        battle.unit("wing").acted = True
         before = battle.digest()
         command = choose_command(battle)
         self.assertEqual(command,
