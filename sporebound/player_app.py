@@ -247,6 +247,27 @@ class PlayerApplication:
                              lambda mid=mission_id: self._change(
                                  lambda: self.player.start_mission(mid))).pack(
                                      fill="x", padx=80, pady=5)
+            # Studio blueprints are distinct from ad-hoc multi-front battles.
+            # Locked or duplicate-mission plans remain visible but not playable.
+            sieges = self.player.available_sieges()
+            if sieges:
+                section = self.ttk.LabelFrame(
+                    self.view, text="Sièges créés dans le Studio", padding=12)
+                section.pack(fill="x", padx=80, pady=12)
+                for siege in sieges:
+                    if siege["ready"]:
+                        self._button(
+                            section, "Jouer le siège : " + siege["id"] +
+                            " (" + str(siege["fronts"]) + " fronts)",
+                            lambda sid=siege["id"]: self._change(
+                                lambda: self.player.start_configured_siege(sid))).pack(
+                                    fill="x", pady=3)
+                    else:
+                        detail = (", ".join(siege["locked"]) if siege["locked"] else
+                                  "missions répétées ou autre rencontre active")
+                        self.ttk.Label(
+                            section, text=siege["id"] + " — bloqué : " + detail).pack(
+                                anchor="w", pady=3)
             if len(available) >= 2:
                 self._button(self.view, "Commandement multi-fronts",
                              lambda: self.front_setup(available)).pack(pady=16)
@@ -480,7 +501,8 @@ class PlayerApplication:
             return
         self._clear()
         frame = strategy_frame(session.fronts)
-        self._heading("Commandement des fronts",
+        self._heading("Siège : " + session.siege_id
+                      if session.siege_id else "Commandement des fronts",
                       "Tour stratégique " + str(frame.turn) +
                       "    Front actif : " + frame.focused)
         tree = self.ttk.Treeview(self.view,

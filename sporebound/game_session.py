@@ -45,6 +45,7 @@ class GameSession:
         self.fronts = None
         self.finalized = False
         self.settled_fronts = set()
+        self.siege_id = None  # Optional authored siege identity; old slots omit it.
 
     @classmethod
     def new(cls, content, project, campaign_id, **kwargs):
@@ -77,6 +78,37 @@ class GameSession:
         self.progress = updated
         return self.active_scene()
 
+    def available_sieges(self):
+        """Describe authored plans for the current campaign without unlocking missions."""
+        available = set(self.available_missions()) if self.mode == "campaign" else set()
+        return [
+            {"id": bp["id"], "fronts": len(bp["fronts"]),
+             "locked": sorted(set(bp["fronts"].values()) - available),
+             "ready": (self.mode == "campaign"
+                       and len(set(bp["fronts"].values())) == len(bp["fronts"])
+                       and set(bp["fronts"].values()) <= available)}
+            for bp in self.project.sieges
+            if bp["campaign_id"] == self.campaign_id
+        ]
+
+    def start_configured_siege(self, siege_id):
+        """Start one saved Studio blueprint through normal campaign/roster gates."""
+        require(self.mode == "campaign", "End the current encounter first")
+        blueprint = next((bp for bp in self.project.sieges
+                          if bp["id"] == siege_id and
+                          bp["campaign_id"] == self.campaign_id), None)
+        require(blueprint is not None, "Unknown siege in this campaign")
+        mids = list(blueprint["fronts"].values())
+        require(len(set(mids)) == len(mids), "Siege fronts require distinct missions")
+        missing = sorted(set(mids) - set(self.available_missions()))
+        require(not missing, "Siege missions are locked: " + ", ".join(missing))
+        # No parallel rules or save format: use the same validated GameSession.
+        self.start_fronts(blueprint["fronts"], blueprint["focused"],
+                          specs=blueprint["specs"], links=blueprint["links"],
+                          campaign=blueprint["campaign"])
+        self.siege_id = siege_id
+        return self.fronts
+
     def start_mission(self, mission_id):
         require(self.mode == "campaign", "End the current encounter first")
         require(mission_id in self.available_missions(), "Mission is locked")
@@ -108,6 +140,7 @@ class GameSession:
             prepared, missions, focused, seed=self.seed, rules=self.rules,
             specs=specs, links=links, logistics=logistics, campaign=campaign)
         self.settled_fronts.clear()
+        self.siege_id = None
         return self.fronts
 
     def _commit(self, battle):
@@ -201,6 +234,7 @@ class GameSession:
         self.fronts = None
         self.finalized = False
         self.settled_fronts = set()
+        self.siege_id = None
 
     def recording(self):
         """Portable v1 checkpoint; embedded tactical journals verify by replay."""
@@ -222,6 +256,8 @@ class GameSession:
             "finalized": self.finalized,
             "settled_fronts": sorted(self.settled_fronts),
         }
+        if self.siege_id is not None:
+            data["siege_id"] = self.siege_id
         if self.fronts is not None:
             # MultiFront journals verify rules/state, but historically recreate
             # Battle UUIDs. Preserve identities used by Campaign.record_bonds.
@@ -240,7 +276,7 @@ class GameSession:
         require(isinstance(data, dict) and type(data.get("version")) is int
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
-        require(set(data) - {"front_battle_ids"} == {"version", "kind", "campaign_id", "seed",
+        require(set(data) - {"front_battle_ids", "siege_id"} == {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
                 "mode", "tactical", "finalized", "settled_fronts", "digest"},
                 "Malformed game session")
@@ -258,6 +294,9 @@ class GameSession:
                 <= set(session.content.missions), "Unknown campaign mission")
         mode = data["mode"]
         require(mode in {"campaign", "battle", "fronts"}, "Invalid session mode")
+        require("siege_id" not in data or (mode == "fronts"
+                and isinstance(data["siege_id"], str) and bool(data["siege_id"])),
+                "Invalid authored siege identity")
         require("front_battle_ids" not in data or mode == "fronts",
                 "Battle identities require a multi-front session")
         settled = data["settled_fronts"]
@@ -289,6 +328,17 @@ class GameSession:
                 require((front in settled) == (battle.result in ("victory", "defeat")),
                         "Front finalization mismatch")
             session.settled_fronts = set(settled)
+            if "siege_id" in data:
+                bp = next((row for row in session.project.sieges
+                           if row["id"] == data["siege_id"] and
+                           row["campaign_id"] == session.campaign_id), None)
+                require(bp is not None and session.fronts.missions == bp["fronts"]
+                        and session.fronts.initial_focus == bp["focused"]
+                        and session.fronts.initial_specs == bp["specs"]
+                        and session.fronts.links == bp["links"]
+                        and session.fronts.initial_campaign == bp["campaign"],
+                        "Authored siege no longer matches saved front configuration")
+                session.siege_id = data["siege_id"]
             if "front_battle_ids" in data:
                 identities = data["front_battle_ids"]
                 require(isinstance(identities, dict) and
