@@ -61,7 +61,14 @@ class JeanneCourtyardCombatTests(unittest.TestCase):
             self.assertEqual(choose_command(battle), expected)
             self.assertEqual(battle.digest(), before)
         # A temporary preview may change no canonical state.
-        self.assertIn("timeline", encounter_preview(content)["threats"])
+        preview = encounter_preview(content)
+        self.assertIn("timeline", preview["threats"])
+        knight = [row for row in preview["threats"]["charges"]
+                  if row["unit"] == "chevalier" and row["target"] == "ecuyer"]
+        self.assertTrue(knight, "The knight's straight courtyard charge must be visible")
+        self.assertEqual(knight[0]["certainty"], "possible")
+        self.assertEqual(knight[0]["path"][-1], knight[0]["landing"])
+        self.assertGreaterEqual(len(knight[0]["path"]), 2)
         view = battle_frame(battle)
         self.assertEqual(view.width, 12)
         self.assertTrue(view.timeline)
