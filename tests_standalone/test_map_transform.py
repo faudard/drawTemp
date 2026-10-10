@@ -79,6 +79,30 @@ class MapTransformTests(unittest.TestCase):
         doc.redo()
         self.assertEqual(self.mission(doc.data).objects[0]['pos'], [4, 7])
 
+    def test_multicell_actor_and_defense_group_moves_every_footprint(self):
+        content = deepcopy(self.base)
+        mission = next(m for m in content['missions'] if m['id'] == self.mid)
+        player = next(u for u in mission['units'] if u['team'] == 'player')
+        player['footprint'] = [2, 2]
+        content = Content.from_dict(content).to_dict()
+        content = add_object(content, self.mid, 'oil', 'defense', (4, 4))
+        unit_ids, object_ids = group_entities(content, self.mid,
+                                               [(2, 11), (4, 4)])
+        self.assertEqual(unit_ids, (player['id'],))
+        self.assertEqual(object_ids, ('oil',))
+        original = deepcopy(content)
+        result = move_group(content, self.mid, unit_ids, object_ids,
+                            dx=1, dy=-1)
+        moved = self.mission(result)
+        actor = next(u for u in moved.units if u.id == player['id'])
+        self.assertEqual(actor.pos, (2, 9))
+        self.assertEqual(actor.occupied_cells(),
+                         {(2, 9), (3, 9), (2, 10), (3, 10)})
+        trap = next(o for o in moved.objects if o['id'] == 'oil')
+        self.assertEqual(trap['pos'], [5, 3])
+        self.assertEqual(trap['cells'], [[5, 3]])
+        self.assertEqual(content, original)
+
     def test_group_rejects_invalid_move_without_modifying_source(self):
         original = deepcopy(self.base)
         mid = self.mid
