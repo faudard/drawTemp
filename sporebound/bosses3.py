@@ -70,6 +70,32 @@ def boss_preview(battle, boss_id):
             "hp_percent": 100 * unit.hp // unit.max_hp, "pending": pending}
 
 
+
+def boss_intent_preview(battle, boss_id):
+    """Side-effect-free rendering contract for a currently active boss.
+
+    Off-turn intentions are deliberately not guessed: CT, paths, cast status,
+    enemy positions and player decisions may change before that activation.
+    """
+    view = boss_preview(battle, boss_id)
+    unit = battle.unit(boss_id)
+    ready = (unit.alive and battle.active_id == unit.id and not battle.result
+             and not battle.deploying and unit.behavior == "phase_boss")
+    result = {**view, "ready": ready, "command": None, "threats": []}
+    if not ready:
+        return result
+    command = phase_boss_command(battle)
+    result["command"] = command
+    if command["kind"] == "charge":
+        result["threats"] = next(
+            (option["threats"] for option in battle.charge_options(unit)
+             if list(option["cell"]) == command["cell"]), [])
+    elif command["kind"] == "act":
+        result["threats"] = battle.forecast(
+            command["skill"], tuple(command["cell"]), unit)
+    return result
+
+
 def phase_boss_command(battle):
     """Phase-specific commander using only Battle's legal tactical command API.
 
