@@ -48,7 +48,26 @@ def validate_blueprint(blueprint, content, campaign_ids):
     front_links.validate(content, missions, blueprint["links"])
     if "logistics" in blueprint:
         from .logistics import LogisticsDirector
-        LogisticsDirector(blueprint["logistics"], missions)
+        logistics = LogisticsDirector(blueprint["logistics"], missions)
+        if logistics.rescue_mission is not None:
+            require(logistics.rescue_mission in content.missions,
+                    "Unknown tactical rescue mission")
+            rescue = content.missions[logistics.rescue_mission]
+            require(rescue.objective == "eliminate" and rescue.protected_id
+                    and any(u.id == rescue.protected_id and u.team == "player"
+                            for u in rescue.units)
+                    and any(u.id != rescue.protected_id and u.team == "player"
+                            for u in rescue.units)
+                    and any(u.team == "enemy" for u in rescue.units),
+                    "Rescue mission needs a cart, escorts, enemies and eliminate objective")
+        if logistics.choices is not None:
+            pursuit_id = logistics.choices["pursuit_mission"]
+            require(pursuit_id in content.missions, "Unknown tactical pursuit mission")
+            pursuit = content.missions[pursuit_id]
+            require(pursuit.objective == "eliminate" and not pursuit.deployment
+                    and any(u.team == "player" for u in pursuit.units)
+                    and any(u.team == "enemy" for u in pursuit.units),
+                    "Pursuit mission needs an elimination objective and two teams")
     campaign = blueprint["campaign"]
     if campaign is not None:
         require(len(missions) >= 2, "Finale needs at least two fronts")
