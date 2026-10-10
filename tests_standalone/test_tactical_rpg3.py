@@ -429,7 +429,11 @@ class BossBehaviorTests(unittest.TestCase):
         self.assertIsInstance(intent["threats"], list)
         self.assertEqual(battle.digest(), before)
         battle.execute(cmd)
-        self.assertFalse(boss_intent_preview(battle, "boss")["ready"])
+        # Charge consumes an Act, not necessarily the entire activation.
+        # An active boss still exposes the next legal command (usually End).
+        post_charge = boss_intent_preview(battle, "boss")
+        self.assertTrue(post_charge["ready"])
+        self.assertEqual(post_charge["command"], choose_command(battle))
         self.assertTrue(any(event["kind"] == "charge" for event in battle.events))
         self.assertEqual(battle.digest(), Battle.replay(
             battle.recording(), rules=rules).digest())
