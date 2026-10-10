@@ -174,6 +174,31 @@ be authored with `reduce_strength`, `reduce_opposition`, and the existing
 object/wave effects. This allows sacrifices and withdrawals to have lasting
 consequences without simulating hundreds of combatants.
 
+## Counteroffensive pressure
+
+An opt-in campaign route policy can schedule an enemy reprisal after a global
+strategic turn. If its front is secure and not focused, the enemy reopens that
+sector, reduces friendly strength, adds opposition, and starts a bounded
+elimination mission. The campaign locks the affected route while the mission
+is active. Only a real tactical victory restores reclaimed status; defeat
+or abandonment leaves the sector withdrawn. Starting a reprisal is deterministic
+and part of the v5 operation replay.
+
+```python
+SIEGE_CAMPAIGN_PATHS["counteroffensives"] = {
+    "gate": {
+        "after_turn": 5,
+        "mission": "castle_gate_recovery",
+        "strength_loss": 2,
+        "opposition_gain": 3,
+    },
+}
+```
+
+The counteroffensive mission is validated as a playable elimination battle.
+At most one due reprisal starts on a strategic turn. Existing campaigns without
+this optional configuration retain their previous behavior.
+
 ## Command centre 2.0: contested routes and rescue orders
 
 The same `MultiFrontSession` drives a small terminal **command centre**

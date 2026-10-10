@@ -20,9 +20,10 @@ class SiegeCampaign:
                 {"final_front", "required_fronts", "partial", "negotiation", "retreat"}
                 <= set(spec) <=
                 {"final_front", "required_fronts", "partial", "negotiation", "retreat",
-                 "routes", "recovery", "treaties"}
+                 "routes", "recovery", "treaties", "counteroffensives"}
                 and (("routes" in spec) == ("recovery" in spec)
-                     == ("treaties" in spec)),
+                     == ("treaties" in spec))
+                and ("counteroffensives" not in spec or "routes" in spec),
             "Invalid campaign structure")
         final = spec["final_front"]
         require(isinstance(final, str) and final in missions,
@@ -127,6 +128,9 @@ class SiegeCampaign:
             state["route_committed"] = session.route_locked
             state["available_routes"] = sorted(session.route_policy.routes)
             state["recovery_outcomes"] = deepcopy(session.recovery_outcomes)
+            if session.route_policy.counteroffensives:
+                state["counteroffensive_active"] = sorted(
+                    session.counteroffensive_active)
             state["recovery_battles"] = {
                 front: battle.state()
                 for front, battle in sorted(session.recovery_battles.items())}

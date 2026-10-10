@@ -14,7 +14,9 @@ ACCEPTED = {"victory", "partial", "negotiated", "reclaimed"}
 
 class CampaignRoutesPolicy:
     def __init__(self, spec, content, missions, final_front):
-        require(isinstance(spec, dict) and set(spec) == {"routes", "recovery", "treaties"},
+        require(isinstance(spec, dict)
+                and {"routes", "recovery", "treaties"} <= set(spec)
+                and set(spec) <= {"routes", "recovery", "treaties", "counteroffensives"},
                 "Invalid alternative-route configuration")
         routes = spec["routes"]
         require(isinstance(routes, dict) and "breach" in routes and
@@ -89,6 +91,29 @@ class CampaignRoutesPolicy:
                     and type(row["reclaimed_strength"]) is int
                     and 1 <= row["reclaimed_strength"] <= 10000,
                     "Invalid recovery costs")
+        counteroffensives = spec.get("counteroffensives", {})
+        require(isinstance(counteroffensives, dict)
+                and set(counteroffensives) <= set(missions) - {final_front},
+                "Invalid counteroffensive targets")
+        self.counteroffensives = deepcopy(counteroffensives)
+        for front, row in counteroffensives.items():
+            require(front in recovery and isinstance(row, dict)
+                    and set(row) == {"after_turn", "mission", "strength_loss",
+                                     "opposition_gain"},
+                    "Invalid counteroffensive rule")
+            require(type(row["after_turn"]) is int and row["after_turn"] >= 1
+                    and isinstance(row["mission"], str)
+                    and row["mission"] in content.missions
+                    and type(row["strength_loss"]) is int
+                    and 0 <= row["strength_loss"] <= 10000
+                    and type(row["opposition_gain"]) is int
+                    and 1 <= row["opposition_gain"] <= 10000,
+                    "Invalid counteroffensive timing, mission, or pressure")
+            mission = content.missions[row["mission"]]
+            require(mission.objective == "eliminate"
+                    and any(unit.team == "player" for unit in mission.units)
+                    and any(unit.team == "enemy" for unit in mission.units),
+                    "Counteroffensive mission must be a playable elimination battle")
 
     def verify_treaty(self, session, front):
         if front not in self.treaties:
@@ -203,11 +228,13 @@ class CampaignRoutesMixin:
         require(isinstance(command, dict) and front in self.recovery_battles,
                 "Invalid command or unknown active counterattack")
         snapshot = deepcopy((self.recovery_battles, self.recovery_outcomes,
-                             self.timeline, self.battles))
+                             self.timeline, self.battles,
+                             self.counteroffensive_active))
         try:
             battle = self.recovery_battles[front]
             battle.execute(deepcopy(command))
             if battle.result in {"victory", "defeat"}:
+                was_counteroffensive = front in self.counteroffensive_active
                 self.recovery_outcomes[front] = battle.result
                 if battle.result == "victory":
                     row = self.timeline.fronts[front]
@@ -216,13 +243,17 @@ class CampaignRoutesMixin:
                         row["strength"],
                         self.route_policy.recovery[front]["reclaimed_strength"])
                 del self.recovery_battles[front]
+                if was_counteroffensive:
+                    self.counteroffensive_active.discard(front)
                 self.timeline.events.append({
                     "turn": self.timeline.turn,
-                    "kind": "campaign_recovery_" + battle.result,
+                    "kind": ("campaign_counteroffensive_" if was_counteroffensive
+                             else "campaign_recovery_") + battle.result,
                     "front": front})
         except Exception:
             (self.recovery_battles, self.recovery_outcomes,
-             self.timeline, self.battles) = snapshot
+             self.timeline, self.battles,
+             self.counteroffensive_active) = snapshot
             raise
         self.history.append({"kind": "execute_recovery", "front": front,
                              "command": deepcopy(command)})
@@ -230,9 +261,14 @@ class CampaignRoutesMixin:
     def abandon_recovery(self, front):
         require(front in self.recovery_battles,
                 "No active recovery mission to abandon")
+        was_counteroffensive = front in self.counteroffensive_active
         del self.recovery_battles[front]
         self.recovery_outcomes[front] = "abandoned"
+        if was_counteroffensive:
+            self.counteroffensive_active.discard(front)
         self.timeline.events.append({
-            "turn": self.timeline.turn, "kind": "campaign_recovery_abandoned",
+            "turn": self.timeline.turn,
+            "kind": ("campaign_counteroffensive_" if was_counteroffensive
+                     else "campaign_recovery_") + "abandoned",
             "front": front})
         self.history.append({"kind": "abandon_recovery", "front": front})

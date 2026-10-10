@@ -128,7 +128,9 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
             self.route_policy = CampaignRoutesPolicy(
                 {"routes": self.initial_campaign["routes"],
                  "recovery": self.initial_campaign["recovery"],
-                 "treaties": self.initial_campaign["treaties"]},
+                 "treaties": self.initial_campaign["treaties"],
+                 **({"counteroffensives": self.initial_campaign["counteroffensives"]}
+                    if "counteroffensives" in self.initial_campaign else {})},
                 self.content, self.missions, self.campaign.final)
         self.route_selected = "breach"
         self.route_locked = False
@@ -141,6 +143,7 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
             self.timeline.tactical_only = extra | {self.campaign.final}
         self.recovery_battles = {}
         self.recovery_outcomes = {}
+        self.counteroffensive_active = set()
         if self.campaign is not None:
             require(focused != self.campaign.final
                     or all(self.timeline.fronts[f]["status"] in outcomes
@@ -581,7 +584,9 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                 and not self.recovery_battles,
                 "Resolve the tactical side mission before advancing the timeline")
         snapshot = deepcopy((self.timeline, self.battles, self.front_snapshots,
-                             self.pending_reinforcements, self.logistics))
+                             self.pending_reinforcements, self.logistics,
+                             self.recovery_battles, self.recovery_outcomes,
+                             self.counteroffensive_active))
         try:
             for name, battle in self.battles.items():
                 if (battle.result in {"victory", "defeat"}
@@ -599,6 +604,7 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                             "turn": self.timeline.turn, "kind": "campaign_retreat_cost",
                             "front": name, "target": rule["target"],
                             "strength_loss": rule["target_loss"]})
+            self._trigger_counteroffensives()
             self._resolve_ambushes()
             self._arrive_convoys()
             self._deliver_reinforcements(self.timeline.focused)
@@ -623,10 +629,40 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                     self.front_snapshots[name] = deepcopy(front)
         except Exception:
             (self.timeline, self.battles, self.front_snapshots,
-             self.pending_reinforcements, self.logistics) = snapshot
+             self.pending_reinforcements, self.logistics,
+             self.recovery_battles, self.recovery_outcomes,
+             self.counteroffensive_active) = snapshot
             raise
         self.history.append({"kind": "advance"})
         return self.timeline.state()
+
+    def _trigger_counteroffensives(self):
+        """Reopen one secured sector per turn with a real bounded battle."""
+        if self.route_policy is None or not self.route_policy.counteroffensives:
+            return
+        started = {event.get("front") for event in self.timeline.events
+                   if event["kind"] == "campaign_counteroffensive_started"}
+        from .engine import Battle
+        for front, rule in sorted(self.route_policy.counteroffensives.items()):
+            row = self.timeline.fronts[front]
+            if (front in started or self.timeline.turn < rule["after_turn"]
+                    or front == self.timeline.focused
+                    or row["status"] not in {"victory", "partial", "reclaimed"}):
+                continue
+            battle = Battle(self.content, rule["mission"],
+                            seed=self.seed + 40000
+                            + sorted(self.missions).index(front), rules=self.rules)
+            row["status"] = "withdrawn"
+            row["strength"] = max(0, row["strength"] - rule["strength_loss"])
+            row["opposition"] = min(10000, row["opposition"] + rule["opposition_gain"])
+            self.recovery_battles[front] = battle
+            self.counteroffensive_active.add(front)
+            self.timeline.events.append({
+                "turn": self.timeline.turn, "kind": "campaign_counteroffensive_started",
+                "front": front, "mission": rule["mission"],
+                "strength_loss": rule["strength_loss"],
+                "opposition_gain": rule["opposition_gain"]})
+            break
 
     @staticmethod
     def _apply_attrition(battle, team, amount):

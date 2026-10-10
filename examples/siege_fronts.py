@@ -94,6 +94,10 @@ SIEGE_CAMPAIGN_PATHS["treaties"] = {
     "gate": {"requires_front": "supplies", "event": "interact",
              "object": "supply_cache"},
 }
+SIEGE_CAMPAIGN_PATHS["counteroffensives"] = {
+    "gate": {"after_turn": 5, "mission": "castle_gate_recovery",
+             "strength_loss": 2, "opposition_gain": 3},
+}
 
 
 def siege_session(seed=1, focused="supplies", *, contested=False, decisions=False,

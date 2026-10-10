@@ -10,7 +10,7 @@ from sporebound.fronts import MultiFrontSession
 from sporebound.model import Content, RuleError
 
 
-def session_with_easy_side_encounters():
+def session_with_easy_side_encounters(*, counteroffensive_after_turn=5):
     raw = siege_content().to_dict()
     for mission in raw["missions"]:
         if mission["id"] in {"castle_tunnels", "castle_gate_recovery"}:
@@ -24,14 +24,18 @@ def session_with_easy_side_encounters():
             boss = next(u for u in mission["units"] if u["id"] == "castellan")
             boss.update(pos=[2, 3], hp=1, max_hp=1, speed=5)
     template = siege_session(contested=True, campaign=True, paths=True)
+    policy = deepcopy(SIEGE_CAMPAIGN_PATHS)
+    policy["counteroffensives"]["gate"]["after_turn"] = counteroffensive_after_turn
     return MultiFrontSession(Content.from_dict(raw), template.missions,
            "supplies", seed=3, specs=template.initial_specs, links=template.links,
-           logistics=template.initial_logistics, campaign=SIEGE_CAMPAIGN_PATHS)
+           logistics=template.initial_logistics, campaign=policy)
 
 
 def play_small_battle(session, *, front, recovery=False):
     if recovery:
-        battle = session.start_recovery(front)
+        battle = session.recovery_battles.get(front)
+        if battle is None:
+            battle = session.start_recovery(front)
     else:
         session.switch(front)
         if session.active.deploying:
@@ -121,7 +125,7 @@ class SiegeRoutesTests(unittest.TestCase):
         self.assertEqual(MultiFrontSession.replay(s.recording()).state(), s.state())
 
     def test_long_strategic_clock_cannot_fake_tunnel_or_throne_victory(self):
-        s = session_with_easy_side_encounters()
+        s = session_with_easy_side_encounters(counteroffensive_after_turn=100)
         s.set_doctrine("tunnels", "assault")
         s.set_doctrine("throne", "assault")
         for _ in range(20):
@@ -132,6 +136,29 @@ class SiegeRoutesTests(unittest.TestCase):
         self.assertFalse(s.state()["campaign"]["unlocked"])
         with self.assertRaises(RuleError):
             s.switch("throne")
+        self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
+
+    def test_enemy_counteroffensive_reopens_front_and_needs_real_retake(self):
+        s = session_with_easy_side_encounters()
+        s.set_doctrine("gate", "assault")
+        for _ in range(5):
+            s.advance()
+        self.assertEqual(s.timeline.fronts["gate"]["status"], "withdrawn")
+        self.assertIn("gate", s.recovery_battles)
+        self.assertIn("gate", s.campaign.state(s)["counteroffensive_active"])
+        self.assertTrue(any(event["kind"] == "campaign_counteroffensive_started"
+                            for event in s.timeline.events))
+        self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
+        with self.assertRaises(RuleError):
+            s.advance()
+        with self.assertRaises(RuleError):
+            s.switch("gate")
+        result = play_small_battle(s, front="gate", recovery=True)
+        self.assertEqual(result, "victory")
+        self.assertEqual(s.timeline.fronts["gate"]["status"], "reclaimed")
+        self.assertNotIn("gate", s.campaign.state(s)["counteroffensive_active"])
+        self.assertTrue(any(event["kind"] == "campaign_counteroffensive_victory"
+                            for event in s.timeline.events))
         self.assertEqual(MultiFrontSession.replay(s.recording()).digest(), s.digest())
 
     def test_treaty_requires_authentic_supply_intelligence(self):
@@ -260,6 +287,7 @@ class SiegeRoutesTests(unittest.TestCase):
             lambda p: p["treaties"]["gate"].update(object="missing"),
             lambda p: p["recovery"]["gate"].update(mission="missing"),
             lambda p: p["recovery"]["gate"].update(supplies=True),
+            lambda p: p["counteroffensives"]["gate"].update(after_turn=True),
         ):
             spec = deepcopy(SIEGE_CAMPAIGN_PATHS)
             mutate(spec)
