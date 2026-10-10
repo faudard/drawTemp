@@ -122,6 +122,9 @@ class ProjectWorkspaceTab:
             self.owner.select_mission(node.id)
             self._show_tab('Carte et combat')
         elif node.kind == 'campaign':
+            if (node.id != self.owner.campaign_id.get() and
+                    self.owner._pending_fields()):
+                raise RuleError('Appliquer la configuration en cours avant de changer de campagne.')
             self.owner.campaign_id.set(node.id)
             self.owner._show_campaign()
             self._show_tab('Jeu, campagnes et sauvegardes')
@@ -158,6 +161,8 @@ class ProjectWorkspaceTab:
                                  mid, name, width, height)))
         self.owner.select_mission(mid)
         self.refresh()
+        self.tree.selection_set('mission:' + mid)
+        self.tree.see('mission:' + mid)
 
     def _dimension(self, title):
         # StudioPanels' dialogs object is intentionally minimal.
@@ -190,8 +195,12 @@ class ProjectWorkspaceTab:
                               node.id, mid, name)))
         self.owner.select_mission(mid)
         self.refresh()
+        self.tree.selection_set('mission:' + mid)
+        self.tree.see('mission:' + mid)
 
     def new_campaign(self):
+        if self.owner._pending_fields():
+            raise RuleError('Appliquer la configuration en cours avant de créer une campagne.')
         cid = self.owner.dialogs.askstring('Nouvelle campagne', 'Identifiant unique :')
         if cid is None:
             return
@@ -204,6 +213,8 @@ class ProjectWorkspaceTab:
         self.owner.campaign_id.set(cid)
         self.owner._show_campaign()
         self.owner.refresh()
+        self.tree.selection_set('campaign:' + cid)
+        self.tree.see('campaign:' + cid)
 
     def validate_all(self):
         index = self.index()
