@@ -130,7 +130,9 @@ class SynergyUnlockStudio:
         self.preview_events, _ = self._field(
             preview, 3, "Événements: kind@tick@source@target",
             "")
-        self._button(preview, "Simuler découverte", self.run_preview)
+        preview_controls = ttk.Frame(preview)
+        preview_controls.grid(row=4, column=0, columnspan=2, sticky="w")
+        self._button(preview_controls, "Simuler découverte", self.run_preview)
         self.status = self.tk.StringVar(value="Sélectionner un combo ou en créer un.")
         ttk.Label(page, textvariable=self.status, wraplength=1050).pack(
             fill="x", padx=8, pady=5)
