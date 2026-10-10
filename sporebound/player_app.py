@@ -52,6 +52,12 @@ class PlayerApplication:
         self.facing_var = tk.StringVar(value="south")
         self.front_var = tk.StringVar()
         self.doctrine_var = tk.StringVar(value="hold")
+        self.logistics_dest_var = tk.StringVar()
+        self.logistics_transfer_dest_var = tk.StringVar()
+        self.logistics_actor_var = tk.StringVar(value="reserve_1")
+        self.logistics_x_var = tk.StringVar(value="1")
+        self.logistics_y_var = tk.StringVar(value="1")
+        self.convoy_var = tk.StringVar()
         self.selection = (0, 0)
         self.camera = Camera(52, 8, 8)
         self.canvas = None
@@ -582,6 +588,8 @@ class PlayerApplication:
             self.player.advance_fronts)).pack(side="left", padx=4)
         self._button(controls, "Jouer le secteur", self.battle_screen).pack(
             side="left", padx=4)
+        if session.fronts.logistics is not None:
+            self._logistics_panel(session.fronts)
         log = self.tk.Text(self.view, height=9, fg="#e9f2fc", bg="#182a40",
                            wrap="word", relief="flat")
         log.pack(fill="both", expand=True, pady=8)
@@ -594,6 +602,98 @@ class PlayerApplication:
         if all(f.status != "active" for f in frame.fronts):
             self._button(footer, "Résultats → Campagne", lambda: self._change(
                 self.player.return_to_campaign)).pack(side="right", padx=6)
+
+    def _logistics_panel(self, fronts):
+        """Display real convoy state and dispatch orders, never visual-only actors."""
+        logistics = fronts.logistics
+        panel = self.ttk.LabelFrame(self.view, text="Routes et ravitaillement", padding=8)
+        panel.pack(fill="x", pady=7)
+        state = logistics.state()
+        supplies = state.get("supplies")
+        summary = ("Réserves : " + str(state["reserves"]) +
+                   "   Capacité : " + str(state["capacity"]) +
+                   ("   Vivres : " + str(supplies) if supplies is not None else "") +
+                   "   Escorts : " + str(state.get("escorts", 0)))
+        self.ttk.Label(panel, text=summary).pack(anchor="w", pady=2)
+        routes = state["routes"]
+        self.ttk.Label(
+            panel, text="Routes : " + (" ; ".join(
+                r["from"] + " → " + r["to"] + " (" + str(r["turns"]) + " tours)"
+                for r in routes) if routes else "aucune route configurée"),
+            wraplength=1030).pack(anchor="w", pady=2)
+        pending = state["in_transit"]
+        self.ttk.Label(
+            panel, text="Convois : " + (" ; ".join(
+                row["id"] + " → " + row["to"] + " / arrivée T" +
+                str(row["arrival"]) +
+                (" [bloqué]" if row.get("stranded") else "")
+                for row in pending) if pending else "aucun"),
+            wraplength=1030).pack(anchor="w", pady=2)
+
+        orders = self.ttk.Frame(panel)
+        orders.pack(fill="x", pady=5)
+        destinations = sorted({r["to"] for r in routes
+                               if r["from"] == "reserve"})
+        transfers = sorted({r["to"] for r in routes
+                            if r["from"] == fronts.timeline.focused})
+        if self.logistics_dest_var.get() not in destinations:
+            self.logistics_dest_var.set(destinations[0] if destinations else "")
+        if self.logistics_transfer_dest_var.get() not in transfers:
+            self.logistics_transfer_dest_var.set(transfers[0] if transfers else "")
+        self.ttk.Label(orders, text="Vers (réserves)").pack(side="left")
+        self.ttk.Combobox(
+            orders, textvariable=self.logistics_dest_var,
+            values=destinations, width=14, state="readonly").pack(
+                side="left", padx=4)
+        for caption, variable, width in (
+                ("Unité", self.logistics_actor_var, 13),
+                ("X", self.logistics_x_var, 4),
+                ("Y", self.logistics_y_var, 4)):
+            self.ttk.Label(orders, text=caption).pack(side="left", padx=(5, 1))
+            self.ttk.Entry(orders, textvariable=variable, width=width).pack(
+                side="left")
+        if destinations:
+            self._button(orders, "Envoyer réserves", lambda: self._change(
+                lambda: self.player.send_reserves(
+                    self.logistics_dest_var.get(),
+                    [{"id": self.logistics_actor_var.get(),
+                      "name": self.logistics_actor_var.get(),
+                      "team": "player",
+                      "pos": [int(self.logistics_x_var.get()),
+                              int(self.logistics_y_var.get())]}]))).pack(
+                                  side="left", padx=4)
+        if transfers:
+            transfers_row = self.ttk.Frame(panel)
+            transfers_row.pack(anchor="w", pady=3)
+            self.ttk.Label(transfers_row, text="Vers (transfert)").pack(side="left")
+            self.ttk.Combobox(
+                transfers_row, textvariable=self.logistics_transfer_dest_var,
+                values=transfers, width=14, state="readonly").pack(
+                    side="left", padx=4)
+            self._button(transfers_row, "Transférer unité", lambda: self._change(
+                lambda: self.player.transfer_units(
+                    self.logistics_transfer_dest_var.get(),
+                    {self.logistics_actor_var.get():
+                     [int(self.logistics_x_var.get()),
+                      int(self.logistics_y_var.get())]}))).pack(
+                          side="left", padx=4)
+        if pending:
+            convoy_ids = [r["id"] for r in pending]
+            if self.convoy_var.get() not in convoy_ids:
+                self.convoy_var.set(convoy_ids[0])
+            convoy_actions = self.ttk.Frame(panel)
+            convoy_actions.pack(anchor="w", pady=3)
+            self.ttk.Label(convoy_actions, text="Convoi").pack(side="left")
+            self.ttk.Combobox(
+                convoy_actions, textvariable=self.convoy_var,
+                values=convoy_ids, state="readonly", width=17).pack(
+                    side="left", padx=5)
+            self._button(convoy_actions, "Assigner escorte", lambda: self._change(
+                lambda: self.player.escort_convoy(self.convoy_var.get()))).pack(
+                    side="left", padx=4)
+            self._button(convoy_actions, "Secourir (vivres)", lambda: self._change(
+                lambda: self.player.rescue_convoy(self.convoy_var.get()))).pack(
+                    side="left", padx=4)
 
     def close(self):
         if self.player.session is not None:

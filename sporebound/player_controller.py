@@ -119,3 +119,15 @@ class PlayerController:
 
     def advance_fronts(self):
         return self._apply(self.session.advance_fronts)
+
+    def send_reserves(self, destination, actors):
+        return self._apply(self.session.send_reserves, destination, actors)
+
+    def transfer_units(self, destination, placements):
+        return self._apply(self.session.transfer_units, destination, placements)
+
+    def escort_convoy(self, convoy_id):
+        return self._apply(self.session.escort_convoy, convoy_id)
+
+    def rescue_convoy(self, convoy_id):
+        return self._apply(self.session.rescue_convoy, convoy_id)
