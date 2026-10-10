@@ -36,7 +36,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == 'player':
-            from .player_shell import launch as launch_player
+            from .player_app import launch as launch_player
             launch_player(args.content, args.project, args.profile)
             return 0
         if args.command == 'editor':

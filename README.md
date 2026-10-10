@@ -11,6 +11,18 @@ sont conservés dans [`assets/`](assets/README.md) ; leur utilisation par un fut
 renderer est un chantier distinct. La conversion des anciennes cartes et sauvegardes
 n'est pas garantie. Voir [les limites de la migration](docs/GAMEPLAY.md#migration-de-godot).
 
+## Player & Presentation 2.6
+
+Le client `python -m sporebound player` utilise désormais `GameSession` et les
+checkpoints `SessionStore` (sauvegarde/reprise des combats, scènes et fronts).
+Une interface Tk 2D/2.5D apporte grille, caméra, preview du moteur,
+déploiement, portraits optionnels, chronologie des fronts et commandes de siège.
+Les données du gameplay restent headless. Les anciens slots `PlayerSession`
+restent séparés et inchangés.
+
+Les assets et sons sont entièrement facultatifs. Pour WAV/OGG :
+`python -m pip install pygame-ce`. Voir [Player 2.6](docs/PLAYER_2_6.md).
+
 ## Session unifiée 2.4.1 (API headless)
 
 La façade `sporebound.game_session.GameSession` orchestre campagne, narration,
@@ -26,7 +38,7 @@ session = GameSession.load("saves/session.json", content, project)
 ```
 
 Les checkpoints de session sont distincts des anciens slots `PlayerSession`.
-L'interface joueur Tk n'est pas encore migrée sur cette nouvelle API.
+Le nouveau client `sporebound player` utilise cette façade, tandis que l'ancien `player_shell` et ses slots sont conservés pour compatibilité.
 Voir [contrats et exemples](docs/UNIFIED_SESSION.md).
 
 ## Persistence 2.0 — reprise et sauvegardes de secours
@@ -127,8 +139,8 @@ l'historique undo/redo. Le `*.game.json` de présentation reste indépendant du
 fichier des missions ; les sauvegardes de campagne n'écrasent pas les replays.
 **Playtest** ne modifie pas la progression, contrairement à **Jouer campagne**.
 Pour les règles, équipements, vagues et acteurs complexes, l'onglet **Données JSON**
-reste disponible. L'écran titre est à ce stade un **aperçu interactif Tk** et
-non un frontend de jeu autonome finalisé.
+reste disponible. L'écran titre du Studio reste un aperçu de création ; la commande
+`sporebound player` lance désormais le client autonome 2.6.
 
 Voir aussi le [guide Project Workspace](docs/WORKSPACE.md).\nLe gate Studio 3.0 reste partiel : l'édition complète des ressources sans JSON\nest prévue dans les PR 2.5.1 à 2.5.4.\n\nVoir le [guide détaillé du Studio](docs/STUDIO.md) pour les actions disponibles,
 les conventions de sauvegarde et les limites.
@@ -168,7 +180,8 @@ Par défaut, les profils sont écrits dans
 Voir [le guide Studio et Player](docs/STUDIO.md). Les embranchements du graphe
 sont pour l'instant les `next_missions` existants : après une victoire,
 tous les successeurs déclarés sont débloqués. Les choix conditionnels,
-dialogues/cinématiques et renderer/audio dédiés restent à développer.
+le client 2.6 ajoute dialogues, renderer Tk et audio optionnel ; les cinématiques
+complexes et les assets animés avancés restent à développer.
 
 ## Arbre narratif — scènes réutilisables
 
