@@ -166,6 +166,15 @@ sont pour l'instant les `next_missions` existants : après une victoire,
 tous les successeurs déclarés sont débloqués. Les choix conditionnels,
 dialogues/cinématiques et renderer/audio dédiés restent à développer.
 
+## Graphe d'événements tactiques — 2.5.2
+
+Le Studio propose le **Graphe des événements** : conditions de mission,
+actions ordonnées, apparition d'acteurs, vagues de renforts, réorganisation
+de priorités et édition depuis les nœuds. Les actions utilisent les règles
+existantes du moteur, avec validation et Undo/Redo.
+
+Voir [le guide du graphe des événements](docs/TACTICAL_EVENT_GRAPH.md).
+
 ## Conditions narratives visuelles — 2.5.2
 
 L’onglet **Conditions & variables** permet de composer les règles
