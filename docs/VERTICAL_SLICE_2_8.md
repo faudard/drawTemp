@@ -112,3 +112,54 @@ save file can create a new compatible checkpoint.
 ```bash
 python -m unittest discover -s tests_standalone -p test_vertical_slice.py -v
 ```
+
+## 2.8.1 — Graphical Castle Player (follow-up)
+
+Launch from the **repository root** (the authored example is in `examples/`):
+
+```bash
+python -m examples.castle_player
+python -m examples.castle_player --save saves/castle-gui.json
+```
+
+Alternatively, launch the ordinary graphical Player from a repository checkout,
+then choose **Campagne Château (2.8)** on the main menu:
+
+```bash
+python -m sporebound player
+```
+
+This entry is intentionally hidden in wheel-only installs because the historical
+castle authors in `examples/` are not bundled in the installed package. It
+opens a separate graphical campaign, with an independent, explicitly named
+save, without changing regular Player slots.
+
+The Tk client uses the *same* CanvasRenderer, `battle_frame`, camera, tactical
+action API and `strategy_frame` as the ordinary Player. It offers:
+
+- New game / continue, explicit overwrite confirmation and save button.
+- Squad selection, job selection, shop and equipment before deployment.
+- Five approaches, and all standard tactical commands on the 2D board
+  (click or arrow keys to select; mouse wheel zoom; Enter to execute).
+- Global strategic timeline, focus switching, doctrine, alternative paid routes,
+  negotiation, partial courtyard victory and retreat.
+- Three authentic epilogues: victory, treaty-backed agreement or defeat.
+- Every accepted operation writes an atomic, replay-verifiable checkpoint;
+  a rejected command or persistence error restores the previous in-memory state.
+
+The Player does **not** generate synthetic victories or invent resources.
+For infiltration and diplomacy, players still need to carry out the real
+in-map objective, e.g. supplies cache interaction or door mechanism.
+The campaign gate and phased throne encounter are enforced by the engine.
+
+Tests:
+
+```bash
+python -m unittest discover -s tests_standalone -p test_castle_player_controller.py -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_castle_player_gui.py -v
+```
+
+Remaining 2.8 integration: designer-authored custom castles directly in this
+Player (instead of the bundled repository example), safe interactive convoy
+side-encounter commands and recovery missions, campaign dialogue / cinematics
+and battle result polish.
