@@ -119,3 +119,22 @@ class PlayerController:
 
     def advance_fronts(self):
         return self._apply(self.session.advance_fronts)
+
+    def select_route(self, route):
+        return self._apply(self.session.select_route, route)
+
+    def negotiate_front(self, front):
+        return self._apply(self.session.negotiate_front, front)
+
+    def partial_front(self, front):
+        return self._apply(self.session.partial_front, front)
+
+    def withdraw_front(self, front):
+        return self._apply(self.session.withdraw_front, front)
+
+    def start_recovery(self, front):
+        return self._apply(self.session.start_recovery, front)
+
+    def abandon_recovery(self, front):
+        return self._apply(self.session.abandon_recovery, front)
+
