@@ -31,6 +31,12 @@ def draw_exploration(canvas, stage):
                 canvas.create_rectangle(px + 9, py + 9, px + 48, py + 47,
                                         fill="#6a7466", outline="#222e2a", width=2)
                 continue
+            if stage["theme"] == "village" and (x, y) in {(2, 1), (5, 2), (7, 4)}:
+                canvas.create_polygon(px + 7, py + 54, px + 19, py + 22,
+                                      px + 30, py + 41, px + 40, py + 12,
+                                      px + 51, py + 55, fill="#ca633c", outline="")
+                canvas.create_polygon(px + 19, py + 54, px + 31, py + 33,
+                                      px + 39, py + 54, fill="#ffc77a", outline="")
             if stage["theme"] == "fields":
                 for shift in (12, 28, 43):
                     canvas.create_line(px + shift, py + 48, px + shift + 4, py + 16,
