@@ -119,7 +119,14 @@ class RoutesDiplomacyGuiTests(unittest.TestCase):
                         isinstance(w, ttk.LabelFrame) and
                         w.cget("text") == "Routes, accords et reconquête"
                         for w in children(root)))
-                    field(root, "Approche").set("direct")
+                    route_caption = next(
+                        w for w in children(root)
+                        if isinstance(w, ttk.Label) and
+                        w.cget("text") == "Approche")
+                    route_select = next(
+                        w for w in route_caption.master.winfo_children()
+                        if isinstance(w, ttk.Combobox))
+                    route_select.set("direct")
                     button(root, "Engager itinéraire").invoke()
                     root.update()
                     self.assertFalse(errors)
