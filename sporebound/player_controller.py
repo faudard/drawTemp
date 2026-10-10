@@ -100,6 +100,13 @@ class PlayerController:
     def abandon_encounter(self):
         return self._apply(self.session.abandon_encounter)
 
+    def available_sieges(self):
+        require(self.session is not None, "No campaign loaded")
+        return self.session.available_sieges()
+
+    def start_configured_siege(self, siege_id):
+        return self._apply(self.session.start_configured_siege, siege_id)
+
     def start_fronts(self, missions, focused):
         require(len(missions) >= 2, "Choose at least two sectors")
         return self._apply(self.session.start_fronts, missions, focused)
