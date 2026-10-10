@@ -84,11 +84,18 @@ class ConfiguredSiegePlayerTests(unittest.TestCase):
             restored = other.load_game("main", 1)
             self.assertEqual(restored.siege_id, "castle_custom")
             self.assertEqual(restored.recording(), ui.session.recording())
-            other.switch_front("walls")
-            other.save()
+            # The final front must remain locked until the gate is won:
+            # assert this gate rather than bypassing the actual siege policy.
+            previous = other.session.recording()
+            with self.assertRaises(RuleError):
+                other.switch_front("walls")
+            self.assertEqual(other.session.recording(), previous)
+            other.set_doctrine("walls", "hold")
             latest = PlayerController(self.content, project, path)
             latest.load_game("main", 1)
-            self.assertEqual(latest.session.fronts.timeline.focused, "walls")
+            self.assertEqual(latest.session.fronts.timeline.focused, "gate")
+            self.assertEqual(latest.session.fronts.timeline.fronts["walls"]["doctrine"],
+                             "hold")
             self.assertEqual(latest.session.siege_id, "castle_custom")
             self.assertEqual(latest.session.fronts.history, other.session.fronts.history)
 
