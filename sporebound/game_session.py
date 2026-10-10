@@ -81,6 +81,19 @@ class GameSession:
         require(scene is not None, "No active narrative scene")
         return self.exploration.interact(self.progress, scene["id"], point_id)
 
+    def explore_wait(self):
+        require(self.mode == "campaign", "Exploration unavailable during combat")
+        scene = self.active_scene()
+        require(scene is not None, "No active narrative scene")
+        return self.exploration.wait(self.progress, scene["id"])
+
+    def explore_actor(self, actor_id, action):
+        require(self.mode == "campaign", "Exploration unavailable during combat")
+        scene = self.active_scene()
+        require(scene is not None, "No active narrative scene")
+        return self.exploration.actor_action(self.progress, scene["id"],
+                                             actor_id, action)
+
     def available_choices(self):
         stage = self.exploration_state()
         if stage is not None and not stage["completed"]:
@@ -132,12 +145,27 @@ class GameSession:
         self.siege_id = siege_id
         return self.fronts
 
+    def _battle_support(self, mission_id):
+        total = 0
+        for spec in self.project.battle_support:
+            value = self.progress.story_flags.get(spec["flag"], 0)
+            require(type(value) is int, "Battle support flag must be an integer")
+            if spec["mission"] == mission_id and value >= spec["gte"]:
+                total += spec["potion_bonus"]
+        if not total:
+            return None
+        # Use the standard replay-verified Battle.initial_state contract;
+        # no out-of-band mutations after Battle was constructed.
+        require(total <= 30, "Battle support exceeds supply cap")
+        return {"inventory": {"potion": 3 + total, "ether": 2, "phoenix": 1}}
+
     def start_mission(self, mission_id):
         require(self.mode == "campaign", "End the current encounter first")
         require(mission_id in self.available_missions(), "Mission is locked")
         # Campaign.prepare can materialize heroes: use a throwaway roster.
         battle = deepcopy(self.progress).prepare(
-            self.content, mission_id, seed=self.seed, ruleset=self.rules)
+            self.content, mission_id, seed=self.seed, ruleset=self.rules,
+            initial_state=self._battle_support(mission_id))
         self.battle, self.finalized = battle, False
         self._settle()
         return battle

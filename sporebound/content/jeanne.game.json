@@ -386,7 +386,121 @@
           "required": false,
           "exit": true
         }
+      ],
+      "actors": [
+        {
+          "id": "colin",
+          "name": "Colin, apprenti boulanger",
+          "kind": "civilian",
+          "route": [
+            [
+              2,
+              5
+            ],
+            [
+              2,
+              4
+            ],
+            [
+              2,
+              5
+            ]
+          ],
+          "dialogue": "« Ma mère est restée près du four ! Je ne sais plus où courir… »",
+          "rescue_text": "Jeanne montre le passage vers la colline. Colin part chercher les autres survivants et promet de rapporter des bandages.",
+          "deadline": 16,
+          "rescue_flag": "village_rescued"
+        },
+        {
+          "id": "isabeau",
+          "name": "Isabeau, villageoise",
+          "kind": "civilian",
+          "route": [
+            [
+              5,
+              6
+            ],
+            [
+              6,
+              6
+            ],
+            [
+              7,
+              6
+            ]
+          ],
+          "dialogue": "« Le toit va s'effondrer. J'ai besoin d'aide pour sortir ! »",
+          "rescue_text": "Jeanne dégage l'issue. Isabeau rassemble les enfants et emporte les dernières réserves de l'hospice.",
+          "deadline": 26,
+          "rescue_flag": "village_rescued"
+        },
+        {
+          "id": "loise",
+          "name": "Loïse, fille du forgeron",
+          "kind": "civilian",
+          "route": [
+            [
+              4,
+              3
+            ],
+            [
+              5,
+              3
+            ],
+            [
+              5,
+              4
+            ]
+          ],
+          "dialogue": "« Ils ont arrêté mon frère. Pourquoi cherchaient-ils ton père ? »",
+          "rescue_text": "Jeanne l'accompagne jusqu'à une rue sûre. Loïse transmet les noms des gardes qu'elle a reconnus.",
+          "deadline": 19,
+          "rescue_flag": "village_rescued"
+        },
+        {
+          "id": "michel",
+          "name": "Frère Michel, témoin",
+          "kind": "witness",
+          "route": [
+            [
+              8,
+              4
+            ],
+            [
+              8,
+              5
+            ],
+            [
+              8,
+              4
+            ]
+          ],
+          "dialogue": "« J'ai vu une bague noire au doigt du capitaine. La troupe cherchait des feuillets, pas des provisions. »",
+          "rescue_text": "Le religieux vous bénit et reste pour secourir les blessés.",
+          "deadline": 0,
+          "rescue_flag": ""
+        }
       ]
     }
-  }
+  },
+  "battle_support": [
+    {
+      "mission": "p0_03a_secours",
+      "flag": "village_rescued",
+      "gte": 1,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "p0_03a_secours",
+      "flag": "village_rescued",
+      "gte": 2,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "p0_04_fuite",
+      "flag": "village_rescued",
+      "gte": 2,
+      "potion_bonus": 1
+    }
+  ]
 }

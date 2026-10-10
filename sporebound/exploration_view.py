@@ -54,6 +54,20 @@ def draw_exploration(canvas, stage):
                                    fill="#24302d", font=("TkDefaultFont", 13, "bold"))
                 canvas.create_text(px + 29, py + 49, text=point["title"][:11],
                                    fill="#fff5d1", font=("TkDefaultFont", 8, "bold"))
+    for actor in stage.get("actors", []):
+        if actor["status"] == "rescued":
+            continue
+        ax, ay = actor["pos"]
+        sx, sy = ox + ax * tile + tile / 2, oy + ay * tile + tile / 2
+        color = ("#82919a" if actor["status"] == "lost" else
+                 "#f8c16f" if actor["kind"] == "civilian" else "#c5a6db")
+        canvas.create_oval(sx - 13, sy - 14, sx + 13, sy + 12,
+                           fill=color, outline="#172d36", width=2)
+        canvas.create_text(sx, sy - 2, text=actor["name"][0],
+                           fill="#24302b", font=("TkDefaultFont", 11, "bold"))
+        canvas.create_text(sx, sy + 24,
+                           text=actor["name"].split(",")[0][:10],
+                           fill="#fff6dc", font=("TkDefaultFont", 8, "bold"))
     px, py = stage["position"]
     sx, sy = ox + px * tile + tile / 2, oy + py * tile + tile / 2
     canvas.create_oval(sx - 17, sy - 19, sx + 17, sy + 15,
@@ -61,7 +75,7 @@ def draw_exploration(canvas, stage):
     canvas.create_text(sx, sy - 2, text="J", fill="#ffffff",
                        font=("TkDefaultFont", 14, "bold"))
     canvas.create_text(ox, oy + h * tile + 20, anchor="w",
-                       text="Jeanne : bleu   •   Souvenirs à découvrir : or   •   Souvenirs lus : vert   •   Sortie : bleu clair",
+                       text="Jeanne : bleu   •   Civils : jaune   •   Témoins : violet   •   Souvenirs : or / vert   •   Sortie : bleu clair",
                        fill="#dfd5af", font=("TkDefaultFont", 10))
 
 
