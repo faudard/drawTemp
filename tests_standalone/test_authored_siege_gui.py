@@ -51,7 +51,7 @@ class AuthoredSiegePlayerGuiTests(unittest.TestCase):
                     button("Nouvelle partie").invoke()
                     root.update()
                     self.assertTrue(any(isinstance(w, tk.Text) for w in descendants(root)))
-                    button("Entrer en bataille").invoke()
+                    button("À l\u0027attaque").invoke()
                     root.update()
                     self.assertTrue(any(isinstance(w, ttk.Treeview)
                                         for w in descendants(root)))
