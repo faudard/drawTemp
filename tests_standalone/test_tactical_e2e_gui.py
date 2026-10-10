@@ -84,10 +84,10 @@ class TacticalEndToEndGUITests(unittest.TestCase):
                 finally:
                     root.destroy()
 
-            with patch.object(tk.Tk, "mainloop", drive_studio), \\
-                 patch("tkinter.filedialog.asksaveasfilename",
-                       return_value=str(saved)), \\
-                 patch("tkinter.messagebox.showerror") as studio_errors:
+            with (patch.object(tk.Tk, "mainloop", drive_studio),
+                  patch("tkinter.filedialog.asksaveasfilename",
+                        return_value=str(saved)),
+                  patch("tkinter.messagebox.showerror") as studio_errors):
                 studio_launch(original)
                 studio_errors.assert_not_called()
             self.assertEqual(gui_errors, [])
@@ -132,8 +132,8 @@ class TacticalEndToEndGUITests(unittest.TestCase):
                 finally:
                     root.destroy()
 
-            with patch.object(tk.Tk, "mainloop", drive_player), \\
-                 patch("tkinter.messagebox.showerror") as player_errors:
+            with (patch.object(tk.Tk, "mainloop", drive_player),
+                  patch("tkinter.messagebox.showerror") as player_errors):
                 player_launch(saved, profile_path=profile)
                 player_errors.assert_not_called()
             self.assertEqual(gui_errors, [])
