@@ -116,7 +116,9 @@ class AuthoredSiegePlayerTests(unittest.TestCase):
             self.assertIs(ctrl.current_battle(), side[2])
             with self.assertRaises(RuleError):
                 ctrl.switch("gate")
-            ctrl.execute({"kind": "start_battle"})
+            command = ({"kind": "start_battle"} if side[2].deploying
+                       else {"kind": "end"})
+            ctrl.execute(command)
             self.assertIn("execute_recovery",
                           [h["kind"] for h in ctrl.session.fronts.history])
             resumed = AuthoredSiegeController(content, bp, path, 1)
