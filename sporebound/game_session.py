@@ -91,11 +91,12 @@ class GameSession:
         require(self.mode == "campaign", "End the current encounter first")
         require(isinstance(missions, dict) and bool(missions) and focused in missions,
                 "Invalid front mapping")
+        available = set(self.available_missions())
+        require(all(isinstance(name, str) and bool(name) and
+                    isinstance(mid, str) and mid in available
+                    for name, mid in missions.items()), "Front mission is locked")
         require(len(set(missions.values())) == len(missions),
                 "Duplicate mission in fronts")
-        available = set(self.available_missions())
-        require(all(isinstance(mid, str) and mid in available
-                    for mid in missions.values()), "Front mission is locked")
         prepared = deepcopy(self.content)
         for mid in missions.values():
             battle = deepcopy(self.progress).prepare(
@@ -182,6 +183,9 @@ class GameSession:
 
     def return_to_campaign(self):
         if self.fronts is not None:
+            require(not (self.fronts.rescue_battles or self.fronts.pursuit_battles
+                         or self.fronts.recovery_battles),
+                    "Finish tactical side missions first")
             require(all(row["status"] != "active"
                         for row in self.fronts.timeline.fronts.values()),
                     "Fronts still active; abandon explicitly")
@@ -255,8 +259,9 @@ class GameSession:
             require(isinstance(data["tactical"], dict) and not settled,
                     "Invalid standalone battle state")
             session.battle = Battle.replay(data["tactical"], rules=rules)
-            require(session.battle.mission.id in content.missions,
-                    "Unknown tactical mission")
+            require(session.battle.mission.id in
+                    session.progress.unlocked + session.progress.completed,
+                    "Unknown or locked tactical mission")
             session.finalized = data["finalized"]
             require(session.finalized == (session.battle.result in ("victory", "defeat")),
                     "Battle finalization mismatch")
@@ -264,7 +269,8 @@ class GameSession:
             require(isinstance(data["tactical"], dict) and not data["finalized"],
                     "Invalid multi-front state")
             session.fronts = MultiFrontSession.replay(data["tactical"], rules=rules)
-            require(set(session.fronts.missions.values()) <= set(content.missions)
+            require(set(session.fronts.missions.values()) <=
+                    set(session.progress.unlocked + session.progress.completed)
                     and set(settled) <= set(session.fronts.missions),
                     "Unknown multi-front mission or settlement")
             for front, battle in session.fronts.battles.items():
