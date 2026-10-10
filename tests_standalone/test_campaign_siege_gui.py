@@ -46,6 +46,12 @@ class CampaignSiegeGUITests(unittest.TestCase):
                                if isinstance(w, ttk.Button)}
                     buttons["Nouveau siège"].invoke()
                     root.update()
+                    front_label = next(w for w in widgets
+                        if isinstance(w, ttk.Label)
+                        and w.cget("text") == "Front / identifiant")
+                    front_entry = front_label.master.grid_slaves(row=0, column=1)[0]
+                    front_entry.delete(0, "end")
+                    front_entry.insert(0, "gate")
                     buttons["+ Front"].invoke()
                     root.update()
                     buttons["Simuler 8 tours"].invoke()
