@@ -54,6 +54,7 @@ jalons suivants décrivent leur intégration produit, pas une réécriture.
 | 2.5.1 | Map Editor 3.0 — fondation + outils avancés | Sélection multiple, calques, rotation/symétrie, modèles JSON, groupes unités/objets, déploiement, mini-carte et zoom ; restent tilesets et aperçu sprites |
 | 2.5.2 | Event & Narrative Graph 3.0 — narration + tactique en PRs | Conditions narratives ET/OU/NON, graphe de choix partagé et aperçu variables ; graphe des événements tactiques à conditions simples, actions séquentielles, priorités et vagues ; reste les conditions tactiques composites |
 | 2.5.3 | Character & Rules Studio — unités/règles + Synergy & Unlock Studio 2.5.3.2 | CRUD d'unités, archétypes, compétences multi-effets, classes et équipements ; édition visuelle des secrets de duos/trios, conditions ET/OU et séquences ; restent les arbres de classes et les profils IA avancés |
+| 2.5.3.3 | Class Progression & AI Studio — PR #30 | Graphes des classes et talents, spécialisations/JP, validation des cycles, patrouilles et rôles IA sur carte ; IA coordonnée versionnée encore à développer |
 | 2.5.4 | Campaign & Siege Studio | Campagnes, fronts, renforts, routes, doctrines, transitions et chronologie stratégique |
 
 Gate : créer trois missions, des dialogues conditionnels, des personnages

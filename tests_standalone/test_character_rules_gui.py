@@ -44,10 +44,13 @@ class CharacterRulesGUITests(unittest.TestCase):
                     page = root.nametowidget(notebook.select())
                     inner = next(widget for widget in descendants(page)
                                  if isinstance(widget, ttk.Notebook))
-                    self.assertEqual(
-                        [inner.tab(tab, 'text') for tab in inner.tabs()],
-                        ['Héros / monstres', 'Archétypes', 'Compétences',
-                         'Classes', 'Équipement', 'Synergies & secrets'])
+                    tab_names = [inner.tab(tab, 'text') for tab in inner.tabs()]
+                    self.assertEqual(tab_names[:5],
+                                     ['Héros / monstres', 'Archétypes', 'Compétences',
+                                      'Classes', 'Équipement'])
+                    self.assertIn('Synergies & secrets', tab_names)
+                    self.assertIn('Graphe des classes', tab_names)
+                    self.assertIn('IA & patrouilles', tab_names)
 
                     def open_tab(name):
                         idx = next(i for i in range(len(inner.tabs()))
