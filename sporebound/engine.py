@@ -585,6 +585,7 @@ class Battle:
 
     def execute(self, command: dict):
         """Atomic command boundary for UI, AI and replay; invalid input changes nothing."""
+        require(isinstance(command, dict), "Expected tactical command")
         require((self.deploying or self.active is not None) and not self.result, "Battle is not accepting commands")
         snapshot = deepcopy(self.__dict__)
         try:

@@ -21,14 +21,83 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
   autosave explicite après commande et import non destructif v1/slots.
 - [ ] **2.4.2 suite** : snapshots incrémentaux et compactage sur longs replays,
   intégration autosave dans le client joueur, aperçu et sélection du backup.
-- [ ] **2.4.3 Asset Pipeline** : contrats PNG/sprites/audio indépendants du renderer,
-  registre d'assets et diagnostics de références.
-- [ ] **2.4.4 Reliability & scale** : longues campagnes, perf replay/checkpoint,
-  fuzz des commandes/chargements et tests multi-seeds.
+- [x] **2.4.3 Asset Pipeline** : registre portable versionné de sprites/portraits
+  PNG, sons WAV/OGG et animations par images ; références typées, confinement des
+  chemins, diagnostics de fichiers, intégration manifeste/CLI et exemple en CI.
+  Contrats et limites : [Asset Pipeline](docs/ASSET_PIPELINE.md).
+- [x] **2.4.4 Reliability gate** : campagnes complètes à deux fins/multi-seeds,
+  comparaison partie continue/reprise, intégration des vrais fronts du château,
+  entrées invalides, interruptions disque, journal de 120 commandes et rapports CI.
+  Contrats et limites : [Reliability](docs/RELIABILITY.md).
+- [ ] **2.4.4 suite — scale** : campagnes de plusieurs heures, profils de stress
+  massifs et budgets p95/p99 reproductibles pour replay/checkpoint.
 - [ ] **2.4.5 Player migration** : connecter le client Tk et le Studio à GameSession
   en conservant une couche d'adaptation pour les anciens slots.
 
 Contrats : [Game Session](docs/UNIFIED_SESSION.md).
+
+Gate 2.4 couvert par les tests headless 2.4.4 : commencer une campagne, prendre une décision
+narrative, combattre sur plusieurs fronts, sauvegarder, quitter et retrouver
+exactement le même état après rechargement, puis continuer avec le même résultat.
+Le parcours joueur graphique et la campagne château complète restent à livrer.
+
+## Priorités suivantes — RPG complet et facile à créer
+
+Les sections 2.0–2.3 ci-dessous conservent l'historique des fondations. Les
+jalons suivants décrivent leur intégration produit, pas une réécriture.
+
+### 2.5 — Game Studio 3.0 (P0)
+
+| PR | Chantier | Livrable restant |
+| --- | --- | --- |
+| 2.5.5 | Project Workspace — à réaliser en premier | Projet unique, campagnes/missions, cartes, personnages, classes, événements, assets, menus et configuration ; import relatif et diagnostics partagés |
+| 2.5.1 | Map Editor 3.0 | Multi-sélection, copie/collage, pinceaux, calques, relief, déploiement, personnages/objets et aperçu réel |
+| 2.5.2 | Event & Narrative Graph 3.0 | Conditions ET/OU, variables, dialogues et choix ; conserver les scènes partagées et l'arbre à occurrences multiples |
+| 2.5.3 | Character & Rules Studio | Héros, monstres, classes, compétences, équipements, réactions, synergies et profils IA sans JSON manuel |
+| 2.5.4 | Campaign & Siege Studio | Campagnes, fronts, renforts, routes, doctrines, transitions et chronologie stratégique |
+
+Gate : créer trois missions, des dialogues conditionnels, des personnages
+personnalisés et plusieurs fins entièrement depuis le Studio.
+
+### 2.6 — Player & Presentation (P1)
+
+| PR | Chantier |
+| --- | --- |
+| 2.6.1 | Comparaison pygame-ce / PySide6 et renderer 2D/2.5D indépendant |
+| 2.6.2 | Grille, caméra, sélection, initiative CT, ciblage, prévisions et animations |
+| 2.6.3 | Titre → campagne → déploiement → bataille → résultats |
+| 2.6.4 | Audio, dialogues, effets, portraits et cinématiques via le registre d'assets |
+| 2.6.5 | Carte stratégique des fronts et timeline interactive |
+
+Le moteur reste headless : le rendu consomme états et événements, sans calculer
+les règles. Gate : partie complète sans Studio ni terminal.
+
+### 2.7 — Tactical RPG 3.0 (P1)
+
+| PR | Chantier |
+| --- | --- |
+| 2.7.1 | IA coordonnée, protection des soigneurs, tactiques de groupe et boss |
+| 2.7.2 | Shield Wall, Phalanx, Escort et contrôle de zones |
+| 2.7.3 | Classes, spécialisations, arbres de talents et builds |
+| 2.7.4 | Synergies duos/trios, compétences secrètes et relations |
+| 2.7.5 | Boss multicases, transformations, phases et siège |
+| 2.7.6 | Équilibrage automatisé, simulations longues et métriques de difficulté |
+
+Gate : choix tactiques distincts selon équipe, terrain, adversaire et objectif.
+
+### Vertical slice — assaut du château
+
+1. Préparation : escouade, équipement, déploiement et stratégie.
+2. Approche : bélier, catapulte, infiltration ou négociation.
+3. Remparts : herses, huile, renforts et objectifs secondaires.
+4. Multi-fronts : changement de secteur et progression des fronts non actifs.
+5. Salle du trône : boss à phases et conséquences des décisions précédentes.
+6. Épilogue : victoire, défaite ou alternative, récompenses et sauvegarde.
+
+Cette campagne doit devenir simultanément une démo jouable, un exemple
+d'authoring et un test d'intégration. Ordre immédiat : **2.5.5 Project Workspace**,
+en raccordant le Studio et le joueur à
+`GameSession` (2.4.5) avant de multiplier les panneaux indépendants.
 
 ## 2.0 alpha — socle implémenté
 

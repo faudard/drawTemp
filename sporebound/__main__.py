@@ -51,6 +51,13 @@ def main(argv=None):
             return 0
         content = Content.load(args.content)
         if args.command == 'validate':
+            if args.project:
+                from .game_project import GameProject
+                project = GameProject.load(args.project, content)
+                issues = project.asset_registry().diagnostics(args.project.parent)
+                if issues:
+                    print(json.dumps({'valid': False, 'assets': issues}, ensure_ascii=False))
+                    return 1
             print(f'Valid: {len(content.missions)} missions, {len(content.skills)} skills, {len(content.jobs)} jobs')
             return 0
         if args.command == 'balance':

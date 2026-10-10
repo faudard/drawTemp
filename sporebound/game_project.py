@@ -25,6 +25,7 @@ class GameProject:
     save_slots: int = 3
     story: dict = field(default_factory=dict)
     version: int = 1
+    assets: dict = field(default_factory=dict)
 
     @classmethod
     def default(cls, content):
@@ -50,9 +51,16 @@ class GameProject:
         return {'version': self.version, 'title': self.title, 'subtitle': self.subtitle,
                 'campaigns': deepcopy(self.campaigns), 'options': deepcopy(self.options),
                 'save_slots': self.save_slots,
-                **({'story': deepcopy(self.story)} if self.story else {})}
+                **({'story': deepcopy(self.story)} if self.story else {}),
+                **({'assets': deepcopy(self.assets)} if self.assets else {})}
+
+    def asset_registry(self):
+        from .assets import AssetRegistry
+        require(isinstance(self.assets, dict), 'Project assets must be an object')
+        return AssetRegistry(self.assets if self.assets else None)
 
     def validate(self, content):
+        self.asset_registry()
         require(type(self.version) is int and self.version == 1, 'Unsupported game project version')
         require(isinstance(self.title, str) and 0 < len(self.title.strip()) <= 120,
                 'Title must contain 1..120 characters')

@@ -12,7 +12,7 @@ import re
 
 from .game_session import GameSession, digest
 from .model import RuleError, require
-from .storage import write_json
+from .storage import json_text, write_json
 
 _CHECKSUM = re.compile(r"^[0-9a-f]{64}$")
 
@@ -127,7 +127,7 @@ class SessionStore:
                       "previous": old_data.get("digest") if old_data else None,
                       "session": record}
         checkpoint["digest"] = digest(checkpoint)
-        require(len(json.dumps(checkpoint, ensure_ascii=False).encode("utf-8"))
+        require(len(json_text(checkpoint).encode("utf-8"))
                 <= self.max_bytes, "Checkpoint exceeds size limit")
         if old_data is not None:
             # Do not erase the sole good backup when the primary is corrupt.
