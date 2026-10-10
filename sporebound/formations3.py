@@ -75,9 +75,48 @@ def set_formation(battle, actor, command):
                 **({"target": target} if target is not None else {}))
 
 
+def phalanx_hold_covers(battle, watcher, cell):
+    """Shared preview/execution geometry for a prepared spear corridor."""
+    return (phalanx(battle, watcher)
+            and distance(watcher.pos, cell) <= min(
+                battle.engagement_range(watcher), battle._basic(watcher).range)
+            and battle.line_of_sight(watcher.pos, cell))
+
+
+def phalanx_hold_enters(battle, watcher, previous, cell):
+    return (not phalanx_hold_covers(battle, watcher, previous)
+            and phalanx_hold_covers(battle, watcher, cell))
+
+
+def validate_phalanx_hold(battle, unit, target):
+    require(target is None, "Phalanx hold does not target an ally")
+    require(phalanx(battle, unit),
+            "Phalanx hold needs adjacent spears already in formation")
+
+
+def formation_control_map(battle, team):
+    """Pure overlay of ready/prepared formation corridors for Studio and Player.
+
+    A marked pair projects a threat only through the existing spear attack
+    geometry; nearby tiles may be seen but not entered through blocked walls.
+    """
+    require(team in {"player", "enemy"}, "Unknown team")
+    result = []
+    for unit in sorted(battle.units, key=lambda u: u.id):
+        if not unit.alive or unit.team != team or not phalanx(battle, unit):
+            continue
+        cells = [list(cell) for cell in battle.board.cells()
+                 if cell != unit.pos and phalanx_hold_covers(battle, unit, cell)]
+        prep = battle.prepared_reactions.get(unit.id, {})
+        result.append({"unit": unit.id, "cells": cells,
+                       "armed": prep.get("mode") == "phalanx_hold"
+                       and prep.get("charges", 0) > 0})
+    return result
+
+
 def install_formations(rules):
     """Return a new RuleSet; no modification of the default global rules."""
-    from .rules.registry import CommandRule, FormulaRule
+    from .rules.registry import CommandRule, FormulaRule, PreparationRule
 
     base_mitigate = rules.formulas.get("mitigation").calculate
     base_hit = rules.formulas.get("hit_chance").calculate
@@ -100,6 +139,10 @@ def install_formations(rules):
             return chance * 0.9
         return chance
 
+    rules = rules.with_family("preparations", rules.preparations.with_rule(
+        "phalanx_hold", PreparationRule(validate_phalanx_hold,
+            covers=phalanx_hold_covers, enters=phalanx_hold_enters,
+            version="2.7.2")))
     rules = rules.with_family("commands", rules.commands.with_rule(
         "formation", CommandRule(set_formation, version="2.7.2")))
     rules = rules.with_family("formulas", rules.formulas.with_rule(
