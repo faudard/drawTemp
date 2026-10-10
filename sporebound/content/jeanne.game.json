@@ -301,6 +301,92 @@
           "exit": true
         }
       ]
+    },
+    "sc_p0_cendres": {
+      "title": "Domrémy — chercher parmi les cendres",
+      "theme": "village",
+      "width": 10,
+      "height": 7,
+      "start": [
+        1,
+        5
+      ],
+      "blocked": [
+        [
+          3,
+          1
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          6,
+          2
+        ],
+        [
+          7,
+          2
+        ],
+        [
+          6,
+          3
+        ]
+      ],
+      "interactions": [
+        {
+          "id": "maison",
+          "title": "La maison de Jacques",
+          "text": "La maison n'est plus qu'un squelette noir. Sous les poutres, Jeanne retrouve un morceau de tissu brodé par son père.",
+          "pos": [
+            2,
+            3
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "grange",
+          "title": "Les appels de la grange",
+          "text": "Derrière la grange, on appelle au secours. Une femme serre un enfant contre elle. Jeanne n'a que quelques instants pour choisir.",
+          "pos": [
+            5,
+            5
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "traces",
+          "title": "Des traces de bottes",
+          "text": "Des chevaux et des hommes d'armes ont quitté la place vers le chemin de l'est. La patrouille cherchait quelque chose de précis.",
+          "pos": [
+            8,
+            2
+          ],
+          "required": false,
+          "exit": false
+        },
+        {
+          "id": "carrefour",
+          "title": "Le carrefour",
+          "text": "D'un côté, le feu et les survivants. De l'autre, les cavaliers qui emportent le sceau. Jeanne doit décider.",
+          "pos": [
+            8,
+            5
+          ],
+          "required": false,
+          "exit": true
+        }
+      ]
     }
   }
 }
