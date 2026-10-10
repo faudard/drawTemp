@@ -116,7 +116,7 @@ class LogisticsStudio:
         self._field(hazards, 2, "Charges (1–100)", self.charges)
         ab = ttk.Frame(hazards)
         ab.grid(row=3, columnspan=2)
-        self._button(ab, "Créer / modifier", self.save_ambush)
+        self._button(ab, "Enregistrer embuscade", self.save_ambush)
         self._button(ab, "Supprimer", self.delete_ambush)
         ttk.Label(hazards, text="Sélectionner d'abord une route à gauche.\n"
                   "Une embuscade peut bloquer le convoi ; le jeu applique les "
