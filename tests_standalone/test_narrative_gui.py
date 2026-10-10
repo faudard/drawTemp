@@ -83,7 +83,7 @@ class StoryGUITests(unittest.TestCase):
                          if w.cget('text')=='Je protégerai la garde.').invoke()
                     root.update()
                     next(w for w in buttons(root)
-                         if 'Accepter l’aide de la garde' in w.cget('text')).invoke()
+                         if "Accepter l'aide de la garde" in w.cget('text')).invoke()
                     root.update()
                     self.assertTrue(any('Couronne Beatbox' in w.cget('text')
                                         for w in buttons(root)))
