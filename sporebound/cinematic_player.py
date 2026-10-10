@@ -3,6 +3,7 @@
 The stage is presentation-only. It never edits Campaign, GameSession or Battle.
 """
 from .cinematics import frame_at
+from .audio_timeline import CinematicAudioDirector
 from .tk_renderer import CanvasRenderer
 
 
@@ -55,12 +56,16 @@ class CinematicPlayback:
         self.parent, self.tk, self.ttk = parent, tk, ttk
         self.clip = clip
         self.finished = finished
+        self._owns_audio = audio is None and registry is not None and asset_root is not None
+        if self._owns_audio:
+            from .audio_stage import AudioStage
+            audio = AudioStage(registry, asset_root)
         self.audio = audio
+        self.director = CinematicAudioDirector(clip, audio)
         self.time_ms = 0
         self.playing = True
         self.closed = False
         self.job = None
-        self.played_sounds = set()
         self.frame = ttk.Frame(parent)
         self.frame.pack(fill="both", expand=True)
         self.canvas = tk.Canvas(self.frame, background="#101a2b",
@@ -82,6 +87,7 @@ class CinematicPlayback:
         self.canvas.bind("<Escape>", lambda _: self.skip())
         self.canvas.bind("<Configure>", lambda _: self.render())
         self.canvas.focus_set()
+        self.director.advance(0)
         self.render()
         self._schedule()
 
@@ -102,12 +108,7 @@ class CinematicPlayback:
             return
         previous = self.time_ms
         self.time_ms = min(self.clip["duration_ms"], previous + 40)
-        if self.audio is not None:
-            for event in self.clip["events"]:
-                if (event["kind"] == "sound" and event["id"] not in self.played_sounds
-                        and previous <= event["start_ms"] < self.time_ms):
-                    self.audio.cue(event["cue"])
-                    self.played_sounds.add(event["id"])
+        self.director.advance(self.time_ms)
         self.render()
         if self.time_ms >= self.clip["duration_ms"]:
             self.skip()
@@ -118,6 +119,10 @@ class CinematicPlayback:
         if self.closed:
             return
         self.playing = not self.playing
+        if self.playing:
+            self.director.resume()
+        else:
+            self.director.pause()
         self.pause_button.configure(text="Pause" if self.playing else "Lire")
         if self.job is not None:
             self.parent.after_cancel(self.job)
@@ -128,7 +133,7 @@ class CinematicPlayback:
         if self.closed:
             return
         self.time_ms = 0
-        self.played_sounds.clear()
+        self.director.restart()
         self.playing = True
         self.pause_button.configure(text="Pause")
         self.render()
@@ -147,5 +152,8 @@ class CinematicPlayback:
         if self.job is not None:
             self.parent.after_cancel(self.job)
             self.job = None
+        self.director.stop()
+        if self._owns_audio:
+            self.audio.close()
         self.renderer.dispose()
         self.frame.destroy()

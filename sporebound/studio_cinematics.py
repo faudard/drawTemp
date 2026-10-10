@@ -26,9 +26,11 @@ class CinematicStudio:
             "trigger": "campaign_start", "target": "", "length": "8000",
             "eid": "event_1", "kind": "dialogue", "start": "0",
             "duration": "1800", "subject": "Jeanne", "text": "Notre histoire commence...",
-            "color": "#243c56", "x0": "0.15", "y0": "0.65",
+            "bus": "sfx", "volume": "100", "fadein": "0",
+            "fadeout": "0", "duck": "40", "color": "#243c56", "x0": "0.15", "y0": "0.65",
             "x1": "0.65", "y1": "0.65", "zoom0": "1", "zoom1": "1",
         }.items()}
+        self.audio_loop = self.tk.BooleanVar(value=False)
         self.cursor = self.tk.DoubleVar(value=0)
         self.preview_renderer = None
         self._build(notebook)
@@ -63,6 +65,7 @@ class CinematicStudio:
         self._button(title, "Rétablir cinématique", self.redo)
         self._button(title, "Enregistrer projet", self.owner.save_project)
         self._button(title, "Exemple Jeanne", self.example)
+        self._button(title, "Bande-son Jeanne", self.example_soundtrack)
         main = ttk.Frame(root)
         main.pack(fill="both", expand=True, padx=8)
         left = ttk.LabelFrame(main, text="Séquences")
@@ -113,6 +116,29 @@ class CinematicStudio:
         ]
         for row, (label, key, choices) in enumerate(fields):
             self._field(form, row, label, key, choices)
+        audio = ttk.LabelFrame(middle, text="Pistes audio — événements sound")
+        audio.pack(fill="x", padx=4, pady=3)
+        audio_fields = (
+            (0, 0, "Bus", "bus", ("music", "ambience", "voice", "sfx")),
+            (0, 2, "Volume (%)", "volume", None),
+            (1, 0, "Fondu entrée (ms)", "fadein", None),
+            (1, 2, "Fondu sortie (ms)", "fadeout", None),
+            (2, 0, "Ducking voix (%)", "duck", None),
+        )
+        for row, col, label, key, choices in audio_fields:
+            ttk.Label(audio, text=label).grid(
+                row=row, column=col, sticky="w", padx=3, pady=2)
+            if choices is None:
+                control = ttk.Entry(audio, textvariable=self.vars[key], width=12)
+            else:
+                control = ttk.Combobox(audio, state="readonly",
+                                       textvariable=self.vars[key],
+                                       values=choices, width=12)
+            control.grid(row=row, column=col+1, sticky="ew", padx=3, pady=2)
+        ttk.Checkbutton(audio, text="Répéter la piste", variable=self.audio_loop).grid(
+            row=2, column=2, columnspan=2, sticky="w", padx=3)
+        audio.columnconfigure(1, weight=1)
+        audio.columnconfigure(3, weight=1)
         buttons = ttk.Frame(middle)
         buttons.pack(fill="x")
         self._button(buttons, "Ajouter événement", self.add_event)
@@ -245,6 +271,12 @@ class CinematicStudio:
             self.vars[key].set(str(event.get(field, [0., 0.])[index]))
         self.vars["zoom0"].set(str(event.get("zoom_from", 1)))
         self.vars["zoom1"].set(str(event.get("zoom_to", 1)))
+        self.vars["bus"].set(event.get("bus", "sfx"))
+        self.vars["volume"].set(str(event.get("volume", 100)))
+        self.vars["fadein"].set(str(event.get("fade_in_ms", 0)))
+        self.vars["fadeout"].set(str(event.get("fade_out_ms", 0)))
+        self.vars["duck"].set(str(event.get("duck_percent", 40)))
+        self.audio_loop.set(event.get("loop", False))
 
     def _spec(self):
         v = lambda name: self.vars[name].get().strip()
@@ -263,7 +295,14 @@ class CinematicStudio:
         elif kind in ("fade", "background"):
             event["color"] = v("color")
         elif kind == "sound":
-            event["cue"] = v("subject")
+            bus = v("bus")
+            event.update(cue=v("subject"), bus=bus,
+                         volume=int(v("volume")),
+                         fade_in_ms=int(v("fadein")),
+                         fade_out_ms=int(v("fadeout")),
+                         loop=self.audio_loop.get())
+            if bus == "voice":
+                event["duck_percent"] = int(v("duck"))
         return event
 
     def create_clip(self):
@@ -342,6 +381,33 @@ class CinematicStudio:
         self.clip_id, self.event_id = cid, ""
         self.refresh()
 
+    def example_soundtrack(self):
+        """Add authored sound beats to Jeanne's sample; users bind audio files later."""
+        cid = "jeanne_prologue"
+        clip = next((c for c in self._project().cinematics if c["id"] == cid), None)
+        require(clip is not None, "Créer d'abord « Exemple Jeanne »")
+        spec = (
+            ("jeanne_music", "jeanne_theme", "music", 0, 10000, True, 1400, 1900),
+            ("jeanne_fields", "jeanne_wind", "ambience", 0, 8200, True, 800, 1200),
+            ("jeanne_voice", "jeanne_vision", "voice", 1500, 4400, False, 250, 550),
+            ("jeanne_fire", "jeanne_fire", "ambience", 8000, 2000, True, 400, 600),
+        )
+        existing = {e["id"] for e in clip["events"]}
+        require(not (existing & {item[0] for item in spec}),
+                "La bande-son Jeanne existe déjà")
+        events = []
+        for eid, cue, bus, start, duration, loop, fade_in, fade_out in spec:
+            event = event_template("sound", eid, start, duration)
+            event.update(cue=cue, bus=bus, loop=loop, volume=85,
+                         fade_in_ms=fade_in, fade_out_ms=fade_out)
+            if bus == "voice":
+                event["duck_percent"] = 30
+            events.append(event)
+        self._apply(lambda data: next(c for c in data["cinematics"]
+                                      if c["id"] == cid)["events"].extend(events))
+        self.clip_id = cid
+        self.refresh()
+
     def refresh(self):
         if self._project() is None:
             return
@@ -365,7 +431,9 @@ class CinematicStudio:
         events = sorted(clip["events"], key=lambda e: (e["start_ms"], e["id"])) if clip else []
         self._event_ids = [e["id"] for e in events]
         for i, event in enumerate(events):
-            self.events.insert("end", f"{event['start_ms']:>6}  {event['kind']} — {event['id']}")
+            display_kind = (f"son:{event.get('bus', 'sfx')}"
+                            if event["kind"] == "sound" else event["kind"])
+            self.events.insert("end", f"{event['start_ms']:>6}  {display_kind} — {event['id']}")
             if event["id"] == self.event_id:
                 self.events.selection_set(i)
         if clip:
@@ -396,14 +464,20 @@ class CinematicStudio:
                                anchor="s", fill="#a9bcd2")
         colors = {"background": "#506d93", "actor": "#c2a06e", "camera": "#78b99b",
                   "dialogue": "#9b8ad0", "fade": "#da8b8b", "sound": "#66bace"}
+        buses = {"music": "#3fbd9c", "ambience": "#65a1d3",
+                 "voice": "#e4b75e", "sfx": "#b48fca"}
         for i, event in enumerate(sorted(clip["events"], key=lambda e: (e["start_ms"], e["id"]))):
             y = 26 + i * 26
             x0 = 80 + (width - 100) * event["start_ms"] / duration
             x1 = 80 + (width - 100) * (event["start_ms"] + event["duration_ms"]) / duration
             canvas.create_rectangle(x0, y, max(x0+5, x1), y+20,
-                                    fill=colors[event["kind"]],
+                                    fill=(buses.get(event.get("bus", "sfx"), "#66bace")
+                                          if event["kind"] == "sound"
+                                          else colors[event["kind"]]),
                                     outline="white" if event["id"] == self.event_id else "")
-            canvas.create_text(x0+3, y+10, anchor="w", text=event["id"][:15],
+            label = (f"{event.get('bus', 'sfx')}:{event['id']}"
+                     if event["kind"] == "sound" else event["id"])
+            canvas.create_text(x0+3, y+10, anchor="w", text=label[:20],
                                fill="#081626")
             self._positions.append((x0, x1, y, y+20, event["id"]))
         playhead = 80 + (width - 100) * self.cursor.get() / duration
