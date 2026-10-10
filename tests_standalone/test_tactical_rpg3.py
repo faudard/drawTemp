@@ -308,10 +308,25 @@ class BalanceTests(unittest.TestCase):
         same = evaluate(content, "arena", seeds=[1, 7, 42], max_commands=15)
         self.assertEqual(report, same)
         self.assertEqual(report["runs"], 3)
+        self.assertEqual(len({row["digest"] for row in report["samples"]}),
+                         len(set(row["digest"] for row in report["samples"])))
+        self.assertEqual(report["telemetry"]["events"].get("activation", 0),
+                         sum(row["events"].get("activation", 0)
+                             for row in report["samples"]))
+        self.assertEqual(report["telemetry"]["tactics"].get("pincer", 0),
+                         sum(row["tactics"].get("pincer", 0)
+                             for row in report["samples"]))
+        self.assertEqual(report["damage_taken_mean"],
+                         round(sum(row["damage_taken"] for row in report["samples"]) / 3, 3))
         self.assertEqual(report["commands_p99"], percentile(
             [row["commands"] for row in report["samples"]], 99))
         self.assertTrue(verify_budgets(report, allow_limits=True,
                                        max_p95_commands=15))
+        with self.assertRaises(RuleError):
+            verify_budgets(report, max_mean_damage_taken=-1, allow_limits=True)
+        self.assertTrue(verify_budgets(report,
+            max_mean_damage_taken=report["damage_taken_mean"],
+            allow_limits=True))
         with self.assertRaises(RuleError):
             evaluate(content, "arena", seeds=[1, 1])
         with self.assertRaises(RuleError):
