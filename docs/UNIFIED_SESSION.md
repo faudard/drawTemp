@@ -77,5 +77,6 @@ Chaque front possède une mission distincte et déjà déverrouillée.
 - `ai_turn()` est proposé pour les combats mono-mission ; dans les fronts,
   les commandes IA doivent passer par `execute()` pour rester journalisées
   dans le replay stratégique.
-- Cette étape privilégie une API et une persistance de preuve d'intégration,
-  pas la gestion optimisée de checkpoints incrémentaux ou l'autosave.
+- La persistance opt-in 2.4.2 est décrite dans
+  [Persistence 2.0](PERSISTENCE_2.md) : enveloppes v2, générations de secours,
+  import v1 et autosave synchrone. Les checkpoints diff incrémentaux restent à faire.

@@ -29,6 +29,24 @@ Les checkpoints de session sont distincts des anciens slots `PlayerSession`.
 L'interface joueur Tk n'est pas encore migrée sur cette nouvelle API.
 Voir [contrats et exemples](docs/UNIFIED_SESSION.md).
 
+## Persistence 2.0 — reprise et sauvegardes de secours
+
+`sporebound.persistence.SessionStore` propose des checkpoints versionnés avec
+une copie de secours vérifiée. Les sessions v1 sont migrées explicitement à la
+prochaine écriture ; les anciens slots ne sont jamais remplacés automatiquement.
+
+```python
+from sporebound.persistence import SessionStore, AutosaveSession
+store = SessionStore("saves/game.session.json")
+store.save(session)
+resumed = store.load_with_status(content, project)
+print(resumed.source)   # primary ou backup
+autosave = AutosaveSession(resumed.session, store)
+```
+
+Voir [le guide Persistence 2.0](docs/PERSISTENCE_2.md). L'autosave reste
+**opt-in** et n'est pas encore connecté à l'interface joueur Tk.
+
 ## Démarrer
 
 Depuis la racine du dépôt :

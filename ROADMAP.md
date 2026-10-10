@@ -16,8 +16,11 @@ Ordre de recherche : combat fundamentals → jobs/builds/progression → encount
 - [x] **2.4.1 Unified Game Session** : façade unique campagne/narration/combat/fronts,
   récompenses engagées une seule fois, replays intégrés, sauvegarde atomique v1,
   vérification des identités de contenu/projet/règles, tests headless.
-- [ ] **2.4.2 Persistence 2.0** : versionnement et migration des fichiers de session,
-  checkpoints incrémentaux, autosave, recovery et API d'import des anciens slots.
+- [x] **2.4.2 Persistence 2.0 — foundation** : checkpoints versionnés v2,
+  deux générations vérifiées, récupération après écriture interrompue,
+  autosave explicite après commande et import non destructif v1/slots.
+- [ ] **2.4.2 suite** : snapshots incrémentaux et compactage sur longs replays,
+  intégration autosave dans le client joueur, aperçu et sélection du backup.
 - [ ] **2.4.3 Asset Pipeline** : contrats PNG/sprites/audio indépendants du renderer,
   registre d'assets et diagnostics de références.
 - [ ] **2.4.4 Reliability & scale** : longues campagnes, perf replay/checkpoint,
