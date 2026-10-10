@@ -25,9 +25,13 @@ The 2.7 gameplay modules have no Tk, pygame or PySide dependency.
 
 ### 2.7.1 — Coordinated AI
 
-Set `Unit.behavior = "coordinated"` to opt in. `Unit.tags` can include
-`medic` (prioritizes legal restorative actions) and `protector` (tries to
-stand next to an endangered medic, considering path costs and threats).
+Set `Unit.behavior = "coordinated"` to opt in directly. With the
+enhanced ruleset, a unit whose stored behavior is the legacy `tactical`
+also uses coordinated healing/protection if the Studio-authored tags include
+`medic` or `protector` (unless a patrol route is configured); untagged
+actors keep the previous policy. `medic` prioritizes legal restorative
+actions, while `protector` tries to stand next to an endangered medic,
+considering path costs and threats.
 An optional focus-fire pass ranks enemy targets by real combat forecast,
 potential lethality and immediately available allied basic attacks. It may
 change the target of an already-selected basic attack; it never overrides
@@ -102,9 +106,10 @@ Call `Campaign.learn_talent(content, hero_id, job_id, talent_id)`, then
 `Campaign.prepare(..., ruleset=rules)`. No implicit refunds; respec and a
 complete Studio talent-tree editing UI are future work. The actor inspector
 already exposes initial tactical roles (`medic`, `protector`) and starting
-formations with validated, undoable edits. This writes role/formation tags,
-not the opt-in `coordinated` behavior; use `tactical_rpg_rules()` when the
-created content enters combat.
+formations with validated, undoable edits. The Studio playtest automatically
+selects `tactical_rpg_rules()` when any authored unit has tactical tags; old
+untagged documents retain the original default rules and replay manifest.
+For standalone player/campaign sessions, explicitly pass the enhanced ruleset.
 
 ### 2.7.4 — Proximity synergies
 
