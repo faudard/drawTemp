@@ -60,6 +60,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_map_editor_gui.py -v
+      - name: Exercise 2.5.3 character and rules Studio authoring
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_character_rules_gui.py -v
       - name: Exercise advanced graph and standalone player UI
         env:
           SPOREBOUND_GUI_SMOKE: '1'
