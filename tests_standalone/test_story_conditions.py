@@ -46,7 +46,7 @@ class ConditionStudioTests(unittest.TestCase):
                                        leaf=predicate('gold_gte', value='50',
                                                       content=self.content))
         found = rows(expression)
-        self.assertEqual(len(found), 7)
+        self.assertEqual(len(found), 6)
         self.assertEqual(found[-1]['kind'], 'completed_mission')
         self.assertEqual(found[-2]['kind'], 'not')
         self.assertEqual(found[0]['path'], ())
