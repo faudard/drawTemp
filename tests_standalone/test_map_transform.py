@@ -73,11 +73,11 @@ class MapTransformTests(unittest.TestCase):
         actor = self.mission(doc.data).units
         self.assertEqual(next(u for u in actor if u.id == selected[0][0]).pos,
                          (2, 9))
-        self.assertEqual(self.mission(doc.data).objects[0]['pos'], [4, 7])
+        self.assertEqual(self.mission(doc.data).objects[0]['pos'], (4, 7))
         doc.undo()
         self.assertEqual(doc.data, saved)
         doc.redo()
-        self.assertEqual(self.mission(doc.data).objects[0]['pos'], [4, 7])
+        self.assertEqual(self.mission(doc.data).objects[0]['pos'], (4, 7))
 
     def test_multicell_actor_and_defense_group_moves_every_footprint(self):
         content = deepcopy(self.base)
@@ -99,7 +99,7 @@ class MapTransformTests(unittest.TestCase):
         self.assertEqual(actor.occupied_cells(),
                          {(2, 9), (3, 9), (2, 10), (3, 10)})
         trap = next(o for o in moved.objects if o['id'] == 'oil')
-        self.assertEqual(trap['pos'], [5, 3])
+        self.assertEqual(trap['pos'], (5, 3))
         self.assertEqual(trap['cells'], [[5, 3]])
         self.assertEqual(content, original)
 
