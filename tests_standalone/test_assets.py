@@ -87,7 +87,7 @@ class AssetTests(unittest.TestCase):
             moved = Path(folder) / 'moved'
             shutil.move(str(root), moved)
             self.assertEqual(registry.diagnostics(moved), [])
-            self.assertEqual(registry.resolve('hero', moved), moved / 'art/hero.png')
+            self.assertEqual(registry.resolve('hero', moved), (moved / 'art/hero.png').resolve())
             (moved / 'art/hero.png').unlink()
             (moved / 'audio/music.ogg').write_bytes(b'not audio')
             issues = registry.diagnostics(moved)
