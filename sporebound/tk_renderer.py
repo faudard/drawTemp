@@ -70,7 +70,7 @@ class CanvasRenderer:
                 kind = threats[tile.pos]
                 canvas.create_rectangle(x + 6, y + 6, x + cell - 6, y + cell - 6,
                                         outline=threat_style[kind], width=3,
-                                        dash=(5, 3) if kind == "charge" else ())
+                                        dash=(5, 3) if kind == "charge" else (2, 3))
             if selected == tile.pos:
                 canvas.create_rectangle(x + 2, y + 2, x + cell - 2, y + cell - 2,
                                         outline="#ffe78a", width=3)
