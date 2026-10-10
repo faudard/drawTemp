@@ -17,6 +17,8 @@ class PlayerController:
     def __init__(self, content, project, profile):
         project.validate(content)
         self.content = content
+        from .tactical_rpg3 import authored_rules_for_document
+        self.rules = authored_rules_for_document(content.to_dict())
         self.project = project
         self.profile = Path(profile)
         self.session = None
@@ -40,19 +42,34 @@ class PlayerController:
         # Validate the previous generation without deleting it: SessionStore.save
         # retains the last verified checkpoint as a recovery backup.
         if overwrite and (path.exists() or SessionStore(path).backup.exists()):
-            previous = SessionStore(path).load(self.content, self.project)
+            previous = self._load_compatible(SessionStore(path))
             require(previous.campaign_id == campaign_id, "Slot belongs to another campaign")
-        candidate = GameSession.new(self.content, self.project, campaign_id, seed=seed)
+        candidate = GameSession.new(self.content, self.project, campaign_id,
+                                    seed=seed, rules=self.rules)
         self.campaign_id, self.slot, self.session = campaign_id, slot, candidate
         self.save()
         return candidate
 
     def load_game(self, campaign_id, slot):
         path = self.path_for(campaign_id, slot)
-        candidate = SessionStore(path).load(self.content, self.project)
+        candidate = self._load_compatible(SessionStore(path))
         require(candidate.campaign_id == campaign_id, "Save belongs to another campaign")
         self.campaign_id, self.slot, self.session = campaign_id, slot, candidate
         return candidate
+
+    def _load_compatible(self, store):
+        """Accept old default-rule checkpoints without silently migrating them."""
+        from .model import RuleError
+        from .rules import default_rules
+        try:
+            return store.load(self.content, self.project, rules=self.rules)
+        except RuleError as error:
+            if self.rules.manifest() == default_rules().manifest():
+                raise
+            try:
+                return store.load(self.content, self.project, rules=default_rules())
+            except RuleError:
+                raise error
 
     def save(self):
         require(self.session is not None, "No campaign loaded")
@@ -68,7 +85,7 @@ class PlayerController:
             return result
         except Exception:
             self.session = GameSession.from_recording(
-                old, self.content, self.project)
+                old, self.content, self.project, rules=self.session.rules)
             raise
 
     def choose_story_option(self, choice_id):
