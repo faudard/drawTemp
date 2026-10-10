@@ -551,6 +551,13 @@ def launch(path):
     notebook.add(journal,text='Journal de combat')
     from types import SimpleNamespace
     from .studio_panels import StudioPanels
+
+    def select_workspace_mission(mid):
+        if mid not in {m['id'] for m in doc.data['missions']}:
+            raise RuleError(f'Unknown mission: {mid}')
+        mission_var.set(mid)
+        stop()
+
     studio = StudioPanels(
         notebook, tk, ttk,
         SimpleNamespace(showerror=messagebox.showerror,
@@ -559,7 +566,7 @@ def launch(path):
         doc=lambda: doc, content_path=lambda: current_path,
         mission=mission_var.get, selection=lambda: selected_cell,
         design_change=design_change, play_campaign=start_campaign,
-        status=status_var, mission_change=stop)
+        status=status_var, mission_change=stop,\n        select_mission=select_workspace_mission)
     ttk.Label(root,textvariable=status_var).pack(fill='x')
     root.protocol('WM_DELETE_WINDOW',lambda: root.destroy() if discard_ok() else None)
     refresh_source()
