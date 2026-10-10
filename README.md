@@ -15,7 +15,8 @@ n'est pas garantie. Voir [les limites de la migration](docs/GAMEPLAY.md#migratio
 
 Une campagne indépendante, **Jeanne d'Arc — Les Cendres du Royaume**, propose
 sept scènes narratives et cinq missions tactiques, avec un embranchement
-secours / poursuite, un flashback d'entraînement et une fuite finale. Les
+secours / poursuite, un flashback d'entraînement, une fuite finale, ainsi
+qu'une exploration jouable des champs et des ruines de Domrémy. Les
 anciens exemples Sporebound restent conservés.
 
 ```sh
@@ -23,8 +24,8 @@ python -m sporebound validate --content sporebound/content/jeanne.json --project
 python -m sporebound player --content sporebound/content/jeanne.json --project sporebound/content/jeanne.game.json
 ```
 
-Cette tranche ne contient pas encore les actes I–V ni l'exploration libre
-et les cinématiques 2D. Voir [le guide du prologue](docs/JEANNE_PROLOGUE.md).
+Cette tranche ne contient pas encore les actes I–V, l'exploration continue
+hors grille ni les cinématiques dessinées. Voir [le guide du prologue](docs/JEANNE_PROLOGUE.md).
 
 ## Studio Cinématiques 2.9
 

@@ -218,5 +218,289 @@
         ]
       }
     ]
-  }
+  },
+  "exploration": {
+    "sc_p0_champs": {
+      "title": "Les champs de Domrémy — avant les flammes",
+      "theme": "fields",
+      "width": 10,
+      "height": 7,
+      "start": [
+        1,
+        5
+      ],
+      "blocked": [
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          6,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          6,
+          2
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "interactions": [
+        {
+          "id": "ble",
+          "title": "Les blés mûrs",
+          "text": "Les épis ploient sous la brise. Jeanne reconnaît les sillons tracés avec son père, année après année.",
+          "pos": [
+            3,
+            5
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "medaillon",
+          "title": "Le médaillon de Jacques",
+          "text": "Un médaillon oublié sous l'arbre. Jacques lui a souvent répété : « Une lame ne vaut rien sans quelqu'un à protéger. »",
+          "pos": [
+            5,
+            3
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "fleurs",
+          "title": "Les fleurs de Margot",
+          "text": "Quelques fleurs sauvages pour l'hospice. Ce matin paraissait ordinaire.",
+          "pos": [
+            1,
+            2
+          ],
+          "required": false,
+          "exit": false
+        },
+        {
+          "id": "chene",
+          "title": "Le vieux chêne",
+          "text": "Les oiseaux se taisent. Une voix prononce son prénom. Le monde semble s'immobiliser.",
+          "pos": [
+            8,
+            4
+          ],
+          "required": false,
+          "exit": true
+        }
+      ]
+    },
+    "sc_p0_cendres": {
+      "title": "Domrémy — chercher parmi les cendres",
+      "theme": "village",
+      "width": 10,
+      "height": 7,
+      "start": [
+        1,
+        5
+      ],
+      "blocked": [
+        [
+          3,
+          1
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          6,
+          2
+        ],
+        [
+          7,
+          2
+        ],
+        [
+          6,
+          3
+        ]
+      ],
+      "interactions": [
+        {
+          "id": "maison",
+          "title": "La maison de Jacques",
+          "text": "La maison n'est plus qu'un squelette noir. Sous les poutres, Jeanne retrouve un morceau de tissu brodé par son père.",
+          "pos": [
+            2,
+            3
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "grange",
+          "title": "Les appels de la grange",
+          "text": "Derrière la grange, on appelle au secours. Une femme serre un enfant contre elle. Jeanne n'a que quelques instants pour choisir.",
+          "pos": [
+            5,
+            5
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "traces",
+          "title": "Des traces de bottes",
+          "text": "Des chevaux et des hommes d'armes ont quitté la place vers le chemin de l'est. La patrouille cherchait quelque chose de précis.",
+          "pos": [
+            8,
+            2
+          ],
+          "required": false,
+          "exit": false
+        },
+        {
+          "id": "carrefour",
+          "title": "Le carrefour",
+          "text": "D'un côté, le feu et les survivants. De l'autre, les cavaliers qui emportent le sceau. Jeanne doit décider.",
+          "pos": [
+            8,
+            5
+          ],
+          "required": false,
+          "exit": true
+        }
+      ],
+      "actors": [
+        {
+          "id": "colin",
+          "name": "Colin, apprenti boulanger",
+          "kind": "civilian",
+          "route": [
+            [
+              2,
+              5
+            ],
+            [
+              2,
+              4
+            ],
+            [
+              2,
+              5
+            ]
+          ],
+          "dialogue": "« Ma mère est restée près du four ! Je ne sais plus où courir… »",
+          "rescue_text": "Jeanne montre le passage vers la colline. Colin part chercher les autres survivants et promet de rapporter des bandages.",
+          "deadline": 16,
+          "rescue_flag": "village_rescued"
+        },
+        {
+          "id": "isabeau",
+          "name": "Isabeau, villageoise",
+          "kind": "civilian",
+          "route": [
+            [
+              5,
+              6
+            ],
+            [
+              6,
+              6
+            ],
+            [
+              7,
+              6
+            ]
+          ],
+          "dialogue": "« Le toit va s'effondrer. J'ai besoin d'aide pour sortir ! »",
+          "rescue_text": "Jeanne dégage l'issue. Isabeau rassemble les enfants et emporte les dernières réserves de l'hospice.",
+          "deadline": 26,
+          "rescue_flag": "village_rescued"
+        },
+        {
+          "id": "loise",
+          "name": "Loïse, fille du forgeron",
+          "kind": "civilian",
+          "route": [
+            [
+              4,
+              3
+            ],
+            [
+              5,
+              3
+            ],
+            [
+              5,
+              4
+            ]
+          ],
+          "dialogue": "« Ils ont arrêté mon frère. Pourquoi cherchaient-ils ton père ? »",
+          "rescue_text": "Jeanne l'accompagne jusqu'à une rue sûre. Loïse transmet les noms des gardes qu'elle a reconnus.",
+          "deadline": 19,
+          "rescue_flag": "village_rescued"
+        },
+        {
+          "id": "michel",
+          "name": "Frère Michel, témoin",
+          "kind": "witness",
+          "route": [
+            [
+              8,
+              4
+            ],
+            [
+              8,
+              5
+            ],
+            [
+              8,
+              4
+            ]
+          ],
+          "dialogue": "« J'ai vu une bague noire au doigt du capitaine. La troupe cherchait des feuillets, pas des provisions. »",
+          "rescue_text": "Le religieux vous bénit et reste pour secourir les blessés.",
+          "deadline": 0,
+          "rescue_flag": ""
+        }
+      ]
+    }
+  },
+  "battle_support": [
+    {
+      "mission": "p0_03a_secours",
+      "flag": "village_rescued",
+      "gte": 1,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "p0_03a_secours",
+      "flag": "village_rescued",
+      "gte": 2,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "p0_04_fuite",
+      "flag": "village_rescued",
+      "gte": 2,
+      "potion_bonus": 1
+    }
+  ]
 }

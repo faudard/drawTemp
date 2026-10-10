@@ -10,6 +10,7 @@ import json
 from .ai import play_activation
 from .campaign import Campaign
 from .engine import Battle
+from .exploration import Exploration
 from .fronts import MultiFrontSession
 from .model import RuleError, require
 from .narrative import StoryBook
@@ -40,6 +41,7 @@ class GameSession:
         self.content, self.project = deepcopy(content), deepcopy(project)
         self.campaign_id, self.seed = campaign_id, seed
         self.story = StoryBook(project.story, content, project.campaigns)
+        self.exploration = Exploration(project.exploration, project.story)
         self.progress = project.new_game(campaign_id, content)
         self.battle = None
         self.fronts = None
@@ -63,7 +65,39 @@ class GameSession:
     def active_scene(self):
         return self.story.active_scene(self.progress)
 
+    def exploration_state(self):
+        scene = self.active_scene()
+        return self.exploration.state(self.progress, scene["id"]) if scene else None
+
+    def explore_move(self, dx, dy):
+        require(self.mode == "campaign", "Exploration unavailable during combat")
+        scene = self.active_scene()
+        require(scene is not None, "No active narrative scene")
+        return self.exploration.move(self.progress, scene["id"], dx, dy)
+
+    def explore_interact(self, point_id):
+        require(self.mode == "campaign", "Exploration unavailable during combat")
+        scene = self.active_scene()
+        require(scene is not None, "No active narrative scene")
+        return self.exploration.interact(self.progress, scene["id"], point_id)
+
+    def explore_wait(self):
+        require(self.mode == "campaign", "Exploration unavailable during combat")
+        scene = self.active_scene()
+        require(scene is not None, "No active narrative scene")
+        return self.exploration.wait(self.progress, scene["id"])
+
+    def explore_actor(self, actor_id, action):
+        require(self.mode == "campaign", "Exploration unavailable during combat")
+        scene = self.active_scene()
+        require(scene is not None, "No active narrative scene")
+        return self.exploration.actor_action(self.progress, scene["id"],
+                                             actor_id, action)
+
     def available_choices(self):
+        stage = self.exploration_state()
+        if stage is not None and not stage["completed"]:
+            return []
         return self.story.choices(self.progress)
 
     def available_missions(self):
@@ -74,6 +108,8 @@ class GameSession:
     def choose_story_option(self, choice_id):
         require(self.active_battle is None or self.active_battle.result is not None,
                 "Finish combat before choosing dialogue")
+        stage = self.exploration_state()
+        require(stage is None or stage["completed"], "Explore the area first")
         updated = self.story.choose(self.progress, choice_id)
         self.progress = updated
         return self.active_scene()
@@ -110,12 +146,27 @@ class GameSession:
         self.siege_id = siege_id
         return self.fronts
 
+    def _battle_support(self, mission_id):
+        total = 0
+        for spec in self.project.battle_support:
+            value = self.progress.story_flags.get(spec["flag"], 0)
+            require(type(value) is int, "Battle support flag must be an integer")
+            if spec["mission"] == mission_id and value >= spec["gte"]:
+                total += spec["potion_bonus"]
+        if not total:
+            return None
+        # Use the standard replay-verified Battle.initial_state contract;
+        # no out-of-band mutations after Battle was constructed.
+        require(total <= 30, "Battle support exceeds supply cap")
+        return {"inventory": {"potion": 3 + total, "ether": 2, "phoenix": 1}}
+
     def start_mission(self, mission_id):
         require(self.mode == "campaign", "End the current encounter first")
         require(mission_id in self.available_missions(), "Mission is locked")
         # Campaign.prepare can materialize heroes: use a throwaway roster.
         battle = deepcopy(self.progress).prepare(
-            self.content, mission_id, seed=self.seed, ruleset=self.rules)
+            self.content, mission_id, seed=self.seed, ruleset=self.rules,
+            initial_state=self._battle_support(mission_id))
         self.battle, self.finalized = battle, False
         self._settle()
         return battle
