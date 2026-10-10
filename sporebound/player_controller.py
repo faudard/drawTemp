@@ -74,6 +74,12 @@ class PlayerController:
     def choose_story_option(self, choice_id):
         return self._apply(self.session.choose_story_option, choice_id)
 
+    def explore_move(self, dx, dy):
+        return self._apply(self.session.explore_move, dx, dy)
+
+    def explore_interact(self, point_id):
+        return self._apply(self.session.explore_interact, point_id)
+
     def start_mission(self, mission_id):
         return self._apply(self.session.start_mission, mission_id)
 
