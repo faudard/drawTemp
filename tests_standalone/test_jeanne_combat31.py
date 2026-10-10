@@ -67,6 +67,29 @@ class JeanneCourtyardCombatTests(unittest.TestCase):
         self.assertTrue(view.timeline)
         self.assertNotEqual(original, battle.digest())  # manual setup only
 
+    def test_real_formation_and_escort_actions_replay(self):
+        content = jeanne_siege_content()
+        for unit in content.missions[MISSION].units:
+            unit.ct = 100 if unit.id in {"lance_nord", "lance_sud", "officier"} else 0
+        battle = Battle(content, MISSION, seed=21, rules=self.rules)
+        for unit_id, expected in (
+            ("lance_nord", {"kind": "formation", "mode": "phalanx"}),
+            ("lance_sud", {"kind": "formation", "mode": "phalanx"}),
+            ("officier", {"kind": "formation", "mode": "escort",
+                          "target": "soigneur"}),
+        ):
+            self.assertEqual(battle.active_id, unit_id)
+            command = choose_command(battle)
+            self.assertEqual(command, expected)
+            battle.execute(command)
+            battle.execute({"kind": "end"})
+        self.assertTrue(any(event["kind"] == "formation" and event["mode"] == "escort"
+                            for event in battle.events))
+        self.assertTrue(any(event["kind"] == "formation" and event["mode"] == "phalanx"
+                            for event in battle.events))
+        self.assertEqual(Battle.replay(battle.recording(), rules=self.rules).digest(),
+                         battle.digest())
+
     def test_balanced_coordinated_and_uncoordinated_rosters(self):
         strong = jeanne_siege_content()
         plain = jeanne_siege_content(coordinated=False)
