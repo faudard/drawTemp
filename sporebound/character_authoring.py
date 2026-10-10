@@ -225,12 +225,13 @@ def parse_skill_levels(text, skill_ids):
     """Read comma-separated skill=level pairs for a job."""
     require(isinstance(text, str), 'Invalid skill levels')
     result = {}
+    known = set(skill_ids)
     for part in text.split(','):
         if not part.strip():
             continue
         require(part.count('=') == 1, 'Use skill=level')
         sid, level = (piece.strip() for piece in part.split('='))
-        require(sid in set(skill_ids) and sid not in result, 'Unknown or duplicate skill')
+        require(sid in known and sid not in result, 'Unknown or duplicate skill')
         require(level.isdecimal() and 1 <= int(level) <= 20,
                 'Skill level must be 1..20')
         result[sid] = int(level)
