@@ -309,11 +309,24 @@ class PlayerApplication:
             self._explore_feedback = result["title"] + " — " + result["text"]
         self._change(apply)
 
+    def _exploration_wait(self):
+        self._explore_feedback = "Le temps passe. Les habitants continuent à se déplacer."
+        self._change(self.player.explore_wait)
+
+    def _exploration_actor(self, actor_id, action):
+        def apply():
+            result = self.player.explore_actor(actor_id, action)
+            self._explore_feedback = result["title"] + " — " + result["text"]
+        self._change(apply)
+
     def _exploration_screen(self, scene, stage):
         if self._explore_scene_id != scene["id"]:
             self._explore_feedback = ""
             self._explore_scene_id = scene["id"]
-        self._heading(stage["title"], "Explorer les champs avant l'appel des voix.")
+        subtitle = ("Le village brûle. Chaque déplacement compte : secourez les habitants !"
+                    if stage["theme"] == "village" else
+                    "Explorez les champs avant l'appel des voix.")
+        self._heading(stage["title"], subtitle)
         area = self.ttk.Frame(self.view)
         area.pack(fill="both", expand=True)
         board = self.tk.Canvas(area, width=690, height=495,
@@ -331,7 +344,12 @@ class PlayerApplication:
         self.ttk.Label(sidebar, text="Déplacement : flèches / ZQSD (WASD)",
                        wraplength=310).pack(anchor="w", pady=(4, 8))
         self.ttk.Label(sidebar, text="Cliquer une case voisine pour marcher.",
-                       wraplength=310).pack(anchor="w", pady=(0, 12))
+                       wraplength=310).pack(anchor="w", pady=(0, 5))
+        if stage.get("actors"):
+            self.ttk.Label(sidebar, text="Temps écoulé : " + str(stage["tick"]) +
+                           " déplacements", wraplength=310).pack(anchor="w", pady=3)
+            self._button(sidebar, "Attendre un déplacement",
+                         self._exploration_wait).pack(anchor="w", pady=(2, 8))
         px, py = stage["position"]
         nearest = []
         for point in stage["interactions"]:
@@ -344,9 +362,28 @@ class PlayerApplication:
                 self._button(sidebar, "Examiner : " + point["title"],
                              lambda pid=point["id"]: self._exploration_interact(pid)).pack(
                                  anchor="w", fill="x", pady=(1, 5))
+        nearest_actor = []
+        for actor in stage.get("actors", []):
+            description = actor["name"] + " — " + (
+                "sauvé" if actor["status"] == "rescued" else
+                "trop tard" if actor["status"] == "lost" else
+                "à secourir (" + str(max(0, actor["deadline"] - stage["tick"])) +
+                " pas)" if actor["kind"] == "civilian" else "témoin")
+            self.ttk.Label(sidebar, text=description,
+                           wraplength=310).pack(anchor="w", pady=(3, 0))
+            distance = abs(actor["pos"][0] - px) + abs(actor["pos"][1] - py)
+            if distance <= 1 and actor["status"] != "lost":
+                nearest_actor.append(actor["id"])
+                self._button(sidebar, "Parler à " + actor["name"],
+                             lambda aid=actor["id"]: self._exploration_actor(
+                                 aid, "talk")).pack(anchor="w", fill="x", pady=(1, 2))
+                if actor["kind"] == "civilian" and actor["status"] == "active":
+                    self._button(sidebar, "Secourir " + actor["name"],
+                                 lambda aid=actor["id"]: self._exploration_actor(
+                                     aid, "rescue")).pack(anchor="w", fill="x", pady=(1, 4))
         self.ttk.Label(sidebar, text=self._explore_feedback or
-                       "Avancez vers un point d'intérêt et examinez-le.",
-                       wraplength=300).pack(anchor="w", pady=12)
+                       "Avancez vers un point d'intérêt ou un habitant.",
+                       wraplength=300).pack(anchor="w", pady=9)
         moves = {"<Up>": (0, -1), "<Down>": (0, 1),
                  "<Left>": (-1, 0), "<Right>": (1, 0),
                  "w": (0, -1), "z": (0, -1), "a": (-1, 0),
@@ -354,7 +391,10 @@ class PlayerApplication:
         for key, delta in moves.items():
             self.root.bind(key, lambda event, vector=delta:
                            self._safe(lambda: self._exploration_step(*vector)))
-        if nearest:
+        if nearest_actor:
+            self.root.bind("e", lambda event: self._safe(
+                lambda: self._exploration_actor(nearest_actor[0], "talk")))
+        elif nearest:
             self.root.bind("e", lambda event: self._safe(
                 lambda: self._exploration_interact(nearest[0])))
 
