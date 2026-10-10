@@ -65,7 +65,7 @@ class AuthoredSiegeController:
                 and fronts.initial_specs == self.blueprint["specs"]
                 and fronts.links == self.blueprint["links"]
                 and fronts.initial_campaign == self.blueprint["campaign"]
-                and fronts.initial_logistics is None,
+                and fronts.initial_logistics == self.blueprint.get("logistics"),
                 "Current session differs from authored siege definition")
 
     def _replace(self, fronts):
