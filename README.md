@@ -102,6 +102,12 @@ et les valeurs sont propres au prototype autonome.
 
 Lancer `python -m sporebound editor`. Le studio comprend maintenant :
 
+- **Espace projet (2.5.5)** : inventaire central des campagnes, missions,
+  dialogues, personnages, classes, compétences et assets ; navigation vers les
+  panneaux existants, création de missions et campagnes, duplication contrôlée,
+  vérification du registre d'assets.
+
+
 - **Carte et combat** : peinture de cases, positionnement, prévisions, playtest isolé.
 - **Carte vierge** : assistant de nouvelle mission avec dimensions et acteurs de base.
 - **Personnages et événements** : ajouter/supprimer personnages et monstres,
@@ -120,7 +126,7 @@ Pour les règles, équipements, vagues et acteurs complexes, l'onglet **Données
 reste disponible. L'écran titre est à ce stade un **aperçu interactif Tk** et
 non un frontend de jeu autonome finalisé.
 
-Voir le [guide détaillé du Studio](docs/STUDIO.md) pour les actions disponibles,
+Voir aussi le [guide Project Workspace](docs/WORKSPACE.md).\nLe gate Studio 3.0 reste partiel : l'édition complète des ressources sans JSON\nest prévue dans les PR 2.5.1 à 2.5.4.\n\nVoir le [guide détaillé du Studio](docs/STUDIO.md) pour les actions disponibles,
 les conventions de sauvegarde et les limites.
 
 ## Studio avancé et client joueur
