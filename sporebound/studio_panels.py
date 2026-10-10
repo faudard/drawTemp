@@ -33,6 +33,8 @@ class StudioPanels:
         self._project_tab(notebook)
         from .studio_advanced import AdvancedStudio
         self.advanced=AdvancedStudio(self, notebook)
+        from .studio_character_rules import CharacterRulesStudio
+        self.character_rules=CharacterRulesStudio(self, notebook)
         from .studio_story import StoryEditor
         self.story_editor=StoryEditor(self, notebook)
         self._last_mission_signature=None
@@ -368,5 +370,6 @@ class StudioPanels:
         if self.session is not None:
             self.project_status.config(text=f'Campagne active : {self.session_campaign} | Missions : {len(self.session.completed)} terminées | Or : {self.session.gold}')
         self.advanced.refresh()
+        self.character_rules.refresh()
         self.story_editor.refresh()
         self.workspace.refresh()
