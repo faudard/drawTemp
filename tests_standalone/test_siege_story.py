@@ -84,6 +84,9 @@ class SiegeStoryTests(unittest.TestCase):
             a.choose_story_option("free")
             self.assertIsNone(a.active_scene())
             self.assertIs(a.story.progress.story_flags["honor"], False)
+            # Old Command Center saves must never erase the new choice journal.
+            with self.assertRaises(RuleError):
+                edit.save_siege_slot(path, bp, 1, a.session.fronts)
             b = AuthoredSiegeController(content, bp, path,
                                         project=project)
             b.continue_game()
