@@ -117,7 +117,7 @@ Les membres d'une faction n'ont pas tous les mêmes convictions ; ne pas assimil
 - **Règle :** sa chute apporte une réponse humaine satisfaisante avant la révélation surnaturelle.
 
 ### MARGOT DES ORMES — soigneuse et conscience civile
-- **Entrée :** survivante du prologue ou rencontre à l'hospice, toujours recrut able (sans softlock).
+- **Entrée :** survivante du prologue ou rencontre à l'hospice, toujours recrutable (sans softlock).
 - **Rôle :** secours, guérison, protection, logistique de réfugiés.
 - **Arc :** guérisseuse dévouée -> responsable qui apprend à poser des limites. Peut quitter temporairement l'escouade si Jeanne commet des violences injustifiées ; une voie de réparation existe.
 
