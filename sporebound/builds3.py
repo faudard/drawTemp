@@ -23,7 +23,8 @@ def validate_talent_trees(content):
             require(type(spec.get("jp", 1)) is int and 1 <= spec.get("jp", 1) <= 20,
                     f"{job_id}.{tid}: invalid JP cost")
             requires = spec.get("requires", [])
-            require(isinstance(requires, list) and len(set(requires)) == len(requires)
+            require(isinstance(requires, list) and all(isinstance(dep, str) for dep in requires)
+                    and len(set(requires)) == len(requires)
                     and tid not in requires and all(dep in talents for dep in requires),
                     f"{job_id}.{tid}: invalid prerequisites")
             require(isinstance(spec.get("exclusive", ""), str), "Invalid talent specialization")
@@ -33,7 +34,8 @@ def validate_talent_trees(content):
                             for value in bonuses.values()),
                     f"{job_id}.{tid}: invalid bonuses")
             skills = spec.get("skills", [])
-            require(isinstance(skills, list) and len(set(skills)) == len(skills)
+            require(isinstance(skills, list) and all(isinstance(sid, str) for sid in skills)
+                    and len(set(skills)) == len(skills)
                     and all(skill_id in content.skills for skill_id in skills),
                     f"{job_id}.{tid}: unknown skill")
         visited, visiting = set(), set()
@@ -108,8 +110,8 @@ def validate_hero_build(content, hero):
             all(type(n) is int and n >= 0 for n in hero.spent_jp.values()),
             "Invalid spent JP")
     require(isinstance(hero.learned_talents, dict) and
-            all(isinstance(v, list) and len(v) == len(set(v)) for v in
-                hero.learned_talents.values()), "Invalid learned talents")
+            all(isinstance(v, list) and all(isinstance(t, str) for t in v)
+                and len(v) == len(set(v)) for v in hero.learned_talents.values()), "Invalid learned talents")
     for job_id, learned in hero.learned_talents.items():
         require(job_id in content.jobs, "Unknown learned talent job")
         talents = content.jobs[job_id].get("talents", {})
