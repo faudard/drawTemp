@@ -120,6 +120,18 @@ class Document:
         self.saved = json.dumps(self.data, sort_keys=True)
 
     def playtest(self, mid, seed=1):
+        # A designer opting into starting tactical roles/formations should see
+        # their actual effects in playtest. Untagged legacy documents keep
+        # their exact default-rules manifest and replay semantics.
+        tactical = any(
+            any(tag in {"medic", "healer", "protector"}
+                or tag.startswith("formation:") for tag in u.get("tags", []))
+            for mission in self.data["missions"] for u in mission["units"])
+        if tactical:
+            from .tactical_rpg3 import tactical_rpg_rules
+            rules = tactical_rpg_rules()
+            return Battle(Content.from_dict(self.data, rules=rules),
+                          mid, seed, rules=rules)
         return Battle(Content.from_dict(self.data), mid, seed)
 
 
