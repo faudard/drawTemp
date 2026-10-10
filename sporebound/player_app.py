@@ -57,6 +57,7 @@ class PlayerApplication:
         self.canvas = None
         self.renderer = None
         self.info = None
+        self.cinematic = None
         self._typewriter_job = None
         self._audible_scene = None
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -77,6 +78,9 @@ class PlayerApplication:
         style.configure("TLabelframe.Label", background="#101a2b", foreground="#e8f0fa")
 
     def _clear(self):
+        if self.cinematic is not None:
+            self.cinematic.close()
+            self.cinematic = None
         if self._typewriter_job is not None:
             self.root.after_cancel(self._typewriter_job)
             self._typewriter_job = None
@@ -191,7 +195,7 @@ class PlayerApplication:
                                                     "Recommencer cet emplacement ?"):
             return
         self.player.new_game(cid, slot, overwrite=exists)
-        self.show()
+        self._cinematic_sequence("campaign_start", cid, self.show)
 
     def _load_game(self):
         self.player.load_game(self.campaign_var.get(), int(self.slot_var.get()))
@@ -230,6 +234,38 @@ class PlayerApplication:
         else:
             self.campaign_screen()
 
+    def _cinematic_sequence(self, kind, target, finished):
+        """Play authored presentation beats without mutating the saved game."""
+        from .cinematics import matching_cinematics
+        from .cinematic_player import CinematicPlayback
+
+        clips = matching_cinematics(self.project, kind, target)
+
+        def next_clip(index=0):
+            self.cinematic = None
+            if index >= len(clips):
+                finished()
+                return
+            self._clear()
+            self.cinematic = CinematicPlayback(
+                self.view, self.tk, self.ttk, clips[index],
+                lambda: next_clip(index + 1), audio=self.audio,
+                registry=self.registry, asset_root=self.asset_root)
+
+        next_clip()
+
+    def _start_mission_with_cinematic(self, mission_id):
+        self._cinematic_sequence(
+            "before_mission", mission_id,
+            lambda: self._safe(lambda: self._change(
+                lambda: self.player.start_mission(mission_id))))
+
+    def _finish_mission_with_cinematic(self):
+        battle = self.player.session.active_battle
+        mission_id = battle.mission.id
+        self.player.return_to_campaign()
+        self._cinematic_sequence("after_mission", mission_id, self.show)
+
     def campaign_screen(self):
         session = self.player.session
         self._clear()
@@ -251,8 +287,7 @@ class PlayerApplication:
             for mission_id in available:
                 mission = self.player.content.missions[mission_id]
                 self._button(self.view, mission.name + " — " + mission.objective,
-                             lambda mid=mission_id: self._change(
-                                 lambda: self.player.start_mission(mid))).pack(
+                             lambda mid=mission_id: self._start_mission_with_cinematic(mid)).pack(
                                      fill="x", padx=80, pady=5)
             # Studio blueprints are distinct from ad-hoc multi-front battles.
             # Locked or duplicate-mission plans remain visible but not playable.
@@ -357,7 +392,7 @@ class PlayerApplication:
             self._button(nav, "Timeline / Fronts", self.strategy_screen).pack(side="left", padx=4)
         elif session.finalized:
             self._button(nav, "Résultats → Campagne",
-                         lambda: self._change(self.player.return_to_campaign)).pack(
+                         self._finish_mission_with_cinematic).pack(
                              side="left", padx=4)
         self._button(nav, "Sauvegarder", self.player.save).pack(side="right", padx=4)
         if not session.finalized and not battle.result:
