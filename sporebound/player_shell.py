@@ -9,13 +9,16 @@ from .model import Content, RuleError
 from .player_session import PlayerSession
 from .siege import available_operations
 from .tactical_ui import tactical_snapshot
+from .tactical_rpg3 import tactical_rpg_rules
 
 
 def launch(content_path, project_path=None, profile_path=None):
     import tkinter as tk
     from tkinter import ttk, messagebox
 
-    content=Content.load(content_path)
+    # The interactive client must accept authored 2.7 boss behaviors and
+    # advanced team tactics; battle opt-in remains mission-scoped.
+    content=Content.load(content_path, rules=tactical_rpg_rules())
     project_path=Path(project_path) if project_path else Path(content_path).with_suffix('.game.json')
     project=(GameProject.load(project_path,content) if project_path.is_file()
              else GameProject.default(content))
