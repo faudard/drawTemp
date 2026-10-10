@@ -1,6 +1,13 @@
-# Modular hero parts
+# Éléments graphiques modulaires
 
-Generated starter parts used by **Sporebound Studio > Hero Creator**.
+Jeu de pièces d'illustration historiques conservées pour un futur éditeur
+de personnage indépendant du moteur de rendu.
 
-Folders: `body`, `cap`, `face`, `top`, `bottom`, `accessory`, `weapon`.
-A variant can provide `_front`, `_right`, `_back`, `_left` PNG files. All images share a 192x192 transparent canvas. White areas are palette-tinted by the editor; dark outlines remain dark.
+Dossiers : `body`, `cap`, `face`, `top`, `bottom`, `accessory`,
+`weapon` et variantes associées. Une pièce peut fournir des PNG
+`_front`, `_right`, `_back` et `_left`. Les images partagent une toile
+transparente 192 × 192. Les zones claires étaient prévues pour la teinte,
+les contours sombres pour conserver leur contraste.
+
+Ce sont des fichiers source graphiques, pas des assets actuellement
+chargés par le moteur Python autonome.
