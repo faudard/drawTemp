@@ -256,7 +256,9 @@ class SiegeStudio:
         self.log_pursuit_box = self._entry(rescue, 1, "Carte de poursuite", self.log_pursuit, [])
         self._entry(rescue, 2, "Rançon en provisions", self.log_ransom)
         self._entry(rescue, 3, "Récompense de poursuite", self.log_reward)
-        self._button(rescue, "Appliquer les missions annexes",
+        side_buttons = ttk.Frame(rescue)
+        side_buttons.grid(row=4, column=0, columnspan=2, sticky="ew")
+        self._button(side_buttons, "Appliquer les missions annexes",
                      self.save_side_missions)
         self.ttk.Label(logistics, text="Les combats annexes sont de vraies missions "
                        "tactiques préalablement dessinées dans Carte et combat. "
