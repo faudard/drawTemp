@@ -185,6 +185,8 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
         front_links.configure_mission(
             prepared, self.missions[front], self.front_overrides.get(front, {}),
             front in self.blocked_reinforcements)
+        if self.route_policy is not None and front == self.campaign.final:
+            self.route_policy.apply_final_terms(self, prepared, front)
         return Battle(prepared, self.missions[front],
                       seed=self.seed + sorted(self.missions).index(front)
                       if front != self.initial_focus else self.seed,
