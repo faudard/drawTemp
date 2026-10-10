@@ -213,6 +213,21 @@ campaign slot before changing in-memory progression, rejects unavailable
 talents and blocks mid-battle upgrades. Purchased bonuses take effect during
 the next `Campaign.prepare` and survive reloads.
 
+### Vertical gate — real Studio → Player → Battle
+
+`tests_standalone/test_tactical_e2e_gui.py` drives real Tk widgets under
+Xvfb: fill the Studio talent form, create the talent node, save the content
+file, reopen it in Player, purchase it from a campaign with earned JP, enter
+combat, reload the persisted slot and verify the equipped combat stat bonus.
+It is a distinct CI job step, not a headless substitute for UI interaction.
+
+The editor also selects the appropriate rules when opening, modifying, saving
+and playtesting advanced-authored missions (including `boss_phase` triggers).
+`authored_rules_for_document` leaves untagged vanilla projects on the exact
+historical `default_rules()` manifest. PlayerSession independently opts in
+when a phase-trigger script is present, even if the boss itself has the
+default tactical behavior.
+
 ## Gate / integration checklist
 
 - Old `default_rules` manifest and v1/2/3 Battle replay unaffected.
