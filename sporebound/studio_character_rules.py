@@ -21,11 +21,11 @@ class CharacterRulesStudio:
         self.tabs.pack(fill='both', expand=True, padx=8, pady=6)
         self._units_tab()
         self._archetypes_tab()
-        from .studio_bestiary import MedievalBestiaryStudio
-        self.medieval_bestiary = MedievalBestiaryStudio(self, self.tabs)
         self._skills_tab()
         self._jobs_tab()
         self._equipment_tab()
+        from .studio_bestiary import MedievalBestiaryStudio
+        self.medieval_bestiary = MedievalBestiaryStudio(self, self.tabs)
         from .studio_synergy_unlocks import SynergyUnlockStudio
         self.synergy_unlocks = SynergyUnlockStudio(self, self.tabs)
         from .studio_class_ai import ClassAIStudio
