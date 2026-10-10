@@ -11,6 +11,24 @@ sont conservés dans [`assets/`](assets/README.md) ; leur utilisation par un fut
 renderer est un chantier distinct. La conversion des anciennes cartes et sauvegardes
 n'est pas garantie. Voir [les limites de la migration](docs/GAMEPLAY.md#migration-de-godot).
 
+## Session unifiée 2.4.1 (API headless)
+
+La façade `sporebound.game_session.GameSession` orchestre campagne, narration,
+combat standard et combats multi-fronts sans modifier les contrats existants :
+
+```python
+from sporebound.game_session import GameSession
+session = GameSession.new(content, project, "main", seed=42)
+session.start_mission("garden")
+session.execute({"kind": "end", "facing": [0, 1]})
+session.save("saves/session.json")
+session = GameSession.load("saves/session.json", content, project)
+```
+
+Les checkpoints de session sont distincts des anciens slots `PlayerSession`.
+L'interface joueur Tk n'est pas encore migrée sur cette nouvelle API.
+Voir [contrats et exemples](docs/UNIFIED_SESSION.md).
+
 ## Démarrer
 
 Depuis la racine du dépôt :
