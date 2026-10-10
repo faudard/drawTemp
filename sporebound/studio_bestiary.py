@@ -13,7 +13,9 @@ class MedievalBestiaryStudio:
                   "Installer est annulable; aucun scénario existant n'est remplacé.",
                   wraplength=900).pack(fill="x", padx=8, pady=5)
         columns = ("family", "tier", "role")
-        self.tree = ttk.Treeview(page, columns=columns, show="tree headings",
+        frame = ttk.Frame(page)
+        frame.pack(fill="both", expand=True, padx=8, pady=3)
+        self.tree = ttk.Treeview(frame, columns=columns, show="tree headings",
                                  selectmode="browse", height=11)
         self.tree.heading("#0", text="Personnage / créature")
         self.tree.heading("family", text="Famille")
@@ -23,9 +25,7 @@ class MedievalBestiaryStudio:
         self.tree.column("family", width=130)
         self.tree.column("tier", width=55, anchor="center")
         self.tree.column("role", width=240)
-        frame = ttk.Frame(page)
-        frame.pack(fill="both", expand=True, padx=8, pady=3)
-        self.tree.pack(in_=frame, side="left", fill="both", expand=True)
+        self.tree.pack(side="left", fill="both", expand=True)
         scroller = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroller.set)
         scroller.pack(side="right", fill="y")
