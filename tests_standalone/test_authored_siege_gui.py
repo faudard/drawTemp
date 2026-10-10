@@ -76,7 +76,7 @@ class AuthoredSiegePlayerGuiTests(unittest.TestCase):
                  patch("tkinter.messagebox.showerror") as errors:
                 launch(content, bp, project, path)
                 errors.assert_not_called()
-            saved = AuthoredSiegeController(content, bp, path)
+            saved = AuthoredSiegeController(content, bp, path, project=project)
             saved.continue_game()
             self.assertFalse(saved.session.fronts.active.deploying)
             self.assertIn("execute", [c["kind"] for c in saved.session.fronts.history])
