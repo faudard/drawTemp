@@ -71,6 +71,28 @@ class UnifiedSessionTests(unittest.TestCase):
         session.abandon_encounter()
         self.assertEqual(session.mode, "campaign")
 
+    def test_victory_reward_and_story_route_settle_only_once(self):
+        session = self.session()
+        session.start_mission("garden")
+        # Isolate the completion boundary, like the legacy PlayerSession tests.
+        # Do not serialize this manually resolved Battle: only command-driven
+        # results can generate a verified tactical replay.
+        session.battle.result = "victory"
+        session._settle()
+        self.assertEqual(session.progress.completed, ["garden"])
+        self.assertEqual(session.progress.story_pending, "council")
+        xp = {key: hero.xp for key, hero in session.progress.heroes.items()}
+        gold = session.progress.gold
+        session._settle()
+        self.assertEqual(session.progress.completed, ["garden"])
+        self.assertEqual({key: hero.xp for key, hero in session.progress.heroes.items()}, xp)
+        self.assertEqual(session.progress.gold, gold)
+        self.assertTrue(session.finalized)
+        session.return_to_campaign()
+        session.choose_story_option("tunnel")
+        self.assertEqual(session.available_missions(), ["escape"])
+        self.assertEqual(session.progress.story_flags["chosen_route"], "tunnel")
+
     def test_checkpoint_corruption_and_identity_mismatch(self):
         session = self.session()
         with TemporaryDirectory() as folder:
