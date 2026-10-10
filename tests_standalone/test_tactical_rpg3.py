@@ -4,7 +4,7 @@ import unittest
 
 from sporebound.ai import choose_command
 from sporebound.balance3 import evaluate, percentile, verify_budgets
-from sporebound.bosses3 import boss_preview
+from sporebound.bosses3 import boss_preview, boss_intent_preview
 from sporebound.builds3 import talent_catalog
 from sporebound.campaign import Campaign
 from sporebound.coordinated_ai import squad_focus_preview
@@ -342,8 +342,14 @@ class BossBehaviorTests(unittest.TestCase):
         before = battle.digest()
         cmd = choose_command(battle)
         self.assertEqual(cmd, {"kind": "charge", "cell": [5, 2]})
+        intent = boss_intent_preview(battle, "boss")
+        self.assertTrue(intent["ready"])
+        self.assertEqual(intent["phase"], 2)
+        self.assertEqual(intent["command"], cmd)
+        self.assertIsInstance(intent["threats"], list)
         self.assertEqual(battle.digest(), before)
         battle.execute(cmd)
+        self.assertFalse(boss_intent_preview(battle, "boss")["ready"])
         self.assertTrue(any(event["kind"] == "charge" for event in battle.events))
         self.assertEqual(battle.digest(), Battle.replay(
             battle.recording(), rules=rules).digest())
