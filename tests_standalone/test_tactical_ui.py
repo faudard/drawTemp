@@ -100,6 +100,46 @@ class TalentEditorTests(unittest.TestCase):
         self.assertEqual(without_guard["jobs"]["brave"]["talents"], {})
 
 
+class AdvancedAuthoringRoundTripTests(unittest.TestCase):
+    def test_studio_can_edit_save_and_playtest_advanced_boss_content(self):
+        import json
+        from sporebound.tactical_rpg3 import authored_rules_for_document
+
+        data = sample().to_dict()
+        data["missions"][0]["triggers"] = [{
+            "id": "giant", "condition": "hp_below", "unit": "enemy",
+            "percent": 60, "actions": [{"kind": "boss_phase",
+                                        "unit": "enemy", "phase": 2,
+                                        "bonuses": {"defense": 2}}]}]
+        rules = authored_rules_for_document(data)
+        self.assertIn("boss_phase", rules.trigger_actions)
+        original = Content.from_dict(data, rules=rules)
+        doc = Document(original)
+        edited = upsert_job_talent(doc.data, "brave", "counter",
+                                   jp=2, stat="defense", bonus=3)
+        doc.replace(edited)
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "authored.json"
+            doc.save(path)
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            restored = Content.from_dict(
+                loaded, rules=authored_rules_for_document(loaded))
+            self.assertEqual(restored.jobs["brave"]["talents"]["counter"]["jp"], 2)
+            battle = doc.playtest("arena", seed=5)
+            self.assertIn("boss_phase", battle.rules.trigger_actions)
+            project = GameProject.default(restored)
+            session = PlayerSession(restored, project, Path(folder) / "profile.json")
+            session.new_game("main", 1)
+            session.begin("arena")
+            self.assertIn("boss_phase", session.battle.rules.trigger_actions)
+
+    def test_untagged_documents_keep_exact_legacy_ruleset(self):
+        from sporebound.tactical_rpg3 import authored_rules_for_document
+        data = sample().to_dict()
+        self.assertEqual(authored_rules_for_document(data).manifest(),
+                         default_rules().manifest())
+
+
 class PlayerIntegrationTests(unittest.TestCase):
     def test_player_learns_talent_atomically_and_reloads_slot(self):
         content = sample()
