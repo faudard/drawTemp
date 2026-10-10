@@ -162,6 +162,36 @@ class RoutesDiplomacyAuthoringTests(unittest.TestCase):
             self.assertEqual(session.fronts.logistics.supplies["player"], 2)
             self.assertIsNone(session.active_battle.result)
 
+    def test_recovery_combat_stays_a_real_battle_after_player_resume(self):
+        project = self.project(self.configured())
+        with TemporaryDirectory() as folder:
+            profile = Path(folder) / "recovery.game.json"
+            ui = PlayerController(self.content, project, profile)
+            ui.new_game("main", 1, seed=3)
+            for mid in project.sieges[0]["fronts"].values():
+                if mid not in ui.session.progress.unlocked:
+                    ui.session.progress.unlocked.append(mid)
+            ui.save()
+            ui.start_configured_siege("castle_routes")
+            ui.switch_front("gate")
+            ui.execute({"kind": "start_battle"})
+            ui.withdraw_front("gate")
+            self.assertEqual(ui.session.fronts.timeline.fronts["gate"]["status"],
+                             "withdrawn")
+            ui.start_recovery("gate")
+            self.assertEqual(ui.session.active_battle.mission.id,
+                             "castle_gate_recovery")
+            self.assertIn("gate", ui.session.fronts.recovery_battles)
+            resumed = PlayerController(self.content, project, profile)
+            restored = resumed.load_game("main", 1)
+            self.assertEqual(restored.active_battle.mission.id,
+                             "castle_gate_recovery")
+            self.assertEqual(restored.recording(), ui.session.recording())
+            resumed.execute({"kind": "end"})
+            again = PlayerController(self.content, project, profile)
+            again.load_game("main", 1)
+            self.assertEqual(again.session.recording(), resumed.session.recording())
+
     def test_saved_blueprint_rejects_invalid_treaties_and_routes(self):
         bp = self.configured()
         broken = deepcopy(bp)
