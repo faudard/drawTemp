@@ -52,6 +52,14 @@ Studio/player previews. Formations persist as `Unit.tags`; the formation
 command consumes the acting unit's Act but not Move. All costs and effects use
 the normal `Battle.execute`, damage and hit chance contracts.
 
+Once two spearmen are in Phalanx, one of them can prepare `phalanx_hold`
+on a later activation. Moving enemies entering the spear attack lane then
+trigger the existing once-only prepared attack and pay the normal CT tax.
+`formation_control_map(battle, team)` exposes sorted lane cells and whether
+the associated reaction is armed. It is pure and safe to call from an enemy
+intent forecast or graphical threat overlay. If the spearmen separate, the
+formation no longer projects a lane; no hidden persistent aura is applied.
+
 ### 2.7.3 — Builds / talent trees
 
 Optionally extend a job with a declarative talent map; legacy job definitions
