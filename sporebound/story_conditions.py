@@ -77,6 +77,7 @@ def _find(root, path):
 def _parent(root, path):
     path = _path(path)
     require(path, 'Cannot delete or replace the root through its parent')
+    _find(root, path)  # The leaf must already exist; never create phantom edges.
     return _find(root, path[:-1]), path[-1]
 
 
