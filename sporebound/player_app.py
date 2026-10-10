@@ -6,6 +6,7 @@ No game mechanics, AI rules, dice or persistence schemas live in this module.
 from pathlib import Path
 
 from .audio_stage import AudioStage
+from .exploration_view import draw_exploration, draw_story_backdrop
 from .game_project import GameProject
 from .model import Content, RuleError
 from .player_controller import PlayerController
@@ -58,6 +59,8 @@ class PlayerApplication:
         self.renderer = None
         self.info = None
         self._typewriter_job = None
+        self._stage_job = None
+        self._explore_feedback = ""
         self._audible_scene = None
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.bind("<Escape>", lambda event: self.root.attributes("-fullscreen", False))
@@ -80,6 +83,11 @@ class PlayerApplication:
         if self._typewriter_job is not None:
             self.root.after_cancel(self._typewriter_job)
             self._typewriter_job = None
+        if self._stage_job is not None:
+            self.root.after_cancel(self._stage_job)
+            self._stage_job = None
+        for key in ("<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "e"):
+            self.root.unbind(key)
         if self.renderer:
             self.renderer.dispose()
             self.renderer = None
@@ -242,7 +250,11 @@ class PlayerApplication:
             if self._audible_scene != scene["id"]:
                 self.audio.cue(f'scene_enter_{scene["id"]}')
                 self._audible_scene = scene["id"]
-            self._narrative_scene(scene)
+            stage = session.exploration_state()
+            if stage is not None and not stage["completed"]:
+                self._exploration_screen(scene, stage)
+            else:
+                self._narrative_scene(scene)
         else:
             self._audible_scene = None
             self.audio.music_for("campaign")
@@ -286,9 +298,73 @@ class PlayerApplication:
         self._button(footer, "Sauvegarder", self.player.save).pack(side="left", padx=6)
         self._button(footer, "Menu principal", self.title_screen).pack(side="left", padx=6)
 
+    def _exploration_step(self, dx, dy):
+        self._explore_feedback = ""
+        self._change(lambda: self.player.explore_move(dx, dy))
+
+    def _exploration_interact(self, point_id):
+        def apply():
+            result = self.player.explore_interact(point_id)
+            self._explore_feedback = result["title"] + " — " + result["text"]
+        self._change(apply)
+
+    def _exploration_screen(self, scene, stage):
+        self._heading(stage["title"], "Explorer les champs avant l'appel des voix.")
+        area = self.ttk.Frame(self.view)
+        area.pack(fill="both", expand=True)
+        board = self.tk.Canvas(area, width=690, height=495,
+                               highlightthickness=0, background="#314936")
+        board.pack(side="left", padx=8, pady=6)
+        draw_exploration(board, stage)
+        def click(event):
+            x, y = int((event.x - 42) // 58), int((event.y - 25) // 58)
+            px, py = stage["position"]
+            if abs(x - px) + abs(y - py) == 1:
+                self._safe(lambda: self._exploration_step(x - px, y - py))
+        board.bind("<Button-1>", click)
+        sidebar = self.ttk.Frame(area, padding=10)
+        sidebar.pack(side="left", fill="both", expand=True)
+        self.ttk.Label(sidebar, text="Déplacement : flèches / ZQSD (WASD)",
+                       wraplength=310).pack(anchor="w", pady=(4, 8))
+        self.ttk.Label(sidebar, text="Cliquer une case voisine pour marcher.",
+                       wraplength=310).pack(anchor="w", pady=(0, 12))
+        px, py = stage["position"]
+        nearest = []
+        for point in stage["interactions"]:
+            distance = abs(point["pos"][0] - px) + abs(point["pos"][1] - py)
+            info = (" ✓" if point["visited"] else "")
+            self.ttk.Label(sidebar, text=point["title"] + info,
+                           wraplength=270).pack(anchor="w", pady=(3, 0))
+            if distance <= 1:
+                nearest.append(point["id"])
+                self._button(sidebar, "Examiner : " + point["title"],
+                             lambda pid=point["id"]: self._exploration_interact(pid)).pack(
+                                 anchor="w", fill="x", pady=(1, 5))
+        self.ttk.Label(sidebar, text=self._explore_feedback or
+                       "Avancez vers un point d'intérêt et examinez-le.",
+                       wraplength=300).pack(anchor="w", pady=12)
+        moves = {"<Up>": (0, -1), "<Down>": (0, 1),
+                 "<Left>": (-1, 0), "<Right>": (1, 0),
+                 "w": (0, -1), "a": (-1, 0), "s": (0, 1), "d": (1, 0)}
+        for key, delta in moves.items():
+            self.root.bind(key, lambda event, vector=delta:
+                           self._safe(lambda: self._exploration_step(*vector)))
+        if nearest:
+            self.root.bind("e", lambda event: self._safe(
+                lambda: self._exploration_interact(nearest[0])))
+
     def _narrative_scene(self, scene):
         panel = self.ttk.LabelFrame(self.view, text=scene["title"], padding=20)
         panel.pack(fill="both", expand=True, padx=60, pady=16)
+        if scene["id"].startswith("sc_p0_"):
+            art = self.tk.Canvas(panel, width=860, height=210, highlightthickness=0)
+            art.pack(pady=4)
+            def animate(frame=0):
+                if not art.winfo_exists():
+                    return
+                draw_story_backdrop(art, scene["id"], frame)
+                self._stage_job = self.root.after(170, animate, frame + 1)
+            animate()
         portrait = CanvasRenderer(panel, registry=self.registry, asset_root=self.asset_root).image(
             "portrait", scene["speaker"])
         # PhotoImage needs a widget master; keep a Python reference while showing scene.
