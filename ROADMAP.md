@@ -92,6 +92,15 @@ et compatibilité avec les anciens replays requis avant fusion.
 
 Gate : choix tactiques distincts selon équipe, terrain, adversaire et objectif.
 
+### 2.8 — Castle Vertical Slice (campagne intégrée)
+
+- [x] **2.8 foundation** : préparation des héros (équipe, classes, équipement), cinq approches tactiques/narratives, fronts liés, ressources, diplomatie conditionnelle, boss à phases et trois épilogues.
+- [x] **2.8 fiabilité** : journaux de préparation + bataille/stratégie, sauvegarde atomique et reprise par replay vérifié, tests multi-branches headless.
+- [ ] **2.8 Player / Studio** : intégrer le parcours dans l'interface graphique du Player, transitions et scènes d'introduction/épilogue, autoriser l'édition intégrale depuis Campaign & Siege Studio 2.5.4.
+
+Lancement terminal : `python -m examples.castle_vertical_slice --save saves/castle-2.8.json`.
+Contrat, limites et gate : [Vertical Slice 2.8](docs/VERTICAL_SLICE_2_8.md).
+
 ### Vertical slice — assaut du château
 
 1. Préparation : escouade, équipement, déploiement et stratégie.
