@@ -91,6 +91,18 @@ class PlayerController:
     def choose_story_option(self, choice_id):
         return self._apply(self.session.choose_story_option, choice_id)
 
+    def explore_move(self, dx, dy):
+        return self._apply(self.session.explore_move, dx, dy)
+
+    def explore_interact(self, point_id):
+        return self._apply(self.session.explore_interact, point_id)
+
+    def explore_wait(self):
+        return self._apply(self.session.explore_wait)
+
+    def explore_actor(self, actor_id, action):
+        return self._apply(self.session.explore_actor, actor_id, action)
+
     def start_mission(self, mission_id):
         return self._apply(self.session.start_mission, mission_id)
 
@@ -148,3 +160,22 @@ class PlayerController:
 
     def rescue_convoy(self, convoy_id):
         return self._apply(self.session.rescue_convoy, convoy_id)
+
+    def select_route(self, route):
+        return self._apply(self.session.select_route, route)
+
+    def negotiate_front(self, front):
+        return self._apply(self.session.negotiate_front, front)
+
+    def partial_front(self, front):
+        return self._apply(self.session.partial_front, front)
+
+    def withdraw_front(self, front):
+        return self._apply(self.session.withdraw_front, front)
+
+    def start_recovery(self, front):
+        return self._apply(self.session.start_recovery, front)
+
+    def abandon_recovery(self, front):
+        return self._apply(self.session.abandon_recovery, front)
+

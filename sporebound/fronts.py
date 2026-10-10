@@ -748,7 +748,12 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                 "operations": deepcopy(self.history), "digest": self.digest()}
 
     @classmethod
-    def replay(cls, recording, *, rules=None):
+    def replay(cls, recording, *, rules=None, _until=None):
+        """Verify a full journal, or reconstruct a trusted prefix for narrative gates.
+
+        Prefix mode is internal: callers must independently verify the full
+        recording's digest before using a partial history for chronological gates.
+        """
         from .model import Content
         from .rules import default_rules
         require(isinstance(recording, dict) and recording.get("version") in {1, 2, 3, 4, 5, 6}
@@ -767,7 +772,12 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                       if recording["version"] in {5, 6} else None,
                       event_graph=recording.get("event_graph", [])
                       if recording["version"] == 6 else None)
-        for operation in recording["operations"]:
+        operations = recording["operations"]
+        require(isinstance(operations, list), "Invalid multi-front operations")
+        require(_until is None or (type(_until) is int
+                and 0 <= _until <= len(operations)),
+                "Invalid tactical replay prefix")
+        for operation in operations if _until is None else operations[:_until]:
             kind = operation["kind"]
             if kind == "execute":
                 session.execute(operation["command"])
@@ -822,7 +832,8 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                 session.abandon_recovery(operation["front"])
             else:
                 require(False, "Unknown multi-front operation")
-        require(session.digest() == recording["digest"], "Multi-front checksum mismatch")
+        if _until is None:
+            require(session.digest() == recording["digest"], "Multi-front checksum mismatch")
         return session
 
     def restore(self, recording):

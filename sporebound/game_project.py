@@ -28,6 +28,8 @@ class GameProject:
     assets: dict = field(default_factory=dict)
     sieges: list[dict] = field(default_factory=list)
     cinematics: list[dict] = field(default_factory=list)
+    exploration: dict = field(default_factory=dict)
+    battle_support: list[dict] = field(default_factory=list)
 
     @classmethod
     def default(cls, content):
@@ -56,7 +58,9 @@ class GameProject:
                 **({'story': deepcopy(self.story)} if self.story else {}),
                 **({'assets': deepcopy(self.assets)} if self.assets else {}),
                 **({'sieges': deepcopy(self.sieges)} if self.sieges else {}),
-                **({'cinematics': deepcopy(self.cinematics)} if self.cinematics else {})}
+                **({'cinematics': deepcopy(self.cinematics)} if self.cinematics else {}),
+                **({'exploration': deepcopy(self.exploration)} if self.exploration else {}),
+                **({'battle_support': deepcopy(self.battle_support)} if self.battle_support else {})}
 
     def asset_registry(self):
         from .assets import AssetRegistry
@@ -104,6 +108,22 @@ class GameProject:
         validate_cinematics(self.cinematics, content, self.campaigns)
         from .narrative import validate_story
         validate_story(self.story, content, self.campaigns)
+        from .exploration import validate_exploration
+        validate_exploration(self.exploration, self.story)
+        require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
+                'Invalid battle support rules')
+        for spec in self.battle_support:
+            require(isinstance(spec, dict) and set(spec) ==
+                    {'mission', 'flag', 'gte', 'potion_bonus'},
+                    'Invalid battle support rule')
+            require(spec['mission'] in content.missions, 'Unknown support mission')
+            require(isinstance(spec['flag'], str) and 0 < len(spec['flag']) <= 64
+                    and all(ch.isalnum() or ch == '_' for ch in spec['flag']),
+                    'Invalid support flag')
+            require(type(spec['gte']) is int and 1 <= spec['gte'] <= 1000,
+                    'Invalid support threshold')
+            require(type(spec['potion_bonus']) is int and
+                    1 <= spec['potion_bonus'] <= 6, 'Invalid support bonus')
 
     def save(self, path, content):
         self.validate(content)

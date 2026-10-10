@@ -126,6 +126,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_configured_siege_player_gui.py -v
+      - name: Exercise 2.5.4.4 route and diplomacy authoring in Tk and Player
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_routes_diplomacy_gui.py -v
       - name: Exercise 2.5.4.5 Strategic Event Graph UI and journaled replay
         env:
           SPOREBOUND_GUI_SMOKE: '1'

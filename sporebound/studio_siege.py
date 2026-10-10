@@ -104,6 +104,7 @@ class SiegeStudio:
         timeline = ttk.Frame(pages)
         logistics = ttk.Frame(pages)
         visual_logistics = ttk.Frame(pages)
+        route_policy = ttk.Frame(pages)
         strategic = ttk.Frame(pages)
         pages.add(fronts, text="Fronts et finale")
         pages.add(links, text="Événements inter-fronts")
@@ -114,6 +115,9 @@ class SiegeStudio:
         from .studio_logistics import LogisticsStudio
         self.logistics_editor = LogisticsStudio(self, visual_logistics)
 
+        pages.add(route_policy, text="Itinéraires & diplomatie")
+        from .studio_routes import RoutesStudio
+        self.routes_editor = RoutesStudio(self, route_policy)
         pages.add(strategic, text="Graphe stratégique")
         from .studio_strategic_events import StrategicEventsStudio
         self.strategic_editor = StrategicEventsStudio(self, strategic)
@@ -610,7 +614,8 @@ class SiegeStudio:
         rules = authored_rules_for_document(self.owner.doc().data)
         slot = int(self.slot.get())
         controller = AuthoredSiegeController(
-            content, bp, self.owner.project_path, slot, rules=rules)
+            content, bp, self.owner.project_path, slot, rules=rules,
+            project=self.owner.project)
         if self.session is not None and self.session_id == bp["id"]:
             exists = controller.save_path.exists()
             from tkinter import messagebox
@@ -784,6 +789,7 @@ class SiegeStudio:
                         text=front, values=(eid, tick, actor, arch))
             self._draw(bp)
             self.logistics_editor.refresh(bp)
+            self.routes_editor.refresh(bp)
             self.strategic_editor.refresh(bp)
             self._object_choices()
         finally:

@@ -98,7 +98,8 @@ Gate : choix tactiques distincts selon équipe, terrain, adversaire et objectif.
 - [x] **2.8 fiabilité** : journaux de préparation + bataille/stratégie, sauvegarde atomique et reprise par replay vérifié, tests multi-branches headless.
 - [x] **2.8.1 Castle Player GUI** : préparation, cinq approches, rendu tactique, carte stratégique, choix de doctrine/diplomatie, épilogues, sauvegardes/reprises avec contrôle de rollback ; entrée depuis le menu Player en checkout source.
 - [x] **2.8.2 Studio → Player** : import des sièges 2.5.4 dans le Player 2D, slots isolés et replay vérifié, transports/convois et missions de reconquête, aperçu des scènes d'introduction et d'épilogue du Studio ; configuration visuelle de la logistique (rétrocompatible).
-- [ ] **2.8.3 Narrative/Polish** : jouer les *choix et effets* narratifs du Studio dans le parcours siège (au-delà de l'aperçu), portraits/sprites du registre, séquences cinématiques et polish responsive/accessibilité.
+- [x] **2.8.3 Narrative & Presentation** : choix conditionnels StoryBook dans les sièges, effets narratifs/drapeaux, scènes après victoire authentifiée, journal narratif entrelacé et contrôlé au rechargement, portraits/sprites portables, dialogue progressif et cues audio optionnels.
+- [ ] **2.8.4 Cinematic Studio / Polish** : édition d'une vraie timeline de cinématiques (plans, transitions, mouvements de caméra), intégration des portraits animés et doublages, gestion adaptative et optimisation des gros graphes narratifs.
 
 Lancement terminal : `python -m examples.castle_vertical_slice --save saves/castle-2.8.json`.
 Contrat, limites et gate : [Vertical Slice 2.8](docs/VERTICAL_SLICE_2_8.md).

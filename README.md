@@ -15,7 +15,8 @@ n'est pas garantie. Voir [les limites de la migration](docs/GAMEPLAY.md#migratio
 
 Une campagne indépendante, **Jeanne d'Arc — Les Cendres du Royaume**, propose
 sept scènes narratives et cinq missions tactiques, avec un embranchement
-secours / poursuite, un flashback d'entraînement et une fuite finale. Les
+secours / poursuite, un flashback d'entraînement, une fuite finale, ainsi
+qu'une exploration jouable des champs et des ruines de Domrémy. Les
 anciens exemples Sporebound restent conservés.
 
 ```sh
@@ -23,8 +24,8 @@ python -m sporebound validate --content sporebound/content/jeanne.json --project
 python -m sporebound player --content sporebound/content/jeanne.json --project sporebound/content/jeanne.game.json
 ```
 
-Cette tranche ne contient pas encore les actes I–V ni l'exploration libre
-et les cinématiques 2D. Voir [le guide du prologue](docs/JEANNE_PROLOGUE.md).
+Cette tranche ne contient pas encore les actes I–V, l'exploration continue
+hors grille ni les cinématiques dessinées. Voir [le guide du prologue](docs/JEANNE_PROLOGUE.md).
 
 ## Studio Cinématiques 2.9
 
@@ -358,3 +359,7 @@ Depuis le dépôt source, lancer `python -m examples.castle_player` (ou **Campag
 ### 2.8.2 — Campaign & Siege Studio → Player
 
 Dans le Studio (`python -m sporebound editor <contenu.json>`), onglet **Campagne & siège** : créer les fronts, configurer éventuellement les convois/logistiques et cliquer **Jouer dans Player 2.8**. Dans le Player (`python -m sporebound player --content <contenu.json> --project <jeu.game.json>`), cliquer **Sièges créés dans le Studio**, sélectionner le siège et son emplacement. Sauvegardes de siège indépendantes, contrôlées par rejeu.
+
+### 2.8.3 — Narrative & Presentation
+
+Les sièges du Studio acceptent désormais des **choix narratifs réels** : conditions, drapeaux, or de campagne narratif, chaînes de scènes et scènes **après victoire d'une mission**. Les opérations de combat restent pilotées par le moteur tactique et sont bloquées pendant les choix de dialogue. Les sauvegardes enregistrent les décisions dans un journal complémentaire contrôlé par rejeu. Portraits PNG, sprites PNG et pistes audio WAV/OGG utilisent le registre d'assets du projet ; un repli sans images/son existe. Voir [guide 2.8](docs/VERTICAL_SLICE_2_8.md).

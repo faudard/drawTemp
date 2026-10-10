@@ -183,7 +183,7 @@ class Campaign:
         self.gold -= price
         self.inventory[item_id] = self.inventory.get(item_id, 0) + 1
 
-    def prepare(self, content, mission_id, seed=1, *, ruleset=None):
+    def prepare(self, content, mission_id, seed=1, *, ruleset=None, initial_state=None):
         ruleset = ruleset or default_rules()
         require(mission_id in self.unlocked, "Mission locked")
         prepared = deepcopy(content)
@@ -220,7 +220,8 @@ class Campaign:
                     if tactic not in by_id[member].tactics:
                         by_id[member].tactics.append(tactic)
         prepared.validate(rules=ruleset)
-        return Battle(prepared, mission_id, seed, rules=ruleset)
+        return Battle(prepared, mission_id, seed, rules=ruleset,
+                      initial_state=initial_state)
 
     def finish(self, battle, playtest=False, tactic_rules=None, *, unlock_next=True):
         if playtest or battle.result not in {"victory", "defeat"}:

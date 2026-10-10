@@ -77,6 +77,17 @@ def validate_blueprint(blueprint, content, campaign_ids):
         policy = SiegeCampaign(campaign, content, missions)
         require(blueprint["focused"] != policy.final,
                 "Initial focus cannot be the locked final sector")
+        if "routes" in campaign:
+            from .campaign_routes import CampaignRoutesPolicy
+            CampaignRoutesPolicy(
+                {"routes": campaign["routes"], "recovery": campaign["recovery"],
+                 "treaties": campaign["treaties"],
+                 **({"counteroffensives": campaign["counteroffensives"]}
+                    if "counteroffensives" in campaign else {})},
+                content, missions, policy.final)
+            require("logistics" in blueprint and
+                    "supplies" in blueprint["logistics"],
+                    "Alternative approaches need a finite supply pool")
 
 
 def validate_all(sieges, content, campaigns):
@@ -282,7 +293,7 @@ def _save_path(project_path, blueprint_id, slot):
     return p.with_name(p.stem + "_saves") / ("siege_" + blueprint_id) / f"slot_{slot}.json"
 
 
-def save_siege_slot(project_path, blueprint, slot, session):
+def save_siege_slot(project_path, blueprint, slot, session, *, narrative=None):
     require(session.missions == blueprint["fronts"]
             and session.initial_specs == blueprint["specs"]
             and session.links == blueprint["links"]
@@ -291,17 +302,26 @@ def save_siege_slot(project_path, blueprint, slot, session):
             and session.initial_event_graph == blueprint.get("event_graph", []),
             "Session no longer matches the siege definition")
     path = _save_path(project_path, blueprint["id"], slot)
+    if narrative is None and path.is_file():
+        import json
+        previous = json.loads(path.read_text(encoding="utf-8"))
+        require("narrative" not in previous,
+                "This slot contains narrative decisions; save it in the "
+                "graphical Siege Player to preserve their journal")
     write_json(path, {"version": 1, "siege_id": blueprint["id"],
-                      "recording": session.recording()})
+                      "recording": session.recording(),
+                      **({"narrative": narrative} if narrative is not None else {})})
     return path
 
 
-def load_siege_slot(project_path, blueprint, slot, content, *, rules=None):
+def load_siege_slot(project_path, blueprint, slot, content, *, rules=None, _with_narrative=False):
     import json
     from pathlib import Path
     path = _save_path(project_path, blueprint["id"], slot)
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    require(isinstance(data, dict) and set(data) == {"version", "siege_id", "recording"}
+    required = {"version", "siege_id", "recording"}
+    require(isinstance(data, dict) and
+            required <= set(data) <= required | {"narrative"}
             and data["version"] == 1 and data["siege_id"] == blueprint["id"],
             "Invalid siege checkpoint")
     session = MultiFrontSession.replay(data["recording"], rules=rules)
@@ -314,4 +334,4 @@ def load_siege_slot(project_path, blueprint, slot, content, *, rules=None):
             and session.initial_logistics == blueprint.get("logistics")
             and session.initial_event_graph == blueprint.get("event_graph", []),
             "Checkpoint belongs to an older siege definition")
-    return session
+    return (session, data.get("narrative")) if _with_narrative else session
