@@ -6,6 +6,7 @@ their undo stack.  No mutation reaches a live Battle or Campaign.
 from copy import deepcopy
 
 from .model import Content, RuleError, require
+from .tactical_rpg3 import authored_rules_for_document
 
 
 def _mission(data, mid):
@@ -17,7 +18,8 @@ def _edit(data, mid, change):
     mission = _mission(new, mid)
     require(mission is not None, f'Unknown mission: {mid}')
     change(new, mission)
-    return Content.from_dict(new).to_dict()
+    return Content.from_dict(
+        new, rules=authored_rules_for_document(new)).to_dict()
 
 
 def _identifier(value, label):
@@ -146,7 +148,8 @@ def upsert_job_talent(data, job_id, talent_id, *, jp=1, requires=(),
         row["skills"] = list(skills)
     new = deepcopy(data)
     new["jobs"][job_id].setdefault("talents", {})[talent_id] = row
-    return Content.from_dict(new).to_dict()
+    return Content.from_dict(
+        new, rules=authored_rules_for_document(new)).to_dict()
 
 
 def remove_job_talent(data, job_id, talent_id):
@@ -159,7 +162,8 @@ def remove_job_talent(data, job_id, talent_id):
                     for name, spec in talents.items() if name != talent_id),
             "Cannot remove a prerequisite used by another talent")
     del talents[talent_id]
-    return Content.from_dict(new).to_dict()
+    return Content.from_dict(
+        new, rules=authored_rules_for_document(new)).to_dict()
 
 
 def add_object(data, mid, oid, kind, pos, *, link='', destination=None):
@@ -246,7 +250,8 @@ def add_blank_mission(data, mid, name, width=8, height=8):
                    triggers=[], deployment=[], protected_id='', relic=None,
                    next_missions=[])
     new['missions'].append(mission)
-    return Content.from_dict(new).to_dict()
+    return Content.from_dict(
+        new, rules=authored_rules_for_document(new)).to_dict()
 
 
 def set_mission_properties(data, mid, *, name, objective, reward, next_missions):
