@@ -26,6 +26,7 @@ class GameProject:
     story: dict = field(default_factory=dict)
     version: int = 1
     assets: dict = field(default_factory=dict)
+    sieges: list[dict] = field(default_factory=list)
 
     @classmethod
     def default(cls, content):
@@ -52,7 +53,8 @@ class GameProject:
                 'campaigns': deepcopy(self.campaigns), 'options': deepcopy(self.options),
                 'save_slots': self.save_slots,
                 **({'story': deepcopy(self.story)} if self.story else {}),
-                **({'assets': deepcopy(self.assets)} if self.assets else {})}
+                **({'assets': deepcopy(self.assets)} if self.assets else {}),
+                **({'sieges': deepcopy(self.sieges)} if self.sieges else {})}
 
     def asset_registry(self):
         from .assets import AssetRegistry
@@ -94,6 +96,8 @@ class GameProject:
                     'Campaign description too long')
             require(campaign['start_mission'] in content.missions,
                     f'Unknown starting mission: {campaign["start_mission"]}')
+        from .siege_authoring import validate_all
+        validate_all(self.sieges, content, self.campaigns)
         from .narrative import validate_story
         validate_story(self.story, content, self.campaigns)
 

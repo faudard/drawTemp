@@ -134,13 +134,14 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                 self.content, self.missions, self.campaign.final)
         self.route_selected = "breach"
         self.route_locked = False
+        if self.campaign is not None:
+            # A final boss victory must come from a focused tactical Battle.
+            self.timeline.tactical_only = {self.campaign.final}
         if self.route_policy is not None:
-            # These fronts require *played* tactical wins; an aggregate
-            # off-screen battle may never unlock a route or the final boss.
             extra = {front for route in self.route_policy.routes.values()
                      for front in route["required"]
                      if front not in self.campaign.spec["required_fronts"]}
-            self.timeline.tactical_only = extra | {self.campaign.final}
+            self.timeline.tactical_only.update(extra)
         self.recovery_battles = {}
         self.recovery_outcomes = {}
         self.counteroffensive_active = set()
