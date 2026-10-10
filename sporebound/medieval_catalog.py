@@ -5,9 +5,10 @@ ordinary skills, archetypes, jobs and equipment; missions and legacy saves
 are unchanged. Every placed unit is a snapshot of its template.
 """
 from copy import deepcopy
+from dataclasses import asdict
 
 from .actor_catalog import place_archetype
-from .model import Content, require
+from .model import Content, Effect, Skill, require
 
 
 def _skill(name, power, *, kind="damage", cost=0, range=1, target="enemy",
@@ -248,10 +249,14 @@ def install_pack(data):
     new = deepcopy(data)
     require(isinstance(new, dict), "Content must be an object")
     collections = (
-        ("skills", [{"id": "med_" + identifier, **deepcopy(spec)}
+        ("skills", [asdict(Skill(**{"id": "med_" + identifier, **deepcopy(spec),
+                                  "effects": [Effect(**effect)
+                                              for effect in spec["effects"]]}))
                     for identifier, spec in SKILLS.items()]),
-        ("archetypes", {"med_" + identifier: deepcopy(spec["actor"])
-                        for identifier, spec in BESTIARY.items()}),
+        ("archetypes", {"med_" + identifier: {
+            **deepcopy(spec["actor"]),
+            "skills": ["med_" + skill for skill in spec["actor"]["skills"]],
+        } for identifier, spec in BESTIARY.items()}),
         ("jobs", {"med_" + identifier: {
             **deepcopy(spec),
             "requires": "med_" + spec["requires"] if spec["requires"] else "",
@@ -312,3 +317,30 @@ def place_entry(data, mission_id, preset_id, unit_id, team, pos, *,
     if rank != "normal":
         unit["tags"].append("rank:" + rank)
     return Content.from_dict(content).to_dict()
+
+
+def find_free_cell(data, mission_id, preset_id):
+    """First unoccupied passable footprint, with deterministic row-major order."""
+    require(preset_id in BESTIARY, "Unknown medieval bestiary entry")
+    mission = next((m for m in data.get("missions", [])
+                    if m["id"] == mission_id), None)
+    require(mission is not None, "Unknown mission")
+    width, height = BESTIARY[preset_id]["actor"]["footprint"]
+    board = mission["board"]
+    blocked = {tuple(tile["pos"]) for tile in board.get("tiles", [])
+               if tile.get("blocked", False)}
+    occupied = {tuple(cell) for unit in mission["units"]
+                for cell in (
+                    (unit["pos"][0] + dx, unit["pos"][1] + dy)
+                    for dx in range(unit.get("footprint", [1, 1])[0])
+                    for dy in range(unit.get("footprint", [1, 1])[1])
+                )}
+    objects = {tuple(obj["pos"]) for obj in mission.get("objects", [])}
+    for y in range(board["height"] - height + 1):
+        for x in range(board["width"] - width + 1):
+            cells = {(x + dx, y + dy) for dx in range(width)
+                     for dy in range(height)}
+            if not cells.intersection(blocked | occupied | objects):
+                return [x, y]
+    from .model import RuleError
+    raise RuleError("No free location for this footprint")
