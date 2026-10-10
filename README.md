@@ -109,6 +109,10 @@ Lancer `python -m sporebound editor`. Le studio comprend maintenant :
 
 
 - **Carte et combat** : peinture de cases, positionnement, prévisions, playtest isolé.
+- **Map Editor 3.0 (2.5.1, fondation)** : sélection multiple, copie/collage
+  validé des cases et objectifs, aperçu de collage, couches visibles,
+  repositionnement d'unités/objets et édition des zones de déploiement.
+  Voir [le guide de l'éditeur de cartes](docs/MAP_EDITOR_3.md).
 - **Carte vierge** : assistant de nouvelle mission avec dimensions et acteurs de base.
 - **Personnages et événements** : ajouter/supprimer personnages et monstres,
   objets interactifs, conditions et actions de triggers simples, sans écrire du JSON.
