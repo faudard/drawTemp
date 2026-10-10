@@ -56,6 +56,24 @@ class PlayerSession:
         require(self.battle is None or self.finalized, 'Finish the battle before saving campaign progression')
         return save_slot(self.profile,self.project,self.content,self.campaign_id,self.slot,self.progress)
 
+    def learn_talent(self, unit_id, job_id, talent_id):
+        """Buy one learned talent, committing the save before changing UI state."""
+        require(self.progress is not None and self.campaign_id is not None,
+                'No campaign loaded')
+        require(self.battle is None or self.finalized,
+                'Cannot change the roster during combat')
+        require(any(unit.team == 'player' and unit.id == unit_id
+                    for mission in self.content.missions.values()
+                    for unit in mission.units),
+                'Unknown player hero')
+        updated = deepcopy(self.progress)
+        updated.learn_talent(self.content, unit_id, job_id, talent_id)
+        # Save before assigning; a disk failure cannot spend JP in memory.
+        save_slot(self.profile, self.project, self.content,
+                  self.campaign_id, self.slot, updated)
+        self.progress = updated
+        return self.progress.talent_catalog(self.content, unit_id, job_id)
+
     def active_scene(self):
         require(self.progress is not None, 'No campaign loaded')
         return self.story.active_scene(self.progress)
