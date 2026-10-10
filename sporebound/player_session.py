@@ -103,12 +103,19 @@ class PlayerSession:
         require(not self.progress.story_pending, 'Resolve the pending dialogue first')
         require(mission_id in self.available_missions(), 'Mission is not currently available')
         mission = self.content.missions[mission_id]
-        advanced = any(
-            unit.behavior in {"coordinated", "phase_boss"} or
-            any(tag in {"medic", "healer", "protector"}
-                or tag.startswith(("formation:", "boss_phase:"))
-                for tag in unit.tags)
-            for unit in mission.units)
+        advanced = (
+            any(unit.behavior in {"coordinated", "phase_boss"}
+                or any(tactic in {"chain_strike", "trio_burst"}
+                       for tactic in unit.tactics)
+                or any(tag in {"medic", "healer", "protector"}
+                       or tag.startswith(("formation:", "boss_phase:"))
+                       for tag in unit.tags)
+                for unit in mission.units)
+            or any(rule.get("id") in {"chain_strike", "trio_burst"}
+                   for rule in self.content.tactic_unlocks)
+            or any(tactic in {"chain_strike", "trio_burst"}
+                   for prepared in self.progress.prepared_tactics.values()
+                   for tactic in prepared))
         if advanced:
             from .tactical_rpg3 import tactical_rpg_rules
             self.battle = self.progress.prepare(
