@@ -125,6 +125,12 @@ growth into walls or occupied cells is rejected atomically. Form is metadata
 for the renderer, not a sprite loader. `boss_preview()` exposes the current
 form and upcoming thresholds.
 
+The optional `Unit.behavior = "phase_boss"` selects a defensive Guard policy
+at close range during phase one, legal long-lane Charge attempts in later phases,
+and the existing tactical/siege AI otherwise. No battle-state mutation occurs
+in the choice callback. `examples/tactical_rpg3_castle.py` equips the castellan
+with this behavior while leaving the original siege fixtures unchanged.
+
 ### 2.7.6 — Balance gates
 
 ```python
