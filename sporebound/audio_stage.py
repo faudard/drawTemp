@@ -65,6 +65,43 @@ class AudioStage:
         except (RuleError, OSError, RuntimeError, ValueError):
             self._music = None
 
+    def music_for(self, *slots):
+        """Play the first authored soundtrack, with silent fallback."""
+        for slot in slots:
+            if self.registry is not None and self.registry.binding("sound", slot):
+                self.music(slot)
+                return slot
+        self.music(None)
+        return None
+
+    def preview_asset(self, asset_id, *, music=False):
+        """Preview a library sound before binding it to an event or scene."""
+        try:
+            if self.registry is None or self.asset_root is None:
+                return False
+            self.registry.require_reference(asset_id, "sound")
+            path = self.registry.resolve(asset_id, self.asset_root)
+            if not self._start():
+                return False
+            if music:
+                self._mixer.music.stop()
+                self._mixer.music.load(str(path))
+                self._mixer.music.set_volume(self.music_volume)
+                self._mixer.music.play(-1)
+            else:
+                sound = self._mixer.Sound(str(path))
+                sound.set_volume(self.effects_volume)
+                sound.play()
+            return True
+        except (RuleError, OSError, RuntimeError, ValueError):
+            return False
+
+    def stop(self):
+        if self._mixer is not None:
+            self._mixer.music.stop()
+            self._mixer.stop()
+        self._music = None
+
     def observe(self, battle):
         """Play only appended events for a stable battle id, not every redraw."""
         if battle is None:
@@ -78,6 +115,5 @@ class AudioStage:
         self._seen[identity] = count
 
     def close(self):
-        if self._mixer is not None:
-            self._mixer.music.stop()
+        self.stop()
         self._sounds.clear()

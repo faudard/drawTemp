@@ -58,6 +58,7 @@ class PlayerApplication:
         self.renderer = None
         self.info = None
         self._typewriter_job = None
+        self._audible_scene = None
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.bind("<Escape>", lambda event: self.root.attributes("-fullscreen", False))
         self.title_screen()
@@ -110,7 +111,8 @@ class PlayerApplication:
         self.show()
 
     def title_screen(self):
-        self.audio.music("title")
+        self._audible_scene = None
+        self.audio.music_for("title")
         self._clear()
         self._heading(self.project.title, self.project.subtitle)
         panel = self.ttk.LabelFrame(self.view, text="Nouvelle aventure / reprendre", padding=18)
@@ -230,15 +232,20 @@ class PlayerApplication:
 
     def campaign_screen(self):
         session = self.player.session
-        self.audio.music("campaign")
         self._clear()
         self._heading(self.project.campaign(session.campaign_id)["name"],
                       "Or : " + str(session.progress.gold) +
                       "    Missions terminées : " + str(len(session.progress.completed)))
         scene = session.active_scene()
         if scene:
+            self.audio.music_for(f'music_scene_{scene["id"]}', "campaign")
+            if self._audible_scene != scene["id"]:
+                self.audio.cue(f'scene_enter_{scene["id"]}')
+                self._audible_scene = scene["id"]
             self._narrative_scene(scene)
         else:
+            self._audible_scene = None
+            self.audio.music_for("campaign")
             available = session.available_missions()
             self.ttk.Label(self.view, text="Choisir une mission :").pack(anchor="w", pady=8)
             for mission_id in available:
@@ -334,11 +341,11 @@ class PlayerApplication:
     def battle_screen(self):
         session = self.player.session
         battle = session.active_battle
-        self.audio.music("battle")
         self._clear()
         if battle is None:
             self.strategy_screen()
             return
+        self.audio.music_for(f"mission_{battle.mission.id}", "battle")
         self._heading(battle.mission.name,
                       "Tick " + str(battle.tick) + "    " +
                       ("Résultat : " + battle.result if battle.result else
@@ -496,6 +503,7 @@ class PlayerApplication:
 
     def strategy_screen(self):
         session = self.player.session
+        self.audio.music_for("battle")
         if session.mode != "fronts":
             self.show()
             return
