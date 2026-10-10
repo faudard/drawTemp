@@ -317,7 +317,10 @@ def launch(content_path, project_path=None, profile_path=None):
         info=tk.Text(body,width=36,height=24,state='normal',wrap='word')
         info.pack(side='right',fill='y')
         rows=[f'Case sélectionnée : {tuple(selected)}','', 'Unités :']
-        rows.extend(f'{u.name}: PV {u.hp}/{u.max_hp} MP {u.mp}/{u.max_mp}' for u in battle.units)
+        rows.extend(
+            f'{u.name}: PV {u.hp}/{u.max_hp} MP {u.mp}/{u.max_mp} '
+            f'ATK {u.attack} DEF {u.defense}'
+            for u in battle.units)
         if tactical["enhanced"]:
             rows.extend(['', 'Tactique :'])
             for formation in tactical["formations"]:
