@@ -51,6 +51,10 @@ class CinematicGUITests(unittest.TestCase):
                         any("jeanne_prologue" in w.get(i)
                             for i in range(w.size()))
                         for w in widgets), "Sample cinematic missing from Studio list")
+                    buttons["Bande-son Jeanne"].invoke()
+                    root.update()
+                    self.assertEqual(showerror.call_args_list, [],
+                                     "Jeanne audio tracks rejected")
                     buttons["Lecture complète"].invoke()
                     root.update()
                     self.assertEqual(showerror.call_args_list, [],
@@ -67,7 +71,11 @@ class CinematicGUITests(unittest.TestCase):
                     root.update()
                     project = GameProject.load(project_file, Content.load(content_file))
                     self.assertEqual(project.cinematics[0]["id"], "jeanne_prologue")
-                    self.assertEqual(len(project.cinematics[0]["events"]), 5)
+                    self.assertEqual(len(project.cinematics[0]["events"]), 9)
+                    self.assertEqual(
+                        {e["bus"] for e in project.cinematics[0]["events"]
+                         if e["kind"] == "sound"},
+                        {"music", "ambience", "voice"})
                     self.assertEqual(callback_errors, [])
                 finally:
                     root.destroy()
