@@ -142,6 +142,7 @@ class Unit:
     kind: str = "character"
     tags: list[str] = field(default_factory=list)
     behavior: str = "tactical"
+    patrol_route: tuple[Cell, ...] = ()
 
     def occupied_cells(self, origin=None):
         x, y = self.pos if origin is None else origin
@@ -299,6 +300,10 @@ class Content:
                             for c in cells), f"Invalid spawn: {u.id}")
                 occupied.update(cells)
                 validate_actor(u, self.skills, self.archetypes, rules)
+                for waypoint in u.patrol_route:
+                    cell(waypoint, b)
+                    require(not b.tile(waypoint).blocked,
+                            f"{u.id}: patrol waypoint is blocked")
             require(any(u.team == "player" for u in m.units), "Mission needs a player")
             require(any(u.team == "enemy" for u in m.units), "Mission needs an enemy")
             require(not m.protected_id or m.protected_id in ids, "Unknown protected unit")
