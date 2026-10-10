@@ -16,6 +16,7 @@ class AudioStage:
         self.music_volume = music_volume / 100
         self._mixer = None
         self._sounds = {}
+        self._tracks = {}
         self._music = None
         self._seen = {}
 
@@ -65,6 +66,61 @@ class AudioStage:
         except (RuleError, OSError, RuntimeError, ValueError):
             self._music = None
 
+    def play_track(self, track_id, slot, *, bus="sfx", loop=False):
+        """Start an independent channel (allow music, ambience and speech to overlap).
+
+        Cinematic tracks are short WAV/OGG Sound objects; long streamed score
+        outside cutscenes keeps using mixer.music through music().
+        """
+        if track_id in self._tracks:
+            return True
+        try:
+            from .audio_timeline import BUSES
+            if bus not in BUSES:
+                return False
+            path = self._path(slot)
+            if path is None or not self._start():
+                return False
+            key = str(path)
+            if key not in self._sounds:
+                self._sounds[key] = self._mixer.Sound(key)
+            channel = self._sounds[key].play(loops=-1 if loop else 0)
+            if channel is None:
+                return False
+            self._tracks[track_id] = (channel, bus)
+            self.set_track_level(track_id, 1.)
+            return True
+        except (RuleError, OSError, RuntimeError, ValueError):
+            return False
+
+    def set_track_level(self, track_id, level):
+        """Set authored envelope gain multiplied by the relevant master volume."""
+        entry = self._tracks.get(track_id)
+        if entry is None:
+            return
+        channel, bus = entry
+        master = self.music_volume if bus in ("music", "ambience") else self.effects_volume
+        try:
+            channel.set_volume(max(0., min(1., float(level))) * master)
+        except (OSError, RuntimeError, ValueError, TypeError):
+            pass
+
+    def stop_track(self, track_id):
+        entry = self._tracks.pop(track_id, None)
+        if entry is not None:
+            try:
+                entry[0].stop()
+            except (OSError, RuntimeError):
+                pass
+
+    def pause_tracks(self):
+        for channel, _ in self._tracks.values():
+            channel.pause()
+
+    def resume_tracks(self):
+        for channel, _ in self._tracks.values():
+            channel.unpause()
+
     def music_for(self, *slots):
         """Play the first authored soundtrack, with silent fallback."""
         for slot in slots:
@@ -97,6 +153,8 @@ class AudioStage:
             return False
 
     def stop(self):
+        for track_id in list(self._tracks):
+            self.stop_track(track_id)
         if self._mixer is not None:
             self._mixer.music.stop()
             self._mixer.stop()

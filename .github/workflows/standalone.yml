@@ -62,6 +62,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_audio_studio_gui.py -v
+      - name: Exercise cinematic timeline authoring and playback
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_cinematics_gui.py -v
       - name: Exercise 2.5.4 visual Campaign & Siege Studio
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -130,3 +134,7 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_authored_siege_gui.py -v
+      - name: Exercise 2.5.4.3 visual logistics graph and live Player convoys
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_logistics_studio_gui.py -v

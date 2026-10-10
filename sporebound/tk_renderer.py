@@ -39,6 +39,15 @@ class CanvasRenderer:
         cell = camera.cell_size
         selected = frame.selected
         reachable = set(frame.reachable)
+        # Source-of-truth engine telegraphs; distinguish scheduled and possible.
+        priority = {"hazard": 0, "charge": 1, "prepared": 2, "cast": 3}
+        threat_style = {"hazard": "#fd766f", "charge": "#f5ae60",
+                        "prepared": "#f5d07a", "cast": "#c69df8"}
+        threats = {}
+        for threat in getattr(frame, "danger", ()):
+            pos = tuple(threat["cell"])
+            if pos not in threats or priority[threat["kind"]] > priority[threats[pos]]:
+                threats[pos] = threat["kind"]
         # Tile height, cover, danger and blockage are presentation only.
         for tile in frame.tiles:
             x, y = camera.cell_to_screen(tile.pos)
@@ -57,6 +66,11 @@ class CanvasRenderer:
             if tile.pos in reachable:
                 canvas.create_rectangle(x + 4, y + 4, x + cell - 4, y + cell - 4,
                                         outline="#58d6cd", width=2, dash=(3, 3))
+            if tile.pos in threats:
+                kind = threats[tile.pos]
+                canvas.create_rectangle(x + 6, y + 6, x + cell - 6, y + cell - 6,
+                                        outline=threat_style[kind], width=3,
+                                        dash=(5, 3) if kind == "charge" else (2, 3))
             if selected == tile.pos:
                 canvas.create_rectangle(x + 2, y + 2, x + cell - 2, y + cell - 2,
                                         outline="#ffe78a", width=3)

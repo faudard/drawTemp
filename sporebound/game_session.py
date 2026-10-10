@@ -141,6 +141,7 @@ class GameSession:
         # No parallel rules or save format: use the same validated GameSession.
         self.start_fronts(blueprint["fronts"], blueprint["focused"],
                           specs=blueprint["specs"], links=blueprint["links"],
+                          logistics=blueprint.get("logistics"),
                           campaign=blueprint["campaign"])
         self.siege_id = siege_id
         return self.fronts
@@ -252,6 +253,26 @@ class GameSession:
         require(self.fronts is not None and not self.progress.story_pending,
                 "No available multi-front encounter")
         self.fronts.set_doctrine(front, doctrine)
+
+    def send_reserves(self, destination, actors):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        return self.fronts.send_reserves(destination, actors)
+
+    def transfer_units(self, destination, placements):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        return self.fronts.transfer_units(destination, placements)
+
+    def escort_convoy(self, convoy_id):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        return self.fronts.escort_convoy(convoy_id)
+
+    def rescue_convoy(self, convoy_id):
+        require(self.fronts is not None and not self.progress.story_pending,
+                "No available multi-front encounter")
+        return self.fronts.rescue_convoy(convoy_id)
 
     def ai_turn(self):
         require(self.mode == "battle" and not self.finalized and
@@ -387,7 +408,8 @@ class GameSession:
                         and session.fronts.initial_focus == bp["focused"]
                         and session.fronts.initial_specs == bp["specs"]
                         and session.fronts.links == bp["links"]
-                        and session.fronts.initial_campaign == bp["campaign"],
+                        and session.fronts.initial_campaign == bp["campaign"]
+                        and session.fronts.initial_logistics == bp.get("logistics"),
                         "Authored siege no longer matches saved front configuration")
                 session.siege_id = data["siege_id"]
             if "front_battle_ids" in data:

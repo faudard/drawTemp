@@ -27,6 +27,17 @@ python -m sporebound player --content sporebound/content/jeanne.json --project s
 Cette tranche ne contient pas encore les actes I–V, l'exploration continue
 hors grille ni les cinématiques dessinées. Voir [le guide du prologue](docs/JEANNE_PROLOGUE.md).
 
+## Studio Cinématiques 2.9
+
+L'onglet **Cinématiques** permet de créer un storyboard temporel avec
+déplacement d'acteurs, caméra, dialogues, fondu, décors colorés et sons
+optionnels. Un lecteur d'aperçu offre lecture/pause/skip ; le Player déclenche
+les séquences au début d'une campagne, avant une mission et au retour d'un
+combat terminé. **Exemple Jeanne** fournit une première scène préremplie.
+
+Les séquences sont validées puis sauvegardées dans le manifeste du jeu, pas
+dans le format de combat. Voir le [guide Cinématiques](docs/CINEMATICS.md).
+
 ## Player & Presentation 2.6
 
 Le client `python -m sporebound player` utilise désormais `GameSession` et les

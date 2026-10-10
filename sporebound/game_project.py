@@ -27,6 +27,7 @@ class GameProject:
     version: int = 1
     assets: dict = field(default_factory=dict)
     sieges: list[dict] = field(default_factory=list)
+    cinematics: list[dict] = field(default_factory=list)
     exploration: dict = field(default_factory=dict)
     battle_support: list[dict] = field(default_factory=list)
 
@@ -57,6 +58,7 @@ class GameProject:
                 **({'story': deepcopy(self.story)} if self.story else {}),
                 **({'assets': deepcopy(self.assets)} if self.assets else {}),
                 **({'sieges': deepcopy(self.sieges)} if self.sieges else {}),
+                **({'cinematics': deepcopy(self.cinematics)} if self.cinematics else {}),
                 **({'exploration': deepcopy(self.exploration)} if self.exploration else {}),
                 **({'battle_support': deepcopy(self.battle_support)} if self.battle_support else {})}
 
@@ -102,6 +104,8 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .siege_authoring import validate_all
         validate_all(self.sieges, content, self.campaigns)
+        from .cinematics import validate_cinematics
+        validate_cinematics(self.cinematics, content, self.campaigns)
         from .narrative import validate_story
         validate_story(self.story, content, self.campaigns)
         from .exploration import validate_exploration
