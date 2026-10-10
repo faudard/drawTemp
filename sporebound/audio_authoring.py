@@ -39,6 +39,8 @@ def import_sound(project, content, source, asset_root, asset_id):
     root = Path(asset_root).resolve()
     relative = f"assets/audio/{asset_id}{source.suffix.lower()}"
     target = root / relative
+    require(target.parent.resolve().is_relative_to(root),
+            "Le dossier audio sort du répertoire du projet")
     require(not target.exists() and not target.is_symlink(),
             "Un fichier audio de ce nom existe déjà")
     def update(assets):
@@ -49,12 +51,15 @@ def import_sound(project, content, source, asset_root, asset_id):
     updated = _edit(project, content, update)
     target.parent.mkdir(parents=True, exist_ok=True)
     # Exclusive creation prevents silent replacement of a user's sound.
+    created = False
     try:
-        with target.open("xb") as dest, source.open("rb") as inp:
-            shutil.copyfileobj(inp, dest)
+        with target.open("xb") as dest:
+            created = True
+            with source.open("rb") as inp:
+                shutil.copyfileobj(inp, dest)
     except BaseException:
-        if target.exists():
-            target.unlink()
+        if created:
+            target.unlink(missing_ok=True)
         raise
     return updated
 
