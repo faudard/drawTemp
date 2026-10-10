@@ -69,7 +69,7 @@ def validate_cinematics(clips, content, campaigns):
             optional_audio = {
                 "bus", "volume", "fade_in_ms", "fade_out_ms", "loop", "duck_percent"
             } if kind == "sound" else set()
-            required = base | fields.get(kind, set())
+            required = base | (fields[kind] if kind in KINDS else set())
             require(kind in KINDS and required <= set(event) <= required | optional_audio,
                     "Invalid fields for cinematic event")
             require(_id(event["id"]) and event["id"] not in event_ids,
