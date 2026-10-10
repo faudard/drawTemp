@@ -80,6 +80,12 @@ class PlayerController:
     def explore_interact(self, point_id):
         return self._apply(self.session.explore_interact, point_id)
 
+    def explore_wait(self):
+        return self._apply(self.session.explore_wait)
+
+    def explore_actor(self, actor_id, action):
+        return self._apply(self.session.explore_actor, actor_id, action)
+
     def start_mission(self, mission_id):
         return self._apply(self.session.start_mission, mission_id)
 
