@@ -61,7 +61,8 @@ class ConditionBuilderGUITests(unittest.TestCase):
                     preset = next(w for w in children if isinstance(w, ttk.Combobox)
                                   and 'flag ≥' in tuple(w['values']))
                     preset.set('flag ≥')
-                    entries = [w for w in children if isinstance(w, ttk.Entry)]
+                    # ttk.Combobox inherits ttk.Entry; exclude its selectors.
+                    entries = [w for w in children if type(w) is ttk.Entry]
                     # Find the variables and value entries using their Tk textvariable.
                     variable = entries[0]  # Condition key, not preview flag
                     value = entries[1]  # Condition value, regardless of selected preset
