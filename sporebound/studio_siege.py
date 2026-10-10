@@ -601,7 +601,8 @@ class SiegeStudio:
         rules = authored_rules_for_document(self.owner.doc().data)
         slot = int(self.slot.get())
         controller = AuthoredSiegeController(
-            content, bp, self.owner.project_path, slot, rules=rules)
+            content, bp, self.owner.project_path, slot, rules=rules,
+            project=self.owner.project)
         if self.session is not None and self.session_id == bp["id"]:
             exists = controller.save_path.exists()
             from tkinter import messagebox
