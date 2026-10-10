@@ -151,6 +151,7 @@ def strategy_frame(fronts):
         fronts=tuple(
             FrontView(name, fronts.missions[name], row["doctrine"],
                       fronts.battles[name].result if row["status"] == "active"
+                      and name in fronts.battles
                       and fronts.battles[name].result is not None else row["status"],
                       row["strength"], row["opposition"],
                       name == timeline.focused)

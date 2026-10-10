@@ -31,6 +31,7 @@ class StoryGraphEditor:
         ttk=self.ttk
         page=ttk.Frame(notebook)
         notebook.add(page,text='Arbre narratif')
+        self.page=page
         header=ttk.Frame(page);header.pack(fill='x',padx=8,pady=7)
         ttk.Label(header,text='Point de départ :').pack(side='left')
         self.root_var=self.tk.StringVar()
@@ -77,6 +78,7 @@ class StoryGraphEditor:
         self.choice_box.bind('<<ComboboxSelected>>',lambda event:self._choice_selected())
         line=ttk.Frame(details);line.pack(fill='x',padx=6,pady=3)
         self._button(line,'Éditer scène / choix',self.open_editor)
+        self._button(line,'Conditions',self.open_conditions)
         line=ttk.Frame(details);line.pack(fill='x',padx=6,pady=3)
         self._button(line,'Replier / déplier',self.toggle)
 
@@ -325,6 +327,10 @@ class StoryGraphEditor:
         if node is None or not node['scene_id']:
             raise RuleError('Sélectionner une scène')
         self.editor.select_graph_target(node['scene_id'],self.choice_var.get())
+
+    def open_conditions(self):
+        scene,choice=self._selection()
+        self.editor.select_condition_target(scene,choice)
 
     def link(self,destination):
         scene,choice=self._selection()
