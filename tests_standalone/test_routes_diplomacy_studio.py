@@ -97,7 +97,7 @@ class RoutesDiplomacyAuthoringTests(unittest.TestCase):
             lambda: treaty(bp, self.content, "gate", "supplies",
                            "interact", "not_real", ["royal_guard_left"]),
             lambda: treaty(bp, self.content, "gate", "supplies",
-                           "interact", "supply_cache", ["castellan"]),
+                           "interact", "supply_cache", ["not_an_enemy"]),
             lambda: recovery(bp, self.content, "gate", "missing", 1, 1, 2),
             lambda: counteroffensive(bp, self.content, "throne", 0,
                                     "castle_gate_recovery", 2, 3),
