@@ -52,6 +52,24 @@ class RulesetTests(unittest.TestCase):
         self.assertEqual(battle.unit("ally").hp, 30)
 
 
+    def test_coordinated_protector_moves_between_medic_and_enemy(self):
+        hero = Unit("hero", "Hero", "player", (1, 2))
+        medic = Unit("medic", "Medic", "enemy", (4, 2), tags=["medic"])
+        guard = Unit("guard", "Guard", "enemy", (5, 3),
+                     behavior="coordinated", tags=["protector"])
+        content = Content({}, {"m": Mission("m", "M", Board(7, 5),
+                                            [hero, medic, guard])})
+        battle = Battle(content, "m", rules=tactical_rpg_rules(), seed=4)
+        battle.active_id = "guard"
+        battle.unit("guard").ct = 100
+        before = battle.digest()
+        cmd = choose_command(battle)
+        self.assertEqual(cmd, {"kind": "move", "cell": [3, 2]})
+        self.assertEqual(battle.digest(), before)
+        battle.execute(cmd)
+        self.assertEqual(battle.unit("guard").pos, (3, 2))
+
+
 class FormationTests(unittest.TestCase):
     def setup_battle(self, tags=None):
         a = Unit("a", "A", "player", (1, 1), weapon="spear",
