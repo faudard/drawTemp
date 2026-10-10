@@ -100,7 +100,8 @@ class ClassAIStudioTests(unittest.TestCase):
         self.assertEqual(report["mode"], "patrol")
         self.assertEqual(report["roles"], ["protector", "leader"])
         self.assertFalse(report["coordinated_active"])
-        self.assertEqual(report["waypoints"], route)
+        self.assertEqual(report["waypoints"],
+                         tuple(tuple(point) for point in route))
         self.assertEqual(self.data, self.before)
         self.assertEqual(parse_cells(""), [])
 
