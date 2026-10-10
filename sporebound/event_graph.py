@@ -73,6 +73,33 @@ def remove_action(data, mission_id, event_id, index):
     return _save(data, mission_id, event_id, event)
 
 
+def append_wave_actor(data, mission_id, event_id, index, actor):
+    """Add a second or later actor to an existing wave, with full validation."""
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    require(type(index) is int and 0 <= index < len(event['actions']),
+            'Unknown wave action')
+    action = event['actions'][index]
+    require(action['kind'] in ('wave', 'queue_wave'),
+            'Choose an existing reinforcement wave action')
+    require(isinstance(actor, dict) and isinstance(actor.get('id'), str),
+            'Invalid reinforcement actor')
+    action['actors'].append(deepcopy(actor))
+    return _save(data, mission_id, event_id, event)
+
+
+def remove_wave_actor(data, mission_id, event_id, index):
+    """Remove last authored wave actor while retaining a valid nonempty wave."""
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    require(type(index) is int and 0 <= index < len(event['actions']),
+            'Unknown wave action')
+    action = event['actions'][index]
+    require(action['kind'] in ('wave', 'queue_wave') and
+            len(action.get('actors', [])) > 1,
+            'A reinforcement wave needs at least one actor')
+    action['actors'].pop()
+    return _save(data, mission_id, event_id, event)
+
+
 def reorder_action(data, mission_id, event_id, index, direction):
     event = deepcopy(_find_event(data, mission_id, event_id))
     event['actions'] = event_composer.move_action(
