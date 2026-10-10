@@ -11,6 +11,7 @@ from .model import Content, RuleError
 from .player_controller import PlayerController
 from .presentation import Camera, battle_frame, strategy_frame
 from .siege import available_operations
+from .tactical_actions import tactical_action_options, tactical_command
 from .tk_renderer import CanvasRenderer
 
 
@@ -322,6 +323,7 @@ class PlayerApplication:
                             "item:potion", "item:ether", "item:phoenix",
                             *["object:" + obj["id"] for obj in battle.mission.objects],
                             *available_operations(battle, battle.active)])
+                options += tactical_action_options(battle)
                 options += ["end"]
             if options:
                 if self.action_var.get() not in options:
@@ -374,6 +376,18 @@ class PlayerApplication:
         if frame.forecast:
             rows.extend(["", "Prévisions"])
             rows.extend(str(item) for item in frame.forecast)
+        rows.extend(["", "Prochaines activations (CT estimé)"])
+        rows.extend(f"{entry['unit']} : " +
+                    ("actif" if entry["active"] else
+                     "bloqué" if entry["eta_ticks"] is None else
+                     "t+" + str(entry["eta_ticks"])) for entry in frame.timeline)
+        if frame.casts:
+            rows.extend(["", "Incantations annoncées"])
+            rows.extend(f"{cast['unit']} : {cast['skill']} dans {cast['remaining_ticks']} ticks"
+                        for cast in frame.casts)
+        if frame.charges:
+            rows.extend(["", "Charges possibles (non garanties)"])
+            rows.extend(f"{charge['unit']} → {charge['target']}" for charge in frame.charges)
         rows.extend(["", "Journal"])
         rows.extend(str(event) for event in frame.events[-15:])
         self.info.configure(state="normal")
@@ -427,6 +441,9 @@ class PlayerApplication:
             command = {"kind": "siege_attack", "object": kind[len("siege-attack:"):]}
         elif kind.startswith("repair-siege:"):
             command = {"kind": "repair_siege", "object": kind[len("repair-siege:"):]}
+        elif kind == "charge" or kind == "disengage" or kind.startswith(
+                ("formation:", "prepare:", "relay:")):
+            command = tactical_command(kind, self.selection)
         else:
             command = {"kind": "act", "skill": kind, "cell": list(self.selection)}
         self._change(lambda: self.player.execute(command))
