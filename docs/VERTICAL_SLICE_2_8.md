@@ -207,3 +207,53 @@ To verify:
 python -m unittest discover -s tests_standalone -p test_authored_siege_player.py -v
 SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_authored_siege_gui.py -v
 ```
+
+## 2.8.3 — Authenticated siege narrative and presentation
+
+The standalone **Studio-authored siege Player** now uses the existing
+`StoryBook` engine, not read-only text scenes. Studio **Scénario & dialogues**
+choices are interactive, including validated `when` conditions, `set_flag`,
+`add_flag`, `gold` and `unlock_mission` effects, and directed `next_scene`
+branches. These effects update **narrative campaign progression** and gate
+later dialogue. They do **not** directly grant battle units or supplies, nor
+override the tactical front/finale prerequisites.
+
+Entry scenes block combat commands until their choices are resolved. When a
+front's Battle really resolves to victory, its authored
+`story.after_mission[mission_id]` is queued as an interactive dialogue; the
+engine never invents victory. Multiple simultaneous front victories queue
+their distinct scenes. Combat resumes once the dialogue graph is resolved.
+
+### Replay and compatibility
+
+The original siege slot (`version: 1`) now optionally includes a `narrative`
+chronicle: scene choice IDs and victorious front IDs at exact tactical journal
+indices; checksum, project digest and replay-derived progress digest. The
+loader first **fully replays and verifies** the tactical journal and then
+replays each narrative event against verified tactical prefixes, including
+battle-result prerequisites, unlocks, available choices and chronological
+dialogue gates. Invalid or tampered narrative choices are rejected.
+
+Existing slots without this optional field still load via the original API.
+Loading an already-started legacy siege suppresses a belated introduction;
+the next save upgrades the slot to include the narrative chronicle. The
+regular Campaign/GameSession and Castle Vertical Slice save formats remain
+unchanged.
+
+### Presentation
+
+The scene viewer includes a skippable typewriter effect, accessible visible
+choice buttons, a portrait binding for the scene speaker with text fallback,
+and optional scene/voice/music cues. The tactical canvas picks up portable
+sprite bindings from the same `GameProject.assets` manifest. PNG files
+and WAV/OGG remain project-relative and validated by `AssetRegistry`.
+
+Audio is optional: missing bindings or a missing mixer do not block play.
+This step is interactive **dialogue staging**, not a full authorable camera
+timeline/cinematic sequencer. Full storyboards and timed cinematic editing
+remain milestone 2.8.4.
+
+```bash
+python -m unittest discover -s tests_standalone -p test_siege_story.py -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_authored_siege_gui.py -v
+```
