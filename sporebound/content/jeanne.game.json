@@ -218,5 +218,89 @@
         ]
       }
     ]
+  },
+  "exploration": {
+    "sc_p0_champs": {
+      "title": "Les champs de Domrémy — avant les flammes",
+      "theme": "fields",
+      "width": 10,
+      "height": 7,
+      "start": [
+        1,
+        5
+      ],
+      "blocked": [
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          6,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          6,
+          2
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "interactions": [
+        {
+          "id": "ble",
+          "title": "Les blés mûrs",
+          "text": "Les épis ploient sous la brise. Jeanne reconnaît les sillons tracés avec son père, année après année.",
+          "pos": [
+            3,
+            5
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "medaillon",
+          "title": "Le médaillon de Jacques",
+          "text": "Un médaillon oublié sous l'arbre. Jacques lui a souvent répété : « Une lame ne vaut rien sans quelqu'un à protéger. »",
+          "pos": [
+            5,
+            3
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "fleurs",
+          "title": "Les fleurs de Margot",
+          "text": "Quelques fleurs sauvages pour l'hospice. Ce matin paraissait ordinaire.",
+          "pos": [
+            1,
+            2
+          ],
+          "required": false,
+          "exit": false
+        },
+        {
+          "id": "chene",
+          "title": "Le vieux chêne",
+          "text": "Les oiseaux se taisent. Une voix prononce son prénom. Le monde semble s'immobiliser.",
+          "pos": [
+            8,
+            4
+          ],
+          "required": false,
+          "exit": true
+        }
+      ]
+    }
   }
 }
