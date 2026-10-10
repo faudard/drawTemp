@@ -692,6 +692,8 @@ def launch(path):
                      'd’ancrage, Ctrl+V ou l’outil Collage.'
                      f'\nCases sélectionnées : {len(selected_tiles)}'
                      f' | Presse-papiers : {len(terrain_clipboard.offsets) if terrain_clipboard else 0}'
+                     '\nRotation/symétrie : modifier le modèle puis coller.'
+                     '\nGroupe : sélectionner les unités/objets et utiliser les flèches.'
                      '\nCouches : visibilité d’édition seulement ; règles inchangées.'
                      '\nDonnées tactiques avancées : onglet JSON.')
         inspector.delete('1.0','end')
@@ -739,6 +741,25 @@ def launch(path):
     for name, var in layer_vars.items():
         ttk.Checkbutton(authoring_controls, text=name, variable=var,
                         command=refresh).pack(side='left',padx=2)
+    advanced_controls = ttk.Frame(root)
+    advanced_controls.pack(fill='x', padx=5)
+    for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
+                            ('⇄ Sym. H','mirror_x'), ('⇅ Sym. V','mirror_y')]:
+        ttk.Button(advanced_controls,text=label,
+                   command=lambda op=operation: rotate_or_flip(op)).pack(side='left',padx=2)
+    ttk.Button(advanced_controls,text='Sauver modèle',
+               command=save_terrain_stamp).pack(side='left',padx=2)
+    ttk.Button(advanced_controls,text='Charger modèle',
+               command=open_terrain_stamp).pack(side='left',padx=2)
+    ttk.Label(advanced_controls, text='Groupe :').pack(side='left',padx=(10,2))
+    for label,dx,dy in [('←',-1,0), ('↑',0,-1), ('↓',0,1), ('→',1,0)]:
+        ttk.Button(advanced_controls,text=label,width=3,
+                   command=lambda x=dx,y=dy: shift_entity_group(x,y)).pack(side='left',padx=1)
+    ttk.Label(advanced_controls,text='Zoom :').pack(side='left',padx=(10,2))
+    ttk.Button(advanced_controls,text='−',width=3,
+               command=lambda: set_zoom(-6)).pack(side='left')
+    ttk.Button(advanced_controls,text='+',width=3,
+               command=lambda: set_zoom(6)).pack(side='left')
     notebook = ttk.Notebook(root)
     notebook.pack(fill='both',expand=True)
     work = ttk.Frame(notebook)
@@ -755,8 +776,18 @@ def launch(path):
     canvas.bind('<Motion>',paste_preview)
     canvas.bind('<Control-c>',lambda _e: copy_selection())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
-    inspector = tk.Text(work,width=43,wrap='word')
-    inspector.pack(side='right',fill='y')
+    canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
+    canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
+    canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
+    canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
+    side_panel = ttk.Frame(work)
+    side_panel.pack(side='right',fill='y')
+    ttk.Label(side_panel,text='Vue tactique').pack(anchor='w',padx=3,pady=(3,0))
+    mini_canvas = tk.Canvas(side_panel,width=184,height=184,
+                            background='#f5f5f5',highlightthickness=1)
+    mini_canvas.pack(anchor='w',padx=3,pady=3)
+    inspector = tk.Text(side_panel,width=43,wrap='word')
+    inspector.pack(side='top',fill='both',expand=True)
     source_frame = ttk.Frame(notebook)
     notebook.add(source_frame,text='Données JSON')
     ttk.Button(source_frame,text='Valider et appliquer',command=apply_json).pack(anchor='w')
