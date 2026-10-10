@@ -166,6 +166,16 @@ sont pour l'instant les `next_missions` existants : après une victoire,
 tous les successeurs déclarés sont débloqués. Les choix conditionnels,
 dialogues/cinématiques et renderer/audio dédiés restent à développer.
 
+## Conditions narratives visuelles — 2.5.2
+
+L’onglet **Conditions & variables** permet de composer les règles
+**ET / OU / NON**, les comparaisons de flags, l’or et les missions
+terminées, puis de prévisualiser la visibilité des choix sans modifier
+une sauvegarde. L’arbre narratif propose désormais un accès direct
+aux conditions de chaque branche.
+
+Voir [le guide des conditions narratives](docs/NARRATIVE_CONDITIONS_3.md).
+
 ## Arbre narratif — scènes réutilisables
 
 Le studio contient aussi un onglet **Arbre narratif** où chaque embranchement
