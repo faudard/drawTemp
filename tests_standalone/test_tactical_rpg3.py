@@ -122,6 +122,20 @@ class TalentTests(unittest.TestCase):
         battle = restored.prepare(content, "arena", ruleset=default_rules())
         self.assertEqual(battle.unit("hero").defense, 3)
 
+    def test_old_campaign_slots_and_default_battle_replays_still_load(self):
+        old = Campaign(["arena"])
+        old.hero("hero").xp = 100
+        snap = {"version": 1, **asdict(old)}
+        del snap["heroes"]["hero"]["spent_jp"]
+        del snap["heroes"]["hero"]["learned_talents"]
+        self.assertEqual(Campaign.from_dict(snap).hero("hero").spent_jp, {})
+        snap["heroes"]["hero"]["learned_talents"] = {"brave": [{}]}
+        with self.assertRaises(RuleError):
+            Campaign.from_dict(snap)
+        battle = Battle(arena(), "arena", seed=4)
+        battle.execute({"kind": "end"})
+        self.assertEqual(Battle.replay(battle.recording()).digest(), battle.digest())
+
     def test_cycle_is_rejected_before_any_purchase(self):
         content = self.content()
         content.jobs["brave"]["talents"]["guard"]["requires"] = ["warcry"]
