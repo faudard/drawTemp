@@ -113,6 +113,55 @@ def set_unit_combat_role(data, mid, uid, *, role="none", formation="none",
     return _edit(data, mid, change)
 
 
+
+def upsert_job_talent(data, job_id, talent_id, *, jp=1, requires=(),
+                      exclusive="", stat="", bonus=0, skills=()):
+    """Edit one talent in a global job tree, atomically and without raw JSON.
+
+    Talent edges (requires) are validated by Content.validate; cycles and
+    dangling dependencies cannot enter an undoable Studio document.
+    """
+    _identifier(talent_id, "Talent id")
+    require(isinstance(job_id, str) and job_id in data.get("jobs", {}),
+            "Unknown job")
+    require(type(jp) is int and 1 <= jp <= 20, "Talent JP cost must be 1..20")
+    require(isinstance(requires, (tuple, list)) and
+            all(isinstance(x, str) for x in requires), "Invalid prerequisites")
+    require(isinstance(skills, (tuple, list)) and
+            all(isinstance(x, str) for x in skills), "Invalid skill references")
+    require(isinstance(exclusive, str) and isinstance(stat, str),
+            "Invalid talent metadata")
+    from .builds3 import STATS
+    require(stat in STATS or (stat == "" and bonus == 0),
+            "Choose a supported talent stat")
+    require(type(bonus) is int and 0 <= bonus <= 100, "Invalid talent bonus")
+    row = {"jp": jp}
+    if requires:
+        row["requires"] = list(requires)
+    if exclusive:
+        row["exclusive"] = exclusive
+    if stat:
+        row["bonuses"] = {stat: bonus}
+    if skills:
+        row["skills"] = list(skills)
+    new = deepcopy(data)
+    new["jobs"][job_id].setdefault("talents", {})[talent_id] = row
+    return Content.from_dict(new).to_dict()
+
+
+def remove_job_talent(data, job_id, talent_id):
+    """Prevent dangling edges; removal is a single undoable edit."""
+    require(job_id in data.get("jobs", {}), "Unknown job")
+    new = deepcopy(data)
+    talents = new["jobs"][job_id].get("talents", {})
+    require(talent_id in talents, "Unknown talent")
+    require(not any(talent_id in spec.get("requires", [])
+                    for name, spec in talents.items() if name != talent_id),
+            "Cannot remove a prerequisite used by another talent")
+    del talents[talent_id]
+    return Content.from_dict(new).to_dict()
+
+
 def add_object(data, mid, oid, kind, pos, *, link='', destination=None):
     _identifier(oid, 'Object id')
     require(kind in ('door', 'switch', 'chest', 'ram', 'catapult', 'passage', 'defense'),
