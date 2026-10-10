@@ -1,0 +1,651 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "id": "estoc",
+      "name": "Estoc",
+      "cost": 0,
+      "range": 1,
+      "effects": [
+        {
+          "kind": "damage",
+          "power": 5,
+          "element": "physical"
+        }
+      ]
+    },
+    {
+      "id": "garde_rapprochee",
+      "name": "Frappe de garde",
+      "cost": 0,
+      "range": 1,
+      "effects": [
+        {
+          "kind": "damage",
+          "power": 3,
+          "element": "physical"
+        }
+      ]
+    },
+    {
+      "id": "premiers_soins",
+      "name": "Premiers soins",
+      "cost": 0,
+      "range": 1,
+      "target": "ally",
+      "effects": [
+        {
+          "kind": "heal",
+          "power": 12
+        }
+      ]
+    }
+  ],
+  "missions": [
+    {
+      "id": "p0_01_lame",
+      "name": "Souvenir — la leçon d'armes",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              2,
+              2
+            ],
+            "cover": 15
+          },
+          {
+            "pos": [
+              4,
+              3
+            ],
+            "cover": 15
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "renaud_mentor",
+          "name": "Renaud — duel d'entraînement",
+          "team": "enemy",
+          "pos": [
+            4,
+            4
+          ],
+          "max_hp": 29,
+          "hp": 29,
+          "attack": 2,
+          "speed": 7,
+          "weapon_power": 2,
+          "skills": [],
+          "reaction": "none"
+        }
+      ],
+      "objective": "eliminate",
+      "reward": 0,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "renaud_conseil",
+          "condition": "tick",
+          "value": 15,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Renaud : Garde ton appui. Le fer ne pardonne pas une seconde d'hésitation."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p0_02_incendie",
+      "name": "Domrémy — les premières flammes",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              2
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              3
+            ],
+            "hazard": 2
+          },
+          {
+            "pos": [
+              4,
+              1
+            ],
+            "hazard": 1
+          },
+          {
+            "pos": [
+              5,
+              1
+            ],
+            "cover": 10
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "pillard_1",
+          "name": "Pillard de Domrémy",
+          "team": "enemy",
+          "pos": [
+            5,
+            3
+          ],
+          "max_hp": 27,
+          "hp": 27,
+          "attack": 6,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        },
+        {
+          "id": "pillard_2",
+          "name": "Homme d'armes",
+          "team": "enemy",
+          "pos": [
+            6,
+            4
+          ],
+          "max_hp": 26,
+          "hp": 26,
+          "attack": 6,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        }
+      ],
+      "objective": "eliminate",
+      "reward": 0,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "fumee",
+          "condition": "tick",
+          "value": 20,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "La fumée s'épaissit. Derrière la palissade, des villageois appellent au secours."
+            }
+          ]
+        },
+        {
+          "id": "ordres",
+          "condition": "tick",
+          "value": 60,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Un pillard crie : « L'ordre était de trouver les feuillets du notable ! »"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p0_03a_secours",
+      "name": "Domrémy — tenir pour les survivants",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              4,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              2,
+              2
+            ],
+            "hazard": 1
+          },
+          {
+            "pos": [
+              5,
+              4
+            ],
+            "cover": 20
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "margot",
+          "name": "Margot — soigneuse",
+          "team": "player",
+          "pos": [
+            0,
+            4
+          ],
+          "max_hp": 68,
+          "hp": 68,
+          "attack": 3,
+          "speed": 8,
+          "weapon_power": 4,
+          "skills": [
+            "premiers_soins"
+          ],
+          "reaction": "none"
+        },
+        {
+          "id": "raider_secours_1",
+          "name": "Pillard",
+          "team": "enemy",
+          "pos": [
+            6,
+            3
+          ],
+          "max_hp": 24,
+          "hp": 24,
+          "attack": 5,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        },
+        {
+          "id": "raider_secours_2",
+          "name": "Arbalétrier",
+          "team": "enemy",
+          "pos": [
+            6,
+            5
+          ],
+          "max_hp": 19,
+          "hp": 19,
+          "attack": 5,
+          "speed": 7,
+          "weapon_power": 2,
+          "skills": [],
+          "weapon": "ranged",
+          "attack_range": 3,
+          "min_range": 2,
+          "attack_range_mode": "los"
+        }
+      ],
+      "objective": "survive",
+      "target_ticks": 85,
+      "protected_id": "margot",
+      "reward": 0,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "grange",
+          "condition": "tick",
+          "value": 20,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Margot : Les blessés sont derrière la grange ! Tenez encore !"
+            }
+          ]
+        },
+        {
+          "id": "evacuation",
+          "condition": "tick",
+          "value": 62,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Des voisins évacuent les derniers survivants pendant que Jeanne couvre leur retraite."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p0_03b_poursuite",
+      "name": "Domrémy — le messager au sceau",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              2
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              2,
+              1
+            ],
+            "cover": 20
+          },
+          {
+            "pos": [
+              5,
+              2
+            ],
+            "cover": 10
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "messager",
+          "name": "Officier au sceau",
+          "team": "enemy",
+          "pos": [
+            6,
+            4
+          ],
+          "max_hp": 29,
+          "hp": 29,
+          "attack": 4,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        },
+        {
+          "id": "garde_messager",
+          "name": "Garde du messager",
+          "team": "enemy",
+          "pos": [
+            5,
+            3
+          ],
+          "max_hp": 25,
+          "hp": 25,
+          "attack": 6,
+          "speed": 9,
+          "weapon_power": 2,
+          "skills": []
+        }
+      ],
+      "objective": "eliminate",
+      "reward": 0,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "sceau",
+          "condition": "tick",
+          "value": 22,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Le messager cache un sceau brisé dans sa besace : un lys sur une lame noire."
+            }
+          ]
+        },
+        {
+          "id": "preuve",
+          "condition": "tick",
+          "value": 63,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Messager : « Varenne n'a fait que transmettre les ordres ! »"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p0_04_fuite",
+      "name": "La route des cendres — extraction",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              4,
+              3
+            ],
+            "cover": 20
+          },
+          {
+            "pos": [
+              3,
+              4
+            ],
+            "cover": 10
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "refugie",
+          "name": "Survivant de Domrémy",
+          "team": "player",
+          "pos": [
+            1,
+            3
+          ],
+          "max_hp": 64,
+          "hp": 64,
+          "attack": 3,
+          "speed": 8,
+          "weapon_power": 4,
+          "skills": [],
+          "reaction": "none"
+        },
+        {
+          "id": "guetteur_route",
+          "name": "Éclaireur hostile",
+          "team": "enemy",
+          "pos": [
+            6,
+            4
+          ],
+          "max_hp": 23,
+          "hp": 23,
+          "attack": 6,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        }
+      ],
+      "objective": "extract",
+      "goal": [
+        [
+          7,
+          0
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          7,
+          2
+        ]
+      ],
+      "protected_id": "refugie",
+      "reward": 0,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "pont",
+          "condition": "tick",
+          "value": 28,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Le sentier à l'est est encore libre. Jeanne doit l'atteindre sans laisser mourir le survivant."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "jobs": {
+    "brave": {
+      "name": "Épéiste",
+      "bonuses": {
+        "max_hp": 4
+      },
+      "skills": {
+        "estoc": 1
+      }
+    },
+    "eclaireur": {
+      "name": "Éclaireur",
+      "requires": "brave",
+      "requires_level": 2,
+      "bonuses": {
+        "move": 1,
+        "speed": 1
+      },
+      "skills": {
+        "garde_rapprochee": 1
+      }
+    }
+  },
+  "equipment": {
+    "epee_de_jacques": {
+      "name": "Épée de Jacques",
+      "slot": "weapon",
+      "bonuses": {
+        "attack": 2
+      },
+      "price": 60
+    },
+    "cape_de_route": {
+      "name": "Cape de voyage",
+      "slot": "armor",
+      "bonuses": {
+        "max_hp": 6
+      },
+      "price": 30
+    }
+  },
+  "tactic_unlocks": []
+}
