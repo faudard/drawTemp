@@ -43,7 +43,8 @@ def play_side(session, front, shooter, *, recovery=False):
         session.start_recovery(front)
     else:
         session.switch(front)
-        session.execute({"kind": "start_battle"})
+        if session.active.deploying:
+            session.execute({"kind": "start_battle"})
     for _ in range(80):
         if recovery:
             if front not in session.recovery_battles:
@@ -74,7 +75,8 @@ def play_side(session, front, shooter, *, recovery=False):
 
 def defeat_castellan(session):
     session.switch("throne")
-    session.execute({"kind": "start_battle"})
+    if session.active.deploying:
+        session.execute({"kind": "start_battle"})
     session.execute({"kind": "act", "skill": "attack", "cell": [2, 3]})
     assert session.state()["campaign"]["status"] == "victory"
 
@@ -100,11 +102,13 @@ def demo():
 
     restored = fresh()
     restored.switch("gate")
-    restored.execute({"kind": "start_battle"})
+    if restored.active.deploying:
+        restored.execute({"kind": "start_battle"})
     restored.withdraw_front("gate")
     play_side(restored, "gate", "relief_captain", recovery=True)
     restored.switch("courtyard")
-    restored.execute({"kind": "start_battle"})
+    if restored.active.deploying:
+        restored.execute({"kind": "start_battle"})
     restored.execute({"kind": "interact", "object": "stone_drop"})
     restored.execute({"kind": "end"})
     restored.partial_front("courtyard")
