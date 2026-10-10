@@ -184,6 +184,7 @@ class Exploration:
         next_pos = [x + dx, y + dy]
         require(_cell(next_pos, stage["width"], stage["height"])
                 and next_pos not in stage["blocked"], "Exploration route blocked")
+        require(stage["tick"] < 100000, "Exploration clock exceeded")
         progress.story_flags[_key(scene_id, "pos")] = ",".join(map(str, next_pos))
         progress.story_flags[_key(scene_id, "tick")] = stage["tick"] + 1
         return self.state(progress, scene_id)
