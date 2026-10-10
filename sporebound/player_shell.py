@@ -7,6 +7,7 @@ from pathlib import Path
 from .game_project import GameProject
 from .model import Content, RuleError
 from .player_session import PlayerSession
+from .siege import available_operations
 
 
 def launch(content_path, project_path=None, profile_path=None):
@@ -162,7 +163,8 @@ def launch(content_path, project_path=None, profile_path=None):
                 actions=['deploy','start_battle']
             elif battle.active:
                 actions=['move','attack',*battle.active.skills,'item:potion','item:ether',
-                         'item:phoenix',*['object:'+o['id'] for o in battle.mission.objects]]
+                         'item:phoenix',*['object:'+o['id'] for o in battle.mission.objects],
+                         *available_operations(battle,battle.active)]
             else:
                 actions=[]
             if command_var.get() not in actions:
@@ -232,6 +234,10 @@ def launch(content_path, project_path=None, profile_path=None):
             command={'kind':'item','item':kind[5:],'cell':list(selected)}
         elif kind.startswith('object:'):
             command={'kind':'interact','object':kind[7:]}
+        elif kind.startswith('siege-attack:'):
+            command={'kind':'siege_attack','object':kind[13:]}
+        elif kind.startswith('repair-siege:'):
+            command={'kind':'repair_siege','object':kind[13:]}
         else:
             command={'kind':'act','skill':kind,'cell':list(selected)}
         session.command(command)
@@ -264,3 +270,4 @@ def launch(content_path, project_path=None, profile_path=None):
     root.protocol('WM_DELETE_WINDOW',close)
     title_screen()
     root.mainloop()
+

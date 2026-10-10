@@ -39,6 +39,28 @@ def defense_targets(battle, obj):
     return [u for u in battle.units if u.alive and u.occupied_cells() & cells]
 
 
+def available_operations(battle, unit):
+    """Return contextual player/AI actions for siege objects in reach."""
+    from .model import distance
+    actions = []
+    for obj in battle.mission.objects:
+        if obj['kind'] not in {'ram', 'catapult'}:
+            continue
+        if min(distance(c, tuple(obj['pos'])) for c in unit.occupied_cells()) > 1:
+            continue
+        hp = obj.get('hp', obj.get('max_hp', 12))
+        maximum = obj.get('max_hp', hp)
+        if hp <= 0:
+            continue
+        if obj.get('team', 'player') != unit.team:
+            if 'siege_attack' in battle.rules.commands:
+                actions.append('siege-attack:' + obj['id'])
+        elif ('repair_siege' in battle.rules.commands
+              and obj.get('repair_charges', 0) > 0 and hp < maximum):
+            actions.append('repair-siege:' + obj['id'])
+    return actions
+
+
 def defense_ready(battle, obj):
     return (not obj.get('disabled', False) and obj.get('charges', 2) > 0
             and battle.tick >= obj.get('ready_at', 0))
@@ -70,3 +92,4 @@ def interact(battle, unit, obj):
             battle._hurt(target, obj.get('power', 15), unit, reactions=False)
     unit.acted = True
     unit.cast = None
+

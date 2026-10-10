@@ -185,6 +185,19 @@ porte à la main. Un interrupteur lié peut toujours lever une porte verrouillé
 Avancer le bélier jusqu’à la porte puis frapper quatre fois (ou deux tirs de
 catapulte) ouvre le passage. L’approche avec le troll est une mission d’élimination.
 
+Les engins ont maintenant un propriétaire, des PV, et des réparations limitées
+définis dans le JSON. Une catapulte peut recevoir un stock `ammo` fini ; chaque
+tir le consomme, et une machine détruite ne peut plus être actionnée. Les unités
+ennemies adjacentes peuvent l’attaquer (`siege-attack ID`) ; un membre de son
+équipe peut la réparer (`repair-siege ID`) si des charges restent. L’IA choisit
+de protéger l’ouverture de la porte, peut opérer un engin allié et cible les
+machines adverses. Le client joueur et le playtest de l’éditeur affichent les
+actions contextuelles quand une unité est à portée.
+
+Les anciens scénarios restent compatibles : sans `ammo`, la catapulte garde son
+stock illimité historique ; les engins sans champs de santé utilisent leurs
+valeurs par défaut. Exemple complet : `python -m examples.siege_scenarios`.
+
 ### Fronts simultanés et seconde phase du boss
 
 Le scénario de siège inclut deux défenses distinctes dans la salle du trône :
@@ -423,3 +436,4 @@ python -m examples.siege_command --interactive --paths
 python -m examples.siege_command --gui --paths
 python -m unittest discover -s tests_standalone -p test_siege_routes.py -v
 ```
+

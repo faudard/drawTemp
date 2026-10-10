@@ -477,10 +477,15 @@ class Battle:
             from .siege import interact
             interact(self, u, obj)
             return
-        require(u.team == "player", "Only players can interact")
+        if obj["kind"] not in {"ram", "catapult"}:
+            require(u.team == "player", "Only players can interact")
         if obj["kind"] in {"ram", "catapult"}:
             target = next(o for o in self.mission.objects if o["id"] == obj["link"])
+            require(obj.get("hp", obj.get("max_hp", 12)) > 0, "Siege engine destroyed")
             require(not target.get("open", False), "Gate already breached")
+            require(obj.get("team", "player") == u.team, "Only the crew can operate this siege engine")
+            require(obj["kind"] != "catapult" or obj.get("ammo", 1) != 0,
+                    "Catapult out of ammunition")
             if obj["kind"] == "ram" and distance(obj["pos"], target["pos"]) > 1:
                 origin = tuple(obj["pos"])
                 choices = sorted(
@@ -500,7 +505,11 @@ class Battle:
             require(obj["kind"] != "catapult" or distance(obj["pos"], target["pos"]) <= obj.get("range", 8),
                     "Gate out of catapult range")
             target["hp"] = max(0, target.get("hp", 1) - obj.get("power", 1))
-            self.emit("siege_hit", unit=u.id, engine=obj["id"], gate=target["id"], hp=target["hp"])
+            event = {"unit": u.id, "engine": obj["id"], "gate": target["id"], "hp": target["hp"]}
+            if obj["kind"] == "catapult" and "ammo" in obj:
+                obj["ammo"] -= 1
+                event["ammo"] = obj["ammo"]
+            self.emit("siege_hit", **event)
             if target["hp"] == 0:
                 target["open"] = True
                 self.board.tiles[tuple(target["pos"])].blocked = False
@@ -521,6 +530,44 @@ class Battle:
         u.acted = True
         u.cast = None
         self.emit("interact", unit=u.id, object=object_id)
+
+    def _siege_attack(self, u, object_id):
+        require(not u.acted and not self.status_blocks(u, "act"), "Action unavailable")
+        obj = next((o for o in self.mission.objects if o["id"] == object_id), None)
+        require(obj is not None and obj["kind"] in {"ram", "catapult"}, "Unknown siege engine")
+        require(obj.get("team", "player") != u.team, "Cannot attack a friendly siege engine")
+        require(obj.get("hp", obj.get("max_hp", 12)) > 0, "Siege engine destroyed")
+        require(min(distance(c, tuple(obj["pos"])) for c in u.occupied_cells()) <= 1,
+                "Siege engine out of reach")
+        maximum = obj.get("max_hp", obj.get("hp", 12))
+        current = obj.get("hp", maximum)
+        amount = max(1, u.attack + u.weapon_power // 2)
+        obj["hp"] = max(0, current - amount)
+        self.emit("siege_damaged", unit=u.id, engine=object_id, amount=current - obj["hp"], hp=obj["hp"])
+        if obj["hp"] == 0:
+            self.emit("siege_destroyed", unit=u.id, engine=object_id)
+        u.acted = True
+        u.cast = None
+
+    def _repair_siege(self, u, object_id):
+        require(not u.acted and not self.status_blocks(u, "act"), "Action unavailable")
+        obj = next((o for o in self.mission.objects if o["id"] == object_id), None)
+        require(obj is not None and obj["kind"] in {"ram", "catapult"}, "Unknown siege engine")
+        require(obj.get("team", "player") == u.team, "Only the crew can repair this siege engine")
+        require(obj.get("hp", obj.get("max_hp", 12)) > 0, "Siege engine destroyed")
+        require(min(distance(c, tuple(obj["pos"])) for c in u.occupied_cells()) <= 1,
+                "Siege engine out of reach")
+        charges = obj.get("repair_charges", 0)
+        maximum = obj.get("max_hp", obj.get("hp", 12))
+        current = obj.get("hp", maximum)
+        require(charges > 0 and current < maximum, "No repair available")
+        amount = min(obj.get("repair", 8), maximum - current)
+        obj["hp"] = current + amount
+        obj["repair_charges"] = charges - 1
+        self.emit("siege_repaired", unit=u.id, engine=object_id, amount=amount,
+                  hp=obj["hp"], charges=obj["repair_charges"])
+        u.acted = True
+        u.cast = None
 
     def _end(self, u, facing):
         require(facing in {(0, -1), (0, 1), (-1, 0), (1, 0)}, "Invalid facing")
@@ -616,3 +663,4 @@ class Battle:
             battle.execute(command)
         require(battle.digest() == recording["digest"], "Replay checksum mismatch")
         return battle
+

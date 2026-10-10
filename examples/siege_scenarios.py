@@ -16,9 +16,11 @@ def siege_content():
             "objects": objects, "triggers": triggers
         }
     gate = {"id": "main_gate", "kind": "door", "pos": [8, 3], "open": False, "hp": 4, "locked": True}
-    ram = {"id": "ram", "kind": "ram", "pos": [3, 3], "link": "main_gate", "power": 1}
+    ram = {"id": "ram", "kind": "ram", "pos": [3, 3], "link": "main_gate", "power": 1,
+           "team": "player", "hp": 18, "max_hp": 18, "repair": 8, "repair_charges": 2}
     catapult = {"id": "catapult", "kind": "catapult", "pos": [2, 5], "link": "main_gate",
-                "power": 2, "range": 10}
+                "power": 2, "range": 10, "team": "player", "hp": 12, "max_hp": 12,
+                "ammo": 3, "repair": 6, "repair_charges": 1}
     troll = {**unit("siege_troll", "enemy", [4, 1]), "kind": "monster",
              "footprint": [2, 2], "max_hp": 150, "hp": 150, "move": 2,
              "attack": 16, "weapon_power": 12}
@@ -193,3 +195,4 @@ def siege_content():
 if __name__ == "__main__":
     data = siege_content()
     print(json.dumps(data.to_dict(), indent=2))
+

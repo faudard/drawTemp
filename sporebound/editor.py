@@ -6,6 +6,7 @@ from pathlib import Path
 from .ai import play_activation
 from .engine import Battle
 from .model import Content, RuleError
+from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 
 
@@ -283,6 +284,10 @@ def launch(path):
             cmd = {'kind': 'item', 'item': action[5:], 'cell': list(selected_cell)}
         elif action.startswith('object:'):
             cmd = {'kind': 'interact', 'object': action[7:]}
+        elif action.startswith('siege-attack:'):
+            cmd = {'kind': 'siege_attack', 'object': action[13:]}
+        elif action.startswith('repair-siege:'):
+            cmd = {'kind': 'repair_siege', 'object': action[13:]}
         else:
             cmd = {'kind': 'act', 'skill': action, 'cell': list(selected_cell)}
         battle.execute(cmd)
@@ -431,10 +436,10 @@ def launch(path):
             if battle.active:
                 u = battle.active
                 text += f'Actif : {u.name} ({u.team})\nPV {u.hp}/{u.max_hp} | MP {u.mp}/{u.max_mp} | CT {u.ct}\nDéplacement : {"utilisé" if u.moved else "libre"}\nAction : {"utilisée" if u.acted else "libre"}\n'
-                actions = ['move','attack',*u.skills,'item:potion','item:ether','item:phoenix',*['object:'+o['id'] for o in mission.objects]]
+                actions = ['move','attack',*u.skills,'item:potion','item:ether','item:phoenix',*['object:'+o['id'] for o in mission.objects],*available_operations(battle,u)]
                 action_box['values'] = actions
                 if action_var.get() not in actions: action_var.set('move')
-                if action_var.get() not in {'move'} and not action_var.get().startswith(('item:','object:')):
+                if action_var.get() not in {'move'} and not action_var.get().startswith(('item:','object:','siege-attack:','repair-siege:')):
                     try:
                         forecast = battle.forecast(action_var.get(), selected_cell)
                         text += '\nPrévision immédiate (avant réactions) :\n'
@@ -512,3 +517,4 @@ def launch(path):
     refresh_source()
     refresh()
     root.mainloop()
+

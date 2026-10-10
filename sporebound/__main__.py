@@ -83,7 +83,7 @@ def main(argv=None):
         if args.command in {'simulate','campaign'}:
             print(json.dumps(simulate(battle,max_commands=args.limit)))
         else:
-            print('Commands: deploy UNIT x y [N/S/E/W] | start | move x y | attack x y | skill ID x y | item ID x y | interact ID | end [N/S/E/W] | ai | save FILE | quit')
+            print('Commands: deploy UNIT x y [N/S/E/W] | start | move x y | attack x y | skill ID x y | item ID x y | interact ID | siege-attack ID | repair-siege ID | end [N/S/E/W] | ai | save FILE | quit')
             while not battle.result:
                 u = battle.active
                 if battle.deploying:
@@ -107,6 +107,8 @@ def main(argv=None):
                     elif kind == 'skill': command = dict(kind='act',skill=words[1],cell=list(map(int,words[2:4])))
                     elif kind == 'item': command = dict(kind='item',item=words[1],cell=list(map(int,words[2:4])))
                     elif kind == 'interact': command = dict(kind='interact',object=words[1])
+                    elif kind == 'siege-attack': command = dict(kind='siege_attack',object=words[1])
+                    elif kind == 'repair-siege': command = dict(kind='repair_siege',object=words[1])
                     elif kind == 'end': command = dict(kind='end',facing={'N':[0,-1],'S':[0,1],'E':[1,0],'W':[-1,0]}[words[1] if len(words)>1 else 'S'])
                     else: raise RuleError('Unknown command')
                     battle.execute(command)
@@ -127,3 +129,4 @@ def main(argv=None):
 
 if __name__ == '__main__':
     raise SystemExit(main())
+

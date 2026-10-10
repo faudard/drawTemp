@@ -80,6 +80,14 @@ Voir [docs/STUDIO.md](docs/STUDIO.md).
 
 ## 2.1b — Assaut multi-fronts et boss (PR #14)
 
+- [x] Engins de siège à PV/propriétaire : machines destructibles et actions
+  atomiques de sabotage.
+- [x] Réparation d’engins avec charges limitées, munitions finies de catapulte
+  et événements journalisés.
+- [x] IA défensive qui vise les engins adverses ; équipages capables d’actionner
+  les leurs pour ouvrir une porte.
+- [x] Actions contextuelles visibles dans le client joueur, le playtest et le CLI ;
+  tests de validation, atomicité et replay.
 - [x] Horloge stratégique partagée, changement de zone et résolution automatique des fronts non focalisés.
 - [x] Application déterministe des pertes stratégiques aux unités, y compris lors de la première ouverture d'un front.
 - [x] Journal de commandes multi-fronts, replay vérifié, sauvegarde/restauration par reconstruction.
@@ -158,3 +166,4 @@ Prochaines étapes :
 - Ajouter spawn/despawn transactionnels, renforts et durée de vie des invocations.
 - Éditeur d'archétypes avec distinction explicite défauts/surcharges et resynchronisation.
 - Profils IA spécialisés (soigneur, meute, boss) avec tests de décisions déterministes.
+

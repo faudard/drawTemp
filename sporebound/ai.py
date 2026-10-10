@@ -95,6 +95,31 @@ def _choose_tactical_command(battle):
                             cmd = ({'kind': 'interact', 'object': obj['id']} if origin == original
                                    else {'kind': 'move', 'cell': list(origin)})
                             candidates.append((value, cmd))
+            if not u.acted and not battle.status_blocks(u, "act"):
+                for obj in battle.mission.objects:
+                    if obj['kind'] not in {'ram', 'catapult'}:
+                        continue
+                    hp = obj.get('hp', obj.get('max_hp', 12))
+                    maximum = obj.get('max_hp', hp)
+                    if hp <= 0:
+                        continue
+                    distance_to_engine = min(distance(c, tuple(obj['pos'])) for c in u.occupied_cells(origin))
+                    if ('siege_attack' in battle.rules.commands
+                            and obj.get('team', 'player') != u.team and distance_to_engine <= 1):
+                        amount = max(1, u.attack + u.weapon_power // 2)
+                        value = 20 + min(hp, amount) * .8 - cost * .05 - path_risk
+                        cmd = ({'kind': 'siege_attack', 'object': obj['id']} if origin == original
+                               else {'kind': 'move', 'cell': list(origin)})
+                        candidates.append((value, cmd))
+                    elif ('repair_siege' in battle.rules.commands
+                          and obj.get('team', 'player') == u.team and obj.get('repair_charges', 0) > 0
+                          and hp < maximum and distance_to_engine <= 1):
+                        amount = min(obj.get('repair', 8), maximum - hp)
+                        value = min(amount, maximum - hp) * .7 - cost * .05 - path_risk
+                        if value > 0:
+                            cmd = ({'kind': 'repair_siege', 'object': obj['id']} if origin == original
+                                   else {'kind': 'move', 'cell': list(origin)})
+                            candidates.append((value, cmd))
             if origin != original:
                 before = min((distance(original, t.pos) for t in opponents), default=0)
                 after = min((distance(origin, t.pos) for t in opponents), default=0)
@@ -123,7 +148,7 @@ def _choose_tactical_command(battle):
                     candidates.append((value, {"kind": "item", "item": "potion", "cell": list(target.pos)}))
             elif not target.alive and battle.inventory[u.team]["phoenix"] and not battle.at(target.pos) and not battle.board.tile(target.pos).blocked:
                 candidates.append((30, {"kind": "item", "item": "phoenix", "cell": list(target.pos)}))
-        if "interact" in battle.rules.commands and u.team == "player":
+        if "interact" in battle.rules.commands:
             for obj in battle.mission.objects:
                 if obj['kind'] == 'defense' and (obj.get('disabled') or obj['team'] == u.team):
                     continue
@@ -131,11 +156,19 @@ def _choose_tactical_command(battle):
                     continue
                 if obj['kind'] == 'door' and obj.get('locked'):
                     continue
+                if obj['kind'] in {'ram', 'catapult'} and obj.get('team', 'player') != u.team:
+                    continue
+                if obj['kind'] not in {'ram', 'catapult'} and u.team != 'player':
+                    continue
                 if obj['kind'] in {'ram', 'catapult'} and any(o['id'] == obj['link'] and o.get('open') for o in battle.mission.objects):
                     continue
                 if not obj.get("used") and distance(u.pos, tuple(obj["pos"])) <= 1 and not (obj["kind"] == "door" and obj.get("open")):
                     if battle.can_interact(u, obj["id"]):
-                        candidates.append((4, {"kind": "interact", "object": obj["id"]}))
+                        value = 4
+                        if obj['kind'] in {'ram', 'catapult'}:
+                            target = next(o for o in battle.mission.objects if o['id'] == obj['link'])
+                            value = 16 + (8 if obj['kind'] == 'ram' and distance(obj['pos'], target['pos']) <= 1 else 0)
+                        candidates.append((value, {"kind": "interact", "object": obj["id"]}))
     if candidates:
         # Canonical JSON-like string breaks ties independently of dict ordering.
         return sorted(candidates, key=lambda c: (-c[0], str(sorted(c[1].items()))))[0][1]
@@ -178,3 +211,4 @@ def choose_command(battle):
     if actor is None:
         raise RuleError('No active unit')
     return battle.rules.behaviors.get(actor.behavior).choose(battle)
+

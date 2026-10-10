@@ -324,6 +324,14 @@ class Content:
                     require(type(obj.get("locked", False)) is bool, "door.locked must be boolean")
                 if obj["kind"] in {"ram", "catapult"}:
                     integer(obj.get("power", 1), 1, 10000, "siege.power")
+                    require(obj.get("team", "player") in {"player", "enemy"}, "Invalid siege engine team")
+                    maximum = obj.get("max_hp", obj.get("hp", 12))
+                    integer(maximum, 1, 10000, "siege.max_hp")
+                    integer(obj.get("hp", maximum), 1, maximum, "siege.hp")
+                    if obj["kind"] == "catapult" and "ammo" in obj:
+                        integer(obj["ammo"], 0, 10000, "catapult.ammo")
+                    integer(obj.get("repair", 8), 1, 10000, "siege.repair")
+                    integer(obj.get("repair_charges", 0), 0, 100, "siege.repair_charges")
                     require(obj.get("link") != obj["id"], "Siege engine cannot target itself")
             for obj in m.objects:
                 require(obj["kind"] != "switch" or any(o["id"] == obj.get("link") and o["kind"] == "door" for o in m.objects), "Switch needs a door")
@@ -401,3 +409,4 @@ class Content:
             require(set(item.get("bonuses", {})) <= {"max_hp", "max_mp", "attack", "magic", "defense", "magic_defense", "move", "speed", "weapon_power"}, "Unknown equipment bonus")
             for bonus in item.get("bonuses", {}).values():
                 integer(bonus, 0, 100, "equipment bonus")
+

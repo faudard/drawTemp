@@ -19,7 +19,10 @@ def default_commands():
         'relay': lambda b, u, c: b._relay(u, c['partner'], cell(c)),
         'disengage': lambda b, u, c: b._disengage(u),
         'interact': lambda b, u, c: b._interact(u, c['object']),
+        'siege_attack': lambda b, u, c: b._siege_attack(u, c['object']),
+        'repair_siege': lambda b, u, c: b._repair_siege(u, c['object']),
         'prepare': lambda b, u, c: b._prepare(u, c['mode'], c.get('target')),
         'end': lambda b, u, c: b._end(u, tuple(c.get('facing', u.facing))),
     }
     return Registry(tuple((key, CommandRule(handler)) for key, handler in handlers.items()))
+

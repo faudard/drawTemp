@@ -7,6 +7,7 @@ from sporebound.ai import choose_command
 from sporebound.engine import Battle
 from sporebound.model import Content, RuleError
 from sporebound.scenarios import ScenarioDirector, ScenarioSession
+from sporebound.siege import available_operations
 
 
 class SiegeTests(unittest.TestCase):
@@ -151,6 +152,101 @@ class SiegeTests(unittest.TestCase):
             next(o for o in m['objects'] if o['kind']=='defense').update(change)
             with self.assertRaises(RuleError): Content.from_dict(c)
 
+    def test_catapult_ammunition_is_finite_and_replayable(self):
+        data = siege_content().to_dict()
+        mission = next(m for m in data['missions'] if m['id'] == 'castle_artillery')
+        next(o for o in mission['objects'] if o['kind'] == 'door')['hp'] = 8
+        catapult = next(o for o in mission['objects'] if o['kind'] == 'catapult')
+        catapult['ammo'] = 1
+        mission['units'][1]['ct'] = 100
+        content = Content.from_dict(data)
+        b = Battle(content, 'castle_artillery', seed=17)
+        b.execute({'kind': 'start_battle'})
+        self.assertEqual(b.active_id, 'engineer')
+        b.execute({'kind': 'interact', 'object': 'catapult'})
+        self.assertEqual(next(o for o in b.mission.objects if o['id'] == 'catapult')['ammo'], 0)
+        self.assertEqual(next(o for o in b.mission.objects if o['id'] == 'main_gate')['hp'], 6)
+        before = b.digest()
+        with self.assertRaises(RuleError):
+            b.execute({'kind': 'interact', 'object': 'catapult'})
+        self.assertEqual(before, b.digest())
+        self.assertEqual(Battle.replay(b.recording()).digest(), b.digest())
+
+    def test_siege_engine_can_be_attacked_and_repaired_with_limited_charges(self):
+        b = self.battle()
+        b.execute({'kind': 'start_battle'})
+        ram = next(o for o in b.mission.objects if o['id'] == 'ram')
+        ram['hp'] = 7
+        self.activate(b, 'defender')
+        b.unit('defender').pos = (4, 3)
+        b.execute({'kind': 'siege_attack', 'object': 'ram'})
+        self.assertEqual(ram['hp'], 1)
+        self.assertTrue(any(e['kind'] == 'siege_damaged' for e in b.events))
+        self.activate(b, 'engineer')
+        b.unit('engineer').pos = (3, 4)
+        b.execute({'kind': 'repair_siege', 'object': 'ram'})
+        self.assertEqual(ram['hp'], 9)
+        self.assertEqual(ram['repair_charges'], 1)
+        self.activate(b, 'engineer')
+        b.execute({'kind': 'repair_siege', 'object': 'ram'})
+        self.assertEqual(ram['hp'], 17)
+        self.assertEqual(ram['repair_charges'], 0)
+        before = b.digest()
+        with self.assertRaises(RuleError):
+            b.execute({'kind': 'repair_siege', 'object': 'ram'})
+        self.assertEqual(before, b.digest())
+
+    def test_defender_ai_targets_an_enemy_siege_engine(self):
+        data = siege_content().to_dict()
+        mission = next(m for m in data['missions'] if m['id'] == 'castle_ram')
+        ram = next(o for o in mission['objects'] if o['kind'] == 'ram')
+        ram.update(team='player', pos=[7, 3], hp=18, max_hp=18)
+        defender = next(u for u in mission['units'] if u['id'] == 'defender')
+        defender['pos'] = [6, 3]
+        content = Content.from_dict(data)
+        b = Battle(content, 'castle_ram')
+        b.execute({'kind': 'start_battle'})
+        self.activate(b, 'defender')
+        self.assertEqual(choose_command(b), {'kind': 'siege_attack', 'object': 'ram'})
+        b.execute(choose_command(b))
+        self.assertLess(next(o for o in b.mission.objects if o['id'] == 'ram')['hp'], 18)
+
+    def test_enemy_crew_can_operate_a_ram_and_breach_a_gate(self):
+        data = siege_content().to_dict()
+        mission = next(m for m in data['missions'] if m['id'] == 'castle_ram')
+        ram = next(o for o in mission['objects'] if o['kind'] == 'ram')
+        ram.update(team='enemy', pos=[7, 3])
+        next(o for o in mission['objects'] if o['kind'] == 'door')['hp'] = 1
+        next(u for u in mission['units'] if u['id'] == 'defender').update(pos=[6, 3], ct=100)
+        content = Content.from_dict(data)
+        b = Battle(content, 'castle_ram')
+        b.execute({'kind': 'start_battle'})
+        self.assertEqual(b.active_id, 'defender')
+        b.execute(choose_command(b))
+        self.assertTrue(any(e['kind'] == 'gate_breached' for e in b.events))
+
+    def test_siege_engine_validation_rejects_invalid_state(self):
+        for change in ({'hp': 0}, {'hp': 20}, {'max_hp': 0}, {'ammo': -1},
+                       {'repair': 0}, {'repair_charges': -1}, {'team': 'neutral'}):
+            data = siege_content().to_dict()
+            mission = next(m for m in data['missions'] if m['id'] == 'castle_artillery')
+            next(o for o in mission['objects'] if o['kind'] == 'catapult').update(change)
+            with self.assertRaises(RuleError):
+                Content.from_dict(data)
+
+    def test_ui_operations_are_contextual_to_engine_team_and_damage(self):
+        b = self.battle()
+        b.execute({'kind': 'start_battle'})
+        captain = b.unit('captain')
+        ram = next(o for o in b.mission.objects if o['id'] == 'ram')
+        captain.pos = (2, 3)
+        ram['hp'] = 10
+        self.assertEqual(available_operations(b, captain), ['repair-siege:ram'])
+        ram['team'] = 'enemy'
+        self.assertEqual(available_operations(b, captain), ['siege-attack:ram'])
+        captain.pos = (0, 0)
+        self.assertEqual(available_operations(b, captain), [])
+
 
     def test_throne_room_defenses_and_sabotage(self):
         b = Battle(siege_content(), 'castle_throne', seed=11)
@@ -197,3 +293,4 @@ class SiegeTests(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+
