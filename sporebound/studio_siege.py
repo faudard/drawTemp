@@ -79,6 +79,8 @@ class SiegeStudio:
         self.campaign_box.pack(side="left", padx=4)
         self._button(header, "Nouveau siège", self.new_siege)
         self._button(header, "Supprimer siège", self.delete_siege)
+        self._button(header, "Branches", lambda: self._open_tab("Graphe des missions"))
+        self._button(header, "Prologue / fins", lambda: self._open_tab("Scénario & dialogues"))
 
         pages = ttk.Notebook(root)
         pages.pack(fill="both", expand=True, padx=8, pady=4)
@@ -209,6 +211,13 @@ class SiegeStudio:
                   wraplength=880).pack(fill="x", padx=8)
         ttk.Label(root, textvariable=self.status, wraplength=1050).pack(
             fill="x", padx=10, pady=5)
+
+    def _open_tab(self, title):
+        for tab in self.owner.workspace.notebook.tabs():
+            if self.owner.workspace.notebook.tab(tab, "text") == title:
+                self.owner.workspace.notebook.select(tab)
+                return
+        raise RuleError("Studio introuvable : " + title)
 
     def blueprint(self):
         sid = self.siege_id.get()
