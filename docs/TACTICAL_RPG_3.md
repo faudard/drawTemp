@@ -184,6 +184,35 @@ descriptive, not statistical significance tests.
 
 These are **gameplay budgets**, not wall-clock CPU performance metrics.
 
+## 2.7 — Player and visual talent integration
+
+The Tk Player now consumes `tactical_snapshot(battle, cell)` directly.
+It shows armed ally/enemy phalanx corridors on the board and a tactical
+panel with forecast damage, available duo/trio synergies, formation status,
+movement hazards, supported focus targets, and the **active** boss's legal
+intent. Off-turn intents remain unknown rather than predicted from stale CT.
+Formation choices (including escorting the ally on the selected cell) and
+Phalanx Hold use normal atomic `Battle.execute` commands.
+
+`PlayerSession.begin` selects the 2.7 rules only for authored missions
+containing the appropriate behaviors/role tags/formations. Untagged legacy
+missions continue to use their original default rule manifest. The Player
+loads advanced content with the 2.7 validator to accept authored boss forms.
+
+The Studio actor inspector can author initial formations, medics and protectors.
+Its **Talents / classes** tab provides a dependency tree and structured
+fields for JP cost, prerequisites, specialization, a stat bonus, and skill
+unlocks. Updates are validated through `Content.from_dict` and committed
+as a single undoable document transaction. Dangling or cyclic prerequisites
+are rejected. This initial UI edits one stat bonus per talent; more advanced
+multi-effect and graph-layout tools remain future authoring work.
+
+On the campaign screen, the Player presents a talent dependency tree and
+allows purchases with earned JP. `PlayerSession.learn_talent` saves the new
+campaign slot before changing in-memory progression, rejects unavailable
+talents and blocks mid-battle upgrades. Purchased bonuses take effect during
+the next `Campaign.prepare` and survive reloads.
+
 ## Gate / integration checklist
 
 - Old `default_rules` manifest and v1/2/3 Battle replay unaffected.
@@ -191,13 +220,13 @@ These are **gameplay budgets**, not wall-clock CPU performance metrics.
 - New commands fail atomically and replay using `tactical_rpg_rules()`.
 - Save/replay preserves formation choice, phase transitions and CT combos.
 - Tests exercise a multi-cell boss and seeded difficulty reports.
-- The 2.5 Studio's role and formation inspector uses one undoable document
-  transaction; 2.6 Player should consume the pure focus, boss and terrain
-  overlays rather than duplicate the headless formulas.
+- The Studio's actor/talent inspectors use validated, undoable document
+  transactions; the Player consumes the same pure tactical forecasts and
+  implements saved JP upgrades without duplicating combat formulas.
 
 ### Boundaries
 
 The new formation and boss actions are opt-in. The 2.7 policy is a gameplay
 foundation; final unit balance, long-campaign benchmarks, telegraph UI,
-class-tree editing and an authorable castle vertical slice still require
-end-to-end integration.
+advanced multi-bonus tree layout, audio/animated telegraphs and an
+authorable castle vertical slice still require end-to-end integration.
