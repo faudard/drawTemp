@@ -155,6 +155,9 @@ Trois onglets d'authoring supplémentaires sont disponibles :
 - **Graphe des missions** : afficher les nœuds, relier/délier deux missions,
   repérer les cycles et les missions inaccessibles depuis une campagne ;
   la navigation vers une mission actualise la carte tactique.
+- **Class Progression & AI Studio 2.5.3.3** : deux graphes cliquables
+  des classes et talents, création de spécialisations et édition des
+  patrouilles sur la carte ; [guide dédié](docs/CLASS_AI_STUDIO.md).
 - **Character & Rules Studio 2.5.3** : éditeur guidé des héros et monstres,
   archétypes, compétences multi-effets, classes et équipements ;
   validation transactionnelle et Undo/Redo. Voir
