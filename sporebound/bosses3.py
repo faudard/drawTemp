@@ -1,0 +1,133 @@
+"""Data-authored boss phases, deterministic multi-cell growth and siege hooks (2.7.5).
+
+Author with an existing hp_below trigger and a boss_phase action. Existing
+queue_wave/spawn/message actions compose with it; no separate boss engine.
+"""
+from __future__ import annotations
+
+from .model import require
+
+PHASE = "boss_phase:"
+
+
+def validate_phase(context, action):
+    require(set(action) <= {"kind", "unit", "phase", "form", "bonuses", "footprint"},
+            "Unsupported boss phase property")
+    context.unit(action["unit"])
+    context.integer(action["phase"], 2, 8)
+    require(isinstance(action.get("form", ""), str) and
+            len(action.get("form", "")) <= 64, "Invalid boss form")
+    bonuses = action.get("bonuses", {})
+    require(isinstance(bonuses, dict) and
+            set(bonuses) <= {"attack", "magic", "defense", "magic_defense",
+                             "speed", "move", "weapon_power", "max_hp"},
+            "Invalid boss bonus")
+    for value in bonuses.values():
+        context.integer(value, 0, 100)
+    footprint = action.get("footprint")
+    if footprint is not None:
+        require(isinstance(footprint, (tuple, list)) and len(footprint) == 2,
+                "Invalid boss footprint")
+        for side in footprint:
+            context.integer(side, 1, 4)
+
+
+def boss_phase(battle, action):
+    unit = next((u for u in battle.units if u.id == action["unit"]), None)
+    require(unit is not None and unit.alive, "Boss is not alive")
+    current = int(next((tag[len(PHASE):] for tag in unit.tags
+                        if tag.startswith(PHASE)), "1"))
+    require(action["phase"] > current, "Boss phase must advance")
+    footprint = tuple(action.get("footprint", unit.footprint))
+    cells = {(unit.pos[0] + x, unit.pos[1] + y)
+             for x in range(footprint[0]) for y in range(footprint[1])}
+    occupied = set().union(*(other.occupied_cells() for other in battle.units
+                             if other.alive and other.id != unit.id))
+    require(all(battle.board.contains(cell) and not battle.board.tile(cell).blocked
+                and cell not in occupied for cell in cells),
+            "Boss transformation overlaps terrain or units")
+    unit.footprint = footprint
+    for key, bonus in action.get("bonuses", {}).items():
+        setattr(unit, key, getattr(unit, key) + bonus)
+    unit.tags = [tag for tag in unit.tags if not tag.startswith(PHASE)]
+    unit.tags.append(PHASE + str(action["phase"]))
+    battle.emit("boss_phase", unit=unit.id, phase=action["phase"],
+                form=action.get("form", ""), footprint=list(footprint))
+
+
+def boss_preview(battle, boss_id):
+    """Read-only state; scripts still own transitions via normal triggers."""
+    unit = next((u for u in battle.units if u.id == boss_id), None)
+    require(unit is not None, "Unknown boss")
+    phase = next((int(t[len(PHASE):]) for t in unit.tags if t.startswith(PHASE)), 1)
+    pending = sorted(
+        ({"id": t["id"], "percent": t["percent"]}
+         for t in battle.mission.triggers
+         if t["condition"] == "hp_below" and t["unit"] == boss_id
+         and t["id"] not in battle.fired),
+        key=lambda row: (-row["percent"], row["id"]))
+    return {"unit": unit.id, "phase": phase, "footprint": list(unit.footprint),
+            "hp_percent": 100 * unit.hp // unit.max_hp, "pending": pending}
+
+
+
+def boss_intent_preview(battle, boss_id):
+    """Side-effect-free rendering contract for a currently active boss.
+
+    Off-turn intentions are deliberately not guessed: CT, paths, cast status,
+    enemy positions and player decisions may change before that activation.
+    """
+    view = boss_preview(battle, boss_id)
+    unit = battle.unit(boss_id)
+    ready = (unit.alive and battle.active_id == unit.id and not battle.result
+             and not battle.deploying and unit.behavior == "phase_boss")
+    result = {**view, "ready": ready, "command": None, "threats": []}
+    if not ready:
+        return result
+    command = phase_boss_command(battle)
+    result["command"] = command
+    if command["kind"] == "charge":
+        result["threats"] = next(
+            (option["threats"] for option in battle.charge_options(unit)
+             if list(option["cell"]) == command["cell"]), [])
+    elif command["kind"] == "act":
+        result["threats"] = battle.forecast(
+            command["skill"], tuple(command["cell"]), unit)
+    return result
+
+
+def phase_boss_command(battle):
+    """Phase-specific commander using only Battle's legal tactical command API.
+
+    Phase 1 defends an approach, phase 2+ favors long straight charges when
+    paths and CT rules make them available. Otherwise use the standard
+    coordinated/tactical combat AI (including siege objects).
+    """
+    from .coordinated_ai import coordinated_command
+    from .model import distance
+
+    actor = battle.active
+    if actor is None or actor.cast:
+        return coordinated_command(battle)
+    phase = int(next((tag[len(PHASE):] for tag in actor.tags
+                      if tag.startswith(PHASE)), "1"))
+    enemies = [u for u in battle.units if u.alive and u.team != actor.team]
+    if phase >= 2 and "charge" in battle.rules.commands and enemies:
+        options = battle.charge_options(actor)
+        if options:
+            best = min(options, key=lambda row: (
+                sum(threat["amount"] * threat["chance"] for threat in row["threats"]),
+                -row["distance"], row["target"]))
+            return {"kind": "charge", "cell": list(best["cell"])}
+    if (phase == 1 and not actor.acted and not battle.status_blocks(actor, "act")
+            and "prepare" in battle.rules.commands and "guard" in battle.rules.preparations
+            and battle.engagement_range(actor) > 0
+            and any(distance(actor.pos, enemy.pos) <= 2 for enemy in enemies)):
+        return {"kind": "prepare", "mode": "guard"}
+    return coordinated_command(battle)
+
+
+def install_bosses(rules):
+    from .rules.registry import TriggerActionRule
+    return rules.with_family("trigger_actions", rules.trigger_actions.with_rule(
+        "boss_phase", TriggerActionRule(boss_phase, validate_phase, version="2.7.5")))

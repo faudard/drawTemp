@@ -11,6 +11,7 @@ from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
                             selected_cells as validate_selection)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
+from .tactical_rpg3 import authored_rules_for_document
 
 
 class Document:
@@ -26,7 +27,8 @@ class Document:
         return json.dumps(self.data, sort_keys=True) != self.saved
 
     def replace(self, data):
-        validated = Content.from_dict(data).to_dict()
+        validated = Content.from_dict(
+            data, rules=authored_rules_for_document(data)).to_dict()
         self.undo_stack.append(deepcopy(self.data))
         self.undo_stack = self.undo_stack[-50:]
         self.redo_stack.clear()
@@ -115,12 +117,17 @@ class Document:
         self.replace(data)
 
     def save(self, path):
-        Content.from_dict(self.data)
+        Content.from_dict(self.data, rules=authored_rules_for_document(self.data))
         write_json(path, self.data)
         self.saved = json.dumps(self.data, sort_keys=True)
 
     def playtest(self, mid, seed=1):
-        return Battle(Content.from_dict(self.data), mid, seed)
+        # A designer opting into starting tactical roles/formations should see
+        # their actual effects in playtest. Untagged legacy documents keep
+        # their exact default-rules manifest and replay semantics.
+        rules = authored_rules_for_document(self.data)
+        return Battle(Content.from_dict(self.data, rules=rules),
+                      mid, seed, rules=rules)
 
 
 def launch(path):
@@ -130,7 +137,8 @@ def launch(path):
     root = tk.Tk()
     root.title('Sporebound — Atelier gameplay autonome')
     root.geometry('1280x850')
-    doc = Document(Content.load(path))
+    raw = json.loads(Path(path).read_text(encoding='utf-8'))
+    doc = Document(Content.from_dict(raw, rules=authored_rules_for_document(raw)))
     current_path = Path(path)
     battle = None
     studio = None
@@ -190,7 +198,9 @@ def launch(path):
             return
         name = filedialog.askopenfilename(filetypes=[('Projet Sporebound', '*.json')])
         if name:
-            candidate = Document(Content.load(name))
+            raw = json.loads(Path(name).read_text(encoding='utf-8'))
+            candidate = Document(Content.from_dict(
+                raw, rules=authored_rules_for_document(raw)))
             doc, current_path, battle = candidate, Path(name), None
             mission_var.set(doc.data['missions'][0]['id'])
             if studio is not None:
@@ -279,7 +289,9 @@ def launch(path):
         if source_pending():
             raise RuleError('Appliquer ou abandonner les modifications JSON avant de jouer.')
         campaign_session = progress
-        battle = progress.prepare(Content.from_dict(doc.data), mid)
+        rules = authored_rules_for_document(doc.data)
+        battle = progress.prepare(Content.from_dict(doc.data, rules=rules),
+                                  mid, ruleset=rules)
         campaign_battle = True
         mission_var.set(mid)
         notebook.select(work)

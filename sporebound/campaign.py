@@ -18,6 +18,8 @@ class HeroProgress:
     job: str = "brave"
     job_xp: dict[str, int] = field(default_factory=dict)
     equipment: dict[str, str] = field(default_factory=dict)
+    spent_jp: dict[str, int] = field(default_factory=dict)
+    learned_talents: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def level(self):
@@ -141,6 +143,16 @@ class Campaign:
                          "hint": rule.get("hints", {}).get(state, "")})
         return rows
 
+    def talent_catalog(self, content, uid, job_id):
+        from .builds3 import talent_catalog, validate_talent_trees
+        validate_talent_trees(content)
+        return talent_catalog(content, self.hero(uid), job_id)
+
+    def learn_talent(self, content, uid, job_id, talent_id):
+        from .builds3 import learn_talent, validate_talent_trees
+        validate_talent_trees(content)
+        learn_talent(content, self.hero(uid), job_id, talent_id)
+
     def set_job(self, content, uid, job):
         require(job in content.jobs, "Unknown job")
         hero = self.hero(uid)
@@ -192,6 +204,9 @@ class Campaign:
                 require(item_id in content.equipment, "Unknown equipped item")
                 for key, value in content.equipment[item_id].get("bonuses", {}).items():
                     setattr(unit, key, getattr(unit, key) + value)
+            from .builds3 import apply_talents, validate_hero_build
+            validate_hero_build(content, hero)
+            apply_talents(content, hero, unit)
             unit.hp, unit.mp = unit.max_hp, unit.max_mp
         by_id = {unit.id: unit for unit in mission_units if unit.team == "player"}
         for key, tactics in self.prepared_tactics.items():
@@ -295,4 +310,12 @@ class Campaign:
                         for row in result.story_history), 'Invalid narrative choice history')
         for h in result.heroes.values():
             require(type(h.xp) is int and h.xp >= 0 and all(type(n) is int and n >= 0 for n in h.job_xp.values()), "Invalid XP")
+            require(isinstance(h.spent_jp, dict) and
+                    all(isinstance(key, str) and type(value) is int and value >= 0
+                        for key, value in h.spent_jp.items()), "Invalid talent JP")
+            require(isinstance(h.learned_talents, dict) and
+                    all(isinstance(key, str) and isinstance(value, list)
+                        and all(isinstance(item, str) for item in value)
+                        and len(value) == len(set(value))
+                        for key, value in h.learned_talents.items()), "Invalid learned talents")
         return result

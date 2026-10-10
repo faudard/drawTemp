@@ -83,6 +83,12 @@ les règles. Gate : partie complète sans Studio ni terminal.
 | 2.7.5 | Boss multicases, transformations, phases et siège |
 | 2.7.6 | Équilibrage automatisé, simulations longues et métriques de difficulté |
 
+PR #23 (en développement) : première intégration opt-in des jalons 2.7.1–2.7.6,
+incluant réaction de couloir Phalanx Hold, IA coordonnée, arbres de talents JP,
+synergies, boss à phases et simulations déterministes. Contrats :
+[TACTICAL_RPG_3.md](docs/TACTICAL_RPG_3.md). Tests CI Python 3.10/3.12/3.14
+et compatibilité avec les anciens replays requis avant fusion.
+
 Gate : choix tactiques distincts selon équipe, terrain, adversaire et objectif.
 
 ### Vertical slice — assaut du château
