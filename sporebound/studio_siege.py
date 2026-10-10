@@ -570,7 +570,10 @@ class SiegeStudio:
         self._apply(bp)
 
     def start_siege(self):
-        self.session = edit.make_session(self._require(), self.owner._content())
+        from .tactical_rpg3 import authored_rules_for_document
+        self.session = edit.make_session(
+            self._require(), self.owner._content(),
+            rules=authored_rules_for_document(self.owner.doc().data))
         self.session_id = self.siege_id.get()
         self.status.set("Siège prêt. Jouer puis sauver la session via un emplacement.")
 
@@ -627,8 +630,11 @@ class SiegeStudio:
 
     def load_session(self):
         bp = self._require()
-        self.session = edit.load_siege_slot(self.owner.project_path, bp,
-                                              int(self.slot.get()), self.owner._content())
+        from .tactical_rpg3 import authored_rules_for_document
+        self.session = edit.load_siege_slot(
+            self.owner.project_path, bp, int(self.slot.get()),
+            self.owner._content(),
+            rules=authored_rules_for_document(self.owner.doc().data))
         self.session_id = bp["id"]
         self.status.set("Siège chargé et journal vérifié. Reprendre dans Command Center.")
 
