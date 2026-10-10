@@ -24,6 +24,8 @@ class CharacterRulesStudio:
         self._skills_tab()
         self._jobs_tab()
         self._equipment_tab()
+        from .studio_class_ai import ClassAIStudio
+        self.class_ai = ClassAIStudio(self, self.tabs)
         self.status = self.tk.StringVar(value='Édits vérifiés et annulables par le Studio.')
         self.ttk.Label(page, textvariable=self.status, wraplength=1000).pack(
             fill='x', padx=8, pady=4)
@@ -352,6 +354,7 @@ class CharacterRulesStudio:
 
     def _jobs_tab(self):
         page = self.ttk.Frame(self.tabs)
+        self.jobs_tab = page
         self.tabs.add(page, text='Classes')
         self.j_id, self.j_box = self._field(page, 'Classe / nouvel ID', row=0, values=[], editable=True)
         self.j_box.bind('<<ComboboxSelected>>', lambda e: self._load_job())
@@ -474,3 +477,4 @@ class CharacterRulesStudio:
             self._load_job()
         if self.i_id.get() in data.get('equipment',{}):
             self._load_item()
+        self.class_ai.refresh()
