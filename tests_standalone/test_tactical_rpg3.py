@@ -1,9 +1,10 @@
 """2.7 tactical vertical tests: gameplay, persistence, forecasts and legacy gates."""
+from copy import deepcopy
 from dataclasses import asdict
 import unittest
 
 from sporebound.ai import choose_command
-from sporebound.balance3 import evaluate, percentile, verify_budgets
+from sporebound.balance3 import compare_compositions, evaluate, percentile, verify_budgets
 from sporebound.bosses3 import boss_preview, boss_intent_preview
 from sporebound.builds3 import talent_catalog
 from sporebound.campaign import Campaign
@@ -356,6 +357,27 @@ class BossBehaviorTests(unittest.TestCase):
 
 
 class BalanceTests(unittest.TestCase):
+    def test_paired_seed_composition_delta_and_nonmutation(self):
+        basic = arena()
+        variant = deepcopy(basic)
+        variant.missions["arena"].units[0].attack += 4
+        origin = basic.to_dict()
+        changed = variant.to_dict()
+        inputs = {"veteran": variant, "novice": basic}
+        report = compare_compositions(inputs, "arena", baseline="novice",
+                                      seeds=(4, 9), max_commands=12)
+        again = compare_compositions(inputs, "arena", baseline="novice",
+                                     seeds=(4, 9), max_commands=12)
+        self.assertEqual(report, again)
+        self.assertEqual([row["name"] for row in report["compositions"]],
+                         ["novice", "veteran"])
+        self.assertEqual(report["compositions"][0]["victory_rate_delta"], 0)
+        self.assertEqual(report["compositions"][0]["damage_taken_delta"], 0)
+        self.assertEqual(basic.to_dict(), origin)
+        self.assertEqual(variant.to_dict(), changed)
+        with self.assertRaises(RuleError):
+            compare_compositions(inputs, "arena", baseline="missing", seeds=(4,))
+
     def test_seeded_metrics_percentiles_and_reproducibility(self):
         content = arena()
         report = evaluate(content, "arena", seeds=[1, 7, 42], max_commands=15)
