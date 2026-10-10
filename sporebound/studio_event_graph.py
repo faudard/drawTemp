@@ -105,15 +105,18 @@ class EventGraphStudio:
                    command=lambda: self.cond_pos.set(
                        ','.join(map(str, self.owner.selection())))).grid(
                            row=5, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
-        ttk.Button(cond, text='Créer / appliquer condition',
+        ttk.Button(cond, text='Appliquer condition',
                    command=lambda: self.owner._run(self.save_condition)).grid(
                        row=6, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
         ttk.Label(cond, text='Nouvel ID').grid(row=7, column=0, sticky='w', padx=5)
         ttk.Entry(cond, textvariable=self.new_id, width=24).grid(
             row=7, column=1, sticky='ew', padx=5)
+        ttk.Button(cond, text='Créer événement',
+                   command=lambda: self.owner._run(self.create_event)).grid(
+                       row=8, column=0, columnspan=2, sticky='ew', padx=4, pady=4)
         ttk.Button(cond, text='Dupliquer événement simple',
                    command=lambda: self.owner._run(self.duplicate)).grid(
-                       row=8, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
+                       row=9, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
         actions_tab = ttk.Frame(tabs)
         tabs.add(actions_tab, text='Actions')
         self.action_list = tk.Listbox(actions_tab, height=5, exportselection=False)
@@ -188,19 +191,22 @@ class EventGraphStudio:
             team=self.action_team.get(),
             lifetime=int(lifetime) if lifetime else None)
 
+    def create_event(self):
+        eid = self.new_id.get()
+        spec = self._condition()
+        self._edit(lambda doc: event_composer.save_event(
+            doc, self.owner.mission(), eid, spec,
+            [event_composer.action('message', text='Nouvel événement')]))
+        self.event_id.set(eid)
+        self.action_index = 0
+        self.refresh()
+
     def save_condition(self):
         eid = self.event_id.get()
         spec = self._condition()
-        if eid in {e['id'] for e in self._mission().get('triggers', [])}:
-            self._edit(lambda doc: event_graph.update_condition(
-                doc, self.owner.mission(), eid, spec))
-        else:
-            eid = self.new_id.get()
-            self._edit(lambda doc: event_composer.save_event(
-                doc, self.owner.mission(), eid, spec,
-                [event_composer.action('message', text='Nouvel événement')]))
-            self.event_id.set(eid)
-            self.refresh()
+        self._event()  # Apply only to a selected existing event.
+        self._edit(lambda doc: event_graph.update_condition(
+            doc, self.owner.mission(), eid, spec))
 
     def delete_event(self):
         eid = self._event()['id']
