@@ -163,6 +163,26 @@ class PersistenceV2Tests(unittest.TestCase):
             with self.assertRaises(RuleError):
                 store.load(self.content, self.project)
 
+    def test_multifront_checkpoint_reconstructs_strategic_history(self):
+        with TemporaryDirectory() as directory:
+            store = SessionStore(Path(directory) / "fronts.json")
+            session = self.new()
+            session.progress.unlocked.append("hold")
+            session.start_fronts(
+                {"garden": "garden", "defense": "hold"}, "garden",
+                specs={"garden": {"strength": 8, "opposition": 8},
+                       "defense": {"strength": 9, "opposition": 11,
+                                   "doctrine": "assault"}})
+            session.set_doctrine("defense", "assault")
+            session.advance_fronts()
+            session.switch_front("defense")
+            session.execute({"kind": "end", "facing": [0, 1]})
+            store.save(session)
+            restored = store.load(self.content, self.project)
+            self.assertEqual(restored.mode, "fronts")
+            self.assertEqual(restored.fronts.digest(), session.fronts.digest())
+            self.assertEqual(restored.fronts.history, session.fronts.history)
+
     def test_size_limit_fails_before_writing(self):
         with TemporaryDirectory() as directory:
             store = SessionStore(Path(directory) / "small.json", max_bytes=256)
