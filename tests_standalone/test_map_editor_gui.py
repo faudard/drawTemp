@@ -121,6 +121,80 @@ class MapEditorGUITests(unittest.TestCase):
                 launch(DEFAULT_CONTENT)
                 dialog_error.assert_not_called()
 
+    def test_rotated_stamp_minimap_and_group_movement(self):
+        import tkinter as tk
+        from tkinter import ttk
+
+        def descendants(parent):
+            for child in parent.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        with TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'rotated.json'
+            stamp_path = Path(tmp) / 'stair.stamp.json'
+            errors = []
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = lambda *err: errors.append(err)
+                    root.update()
+                    widgets = list(descendants(root))
+                    canvases = [w for w in widgets if isinstance(w, tk.Canvas)]
+                    main_canvas = max(canvases, key=lambda w: int(w.cget('width')))
+                    # The minimap has a full tactical overview (184x184).
+                    mini = next(w for w in canvases if int(w.cget('width')) == 184)
+                    self.assertTrue(mini.find_all())
+                    tool = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                and 'Sélection' in w.cget('values'))
+                    buttons = {w.cget('text'): w for w in widgets
+                               if isinstance(w, ttk.Button)}
+                    tool.set('Sélection')
+                    main_canvas.event_generate('<Button-1>', x=182, y=182)
+                    main_canvas.event_generate('<B1-Motion>', x=236, y=182, state=256)
+                    main_canvas.event_generate('<ButtonRelease-1>', x=236, y=182)
+                    root.update()
+                    buttons['Copier cases'].invoke()
+                    buttons['↻ 90°'].invoke()
+                    buttons['Sauver modèle'].invoke()
+                    self.assertTrue(stamp_path.exists())
+                    stamp = json.loads(stamp_path.read_text(encoding='utf-8'))
+                    self.assertEqual(stamp['size'], [1, 2])
+                    buttons['Charger modèle'].invoke()
+                    main_canvas.event_generate('<Motion>', x=290, y=20)
+                    root.update()
+                    self.assertTrue(main_canvas.find_withtag('paste_preview'))
+                    main_canvas.event_generate('<Button-1>', x=290, y=20)
+                    main_canvas.event_generate('<ButtonRelease-1>', x=290, y=20)
+                    root.update()
+                    tool.set('Sélection')
+                    main_canvas.event_generate('<Button-1>', x=128, y=20)
+                    main_canvas.event_generate('<ButtonRelease-1>', x=128, y=20)
+                    root.update()
+                    buttons['→'].invoke()  # Move chest without changing its ID.
+                    buttons['Enregistrer sous'].invoke()
+                    saved = json.loads(target.read_text(encoding='utf-8'))
+                    mission = saved['missions'][0]
+                    tiles = {tuple(t['pos']): t for t in mission['board']['tiles']}
+                    self.assertTrue(tiles[(5, 0)]['blocked'])
+                    self.assertEqual(tiles[(5, 1)]['height'], 1)
+                    self.assertEqual(next(o for o in mission['objects'] if
+                                          o['id'] == 'chest')['pos'], [3, 0])
+                    self.assertEqual(errors, [])
+                finally:
+                    root.destroy()
+
+            with patch.object(tk.Tk, 'mainloop', drive), \
+                 patch('tkinter.filedialog.asksaveasfilename',
+                       side_effect=[str(stamp_path), str(target)]), \
+                 patch('tkinter.filedialog.askopenfilename',
+                       return_value=str(stamp_path)), \
+                 patch('tkinter.simpledialog.askstring',
+                       return_value='Escalier'), \
+                 patch('tkinter.messagebox.showerror') as dialog_error:
+                launch(DEFAULT_CONTENT)
+                dialog_error.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()
