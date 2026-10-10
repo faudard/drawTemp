@@ -97,12 +97,14 @@ class SiegeStudio:
             self.route_list.column(col, width=100, stretch=True)
         self.route_list.pack(fill="x", padx=5, pady=4)
         self.route_list.bind("<<TreeviewSelect>>", self._select_route)
+        route_fields = ttk.Frame(route_section)
+        route_fields.pack(fill="x")
         self.origin, self.origin_box = self._field(
-            route_section, 0, "Origine", "reserve", choices=[])
+            route_fields, 0, "Origine", "reserve", choices=[])
         self.destination, self.destination_box = self._field(
-            route_section, 1, "Destination", choices=[])
-        self.travel, _ = self._field(route_section, 2, "Temps (1..100)", "2")
-        route_commands = ttk.Frame(route_section)
+            route_fields, 1, "Destination", choices=[])
+        self.travel, _ = self._field(route_fields, 2, "Temps (1..100)", "2")
+        route_commands = ttk.Frame(route_fields)
         route_commands.grid(row=3, column=0, columnspan=2, sticky="w")
         self._button(route_commands, "Ajouter / modifier route", self.save_route)
         self._button(route_commands, "Supprimer route", self.remove_route)
@@ -283,7 +285,8 @@ class SiegeStudio:
         missions = list(self.owner._content().missions)
         self.mission_box["values"] = missions
         self.front_list.delete(0, "end")
-        self.route_list.delete(*self.route_list.get_children())
+        if self.route_list.get_children():
+            self.route_list.delete(*self.route_list.get_children())
         self._front_ids = []
         self._route_keys = []
         if plan is None:
