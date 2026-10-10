@@ -185,7 +185,8 @@ class StoryConditionEditor:
         if tree_rows:
             self.tree.selection_set('p0')
         self._refreshing = False
-        self.status.set('Condition : '+condition_label(self._expression()))
+        self.status.set('Condition : '+condition_label(self._expression())
+                        if tree_rows else 'Sélectionner un choix ou créer une scène.')
 
     def _pick_scene(self):
         if self._refreshing:
