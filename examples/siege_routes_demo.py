@@ -5,6 +5,8 @@
 Only the demonstration's enemy HP and courtyard object placement are simplified.
 All victories are achieved by genuine Battle commands.
 """
+from copy import deepcopy
+
 from sporebound.fronts import MultiFrontSession
 from sporebound.model import Content
 from .siege_fronts import SIEGE_CAMPAIGN_PATHS, SIEGE_LINKS, siege_session
@@ -32,10 +34,14 @@ def compact_content():
 
 def fresh():
     example = siege_session(contested=True, campaign=True, paths=True, seed=3)
+    campaign = deepcopy(SIEGE_CAMPAIGN_PATHS)
+    # This compact demo removes the royal guards, so keep its treaty on the
+    # strategic supply effect only; the full scenario tests the stand-down.
+    campaign["treaties"]["gate"].pop("final_stand_down")
     return MultiFrontSession(
         compact_content(), example.missions, "supplies", seed=3,
         specs=example.initial_specs, links=SIEGE_LINKS,
-        logistics=example.initial_logistics, campaign=SIEGE_CAMPAIGN_PATHS)
+        logistics=example.initial_logistics, campaign=campaign)
 
 
 def play_side(session, front, shooter, *, recovery=False):
