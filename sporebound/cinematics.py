@@ -66,7 +66,11 @@ def validate_cinematics(clips, content, campaigns):
                 "fade": {"color"},
                 "sound": {"cue"},
             }
-            require(kind in KINDS and set(event) == base | fields[kind],
+            optional_audio = {
+                "bus", "volume", "fade_in_ms", "fade_out_ms", "loop", "duck_percent"
+            } if kind == "sound" else set()
+            required = base | fields.get(kind, set())
+            require(kind in KINDS and required <= set(event) <= required | optional_audio,
                     "Invalid fields for cinematic event")
             require(_id(event["id"]) and event["id"] not in event_ids,
                     "Duplicate / invalid cinematic event id")
@@ -91,6 +95,24 @@ def validate_cinematics(clips, content, campaigns):
                         0 < len(event["text"].strip()) <= 1600, "Dialogue text is required")
             if kind == "sound":
                 require(_id(event["cue"]), "Sound cue ID is required")
+                from .audio_timeline import BUSES
+                bus = event.get("bus", "sfx")
+                require(bus in BUSES, "Unknown cinematic audio bus")
+                volume = event.get("volume", 100)
+                require(type(volume) is int and 0 <= volume <= 100,
+                        "Audio volume must be an integer 0..100")
+                require(type(event.get("loop", False)) is bool,
+                        "Audio loop must be boolean")
+                for name in ("fade_in_ms", "fade_out_ms"):
+                    fade = event.get(name, 0)
+                    require(type(fade) is int and 0 <= fade <= duration,
+                            f"{name} must be an integer 0..event duration")
+                require("duck_percent" not in event or bus == "voice",
+                        "Only voice events may duck music")
+                if "duck_percent" in event:
+                    duck = event["duck_percent"]
+                    require(type(duck) is int and 0 <= duck <= 100,
+                            "Voice duck percentage must be 0..100")
 
 
 def matching_cinematics(project, kind, target):
