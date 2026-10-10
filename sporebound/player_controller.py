@@ -37,14 +37,11 @@ class PlayerController:
         path = self.path_for(campaign_id, slot)
         require(overwrite or not path.exists() and not SessionStore(path).backup.exists(),
                 "Save already exists; explicit overwrite required")
-        # A new game is never allowed to erase an unreadable old checkpoint.
+        # Validate the previous generation without deleting it: SessionStore.save
+        # retains the last verified checkpoint as a recovery backup.
         if overwrite and (path.exists() or SessionStore(path).backup.exists()):
-            # Preserve damaged or old data for recovery outside the application.
-            previous = SessionStore(path)
-            previous.load(self.content, self.project)
-            for file in (previous.path, previous.backup):
-                if file.exists():
-                    file.unlink()
+            previous = SessionStore(path).load(self.content, self.project)
+            require(previous.campaign_id == campaign_id, "Slot belongs to another campaign")
         candidate = GameSession.new(self.content, self.project, campaign_id, seed=seed)
         self.campaign_id, self.slot, self.session = campaign_id, slot, candidate
         self.save()

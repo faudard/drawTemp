@@ -11,6 +11,18 @@ sont conservés dans [`assets/`](assets/README.md) ; leur utilisation par un fut
 renderer est un chantier distinct. La conversion des anciennes cartes et sauvegardes
 n'est pas garantie. Voir [les limites de la migration](docs/GAMEPLAY.md#migration-de-godot).
 
+## Player & Presentation 2.6
+
+Le client `python -m sporebound player` utilise désormais `GameSession` et les
+checkpoints `SessionStore` (sauvegarde/reprise des combats, scènes et fronts).
+Une interface Tk 2D/2.5D apporte grille, caméra, preview du moteur,
+déploiement, portraits optionnels, chronologie des fronts et commandes de siège.
+Les données du gameplay restent headless. Les anciens slots `PlayerSession`
+restent séparés et inchangés.
+
+Les assets et sons sont entièrement facultatifs. Pour WAV/OGG :
+`python -m pip install pygame-ce`. Voir [Player 2.6](docs/PLAYER_2_6.md).
+
 ## Session unifiée 2.4.1 (API headless)
 
 La façade `sporebound.game_session.GameSession` orchestre campagne, narration,
