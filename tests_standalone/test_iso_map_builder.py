@@ -88,6 +88,17 @@ class IsometricMapAuthoringTests(unittest.TestCase):
         self.doc.undo()
         self.assertTrue(all(self.board().tile(c).surface == 'grass' for c in stroke))
 
+    def test_picker_finds_elevated_cells_at_multiple_zooms(self):
+        self.doc.paint_many(self.mid, [(6, 6)], 'height:4')
+        for zoom in (24, 54, 96):
+            geo = IsoGeometry(self.board(), zoom)
+            for cell in ((1, 1), (6, 6), (9, 9)):
+                px, py = geo.center(cell)
+                self.assertEqual(geo.hit_test(px, py), cell)
+            self.assertIsNone(geo.hit_test(-100, -100))
+            self.assertTrue(geo._pick_buckets)
+            self.assertLess(len(geo._pick_buckets), 2_000)
+
     def test_atlas_png_has_sixteen_valid_textured_frames(self):
         import struct
         import zlib
