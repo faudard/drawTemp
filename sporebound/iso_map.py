@@ -55,6 +55,8 @@ class IsoGeometry:
         self.width = (self.board.width + self.board.height + 3) * self.half_width + 72
         self.height = ((self.board.width + self.board.height + 3) *
                        self.half_height + self.max_height * self.step + 120)
+        self.draw_order = tuple(sorted(self.board.cells(),
+                                       key=lambda c: (sum(c), c[0])))
 
     def center(self, cell):
         x, y = cell
@@ -69,7 +71,7 @@ class IsoGeometry:
 
     def hit_test(self, px, py):
         # Reverse painter's order: pick the uppermost visible diamond.
-        for cell in sorted(self.board.cells(), key=lambda c: (sum(c), c[0]), reverse=True):
+        for cell in reversed(self.draw_order):
             cx, cy = self.center(cell)
             if (abs(px-cx) / self.half_width +
                     abs(py-cy) / self.half_height <= 1):
@@ -93,7 +95,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         objects.setdefault(tuple(obj['pos']), []).append(obj)
     reachable = set(reachable)
 
-    for c in sorted(board.cells(), key=lambda cell: (sum(cell), cell[0])):
+    for c in geo.draw_order:
         tile = board.tile(c)
         corners = geo.polygon(c)
         north, east, south, west = corners
