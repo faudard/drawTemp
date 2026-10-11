@@ -27,6 +27,10 @@ class WatercolorImporterTests(unittest.TestCase):
         ids = {s['id'] for s in sprites}
         self.assertEqual(manifest['version'], 1)
         self.assertEqual(manifest['bindings'], {})
+        from sporebound.assets import AssetRegistry
+        AssetRegistry(manifest)
+        all_ids = [entry['id'] for entry in manifest['entries']]
+        self.assertEqual(len(all_ids), len(set(all_ids)), 'Duplicate sprite/animation IDs')
         animations = [e for e in manifest['entries'] if e['kind'] == 'animation']
         self.assertEqual(len(animations), 15)
         for animation in animations:
