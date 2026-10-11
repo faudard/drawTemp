@@ -578,8 +578,8 @@ def launch(path):
         else:
             rectangle_anchor = None
             stroke_cells = [selected_cell]
-            if brush in ('unit', 'object'):
-                paint_cells([selected_cell], brush)
+            # Click immediately applies the first cell (legacy Tk interaction).
+            paint_cells([selected_cell], brush)
 
     def drag(event):
         if battle or not stroke_cells or tool_var.get() == 'Collage':
@@ -626,9 +626,14 @@ def launch(path):
             else:
                 design_change(lambda: doc.paint_rectangle(mission_var.get(),
                                                           rectangle_anchor, end, brush))
-        elif not battle and tool == 'Pinceau' and brush not in ('unit', 'object') and stroke_cells:
+        elif not battle and tool == 'Pinceau' and brush not in ('unit', 'object') and len(stroke_cells) > 1:
             selected_cell = stroke_cells[-1]
-            paint_cells(stroke_cells, brush)
+            # Keep the entire drag in one undo entry, including its first click.
+            original = deepcopy(doc.undo_stack[-1])
+            previous = doc.data
+            paint_cells(stroke_cells[1:], brush)
+            if doc.data is not previous:
+                doc.undo_stack[-1] = original
         stroke_cells = []
         rectangle_anchor = None
         canvas.delete('stroke_preview')
@@ -739,10 +744,11 @@ def launch(path):
                 t = board.tile(c)
                 color = '#dddddd'
                 if layer_vars['Terrain'].get():
+                    color = SURFACE_COLORS[t.surface]
                     if t.cost > 1: color = '#b29f78'
                     if t.cover: color = '#b0c9a8'
                     if t.hazard: color = '#eead93'
-                    if t.blocked: color = '#555555'
+                    if t.blocked and t.surface != 'water': color = '#555555'
                 if layer_vars['Relief'].get() and t.height: color = '#c3c3df'
                 if c in deployment_cells and (not battle or battle.deploying): color = '#a8dce8'
                 if c in mission.goal and layer_vars['Objectifs'].get(): color = '#d7c469'
@@ -754,6 +760,10 @@ def launch(path):
                     canvas.create_text(x+8, y+8, text=str(t.height), anchor='nw')
                 if t.hazard and layer_vars['Terrain'].get():
                     canvas.create_text(x+tile_size-3, y+tile_size-3, text=f'!{t.hazard}', anchor='se')
+                if t.feature and layer_vars['Décors'].get():
+                    canvas.create_text(x+tile_size//2, y+tile_size//2,
+                                       text=t.feature[:5], fill='#293e30',
+                                       font=('TkDefaultFont', 8, 'bold'))
             for obj in mission.objects if layer_vars['Objets'].get() else ():
                 x,y = obj['pos']
                 if obj['kind'] == 'passage':
