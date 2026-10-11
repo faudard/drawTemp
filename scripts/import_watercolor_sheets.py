@@ -96,12 +96,12 @@ def build_registry(sprites):
 
 
 def build(input_dir, output_dir, *, matte=True, force=False):
-    from PIL import Image
     input_dir, output_dir = Path(input_dir), Path(output_dir)
     missing = [filename for _, filename, _, _, _ in SHEETS
                if not (input_dir / filename).is_file()]
     if missing:
         raise FileNotFoundError("Missing source sheets: " + ", ".join(missing))
+    from PIL import Image  # Optional dependency only required for real extraction.
     if output_dir.exists() and any(output_dir.iterdir()) and not force:
         raise FileExistsError(f"{output_dir} is not empty; use --force")
     output_dir.mkdir(parents=True, exist_ok=True)
