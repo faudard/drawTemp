@@ -364,5 +364,111 @@ class MapEditorGUITests(unittest.TestCase):
                 dialog_error.assert_not_called()
 
 
+
+    def test_multicell_structure_rotation_preview_undo_and_iso_save(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.authoring import add_blank_mission
+        from sporebound.iso_map import IsoGeometry
+        from sporebound.model import Content
+
+        def descendants(parent):
+            for child in parent.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        with TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'structure_source.json'
+            saved_path = Path(tmp) / 'structures_ui.json'
+            mid = 'structure_ui'
+            payload = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
+                                        mid, 'Structure UI', 12, 12)
+            source.write_text(json.dumps(payload), encoding='utf-8')
+            errors = []
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = lambda *err: errors.append(err)
+                    root.update()
+                    widgets = list(descendants(root))
+                    canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
+                    mission = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                   and mid in w.cget('values'))
+                    structure_box = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                         and 'Rempart' in w.cget('values'))
+                    tool = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                and 'Structure' in w.cget('values'))
+                    buttons = {w.cget('text'): w for w in widgets
+                               if isinstance(w, ttk.Button)}
+                    mission.set(mid)
+                    mission.event_generate('<<ComboboxSelected>>')
+                    root.update()
+
+                    def click(x, y):
+                        canvas.event_generate('<Button-1>', x=x, y=y)
+                        canvas.event_generate('<ButtonRelease-1>', x=x, y=y)
+                        root.update()
+
+                    structure_box.set('Maison')
+                    buttons['↻ Bâtiment'].invoke()
+                    self.assertEqual(tool.get(), 'Structure')
+                    x, y = 3*54+12, 3*54+12
+                    canvas.event_generate('<Motion>', x=x, y=y)
+                    root.update()
+                    preview = canvas.find_withtag('structure_preview')
+                    self.assertEqual(len(preview), 12)
+                    self.assertEqual(canvas.itemcget(preview[0], 'outline'),
+                                     '#36a16c')
+                    click(x, y)
+                    buttons['Enregistrer sous'].invoke()
+                    first = Content.load(saved_path).missions[mid].board
+                    # A 4x3 maison is now a 3x4 rotated footprint.
+                    self.assertTrue(first.tile((3, 3)).blocked)
+                    self.assertFalse(first.tile((6, 4)).blocked)
+                    buttons['Annuler'].invoke()
+                    buttons['Enregistrer sous'].invoke()
+                    undone = Content.load(saved_path).missions[mid].board
+                    self.assertFalse(undone.tile((3, 3)).blocked)
+                    buttons['Rétablir'].invoke()
+                    buttons['Enregistrer sous'].invoke()
+                    restored = Content.load(saved_path).missions[mid].board
+                    self.assertTrue(restored.tile((3, 3)).blocked)
+
+                    toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
+                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    toggle.invoke()
+                    structure_box.set('Pont')
+                    structure_box.event_generate('<<ComboboxSelected>>')
+                    root.update()
+                    geo = IsoGeometry(restored, 54)
+                    px, py = geo.center((7, 7))
+                    canvas.xview_moveto(max(0.0,
+                        (px-canvas.winfo_width()/2)/geo.width))
+                    canvas.yview_moveto(max(0.0,
+                        (py-canvas.winfo_height()/2)/geo.height))
+                    root.update()
+                    x, y = int(px-canvas.canvasx(0)), int(py-canvas.canvasy(0))
+                    self.assertTrue(0 <= x < canvas.winfo_width())
+                    self.assertTrue(0 <= y < canvas.winfo_height())
+                    canvas.event_generate('<Motion>', x=x, y=y)
+                    root.update()
+                    self.assertTrue(canvas.find_withtag('structure_preview'))
+                    click(x, y)
+                    buttons['Enregistrer sous'].invoke()
+                    final = Content.load(saved_path).missions[mid].board
+                    self.assertEqual(final.tile((7, 7)).surface, 'bridge')
+                    self.assertEqual(final.tile((8, 9)).surface, 'bridge')
+                    self.assertEqual(errors, [])
+                finally:
+                    root.destroy()
+
+            with (patch.object(tk.Tk, 'mainloop', drive),
+                  patch('tkinter.filedialog.asksaveasfilename',
+                        return_value=str(saved_path)),
+                  patch('tkinter.messagebox.showerror') as dialog_error):
+                launch(source)
+                dialog_error.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
