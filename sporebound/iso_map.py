@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from math import gcd
 from pathlib import Path
 
+from .iso_connections import (shoreline_mask, waterfall_mask, bridge_axis,
+                              transition_segments, bridge_rails)
+
 SURFACES = frozenset({'grass', 'dirt', 'stone', 'cobble', 'sand',
                       'rock', 'water', 'bridge'})
 FEATURES = frozenset({'', 'tree', 'bush', 'boulder', 'ruin', 'crate',
@@ -205,12 +208,31 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
             canvas.create_image(cx-cell_size, cy-cell_size/2,
                                 image=photo, anchor='nw')
         if surface == 'water' and layers.get('Terrain', True):
-            # Local ripples; the low and high banks are naturally defined by
-            # adjacent surface boundaries and the relief geometry.
+            # Stable, neighbour-aware banks; no seams between water cells.
+            mask = shoreline_mask(board, c)
+            for p, q in transition_segments(corners, mask):
+                canvas.create_line(*p, *q, fill='#335e68',
+                                   width=max(2,cell_size//13))
+                canvas.create_line(p[0]*.78+q[0]*.22,
+                                   p[1]*.78+q[1]*.22,
+                                   p[0]*.22+q[0]*.78,
+                                   p[1]*.22+q[1]*.78,
+                                   fill='#c2e4dc', width=max(1,cell_size//25))
             canvas.create_line(cx-cell_size*.28,cy-2, cx,cy-2-cell_size*.13,
                                fill='#b3dadd', width=2)
             canvas.create_line(cx,cy+cell_size*.15, cx+cell_size*.28,cy,
                                fill='#81c2ce', width=2)
+            # A descending water-to-water edge becomes a visible waterfall.
+            for p, q in transition_segments(corners, waterfall_mask(board, c)):
+                # The drop is equal to the neighbouring tactical elevation.
+                dx, dy = ((1, 0) if (p, q) == (east, south) else (0, 1))
+                drop = (tile.height - board.tile((c[0]+dx,c[1]+dy)).height)*geo.step
+                canvas.create_polygon(*_flatten(
+                    (p,q,(q[0],q[1]+drop),(p[0],p[1]+drop))),
+                    fill='#71b3cc', outline='#acdfe6', width=1)
+                canvas.create_line((p[0]*.65+q[0]*.35), (p[1]*.65+q[1]*.35),
+                                   (p[0]*.65+q[0]*.35), (p[1]*.65+q[1]*.35+drop),
+                                   fill='#e2f7ef', width=max(1,cell_size//24))
         elif surface in ('bridge', 'cobble', 'stone') and layers.get('Terrain', True):
             for fraction in (-.35, 0, .35):
                 px = cx + fraction*cell_size
@@ -218,8 +240,15 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                                    px+cell_size*.15,cy-cell_size*.2,
                                    fill='#918b7d', width=1)
             if surface == 'bridge':
-                canvas.create_line(*west, *north, fill='#f1dfb8', width=3)
-                canvas.create_line(*south, *east, fill='#766655', width=3)
+                # Rails follow the local channel direction, even on a rotated river.
+                for p, q in bridge_rails(corners, bridge_axis(board, c)):
+                    canvas.create_line(*p, *q,fill='#73604b',width=max(3,cell_size//10))
+                    raise_by = max(5, cell_size//7)
+                    canvas.create_line(p[0],p[1]-raise_by,q[0],q[1]-raise_by,
+                                       fill='#ead6aa',width=max(2,cell_size//13))
+                    for r in (p,q):
+                        canvas.create_line(r[0],r[1],r[0],r[1]-raise_by,
+                                           fill='#a69070',width=max(2,cell_size//15))
         if c in deploy and layers.get('Déploiement', True):
             canvas.create_polygon(*_flatten(corners), outline='#3b9ec0', fill='',
                                   width=3)
