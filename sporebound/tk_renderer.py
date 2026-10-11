@@ -25,10 +25,14 @@ class CanvasRenderer:
             return None
         try:
             import tkinter as tk
+        except ImportError:
+            self._missing.add(asset_id)
+            return None
+        try:
             path = self.registry.resolve(asset_id, self.asset_root)
             self._images[asset_id] = tk.PhotoImage(file=str(path), master=self.canvas)
             return self._images[asset_id]
-        except (ImportError, RuleError, OSError, RuntimeError, ValueError, tk.TclError):
+        except (RuleError, OSError, RuntimeError, ValueError, tk.TclError):
             self._missing.add(asset_id)
             return None
 
