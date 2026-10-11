@@ -63,3 +63,33 @@ shafts, feet and props cross source-grid boundaries and are clipped or
 contaminated by adjacent illustrations. Manual cleanup is required before
 marking this set production-ready. The branch remains draft until 88 PNGs are
 actually committed and the in-game rendering is reviewed.
+
+
+## Alpha-boundary audit (authoring-only)
+
+Before merging the binary artwork, run the standalone visual QA tool on the
+**corrected v2 ZIP**. Pillow is needed for this audit, not for the game runtime:
+
+```sh
+python -m pip install pillow
+python scripts/audit_watercolor_pack.py \
+  --bundle /path/to/drawTemp_assets_Jeanne_88_sprites_v2.zip \
+  --output /tmp/jeanne-alpha-audit.json
+# --strict fails when any frame needs a visual review.
+```
+
+The report records the fraction of pixels with alpha >= 128 on each of
+the four *outermost* sprite-frame edges. Default manual-review threshold:
+**more than 12% on any edge**. This is a conservative indicator of
+cropping/bleed, **not proof of a visual defect**: large props and VFX may
+intentionally reach the frame boundary. It does not detect missing art
+which was cut off by the source grid. No gameplay state is changed.
+
+Reference run on the v2 archive provided separately in the conversation:
+**88 inspected; 51 marked for manual review**, including 11/12 props,
+9/12 Jeanne poses and 10/12 spearman poses. Inspect source-sheet spillover
+and fine edges carefully before converting this pack to production art.
+
+The ZIP itself and its 88 individual PNG binaries have **not been committed**
+to this branch; test green does not mean production-ready. Import the archive
+using the documented installer for a non-destructive Player preview.
