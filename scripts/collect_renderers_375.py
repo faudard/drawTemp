@@ -67,7 +67,10 @@ def collect(sequence, *, frames, timeout):
                 f'repeat {spec["repeat"]}: renderer failed with exit '
                 f'{run.returncode}: {run.stderr[-1200:]}')
         try:
-            record = json.loads(run.stdout.strip())
+            # GUI libraries can print startup banners. The benchmark itself
+            # always emits exactly one machine-readable JSON record last.
+            lines = [line for line in run.stdout.splitlines() if line.strip()]
+            record = json.loads(lines[-1])
         except (ValueError, TypeError) as exc:
             raise RuntimeError("Renderer emitted invalid JSON: " + str(spec)) from exc
         for key in ("backend", "actors", "scale"):
