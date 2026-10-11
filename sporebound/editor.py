@@ -11,6 +11,8 @@ from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
                             selected_cells as validate_selection)
 from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
                             transform_terrain)
+from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
+                      _line_cells, render_isometric, SURFACE_COLORS)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -54,7 +56,7 @@ class Document:
         data = deepcopy(self.data)
         mission = next(m for m in data['missions'] if m['id'] == mid)
         width, height = mission['board']['width'], mission['board']['height']
-        tiles = mission['board']['tiles']
+        tiles = {tuple(t['pos']): t for t in mission['board']['tiles']}
         seen = set()
         for cell in cells:
             cell = tuple(cell)
@@ -63,7 +65,7 @@ class Document:
             seen.add(cell)
             if not (0 <= cell[0] < width and 0 <= cell[1] < height):
                 raise RuleError(f'Case hors carte : {cell}')
-            old = next((t for t in tiles if tuple(t['pos']) == cell), {'pos': list(cell)})
+            old = tiles.get(cell, {'pos': list(cell)})
             new = {**old}
             if brush == 'erase':
                 new = {'pos': list(cell)}
@@ -81,6 +83,33 @@ class Document:
                 new['hazard'] = 4
             elif brush == 'cover':
                 new['cover'] = 20
+            elif brush.startswith('surface:'):
+                surface = brush.partition(':')[2]
+                if surface not in SURFACES:
+                    raise RuleError('Surface inconnue')
+                new['surface'] = surface
+                if surface == 'water':
+                    new['blocked'] = True
+                elif surface == 'bridge' or old.get('surface') == 'water':
+                    new['blocked'] = False
+            elif brush.startswith('feature:'):
+                feature = brush.partition(':')[2]
+                if feature not in FEATURES:
+                    raise RuleError('Décor inconnu')
+                new['feature'] = feature
+                if feature == 'stone_wall':
+                    new['blocked'] = True
+                elif old.get('feature') == 'stone_wall':
+                    new['blocked'] = False
+            elif brush == 'feature-erase':
+                new['feature'] = ''
+                if old.get('feature') == 'stone_wall':
+                    new['blocked'] = False
+            elif brush.startswith('height:'):
+                value = brush.partition(':')[2]
+                if not value.isdigit() or not 0 <= int(value) <= 99:
+                    raise RuleError('Hauteur attendue entre 0 et 99')
+                new['height'] = int(value)
             elif brush == 'goal':
                 goal = [list(c) for c in mission.get('goal', [])]
                 if list(cell) not in goal:
@@ -88,9 +117,9 @@ class Document:
                 mission['goal'] = goal
             else:
                 raise RuleError('Unknown brush')
-            tiles[:] = [t for t in tiles if tuple(t['pos']) != cell]
-            tiles.append(new)
+            tiles[cell] = new
         if seen:
+            mission['board']['tiles'] = list(tiles.values())
             self.replace(data)
 
     def paint_rectangle(self, mid, start, end, brush):
