@@ -116,3 +116,28 @@ and fine edges carefully before converting this pack to production art.
 The ZIP itself and its 88 individual PNG binaries have **not been committed**
 to this branch; test green does not mean production-ready. Import the archive
 using the documented installer for a non-destructive Player preview.
+
+
+## V3 bleed cleanup and publication gate
+
+After importing the 9 sheets or receiving the corrected v2 ZIP, use the authoring-only cleaner to remove **detached foreign-cell artifacts**:
+
+```bash
+python -m pip install pillow numpy opencv-python-headless
+python scripts/cleanup_watercolor_bleed.py \
+  --input /path/to/drawTemp_assets_Jeanne_88_sprites_v2.zip \
+  --output /path/to/drawTemp_assets_Jeanne_88_sprites_v3.zip
+python scripts/audit_watercolor_pack.py \
+  --bundle /path/to/drawTemp_assets_Jeanne_88_sprites_v3.zip \
+  --output /tmp/watercolor_v3_audit.json
+```
+
+**V3 reference results:** 88 sprites preserved, **12 cleaned**, 17 disconnected neighbour-cell fragments erased. Edge-occupancy QA flags fell from **51** (v2) to **46** (v3) at a 12% threshold. The 15 animation sequences and `AssetRegistry` IDs are unchanged. The cleaner intentionally does **not** touch VFX or the bestiary, where detached magical particles may be intentional.
+
+Use the **v3 ZIP** instead of v2 when running `scripts/install_watercolor_pack.py` or publishing the PNGs to PR #71. On Windows, publish from a clean checkout with:
+
+```powershell
+.\scripts\publish_watercolor_art.ps1 -RepoPath C:\dev\drawTemp -BundlePath C:\Downloads\drawTemp_assets_Jeanne_88_sprites_v3.zip
+```
+
+The new QA stage only removes visually detached cell bleed. It cannot recover a spear, sword or leg that was already truncated by the sheet's rectangular layout. The final visual gate still requires manual review on gameplay scale and animation timing, particularly **Jeanne**, **spearman**, and modular **props**. The PR remains draft until the 88 PNGs are committed and visually verified in Player.
