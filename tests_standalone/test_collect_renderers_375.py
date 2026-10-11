@@ -54,6 +54,17 @@ class RendererCollectionTests(TestCase):
             self.assertTrue(call.args[0][1].endswith("benchmark_renderers_375.py"))
 
     @patch("scripts.collect_renderers_375.subprocess.run")
+    def test_gui_startup_banners_do_not_hide_valid_json(self, run):
+        record = {"backend": "pygame", "actors": 20, "scale": 2,
+                  "frames": 20, "p50_ms": 2.2, "p95_ms": 3.2}
+        run.return_value = SimpleNamespace(
+            returncode=0, stdout="pygame community\n" + json.dumps(record) + "\n",
+            stderr="")
+        rows = collect(plan(backends=("pygame",), actors=(20,),
+                            scales=(2,), repeats=1), frames=20, timeout=30)
+        self.assertEqual(rows[0]["p95_ms"], 3.2)
+
+    @patch("scripts.collect_renderers_375.subprocess.run")
     def test_failure_cannot_create_fake_timing(self, run):
         run.return_value = SimpleNamespace(returncode=1, stdout="", stderr="No GUI")
         with self.assertRaisesRegex(RuntimeError, "renderer failed"):
