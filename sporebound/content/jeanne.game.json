@@ -844,5 +844,689 @@
       "gte": 10,
       "potion_bonus": 1
     }
-  ]
+  ],
+  "assets": {
+    "version": 1,
+    "entries": [
+      {
+        "id": "jeanne_south_idle_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          0,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_idle_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          64,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_move_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          128,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_move_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          192,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_attack_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          256,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_attack_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          320,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_hit_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          384,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_defeat_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          448,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_idle",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_south_idle_0",
+            "duration_ms": 280
+          },
+          {
+            "sprite": "jeanne_south_idle_1",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_south_move",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_south_move_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_south_move_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_south_attack",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_south_attack_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_south_attack_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_south_hit",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_south_hit_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_south_defeat",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_south_defeat_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_north_idle_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          0,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_idle_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          64,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_move_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          128,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_move_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          192,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_attack_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          256,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_attack_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          320,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_hit_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          384,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_defeat_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          448,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_idle",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_north_idle_0",
+            "duration_ms": 280
+          },
+          {
+            "sprite": "jeanne_north_idle_1",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_north_move",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_north_move_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_north_move_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_north_attack",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_north_attack_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_north_attack_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_north_hit",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_north_hit_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_north_defeat",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_north_defeat_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_east_idle_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          0,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_idle_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          64,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_move_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          128,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_move_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          192,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_attack_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          256,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_attack_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          320,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_hit_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          384,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_defeat_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          448,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_idle",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_east_idle_0",
+            "duration_ms": 280
+          },
+          {
+            "sprite": "jeanne_east_idle_1",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_east_move",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_east_move_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_east_move_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_east_attack",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_east_attack_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_east_attack_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_east_hit",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_east_hit_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_east_defeat",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_east_defeat_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_west_idle_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          0,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_idle_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          64,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_move_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          128,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_move_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          192,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_attack_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          256,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_attack_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          320,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_hit_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          384,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_defeat_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          448,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_idle",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_west_idle_0",
+            "duration_ms": 280
+          },
+          {
+            "sprite": "jeanne_west_idle_1",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_west_move",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_west_move_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_west_move_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_west_attack",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_west_attack_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_west_attack_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_west_hit",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_west_hit_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_west_defeat",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_west_defeat_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_portrait",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_portrait.png"
+      },
+      {
+        "id": "jeanne_neutral",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_neutral.png"
+      },
+      {
+        "id": "jeanne_smile",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_smile.png"
+      },
+      {
+        "id": "jeanne_determined",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_determined.png"
+      },
+      {
+        "id": "jeanne_battle_shout",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_battle_shout.png"
+      }
+    ],
+    "bindings": {
+      "animation": {
+        "jeanne_idle_south": "jeanne_south_idle",
+        "jeanne_move_south": "jeanne_south_move",
+        "jeanne_attack_south": "jeanne_south_attack",
+        "jeanne_hit_south": "jeanne_south_hit",
+        "jeanne_defeat_south": "jeanne_south_defeat",
+        "jeanne_idle_north": "jeanne_north_idle",
+        "jeanne_move_north": "jeanne_north_move",
+        "jeanne_attack_north": "jeanne_north_attack",
+        "jeanne_hit_north": "jeanne_north_hit",
+        "jeanne_defeat_north": "jeanne_north_defeat",
+        "jeanne_idle_east": "jeanne_east_idle",
+        "jeanne_move_east": "jeanne_east_move",
+        "jeanne_attack_east": "jeanne_east_attack",
+        "jeanne_hit_east": "jeanne_east_hit",
+        "jeanne_defeat_east": "jeanne_east_defeat",
+        "jeanne_idle_west": "jeanne_west_idle",
+        "jeanne_move_west": "jeanne_west_move",
+        "jeanne_attack_west": "jeanne_west_attack",
+        "jeanne_hit_west": "jeanne_west_hit",
+        "jeanne_defeat_west": "jeanne_west_defeat"
+      },
+      "sprite": {
+        "jeanne": "jeanne_south_idle_0"
+      },
+      "portrait": {
+        "Jeanne": "jeanne_portrait",
+        "Jeanne_neutral": "jeanne_neutral",
+        "Jeanne_smile": "jeanne_smile",
+        "Jeanne_determined": "jeanne_determined",
+        "Jeanne_battle_shout": "jeanne_battle_shout"
+      }
+    }
+  }
 }

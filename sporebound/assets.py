@@ -56,11 +56,19 @@ class AssetRegistry:
             require(aid.casefold() not in folded, f'Duplicate asset id: {aid}')
             require(isinstance(kind, str) and kind in KINDS, f'{aid}: invalid asset kind')
             fields = {'id', 'kind', 'frames', 'loop'} if kind == 'animation' else {'id', 'kind', 'path'}
+            if kind == 'sprite' and 'region' in entry:
+                fields |= {'region'}
             require(set(entry) == fields, f'{aid}: unknown or missing asset fields')
             if kind != 'animation':
                 _portable_path(entry['path'])
                 require(Path(entry['path']).suffix.lower() in EXTENSIONS[kind],
                         f'{aid}: unsupported {kind} extension')
+                if 'region' in entry:
+                    region = entry['region']
+                    require(isinstance(region, list) and len(region) == 4 and
+                            all(type(value) is int and value >= 0 for value in region) and
+                            region[2] > 0 and region[3] > 0,
+                            f'{aid}: sprite region must be [x, y, width, height]')
             else:
                 require(type(entry['loop']) is bool, f'{aid}: loop must be boolean')
                 require(isinstance(entry['frames'], list) and 0 < len(entry['frames']) <= 10000,
@@ -128,12 +136,20 @@ class AssetRegistry:
             try:
                 path = self.resolve(aid, root)
                 with path.open('rb') as source:
-                    header = source.read(12)
+                    header = source.read(24)
                 suffix = Path(entry['path']).suffix.lower()
                 valid = (header.startswith(b'\x89PNG\r\n\x1a\n') if suffix == '.png' else
                          header.startswith(b'OggS') if suffix == '.ogg' else
                          header.startswith(b'RIFF') and header[8:12] == b'WAVE')
                 require(valid, f'{aid}: invalid {suffix} file signature')
+                if 'region' in entry:
+                    require(len(header) >= 24 and header[12:16] == b'IHDR',
+                            f'{aid}: invalid PNG atlas dimensions')
+                    import struct
+                    width, height = struct.unpack('>II', header[16:24])
+                    x, y, w, h = entry['region']
+                    require(x + w <= width and y + h <= height,
+                            f'{aid}: sprite region exceeds atlas bounds')
             except (RuleError, OSError) as exc:
                 issues.append({'asset_id': aid, 'message': str(exc)})
         return issues

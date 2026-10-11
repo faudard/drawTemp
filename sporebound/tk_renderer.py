@@ -14,6 +14,7 @@ class CanvasRenderer:
         self.registry = registry
         self.asset_root = Path(asset_root) if asset_root is not None else None
         self._images = {}
+        self._sources = {}  # Shared PNG atlas decoded once for all regions.
         self._missing = set()
 
     def _photo(self, asset_id):
@@ -29,9 +30,24 @@ class CanvasRenderer:
             self._missing.add(asset_id)
             return None
         try:
+            spec = self.registry.require_reference(asset_id)
             path = self.registry.resolve(asset_id, self.asset_root)
-            self._images[asset_id] = tk.PhotoImage(file=str(path), master=self.canvas)
-            return self._images[asset_id]
+            key = str(path)
+            if key not in self._sources:
+                self._sources[key] = tk.PhotoImage(file=key, master=self.canvas)
+            source = self._sources[key]
+            region = spec.get("region")
+            if region is None:
+                image = source
+            else:
+                x, y, w, h = region
+                if x + w > source.width() or y + h > source.height():
+                    raise ValueError("Atlas region outside PNG")
+                image = tk.PhotoImage(width=w, height=h, master=self.canvas)
+                image.tk.call(str(image), "copy", str(source),
+                              "-from", x, y, x + w, y + h, "-to", 0, 0)
+            self._images[asset_id] = image
+            return image
         except (RuleError, OSError, RuntimeError, ValueError, tk.TclError):
             self._missing.add(asset_id)
             return None
@@ -153,4 +169,5 @@ class CanvasRenderer:
 
     def dispose(self):
         self._images.clear()
+        self._sources.clear()
         self._missing.clear()
