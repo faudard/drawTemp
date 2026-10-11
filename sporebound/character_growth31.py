@@ -125,6 +125,8 @@ def inject_recruits(mission, recruits):
         attributes["tags"] = [t for t in row["tags"]
                               if t != "reload:empty" and not t.startswith("doctrine:")]
         attributes["kind"] = "character"
+        attributes["hp"] = attributes["max_hp"]
+        attributes["mp"] = attributes["max_mp"]
         unit = Unit(id=actor_id, name=attributes.pop("name"), team="player",
                     pos=tuple(cell), **attributes)
         mission.units.append(unit)
