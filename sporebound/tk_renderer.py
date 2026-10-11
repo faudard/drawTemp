@@ -18,6 +18,8 @@ class CanvasRenderer:
         self._cell_images = {}  # Sized sprite cache, (Tk image ID, cell pixels).
         self._sources = {}  # Shared PNG atlas decoded once for all regions.
         self._missing = set()
+        self._terrain_key = None  # Tiles + camera + viewport identity.
+        self._terrain_rebuilds = 0
 
     def _photo(self, asset_id):
         if self.registry is None or self.asset_root is None:
@@ -103,8 +105,9 @@ class CanvasRenderer:
 
     def draw(self, frame, camera, *, poses=None, elapsed_ms=0, clock_ms=0):
         canvas = self.canvas
-        canvas.delete("all")
         if frame is None:
+            canvas.delete("all")
+            self._terrain_key = None
             return
         cell = camera.cell_size
         selected = frame.selected
@@ -129,23 +132,43 @@ class CanvasRenderer:
             pos = tuple(threat["cell"])
             if pos not in threats or priority[threat["kind"]] > priority[threats[pos]]:
                 threats[pos] = threat["kind"]
-        # Tile height, cover, danger and blockage are presentation only.
+        # Terrain is immutable for most motion ticks. Keeping its Canvas
+        # items avoids rebuilding every tile on the 60 ms animation timer.
+        # Camera, real viewport geometry and tile values all invalidate it;
+        # transient selection, threats and reachable overlays never do.
+        terrain_key = (frame.width, frame.height, frame.tiles, camera,
+                       viewport_w, viewport_h)
+        refresh_terrain = terrain_key != self._terrain_key
+        if refresh_terrain:
+            canvas.delete("all")
+            for tile in frame.tiles:
+                x, y = camera.cell_to_screen(tile.pos)
+                if not visible(x, y, cell, cell):
+                    continue
+                color = ("#45546a" if tile.blocked else "#7c4433" if tile.hazard
+                         else "#446b5b" if tile.height else "#26384b")
+                canvas.create_rectangle(x, y, x + cell, y + cell,
+                                        fill=color, outline="#405166")
+                if tile.height:
+                    h = min(cell // 3, tile.height * 3)
+                    canvas.create_rectangle(x + 2, y + cell - h - 2,
+                                            x + cell - 2, y + cell - 2,
+                                            fill="#759b87", outline="")
+                if tile.cover:
+                    canvas.create_line(x + 4, y + 5, x + cell - 4, y + 5,
+                                       fill="#e2ce91", width=2)
+            canvas.addtag_withtag("terrain", "all")
+            self._terrain_key = terrain_key
+            self._terrain_rebuilds += 1
+        else:
+            canvas.delete("dynamic")
+
+        # Overlay paint always reflects the latest authoritative frame.
+        # These shapes are tagged dynamic at the end of this method.
         for tile in frame.tiles:
             x, y = camera.cell_to_screen(tile.pos)
             if not visible(x, y, cell, cell):
                 continue
-            color = ("#45546a" if tile.blocked else "#7c4433" if tile.hazard
-                     else "#446b5b" if tile.height else "#26384b")
-            canvas.create_rectangle(x, y, x + cell, y + cell,
-                                    fill=color, outline="#405166")
-            if tile.height:
-                h = min(cell // 3, tile.height * 3)
-                canvas.create_rectangle(x + 2, y + cell - h - 2,
-                                        x + cell - 2, y + cell - 2,
-                                        fill="#759b87", outline="")
-            if tile.cover:
-                canvas.create_line(x + 4, y + 5, x + cell - 4, y + 5,
-                                   fill="#e2ce91", width=2)
             if tile.pos in reachable:
                 canvas.create_rectangle(x + 4, y + 4, x + cell - 4, y + cell - 4,
                                         outline="#58d6cd", width=2, dash=(3, 3))
@@ -212,8 +235,13 @@ class CanvasRenderer:
                                camera.offset_y + 14,
                                text=frame.result.upper(), fill="#ffe38d",
                                font=("TkDefaultFont", 17, "bold"))
+        # Tag only new foreground objects. Terrain must stay untagged
+        # "dynamic" so the next animation tick retains those items.
+        canvas.addtag_withtag("dynamic", "all")
+        canvas.dtag("terrain", "dynamic")
 
     def dispose(self):
+        self._terrain_key = None
         self._cell_images.clear()
         self._images.clear()
         self._sources.clear()
