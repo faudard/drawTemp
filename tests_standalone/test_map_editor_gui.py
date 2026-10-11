@@ -225,6 +225,8 @@ class MapEditorGUITests(unittest.TestCase):
                     buttons = {w.cget('text'): w for w in widgets
                                if isinstance(w, ttk.Button)}
                     toggle.invoke()
+                    self.assertTrue(any(canvas.type(item) == 'image'
+                                        for item in canvas.find_all()))
                     surface.set('stone')
                     surface.event_generate('<<ComboboxSelected>>')
                     root.update()
