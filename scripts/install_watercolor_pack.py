@@ -180,23 +180,57 @@ def install(bundle, content, project, output):
             if entry["kind"] == "sprite":
                 entry["path"] = PREFIX + entry["path"]
             assets["entries"].append(entry)
+        # Preserve the canonical project's existing atlases/portraits.
+        # They remain referenced by the unchanged presentation metadata.
+        from sporebound.assets import AssetRegistry
+        source_registry = AssetRegistry(game.get("assets") or None)
+        source_files = {}
+        for original in source_registry.to_dict()["entries"]:
+            if original["kind"] != "animation":
+                source_files[original["path"]] = source_registry.resolve(
+                    original["id"], project.parent)
+        imported_paths = {PREFIX + e["path"] for e in entries
+                          if e["kind"] == "sprite"}
+        if set(source_files).intersection(imported_paths):
+            raise ValueError("Artwork ZIP conflicts with an existing asset path")
+
         bindings = assets.setdefault("bindings", {})
         statics = bindings.setdefault("sprite", {})
         motions = bindings.setdefault("animation", {})
         for actor, sprite in ACTORS.items():
             if actor in actors:
-                statics.setdefault(actor, sprite)
+                # A standalone watercolor demo must show the requested new art.
+                # The original campaign file remains untouched.
+                if actor == "jeanne":
+                    statics[actor] = sprite
+                else:
+                    statics.setdefault(actor, sprite)
         for actor, actions in MOTION.items():
-            if actor in actors:
-                for action, aid in actions.items():
-                    motions.setdefault(f"{actor}_{action}", aid)
-        from sporebound.assets import AssetRegistry
+            if actor not in actors:
+                continue
+            for action, aid in actions.items():
+                motions[f"{actor}_{action}"] = aid
+            if actor == "jeanne":
+                # Existing directional bindings outrank the generic slot in
+                # visual_motion.animation_sprite_id; override only in this
+                # isolated preview. The source PNG is single-view, so all
+                # direction aliases intentionally share the same frame.
+                for direction in ("north", "south", "east", "west"):
+                    motions.pop(f"jeanne_idle_{direction}", None)
+                    for action, aid in actions.items():
+                        motions[f"jeanne_{action}_{direction}"] = aid
         registry = AssetRegistry(assets)
         game["assets"] = assets
         output.parent.mkdir(parents=True, exist_ok=True)
         with TemporaryDirectory(prefix=".watercolor-", dir=output.parent) as tmp:
             stage = Path(tmp) / "game"
             stage.mkdir()
+            # Copy every previously-referenced local asset into the demo so
+            # its original portraits and direction atlases still validate.
+            for relative, source in source_files.items():
+                destination = stage / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, destination)
             for member in members + [PREFIX + "index.json", PREFIX + "registry.json"]:
                 dest = stage / member
                 dest.parent.mkdir(parents=True, exist_ok=True)
