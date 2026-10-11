@@ -108,6 +108,15 @@ class GameProject:
         validate_cinematics(self.cinematics, content, self.campaigns)
         from .narrative import validate_story
         validate_story(self.story, content, self.campaigns)
+        # Only a verified node in the authored siege may trigger a narrative scene.
+        strategic_refs = {
+            siege['id'] + '/' + node['id']
+            for siege in self.sieges
+            for node in siege.get('event_graph', [])
+        }
+        for reference in self.story.get('after_strategic_event', {}):
+            require(reference in strategic_refs,
+                    'Unknown strategic narrative trigger: ' + reference)
         from .exploration import validate_exploration
         validate_exploration(self.exploration, self.story)
         require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
