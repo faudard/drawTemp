@@ -15,19 +15,37 @@ def load(path, name):
 
 imp = load("scripts/import_watercolor_sheets.py", "watercolor_source")
 installer = load("scripts/install_watercolor_pack.py", "watercolor_install")
-PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 24
+# A valid 1x1 RGBA PNG: guards must inspect real IHDR bytes, not just magic.
+import struct
+import zlib
 
 
-def prepare(root, *, corrupt=False):
+def _chunk(tag, payload):
+    data = tag + payload
+    return (struct.pack(">I", len(payload)) + data +
+            struct.pack(">I", zlib.crc32(data) & 0xFFFFFFFF))
+
+
+PNG = (b"\x89PNG\r\n\x1a\n" +
+       _chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)) +
+       _chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00\xff")) +
+       _chunk(b"IEND", b""))
+
+
+def prepare(root, *, corrupt=False, wrong_dimensions=False, broken_frame=False):
     sprites = [
         {"id": f"{group}_{pose}", "path": f"sprites/{group}/{pose}.png"}
         for group, _, _, _, poses in imp.SHEETS
         for pose in (poses.split() if isinstance(poses, str) else poses)
     ]
+    if wrong_dimensions:
+        sprites[0]["frame_size"] = [999, 999]
     index = {"schema_version": 1, "sprites": sprites}
     manifest = imp.build_registry(sprites)
     if corrupt:
         manifest["entries"][-1]["id"] = manifest["entries"][0]["id"]
+    if broken_frame:
+        manifest["entries"][-1]["frames"][0]["sprite"] = "missing_sprite"
     pack = root / "art.zip"
     with ZipFile(pack, "w") as archive:
         archive.writestr("assets/watercolor/index.json", json.dumps(index))
@@ -61,6 +79,36 @@ class WatercolorInstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Duplicate"):
                 installer.install(pack, content, project, target)
             self.assertFalse(target.exists())
+
+    def test_png_header_and_frame_size_checked_before_install(self):
+        with TemporaryDirectory() as tmp:
+            pack, content, project = prepare(Path(tmp), wrong_dimensions=True)
+            output = Path(tmp) / "bad_dimensions"
+            with self.assertRaisesRegex(ValueError, "dimensions mismatch"):
+                installer.install(pack, content, project, output)
+            self.assertFalse(output.exists())
+
+    def test_animation_references_verified_before_install(self):
+        from sporebound.model import RuleError
+        with TemporaryDirectory() as tmp:
+            pack, content, project = prepare(Path(tmp), broken_frame=True)
+            output = Path(tmp) / "bad_animation"
+            with self.assertRaises(RuleError):
+                installer.install(pack, content, project, output)
+            self.assertFalse(output.exists())
+
+    def test_duplicate_zip_entries_rejected(self):
+        import warnings
+        with TemporaryDirectory() as tmp:
+            pack, content, project = prepare(Path(tmp))
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                with ZipFile(pack, "a") as archive:
+                    archive.writestr("assets/watercolor/sprites/wolf/idle.png", PNG)
+            output = Path(tmp) / "duplicate_zip"
+            with self.assertRaisesRegex(ValueError, "Duplicate ZIP member"):
+                installer.install(pack, content, project, output)
+            self.assertFalse(output.exists())
 
     def test_installer_creates_relocatable_game_without_modifying_input(self):
         with TemporaryDirectory() as tmp:
