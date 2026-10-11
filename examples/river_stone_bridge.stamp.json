@@ -1,0 +1,672 @@
+{
+  "kind": "sporebound_terrain_stamp",
+  "version": 1,
+  "name": "Pont de pierre et rivière — exemple 2.5D",
+  "size": [
+    9,
+    7
+  ],
+  "cells": [
+    {
+      "offset": [
+        0,
+        0
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass",
+        "feature": "tree"
+      }
+    },
+    {
+      "offset": [
+        1,
+        0
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        2,
+        0
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        3,
+        0
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        4,
+        0
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        5,
+        0
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        6,
+        0
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        7,
+        0
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        8,
+        0
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass",
+        "feature": "lantern"
+      }
+    },
+    {
+      "offset": [
+        0,
+        1
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        1,
+        1
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass",
+        "feature": "boulder"
+      }
+    },
+    {
+      "offset": [
+        2,
+        1
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        3,
+        1
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        4,
+        1
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        5,
+        1
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        6,
+        1
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        7,
+        1
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass",
+        "feature": "ruin"
+      }
+    },
+    {
+      "offset": [
+        8,
+        1
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        0,
+        2
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        1,
+        2
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        2,
+        2
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        3,
+        2
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        4,
+        2
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        5,
+        2
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        6,
+        2
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        7,
+        2
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        8,
+        2
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        0,
+        3
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "cobble"
+      }
+    },
+    {
+      "offset": [
+        1,
+        3
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "cobble"
+      }
+    },
+    {
+      "offset": [
+        2,
+        3
+      ],
+      "terrain": {
+        "height": 1,
+        "surface": "cobble",
+        "feature": "stairs"
+      }
+    },
+    {
+      "offset": [
+        3,
+        3
+      ],
+      "terrain": {
+        "height": 1,
+        "surface": "bridge",
+        "blocked": false
+      }
+    },
+    {
+      "offset": [
+        4,
+        3
+      ],
+      "terrain": {
+        "height": 1,
+        "surface": "bridge",
+        "blocked": false
+      }
+    },
+    {
+      "offset": [
+        5,
+        3
+      ],
+      "terrain": {
+        "height": 1,
+        "surface": "bridge",
+        "blocked": false
+      }
+    },
+    {
+      "offset": [
+        6,
+        3
+      ],
+      "terrain": {
+        "height": 1,
+        "surface": "cobble",
+        "feature": "stairs"
+      }
+    },
+    {
+      "offset": [
+        7,
+        3
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "cobble"
+      }
+    },
+    {
+      "offset": [
+        8,
+        3
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "cobble"
+      }
+    },
+    {
+      "offset": [
+        0,
+        4
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        1,
+        4
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        2,
+        4
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        3,
+        4
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        4,
+        4
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        5,
+        4
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        6,
+        4
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        7,
+        4
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        8,
+        4
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        0,
+        5
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        1,
+        5
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass",
+        "feature": "tree"
+      }
+    },
+    {
+      "offset": [
+        2,
+        5
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        3,
+        5
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        4,
+        5
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        5,
+        5
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        6,
+        5
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        7,
+        5
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        8,
+        5
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        0,
+        6
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass",
+        "feature": "crate"
+      }
+    },
+    {
+      "offset": [
+        1,
+        6
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        2,
+        6
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        3,
+        6
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        4,
+        6
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        5,
+        6
+      ],
+      "terrain": {
+        "height": 0,
+        "surface": "water",
+        "blocked": true
+      }
+    },
+    {
+      "offset": [
+        6,
+        6
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        7,
+        6
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass"
+      }
+    },
+    {
+      "offset": [
+        8,
+        6
+      ],
+      "terrain": {
+        "height": 2,
+        "surface": "grass",
+        "feature": "tree"
+      }
+    }
+  ],
+  "goals": []
+}
