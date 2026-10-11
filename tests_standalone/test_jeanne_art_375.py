@@ -49,9 +49,9 @@ class JeanneArtGateTests(unittest.TestCase):
     def test_no_asset_dependency_on_tactical_engine(self):
         from sporebound.game_session import GameSession
         session = GameSession.new(self.content, self.project, "jeanne")
-        session.start_mission("p0_01_lame")
-        # A presentation-only asset addition does not change battle rules.
-        self.assertEqual(session.active_battle.mission.id, "p0_01_lame")
+        # The authored introduction still starts in exploration; art is cosmetic.
+        self.assertEqual(session.active_scene()["id"], "sc_p0_champs")
+        self.assertIsNone(session.active_battle)
 
     def test_invalid_region_rejected_before_renderer(self):
         base = {"version": 1, "entries": [
