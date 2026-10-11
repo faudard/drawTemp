@@ -107,6 +107,11 @@ class StoryEditor:
             rf,4,'Siège / événement',choices=[])
         self.strategic_scene,self.strategic_scene_box=self._field(
             rf,5,'Scène après activation',choices=[])
+        self.strategic_key_box.bind(
+            '<<ComboboxSelected>>',
+            lambda _event: self.strategic_scene.set(
+                self.owner.project.story.get('after_strategic_event', {}).get(
+                    self.strategic_key.get(), '')))
         line=ttk.Frame(routes);line.pack(fill='x')
         self._button(line,'Appliquer introduction',self.set_intro)
         self._button(line,'Appliquer suite de victoire',self.set_outcome)
@@ -383,8 +388,7 @@ class StoryEditor:
         if self.strategic_key.get() not in strategic_keys:
             self.strategic_key.set(strategic_keys[0] if strategic_keys else '')
         linked = self.owner.project.story.get('after_strategic_event', {})
-        if self.strategic_key.get() in linked:
-            self.strategic_scene.set(linked[self.strategic_key.get()])
+        self.strategic_scene.set(linked.get(self.strategic_key.get(), ''))
         self.entry_campaign_box['values']=[row['id'] for row in self.owner.project.campaigns]
         self.after_mission_box['values']=[row['id'] for row in self.owner.doc().data['missions']]
         self.effect_mission_box['values']=[row['id'] for row in self.owner.doc().data['missions']]
