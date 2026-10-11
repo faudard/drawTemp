@@ -79,7 +79,13 @@ def install_morale(rules):
 
     def damage(battle, caster, target, skill, effect):
         amount = original_damage(battle, caster, target, skill, effect)
-        # Never change legacy actors that do not opt in via tags.
+        # Crossbows are tactically vulnerable while empty; both forecast and
+        # actual melee impact use exactly this rule.
+        if ("reload:empty" in target.tags and skill.id == "attack"
+                and caster.weapon in {"melee", "spear", "unarmed"}
+                and not skill.magical):
+            amount = amount * 6 // 5
+        # Never penalize legacy actors without an opted-in doctrine/morale.
         if not any(tag.startswith(("doctrine:", "morale:")) for tag in caster.tags):
             return amount
         percent = morale_snapshot(battle, caster)["damage_percent"]
