@@ -147,7 +147,8 @@ class GameSession:
         self.start_fronts(blueprint["fronts"], blueprint["focused"],
                           specs=blueprint["specs"], links=blueprint["links"],
                           logistics=blueprint.get("logistics"),
-                          campaign=blueprint["campaign"])
+                          campaign=blueprint["campaign"],
+                          event_graph=blueprint.get("event_graph"))
         self.siege_id = siege_id
         return self.fronts
 
@@ -177,7 +178,7 @@ class GameSession:
         return battle
 
     def start_fronts(self, missions, focused, *, specs=None, links=None,
-                     logistics=None, campaign=None):
+                     logistics=None, campaign=None, event_graph=None):
         require(self.mode == "campaign", "End the current encounter first")
         require(isinstance(missions, dict) and bool(missions) and focused in missions,
                 "Invalid front mapping")
@@ -195,7 +196,8 @@ class GameSession:
             prepared.missions[mid] = deepcopy(battle.content.missions[mid])
         self.fronts = MultiFrontSession(
             prepared, missions, focused, seed=self.seed, rules=self.rules,
-            specs=specs, links=links, logistics=logistics, campaign=campaign)
+            specs=specs, links=links, logistics=logistics, campaign=campaign,
+            event_graph=event_graph)
         self.settled_fronts.clear()
         self.siege_id = None
         return self.fronts
@@ -448,7 +450,8 @@ class GameSession:
                         and session.fronts.initial_specs == bp["specs"]
                         and session.fronts.links == bp["links"]
                         and session.fronts.initial_campaign == bp["campaign"]
-                        and session.fronts.initial_logistics == bp.get("logistics"),
+                        and session.fronts.initial_logistics == bp.get("logistics")
+                        and session.fronts.initial_event_graph == bp.get("event_graph", []),
                         "Authored siege no longer matches saved front configuration")
                 session.siege_id = data["siege_id"]
             if "front_battle_ids" in data:

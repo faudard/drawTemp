@@ -130,6 +130,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_routes_diplomacy_gui.py -v
+      - name: Exercise 2.5.4.5 Strategic Event Graph UI and journaled replay
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_strategic_event_graph_gui.py -v
       - name: Exercise 2.8.1 Castle Player GUI and resumable siege
         env:
           SPOREBOUND_GUI_SMOKE: '1'

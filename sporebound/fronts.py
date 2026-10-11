@@ -5,7 +5,7 @@ The focused front is never auto-resolved. All fronts share one clock.
 """
 from copy import deepcopy
 from .model import require
-from . import front_links
+from . import front_links, strategic_events
 from .logistics import LogisticsDirector, destination_actors
 from .convoy_choices import ConvoyChoicesMixin
 from .campaign_strategy import SiegeCampaign, CampaignChoicesMixin
@@ -97,7 +97,7 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
     the multi-front journal can reconstruct offscreen attrition.
     """
 
-    def __init__(self, content, missions, focused, *, seed=1, rules=None, specs=None, links=None, logistics=None, campaign=None):
+    def __init__(self, content, missions, focused, *, seed=1, rules=None, specs=None, links=None, logistics=None, campaign=None, event_graph=None):
         from .engine import Battle
         from .rules import default_rules
         require(isinstance(missions, dict) and bool(missions) and focused in missions,
@@ -176,6 +176,11 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
         self.links = deepcopy(links if links is not None else [])
         front_links.validate(self.content, self.missions, self.links)
         self.applied_links = set()
+        self.initial_event_graph = deepcopy(event_graph if event_graph is not None else [])
+        self.graph_order = strategic_events.validate(
+            self.content, self.missions, self.initial_event_graph,
+            final=self.campaign.final if self.campaign is not None else None)
+        self.fired_graph = set()
         self.front_overrides = {}
         self.blocked_reinforcements = set()
         self.battles[focused] = self._new_battle(focused)
@@ -211,7 +216,7 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
         # atomic, including their events, aggregate scores and future overrides.
         snapshot = deepcopy((self.timeline, self.battles, self.front_overrides,
                              self.blocked_reinforcements, self.pending_reinforcements,
-                             self.applied_links))
+                             self.applied_links, self.fired_graph))
         source = self.timeline.focused
         try:
             start = len(self.active.events)
@@ -228,10 +233,11 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                     self.timeline.events.append({
                         "turn": self.timeline.turn, "kind": "campaign_battle_resolved",
                         "front": source, "outcome": row["status"]})
+            strategic_events.synchronize(self)
         except Exception:
             (self.timeline, self.battles, self.front_overrides,
              self.blocked_reinforcements, self.pending_reinforcements,
-             self.applied_links) = snapshot
+             self.applied_links, self.fired_graph) = snapshot
             raise
         self.history.append({"kind": "execute", "command": deepcopy(command)})
 
@@ -589,7 +595,9 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
         snapshot = deepcopy((self.timeline, self.battles, self.front_snapshots,
                              self.pending_reinforcements, self.logistics,
                              self.recovery_battles, self.recovery_outcomes,
-                             self.counteroffensive_active))
+                             self.counteroffensive_active, self.fired_graph,
+                             self.front_overrides, self.blocked_reinforcements,
+                             self.applied_links))
         try:
             for name, battle in self.battles.items():
                 if (battle.result in {"victory", "defeat"}
@@ -630,11 +638,14 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
             for name, front in self.timeline.fronts.items():
                 if name != self.timeline.focused and name in self.battles:
                     self.front_snapshots[name] = deepcopy(front)
+            strategic_events.synchronize(self)
         except Exception:
             (self.timeline, self.battles, self.front_snapshots,
              self.pending_reinforcements, self.logistics,
              self.recovery_battles, self.recovery_outcomes,
-             self.counteroffensive_active) = snapshot
+             self.counteroffensive_active, self.fired_graph,
+             self.front_overrides, self.blocked_reinforcements,
+             self.applied_links) = snapshot
             raise
         self.history.append({"kind": "advance"})
         return self.timeline.state()
@@ -702,7 +713,10 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                 state["pursuit_battles"] = {
                     key: battle.state() for key, battle in sorted(self.pursuit_battles.items())}
                 state["pursuit_outcomes"] = deepcopy(self.pursuit_outcomes)
-        if self.links:
+        if self.initial_event_graph:
+            state["event_graph"] = deepcopy(self.initial_event_graph)
+            state["fired_graph"] = sorted(self.fired_graph)
+        if self.links or self.initial_event_graph:
             state["links"] = deepcopy(self.links)
             state["applied_links"] = sorted(self.applied_links)
             state["front_overrides"] = deepcopy(self.front_overrides)
@@ -717,12 +731,15 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
     def recording(self):
         """Portable journal; replay proves all tactical and strategic mutations."""
         extended = self.logistics is not None and self.logistics._extended
-        return {"version": 5 if self.campaign is not None else
+        return {"version": 6 if self.initial_event_graph else
+                5 if self.campaign is not None else
                 4 if extended else 3 if self.logistics is not None else 2,
                 "kind": "multi_front",
                 "content": self.content.to_dict(), "missions": dict(self.missions),
                 "focused": self.initial_focus, "specs": deepcopy(self.initial_specs),
                 "links": deepcopy(self.links),
+                **({"event_graph": deepcopy(self.initial_event_graph)}
+                   if self.initial_event_graph else {}),
                 **({"campaign": deepcopy(self.initial_campaign)}
                    if self.campaign is not None else {}),
                 **({"logistics": deepcopy(self.initial_logistics)}
@@ -739,7 +756,7 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
         """
         from .model import Content
         from .rules import default_rules
-        require(isinstance(recording, dict) and recording.get("version") in {1, 2, 3, 4, 5}
+        require(isinstance(recording, dict) and recording.get("version") in {1, 2, 3, 4, 5, 6}
                 and recording.get("kind") == "multi_front", "Unsupported multi-front save")
         effective_rules = rules if rules is not None else default_rules()
         require(recording.get("rules") == effective_rules.manifest(),
@@ -750,8 +767,11 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                       specs=recording["specs"],
                       links=recording.get("links", []) if recording["version"] >= 2 else [],
                       logistics=recording.get("logistics")
-                      if recording["version"] in {3, 4, 5} else None,
-                      campaign=recording["campaign"] if recording["version"] == 5 else None)
+                      if recording["version"] in {3, 4, 5, 6} else None,
+                      campaign=recording.get("campaign")
+                      if recording["version"] in {5, 6} else None,
+                      event_graph=recording.get("event_graph", [])
+                      if recording["version"] == 6 else None)
         operations = recording["operations"]
         require(isinstance(operations, list), "Invalid multi-front operations")
         require(_until is None or (type(_until) is int
@@ -825,6 +845,7 @@ class MultiFrontSession(CampaignRoutesMixin, CampaignChoicesMixin, ConvoyChoices
                 and restored.content.to_dict() == self.content.to_dict()
                 and restored.links == self.links
                 and restored.initial_logistics == self.initial_logistics
-                and restored.initial_campaign == self.initial_campaign,
+                and restored.initial_campaign == self.initial_campaign
+                and restored.initial_event_graph == self.initial_event_graph,
                 "Incompatible multi-front save")
         self.__dict__.update(restored.__dict__)

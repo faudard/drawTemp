@@ -5,7 +5,7 @@ normal mission triggers in Content.  No parallel simulation rules are invented.
 """
 from copy import deepcopy
 
-from . import front_links
+from . import front_links, strategic_events
 from .campaign_strategy import SiegeCampaign
 from .fronts import FrontDirector, MultiFrontSession
 from .model import Content, RuleError, require
@@ -25,7 +25,7 @@ def _identifier(value, label):
 def validate_blueprint(blueprint, content, campaign_ids):
     required = {"id", "campaign_id", "fronts", "focused", "specs", "links", "campaign"}
     require(isinstance(blueprint, dict)
-            and required <= set(blueprint) <= required | {"logistics"},
+            and required <= set(blueprint) <= required | {"logistics", "event_graph"},
             "Invalid siege blueprint structure")
     _identifier(blueprint["id"], "siege id")
     require(blueprint["campaign_id"] in campaign_ids, "Unknown parent campaign")
@@ -46,6 +46,9 @@ def validate_blueprint(blueprint, content, campaign_ids):
                 "Invalid strategic front fields")
     FrontDirector(specs, blueprint["focused"])
     front_links.validate(content, missions, blueprint["links"])
+    if "event_graph" in blueprint:
+        final = blueprint["campaign"]["final_front"] if blueprint["campaign"] else None
+        strategic_events.validate(content, missions, blueprint["event_graph"], final=final)
     if "logistics" in blueprint:
         from .logistics import LogisticsDirector
         logistics = LogisticsDirector(blueprint["logistics"], missions)
@@ -151,6 +154,9 @@ def remove_front(blueprint, front):
         route["from"] == front or route["to"] == front
         for route in logistics.get("routes", [])),
         "Remove connected logistics routes first")
+    require(not strategic_events.references_front(
+        result.get("event_graph", []), front),
+        "Remove connected strategic events before deleting this front")
     campaign = result["campaign"]
     require(campaign is None or (front != campaign["final_front"]
             and front not in campaign["required_fronts"]),
@@ -275,7 +281,8 @@ def make_session(blueprint, content, *, seed=1, rules=None):
                              seed=seed, rules=rules, specs=blueprint["specs"],
                              links=blueprint["links"],
                              logistics=blueprint.get("logistics"),
-                             campaign=blueprint["campaign"])
+                             campaign=blueprint["campaign"],
+                             event_graph=blueprint.get("event_graph"))
 
 
 def _save_path(project_path, blueprint_id, slot):
@@ -291,7 +298,8 @@ def save_siege_slot(project_path, blueprint, slot, session, *, narrative=None):
             and session.initial_specs == blueprint["specs"]
             and session.links == blueprint["links"]
             and session.initial_campaign == blueprint["campaign"]
-            and session.initial_logistics == blueprint.get("logistics"),
+            and session.initial_logistics == blueprint.get("logistics")
+            and session.initial_event_graph == blueprint.get("event_graph", []),
             "Session no longer matches the siege definition")
     path = _save_path(project_path, blueprint["id"], slot)
     if narrative is None and path.is_file():
@@ -323,6 +331,7 @@ def load_siege_slot(project_path, blueprint, slot, content, *, rules=None, _with
             and session.initial_specs == blueprint["specs"]
             and session.links == blueprint["links"]
             and session.initial_campaign == blueprint["campaign"]
-            and session.initial_logistics == blueprint.get("logistics"),
+            and session.initial_logistics == blueprint.get("logistics")
+            and session.initial_event_graph == blueprint.get("event_graph", []),
             "Checkpoint belongs to an older siege definition")
     return (session, data.get("narrative")) if _with_narrative else session

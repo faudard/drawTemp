@@ -105,6 +105,7 @@ class SiegeStudio:
         logistics = ttk.Frame(pages)
         visual_logistics = ttk.Frame(pages)
         route_policy = ttk.Frame(pages)
+        strategic = ttk.Frame(pages)
         pages.add(fronts, text="Fronts et finale")
         pages.add(links, text="Événements inter-fronts")
         pages.add(waves, text="Vagues de renforts")
@@ -117,6 +118,9 @@ class SiegeStudio:
         pages.add(route_policy, text="Itinéraires & diplomatie")
         from .studio_routes import RoutesStudio
         self.routes_editor = RoutesStudio(self, route_policy)
+        pages.add(strategic, text="Graphe stratégique")
+        from .studio_strategic_events import StrategicEventsStudio
+        self.strategic_editor = StrategicEventsStudio(self, strategic)
 
         lside = ttk.Frame(fronts)
         lside.pack(side="left", fill="both", expand=True)
@@ -786,6 +790,7 @@ class SiegeStudio:
             self._draw(bp)
             self.logistics_editor.refresh(bp)
             self.routes_editor.refresh(bp)
+            self.strategic_editor.refresh(bp)
             self._object_choices()
         finally:
             self._refreshing = False
