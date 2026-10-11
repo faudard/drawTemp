@@ -1,7 +1,7 @@
 """3.7.6 renderer workload uses a genuine authored Jeanne tactical projection."""
 import unittest
 
-from scripts.benchmark_player_canvas_376 import build_scene
+from scripts.benchmark_player_canvas_376 import CONTENT, build_scene
 
 
 class RealCanvasBenchmarkTests(unittest.TestCase):
@@ -12,8 +12,7 @@ class RealCanvasBenchmarkTests(unittest.TestCase):
         self.assertEqual(len(frame.actors), len(battle.units))
         self.assertTrue(frame.actors)
         self.assertEqual(battle.digest(), digest)
-        self.assertEqual(registry.diagnostics(
-            __import__("scripts.benchmark_player_canvas_376", fromlist=["CONTENT"]).CONTENT), [])
+        self.assertEqual(registry.diagnostics(CONTENT), [])
 
     def test_stress_copies_are_only_render_projections(self):
         for number in (20, 80, 200):
