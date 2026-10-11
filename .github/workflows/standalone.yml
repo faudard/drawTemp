@@ -126,6 +126,18 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_jeanne_atlas_gui.py -v
+      - name: Collect real Tk renderer evidence (3.7.5)
+        run: >-
+          xvfb-run -a python3 scripts/collect_renderers_375.py
+          --backends tk --actors 20 80 --scales 1 2
+          --repeats 2 --frames 120
+          --output "${{ runner.temp }}/tk-renderer-375.json"
+      - name: Preserve Tk renderer measurements
+        uses: actions/upload-artifact@v4
+        with:
+          name: renderer-375-ubuntu-tk
+          path: ${{ runner.temp }}/tk-renderer-375.json
+          if-no-files-found: error
       - name: Exercise 2.5.4.2 authored siege in the Player and resume it
         env:
           SPOREBOUND_GUI_SMOKE: '1'
