@@ -1,0 +1,76 @@
+name: Renderer comparison 3.7.5
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark_renderers_375.py'
+      - 'scripts/collect_renderers_375.py'
+      - 'sporebound/content/art/jeanne/**'
+      - 'sporebound/content/jeanne.game.json'
+      - '.github/workflows/renderer-comparison-375.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Keep all backends on the same runner. Each sample still uses its own
+# isolated Python process, as enforced by collect_renderers_375.py.
+jobs:
+  renderer-matrix-ubuntu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install GUI libraries and headless X server
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             xvfb xauth python3-tk libgl1 libegl1 libxkbcommon-x11-0             libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0             libxcb-keysyms1 libxcb-render-util0 libxcb-xkb1
+          python -m pip install pygame-ce PySide6
+      - name: Confirm all three backends actually render
+        env:
+          QT_QPA_PLATFORM: xcb
+          SDL_VIDEODRIVER: x11
+        run: >-
+          xvfb-run -a -s '-screen 0 1280x900x24'
+          python scripts/collect_renderers_375.py
+          --backends tk pygame qt --actors 20 --scales 1
+          --repeats 1 --frames 30
+          --output "${{ runner.temp }}/renderer-smoke-375.json"
+      - name: Compare identical atlas and viewport on a single machine
+        env:
+          QT_QPA_PLATFORM: xcb
+          SDL_VIDEODRIVER: x11
+        run: >-
+          xvfb-run -a -s '-screen 0 1280x900x24'
+          python scripts/collect_renderers_375.py
+          --backends tk pygame qt --actors 20 80 200 --scales 1 2
+          --repeats 3 --frames 120 --timeout 120
+          --output "${{ runner.temp }}/renderer-matrix-375.json"
+      - name: Assert complete actual measurements (no synthetic or skipped cases)
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          data = json.loads((root / "renderer-matrix-375.json").read_text(encoding="utf-8"))
+          expected = {(backend, count, scale) for backend in ("tk", "pygame", "qt")
+                      for count in (20, 80, 200) for scale in (1, 2)}
+          assert len(data["samples"]) == 54, data
+          assert {(s["backend"], s["actors"], s["scale"]) for s in data["samples"]} == expected
+          assert all(row["runs"] == 3 for row in data["summary"]), data["summary"]
+          assert not data.get("dry_run")
+          print("Validated all 54 measured cases on one runner.")
+          PY
+      - name: Preserve reproducible renderer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: renderer-375-ubuntu-comparative
+          path: |
+            ${{ runner.temp }}/renderer-smoke-375.json
+            ${{ runner.temp }}/renderer-matrix-375.json
+          if-no-files-found: warn
