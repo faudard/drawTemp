@@ -293,6 +293,25 @@ class PlayerApplication:
         self._heading(self.project.campaign(session.campaign_id)["name"],
                       "Or : " + str(session.progress.gold) +
                       "    Missions terminées : " + str(len(session.progress.completed)))
+        # Compact, generic roster panel: story recruitment and real equipment
+        # bonuses are visible without inspecting JSON files.
+        if session.progress.heroes:
+            roster = self.ttk.LabelFrame(self.view, text="Équipe et progression", padding=8)
+            roster.pack(fill="x", padx=80, pady=(2, 8))
+            for uid, hero in sorted(session.progress.heroes.items()):
+                if uid.startswith("otage_") or uid == "refugie":
+                    continue
+                gear = ", ".join(hero.equipment.values()) or "sans équipement"
+                self.ttk.Label(
+                    roster, text=f"{uid} · niveau {hero.level} · {hero.job} · {gear}"
+                ).pack(anchor="w")
+            bonds = [(k[6:], v) for k, v in sorted(session.progress.story_flags.items())
+                     if k.startswith("trust_") and type(v) is int]
+            if bonds:
+                self.ttk.Label(
+                    roster, text="Relations : " +
+                    ", ".join(f"{name} {value}" for name, value in bonds)
+                ).pack(anchor="w")
         scene = session.active_scene()
         if scene:
             self.audio.music_for(f'music_scene_{scene["id"]}', "campaign")

@@ -188,6 +188,13 @@ class Campaign:
         require(mission_id in self.unlocked, "Mission locked")
         prepared = deepcopy(content)
         mission_units = prepared.missions[mission_id].units
+        # Optional tagged companions are only deployed after a validated
+        # StoryBook recruitment. Untagged legacy content is unchanged.
+        mission_units[:] = [
+            unit for unit in mission_units
+            if unit.team != "player" or "recruit:" + unit.id not in unit.tags
+            or self.story_flags.get("recruited_" + unit.id) is True
+        ]
         for unit in mission_units:
             if unit.team != "player":
                 continue
