@@ -119,6 +119,18 @@ class IsoGeometry:
                        self.half_height + self.max_height * self.step + 120)
         self.draw_order = tuple(sorted(self.board.cells(),
                                        key=lambda c: (sum(c), c[0])))
+        # Spatial buckets avoid O(width*height) mouse hit tests on each move.
+        self._bucket_size = max(16, self.cell_size * 2)
+        self._pick_buckets = {}
+        for cell in self.draw_order:
+            cx, cy = self.center(cell)
+            left = int((cx-self.half_width)//self._bucket_size)
+            right = int((cx+self.half_width)//self._bucket_size)
+            top = int((cy-self.half_height)//self._bucket_size)
+            bottom = int((cy+self.half_height)//self._bucket_size)
+            for by in range(top, bottom+1):
+                for bx in range(left, right+1):
+                    self._pick_buckets.setdefault((bx, by), []).append(cell)
 
     def center(self, cell):
         x, y = cell
@@ -133,7 +145,8 @@ class IsoGeometry:
 
     def hit_test(self, px, py):
         # Reverse painter's order: pick the uppermost visible diamond.
-        for cell in reversed(self.draw_order):
+        bucket = (int(px//self._bucket_size), int(py//self._bucket_size))
+        for cell in reversed(self._pick_buckets.get(bucket, ())):
             cx, cy = self.center(cell)
             if (abs(px-cx) / self.half_width +
                     abs(py-cy) / self.half_height <= 1):
