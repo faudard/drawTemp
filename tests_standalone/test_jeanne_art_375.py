@@ -25,7 +25,7 @@ class JeanneArtGateTests(unittest.TestCase):
         self.assertEqual(self.registry.diagnostics(CONTENT), [])
         atlas = CONTENT / "art/jeanne/jeanne_atlas.png"
         portrait = CONTENT / "art/jeanne/jeanne_portrait.png"
-        for path, dimensions in ((atlas, (256, 512)), (portrait, (64, 64))):
+        for path, dimensions in ((atlas, (256, 512)), (portrait, (256, 256))):
             data = path.read_bytes()[:24]
             self.assertEqual(data[:8], bytes((137, 80, 78, 71, 13, 10, 26, 10)))
             self.assertEqual(struct.unpack(">II", data[16:24]), dimensions)
@@ -43,6 +43,16 @@ class JeanneArtGateTests(unittest.TestCase):
                     entry = self.registry.require_reference(frame["sprite"], "sprite")
                     self.assertEqual(entry["region"][2:], [64, 64])
         self.assertIsNotNone(self.registry.binding("portrait", "Jeanne"))
+        expected_expressions = ("neutral", "smile", "determined", "battle_shout")
+        for expression in expected_expressions:
+            name = f"Jeanne_{expression}"
+            entry = self.registry.binding("portrait", name)
+            self.assertIsNotNone(entry, name)
+            self.assertEqual(entry["id"], f"jeanne_{expression}")
+            source = self.registry.resolve(entry["id"], CONTENT)
+            with source.open("rb") as payload:
+                chunk = payload.read(24)
+            self.assertEqual(struct.unpack(">II", chunk[16:24]), (192, 192))
         self.assertEqual(self.registry.binding("sprite", "jeanne")["id"],
                          "jeanne_south_idle_0")
 
