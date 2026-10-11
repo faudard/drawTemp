@@ -19,6 +19,7 @@ def tactical_rpg_rules(base=None):
     from .synergies3 import install_synergies
     from .bosses3 import install_bosses, phase_boss_command
     from .doctrines31 import doctrine, doctrine_command, install_doctrines
+    from .morale31 import install_morale
 
     rules = base if base is not None else default_rules()
     original_tactical = rules.behaviors.get("tactical").choose
@@ -47,6 +48,7 @@ def tactical_rpg_rules(base=None):
     rules = install_synergies(rules)
     rules = install_bosses(rules)
     rules = install_doctrines(rules)
+    rules = install_morale(rules)
     return rules
 
 
@@ -62,7 +64,7 @@ def authored_rules_for_document(data):
         unit.get("behavior") in {"coordinated", "phase_boss"}
         or any(t in {"chain_strike", "trio_burst"} for t in unit.get("tactics", []))
         or any(t in {"medic", "healer", "protector"}
-               or t.startswith(("formation:", "boss_phase:", "squad:", "doctrine:"))
+               or t.startswith(("formation:", "boss_phase:", "squad:", "doctrine:", "morale:"))
                for t in unit.get("tags", []))
         for mission in missions
         for unit in mission.get("units", [])
