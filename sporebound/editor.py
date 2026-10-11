@@ -142,6 +142,43 @@ class Document:
         cells = [(x, y) for y in range(y1, y2 + 1) for x in range(x1, x2 + 1)]
         self.paint_many(mid, cells, brush)
 
+    def flood_surface(self, mid, start, surface):
+        """Fill four-connected cells of the same surface in one atomic edit.
+
+        Empty sparse tiles are grass. The existing paint_many path owns surface
+        collisions, Content validation and undo; no runtime Battle is changed.
+        """
+        if surface not in SURFACES:
+            raise RuleError('Surface inconnue')
+        mission = next((m for m in self.data['missions'] if m['id'] == mid), None)
+        if mission is None:
+            raise RuleError(f'Unknown mission: {mid}')
+        width, height = mission['board']['width'], mission['board']['height']
+        if (not isinstance(start, (list, tuple)) or len(start) != 2 or
+                any(type(v) is not int for v in start) or
+                not (0 <= start[0] < width and 0 <= start[1] < height)):
+            raise RuleError('Choisir une case dans la carte.')
+        tiles = {tuple(tile['pos']): tile for tile in mission['board']['tiles']}
+        start = tuple(start)
+        original = tiles.get(start, {}).get('surface', 'grass')
+        if original == surface:
+            return 0
+        region, visited, pending = [], set(), [start]
+        while pending:
+            x, y = pending.pop()
+            if (not (0 <= x < width and 0 <= y < height) or
+                    (x, y) in visited):
+                continue
+            visited.add((x, y))
+            if tiles.get((x, y), {}).get('surface', 'grass') != original:
+                continue
+            region.append((x, y))
+            pending.extend(((x-1, y), (x+1, y), (x, y-1), (x, y+1)))
+        # Validation is performed before replace(), so an illegal blocked
+        # spawn or objective leaves the map and both undo stacks unchanged.
+        self.paint_many(mid, region, 'surface:' + surface)
+        return len(region)
+
     def place_unit(self, mid, uid, cell):
         data = deepcopy(self.data)
         mission = next(m for m in data['missions'] if m['id'] == mid)
@@ -539,7 +576,15 @@ def launch(path):
 
     def paste_preview(event):
         canvas.delete('paste_preview')
-        if battle or tool_var.get() != 'Collage' or terrain_clipboard is None:
+        canvas.delete('fill_preview')
+        if battle:
+            return
+        if tool_var.get() == 'Remplissage':
+            anchor = event_cell(event)
+            if anchor is not None:
+                preview_cells([anchor], tag='fill_preview', color='#36a16c')
+            return
+        if tool_var.get() != 'Collage' or terrain_clipboard is None:
             return
         anchor = event_cell(event)
         if anchor is None:
@@ -558,6 +603,25 @@ def launch(path):
         preview_cells([c for c in cells if inside(c)], tag='paste_preview',
                       color='#36a16c' if all(map(inside,cells)) else '#e05252')
 
+    def sample_appearance(cell, *, decor=False):
+        if source_pending():
+            raise RuleError('Appliquer ou abandonner le JSON avant la pipette.')
+        mission = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
+        tile = next((t for t in mission['board']['tiles']
+                     if tuple(t['pos']) == cell), {})
+        if decor:
+            feature = tile.get('feature', '')
+            feature_var.set(feature if feature else 'tree')
+            brush_var.set('feature:' + feature if feature else 'feature-erase')
+            status_var.set('Pipette décor : ' + (feature or 'aucun'))
+        else:
+            surface = tile.get('surface', 'grass')
+            surface_var.set(surface)
+            brush_var.set('surface:' + surface)
+            status_var.set('Pipette sol : ' + surface)
+        tool_var.set('Pinceau')
+        refresh()
+
     @guarded
     def click(event):
         nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive
@@ -573,6 +637,22 @@ def launch(path):
             refresh()
         elif tool == 'Collage':
             paste_at(selected_cell)
+        elif tool == 'Remplissage':
+            if not brush.startswith('surface:'):
+                raise RuleError('Choisir un sol dans la palette avant le remplissage.')
+            if source_pending():
+                raise RuleError('Appliquer ou abandonner le JSON avant de remplir.')
+            count = 0
+            def fill():
+                nonlocal count
+                count = doc.flood_surface(mission_var.get(), selected_cell,
+                                         brush.partition(':')[2])
+            design_change(fill)
+            status_var.set(f'Remplissage : {count} case(s) modifiée(s).')
+        elif tool == 'Pipette sol':
+            sample_appearance(selected_cell)
+        elif tool == 'Pipette décor':
+            sample_appearance(selected_cell, decor=True)
         elif tool in ('Sélection', 'Rectangle') and (tool == 'Sélection' or brush not in ('unit', 'object')):
             rectangle_anchor = selected_cell
             selection_additive = bool(event.state & 0x0001)
@@ -850,6 +930,8 @@ def launch(path):
                      f' | Presse-papiers : {len(terrain_clipboard.offsets) if terrain_clipboard else 0}'
                      '\nRotation/symétrie : modifier le modèle puis coller.'
                      '\nGroupe : sélectionner les unités/objets et utiliser les flèches.'
+                     '\nRemplissage : choisir un sol puis remplir une zone contiguë.'
+                     '\nPipette sol/décor : cliquer une case pour reprendre son pinceau.'
                      '\nCouches : visibilité d’édition seulement ; règles inchangées.'
                      '\nDonnées tactiques avancées : onglet JSON.')
         inspector.delete('1.0','end')
@@ -870,7 +952,8 @@ def launch(path):
     mission_box.bind('<<ComboboxSelected>>', lambda e: stop())
     ttk.Label(controls,text='Outil').pack(side='left')
     ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=11,
-                 values=['Pinceau','Rectangle','Sélection','Collage']).pack(side='left')
+                 values=['Pinceau','Rectangle','Sélection','Collage',
+                         'Remplissage','Pipette sol','Pipette décor']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -919,6 +1002,11 @@ def launch(path):
                                 tool_var.set('Pinceau')))
     ttk.Button(scenery_controls, text='Effacer décor',
                command=lambda: brush_var.set('feature-erase')).pack(side='left',padx=4)
+    for label, tool in [('Remplir sol', 'Remplissage'),
+                        ('Pipette sol', 'Pipette sol'),
+                        ('Pipette décor', 'Pipette décor')]:
+        ttk.Button(scenery_controls, text=label,
+                   command=lambda name=tool: tool_var.set(name)).pack(side='left',padx=2)
     ttk.Label(scenery_controls, text='Niveau :').pack(side='left',padx=(10,2))
     ttk.Spinbox(scenery_controls, from_=0, to=99, textvariable=level_var,
                 width=4).pack(side='left')
