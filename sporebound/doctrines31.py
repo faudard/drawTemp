@@ -136,10 +136,9 @@ def _spear(battle, actor):
     if (not actor.acted and closest <= 4 and
             not battle.status_blocks(actor, "act") and
             "prepare" in battle.rules.commands):
-        if ("phalanx_hold" in battle.rules.preparations and
-                any(u.alive and u.team == actor.team and u.id != actor.id
-                    and u.weapon == "spear" and distance(actor.pos, u.pos) == 1
-                    for u in battle.units)):
+        from .formations3 import phalanx
+        if ("phalanx_hold" in battle.rules.preparations
+                and phalanx(battle, actor)):
             return {"kind": "prepare", "mode": "phalanx_hold"}
         if "guard" in battle.rules.preparations:
             return {"kind": "prepare", "mode": "guard"}
