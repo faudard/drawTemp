@@ -57,6 +57,29 @@ python scripts/benchmark_renderers_375.py --backend pygame --actors 80 --scale 1
 python scripts/benchmark_renderers_375.py --backend qt --actors 80 --scale 1
 ```
 
+Pour automatiser la matrice complète et conserver les mesures par exécution,
+lancer le collecteur (processus isolé par point de mesure) :
+
+```sh
+python scripts/collect_renderers_375.py --dry-run --output matrix.json
+python scripts/collect_renderers_375.py \\
+  --backends tk pygame qt --actors 20 80 200 --scales 1 2 \\
+  --repeats 3 --frames 120 --output renderers-local.json
+
+# CI Linux : smoke de performance réel sous Xvfb et artifact de preuves
+xvfb-run -a python3 scripts/collect_renderers_375.py \\
+  --backends tk --actors 20 80 --scales 1 2 \\
+  --repeats 2 --frames 120 --output tk-evidence.json
+```
+
+Le rapport contient les 54 essais individuels attendus pour une matrice complète
+(Tk/pygame-ce/PySide6 × 20/80/200 × 1x/2x × trois répétitions), le p50/p95 de
+chaque essai, la médiane des p50/p95 et le p95 maximal par scénario.
+Une bibliothèque optionnelle ou un display absent provoque un **échec explicite**,
+jamais une mesure fictive ni un faux backend ignoré. Le critère p95 inférieur
+à 33,3 ms est un indicateur non décisionnel du benchmark de blit :
+il ne valide pas à lui seul les performances réelles du Player.
+
 Chaque invocation doit utiliser un **processus indépendant**. Exécuter pour
 `--actors 20, 80, 200`, `--scale 1, 2` sur Windows, Ubuntu et macOS, au
 moins 120 frames et trois répétitions après warmup. Conserver les JSON obtenus
