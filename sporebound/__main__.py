@@ -16,9 +16,10 @@ DEFAULT_CONTENT = Path(__file__).parent / 'content' / 'core.json'
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Sporebound standalone gameplay workbench')
-    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance'])
+    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','export'])
     parser.add_argument('--content', type=Path, default=DEFAULT_CONTENT)
     parser.add_argument('--project', type=Path, help='Game presentation manifest for player')
+    parser.add_argument('--output', type=Path, help='Destination ZIP for export')
     parser.add_argument('--profile', type=Path, help='Writable player profile path')
     parser.add_argument('--mission', default='garden')
     parser.add_argument('--seed', type=int, default=1)
@@ -50,6 +51,15 @@ def main(argv=None):
             print(json.dumps({'verified':True,'digest':battle.digest(),'result':battle.result}))
             return 0
         content = Content.load(args.content)
+        if args.command == 'export':
+            if args.project is None or args.output is None:
+                parser.error('export requires --project and --output')
+            from .game_project import GameProject
+            from .game_export4 import export_game
+            project = GameProject.load(args.project, content)
+            path = export_game(content, project, args.project.parent, args.output)
+            print(json.dumps({'exported': str(path)}, ensure_ascii=False))
+            return 0
         if args.command == 'validate':
             if args.project:
                 from .game_project import GameProject
