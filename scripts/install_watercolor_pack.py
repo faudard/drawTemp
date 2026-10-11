@@ -17,8 +17,15 @@ from copy import deepcopy
 import json
 from pathlib import Path, PurePosixPath
 import shutil
+import sys
 from tempfile import TemporaryDirectory
 import zipfile
+
+# Support the documented "python scripts/install_watercolor_pack.py" command
+# without requiring an editable pip install of sporebound.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 PREFIX = "assets/watercolor/"
 ACTORS = {
