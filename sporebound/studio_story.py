@@ -96,18 +96,24 @@ class StoryEditor:
         self.effects_label=ttk.Label(effects,text='',wraplength=420,justify='left')
         self.effects_label.pack(anchor='w',padx=6,pady=4)
 
-        routes=ttk.LabelFrame(root,text='Déclenchement : début de campagne / après victoire')
+        routes=ttk.LabelFrame(root,text='Déclenchement : campagne / victoire / événement stratégique')
         routes.pack(fill='x',padx=10,pady=6)
         rf=ttk.Frame(routes);rf.pack(fill='x')
         self.entry_campaign,self.entry_campaign_box=self._field(rf,0,'Campagne',choices=[])
         self.entry_scene,self.entry_scene_box=self._field(rf,1,'Scène introductive',choices=[])
         self.after_mission,self.after_mission_box=self._field(rf,2,'Après victoire de',choices=[])
         self.after_scene,self.after_scene_box=self._field(rf,3,'Dialogue de conséquence',choices=[])
+        self.strategic_key,self.strategic_key_box=self._field(
+            rf,4,'Siège / événement',choices=[])
+        self.strategic_scene,self.strategic_scene_box=self._field(
+            rf,5,'Scène après activation',choices=[])
         line=ttk.Frame(routes);line.pack(fill='x')
         self._button(line,'Appliquer introduction',self.set_intro)
         self._button(line,'Appliquer suite de victoire',self.set_outcome)
         self._button(line,'Retirer introduction',lambda:self.set_intro(clear=True))
         self._button(line,'Retirer suite',lambda:self.set_outcome(clear=True))
+        self._button(line,'Lier événement stratégique',self.set_strategic_scene)
+        self._button(line,'Délier événement',lambda:self.set_strategic_scene(clear=True))
         ttk.Label(routes,text='Sur une mission avec dialogue de victoire, seul le choix narratif débloque la suite (et non tous les liens classiques).',
                   wraplength=950).pack(anchor='w',padx=5,pady=3)
 
@@ -321,6 +327,15 @@ class StoryEditor:
             project,content,self.after_mission.get(),
             '' if clear else self.after_scene.get()))
 
+    def set_strategic_scene(self, clear=False):
+        key = self.strategic_key.get()
+        if key.count('/') != 1:
+            raise RuleError('Sélectionner un événement de siège.')
+        siege, node = key.split('/', 1)
+        self._apply(lambda project, content: edit.set_strategic_scene(
+            project, content, siege, node,
+            '' if clear else self.strategic_scene.get()))
+
     def select_condition_target(self, scene_id, choice_id):
         """Open the canonical condition definition of a selected graph edge."""
         self.condition_editor.open_choice(scene_id, choice_id)
@@ -358,6 +373,18 @@ class StoryEditor:
         self.cnext_box['values']=['',*scene_ids]
         self.entry_scene_box['values']=['',*scene_ids]
         self.after_scene_box['values']=['',*scene_ids]
+        self.strategic_scene_box['values']=['',*scene_ids]
+        strategic_keys = [
+            siege['id'] + '/' + event['id']
+            for siege in self.owner.project.sieges
+            for event in siege.get('event_graph', [])
+        ]
+        self.strategic_key_box['values'] = strategic_keys
+        if self.strategic_key.get() not in strategic_keys:
+            self.strategic_key.set(strategic_keys[0] if strategic_keys else '')
+        linked = self.owner.project.story.get('after_strategic_event', {})
+        if self.strategic_key.get() in linked:
+            self.strategic_scene.set(linked[self.strategic_key.get()])
         self.entry_campaign_box['values']=[row['id'] for row in self.owner.project.campaigns]
         self.after_mission_box['values']=[row['id'] for row in self.owner.doc().data['missions']]
         self.effect_mission_box['values']=[row['id'] for row in self.owner.doc().data['missions']]
