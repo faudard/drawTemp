@@ -245,7 +245,10 @@ class Campaign:
             apply_talents(content, hero, unit)
             from .character_growth31 import apply_profile
             apply_profile(content, hero, unit)
-            if hero.morale != "steady" and not any(t.startswith("morale:") for t in unit.tags):
+            if hero.morale != "steady":
+                # Roster morale replaces an authored baseline, never appends a
+                # competing tag; battle-time rally tags are never persisted.
+                unit.tags = [t for t in unit.tags if not t.startswith("morale:")]
                 unit.tags.append("morale:" + hero.morale)
             unit.hp, unit.mp = unit.max_hp, unit.max_mp
         by_id = {unit.id: unit for unit in mission_units if unit.team == "player"}
