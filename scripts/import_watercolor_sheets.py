@@ -89,7 +89,7 @@ def build_registry(sprites):
     entries = [{"id": sprite["id"], "kind": "sprite",
                 "path": sprite["path"]} for sprite in sprites]
     for animation_id, (group, poses, millis, loop) in ANIMATIONS.items():
-        entries.append({"id": animation_id, "kind": "animation", "loop": loop,
+        entries.append({"id": "anim_" + animation_id, "kind": "animation", "loop": loop,
                         "frames": [{"sprite": f"{group}_{pose}", "duration_ms": millis}
                                    for pose in poses.split()]})
     return {"version": 1, "entries": entries, "bindings": {}}
