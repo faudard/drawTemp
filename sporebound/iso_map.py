@@ -4,6 +4,8 @@ This is an editor visualization; the tactical board and all pathfinding remain
 orthogonal. Geometry and hit-testing work without importing tkinter.
 """
 from dataclasses import dataclass
+from math import gcd
+from pathlib import Path
 
 SURFACES = frozenset({'grass', 'dirt', 'stone', 'cobble', 'sand',
                       'rock', 'water', 'bridge'})
@@ -15,6 +17,62 @@ SURFACE_COLORS = {
     'water': '#4d92ac', 'bridge': '#c5b496',
 }
 
+
+
+# Original 8 x 2 textured PNG atlas; 96 x 48 per transparent isometric tile.
+ATLAS_MATERIALS = ('grass', 'dirt', 'stone', 'cobble',
+                   'sand', 'rock', 'water', 'bridge')
+ATLAS_VARIANTS = 2
+ATLAS_TILE_SIZE = (96, 48)
+DEFAULT_TERRAIN_ATLAS = Path(__file__).parent / 'content' / 'art' / 'iso' / 'terrain.png'
+
+
+class IsoTerrainAtlas:
+    """Load one PNG once; resize cropped regions at each requested Tk zoom.
+
+    The editor remains functional if the file is absent or Tk cannot display it.
+    Image refs stay alive as long as this loader stays alive.
+    """
+    def __init__(self, canvas, path=DEFAULT_TERRAIN_ATLAS):
+        self.canvas = canvas
+        self.path = Path(path)
+        self._source = None
+        self._tiles = {}
+        self._unavailable = False
+
+    def tile(self, surface, cell_size, variant=0):
+        if self._unavailable or surface not in ATLAS_MATERIALS:
+            return None
+        if type(cell_size) is not int or cell_size < 1:
+            return None
+        variant %= ATLAS_VARIANTS
+        key = surface, cell_size, variant
+        if key in self._tiles:
+            return self._tiles[key]
+        try:
+            import tkinter as tk
+            if self._source is None:
+                self._source = tk.PhotoImage(file=str(self.path), master=self.canvas)
+                required = len(ATLAS_MATERIALS) * ATLAS_VARIANTS * ATLAS_TILE_SIZE[0]
+                if (self._source.width() != required or
+                        self._source.height() != ATLAS_TILE_SIZE[1]):
+                    raise ValueError('Unexpected terrain atlas dimensions')
+            source_width, source_height = ATLAS_TILE_SIZE
+            target_width, target_height = 2*cell_size, cell_size
+            sx = ATLAS_MATERIALS.index(surface) * ATLAS_VARIANTS + variant
+            x = sx * source_width
+            photo = tk.PhotoImage(master=self.canvas,
+                                  width=target_width, height=target_height)
+            factor = gcd(target_width, source_width)
+            photo.tk.call(str(photo), 'copy', str(self._source),
+                          '-from', x, 0, x+source_width, source_height,
+                          '-to', 0, 0, '-zoom', target_width // factor,
+                          '-subsample', source_width // factor)
+            self._tiles[key] = photo
+            return photo
+        except (OSError, ValueError, RuntimeError, ImportError, tk.TclError):
+            self._unavailable = True
+            return None
 
 def _flatten(points):
     return tuple(coord for point in points for coord in point)
@@ -80,7 +138,7 @@ class IsoGeometry:
 
 
 def render_isometric(canvas, board, mission, units, *, cell_size, layers,
-                     selected_cell, selected_tiles, reachable=()):
+                     selected_cell, selected_tiles, reachable=(), atlas=None):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = IsoGeometry(board, cell_size)
     canvas.delete('all')
@@ -122,6 +180,13 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                                                     (p[0], p[1]+drop))),
                                           fill=shade, outline='#615d52', width=1)
         canvas.create_polygon(*_flatten(corners), fill=top, outline='#777c6f', width=1)
+        photo = None
+        if atlas is not None and layers.get('Terrain', True):
+            photo = atlas.tile(surface, cell_size,
+                               variant=(c[0]*37 + c[1]*19) % ATLAS_VARIANTS)
+        if photo is not None:
+            canvas.create_image(cx-cell_size, cy-cell_size/2,
+                                image=photo, anchor='nw')
         if surface == 'water' and layers.get('Terrain', True):
             # Local ripples; the low and high banks are naturally defined by
             # adjacent surface boundaries and the relief geometry.
