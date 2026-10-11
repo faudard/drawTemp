@@ -256,6 +256,22 @@ Voir [contrats multi-fronts](docs/MULTI_FRONT.md).
 - [ ] Gestion de campagne/roster dans l’interface, lancement de batteries d’équilibrage.
 - [ ] Sauvegarde automatique, projets multi-fichiers, distribution Windows/Linux/macOS.
 
+## 3.5 — Direction artistique et présentation
+
+La présentation reste indépendante du moteur Python headless.
+Contrats et direction visuelle : [Direction artistique 3.5](docs/ART_DIRECTION_3_5.md).
+
+- [x] **3.5.1 — Motion & Sprite Runtime** : interpolation de poses entre
+  `BattleFrame` sans mutation, lecteur d'animations du registre d'assets,
+  hooks du Player Tk, fallbacks vectoriels, tests headless.
+- [ ] **3.5.2** Sprites/atlas directionnels pour déplacement et combat.
+- [ ] **3.5.3** Portraits/expressions dans dialogues et cinématiques.
+- [ ] **3.5.4** Décors médiévaux/tilesets et occlusion 2.5D.
+- [ ] **3.5.5** VFX de compétences et transitions de scènes.
+- [ ] **3.5.6** Audio adaptatif, ambiances et synchronisation.
+- [ ] **3.5.7** Comparatif mesuré Tk / pygame-ce / PySide6, sans
+  modification du moteur tactique ni des replays.
+
 ## Plus tard — présentation
 
 - [ ] Choisir un renderer après stabilisation des règles et des contrats d’événements.
