@@ -30,6 +30,25 @@ def write_json(path, data):
             os.unlink(name)
 
 
+def write_bytes(path, data):
+    """Publish an exact binary backup atomically (no JSON reformatting)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    name = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent,
+                                         prefix=path.name + ".", suffix=".tmp",
+                                         delete=False) as out:
+            name = out.name
+            out.write(data)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(name, path)
+    finally:
+        if name and os.path.exists(name):
+            os.unlink(name)
+
+
 def load_battle(path, *, rules=None):
     try:
         return Battle.replay(json.loads(Path(path).read_text(encoding="utf-8")), rules=rules)

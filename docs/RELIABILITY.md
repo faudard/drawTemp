@@ -70,3 +70,12 @@ remain follow-up work.
 The preceding asset PR's macOS/Windows test failure was also corrected on that
 PR: expected temporary paths now use the same canonical resolution as the asset
 resolver. The correction is included in this branch's base.
+
+## Player compatibility and distribution gate
+
+The Player now enforces explicit replay compatibility for content, project and
+rules identities. Legacy v1-to-v2 **envelope** migrations require a separate
+user action; gameplay rules are never implicitly replaced. Backup recovery is
+shown to players, new-game writes are committed before changing the selected
+session, and close is idempotent. See [RELEASE_READINESS.md](RELEASE_READINESS.md)
+for tests, Python wheel build instructions and remaining release blockers.

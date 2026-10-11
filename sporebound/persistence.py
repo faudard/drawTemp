@@ -12,7 +12,7 @@ import re
 
 from .game_session import GameSession, digest
 from .model import RuleError, require
-from .storage import json_text, write_json
+from .storage import json_text, write_bytes, write_json
 
 _CHECKSUM = re.compile(r"^[0-9a-f]{64}$")
 
@@ -138,9 +138,32 @@ class SessionStore:
                 except (RuleError, OSError):
                     pass
                 else:
-                    write_json(self.backup, old_data)
+                    if old_status.migrated_from_v1:
+                        # Exact source bytes matter for forensic recovery and
+                        # user-owned archives with noncanonical JSON layout.
+                        write_bytes(self.backup, self.path.read_bytes())
+                    else:
+                        write_json(self.backup, old_data)
         write_json(self.path, checkpoint)
         return self.path
+
+    def migrate_v1(self, content, project, *, rules=None, expected_campaign_id=None):
+        """Explicit, lossless envelope migration: game_session v1 -> checkpoint v2.
+
+        Only the storage envelope changes; content/project/rules and tactical
+        replay must match exactly. The original v1 bytes remain in .bak.
+        An existing backup is never overwritten during an explicit migration.
+        """
+        require(self.path.is_file(), "No primary v1 save to migrate")
+        require(not self.backup.exists(),
+                "Backup already exists; inspect it before migrating the v1 save")
+        _, outcome = self._read(self.path, content, project, rules=rules)
+        require(outcome.migrated_from_v1, "Save is not a legacy v1 session")
+        if expected_campaign_id is not None:
+            require(outcome.session.campaign_id == expected_campaign_id,
+                    "Save belongs to a different campaign")
+        self.save(outcome.session)
+        return self.load_with_status(content, project, rules=rules)
 
     @staticmethod
     def import_player_slot(project_path, project, content, campaign_id, slot,
