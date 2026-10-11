@@ -39,15 +39,33 @@ Collision-invalid edits are atomically rejected.
 
 ## Current rendering limits
 
-The new preview is vector art composed with Tk Canvas, not a finished
-painted tileset or a true 3D renderer. River connections and cliff faces
-are geometric, with no asset atlas or animated water. A prop occupies one
+The preview now uses an original, bundled transparent **PNG texture atlas**
+(`sporebound/content/art/iso/terrain.png`), with 16 tiles:
+8 materials × 2 deterministic texture variants, each 96 × 48 pixels.
+`IsoTerrainAtlas` crops and caches resized Tk images for the current zoom,
+and falls back to the vector rendering when unavailable. The atlas is
+included in packaged wheels through `pyproject.toml`.
+The textured tiles are a **first integrated art prototype**, not final
+hand-painted illustrations. Cliff faces, tall props and water ripples
+remain vector shapes. There is no animated water. A prop occupies one
 cell; large objects can be authored as multi-cell stamps. The current
 isometric picker targets the top diamond, not a vertical cliff face.
 Playtests continue in the original tactical grid view.
 
-Future steps: import authored sprite atlases, automatic shore transitions,
-multi-cell decorative objects, depth-aware occlusion, and viewport caching.
+Future steps: integrate polished painterly prop/character atlases,
+automatic shoreline and bridge-end transitions, multi-cell decorative
+objects, depth-aware occlusion, and viewport-aware draw caching.
+
+### Atlas replacement contract
+
+Artists can replace the bundled PNG while retaining the material ordering
+`grass, dirt, stone, cobble, sand, rock, water, bridge`, two horizontally
+adjacent variants per material, 96 × 48 pixels per frame (1536 × 48 total),
+and transparent corners around each centered diamond.
+Changing tile geometry or material identifiers requires updating
+`ATLAS_MATERIALS`, `ATLAS_VARIANTS`, `ATLAS_TILE_SIZE` and the tests.
+The source PNG is original to this repository; no sprites were sliced from
+the supplied single-map illustration (which is not a reusable tilesheet).
 
 ## Regression gates
 
