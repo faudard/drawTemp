@@ -126,6 +126,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_jeanne_atlas_gui.py -v
+      - name: Verify entire high-res watercolor PNG survives Tk resizing (PR 71)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_tk_sprite_scaling_3710.py -v
       - name: Collect real Tk renderer evidence (3.7.5)
         run: >-
           xvfb-run -a python3 scripts/collect_renderers_375.py
