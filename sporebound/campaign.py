@@ -224,6 +224,13 @@ class Campaign:
         from .character_growth31 import inject_recruits
         inject_recruits(mission, self.recruits)
         mission_units = mission.units
+        # Authored companions are opt-in: never deploy an unrecruited hero.
+        # Untagged legacy units retain their previous behavior.
+        mission_units[:] = [
+            unit for unit in mission_units
+            if unit.team != "player" or "recruit:" + unit.id not in unit.tags
+            or self.story_flags.get("recruited_" + unit.id) is True
+        ]
         for unit in mission_units:
             if unit.team != "player":
                 continue

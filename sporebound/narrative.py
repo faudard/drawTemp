@@ -68,6 +68,25 @@ def _effect(effect, content):
     elif kind == 'unlock_mission':
         require(set(effect) == {'kind', 'mission'} and effect['mission'] in content.missions,
                 'Unknown mission to unlock')
+    elif kind == 'recruit_hero':
+        require(set(effect) == {'kind', 'hero'}, 'Invalid recruitment effect')
+        _id(effect['hero'], 'Recruit hero')
+        require(any(u.id == effect['hero'] and u.team == 'player'
+                    for mission in content.missions.values() for u in mission.units),
+                'Recruit requires a known player hero')
+        require(len('recruited_' + effect['hero']) <= 64, 'Recruit flag exceeds limits')
+    elif kind == 'grant_item':
+        require(set(effect) == {'kind', 'item', 'quantity'}
+                and effect['item'] in content.equipment
+                and type(effect['quantity']) is int and 1 <= effect['quantity'] <= 10,
+                'Invalid equipment grant')
+    elif kind == 'equip_hero':
+        require(set(effect) == {'kind', 'hero', 'item'}
+                and effect['item'] in content.equipment, 'Invalid equipment assignment')
+        _id(effect['hero'], 'Equip hero')
+        require(any(u.id == effect['hero'] and u.team == 'player'
+                    for mission in content.missions.values() for u in mission.units),
+                'Equip requires a known player hero')
     elif kind == 'gold':
         require(set(effect) == {'kind', 'amount'}
                 and type(effect['amount']) is int and -10000 <= effect['amount'] <= 10000,
@@ -181,6 +200,7 @@ class StoryBook:
     def __init__(self, raw, content, campaigns):
         validate_story(raw, content, campaigns)
         self.raw = deepcopy(raw)
+        self.content = content
         self.scenes = {scene['id']: scene for scene in raw.get('scenes', [])}
         self.entry = dict(raw.get('entry_scenes', {}))
         self.after = dict(raw.get('after_mission', {}))
@@ -242,6 +262,25 @@ class StoryBook:
             elif kind == 'unlock_mission':
                 if effect['mission'] not in updated.unlocked:
                     updated.unlocked.append(effect['mission'])
+            elif kind == 'recruit_hero':
+                hero = effect['hero']
+                require(not updated.story_flags.get('recruited_' + hero, False),
+                        'Hero already recruited')
+                updated.hero(hero)
+                updated.story_flags['recruited_' + hero] = True
+            elif kind == 'grant_item':
+                item = effect['item']
+                total = updated.inventory.get(item, 0) + effect['quantity']
+                require(total <= 1000000, 'Item quantity exceeds limits')
+                updated.inventory[item] = total
+            elif kind == 'equip_hero':
+                hero = effect['hero']
+                gated = any(unit.id == hero and 'recruit:' + hero in unit.tags
+                            for mission in self.content.missions.values()
+                            for unit in mission.units)
+                require(not gated or updated.story_flags.get('recruited_' + hero) is True,
+                        'Hero has not been recruited')
+                updated.equip(self.content, hero, effect['item'])
             elif kind == 'gold':
                 require(0 <= updated.gold + effect['amount'] <= 1000000,
                         'Insufficient gold for story choice')

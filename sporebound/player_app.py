@@ -70,6 +70,7 @@ class PlayerApplication:
         self.selection = (0, 0)
         self.camera = Camera(52, 8, 8)
         self.motion = MotionDirector()
+        self._motion_source = None
         self._motion_frame = None
         self._motion_job = None
         self.canvas = None
@@ -324,6 +325,20 @@ class PlayerApplication:
         self._heading(self.project.campaign(session.campaign_id)["name"],
                       "Or : " + str(session.progress.gold) +
                       "    Missions terminées : " + str(len(session.progress.completed)))
+        # Visible roster: recruitment and equipment have actual tactical effects.
+        if session.progress.heroes:
+            roster = self.ttk.LabelFrame(self.view, text="Équipe et progression", padding=8)
+            roster.pack(fill="x", padx=60, pady=(2, 8))
+            for uid, hero in sorted(session.progress.heroes.items()):
+                if uid.startswith("otage_") or uid == "refugie":
+                    continue
+                gear = ", ".join(hero.equipment.values()) or "sans équipement"
+                self.ttk.Label(roster, text=f"{uid} · niveau {hero.level} · {hero.job} · {gear}").pack(anchor="w")
+            bonds = [(key[6:], value) for key, value in sorted(session.progress.story_flags.items())
+                     if key.startswith("trust_") and type(value) is int]
+            if bonds:
+                self.ttk.Label(roster, text="Relations : " +
+                    ", ".join(f"{name} {value}" for name, value in bonds)).pack(anchor="w")
         scene = session.active_scene()
         if scene:
             self.audio.music_for(f'music_scene_{scene["id"]}', "campaign")
@@ -605,11 +620,14 @@ class PlayerApplication:
                     self._button(actions, "Fin de tour", self._end).pack(side="left", padx=5)
         body = self.ttk.Frame(self.view)
         body.pack(fill="both", expand=True, pady=9)
-        self.canvas = self.tk.Canvas(body, background="#172638", highlightthickness=0)
+        self.canvas = self.tk.Canvas(body, background="#172638", highlightthickness=0,
+                                     takefocus=1)
         self.canvas.pack(side="left", fill="both", expand=True)
         self.renderer = CanvasRenderer(self.canvas, registry=self.registry,
                                        asset_root=self.asset_root)
         self.canvas.bind("<Button-1>", self._select_cell)
+        self.canvas.bind("<Return>", lambda _event: self._safe(self._execute))
+        self.canvas.bind("<space>", lambda _event: self._safe(self._end))
         self.canvas.bind("<MouseWheel>", self._zoom)
         self.canvas.bind("<Button-4>", lambda _: self._zoom_step(1))
         self.canvas.bind("<Button-5>", lambda _: self._zoom_step(-1))
@@ -619,6 +637,9 @@ class PlayerApplication:
                                  bg="#182a40", relief="flat")
         self.info.pack(side="right", fill="y", padx=(9, 0))
         self._redraw()
+        self.ttk.Label(self.view,
+                       text="Carte : Entrée = exécuter • Espace = finir le tour | "
+                            "Rouge = terrain, violet = incantation, orange = charge possible").pack(anchor="w")
         if not session.finalized:
             self._button(self.view, "Abandonner l'opération",
                          self._abandon).pack(anchor="e", pady=4)
@@ -646,6 +667,9 @@ class PlayerApplication:
         skill = skill if skill == "attack" or skill in (
             battle.active.skills if battle.active else ()) else None
         frame = battle_frame(battle, self.selection, skill)
+        if battle is not self._motion_source:
+            self.motion.reset()
+            self._motion_source = battle
         clock_ms = time.monotonic() * 1000
         self.motion.observe(frame, clock_ms)
         self._motion_frame = frame
@@ -658,6 +682,22 @@ class PlayerApplication:
         if frame.forecast:
             rows.extend(["", "Prévisions"])
             rows.extend(str(item) for item in frame.forecast)
+        # Clarity: scheduled casts, armed reactions and hypothetical charges
+        # are not equivalent to certain environmental damage.
+        threats = {}
+        for danger in frame.danger:
+            threats.setdefault(danger["kind"], set()).add(tuple(danger["cell"]))
+        labels = (("hazard", "Danger du terrain (certain)"),
+                  ("cast", "Sort programmé"),
+                  ("prepared", "Réaction armée"),
+                  ("charge", "Charge possible (non garantie)"))
+        rows.extend(["", "Menaces visibles"])
+        rows.extend(f"{title} : {len(threats[kind])} cases"
+                    for kind, title in labels if threats.get(kind))
+        on_cell = [title for kind, title in labels
+                   if tuple(self.selection) in threats.get(kind, set())]
+        rows.append("Case sélectionnée : " +
+                    (", ".join(on_cell) if on_cell else "aucune menace signalée"))
         rows.extend(["", "Prochaines activations (CT estimé)"])
         rows.extend(f"{entry['unit']} : " +
                     ("actif" if entry["active"] else
@@ -678,6 +718,7 @@ class PlayerApplication:
         self.info.configure(state="disabled")
 
     def _select_cell(self, event):
+        self.canvas.focus_set()
         battle = self.player.session.active_battle
         cell = self.camera.screen_to_cell(event.x, event.y)
         if battle.board.contains(cell):
