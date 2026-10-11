@@ -44,7 +44,8 @@ class JeanneAtlasTkTests(unittest.TestCase):
             image = self.renderer.image("portrait", f"Jeanne_{expression}")
             self.assertIsNotNone(image, expression)
             self.assertEqual((image.width(), image.height()), (192, 192))
-        self.assertEqual(len(self.renderer._sources), 2)
+        # One atlas, main portrait and four independent expression portraits.
+        self.assertEqual(len(self.renderer._sources), 6)
 
     def test_player_canvas_draws_real_sprite_and_health_bar(self):
         actor = ActorView("jeanne", "Jeanne", "player", (2, 2), (1, 1),
