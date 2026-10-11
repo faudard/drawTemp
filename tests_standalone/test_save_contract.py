@@ -67,7 +67,11 @@ class SaveContractTests(unittest.TestCase):
             old = GameSession.new(self.content, self.project, "main",
                                   rules=ui.rules, seed=17)
             old.start_mission("garden")
-            old.save(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            # Deliberately noncanonical JSON: migrating must not reformat the
+            # original source in the recovery generation.
+            path.write_text(json.dumps(old.recording(), separators=(",", ":")),
+                            encoding="utf-8")
             original = path.read_bytes()
             with self.assertRaisesRegex(RuleError, "migrate_game"):
                 ui.load_game("main", 1)

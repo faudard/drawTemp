@@ -12,7 +12,7 @@ import re
 
 from .game_session import GameSession, digest
 from .model import RuleError, require
-from .storage import json_text, write_json
+from .storage import json_text, write_bytes, write_json
 
 _CHECKSUM = re.compile(r"^[0-9a-f]{64}$")
 
@@ -138,7 +138,12 @@ class SessionStore:
                 except (RuleError, OSError):
                     pass
                 else:
-                    write_json(self.backup, old_data)
+                    if old_status.migrated_from_v1:
+                        # Exact source bytes matter for forensic recovery and
+                        # user-owned archives with noncanonical JSON layout.
+                        write_bytes(self.backup, self.path.read_bytes())
+                    else:
+                        write_json(self.backup, old_data)
         write_json(self.path, checkpoint)
         return self.path
 
