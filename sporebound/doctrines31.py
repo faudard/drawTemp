@@ -112,6 +112,7 @@ def _bandit(battle, actor):
             + battle.board.tile(cell).cover * .05))
         if fleeing:
             return fleeing
+        return {"kind": "end"}
     # An ambusher prefers cover and waits for an exposed target rather than
     # abandoning it to chase across the open.
     targets = sorted(enemies, key=lambda t: (t.hp, t.id))
@@ -142,8 +143,15 @@ def _spear(battle, actor):
             return {"kind": "prepare", "mode": "phalanx_hold"}
         if "guard" in battle.rules.preparations:
             return {"kind": "prepare", "mode": "guard"}
-    # Do not pursue beyond the defended choke point.
-    return None
+    # Do not pursue beyond the defended choke point. A pair can spend
+    # real actions establishing its phalanx before arming a hold reaction.
+    if (not actor.acted and "formation" in battle.rules.commands
+            and not any(tag.startswith("formation:") for tag in actor.tags)
+            and any(u.alive and u.team == actor.team and u.id != actor.id
+                    and u.weapon == "spear" and distance(actor.pos, u.pos) == 1
+                    for u in battle.units)):
+        return {"kind": "formation", "mode": "phalanx"}
+    return {"kind": "end"}
 
 
 def _crossbow(battle, actor):
