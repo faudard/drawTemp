@@ -211,3 +211,25 @@ jobs:
             ${{ runner.temp }}/player-canvas-377-authored.json
             ${{ runner.temp }}/player-canvas-377-stress.json
           if-no-files-found: error
+      - name: Verify persistent actor sprites, HP and culling in Tk (3.7.8)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_player_actors_378_gui.py -v
+      - name: Measure incremental actors on authentic Jeanne battle (3.7.8)
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_player_canvas_376.py
+          --actors 0 --cell 52 --frames 120
+          --output "${{ runner.temp }}/player-canvas-378-authored.json"
+      - name: Measure incremental actors with 80 presentation-only actors (3.7.8)
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_player_canvas_376.py
+          --actors 80 --cell 52 --frames 120
+          --output "${{ runner.temp }}/player-canvas-378-stress.json"
+      - name: Preserve 3.7.8 incremental actor benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-canvas-378-ubuntu
+          path: |
+            ${{ runner.temp }}/player-canvas-378-authored.json
+            ${{ runner.temp }}/player-canvas-378-stress.json
+          if-no-files-found: error
