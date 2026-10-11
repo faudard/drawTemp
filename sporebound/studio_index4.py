@@ -69,6 +69,9 @@ class StudioIndex:
                         add(key, 'mission:' + s['fronts'][effect['front']],
                             'Effet ' + effect['kind'])
         story = self.project.story
+        for reference, scene_id in story.get('after_strategic_event', {}).items():
+            add('strategic_event:' + reference,
+                'scene:' + scene_id, 'Scène après événement authentifié')
         for cid, sid in story.get('entry_scenes', {}).items():
             add('campaign:' + cid, 'scene:' + sid, 'Introduction')
         for mid, sid in story.get('after_mission', {}).items():
@@ -81,7 +84,9 @@ class StudioIndex:
         bindings = self.project.asset_registry().to_dict()['bindings'].get('sound', {})
         for clip in self.project.cinematics:
             kind = clip['trigger']['kind']
-            source = ('campaign:' if kind == 'campaign_start' else 'mission:') + clip['trigger']['target']
+            source = (('campaign:' if kind == 'campaign_start'
+                       else 'scene:' if kind == 'scene' else 'mission:')
+                      + clip['trigger']['target'])
             add(source, 'cinematic:' + clip['id'], 'Déclenchement cinématique')
             for event in clip['events']:
                 if event['kind'] == 'sound':

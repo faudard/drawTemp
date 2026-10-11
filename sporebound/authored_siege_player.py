@@ -162,6 +162,24 @@ class AuthoredSiegeController:
     def available_choices(self):
         return self.story.choices() if self.story is not None else []
 
+    def pending_cinematic(self):
+        return self.story.next_cinematic() if self.story is not None else None
+
+    def acknowledge_cinematic(self, clip_id):
+        """Record an explicit finished/skipped cutscene at this replay boundary."""
+        require(self.story is not None and self.session is not None,
+                "No active narrative session")
+        previous = self.story.recording()
+        try:
+            self.story.acknowledge_cinematic(
+                clip_id, len(self.session.fronts.history))
+            self.save()
+        except Exception:
+            self.story = SiegeStory.replay(
+                previous, self.project, self.content, self.blueprint,
+                self.session.fronts.recording(), rules=self.rules)
+            raise
+
     def choose_story_option(self, choice):
         require(self.story is not None and self.session is not None,
                 "No active narrative session")

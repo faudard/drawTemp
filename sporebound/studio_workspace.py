@@ -72,6 +72,9 @@ class ProjectWorkspaceTab:
         ttk.Button(controls, text='Nouvelle campagne',
                    command=lambda: self.owner._run(self.new_campaign)).pack(
                        fill='x', padx=8, pady=4)
+        ttk.Button(controls, text='Assistant siège (3 missions)',
+                   command=lambda: self.owner._run(self.open_siege_wizard)).pack(
+                       fill='x', padx=8, pady=4)
         ttk.Button(controls, text='Vérifier projet et assets',
                    command=lambda: self.owner._run(self.validate_all)).pack(
                        fill='x', padx=8, pady=4)
@@ -275,6 +278,11 @@ class ProjectWorkspaceTab:
         self.owner.refresh()
         self.tree.selection_set('campaign:' + cid)
         self.tree.see('campaign:' + cid)
+
+    def open_siege_wizard(self):
+        siege = self.owner.siege_studio
+        self.notebook.select(siege.tab)
+        siege.pages.select(siege.flow_page)
 
     def validate_all(self):
         issues = self.model().diagnostics(self.owner.project_path.parent)

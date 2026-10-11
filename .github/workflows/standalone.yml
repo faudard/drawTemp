@@ -130,6 +130,18 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_routes_diplomacy_gui.py -v
+      - name: Exercise Game Studio 4 cutscenes and resumed dialogue in Player
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_scene_cinematics_gui.py -v
+      - name: Exercise Game Studio 4 guided campaign / siege wizard
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_studio_siege_flow_gui.py -v
+      - name: Exercise Game Studio 4 strategic-narrative authoring in Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_strategic_narrative_bridge_gui.py -v
       - name: Exercise 2.5.4.5 Strategic Event Graph UI and journaled replay
         env:
           SPOREBOUND_GUI_SMOKE: '1'
