@@ -32,6 +32,16 @@ class SiegeStory:
         self.baseline = {"at": len(fronts.history), "winners": sorted(victories(fronts))}
         self.won = set(self.baseline["winners"])
         self.pending_missions = []
+        self.mapped_nodes = {
+            ref.split('/', 1)[1]: scene
+            for ref, scene in self.book.after_strategic_event.items()
+            if ref.startswith(blueprint['id'] + '/')
+        }
+        # Legacy projects retain v1 recordings and digests unchanged.
+        self.VERSION = 2 if self.mapped_nodes else 1
+        self.seen_strategic = (set(fronts.fired_graph)
+                               if self.baseline['at'] else set())
+        self.pending_scenes = []
         # Legacy pre-2.8.3 checkpoints have no chronicle; do not retroactively
         # play an intro after combat has already begun.
         if self.baseline["at"]:
@@ -41,6 +51,19 @@ class SiegeStory:
                 if mid not in self.progress.completed:
                     self.progress.completed.append(mid)
 
+    def _queue_scene(self, scene):
+        if self.progress.story_pending:
+            self.pending_scenes.append(scene)
+        else:
+            self.progress.story_pending = scene
+
+    def _strategic(self, node, at):
+        require(node in self.mapped_nodes and node not in self.seen_strategic,
+                'Unverified or duplicate strategic narrative trigger')
+        self.seen_strategic.add(node)
+        self._queue_scene(self.mapped_nodes[node])
+        self.events.append({'kind': 'strategic', 'node': node, 'at': at})
+
     def _victory(self, front, at):
         require(front not in self.won, "Narrative front was already won")
         self.won.add(front)
@@ -48,7 +71,9 @@ class SiegeStory:
         if mission not in self.progress.completed:
             self.progress.completed.append(mission)
         if mission in self.book.after:
-            if self.progress.story_pending:
+            if self.VERSION == 2:
+                self._queue_scene(self.book.after[mission])
+            elif self.progress.story_pending:
                 self.pending_missions.append(mission)
             else:
                 self.book.after_victory(self.progress, mission)
@@ -57,6 +82,16 @@ class SiegeStory:
     def sync(self, fronts):
         index = len(fronts.history)
         require(index >= self.baseline["at"], "Siege clock cannot move backwards")
+        if self.VERSION == 2:
+            # Only one-shot, authenticated graph events may advance the story.
+            for event in fronts.timeline.events:
+                node = event.get('id')
+                if (event.get('kind') == 'strategic_event_fired'
+                        and node in self.mapped_nodes
+                        and node not in self.seen_strategic):
+                    require(node in fronts.fired_graph,
+                            'Strategic narrative event lacks tactical proof')
+                    self._strategic(node, index)
         for front in sorted(victories(fronts) - self.won):
             self._victory(front, index)
 
@@ -71,26 +106,32 @@ class SiegeStory:
                 "Invalid narrative operation index")
         self.progress = self.book.choose(self.progress, choice)
         self.events.append({"kind": "choice", "choice": choice, "at": at})
-        if not self.progress.story_pending and self.pending_missions:
-            self.book.after_victory(self.progress, self.pending_missions.pop(0))
+        if not self.progress.story_pending:
+            if self.VERSION == 2 and self.pending_scenes:
+                self.progress.story_pending = self.pending_scenes.pop(0)
+            elif self.pending_missions:
+                self.book.after_victory(self.progress, self.pending_missions.pop(0))
         return self.active_scene()
 
     def recording(self):
+        state = {'progress': asdict(self.progress),
+                 'pending_missions': self.pending_missions,
+                 'won': sorted(self.won)}
+        if self.VERSION == 2:
+            state['seen_strategic'] = sorted(self.seen_strategic)
+            state['pending_scenes'] = list(self.pending_scenes)
         body = {"version": self.VERSION,
                 "project_digest": digest(self.project.to_dict()),
                 "baseline": deepcopy(self.baseline),
                 "events": deepcopy(self.events),
-                "state_digest": digest({
-                    "progress": asdict(self.progress),
-                    "pending_missions": self.pending_missions,
-                    "won": sorted(self.won)})}
+                "state_digest": digest(state)}
         return {**body, "digest": digest(body)}
 
     @classmethod
     def replay(cls, record, project, content, blueprint, tactical, *, rules=None):
         require(isinstance(record, dict) and set(record) == {
             "version", "project_digest", "baseline", "events",
-            "state_digest", "digest"} and record["version"] == cls.VERSION,
+            "state_digest", "digest"} and record["version"] in (1, 2),
                 "Unsupported siege narrative recording")
         require(record["digest"] == digest({key: value for key, value in
                 record.items() if key != "digest"}), "Narrative checksum mismatch")
@@ -118,7 +159,8 @@ class SiegeStory:
         require(sorted(victories(prefix(baseline["at"]))) == baseline["winners"],
                 "Narrative initial victories mismatch")
         story = cls(project, content, blueprint, prefix(baseline["at"]))
-        require(story.baseline == baseline, "Narrative baseline mismatch")
+        require(story.baseline == baseline and story.VERSION == record["version"],
+                "Narrative version or baseline differs from saved campaign")
         events = record["events"]
         require(isinstance(events, list) and len(events) <= 20000,
                 "Invalid narrative event journal")
@@ -140,6 +182,15 @@ class SiegeStory:
                         and event["front"] not in victories(prefix(index - 1)),
                         "Narrative victory has no newly verified battle result")
                 story._victory(event["front"], index)
+            elif event.get("kind") == "strategic":
+                require(set(event) == {"kind", "node", "at"}
+                        and story.VERSION == 2
+                        and index > baseline["at"]
+                        and event["node"] in story.mapped_nodes
+                        and event["node"] in prefix(index).fired_graph
+                        and event["node"] not in prefix(index-1).fired_graph,
+                        "Strategic scene has no authenticated graph firing")
+                story._strategic(event["node"], index)
             elif event.get("kind") == "choice":
                 require(set(event) == {"kind", "choice", "at"}
                         and isinstance(event["choice"], str),
@@ -152,5 +203,9 @@ class SiegeStory:
                 "Tactical actions occurred while a dialogue was pending")
         require(victories(prefix(len(operations))) <= story.won,
                 "A real victory was omitted from narrative chronology")
+        if story.VERSION == 2:
+            require(set(story.mapped_nodes) & set(prefix(len(operations)).fired_graph)
+                    <= story.seen_strategic,
+                    "A strategic narrative event is missing from the journal")
         require(story.recording() == record, "Narrative replay state mismatch")
         return story
