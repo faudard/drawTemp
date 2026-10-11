@@ -236,6 +236,8 @@ class CinematicStudio:
             return
         targets = ([c["id"] for c in self._project().campaigns]
                    if kind == "campaign_start" else
+                   [s["id"] for s in self._project().story.get("scenes", [])]
+                   if kind == "scene" else
                    [m["id"] for m in self.owner.doc().data["missions"]])
         self.target_box["values"] = targets
         if self.vars["target"].get() not in targets:

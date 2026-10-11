@@ -105,7 +105,8 @@ class GameProject:
         from .siege_authoring import validate_all
         validate_all(self.sieges, content, self.campaigns)
         from .cinematics import validate_cinematics
-        validate_cinematics(self.cinematics, content, self.campaigns)
+        validate_cinematics(self.cinematics, content, self.campaigns,
+                            self.story.get("scenes", []))
         from .narrative import validate_story
         validate_story(self.story, content, self.campaigns)
         # Only a verified node in the authored siege may trigger a narrative scene.
