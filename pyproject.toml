@@ -16,4 +16,4 @@ sporebound = "sporebound.__main__:main"
 include = ["sporebound*"]
 
 [tool.setuptools.package-data]
-sporebound = ["content/*.json", "content/art/jeanne/*.png"]
+sporebound = ["content/*.json", "content/art/jeanne/*.png", "content/art/iso/*.png"]

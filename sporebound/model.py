@@ -36,6 +36,9 @@ class Tile:
     blocked: bool = False
     cover: int = 0
     hazard: int = 0
+    # Presentation-only: simulation still uses height, cost and blocked.
+    surface: str = 'grass'
+    feature: str = ''
 
 
 @dataclass
@@ -288,6 +291,11 @@ class Content:
                 integer(t.cost, 1, 99, "tile.cost")
                 integer(t.hazard, 0, 10000, "tile.hazard")
                 integer(t.cover, 0, 100, "tile.cover")
+                from .iso_map import SURFACES, FEATURES
+                require(type(t.surface) is str and t.surface in SURFACES,
+                        "Invalid tile surface")
+                require(type(t.feature) is str and t.feature in FEATURES,
+                        "Invalid tile feature")
             ids, occupied = set(), set()
             for u in m.units:
                 require(u.id and u.id not in ids, f"Duplicate/empty unit: {u.id}")
