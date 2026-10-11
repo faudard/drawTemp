@@ -268,5 +268,101 @@ class MapEditorGUITests(unittest.TestCase):
                 dialog_error.assert_not_called()
 
 
+
+    def test_flood_fill_and_eyedroppers_in_orthographic_and_iso_modes(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.iso_map import IsoGeometry
+        from sporebound.model import Content
+
+        def descendants(parent):
+            for widget in parent.winfo_children():
+                yield widget
+                yield from descendants(widget)
+
+        with TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'fill.json'
+            errors = []
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = lambda *err: errors.append(err)
+                    root.update()
+                    widgets = list(descendants(root))
+                    canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
+                    tool = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                and 'Remplissage' in w.cget('values'))
+                    brush = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                 and 'zone+' in w.cget('values'))
+                    surface = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                   and 'bridge' in w.cget('values'))
+                    feature = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                   and 'arch' in w.cget('values'))
+                    buttons = {w.cget('text'): w for w in widgets
+                               if isinstance(w, ttk.Button)}
+
+                    def click(x, y):
+                        canvas.event_generate('<Button-1>', x=x, y=y)
+                        canvas.event_generate('<ButtonRelease-1>', x=x, y=y)
+                        root.update()
+
+                    surface.set('stone')
+                    surface.event_generate('<<ComboboxSelected>>')
+                    root.update()
+                    click(4*54+12, 4*54+12)
+                    click(5*54+12, 4*54+12)
+                    surface.set('dirt')
+                    surface.event_generate('<<ComboboxSelected>>')
+                    buttons['Remplir sol'].invoke()
+                    click(4*54+12, 4*54+12)
+                    buttons['Pipette sol'].invoke()
+                    click(4*54+12, 4*54+12)
+                    self.assertEqual(brush.get(), 'surface:dirt')
+                    self.assertEqual(tool.get(), 'Pinceau')
+
+                    feature.set('arch')
+                    feature.event_generate('<<ComboboxSelected>>')
+                    click(6*54+12, 4*54+12)
+                    buttons['Pipette décor'].invoke()
+                    click(6*54+12, 4*54+12)
+                    self.assertEqual(brush.get(), 'feature:arch')
+                    buttons['Pipette décor'].invoke()
+                    click(4*54+12, 4*54+12)
+                    self.assertEqual(brush.get(), 'feature-erase')
+
+                    toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
+                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    toggle.invoke()
+                    root.update()
+                    board = next(iter(Content.load(DEFAULT_CONTENT).missions.values())).board
+                    geo = IsoGeometry(board, 54)
+                    px, py = geo.center((4, 4))
+                    canvas.xview_moveto(max(0.0, (px-canvas.winfo_width()/2)/geo.width))
+                    canvas.yview_moveto(max(0.0, (py-canvas.winfo_height()/2)/geo.height))
+                    root.update()
+                    buttons['Pipette sol'].invoke()
+                    click(int(px-canvas.canvasx(0)), int(py-canvas.canvasy(0)))
+                    self.assertEqual(brush.get(), 'surface:dirt')
+                    buttons['Enregistrer sous'].invoke()
+                    saved = json.loads(output.read_text(encoding='utf-8'))
+                    tiles = {tuple(t['pos']): t
+                             for t in saved['missions'][0]['board']['tiles']}
+                    self.assertEqual(tiles[(4, 4)]['surface'], 'dirt')
+                    self.assertEqual(tiles[(5, 4)]['surface'], 'dirt')
+                    self.assertEqual(tiles.get((5, 5), {}).get('surface', 'grass'),
+                                     'grass')
+                    self.assertEqual(tiles[(6, 4)]['feature'], 'arch')
+                    self.assertEqual(errors, [])
+                finally:
+                    root.destroy()
+
+            with patch.object(tk.Tk, 'mainloop', drive), \\
+                 patch('tkinter.filedialog.asksaveasfilename',
+                       return_value=str(output)), \\
+                 patch('tkinter.messagebox.showerror') as dialog_error:
+                launch(DEFAULT_CONTENT)
+                dialog_error.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
