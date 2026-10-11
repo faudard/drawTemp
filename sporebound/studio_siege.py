@@ -97,6 +97,7 @@ class SiegeStudio:
         self._button(header, "Prologue / fins", lambda: self._open_tab("Scénario & dialogues"))
 
         pages = ttk.Notebook(root)
+        self.pages = pages
         pages.pack(fill="both", expand=True, padx=8, pady=4)
         fronts = ttk.Frame(pages)
         links = ttk.Frame(pages)
@@ -119,6 +120,7 @@ class SiegeStudio:
         from .studio_routes import RoutesStudio
         self.routes_editor = RoutesStudio(self, route_policy)
         pages.add(strategic, text="Graphe stratégique")
+        self.strategic_page = strategic
         from .studio_strategic_events import StrategicEventsStudio
         self.strategic_editor = StrategicEventsStudio(self, strategic)
 
