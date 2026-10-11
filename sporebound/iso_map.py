@@ -51,6 +51,10 @@ class IsoTerrainAtlas:
             return self._tiles[key]
         try:
             import tkinter as tk
+        except ImportError:
+            self._unavailable = True
+            return None
+        try:
             if self._source is None:
                 self._source = tk.PhotoImage(file=str(self.path), master=self.canvas)
                 required = len(ATLAS_MATERIALS) * ATLAS_VARIANTS * ATLAS_TILE_SIZE[0]
