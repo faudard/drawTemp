@@ -20,6 +20,18 @@ _STRUCTURE_PLANS = {
     'Ruines': ('W.WW', 'R..R', 'W.DW'),
 }
 STRUCTURE_NAMES = tuple(_STRUCTURE_PLANS)
+# The alternative door uses an existing walkable floor cell; nothing new
+# enters Content, navigation or the serialized tile schema.
+STRUCTURE_DOOR_SLOTS = {
+    'Maison': ((1, 2), (2, 2)),
+    'Ruines': ((2, 2), (1, 2)),
+}
+
+
+def door_slots(name):
+    return STRUCTURE_DOOR_SLOTS.get(name, ((0, 0),))
+
+
 
 
 def _tile_for_token(token):
@@ -40,18 +52,30 @@ def _tile_for_token(token):
     raise RuleError('Structure inconnue ou invalide')
 
 
-def structure_template(name, quarter_turns=0):
+def structure_template(name, quarter_turns=0, *, door_slot=0):
     """Return a fresh TerrainClipboard suitable for preview, rotation or paste."""
     require(isinstance(name, str) and name in _STRUCTURE_PLANS,
             'Unknown structure preset')
     require(type(quarter_turns) is int and 0 <= quarter_turns <= 3,
             'Rotation must be 0, 1, 2 or 3 quarter turns')
+    require(type(door_slot) is int and 0 <= door_slot < len(door_slots(name)),
+            'Invalid structure door slot')
     rows = _STRUCTURE_PLANS[name]
     width, height = len(rows[0]), len(rows)
     require(all(len(row) == width for row in rows),
             'Inconsistent structure dimensions')
     offsets = tuple((x, y) for y in range(height) for x in range(width))
-    terrain = tuple(_tile_for_token(rows[y][x]) for x, y in offsets)
+    default_entry = door_slots(name)[0] if name in STRUCTURE_DOOR_SLOTS else None
+    alternate_entry = door_slots(name)[door_slot] if default_entry else None
+    def token(x, y):
+        current = rows[y][x]
+        if default_entry is not None and door_slot:
+            if (x, y) == default_entry:
+                return '.'
+            if (x, y) == alternate_entry:
+                return 'D'
+        return current
+    terrain = tuple(_tile_for_token(token(x, y)) for x, y in offsets)
     clip = _validate_clipboard(TerrainClipboard(width, height, offsets, terrain, ()))
     for _ in range(quarter_turns):
         clip = transform_terrain(clip, 'rotate_cw')
@@ -105,8 +129,8 @@ def validate_structure_placement(data, mission_id, clip, anchor):
     return destination
 
 
-def place_structure(data, mission_id, name, anchor, quarter_turns=0):
+def place_structure(data, mission_id, name, anchor, quarter_turns=0, *, door_slot=0):
     """Commit all cells in one content-validation transaction or none."""
-    clip = structure_template(name, quarter_turns)
+    clip = structure_template(name, quarter_turns, door_slot=door_slot)
     validate_structure_placement(data, mission_id, clip, anchor)
     return paste_terrain(data, mission_id, clip, anchor)
