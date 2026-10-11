@@ -31,7 +31,12 @@ class CanvasRenderer:
         except (RuleError, OSError, RuntimeError, ValueError):
             return None
 
-    def draw(self, frame, camera):
+    def draw(self, frame, camera, *, poses=None):
+        """Render cosmetic interpolations over the authoritative frame.
+
+        poses is optional and read-only; selection, health, damage and threat
+        tiles always come from frame, never the animated positions.
+        """
         canvas = self.canvas
         canvas.delete("all")
         if frame is None:
@@ -84,7 +89,10 @@ class CanvasRenderer:
                                text=obj.id[:10], fill="#ffffff",
                                font=("TkDefaultFont", max(7, cell // 7)))
         for actor in frame.actors:
-            x, y = camera.cell_to_screen(actor.pos)
+            pose = poses.get(actor.id) if poses is not None else None
+            # Interpolation never changes the engine unit position or hit cell.
+            x, y = camera.cell_to_screen(
+                (pose.x, pose.y) if pose is not None else actor.pos)
             width, height = actor.footprint
             w, h = cell * width, cell * height
             if actor.active:
@@ -98,10 +106,16 @@ class CanvasRenderer:
                 if not actor.alive:
                     color = "#697383"
                 canvas.create_oval(x + 7, y + 7, x + w - 7, y + h - 8,
-                                   fill=color, outline="#1c293a", width=2)
+                                   fill=color,
+                                   outline="#fff1a5" if pose is not None and pose.action == "hit"
+                                   else "#1c293a",
+                                   width=3 if pose is not None and pose.action == "hit" else 2)
                 canvas.create_text(x + w / 2, y + h / 2,
                                    text=actor.name[:max(2, cell // 9)],
                                    fill="#ffffff", font=("TkDefaultFont", max(9, cell // 5), "bold"))
+            if pose is not None and pose.action == "attack":
+                canvas.create_oval(x + w / 3, y + h / 3, x + 2 * w / 3,
+                                   y + 2 * h / 3, outline="#fcd87b", width=3)
             # Health bar is a read-only visual of actor data.
             pct = max(0, actor.hp) / max(1, actor.max_hp)
             canvas.create_rectangle(x + 5, y + h - 7, x + w - 5, y + h - 3,
