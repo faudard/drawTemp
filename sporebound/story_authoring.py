@@ -126,6 +126,24 @@ def set_mission_outcome(project, content, mission_id, scene_id=''):
     return _edit(project, content, change)
 
 
+def set_strategic_scene(project, content, siege_id, node_id, scene_id=''):
+    """Link a verified, authored siege node to a scene in one undoable edit."""
+    _id(siege_id, 'Siege id')
+    _id(node_id, 'Strategic node id')
+    reference = siege_id + '/' + node_id
+
+    def change(story):
+        mapping = story.setdefault('after_strategic_event', {})
+        if scene_id:
+            mapping[reference] = scene_id
+        else:
+            mapping.pop(reference, None)
+        if not mapping:
+            story.pop('after_strategic_event', None)
+
+    return _edit(project, content, change)
+
+
 def link_choice(project, content, scene_id, choice_id, target_id=''):
     """Connect/disconnect a choice to a reusable scene, preserving other edges."""
     def change(story):
