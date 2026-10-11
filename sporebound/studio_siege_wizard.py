@@ -91,7 +91,9 @@ class SiegeFlowWizard:
         bar.pack(fill='x', padx=8, pady=6)
         self._button(bar, 'Vérifier préparation', self.preview)
         self._button(bar, 'Préparer déploiements', self.prepare)
-        self._button(bar, 'Ouvrir carte', self.open_map)
+        self._button(bar, 'Carte remparts', lambda: self.open_map('walls'))
+        self._button(bar, 'Carte porte', lambda: self.open_map('gate'))
+        self._button(bar, 'Carte trône', lambda: self.open_map('throne'))
         self._button(bar, 'Créer siège guidé', self.create)
         self._button(bar, 'Scénario et fins', lambda:
                      self.siege._open_tab('Scénario & dialogues'))
@@ -126,7 +128,9 @@ class SiegeFlowWizard:
         missions = sorted(self.owner._content().missions)
         self.inputs['campaign']['values'] = campaigns
         if self.vars['campaign'].get() not in campaigns:
-            self.vars['campaign'].set(campaigns[0] if campaigns else '')
+            active = self.owner.campaign_id.get()
+            self.vars['campaign'].set(active if active in campaigns else
+                                       (campaigns[0] if campaigns else ''))
         for front in FRONTS:
             self.inputs[front]['values'] = missions
         # Prefer the active mission for the approach, but never silently
@@ -181,9 +185,11 @@ class SiegeFlowWizard:
         self.owner.refresh()
         self.preview()
 
-    def open_map(self):
-        mid = self.vars['walls'].get()
-        require(mid in self.owner._content().missions, 'Choisir une mission de remparts.')
+    def open_map(self, front):
+        require(front in FRONTS, 'Front inconnu.')
+        mid = self.vars[front].get()
+        require(mid in self.owner._content().missions,
+                'Sélectionner une mission existante pour ' + front)
         self.owner.select_mission(mid)
         self.siege._open_tab('Carte et combat')
 
