@@ -951,7 +951,7 @@ def launch(path):
     mission_box.pack(side='left')
     mission_box.bind('<<ComboboxSelected>>', lambda e: stop())
     ttk.Label(controls,text='Outil').pack(side='left')
-    ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=11,
+    ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=15,
                  values=['Pinceau','Rectangle','Sélection','Collage',
                          'Remplissage','Pipette sol','Pipette décor']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
