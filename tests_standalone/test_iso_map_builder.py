@@ -105,14 +105,14 @@ class IsometricMapAuthoringTests(unittest.TestCase):
         from sporebound.iso_map import (ATLAS_MATERIALS, ATLAS_TILE_SIZE,
                                        ATLAS_VARIANTS, DEFAULT_TERRAIN_ATLAS)
         png = DEFAULT_TERRAIN_ATLAS.read_bytes()
-        self.assertEqual(png[:8], b'\\x89PNG\\r\\n\\x1a\\n')
+        self.assertEqual(png[:8], bytes((137, 80, 78, 71, 13, 10, 26, 10)))
         length = struct.unpack('>I', png[8:12])[0]
         self.assertEqual(length, 13)
         width, height = struct.unpack('>II', png[16:24])
         self.assertEqual((width, height),
                          (len(ATLAS_MATERIALS)*ATLAS_VARIANTS*ATLAS_TILE_SIZE[0],
                           ATLAS_TILE_SIZE[1]))
-        self.assertEqual(png[24:26], b'\\x08\\x06')  # RGBA
+        self.assertEqual(png[24:26], bytes((8, 6)))  # 8 bit RGBA
         chunks = []
         pos = 8
         while pos < len(png):
