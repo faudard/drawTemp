@@ -155,7 +155,7 @@ class PlayerSession:
                 or any(tactic in {"chain_strike", "trio_burst"}
                        for tactic in unit.tactics)
                 or any(tag in {"medic", "healer", "protector"}
-                       or tag.startswith(("formation:", "boss_phase:", "squad:", "doctrine:"))
+                       or tag.startswith(("formation:", "boss_phase:", "squad:", "doctrine:", "morale:"))
                        for tag in unit.tags)
                 for unit in mission.units)
             or any(action.get("kind") == "boss_phase"

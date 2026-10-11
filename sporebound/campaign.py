@@ -245,6 +245,11 @@ class Campaign:
             apply_talents(content, hero, unit)
             from .character_growth31 import apply_profile
             apply_profile(content, hero, unit)
+            if hero.morale != "steady":
+                # Roster morale replaces an authored baseline, never appends a
+                # competing tag; battle-time rally tags are never persisted.
+                unit.tags = [t for t in unit.tags if not t.startswith("morale:")]
+                unit.tags.append("morale:" + hero.morale)
             unit.hp, unit.mp = unit.max_hp, unit.max_mp
         by_id = {unit.id: unit for unit in mission_units if unit.team == "player"}
         for key, tactics in self.prepared_tactics.items():
@@ -267,12 +272,18 @@ class Campaign:
         rules = battle.content.tactic_unlocks if tactic_rules is None else tactic_rules
         first_battle = battle.battle_id not in self.tracked_battles
         self.record_bonds(battle)
-        if first_battle and self.wound_policy != "off":
+        if first_battle and (self.wound_policy != "off" or "rally" in battle.rules.commands):
             from .character_growth31 import apply_battle_history
             for unit in battle.units:
                 if unit.team == "player":
                     apply_battle_history(self.hero(unit.id), unit,
                                          battle.result, self.wound_policy)
+                    if "rally" in battle.rules.commands and battle.result == "defeat":
+                        from .morale31 import STATES, morale_snapshot
+                        hero = self.hero(unit.id)
+                        observed = morale_snapshot(battle, unit)["state"]
+                        if STATES.index(observed) > STATES.index(hero.morale):
+                            hero.morale = observed
         if battle.result != "victory" or battle.mission.id in self.completed:
             if rules:
                 self.evaluate_tactic_unlocks(rules, battle.mission.id, battle.events, ruleset=battle.rules)

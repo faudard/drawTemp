@@ -44,7 +44,7 @@ def tactical_intents(battle, *, max_cells=1024):
     """
     result = {"timeline": activation_timeline(battle),
               "casts": [], "charges": [], "prepared": [],
-              "danger": [], "doctrines": [], "truncated": False}
+              "danger": [], "doctrines": [], "morale": [], "truncated": False}
     if battle.result or battle.deploying:
         return result
 
@@ -56,10 +56,13 @@ def tactical_intents(battle, *, max_cells=1024):
                 "amount": tile.hazard, "certainty": "certain"}
 
     from .doctrines31 import doctrine
+    from .morale31 import morale_snapshot
     for actor in sorted(battle.units, key=lambda u: u.id):
         if not actor.alive:
             continue
         role = doctrine(actor)
+        if role or any(t.startswith("morale:") for t in actor.tags):
+            result["morale"].append(morale_snapshot(battle, actor))
         if role:
             result["doctrines"].append({"unit": actor.id, "doctrine": role,
                                          "state": "reloading" if "reload:empty" in actor.tags else "ready",

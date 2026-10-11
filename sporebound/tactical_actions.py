@@ -13,6 +13,13 @@ def tactical_action_options(battle):
     if actor is None or actor.team != "player" or battle.result or battle.deploying:
         return []
     options = []
+    if ("rally" in battle.rules.commands and "leader" in actor.tags
+            and not actor.acted and not battle.status_blocks(actor, "act")):
+        from .morale31 import morale_snapshot
+        options.extend("rally:" + ally.id for ally in sorted(battle.units, key=lambda u: u.id)
+                       if ally.id != actor.id and ally.team == actor.team and ally.alive
+                       and distance(actor.pos, ally.pos) <= 2
+                       and morale_snapshot(battle, ally)["can_be_rallied"])
     if ("reload" in battle.rules.commands and
             "reload:empty" in actor.tags and not actor.acted):
         options.append("reload")
@@ -52,6 +59,8 @@ def tactical_action_options(battle):
 
 def tactical_command(option, cell):
     """Convert one explicit widget selection into a normal Battle command."""
+    if option.startswith("rally:"):
+        return {"kind": "rally", "target": option[len("rally:"):]}
     if option == "reload":
         return {"kind": "reload"}
     if option == "charge":
