@@ -177,6 +177,8 @@ def launch(path):
     campaign_battle = False
     selected_cell = (0, 0)
     stroke_cells = []
+    stroke_before = None
+    stroke_redo = None
     rectangle_anchor = None
     selected_tiles = set()
     selection_mission = ''
@@ -557,7 +559,7 @@ def launch(path):
 
     @guarded
     def click(event):
-        nonlocal selected_cell, stroke_cells, rectangle_anchor, selection_additive
+        nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive
         canvas.focus_set()
         stroke_cells = []
         selected_cell = event_cell(event)
@@ -578,6 +580,8 @@ def launch(path):
         else:
             rectangle_anchor = None
             stroke_cells = [selected_cell]
+            stroke_before = deepcopy(doc.data)
+            stroke_redo = list(doc.redo_stack)
             # Click immediately applies the first cell (legacy Tk interaction).
             paint_cells([selected_cell], brush)
 
@@ -609,7 +613,7 @@ def launch(path):
 
     @guarded
     def end_stroke(_event):
-        nonlocal selected_cell, stroke_cells, rectangle_anchor, selected_tiles
+        nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selected_tiles
         tool, brush = tool_var.get(), active_brush()
         if not battle and tool == 'Sélection' and rectangle_anchor is not None and stroke_cells:
             cells = cells_in_rectangle(doc.data, mission_var.get(), rectangle_anchor,
@@ -628,13 +632,27 @@ def launch(path):
                                                           rectangle_anchor, end, brush))
         elif not battle and tool == 'Pinceau' and brush not in ('unit', 'object') and len(stroke_cells) > 1:
             selected_cell = stroke_cells[-1]
-            # Keep the entire drag in one undo entry, including its first click.
-            original = deepcopy(doc.undo_stack[-1])
-            previous = doc.data
-            paint_cells(stroke_cells[1:], brush)
-            if doc.data is not previous:
-                doc.undo_stack[-1] = original
+            # Validate the complete stroke from the unmodified snapshot. An
+            # invalid destination rolls back the first-click preview too.
+            try:
+                temporary = Document(Content.from_dict(
+                    stroke_before, rules=authored_rules_for_document(stroke_before)))
+                temporary.paint_many(mission_var.get(), stroke_cells, brush)
+            except (RuleError, ValueError, KeyError):
+                doc.data = stroke_before
+                if doc.undo_stack:
+                    doc.undo_stack.pop()
+                doc.redo_stack = stroke_redo
+                refresh_source()
+                refresh()
+                raise
+            else:
+                doc.data = temporary.data
+                refresh_source()
+                refresh()
         stroke_cells = []
+        stroke_before = None
+        stroke_redo = None
         rectangle_anchor = None
         canvas.delete('stroke_preview')
 
