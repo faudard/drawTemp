@@ -30,3 +30,36 @@ review transparent PNGs, especially fine weapon shafts, hair,
 separated objects, VFX glow and frames near cell boundaries.
 Use `--no-matte` for unaltered cell crops when retouching.
 The runtime/headless engine requires none of the above image libraries.
+
+## Validation and local Player integration
+
+`AssetRegistry` requires unique IDs across sprites **and** animations, so the
+15 animation IDs use the `anim_` prefix (for example `anim_jeanne_walk`).
+The importer tests instantiate `AssetRegistry` to prevent regressions.
+
+The artwork ZIP is a **separate binary deliverable** and is not yet in this
+GitHub branch. With the **corrected v2 pack** downloaded from the ChatGPT
+conversation, launch a demonstrator without modifying the canonical campaign:
+
+```sh
+python scripts/install_watercolor_pack.py \
+  --bundle /path/to/drawTemp_assets_Jeanne_88_sprites_v2.zip \
+  --content sporebound/content/jeanne.json \
+  --project sporebound/content/jeanne.game.json \
+  --output /tmp/jeanne-art-demo
+python -m sporebound player \
+  --content /tmp/jeanne-art-demo/jeanne.json \
+  --project /tmp/jeanne-art-demo/jeanne.game.json
+```
+
+The installer validates the ZIP paths, image signatures, 88 sprites, 15
+animations and all registry references; preserves the source project and
+savegames; copies the images and game JSON into a standalone directory;
+and binds Jeanne, her allies, and enemy soldier slots to the Tk Player.
+No additional Pillow/OpenCV dependencies are needed for **installation**.
+
+**Quality gate:** These are single-view preliminary cutouts. Some weapon
+shafts, feet and props cross source-grid boundaries and are clipped or
+contaminated by adjacent illustrations. Manual cleanup is required before
+marking this set production-ready. The branch remains draft until 88 PNGs are
+actually committed and the in-game rendering is reviewed.
