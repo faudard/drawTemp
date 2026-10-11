@@ -27,7 +27,7 @@ class JeanneArtGateTests(unittest.TestCase):
         portrait = CONTENT / "art/jeanne/jeanne_portrait.png"
         for path, dimensions in ((atlas, (256, 512)), (portrait, (64, 64))):
             data = path.read_bytes()[:24]
-            self.assertEqual(data[:8], b"\\x89PNG\\r\\n\\x1a\\n")
+            self.assertEqual(data[:8], bytes((137, 80, 78, 71, 13, 10, 26, 10)))
             self.assertEqual(struct.unpack(">II", data[16:24]), dimensions)
 
     def test_all_directions_and_actions_bind_without_display(self):
