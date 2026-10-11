@@ -604,6 +604,952 @@
           ]
         }
       ]
+    },
+    {
+      "id": "a1_01_route",
+      "name": "Acte I — La route des fugitifs",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              2
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              5,
+              3
+            ],
+            "cover": 25
+          },
+          {
+            "pos": [
+              4,
+              4
+            ],
+            "cover": 20
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "etienne",
+          "name": "Étienne — écuyer",
+          "team": "player",
+          "pos": [
+            0,
+            4
+          ],
+          "max_hp": 62,
+          "hp": 62,
+          "attack": 8,
+          "speed": 10,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter",
+          "tags": [
+            "recruit:etienne"
+          ]
+        },
+        {
+          "id": "agnes",
+          "name": "Agnès — hospitalière",
+          "team": "player",
+          "pos": [
+            0,
+            3
+          ],
+          "max_hp": 59,
+          "hp": 59,
+          "attack": 5,
+          "speed": 9,
+          "weapon_power": 4,
+          "skills": [
+            "premiers_soins"
+          ],
+          "reaction": "none",
+          "tags": [
+            "recruit:agnes"
+          ]
+        },
+        {
+          "id": "eclaireur_rouge",
+          "name": "Éclaireur de Varenne",
+          "team": "enemy",
+          "pos": [
+            6,
+            3
+          ],
+          "max_hp": 23,
+          "hp": 23,
+          "attack": 5,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        },
+        {
+          "id": "brigand_route",
+          "name": "Bandit du col",
+          "team": "enemy",
+          "pos": [
+            6,
+            5
+          ],
+          "max_hp": 26,
+          "hp": 26,
+          "attack": 6,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        }
+      ],
+      "objective": "eliminate",
+      "reward": 25,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "a1_01_route_alerte",
+          "condition": "tick",
+          "value": 22,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Étienne / Agnès : la route vers le pont est surveillée. Il faut ouvrir le passage aux réfugiés."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a1_02_pont",
+      "name": "Acte I — Le pont de la Brume",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              0
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              5
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              3
+            ],
+            "hazard": 1
+          },
+          {
+            "pos": [
+              5,
+              2
+            ],
+            "cover": 25
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "etienne",
+          "name": "Étienne — écuyer",
+          "team": "player",
+          "pos": [
+            0,
+            4
+          ],
+          "max_hp": 62,
+          "hp": 62,
+          "attack": 8,
+          "speed": 10,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter",
+          "tags": [
+            "recruit:etienne"
+          ]
+        },
+        {
+          "id": "agnes",
+          "name": "Agnès — hospitalière",
+          "team": "player",
+          "pos": [
+            0,
+            3
+          ],
+          "max_hp": 59,
+          "hp": 59,
+          "attack": 5,
+          "speed": 9,
+          "weapon_power": 4,
+          "skills": [
+            "premiers_soins"
+          ],
+          "reaction": "none",
+          "tags": [
+            "recruit:agnes"
+          ]
+        },
+        {
+          "id": "lancier_pont",
+          "name": "Lancier de péage",
+          "team": "enemy",
+          "pos": [
+            5,
+            3
+          ],
+          "max_hp": 32,
+          "hp": 32,
+          "attack": 7,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        },
+        {
+          "id": "arbaletrier_pont",
+          "name": "Arbalétrier du pont",
+          "team": "enemy",
+          "pos": [
+            6,
+            1
+          ],
+          "max_hp": 19,
+          "hp": 19,
+          "attack": 4,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": [],
+          "weapon": "ranged",
+          "attack_range": 3,
+          "min_range": 2,
+          "attack_range_mode": "los"
+        }
+      ],
+      "objective": "eliminate",
+      "reward": 25,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "a1_02_pont_alerte",
+          "condition": "tick",
+          "value": 22,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Le pont tient, mais une patrouille approche. Délogez les gardes avant de traverser."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a1_03_hospice",
+      "name": "Acte I — L'hospice assiégé",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              4,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              4
+            ],
+            "cover": 25
+          },
+          {
+            "pos": [
+              5,
+              4
+            ],
+            "cover": 15
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "etienne",
+          "name": "Étienne — écuyer",
+          "team": "player",
+          "pos": [
+            0,
+            4
+          ],
+          "max_hp": 62,
+          "hp": 62,
+          "attack": 8,
+          "speed": 10,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter",
+          "tags": [
+            "recruit:etienne"
+          ]
+        },
+        {
+          "id": "agnes",
+          "name": "Agnès — hospitalière",
+          "team": "player",
+          "pos": [
+            0,
+            3
+          ],
+          "max_hp": 59,
+          "hp": 59,
+          "attack": 5,
+          "speed": 9,
+          "weapon_power": 4,
+          "skills": [
+            "premiers_soins"
+          ],
+          "reaction": "none",
+          "tags": [
+            "recruit:agnes"
+          ]
+        },
+        {
+          "id": "bandit_hospice",
+          "name": "Pilleur de l'hospice",
+          "team": "enemy",
+          "pos": [
+            6,
+            3
+          ],
+          "max_hp": 27,
+          "hp": 27,
+          "attack": 5,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        },
+        {
+          "id": "arbaletrier_hospice",
+          "name": "Arbalétrier mercenaire",
+          "team": "enemy",
+          "pos": [
+            6,
+            5
+          ],
+          "max_hp": 21,
+          "hp": 21,
+          "attack": 4,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": [],
+          "weapon": "ranged",
+          "attack_range": 3,
+          "min_range": 2,
+          "attack_range_mode": "los"
+        }
+      ],
+      "objective": "survive",
+      "target_ticks": 75,
+      "protected_id": "jeanne",
+      "reward": 30,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "a1_03_hospice_alerte",
+          "condition": "tick",
+          "value": 22,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Frère Michel : défendez les malades jusqu'à l'évacuation des charrettes."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a1_04a_archives",
+      "name": "Acte I — Les archives du bailli",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              4,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              4,
+              2
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              5,
+              3
+            ],
+            "cover": 20
+          },
+          {
+            "pos": [
+              3,
+              4
+            ],
+            "cover": 20
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "etienne",
+          "name": "Étienne — écuyer",
+          "team": "player",
+          "pos": [
+            0,
+            4
+          ],
+          "max_hp": 62,
+          "hp": 62,
+          "attack": 8,
+          "speed": 10,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter",
+          "tags": [
+            "recruit:etienne"
+          ]
+        },
+        {
+          "id": "agnes",
+          "name": "Agnès — hospitalière",
+          "team": "player",
+          "pos": [
+            0,
+            3
+          ],
+          "max_hp": 59,
+          "hp": 59,
+          "attack": 5,
+          "speed": 9,
+          "weapon_power": 4,
+          "skills": [
+            "premiers_soins"
+          ],
+          "reaction": "none",
+          "tags": [
+            "recruit:agnes"
+          ]
+        },
+        {
+          "id": "clerc_armes",
+          "name": "Garde des archives",
+          "team": "enemy",
+          "pos": [
+            5,
+            4
+          ],
+          "max_hp": 31,
+          "hp": 31,
+          "attack": 7,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        },
+        {
+          "id": "bailli_soldat",
+          "name": "Sergent du bailli",
+          "team": "enemy",
+          "pos": [
+            6,
+            3
+          ],
+          "max_hp": 29,
+          "hp": 29,
+          "attack": 6,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        }
+      ],
+      "objective": "eliminate",
+      "reward": 35,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "a1_04a_archives_alerte",
+          "condition": "tick",
+          "value": 22,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Le registre relie le sceau noir à Valcroix. Protégez les documents de la destruction."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a1_04b_otages",
+      "name": "Acte I — Les otages de la tour",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              4,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              5,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              4,
+              3
+            ],
+            "cover": 25
+          },
+          {
+            "pos": [
+              5,
+              4
+            ],
+            "cover": 15
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "etienne",
+          "name": "Étienne — écuyer",
+          "team": "player",
+          "pos": [
+            0,
+            4
+          ],
+          "max_hp": 62,
+          "hp": 62,
+          "attack": 8,
+          "speed": 10,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter",
+          "tags": [
+            "recruit:etienne"
+          ]
+        },
+        {
+          "id": "agnes",
+          "name": "Agnès — hospitalière",
+          "team": "player",
+          "pos": [
+            0,
+            3
+          ],
+          "max_hp": 59,
+          "hp": 59,
+          "attack": 5,
+          "speed": 9,
+          "weapon_power": 4,
+          "skills": [
+            "premiers_soins"
+          ],
+          "reaction": "none",
+          "tags": [
+            "recruit:agnes"
+          ]
+        },
+        {
+          "id": "otage_anne",
+          "name": "Anne — otage à protéger",
+          "team": "player",
+          "pos": [
+            2,
+            4
+          ],
+          "max_hp": 70,
+          "hp": 70,
+          "attack": 1,
+          "speed": 6,
+          "weapon_power": 1,
+          "skills": [],
+          "reaction": "none"
+        },
+        {
+          "id": "geolier",
+          "name": "Geôlier de Varenne",
+          "team": "enemy",
+          "pos": [
+            6,
+            3
+          ],
+          "max_hp": 28,
+          "hp": 28,
+          "attack": 5,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        },
+        {
+          "id": "garde_otages",
+          "name": "Arbalétrier de la tour",
+          "team": "enemy",
+          "pos": [
+            6,
+            5
+          ],
+          "max_hp": 20,
+          "hp": 20,
+          "attack": 4,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": [],
+          "weapon": "ranged",
+          "attack_range": 3,
+          "min_range": 2,
+          "attack_range_mode": "los"
+        }
+      ],
+      "objective": "survive",
+      "target_ticks": 75,
+      "protected_id": "otage_anne",
+      "reward": 35,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "a1_04b_otages_alerte",
+          "condition": "tick",
+          "value": 22,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Anne doit rester vivante jusqu'à l'arrivée des secours. Ne laissez pas les gardes la rejoindre."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a1_05_vaucouleurs",
+      "name": "Acte I — Aux portes de Vaucouleurs",
+      "board": {
+        "width": 8,
+        "height": 6,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              0
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              3,
+              1
+            ],
+            "cover": 20
+          },
+          {
+            "pos": [
+              4,
+              1
+            ],
+            "blocked": true
+          },
+          {
+            "pos": [
+              4,
+              3
+            ],
+            "cover": 30
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "jeanne",
+          "name": "Jeanne d'Arc",
+          "team": "player",
+          "pos": [
+            1,
+            4
+          ],
+          "max_hp": 74,
+          "hp": 74,
+          "attack": 11,
+          "speed": 12,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter"
+        },
+        {
+          "id": "etienne",
+          "name": "Étienne — écuyer",
+          "team": "player",
+          "pos": [
+            0,
+            4
+          ],
+          "max_hp": 62,
+          "hp": 62,
+          "attack": 8,
+          "speed": 10,
+          "weapon_power": 4,
+          "skills": [
+            "estoc",
+            "garde_rapprochee"
+          ],
+          "reaction": "counter",
+          "tags": [
+            "recruit:etienne"
+          ]
+        },
+        {
+          "id": "agnes",
+          "name": "Agnès — hospitalière",
+          "team": "player",
+          "pos": [
+            0,
+            3
+          ],
+          "max_hp": 59,
+          "hp": 59,
+          "attack": 5,
+          "speed": 9,
+          "weapon_power": 4,
+          "skills": [
+            "premiers_soins"
+          ],
+          "reaction": "none",
+          "tags": [
+            "recruit:agnes"
+          ]
+        },
+        {
+          "id": "capitaine_porte",
+          "name": "Capitaine de la garnison",
+          "team": "enemy",
+          "pos": [
+            6,
+            3
+          ],
+          "max_hp": 36,
+          "hp": 36,
+          "attack": 8,
+          "speed": 9,
+          "weapon_power": 2,
+          "skills": []
+        },
+        {
+          "id": "garde_porte",
+          "name": "Garde de Vaucouleurs",
+          "team": "enemy",
+          "pos": [
+            5,
+            4
+          ],
+          "max_hp": 27,
+          "hp": 27,
+          "attack": 6,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": []
+        },
+        {
+          "id": "archer_rempart",
+          "name": "Arbalétrier du rempart",
+          "team": "enemy",
+          "pos": [
+            6,
+            1
+          ],
+          "max_hp": 19,
+          "hp": 19,
+          "attack": 4,
+          "speed": 8,
+          "weapon_power": 2,
+          "skills": [],
+          "weapon": "ranged",
+          "attack_range": 3,
+          "min_range": 2,
+          "attack_range_mode": "los"
+        }
+      ],
+      "objective": "eliminate",
+      "reward": 45,
+      "next_missions": [],
+      "triggers": [
+        {
+          "id": "a1_05_vaucouleurs_alerte",
+          "condition": "tick",
+          "value": 22,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Un lieutenant de Varenne tente d'empêcher Jeanne de parler au capitaine de Vaucouleurs."
+            }
+          ]
+        }
+      ]
     }
   ],
   "jobs": {
@@ -645,6 +1591,33 @@
         "max_hp": 6
       },
       "price": 30
+    },
+    "gambison_ecuyer": {
+      "name": "Gambison d'Étienne",
+      "slot": "armor",
+      "bonuses": {
+        "max_hp": 8,
+        "defense": 2
+      },
+      "price": 35
+    },
+    "baton_hospice": {
+      "name": "Bâton de l'hospice",
+      "slot": "weapon",
+      "bonuses": {
+        "magic": 2,
+        "max_mp": 4
+      },
+      "price": 30
+    },
+    "gants_passeur": {
+      "name": "Gants du passeur",
+      "slot": "accessory",
+      "bonuses": {
+        "speed": 1,
+        "move": 1
+      },
+      "price": 25
     }
   },
   "tactic_unlocks": []
