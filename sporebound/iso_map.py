@@ -7,10 +7,14 @@ from dataclasses import dataclass
 from math import gcd
 from pathlib import Path
 
+from .iso_connections import (shoreline_mask, waterfall_mask, bridge_axis,
+                              transition_segments, bridge_rails)
+
 SURFACES = frozenset({'grass', 'dirt', 'stone', 'cobble', 'sand',
                       'rock', 'water', 'bridge'})
 FEATURES = frozenset({'', 'tree', 'bush', 'boulder', 'ruin', 'crate',
-                      'lantern', 'stairs', 'stone_wall'})
+                      'lantern', 'stairs', 'stone_wall',
+                      'arch', 'fence', 'reeds', 'pillar'})
 SURFACE_COLORS = {
     'grass': '#9aa66c', 'dirt': '#c6a875', 'stone': '#aca69a',
     'cobble': '#c6b9a0', 'sand': '#dec897', 'rock': '#8e978d',
@@ -113,10 +117,11 @@ class IsoGeometry:
         self.step = max(5, self.cell_size // 4)
         self.max_height = max((t.height for t in self.board.tiles.values()), default=0)
         self.origin_x = (self.board.height + 1) * self.half_width + 36
-        self.origin_y = self.max_height * self.step + self.cell_size + 40
+        self.origin_y = self.max_height * self.step + 2*self.cell_size + 48
         self.width = (self.board.width + self.board.height + 3) * self.half_width + 72
         self.height = ((self.board.width + self.board.height + 3) *
-                       self.half_height + self.max_height * self.step + 120)
+                       self.half_height + self.max_height * self.step
+                       + 2*self.cell_size + 120)
         self.draw_order = tuple(sorted(self.board.cells(),
                                        key=lambda c: (sum(c), c[0])))
         # Spatial buckets avoid O(width*height) mouse hit tests on each move.
@@ -155,7 +160,7 @@ class IsoGeometry:
 
 
 def render_isometric(canvas, board, mission, units, *, cell_size, layers,
-                     selected_cell, selected_tiles, reachable=(), atlas=None):
+                     selected_cell, selected_tiles, reachable=(), atlas=None, prop_atlas=None):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = IsoGeometry(board, cell_size)
     canvas.delete('all')
@@ -205,12 +210,31 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
             canvas.create_image(cx-cell_size, cy-cell_size/2,
                                 image=photo, anchor='nw')
         if surface == 'water' and layers.get('Terrain', True):
-            # Local ripples; the low and high banks are naturally defined by
-            # adjacent surface boundaries and the relief geometry.
+            # Stable, neighbour-aware banks; no seams between water cells.
+            mask = shoreline_mask(board, c)
+            for p, q in transition_segments(corners, mask):
+                canvas.create_line(*p, *q, fill='#335e68',
+                                   width=max(2,cell_size//13))
+                canvas.create_line(p[0]*.78+q[0]*.22,
+                                   p[1]*.78+q[1]*.22,
+                                   p[0]*.22+q[0]*.78,
+                                   p[1]*.22+q[1]*.78,
+                                   fill='#c2e4dc', width=max(1,cell_size//25))
             canvas.create_line(cx-cell_size*.28,cy-2, cx,cy-2-cell_size*.13,
                                fill='#b3dadd', width=2)
             canvas.create_line(cx,cy+cell_size*.15, cx+cell_size*.28,cy,
                                fill='#81c2ce', width=2)
+            # A descending water-to-water edge becomes a visible waterfall.
+            for p, q in transition_segments(corners, waterfall_mask(board, c)):
+                # The drop is equal to the neighbouring tactical elevation.
+                dx, dy = ((1, 0) if (p, q) == (east, south) else (0, 1))
+                drop = (tile.height - board.tile((c[0]+dx,c[1]+dy)).height)*geo.step
+                canvas.create_polygon(*_flatten(
+                    (p,q,(q[0],q[1]+drop),(p[0],p[1]+drop))),
+                    fill='#71b3cc', outline='#acdfe6', width=1)
+                canvas.create_line((p[0]*.65+q[0]*.35), (p[1]*.65+q[1]*.35),
+                                   (p[0]*.65+q[0]*.35), (p[1]*.65+q[1]*.35+drop),
+                                   fill='#e2f7ef', width=max(1,cell_size//24))
         elif surface in ('bridge', 'cobble', 'stone') and layers.get('Terrain', True):
             for fraction in (-.35, 0, .35):
                 px = cx + fraction*cell_size
@@ -218,8 +242,15 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                                    px+cell_size*.15,cy-cell_size*.2,
                                    fill='#918b7d', width=1)
             if surface == 'bridge':
-                canvas.create_line(*west, *north, fill='#f1dfb8', width=3)
-                canvas.create_line(*south, *east, fill='#766655', width=3)
+                # Rails follow the local channel direction, even on a rotated river.
+                for p, q in bridge_rails(corners, bridge_axis(board, c)):
+                    canvas.create_line(*p, *q,fill='#73604b',width=max(3,cell_size//10))
+                    raise_by = max(5, cell_size//7)
+                    canvas.create_line(p[0],p[1]-raise_by,q[0],q[1]-raise_by,
+                                       fill='#ead6aa',width=max(2,cell_size//13))
+                    for r in (p,q):
+                        canvas.create_line(r[0],r[1],r[0],r[1]-raise_by,
+                                           fill='#a69070',width=max(2,cell_size//15))
         if c in deploy and layers.get('Déploiement', True):
             canvas.create_polygon(*_flatten(corners), outline='#3b9ec0', fill='',
                                   width=3)
@@ -228,8 +259,14 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         if c in reachable:
             canvas.create_polygon(*_flatten(corners), outline='#25a885', fill='',
                                   width=2)
-        if layers.get('Décors', True):
-            _draw_feature(canvas, tile.feature, cx, cy, cell_size)
+        if layers.get('Décors', True) and tile.feature:
+            sprite = (prop_atlas.sprite(tile.feature, cell_size)
+                      if prop_atlas is not None else None)
+            if sprite is not None:
+                canvas.create_image(cx, cy + cell_size*18/54, image=sprite,
+                                    anchor='s', tags='decor_sprite')
+            else:
+                _draw_feature(canvas, tile.feature, cx, cy, cell_size)
         if layers.get('Objets', True):
             for obj in objects.get(c, ()):
                 canvas.create_rectangle(cx-9,cy-18,cx+9,cy-4,
@@ -291,3 +328,29 @@ def _draw_feature(canvas, feature, cx, cy, size):
             canvas.create_line(cx-14*s+i*3*s,cy+8*s-i*5*s,
                                cx+8*s+i*3*s,cy-5*s-i*5*s,
                                fill='#efdfbd',width=max(1,int(3*s)))
+
+    elif feature == 'arch':
+        canvas.create_rectangle(cx-20*s,cy-44*s,cx-10*s,cy,
+                                fill='#c0b29b',outline='#6e6a61')
+        canvas.create_rectangle(cx+10*s,cy-44*s,cx+20*s,cy,
+                                fill='#c0b29b',outline='#6e6a61')
+        canvas.create_arc(cx-21*s,cy-71*s,cx+21*s,cy-20*s,
+                          start=0,extent=180,style='arc',
+                          outline='#c0b29b',width=max(3,int(10*s)))
+    elif feature == 'fence':
+        for dx in (-18,0,18):
+            canvas.create_line(cx+dx*s,cy,cx+dx*s,cy-25*s,
+                               fill='#8d6e45',width=max(2,int(4*s)))
+        for dy in (8,18):
+            canvas.create_line(cx-19*s,cy-dy*s,cx+19*s,cy-dy*s,
+                               fill='#af8153',width=max(2,int(3*s)))
+    elif feature == 'reeds':
+        for i in range(7):
+            dx=(i-3)*5
+            canvas.create_line(cx+dx*s,cy,cx+(dx+3-i)*s,cy-(23+i%3*6)*s,
+                               fill='#739357',width=max(1,int(2*s)))
+    elif feature == 'pillar':
+        canvas.create_rectangle(cx-9*s,cy-52*s,cx+9*s,cy-3*s,
+                                fill='#b7a992',outline='#777267')
+        canvas.create_rectangle(cx-13*s,cy-56*s,cx+13*s,cy-50*s,
+                                fill='#d5c4a7',outline='#777267')
