@@ -69,7 +69,10 @@ class CanvasRenderer:
         if source_size < 1 or target_size < 1:
             raise ValueError("Image dimensions must be positive")
         candidates = []
-        for zoom in range(1, 5):
+        # Bound temporary images (one axis <= 2048px) while allowing
+        # precise resizing of small 64px atlas sprites at high camera zoom.
+        max_zoom = max(1, min(16, 2048 // source_size))
+        for zoom in range(1, max_zoom + 1):
             estimated = max(1, round(source_size * zoom / target_size))
             for subsample in range(max(1, estimated - 2), estimated + 3):
                 output = (source_size * zoom + subsample - 1) // subsample
