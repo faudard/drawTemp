@@ -250,8 +250,8 @@ class MapEditorGUITests(unittest.TestCase):
                 finally:
                     root.destroy()
 
-            with patch.object(tk.Tk, 'mainloop', drive), \\
-                 patch('tkinter.filedialog.asksaveasfilename', return_value=str(output)), \\
+            with patch.object(tk.Tk, 'mainloop', drive), \
+                 patch('tkinter.filedialog.asksaveasfilename', return_value=str(output)), \
                  patch('tkinter.messagebox.showerror') as dialog_error:
                 launch(DEFAULT_CONTENT)
                 dialog_error.assert_not_called()
