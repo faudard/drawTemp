@@ -121,7 +121,8 @@ class TacticalMoraleTests(unittest.TestCase):
         campaign = Campaign(unlocked=["m"])
         campaign.hero("squire").morale = "wavering"
         started = campaign.prepare(content, "m", ruleset=tactical_rpg_rules())
-        self.assertIn("morale:shaken", started.unit("squire").tags)
+        self.assertIn("morale:wavering", started.unit("squire").tags)
+        self.assertNotIn("morale:shaken", started.unit("squire").tags)
         self.assertEqual(campaign.hero("squire").morale, "wavering")
         payload = json.loads(json.dumps({"version": 1, **asdict(campaign)}))
         self.assertEqual(Campaign.from_dict(payload).hero("squire").morale,
