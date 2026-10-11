@@ -83,3 +83,12 @@ En cas de p95 trop élevé sur le Player réel, privilégier un spike
 coût de deux runtimes. Considérer PySide6 si l'accessibilité et la gestion DPI
 font gagner davantage que le coût de distribution Qt. Pas de réécriture du
 moteur tactique, des formats d'assets ni des sauvegardes pour un renderer.
+
+## Compatibilité de sauvegardes
+
+L'ajout d'un registre non vide modifie le digest du projet Jeanne, comme prévu
+par `docs/ASSET_PIPELINE.md`. Les checkpoints Jeanne antérieurs doivent donc
+être **déclarés incompatibles**, sauf migration explicite après audit ; ne
+jamais rejouer une sauvegarde sous un nouveau digest sans avertissement. Les
+projets sans assets ne changent pas. Ce changement ne concerne ni les tables
+tactiques ni les replays headless autonomes.
