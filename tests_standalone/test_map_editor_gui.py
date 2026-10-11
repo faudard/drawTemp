@@ -197,5 +197,65 @@ class MapEditorGUITests(unittest.TestCase):
                 dialog_error.assert_not_called()
 
 
+    def test_isometric_preview_can_paint_a_surface_by_click(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.iso_map import IsoGeometry
+        from sporebound.model import Content
+
+        def descendants(parent):
+            for widget in parent.winfo_children():
+                yield widget
+                yield from descendants(widget)
+
+        with TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'isometric.json'
+            errors = []
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = lambda *err: errors.append(err)
+                    root.update()
+                    widgets = list(descendants(root))
+                    canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
+                    toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
+                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    surface = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                   and 'bridge' in w.cget('values'))
+                    buttons = {w.cget('text'): w for w in widgets
+                               if isinstance(w, ttk.Button)}
+                    toggle.invoke()
+                    surface.set('stone')
+                    surface.event_generate('<<ComboboxSelected>>')
+                    root.update()
+                    board = next(iter(Content.load(DEFAULT_CONTENT).missions.values())).board
+                    geo = IsoGeometry(board, 54)
+                    pos = (3, 3)
+                    px, py = geo.center(pos)
+                    canvas.xview_moveto(max(0.0, (px - canvas.winfo_width()/2)/geo.width))
+                    canvas.yview_moveto(max(0.0, (py - canvas.winfo_height()/2)/geo.height))
+                    root.update()
+                    x, y = int(px-canvas.canvasx(0)), int(py-canvas.canvasy(0))
+                    self.assertTrue(0 <= x < canvas.winfo_width())
+                    self.assertTrue(0 <= y < canvas.winfo_height())
+                    canvas.event_generate('<Button-1>', x=x, y=y)
+                    canvas.event_generate('<ButtonRelease-1>', x=x, y=y)
+                    root.update()
+                    buttons['Enregistrer sous'].invoke()
+                    saved = json.loads(output.read_text(encoding='utf-8'))
+                    tile = next(t for t in saved['missions'][0]['board']['tiles']
+                                if t['pos'] == [3, 3])
+                    self.assertEqual(tile['surface'], 'stone')
+                    self.assertEqual(errors, [])
+                finally:
+                    root.destroy()
+
+            with patch.object(tk.Tk, 'mainloop', drive), \\
+                 patch('tkinter.filedialog.asksaveasfilename', return_value=str(output)), \\
+                 patch('tkinter.messagebox.showerror') as dialog_error:
+                launch(DEFAULT_CONTENT)
+                dialog_error.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
