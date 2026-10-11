@@ -88,7 +88,7 @@ class Document:
                 if surface not in SURFACES:
                     raise RuleError('Surface inconnue')
                 new['surface'] = surface
-                if surface == 'water':
+                if surface == 'water' or old.get('feature') == 'stone_wall':
                     new['blocked'] = True
                 elif surface == 'bridge' or old.get('surface') == 'water':
                     new['blocked'] = False
@@ -100,11 +100,11 @@ class Document:
                 if feature == 'stone_wall':
                     new['blocked'] = True
                 elif old.get('feature') == 'stone_wall':
-                    new['blocked'] = False
+                    new['blocked'] = old.get('surface') == 'water'
             elif brush == 'feature-erase':
                 new['feature'] = ''
                 if old.get('feature') == 'stone_wall':
-                    new['blocked'] = False
+                    new['blocked'] = old.get('surface') == 'water'
             elif brush.startswith('height:'):
                 value = brush.partition(':')[2]
                 if not value.isdigit() or not 0 <= int(value) <= 99:
