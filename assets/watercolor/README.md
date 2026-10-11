@@ -58,6 +58,29 @@ savegames; copies the images and game JSON into a standalone directory;
 and binds Jeanne, her allies, and enemy soldier slots to the Tk Player.
 No additional Pillow/OpenCV dependencies are needed for **installation**.
 
+### Real Jeanne campaign compatibility
+
+The current `jeanne.game.json` already contains **57 asset entries** pointing
+to the original directional Jeanne atlas and five expression portraits (six
+existing PNG files). The installer now copies all referenced original files
+into the demo, so the resulting project is truly relocatable and diagnostics
+do not fail on missing old media.
+
+In the isolated **watercolor preview only**, the importer overrides the
+existing `jeanne_move_<direction>`, `jeanne_attack_<direction>`,
+`jeanne_hit_<direction>` and `jeanne_defeat_<direction>` bindings, because
+the Player resolves directional animations before generic ones. The
+`jeanne_idle_<direction>` aliases are removed in this preview so the
+`jeanne_idle` static sprite displays instead of the old atlas idle cycle.
+All four directional aliases intentionally share the same 2D illustration;
+**they are not valid four-view animation assets**. The source project
+and original assets are left unchanged.
+
+The integration test installs the actual `jeanne.json` /
+`jeanne.game.json` pair, validates the resulting `GameProject` and
+`AssetRegistry`, and checks which sprite ID `animation_sprite_id`
+selects for the Player.
+
 **Quality gate:** These are single-view preliminary cutouts. Some weapon
 shafts, feet and props cross source-grid boundaries and are clipped or
 contaminated by adjacent illustrations. Manual cleanup is required before
