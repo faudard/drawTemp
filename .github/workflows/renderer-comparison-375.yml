@@ -27,12 +27,25 @@ jobs:
       - name: Install GUI libraries and headless X server
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends             xvfb xauth python3-tk libgl1 libegl1 libxkbcommon-x11-0             libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0             libxcb-keysyms1 libxcb-render-util0 libxcb-xkb1
+          sudo apt-get install -y --no-install-recommends             xvfb xauth python3-tk libgl1 libegl1 libxkbcommon-x11-0             libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0             libxcb-keysyms1 libxcb-render-util0 libxcb-xkb1 \
+            libxcb-xinput0 libxcb-xfixes0 libxcb-randr0 \
+            libxcb-shape0 libxcb-sync1 libxrender1 libxi6
           python -m pip install pygame-ce PySide6
+      - name: Diagnose PySide6 xcb dependencies
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import PySide6
+          import subprocess
+          plugin = Path(PySide6.__file__).parent / "Qt" / "plugins" / "platforms" / "libqxcb.so"
+          print("Qt plugin:", plugin, "exists:", plugin.is_file())
+          subprocess.run(["ldd", str(plugin)], check=True)
+          PY
       - name: Confirm all three backends actually render
         env:
           QT_QPA_PLATFORM: xcb
           SDL_VIDEODRIVER: x11
+          QT_DEBUG_PLUGINS: '1'
         run: >-
           xvfb-run -a -s '-screen 0 1280x900x24'
           python scripts/collect_renderers_375.py
