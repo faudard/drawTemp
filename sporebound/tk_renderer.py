@@ -20,6 +20,9 @@ class CanvasRenderer:
         self._missing = set()
         self._terrain_key = None  # Tiles + camera + viewport identity.
         self._terrain_rebuilds = 0
+        self._actor_items = {}  # Stable Canvas item handles, indexed by actor ID.
+        self._actor_creations = 0
+        self._actor_updates = 0
 
     def _photo(self, asset_id):
         if self.registry is None or self.asset_root is None:
@@ -103,11 +106,106 @@ class CanvasRenderer:
                     return True
         return False
 
+    def _remove_actor(self, actor_id):
+        row = self._actor_items.pop(actor_id, None)
+        if row is not None:
+            for item in row["ids"].values():
+                self.canvas.delete(item)
+
+    def _paint_actor(self, actor, camera, x, y, action, direction, *,
+                     elapsed_ms=0, clock_ms=0):
+        """Update Tk item coordinates/config only when an actor actually changes.
+
+        A frame rebuild previously deleted every sprite, health bar and label
+        16 times per second. Preserve per-actor item handles across frames.
+        All data here is read-only projection; never mutate ActorView/Battle.
+        """
+        canvas = self.canvas
+        cell = camera.cell_size
+        width, height = actor.footprint
+        w, h = cell * width, cell * height
+        animated = animation_sprite_id(
+            self.registry, actor.id, actor.team, action, direction,
+            clock_ms if action == "idle" else elapsed_ms)
+        sprite = self._photo(animated) if animated else None
+        sprite = sprite or self.image("sprite", actor.id) or self.image("sprite", actor.team)
+        if sprite is not None and width == height == 1:
+            sprite = self._cell_photo(sprite, cell)
+        else:
+            sprite = None
+        visual = "sprite" if sprite is not None else "vector"
+        signature = (x, y, w, h, cell, visual, str(sprite) if sprite else None,
+                     actor.name, actor.team, actor.hp, actor.max_hp,
+                     actor.alive, actor.active, action)
+        row = self._actor_items.get(actor.id)
+        if row is not None and row["visual"] != visual:
+            self._remove_actor(actor.id)
+            row = None
+        if row is not None and row["signature"] == signature:
+            return
+
+        active_coords = (x + 2, y + 2, x + w - 2, y + h - 2)
+        health_coords = (x + 5, y + h - 7, x + w - 5, y + h - 3)
+        pct = max(0, actor.hp) / max(1, actor.max_hp)
+        fill_coords = (x + 5, y + h - 7,
+                       x + 5 + (w - 10) * pct, y + h - 3)
+        hp_color = "#66d48b" if actor.team == "player" else "#ffa08c"
+        color = "#648cdb" if actor.team == "player" else "#d26b7b"
+        if action == "hit":
+            color = "#f8a56a"
+        if not actor.alive:
+            color = "#697383"
+        name = actor.name[:max(2, cell // 9)]
+        font = ("TkDefaultFont", max(9, cell // 5), "bold")
+
+        if row is None:
+            ids = {}
+            ids["active"] = canvas.create_rectangle(
+                *active_coords, outline="#facc15", width=3, tags=("actor",),
+                state="normal" if actor.active else "hidden")
+            if visual == "sprite":
+                ids["image"] = canvas.create_image(
+                    x + w / 2, y + h / 2, image=sprite, tags=("actor",))
+            else:
+                ids["oval"] = canvas.create_oval(
+                    x + 7, y + 7, x + w - 7, y + h - 8,
+                    fill=color, outline="#1c293a", width=2, tags=("actor",))
+                ids["label"] = canvas.create_text(
+                    x + w / 2, y + h / 2, text=name,
+                    fill="#ffffff", font=font, tags=("actor",))
+            ids["health_bg"] = canvas.create_rectangle(
+                *health_coords, fill="#121a27", outline="", tags=("actor",))
+            ids["health"] = canvas.create_rectangle(
+                *fill_coords, fill=hp_color, outline="", tags=("actor",))
+            self._actor_items[actor.id] = {
+                "ids": ids, "visual": visual, "signature": signature}
+            self._actor_creations += 1
+            return
+
+        ids = row["ids"]
+        canvas.coords(ids["active"], *active_coords)
+        canvas.itemconfigure(ids["active"],
+                             state="normal" if actor.active else "hidden")
+        if visual == "sprite":
+            canvas.coords(ids["image"], x + w / 2, y + h / 2)
+            canvas.itemconfigure(ids["image"], image=sprite)
+        else:
+            canvas.coords(ids["oval"], x + 7, y + 7, x + w - 7, y + h - 8)
+            canvas.itemconfigure(ids["oval"], fill=color)
+            canvas.coords(ids["label"], x + w / 2, y + h / 2)
+            canvas.itemconfigure(ids["label"], text=name, font=font)
+        canvas.coords(ids["health_bg"], *health_coords)
+        canvas.coords(ids["health"], *fill_coords)
+        canvas.itemconfigure(ids["health"], fill=hp_color)
+        row["signature"] = signature
+        self._actor_updates += 1
+
     def draw(self, frame, camera, *, poses=None, elapsed_ms=0, clock_ms=0):
         canvas = self.canvas
         if frame is None:
             canvas.delete("all")
             self._terrain_key = None
+            self._actor_items.clear()
             return
         cell = camera.cell_size
         selected = frame.selected
@@ -141,6 +239,7 @@ class CanvasRenderer:
         refresh_terrain = terrain_key != self._terrain_key
         if refresh_terrain:
             canvas.delete("all")
+            self._actor_items.clear()
             for tile in frame.tiles:
                 x, y = camera.cell_to_screen(tile.pos)
                 if not visible(x, y, cell, cell):
@@ -191,45 +290,26 @@ class CanvasRenderer:
             canvas.create_text(x + cell / 2, y + cell - 5,
                                text=obj.id[:10], fill="#ffffff",
                                font=("TkDefaultFont", max(7, cell // 7)))
+        # Reconcile stable actor item handles with the current projection.
+        # Visibility culling also prunes cached offscreen units; no ghost items.
+        visible_ids = set()
         for actor in frame.actors:
             pose = poses.get(actor.id) if poses is not None else None
             x, y = camera.cell_to_screen((pose.x, pose.y) if pose else actor.pos)
             action = pose.action if pose else ("defeat" if not actor.alive else "idle")
             direction = pose.direction if pose else "south"
             width, height = actor.footprint
-            w, h = cell * width, cell * height
-            if not visible(x, y, w, h):
+            if not visible(x, y, cell * width, cell * height):
                 continue
-            if actor.active:
-                canvas.create_rectangle(x + 2, y + 2, x + w - 2, y + h - 2,
-                                        outline="#facc15", width=3)
-            animated_id = animation_sprite_id(
-                self.registry, actor.id, actor.team, action, direction,
-                clock_ms if action == "idle" else elapsed_ms)
-            sprite = (self._photo(animated_id) if animated_id else None)
-            sprite = sprite or self.image("sprite", actor.id) or self.image("sprite", actor.team)
-            if sprite is not None and width == height == 1:
-                sprite = self._cell_photo(sprite, cell)
-                canvas.create_image(x + w / 2, y + h / 2, image=sprite)
-            else:
-                color = "#648cdb" if actor.team == "player" else "#d26b7b"
-                if action == "hit":
-                    color = "#f8a56a"
-                if not actor.alive:
-                    color = "#697383"
-                canvas.create_oval(x + 7, y + 7, x + w - 7, y + h - 8,
-                                   fill=color, outline="#1c293a", width=2)
-                canvas.create_text(x + w / 2, y + h / 2,
-                                   text=actor.name[:max(2, cell // 9)],
-                                   fill="#ffffff", font=("TkDefaultFont", max(9, cell // 5), "bold"))
-            # Health bar is a read-only visual of actor data.
-            pct = max(0, actor.hp) / max(1, actor.max_hp)
-            canvas.create_rectangle(x + 5, y + h - 7, x + w - 5, y + h - 3,
-                                    fill="#121a27", outline="")
-            canvas.create_rectangle(x + 5, y + h - 7,
-                                    x + 5 + (w - 10) * pct, y + h - 3,
-                                    fill="#66d48b" if actor.team == "player" else "#ffa08c",
-                                    outline="")
+            visible_ids.add(actor.id)
+            self._paint_actor(actor, camera, x, y, action, direction,
+                              elapsed_ms=elapsed_ms, clock_ms=clock_ms)
+        for stale in tuple(self._actor_items):
+            if stale not in visible_ids:
+                self._remove_actor(stale)
+        # Existing actor shapes must be above freshly created threat overlays;
+        # the result banner, added below, remains above all actors.
+        canvas.tag_raise("actor")
         if frame.result:
             canvas.create_text(camera.offset_x + frame.width * cell / 2,
                                camera.offset_y + 14,
@@ -239,8 +319,10 @@ class CanvasRenderer:
         # "dynamic" so the next animation tick retains those items.
         canvas.addtag_withtag("dynamic", "all")
         canvas.dtag("terrain", "dynamic")
+        canvas.dtag("actor", "dynamic")
 
     def dispose(self):
+        self._actor_items.clear()
         self._terrain_key = None
         self._cell_images.clear()
         self._images.clear()
