@@ -141,3 +141,22 @@ Use the **v3 ZIP** instead of v2 when running `scripts/install_watercolor_pack.p
 ```
 
 The new QA stage only removes visually detached cell bleed. It cannot recover a spear, sword or leg that was already truncated by the sheet's rectangular layout. The final visual gate still requires manual review on gameplay scale and animation timing, particularly **Jeanne**, **spearman**, and modular **props**. The PR remains draft until the 88 PNGs are committed and visually verified in Player.
+
+
+## Native Tk 52px renderer regression gate
+
+The Player previously used Tk PhotoImage copy with zoom and subsample in **one operation**. Tk samples the input at the subsample interval **before** zooming; for 384×341 source sprites down to a 52px cell, this reproduced only a small corner and left Jeanne, the spearman and wolf effectively invisible.
+
+PR #71 now repairs the **shared** CanvasRenderer._cell_photo path (also used by existing Jeanne atlas frames): magnify the complete source photo first, subsample in a separate operation, then centre the result in the target cell. This uses native Tk only, remains cached by image ID and camera scale, and does **not** affect tactical rules, replay, saves or project schemas. The scale ratio chooser is bounded to keep each temporary dimension <= 2048 px.
+
+Run the new regression tests:
+
+```sh
+python -m unittest discover -s tests_standalone -p 'test_tk_sprite_scaling_3710.py' -v
+# On Linux with Xvfb, actually check the lower-right pixels of large PNGs:
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest discover -s tests_standalone -p 'test_tk_sprite_scaling_3710.py' -v
+```
+
+The GUI test constructs transparent 384×341 source pixels with a bright rectangle in the **lower-right**. That rectangle was lost with single-pass Tk zoom/subsample, and must survive the corrected two-pass resize at 52px. The test also checks the existing 64×64 atlas, stable image caching and camera zoom to 78px.
+
+Local offscreen Tk proof on the v3 ZIP: all 18 reviewed action poses for Jeanne, spearman and wolf are visible at the Player's 52px cell size. This is a renderer QA snapshot, **not** an end-to-end interactive Player gameplay test; that remains required once the 88 PNGs are committed.
