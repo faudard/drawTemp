@@ -54,7 +54,7 @@ class IncrementalActor378GUITests(unittest.TestCase):
         self.assertEqual(len(self.renderer._actor_items), 2)
         self.assertEqual(self.renderer._actor_creations, 2)
         for tick in range(1, 5):
-            self.renderer.draw(frame, self.camera, clock_ms=tick * 60)
+            self.renderer.draw(frame, self.camera, clock_ms=tick)
             self.assertEqual(self.canvas.find_withtag("actor"), actor_ids)
             self.assertEqual(self.renderer._actor_creations, 2)
         self.assertEqual(self.renderer._actor_updates, 0)
