@@ -1472,6 +1472,26 @@
         "id": "jeanne_portrait",
         "kind": "portrait",
         "path": "art/jeanne/jeanne_portrait.png"
+      },
+      {
+        "id": "jeanne_neutral",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_neutral.png"
+      },
+      {
+        "id": "jeanne_smile",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_smile.png"
+      },
+      {
+        "id": "jeanne_determined",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_determined.png"
+      },
+      {
+        "id": "jeanne_battle_shout",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_battle_shout.png"
       }
     ],
     "bindings": {
@@ -1501,7 +1521,11 @@
         "jeanne": "jeanne_south_idle_0"
       },
       "portrait": {
-        "Jeanne": "jeanne_portrait"
+        "Jeanne": "jeanne_portrait",
+        "Jeanne_neutral": "jeanne_neutral",
+        "Jeanne_smile": "jeanne_smile",
+        "Jeanne_determined": "jeanne_determined",
+        "Jeanne_battle_shout": "jeanne_battle_shout"
       }
     }
   }

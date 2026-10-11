@@ -26,7 +26,7 @@ Player avant validation graphique, clavier, DPI, packaging et autosave.
 - Atlas PNG RGBA : **256 × 512**, frames **64 × 64** ;
   colonnes `south, north, east, west` ; lignes
   `idle_0, idle_1, move_0, move_1, attack_0, attack_1, hit_0, defeat_0`.
-  Un portrait RGBA 64 × 64 est inclus.
+  Le portrait principal (256 × 256) et quatre expressions (192 × 192) proviennent de la **direction artistique validée**.
 - Identifiants stables `jeanne_<direction>_<action>_<frame>` et bindings
   `jeanne_<action>_<direction>` dans
   `sporebound/content/jeanne.game.json`. Portrait associé à l'intervenante
@@ -38,11 +38,31 @@ Player avant validation graphique, clavier, DPI, packaging et autosave.
   la RNG, les replays ou les sauvegardes.
 - Les autres personnages restent en fallback vectoriel.
 
-**Limite artistique :** ce premier pack 64 × 64 est une base cohérente et
-jouable, pas une validation artistique définitive du character design. Les
-décors, FX, expressions supplémentaires et les animations plus longues seront
-itérés séparément. Les personnages ne doivent pas adopter les assets hérités
-de Sporebound par défaut.
+**Direction artistique validée :** le design de Jeanne — tresse et ruban bleu,
+cheveux blonds, yeux bleus, armure argentée, bleu royal, lin et détails dorés —
+est approuvé pour la campagne. Les images intégrées sont dérivées de la planche
+de validation visuelle produite pour `drawTemp`; aucun personnage de franchise
+tierce n'a été recopié dans les assets.
+
+Portrait principal :
+
+![Portrait validé de Jeanne](../sporebound/content/art/jeanne/jeanne_portrait.png)
+
+Variantes : `Jeanne_neutral`, `Jeanne_smile`, `Jeanne_determined`,
+`Jeanne_battle_shout` sont disponibles dans le registre `portrait`,
+sans ajouter de nouvelles propriétés à `GameProject`. Le slot existant
+`Jeanne` pointe désormais sur le portrait principal; les quatre variantes
+sont prêtes pour la prochaine passe de scènes cinématiques.
+
+**Limites restantes** : l'atlas tactique 64 × 64 reprend les silhouettes et
+la palette du concept validé, mais des séquences (notamment de dos) utilisent
+encore des poses dérivées. Les animations directionnelles plus riches,
+expressions additionnelles et VFX cohérents devront passer une validation
+graphique distincte. Aucune validation de performance renderer n'est
+présumée par cette approbation artistique.
+
+Les sources sont des visuels générés pour ce projet. Les décors, FX et autres
+personnages ne sont pas modifiés ici.
 
 ## Comparaison concrète, même workload
 
