@@ -46,6 +46,15 @@ class JeanneArtGateTests(unittest.TestCase):
         self.assertEqual(self.registry.binding("sprite", "jeanne")["id"],
                          "jeanne_south_idle_0")
 
+    def test_act_one_story_survives_atlas_integration(self):
+        scenes = {scene["id"] for scene in self.project.story["scenes"]}
+        self.assertIn("sc_a1_camp", scenes)
+        self.assertIn("sc_a1_fin", scenes)
+        self.assertIn("a1_05_vaucouleurs", self.content.missions)
+        self.assertIn("a1_05_vaucouleurs", self.project.story["after_mission"])
+        self.assertTrue(self.project.battle_support)
+        self.assertGreaterEqual(len(self.registry.to_dict()["entries"]), 50)
+
     def test_no_asset_dependency_on_tactical_engine(self):
         from sporebound.game_session import GameSession
         session = GameSession.new(self.content, self.project, "jeanne")

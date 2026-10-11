@@ -1,12 +1,12 @@
 {
   "version": 1,
   "title": "Jeanne d'Arc — Les Cendres du Royaume",
-  "subtitle": "Prologue : les voix dans les champs",
+  "subtitle": "Prologue et acte I : des cendres à Vaucouleurs",
   "campaigns": [
     {
       "id": "jeanne",
-      "name": "Les Cendres de Domrémy",
-      "description": "Uchronie inspirée de Jeanne d'Arc. Le prologue propose deux chemins exclusifs.",
+      "name": "Les Cendres — Prologue et Acte I",
+      "description": "De Domrémy à Vaucouleurs : recrutement, équipement, choix des archives ou des otages et ouverture de l'acte II.",
       "start_mission": "p0_01_lame"
     }
   ],
@@ -26,7 +26,13 @@
       "p0_02_incendie": "sc_p0_cendres",
       "p0_03a_secours": "sc_p0_apres_branche",
       "p0_03b_poursuite": "sc_p0_apres_branche",
-      "p0_04_fuite": "sc_p0_au_revoir"
+      "p0_04_fuite": "sc_p0_au_revoir",
+      "a1_01_route": "sc_a1_pont",
+      "a1_02_pont": "sc_a1_hospice",
+      "a1_03_hospice": "sc_a1_dilemme",
+      "a1_04a_archives": "sc_a1_debrief",
+      "a1_04b_otages": "sc_a1_debrief",
+      "a1_05_vaucouleurs": "sc_a1_fin"
     },
     "scenes": [
       {
@@ -211,6 +217,324 @@
               {
                 "kind": "set_flag",
                 "flag": "prologue_complete",
+                "value": true
+              }
+            ],
+            "next_scene": "sc_a1_camp"
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_camp",
+        "title": "Acte I — Le camp des réfugiés",
+        "speaker": "Jeanne",
+        "text": "La forêt abrite les derniers survivants. Les vivres manquent et les blessés réclament de l'aide. Deux volontaires proposent de suivre Jeanne : Étienne, un écuyer privé de son seigneur, et Agnès, une hospitalière qui a sauvé des enfants. Elle ne peut armer qu'un volontaire pour la route.",
+        "choices": [
+          {
+            "id": "engager_etienne",
+            "label": "Recruter Étienne et lui confier un gambison.",
+            "effects": [
+              {
+                "kind": "recruit_hero",
+                "hero": "etienne"
+              },
+              {
+                "kind": "grant_item",
+                "item": "gambison_ecuyer",
+                "quantity": 1
+              },
+              {
+                "kind": "equip_hero",
+                "hero": "etienne",
+                "item": "gambison_ecuyer"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "compagnon_acte1",
+                "value": "etienne"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "trust_etienne",
+                "amount": 15
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_01_route"
+              }
+            ]
+          },
+          {
+            "id": "engager_agnes",
+            "label": "Recruter Agnès et lui confier le bâton de l'hospice.",
+            "effects": [
+              {
+                "kind": "recruit_hero",
+                "hero": "agnes"
+              },
+              {
+                "kind": "grant_item",
+                "item": "baton_hospice",
+                "quantity": 1
+              },
+              {
+                "kind": "equip_hero",
+                "hero": "agnes",
+                "item": "baton_hospice"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "compagnon_acte1",
+                "value": "agnes"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "trust_agnes",
+                "amount": 15
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_01_route"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_pont",
+        "title": "Les routes barrées",
+        "speaker": "Étienne / Agnès",
+        "text": "La patrouille dispersée, le groupe aperçoit le vieux pont de la Brume. Les réfugiés risquent d'être découverts si Jeanne ne sécurise pas les deux rives.",
+        "choices": [
+          {
+            "id": "tenir_passage",
+            "label": "Choisir de couvrir le passage des familles.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "pont_plan",
+                "value": "protection"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "trust_refugies",
+                "amount": 10
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_02_pont"
+              }
+            ]
+          },
+          {
+            "id": "contourner",
+            "label": "Surprendre les gardes en empruntant le sentier des meuniers.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "pont_plan",
+                "value": "surprise"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "renseignement",
+                "amount": 10
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_02_pont"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_hospice",
+        "title": "Le prix de l'hospitalité",
+        "speaker": "Frère Michel",
+        "text": "Après le pont, l'hospice offre un abri. Frère Michel soigne les arrivants, mais les dernières potions doivent être réparties avant l'arrivée de la milice.",
+        "choices": [
+          {
+            "id": "ravitailler",
+            "label": "Donner priorité aux blessés et organiser leur départ.",
+            "effects": [
+              {
+                "kind": "add_flag",
+                "flag": "trust_refugies",
+                "amount": 10
+              },
+              {
+                "kind": "set_flag",
+                "flag": "hospice_aide",
+                "value": 1
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_03_hospice"
+              }
+            ]
+          },
+          {
+            "id": "proteger_dossiers",
+            "label": "Conserver les registres des réfugiés comme preuves.",
+            "effects": [
+              {
+                "kind": "add_flag",
+                "flag": "renseignement",
+                "amount": 10
+              },
+              {
+                "kind": "set_flag",
+                "flag": "hospice_aide",
+                "value": 0
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_03_hospice"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_dilemme",
+        "title": "Archives ou otages",
+        "speaker": "Jeanne",
+        "text": "L'attaque repoussée, deux nouvelles parviennent au camp. Le bailli détient les archives sur le massacre de Domrémy ; dans la tour voisine, des otages attendent leur exécution. Jeanne ne pourra mener qu'un assaut.",
+        "choices": [
+          {
+            "id": "prendre_archives",
+            "label": "S'emparer des archives pour remonter aux commanditaires.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "acte1_choix",
+                "value": "archives"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "evidence",
+                "amount": 15
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_04a_archives"
+              }
+            ]
+          },
+          {
+            "id": "liberer_otages",
+            "label": "Sauver les otages et obtenir leur témoignage.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "acte1_choix",
+                "value": "otages"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "trust_refugies",
+                "amount": 15
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_04b_otages"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_debrief",
+        "title": "La route de Vaucouleurs",
+        "speaker": "Jeanne",
+        "text": "Le groupe a quitté le domaine du bailli. Les archives ou les survivants auront un prix politique. La seule chance d'obtenir une audience est désormais de rejoindre Vaucouleurs.",
+        "choices": [
+          {
+            "id": "avancer_vaucouleurs",
+            "label": "Prendre la route de Vaucouleurs.",
+            "effects": [
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_05_vaucouleurs"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_fin",
+        "title": "Fin de l'Acte I — Vaucouleurs",
+        "speaker": "Robert de Baudricourt",
+        "text": "Les hommes du capitaine repoussent les derniers assaillants. Jeanne se présente, couverte de poussière, avec ses compagnons. « Je ne demande pas qu'on me croie, seulement qu'on me laisse défendre le royaume. » Les routes de l'Acte II mènent vers Orléans et vers le sacre.",
+        "choices": [
+          {
+            "id": "preuve_officielle",
+            "label": "Présenter les archives et demander une audience officielle.",
+            "when": {
+              "flag": "acte1_choix",
+              "eq": "archives"
+            },
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "acte1_complete",
+                "value": true
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_appui",
+                "value": "archives"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_route_ouverte",
+                "value": true
+              }
+            ]
+          },
+          {
+            "id": "parole_otages",
+            "label": "Faire témoigner les personnes libérées.",
+            "when": {
+              "flag": "acte1_choix",
+              "eq": "otages"
+            },
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "acte1_complete",
+                "value": true
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_appui",
+                "value": "temoins"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_route_ouverte",
+                "value": true
+              }
+            ]
+          },
+          {
+            "id": "appel_de_jeanne",
+            "label": "S'en remettre aux convictions de Jeanne pour ouvrir la route d'Orléans.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "acte1_complete",
+                "value": true
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_appui",
+                "value": "foi"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_route_ouverte",
                 "value": true
               }
             ]
@@ -500,6 +824,24 @@
       "mission": "p0_04_fuite",
       "flag": "village_rescued",
       "gte": 2,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "a1_01_route",
+      "flag": "village_rescued",
+      "gte": 2,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "a1_03_hospice",
+      "flag": "trust_refugies",
+      "gte": 10,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "a1_05_vaucouleurs",
+      "flag": "renseignement",
+      "gte": 10,
       "potion_bonus": 1
     }
   ],

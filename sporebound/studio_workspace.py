@@ -5,6 +5,7 @@ Only this module creates widgets; the index and game engine remain headless.
 from .model import RuleError
 from .studio_index4 import StudioIndex
 from .game_export4 import export_game
+from .studio_release_gate import verify_game_bundle
 from .workspace import (GROUPS, ProjectWorkspaceIndex, create_blank_mission,
                         create_campaign, duplicate_mission)
 
@@ -306,4 +307,7 @@ class ProjectWorkspaceTab:
         if filename:
             output = export_game(self.owner._content(), self.owner.project,
                                  self.owner.project_path.parent, filename)
-            self.status.config(text='Export validé : ' + str(output))
+            report = verify_game_bundle(output)
+            self.status.config(
+                text=f'Export prêt : {output} — {report["campaigns"]} campagne(s), '
+                     f'{report["missions"]} mission(s), sauvegarde/reprise vérifiée')

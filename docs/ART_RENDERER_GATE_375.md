@@ -3,6 +3,11 @@
 ## Statut et décision technique
 
 **Prototype d'intégration livré, validation comparative encore ouverte.**
+
+La branche a été réconciliée avec la campagne Acte I de la PR #62 : les 13 scènes,
+les choix de recrutement, les missions de Vaucouleurs et les conséquences restent
+présents. Les animations et le portrait Jeanne sont ajoutés au manifeste actuel,
+sans retour à l'ancien prologue.
 Le renderer de production reste **Tk Canvas** pour le vertical slice Jeanne :
 c'est le seul backend déjà connecté à `BattleFrame`, au Studio et aux contrôles
 de campagne, sans dépendance optionnelle. Le code tactique Python reste headless.

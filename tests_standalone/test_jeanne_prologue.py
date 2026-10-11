@@ -120,7 +120,9 @@ class JeannePrologueTests(unittest.TestCase):
         self.assertEqual(self.project.title, "Jeanne d'Arc — Les Cendres du Royaume")
         self.assertEqual(set(self.content.missions), {
             "p0_01_lame", "p0_02_incendie", "p0_03a_secours",
-            "p0_03b_poursuite", "p0_04_fuite"})
+            "p0_03b_poursuite", "p0_04_fuite",
+            "a1_01_route", "a1_02_pont", "a1_03_hospice",
+            "a1_04a_archives", "a1_04b_otages", "a1_05_vaucouleurs"})
         self.assertEqual(self.project.campaigns[0]["start_mission"], "p0_01_lame")
         self.assertTrue(all(not s.magical for s in self.content.skills.values()))
         self.assertEqual(
