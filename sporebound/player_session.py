@@ -56,6 +56,23 @@ class PlayerSession:
         require(self.battle is None or self.finalized, 'Finish the battle before saving campaign progression')
         return save_slot(self.profile,self.project,self.content,self.campaign_id,self.slot,self.progress)
 
+    def set_job(self, unit_id, job_id):
+        """Persist a class change atomically; no mid-battle roster edits."""
+        require(self.progress is not None and self.campaign_id is not None,
+                'No campaign loaded')
+        require(self.battle is None or self.finalized,
+                'Cannot change the roster during combat')
+        require(any(unit.team == 'player' and unit.id == unit_id
+                    for mission in self.content.missions.values()
+                    for unit in mission.units),
+                'Unknown player hero')
+        updated = deepcopy(self.progress)
+        updated.set_job(self.content, unit_id, job_id)
+        save_slot(self.profile, self.project, self.content,
+                  self.campaign_id, self.slot, updated)
+        self.progress = updated
+        return updated.hero(unit_id).job
+
     def learn_talent(self, unit_id, job_id, talent_id):
         """Buy one learned talent, committing the save before changing UI state."""
         require(self.progress is not None and self.campaign_id is not None,
