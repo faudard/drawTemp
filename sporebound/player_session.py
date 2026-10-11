@@ -62,9 +62,10 @@ class PlayerSession:
                 'No campaign loaded')
         require(self.battle is None or self.finalized,
                 'Cannot change the roster during combat')
-        require(any(unit.team == 'player' and unit.id == unit_id
-                    for mission in self.content.missions.values()
-                    for unit in mission.units),
+        require(unit_id in {"recruit_" + uid for uid in self.progress.recruits}
+                or any(unit.team == 'player' and unit.id == unit_id
+                       for mission in self.content.missions.values()
+                       for unit in mission.units),
                 'Unknown player hero')
         updated = deepcopy(self.progress)
         updated.set_job(self.content, unit_id, job_id)
@@ -79,9 +80,10 @@ class PlayerSession:
                 'No campaign loaded')
         require(self.battle is None or self.finalized,
                 'Cannot change the roster during combat')
-        require(any(unit.team == 'player' and unit.id == unit_id
-                    for mission in self.content.missions.values()
-                    for unit in mission.units),
+        require(unit_id in {"recruit_" + uid for uid in self.progress.recruits}
+                or any(unit.team == 'player' and unit.id == unit_id
+                       for mission in self.content.missions.values()
+                       for unit in mission.units),
                 'Unknown player hero')
         updated = deepcopy(self.progress)
         updated.learn_talent(self.content, unit_id, job_id, talent_id)
@@ -90,6 +92,34 @@ class PlayerSession:
                   self.campaign_id, self.slot, updated)
         self.progress = updated
         return self.progress.talent_catalog(self.content, unit_id, job_id)
+
+    def customize_hero(self, unit_id, **changes):
+        """Set a build without mutating the active battle or an unsaved slot."""
+        require(self.progress is not None and self.campaign_id is not None,
+                "No campaign loaded")
+        require(self.battle is None or self.finalized, "Cannot edit hero during battle")
+        require(unit_id in {"recruit_" + uid for uid in self.progress.recruits}
+                or any(unit.team == "player" and unit.id == unit_id
+                       for mission in self.content.missions.values()
+                       for unit in mission.units), "Unknown player hero")
+        updated = deepcopy(self.progress)
+        updated.customize_hero(self.content, unit_id, **changes)
+        save_slot(self.profile, self.project, self.content,
+                  self.campaign_id, self.slot, updated)
+        self.progress = updated
+        return self.progress.hero(unit_id)
+
+    def recruit_prisoner(self, unit_id):
+        """Recruit after combat, commit save before updating UI state."""
+        require(self.progress is not None and self.campaign_id is not None,
+                "No campaign loaded")
+        require(self.battle is None or self.finalized, "Cannot recruit during battle")
+        updated = deepcopy(self.progress)
+        new_id = updated.recruit_prisoner(unit_id)
+        save_slot(self.profile, self.project, self.content,
+                  self.campaign_id, self.slot, updated)
+        self.progress = updated
+        return new_id
 
     def active_scene(self):
         require(self.progress is not None, 'No campaign loaded')
@@ -125,7 +155,7 @@ class PlayerSession:
                 or any(tactic in {"chain_strike", "trio_burst"}
                        for tactic in unit.tactics)
                 or any(tag in {"medic", "healer", "protector"}
-                       or tag.startswith(("formation:", "boss_phase:", "squad:"))
+                       or tag.startswith(("formation:", "boss_phase:", "squad:", "doctrine:"))
                        for tag in unit.tags)
                 for unit in mission.units)
             or any(action.get("kind") == "boss_phase"

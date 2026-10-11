@@ -20,6 +20,12 @@ class HeroProgress:
     equipment: dict[str, str] = field(default_factory=dict)
     spent_jp: dict[str, int] = field(default_factory=dict)
     learned_talents: dict[str, list[str]] = field(default_factory=dict)
+    origin: str = "commoner"
+    traits: list[str] = field(default_factory=list)
+    secondary_job: str = ""
+    weapon_mastery: dict[str, int] = field(default_factory=dict)
+    morale: str = "steady"
+    wounds: list[str] = field(default_factory=list)
 
     @property
     def level(self):
@@ -45,9 +51,36 @@ class Campaign:
     story_pending: str = ''
     story_started: bool = False
     story_digest: str = ''
+    reward_policy: str = "classic"  # classic / contribution
+    wound_policy: str = "off"  # off / light / serious
+    reward_ledger: dict[str, dict] = field(default_factory=dict)
+    prisoners: dict[str, dict] = field(default_factory=dict)
+    recruits: dict[str, dict] = field(default_factory=dict)
 
     def hero(self, uid):
         return self.heroes.setdefault(uid, HeroProgress())
+
+    def customize_hero(self, content, uid, *, origin=None, traits=None,
+                       secondary_job=None, weapon_mastery=None):
+        """Atomic profile choice; valid choices create distinct battle stats."""
+        from .character_growth31 import validate_profile
+        hero = deepcopy(self.hero(uid))
+        for key, value in {"origin": origin, "traits": traits,
+                           "secondary_job": secondary_job,
+                           "weapon_mastery": weapon_mastery}.items():
+            if value is not None:
+                setattr(hero, key, deepcopy(value))
+        validate_profile(hero, content)
+        self.heroes[uid] = hero
+        return hero
+
+    def recruit_prisoner(self, uid):
+        require(uid in self.prisoners and uid not in self.recruits,
+                "Prisoner unavailable for recruitment")
+        self.recruits[uid] = self.prisoners.pop(uid)
+        self.hero("recruit_" + uid)
+        self.story_flags["recruited_" + uid[:45]] = True
+        return "recruit_" + uid
 
     def bond_group(self, *members):
         return self.bond_stats.setdefault(group_key(members), {})
@@ -187,7 +220,10 @@ class Campaign:
         ruleset = ruleset or default_rules()
         require(mission_id in self.unlocked, "Mission locked")
         prepared = deepcopy(content)
-        mission_units = prepared.missions[mission_id].units
+        mission = prepared.missions[mission_id]
+        from .character_growth31 import inject_recruits
+        inject_recruits(mission, self.recruits)
+        mission_units = mission.units
         for unit in mission_units:
             if unit.team != "player":
                 continue
@@ -207,6 +243,8 @@ class Campaign:
             from .builds3 import apply_talents, validate_hero_build
             validate_hero_build(content, hero)
             apply_talents(content, hero, unit)
+            from .character_growth31 import apply_profile
+            apply_profile(content, hero, unit)
             unit.hp, unit.mp = unit.max_hp, unit.max_mp
         by_id = {unit.id: unit for unit in mission_units if unit.team == "player"}
         for key, tactics in self.prepared_tactics.items():
@@ -227,19 +265,39 @@ class Campaign:
         if playtest or battle.result not in {"victory", "defeat"}:
             return False
         rules = battle.content.tactic_unlocks if tactic_rules is None else tactic_rules
+        first_battle = battle.battle_id not in self.tracked_battles
         self.record_bonds(battle)
+        if first_battle and self.wound_policy != "off":
+            from .character_growth31 import apply_battle_history
+            for unit in battle.units:
+                if unit.team == "player":
+                    apply_battle_history(self.hero(unit.id), unit,
+                                         battle.result, self.wound_policy)
         if battle.result != "victory" or battle.mission.id in self.completed:
             if rules:
                 self.evaluate_tactic_unlocks(rules, battle.mission.id, battle.events, ruleset=battle.rules)
             return False
         require(battle.mission.id in self.unlocked, "Mission was not unlocked")
         self.completed.append(battle.mission.id)
+        from .character_growth31 import capture_prisoner, contribution
+        captured = {event.get("unit") for event in battle.events
+                    if event.get("kind") == "surrender" and event.get("captor") == "player"}
+        for uid in sorted(captured):
+            if uid and uid not in self.prisoners and uid not in self.recruits:
+                self.prisoners[uid] = capture_prisoner(battle.unit(uid))
+        if captured:
+            self.story_flags["surrender_count"] = (self.story_flags.get("surrender_count", 0)
+                                                    + len(captured))
+            self.story_flags["prisoners_taken"] = True
         self.gold += battle.mission.reward + battle.loot
         for unit in battle.units:
             if unit.team == "player":
                 hero = self.hero(unit.id)
-                hero.xp += 100
-                hero.job_xp[hero.job] = hero.job_xp.get(hero.job, 0) + 50
+                award = (contribution(battle, unit.id) if self.reward_policy == "contribution"
+                         else {"xp": 100, "job_xp": 50, "actions": 0})
+                hero.xp += award["xp"]
+                hero.job_xp[hero.job] = hero.job_xp.get(hero.job, 0) + award["job_xp"]
+                self.reward_ledger.setdefault(battle.mission.id, {})[unit.id] = award
         if unlock_next:
             for mission in battle.mission.next_missions:
                 if mission not in self.unlocked:
@@ -309,7 +367,22 @@ class Campaign:
                         and all(isinstance(value, str) and 0 < len(value) <= 64
                                 for value in row.values())
                         for row in result.story_history), 'Invalid narrative choice history')
+        require(result.reward_policy in {"classic", "contribution"}, "Invalid reward policy")
+        require(result.wound_policy in {"off", "light", "serious"}, "Invalid wound policy")
+        require(isinstance(result.reward_ledger, dict) and all(
+                isinstance(m, str) and isinstance(rows, dict) and all(
+                    isinstance(uid, str) and isinstance(value, dict) and
+                    set(value) == {"xp", "job_xp", "actions"} and
+                    all(type(n) is int and 0 <= n <= 1000 for n in value.values())
+                    for uid, value in rows.items())
+                for m, rows in result.reward_ledger.items()), "Invalid reward ledger")
+        from .character_growth31 import RECRUIT_FIELDS, validate_profile
+        require(all(isinstance(rows, dict) and set(rows) == set(RECRUIT_FIELDS)
+                    and isinstance(uid, str) and uid for uid, rows in
+                    [*result.prisoners.items(), *result.recruits.items()]),
+                "Invalid recruit records")
         for h in result.heroes.values():
+            validate_profile(h)
             require(type(h.xp) is int and h.xp >= 0 and all(type(n) is int and n >= 0 for n in h.job_xp.values()), "Invalid XP")
             require(isinstance(h.spent_jp, dict) and
                     all(isinstance(key, str) and type(value) is int and value >= 0

@@ -13,6 +13,9 @@ def tactical_action_options(battle):
     if actor is None or actor.team != "player" or battle.result or battle.deploying:
         return []
     options = []
+    if ("reload" in battle.rules.commands and
+            "reload:empty" in actor.tags and not actor.acted):
+        options.append("reload")
     if "charge" in battle.rules.commands and battle.charge_options(actor):
         options.append("charge")
     if ("disengage" in battle.rules.commands and not actor.acted
@@ -49,6 +52,8 @@ def tactical_action_options(battle):
 
 def tactical_command(option, cell):
     """Convert one explicit widget selection into a normal Battle command."""
+    if option == "reload":
+        return {"kind": "reload"}
     if option == "charge":
         return {"kind": "charge", "cell": list(cell)}
     if option == "disengage":

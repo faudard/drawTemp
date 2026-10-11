@@ -18,6 +18,7 @@ def tactical_rpg_rules(base=None):
     from .spatial3 import install_positioning
     from .synergies3 import install_synergies
     from .bosses3 import install_bosses, phase_boss_command
+    from .doctrines31 import doctrine, doctrine_command, install_doctrines
 
     rules = base if base is not None else default_rules()
     original_tactical = rules.behaviors.get("tactical").choose
@@ -26,6 +27,8 @@ def tactical_rpg_rules(base=None):
         actor = battle.active
         # Starting roles authored in the Studio opt in without changing the
         # stored legacy "tactical" behavior. Preserve custom patrol routes.
+        if actor is not None and not actor.patrol_route and doctrine(actor):
+            return doctrine_command(battle)
         if (actor is not None and not actor.patrol_route
                 and (any(tag in actor.tags for tag in ("medic", "healer", "protector"))
                      or any(tag.startswith("squad:") for tag in actor.tags))):
@@ -43,6 +46,7 @@ def tactical_rpg_rules(base=None):
     rules = install_positioning(rules)
     rules = install_synergies(rules)
     rules = install_bosses(rules)
+    rules = install_doctrines(rules)
     return rules
 
 
@@ -58,7 +62,7 @@ def authored_rules_for_document(data):
         unit.get("behavior") in {"coordinated", "phase_boss"}
         or any(t in {"chain_strike", "trio_burst"} for t in unit.get("tactics", []))
         or any(t in {"medic", "healer", "protector"}
-               or t.startswith(("formation:", "boss_phase:", "squad:"))
+               or t.startswith(("formation:", "boss_phase:", "squad:", "doctrine:"))
                for t in unit.get("tags", []))
         for mission in missions
         for unit in mission.get("units", [])

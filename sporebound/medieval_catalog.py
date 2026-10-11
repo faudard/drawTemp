@@ -309,6 +309,9 @@ def place_entry(data, mission_id, preset_id, unit_id, team, pos, *,
     # place_archetype resolves the template into full, immutable spawn fields.
     mission = next(row for row in content["missions"] if row["id"] == mission_id)
     unit = next(row for row in mission["units"] if row["id"] == unit_id)
+    from .doctrines31 import DOCTRINES
+    if preset_id in DOCTRINES:
+        unit["tags"].append("doctrine:" + DOCTRINES[preset_id])
     unit["max_hp"] += unit["max_hp"] * pct // 100
     unit["hp"] = unit["max_hp"]
     unit["attack"] += attack
