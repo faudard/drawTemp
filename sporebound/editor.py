@@ -790,10 +790,10 @@ def launch(path):
             x,y = (v*tile_size for v in selected_cell)
             canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
         inspected_tile = board.tile(selected_cell) if board.contains(selected_cell) else None
-        text = f'{mission.name}\\nObjectif : {mission.objective}\\nCase : {selected_cell}\\n'
+        text = f'{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
         if inspected_tile is not None:
             text += (f'Surface : {inspected_tile.surface} | Décor : '
-                     f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\\n')
+                     f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
         for obj in mission.objects:
             if obj['kind'] == 'defense':
                 text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
