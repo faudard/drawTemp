@@ -84,6 +84,17 @@ class MedievalBestiaryStudio:
                   "et arbres d'évolution dans les onglets du Studio. "
                   "Les instances déjà placées ne sont pas réécrites.",
                   wraplength=930).pack(fill="x", padx=8)
+        balance = ttk.LabelFrame(page, text="Rencontres 3.1.6 — composition et difficulté")
+        balance.pack(fill="x", padx=8, pady=5)
+        self.budget_missions = tk.StringVar()
+        ttk.Label(balance, text="3 missions (IDs séparés par une virgule)").pack(
+            side="left", padx=5)
+        ttk.Entry(balance, textvariable=self.budget_missions, width=35).pack(
+            side="left", fill="x", expand=True, padx=4)
+        parent._button(balance, "Analyser les rencontres", self.analyze_three)
+        self.budget_result = tk.StringVar(value="Budget, rôles et alertes de composition.")
+        ttk.Label(page, textvariable=self.budget_result, wraplength=930).pack(
+            fill="x", padx=8)
         self.pack_state = tk.StringVar()
         ttk.Label(page, textvariable=self.pack_state).pack(fill="x", padx=8, pady=3)
         ttk.Label(page, text="Évolution : Recrue → Écuyer → Épéiste / Garde "
@@ -170,6 +181,26 @@ class MedievalBestiaryStudio:
             data, mid, aid, self.unit_id.get(),
             self.unit_name.get() or aid, self.team.get(), pos))
         self.parent.status.set("Variante placée : " + aid)
+
+    def analyze_three(self):
+        from .encounter_balance31 import analyze_three
+        from .tactical_rpg3 import authored_rules_for_document
+        from .model import Content, require
+        data = self.parent._data()
+        ids = [name.strip() for name in self.budget_missions.get().split(",")
+               if name.strip()]
+        require(len(ids) == 3, "Indiquer trois missions distinctes")
+        content = Content.from_dict(data, rules=authored_rules_for_document(data))
+        report = analyze_three(content, ids)
+        lines = []
+        for item in report["encounters"]:
+            note = "; ".join(item["warnings"]) or "budget cohérent"
+            lines.append("{} : ratio {} — rôles {} — {}".format(
+                item["mission"], item["ratio"], ", ".join(item["enemy_roles"]), note))
+        self.budget_result.set(" | ".join(lines))
+        self.parent.status.set(
+            "Diagnostic indicatif : {}. Simuler les trois combats pour certifier.".format(
+                "équilibré" if report["balanced"] else "à revoir"))
 
     def refresh(self):
         if self.parent.owner.project is None:
