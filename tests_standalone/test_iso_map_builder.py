@@ -88,6 +88,43 @@ class IsometricMapAuthoringTests(unittest.TestCase):
         self.doc.undo()
         self.assertTrue(all(self.board().tile(c).surface == 'grass' for c in stroke))
 
+    def test_atlas_png_has_sixteen_valid_textured_frames(self):
+        import struct
+        import zlib
+        from sporebound.iso_map import (ATLAS_MATERIALS, ATLAS_TILE_SIZE,
+                                       ATLAS_VARIANTS, DEFAULT_TERRAIN_ATLAS)
+        png = DEFAULT_TERRAIN_ATLAS.read_bytes()
+        self.assertEqual(png[:8], b'\\x89PNG\\r\\n\\x1a\\n')
+        length = struct.unpack('>I', png[8:12])[0]
+        self.assertEqual(length, 13)
+        width, height = struct.unpack('>II', png[16:24])
+        self.assertEqual((width, height),
+                         (len(ATLAS_MATERIALS)*ATLAS_VARIANTS*ATLAS_TILE_SIZE[0],
+                          ATLAS_TILE_SIZE[1]))
+        self.assertEqual(png[24:26], b'\\x08\\x06')  # RGBA
+        chunks = []
+        pos = 8
+        while pos < len(png):
+            size = struct.unpack('>I', png[pos:pos+4])[0]
+            kind = png[pos+4:pos+8]
+            data = png[pos+8:pos+8+size]
+            import binascii
+            checksum = struct.unpack('>I',png[pos+8+size:pos+12+size])[0]
+            self.assertEqual(binascii.crc32(kind+data)&0xffffffff, checksum)
+            if kind == b'IDAT':
+                chunks.append(data)
+            pos += size+12
+        raw = zlib.decompress(b''.join(chunks))
+        stride = width*4+1
+        self.assertEqual(len(raw), stride*height)
+        center_y = height // 2
+        for index in range(len(ATLAS_MATERIALS)*ATLAS_VARIANTS):
+            frame_x = index*ATLAS_TILE_SIZE[0]
+            alpha = raw[center_y*stride+1+(frame_x+ATLAS_TILE_SIZE[0]//2)*4+3]
+            self.assertGreater(alpha, 170)
+            corner_alpha = raw[center_y*stride+1+frame_x*4+3]
+            self.assertEqual(corner_alpha, 0)
+
     def test_bad_visual_tokens_rejected_by_content_validation(self):
         payload = deepcopy(self.doc.data)
         mission = next(m for m in payload['missions'] if m['id'] == self.mid)
