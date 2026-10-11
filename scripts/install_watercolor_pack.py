@@ -66,43 +66,85 @@ def _read_json(archive, path):
 
 
 def validate_bundle(archive):
-    """Validate all expected assets and reject unsafe paths before extraction."""
+    """Verify the entire reusable asset registry and every extracted PNG.
+
+    No archive member is extracted until preflight has checked path safety,
+    unique paths/IDs, dimensions and plausible decompressed byte sizes.
+    Files outside the allowlist are ignored, never extracted.
+    """
+    import struct
+    from sporebound.assets import AssetRegistry
+
     index = _read_json(archive, PREFIX + "index.json")
     registry = _read_json(archive, PREFIX + "registry.json")
-    if index.get("schema_version") != 1 or registry.get("version") != 1:
-        raise ValueError("Unsupported watercolor pack schema")
-    sprites = index.get("sprites", [])
-    entries = registry.get("entries", [])
-    if len(sprites) != 88 or len(entries) != 103:
+    if not isinstance(index, dict) or not isinstance(registry, dict):
+        raise ValueError("Watercolor manifests must be objects")
+    if index.get("schema_version") != 1:
+        raise ValueError("Unsupported watercolor index schema")
+    # Enforce all typed references, including unknown animation frame IDs.
+    AssetRegistry(registry)
+    sprites = index.get("sprites")
+    entries = registry.get("entries")
+    if not isinstance(sprites, list) or len(sprites) != 88:
+        raise ValueError("Expected 88 indexed sprites")
+    if len(entries) != 103 or sum(e["kind"] == "animation" for e in entries) != 15:
         raise ValueError("Expected 88 sprites and 15 animations")
-    ids = [entry["id"] for entry in entries]
-    if len(set(ids)) != len(ids):
-        raise ValueError("Duplicate sprite/animation asset IDs")
-    sprite_entries = {entry["id"]: entry for entry in entries
-                      if entry["kind"] == "sprite"}
+    sprite_entries = {e["id"]: e for e in entries if e["kind"] == "sprite"}
     if len(sprite_entries) != 88:
         raise ValueError("Incomplete sprite registry")
-    members = []
+
+    # A ZIP may contain duplicate names; ZipFile.getinfo() would silently
+    # return just the last entry. Reject ambiguity for all expected assets.
+    names = archive.namelist()
+    if len(names) != len(set(names)):
+        raise ValueError("Duplicate ZIP member")
+    members, seen_paths, seen_ids = [], set(), set()
+    total = 0
     for item in sprites:
-        path = item["path"]
+        if not isinstance(item, dict):
+            raise ValueError("Invalid indexed sprite")
+        path, asset_id = item.get("path"), item.get("id")
+        if not isinstance(path, str) or not isinstance(asset_id, str):
+            raise ValueError("Invalid sprite path or ID")
         relative = PurePosixPath(path)
         if (relative.is_absolute() or ".." in relative.parts or
                 len(relative.parts) != 3 or relative.parts[0] != "sprites" or
                 relative.suffix != ".png" or str(relative) != path):
             raise ValueError(f"Invalid sprite path: {path}")
-        if item["id"] not in sprite_entries or sprite_entries[item["id"]]["path"] != path:
+        if path.casefold() in seen_paths or asset_id.casefold() in seen_ids:
+            raise ValueError("Duplicate indexed sprite path or ID")
+        seen_paths.add(path.casefold())
+        seen_ids.add(asset_id.casefold())
+        spec = sprite_entries.get(asset_id)
+        if spec is None or spec["path"] != path:
             raise ValueError("Sprite index/registry mismatch")
         name = PREFIX + path
         try:
             info = archive.getinfo(name)
         except KeyError as exc:
             raise ValueError(f"Missing sprite: {name}") from exc
-        if not 24 <= info.file_size <= 15_000_000:
-            raise ValueError(f"Invalid PNG size: {name}")
-        with archive.open(info) as handle:
-            if handle.read(8) != b"\x89PNG\r\n\x1a\n":
-                raise ValueError(f"Invalid PNG signature: {name}")
+        if info.flag_bits & 1:
+            raise ValueError(f"Encrypted ZIP member: {name}")
+        if not 33 <= info.file_size <= 15_000_000:
+            raise ValueError(f"Invalid PNG byte size: {name}")
+        total += info.file_size
+        if total > 300_000_000:
+            raise ValueError("Watercolor pack exceeds 300MB expanded size")
+        # Verify PNG signature and IHDR dimensions without Pillow.
+        with archive.open(info) as stream:
+            header = stream.read(24)
+        if (header[:8] != b"\x89PNG\r\n\x1a\n" or
+                header[12:16] != b"IHDR" or header[8:12] != b"\x00\x00\x00\x0d"):
+            raise ValueError(f"Invalid PNG header: {name}")
+        width, height = struct.unpack(">II", header[16:24])
+        if not (1 <= width <= 4096 and 1 <= height <= 4096):
+            raise ValueError(f"Invalid sprite dimensions: {name}")
+        frame_size = item.get("frame_size")
+        if frame_size is not None and frame_size != [width, height]:
+            raise ValueError(f"Sprite dimensions mismatch: {name}")
         members.append(name)
+    if seen_ids != {id_.casefold() for id_ in sprite_entries}:
+        raise ValueError("Index does not cover registered sprites")
     return entries, members
 
 
