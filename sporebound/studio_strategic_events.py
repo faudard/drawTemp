@@ -82,6 +82,7 @@ class StrategicEventsStudio:
         self.preview_text = self.tk.Text(left, height=9, wrap="word")
         self.preview_text.pack(fill="x", padx=5)
         self._button(left, "Simuler 8 tours", self.preview)
+        self._button(left, "Scène associée…", self.open_story)
 
         tabs = ttk.Notebook(right)
         tabs.pack(fill="both", expand=True)
@@ -148,6 +149,16 @@ class StrategicEventsStudio:
         require(bool(chosen), "Sélectionner d'abord un événement")
         return next(node for node in bp.get("event_graph", [])
                     if node["id"] == chosen[0])
+
+    def open_story(self):
+        node = self._active()
+        reference = self._bp()['id'] + '/' + node['id']
+        editor = self.parent.owner.story_editor
+        editor.strategic_key.set(reference)
+        editor.strategic_scene.set(
+            self.parent.owner.project.story.get(
+                'after_strategic_event', {}).get(reference, ''))
+        editor.notebook.select(editor.tab)
 
     def _save(self, node):
         bp = events.upsert(self._bp(), self.parent.owner._content(), node)

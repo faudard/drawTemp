@@ -93,10 +93,13 @@ class SiegeStudio:
         self.campaign_box.pack(side="left", padx=4)
         self._button(header, "Nouveau siège", self.new_siege)
         self._button(header, "Supprimer siège", self.delete_siege)
+        self._button(header, "Assistant siège", lambda:
+                     self.pages.select(self.flow_page))
         self._button(header, "Branches", lambda: self._open_tab("Graphe des missions"))
         self._button(header, "Prologue / fins", lambda: self._open_tab("Scénario & dialogues"))
 
         pages = ttk.Notebook(root)
+        self.pages = pages
         pages.pack(fill="both", expand=True, padx=8, pady=4)
         fronts = ttk.Frame(pages)
         links = ttk.Frame(pages)
@@ -106,6 +109,7 @@ class SiegeStudio:
         visual_logistics = ttk.Frame(pages)
         route_policy = ttk.Frame(pages)
         strategic = ttk.Frame(pages)
+        self.front_page = fronts
         pages.add(fronts, text="Fronts et finale")
         pages.add(links, text="Événements inter-fronts")
         pages.add(waves, text="Vagues de renforts")
@@ -119,8 +123,14 @@ class SiegeStudio:
         from .studio_routes import RoutesStudio
         self.routes_editor = RoutesStudio(self, route_policy)
         pages.add(strategic, text="Graphe stratégique")
+        self.strategic_page = strategic
         from .studio_strategic_events import StrategicEventsStudio
         self.strategic_editor = StrategicEventsStudio(self, strategic)
+        flow = ttk.Frame(pages)
+        pages.add(flow, text="Assistant 3 missions")
+        self.flow_page = flow
+        from .studio_siege_wizard import SiegeFlowWizard
+        self.flow_wizard = SiegeFlowWizard(self, flow)
 
         lside = ttk.Frame(fronts)
         lside.pack(side="left", fill="both", expand=True)
@@ -791,6 +801,7 @@ class SiegeStudio:
             self.logistics_editor.refresh(bp)
             self.routes_editor.refresh(bp)
             self.strategic_editor.refresh(bp)
+            self.flow_wizard.refresh()
             self._object_choices()
         finally:
             self._refreshing = False

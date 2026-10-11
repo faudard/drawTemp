@@ -3,6 +3,8 @@
 Only this module creates widgets; the index and game engine remain headless.
 """
 from .model import RuleError
+from .studio_index4 import StudioIndex
+from .game_export4 import export_game
 from .workspace import (GROUPS, ProjectWorkspaceIndex, create_blank_mission,
                         create_campaign, duplicate_mission)
 
@@ -11,6 +13,7 @@ class ProjectWorkspaceTab:
     def __init__(self, owner, notebook):
         self.owner = owner
         self.notebook = notebook
+        self.query = owner.tk.StringVar()
         ttk = owner.ttk
         root = ttk.Frame(notebook)
         notebook.add(root, text='Espace projet')
@@ -21,6 +24,12 @@ class ProjectWorkspaceTab:
                   'Les éditeurs spécialisés restent la source des modifications.',
                   wraplength=950).pack(anchor='w', padx=12, pady=(0, 8))
 
+        searchbar = ttk.Frame(root)
+        searchbar.pack(fill='x', padx=12, pady=5)
+        ttk.Label(searchbar, text='Rechercher :').pack(side='left')
+        ttk.Entry(searchbar, textvariable=self.query).pack(
+            side='left', fill='x', expand=True, padx=7)
+        self.query.trace_add('write', lambda *_: self.refresh())
         body = ttk.Panedwindow(root, orient='horizontal')
         body.pack(fill='both', expand=True, padx=10, pady=6)
         tree_frame = ttk.Frame(body)
@@ -42,6 +51,12 @@ class ProjectWorkspaceTab:
         self.summary = ttk.Label(detail_frame, text='', justify='left',
                                  wraplength=470)
         self.summary.pack(anchor='w', padx=10, pady=8)
+        ttk.Label(detail_frame, text='Références entrantes / sortantes').pack(
+            anchor='w', padx=10)
+        self.refs = owner.tk.Listbox(detail_frame, height=7, exportselection=False)
+        self.refs.pack(fill='x', padx=10, pady=5)
+        self.ref_keys = []
+        self.refs.bind('<Double-1>', lambda _e: self.owner._run(self.open_reference))
         ttk.Button(detail_frame, text='Ouvrir dans le Studio',
                    command=lambda: self.owner._run(self.open_selected)).pack(
                        anchor='w', padx=10, pady=6)
@@ -57,8 +72,14 @@ class ProjectWorkspaceTab:
         ttk.Button(controls, text='Nouvelle campagne',
                    command=lambda: self.owner._run(self.new_campaign)).pack(
                        fill='x', padx=8, pady=4)
+        ttk.Button(controls, text='Assistant siège (3 missions)',
+                   command=lambda: self.owner._run(self.open_siege_wizard)).pack(
+                       fill='x', padx=8, pady=4)
         ttk.Button(controls, text='Vérifier projet et assets',
                    command=lambda: self.owner._run(self.validate_all)).pack(
+                       fill='x', padx=8, pady=4)
+        ttk.Button(controls, text='Exporter le jeu en ZIP',
+                   command=lambda: self.owner._run(self.export)).pack(
                        fill='x', padx=8, pady=4)
         ttk.Label(detail_frame, text='Les cartes sont enregistrées avec le contenu; '
                   'le titre, les campagnes, dialogues et assets avec le fichier .game.json. '
@@ -70,6 +91,9 @@ class ProjectWorkspaceTab:
     def index(self):
         return ProjectWorkspaceIndex(self.owner._content(), self.owner.project)
 
+    def model(self):
+        return StudioIndex(self.owner._content(), self.owner.project)
+
     def refresh(self):
         if self.owner.project is None:
             return
@@ -79,10 +103,12 @@ class ProjectWorkspaceTab:
                     if self.tree.item(key, 'open')}
         for key in self.tree.get_children(''):
             self.tree.delete(key)
-        sections = self.index().sections()
+        model = self.model()
+        sections = model.sections
+        shown = {node.key for node in model.search(self.query.get())}
         for kind, title in GROUPS:
             parent = 'group:' + kind
-            items = sections[kind]
+            items = [node for node in sections[kind] if node.key in shown]
             self.tree.insert('', 'end', iid=parent, text=f'{title} ({len(items)})',
                              open=parent in expanded or not expanded)
             for node in items:
@@ -106,6 +132,26 @@ class ProjectWorkspaceTab:
                             if node else 'Sélectionner une ressource')
         self.summary.config(text=node.summary if node else
                             'Explorer campagnes, missions, scénarios et bibliothèques.')
+        self.refs.delete(0, 'end')
+        self.ref_keys = []
+        if node is not None:
+            model = self.model()
+            for relation in model.outgoing(node.key):
+                self.ref_keys.append(relation.target)
+                self.refs.insert('end', '→ ' + relation.label + ' : ' + relation.target)
+            for relation in model.incoming(node.key):
+                self.ref_keys.append(relation.source)
+                self.refs.insert('end', '← ' + relation.label + ' : ' + relation.source)
+
+    def open_reference(self):
+        selected = self.refs.curselection()
+        if not selected:
+            return
+        target = self.ref_keys[selected[0]]
+        self.query.set('')
+        self.tree.selection_set(target)
+        self.tree.see(target)
+        self.open_selected()
 
     def _show_tab(self, title):
         for tab in self.notebook.tabs():
@@ -136,6 +182,19 @@ class ProjectWorkspaceTab:
             self.owner.story_editor.scene_id = node.id
             self.owner.story_editor.refresh()
             self._show_tab('Scénario & dialogues')
+        elif node.kind == 'strategic_event':
+            siege_id, event_id = node.id.split('/', 1)
+            studio = self.owner.siege_studio
+            studio.siege_id.set(siege_id)
+            studio.refresh()
+            studio.pages.select(studio.strategic_page)
+            studio.strategic_editor.nodes.selection_set(event_id)
+            studio.strategic_editor._select_node()
+            self._show_tab('Campagne & siège')
+        elif node.kind == 'cinematic':
+            self.owner.cinematic_studio.clip_id = node.id
+            self.owner.cinematic_studio.refresh()
+            self._show_tab('Cinématiques')
         elif node.kind == 'actor':
             self._show_tab('Bibliothèque d’acteurs')
         elif node.kind == 'game':
@@ -220,13 +279,31 @@ class ProjectWorkspaceTab:
         self.tree.selection_set('campaign:' + cid)
         self.tree.see('campaign:' + cid)
 
+    def open_siege_wizard(self):
+        siege = self.owner.siege_studio
+        self.notebook.select(siege.tab)
+        siege.pages.select(siege.flow_page)
+
     def validate_all(self):
-        index = self.index()
-        issues = index.asset_issues(self.owner.project_path.parent)
-        if issues:
-            self.owner.dialogs.showerror('Assets non valides',
-                                         '\n'.join(f'{i["asset_id"]}: {i["message"]}'
-                                                   for i in issues[:15]))
-            self.status.config(text=f'{len(issues)} erreur(s) de fichiers assets.')
-        else:
-            self.status.config(text='Contenu, projet, références et fichiers assets : valides.')
+        issues = self.model().diagnostics(self.owner.project_path.parent)
+        errors = [i for i in issues if i[0] == 'error']
+        warnings = [i for i in issues if i[0] != 'error']
+        if errors:
+            self.owner.dialogs.showerror('Diagnostics Game Studio',
+                '\n'.join(f'{key}: {message}' for _, key, message in errors[:15]))
+        elif warnings:
+            self.owner.dialogs.showwarning('Diagnostics Game Studio',
+                '\n'.join(f'{key}: {message}' for _, key, message in warnings[:15]))
+        self.status.config(text=f'Diagnostics : {len(errors)} erreur(s), '
+                                f'{len(warnings)} avertissement(s).')
+
+    def export(self):
+        if self.owner._pending_fields():
+            raise RuleError('Appliquer les champs de configuration avant export.')
+        filename = self.owner.dialogs.asksaveasfilename(
+            defaultextension='.zip', initialfile='jeu-export.zip',
+            filetypes=[('Archive de jeu ZIP', '*.zip')])
+        if filename:
+            output = export_game(self.owner._content(), self.owner.project,
+                                 self.owner.project_path.parent, filename)
+            self.status.config(text='Export validé : ' + str(output))
