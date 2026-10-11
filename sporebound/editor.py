@@ -14,6 +14,9 @@ from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, render_isometric, SURFACE_COLORS, IsoTerrainAtlas)
 from .iso_props import IsoPropAtlas
+from .iso_structures import (STRUCTURE_NAMES, structure_template,
+                             structure_footprint, validate_structure_placement,
+                             place_structure)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -228,6 +231,8 @@ def launch(path):
     surface_var = tk.StringVar(value='grass')
     feature_var = tk.StringVar(value='tree')
     level_var = tk.IntVar(value=2)
+    structure_var = tk.StringVar(value='Maison')
+    structure_turns = 0
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
@@ -538,6 +543,15 @@ def launch(path):
             refresh()
             status_var.set(f'Zoom carte : {tile_size}px/case')
 
+    @guarded
+    def rotate_structure(direction):
+        nonlocal structure_turns
+        structure_turns = (structure_turns + direction) % 4
+        tool_var.set('Structure')
+        canvas.delete('structure_preview')
+        status_var.set(f'Structure {structure_var.get()} : rotation '
+                       f'{structure_turns * 90} degrés ; cliquer pour poser.')
+
     def active_brush():
         return f'height:{level_var.get()}' if brush_var.get() == 'height_set' else brush_var.get()
 
@@ -577,7 +591,27 @@ def launch(path):
     def paste_preview(event):
         canvas.delete('paste_preview')
         canvas.delete('fill_preview')
+        canvas.delete('structure_preview')
         if battle:
+            return
+        if tool_var.get() == 'Structure':
+            anchor = event_cell(event)
+            if anchor is None:
+                return
+            clip = structure_template(structure_var.get(), structure_turns)
+            cells = structure_footprint(clip, anchor)
+            mission = next(m for m in doc.data['missions']
+                           if m['id'] == mission_var.get())
+            width, height = mission['board']['width'], mission['board']['height']
+            inside = [c for c in cells
+                      if 0 <= c[0] < width and 0 <= c[1] < height]
+            try:
+                validate_structure_placement(doc.data, mission_var.get(),
+                                             clip, anchor)
+                color = '#36a16c'
+            except RuleError:
+                color = '#e05252'
+            preview_cells(inside, tag='structure_preview', color=color)
             return
         if tool_var.get() == 'Remplissage':
             anchor = event_cell(event)
@@ -637,6 +671,15 @@ def launch(path):
             refresh()
         elif tool == 'Collage':
             paste_at(selected_cell)
+        elif tool == 'Structure':
+            if source_pending():
+                raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
+            name = structure_var.get()
+            rotation = structure_turns
+            design_change(lambda: doc.replace(place_structure(
+                doc.data, mission_var.get(), name, selected_cell, rotation)))
+            status_var.set(f'Structure {name} posée en {selected_cell} '
+                           f'(rotation {rotation * 90} degrés).')
         elif tool == 'Remplissage':
             if not brush.startswith('surface:'):
                 raise RuleError('Choisir un sol dans la palette avant le remplissage.')
@@ -930,6 +973,8 @@ def launch(path):
                      f' | Presse-papiers : {len(terrain_clipboard.offsets) if terrain_clipboard else 0}'
                      '\nRotation/symétrie : modifier le modèle puis coller.'
                      '\nGroupe : sélectionner les unités/objets et utiliser les flèches.'
+                     '\nStructures : choisir un modèle multi-cases, le tourner puis cliquer.'
+                     '\nAperçu vert : emplacement libre ; rouge : interdit/hors carte.'
                      '\nRemplissage : choisir un sol puis remplir une zone contiguë.'
                      '\nPipette sol/décor : cliquer une case pour reprendre son pinceau.'
                      '\nCouches : visibilité d’édition seulement ; règles inchangées.'
@@ -953,7 +998,8 @@ def launch(path):
     ttk.Label(controls,text='Outil').pack(side='left')
     ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=15,
                  values=['Pinceau','Rectangle','Sélection','Collage',
-                         'Remplissage','Pipette sol','Pipette décor']).pack(side='left')
+                         'Remplissage','Pipette sol','Pipette décor',
+                         'Structure']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -1013,6 +1059,21 @@ def launch(path):
     ttk.Button(scenery_controls, text='Fixer niveau',
                command=lambda: (brush_var.set('height_set'),
                                 tool_var.set('Pinceau'))).pack(side='left',padx=4)
+    structure_controls = ttk.Frame(root)
+    structure_controls.pack(fill='x', padx=5)
+    ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
+    structure_box = ttk.Combobox(structure_controls, textvariable=structure_var,
+                                 state='readonly', width=16, values=STRUCTURE_NAMES)
+    structure_box.pack(side='left', padx=2)
+    structure_box.bind('<<ComboboxSelected>>', lambda e: tool_var.set('Structure'))
+    ttk.Button(structure_controls, text='Poser structure',
+               command=lambda: tool_var.set('Structure')).pack(side='left',padx=3)
+    ttk.Button(structure_controls, text='↺ Bâtiment',
+               command=lambda: rotate_structure(-1)).pack(side='left',padx=2)
+    ttk.Button(structure_controls, text='↻ Bâtiment',
+               command=lambda: rotate_structure(1)).pack(side='left',padx=2)
+    ttk.Label(structure_controls,
+              text='Aperçu vert/rouge = valide/interdit. Rotation sans modifier les règles tactiques.').pack(side='left',padx=8)
     advanced_controls = ttk.Frame(root)
     advanced_controls.pack(fill='x', padx=5)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
