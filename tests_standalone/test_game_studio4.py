@@ -76,10 +76,9 @@ class GameStudio4Tests(unittest.TestCase):
             first = export_game(self.content, project, base, base / 'a.zip')
             second = export_game(self.content, project, base, base / 'b.zip')
             self.assertEqual(first.read_bytes(), second.read_bytes())
-            self.assertNotIn('saves', first.read_bytes().decode('latin1').split(
-                'export_manifest.json')[0].split())
             with ZipFile(first) as archive:
                 names = set(archive.namelist())
+                self.assertFalse(any(name.startswith('saves/') for name in names))
                 self.assertTrue({'run_game.py', 'game/content.json',
                                  'game/project.game.json', 'game/audio/title.ogg',
                                  'sporebound/player_app.py',
