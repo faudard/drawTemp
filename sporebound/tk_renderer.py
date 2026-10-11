@@ -3,7 +3,6 @@
 Importing this module is display-free. All tactical rules remain headless.
 """
 from pathlib import Path
-from math import gcd
 
 from .model import RuleError
 from .visual_motion import animation_sprite_id
