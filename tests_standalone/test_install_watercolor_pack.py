@@ -110,6 +110,69 @@ class WatercolorInstallerTests(unittest.TestCase):
                 installer.install(pack, content, project, output)
             self.assertFalse(output.exists())
 
+    def test_existing_jeanne_art_is_preserved_and_preview_bindings_win(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pack, content, project = prepare(root)
+            original_art = root / "art/jeanne/legacy.png"
+            original_art.parent.mkdir(parents=True)
+            original_art.write_bytes(PNG)
+            game = json.loads(project.read_text(encoding="utf-8"))
+            game["assets"] = {
+                "version": 1,
+                "entries": [
+                    {"id": "legacy_jeanne", "kind": "sprite",
+                     "path": "art/jeanne/legacy.png"},
+                    {"id": "legacy_jeanne_move", "kind": "animation",
+                     "loop": True, "frames": [
+                         {"sprite": "legacy_jeanne", "duration_ms": 100}]},
+                ],
+                "bindings": {
+                    "sprite": {"jeanne": "legacy_jeanne"},
+                    "animation": {
+                        "jeanne_move_south": "legacy_jeanne_move",
+                        "jeanne_idle_south": "legacy_jeanne_move",
+                    },
+                },
+            }
+            project.write_text(json.dumps(game), encoding="utf-8")
+            original_bytes = project.read_bytes()
+            output = root / "preview"
+            output_project = installer.install(pack, content, project, output)
+            self.assertEqual(original_bytes, project.read_bytes())
+            self.assertEqual((output / "art/jeanne/legacy.png").read_bytes(), PNG)
+            from sporebound.assets import AssetRegistry
+            registry = AssetRegistry(json.loads(
+                output_project.read_text(encoding="utf-8"))["assets"])
+            self.assertEqual(registry.diagnostics(output), [])
+            self.assertEqual(registry.binding("sprite", "jeanne")["id"],
+                             "jeanne_idle")
+            self.assertEqual(registry.binding("animation", "jeanne_move_south")["id"],
+                             "anim_jeanne_walk")
+            self.assertIsNone(registry.binding("animation", "jeanne_idle_south"))
+            self.assertEqual(registry.binding("animation", "jeanne_attack_west")["id"],
+                             "anim_jeanne_attack")
+            self.assertEqual(registry.require_reference("legacy_jeanne")["id"],
+                             "legacy_jeanne")
+
+    def test_missing_original_asset_rejects_preview_without_creating_output(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pack, content, project = prepare(root)
+            game = json.loads(project.read_text(encoding="utf-8"))
+            game["assets"] = {
+                "version": 1,
+                "entries": [{"id": "legacy_jeanne", "kind": "sprite",
+                             "path": "art/jeanne/missing.png"}],
+                "bindings": {},
+            }
+            project.write_text(json.dumps(game), encoding="utf-8")
+            output = root / "preview"
+            from sporebound.model import RuleError
+            with self.assertRaises(RuleError):
+                installer.install(pack, content, project, output)
+            self.assertFalse(output.exists())
+
     def test_installer_creates_relocatable_game_without_modifying_input(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
