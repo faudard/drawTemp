@@ -33,6 +33,19 @@ def main():
         run([python, "-c", "import sporebound; print(sporebound.__file__)"],
             cwd=root)
         run([python, "-m", "sporebound", "validate"], cwd=root)
+        # The playable Jeanne atlas/portrait must ship inside the wheel, not
+        # merely validate from a developer checkout.
+        script = (
+            "from pathlib import Path; import sporebound; "
+            "from sporebound.game_project import GameProject; "
+            "from sporebound.model import Content; "
+            "root=Path(sporebound.__file__).parent / 'content'; "
+            "content=Content.load(root / 'jeanne.json'); "
+            "project=GameProject.load(root / 'jeanne.game.json', content); "
+            "issues=project.asset_registry().diagnostics(root); "
+            "assert not issues, issues"
+        )
+        run([python, "-c", script], cwd=root)
         save = root / "battle.json"
         run([python, "-m", "sporebound", "simulate", "--mission", "garden",
              "--seed", "42", "--save", save], cwd=root)
