@@ -155,6 +155,34 @@ class WatercolorInstallerTests(unittest.TestCase):
             self.assertEqual(registry.require_reference("legacy_jeanne")["id"],
                              "legacy_jeanne")
 
+    def test_real_jeanne_project_with_existing_atlas_installs_portably(self):
+        from sporebound.model import Content
+        from sporebound.game_project import GameProject
+        from sporebound.visual_motion import animation_sprite_id
+        content_path = ROOT / "sporebound/content/jeanne.json"
+        project_path = ROOT / "sporebound/content/jeanne.game.json"
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pack, _, _ = prepare(root)
+            demo_dir = root / "jeanne_demo"
+            installed = installer.install(pack, content_path, project_path, demo_dir)
+            self.assertTrue((demo_dir / "art/jeanne/jeanne_atlas.png").is_file())
+            self.assertTrue((demo_dir / "art/jeanne/jeanne_portrait.png").is_file())
+            self.assertEqual(len(list((demo_dir / "assets/watercolor/sprites").rglob("*.png"))), 88)
+            content = Content.load(demo_dir / "jeanne.json")
+            project = GameProject.load(installed, content)
+            registry = project.asset_registry()
+            self.assertEqual(registry.diagnostics(demo_dir), [])
+            self.assertEqual(registry.binding("sprite", "jeanne")["id"], "jeanne_idle")
+            self.assertEqual(
+                animation_sprite_id(registry, "jeanne", "player", "move", "south", 10),
+                "jeanne_walk_a")
+            self.assertEqual(
+                animation_sprite_id(registry, "jeanne", "player", "attack", "west", 200),
+                "jeanne_slash")
+            self.assertIsNone(
+                animation_sprite_id(registry, "jeanne", "player", "idle", "south", 100))
+
     def test_missing_original_asset_rejects_preview_without_creating_output(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
