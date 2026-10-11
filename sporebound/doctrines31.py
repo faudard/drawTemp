@@ -101,17 +101,37 @@ def _bandit(battle, actor):
         return None
     leaders = [u for u in battle.units if u.team == actor.team
                and "bandit" in u.tags and "leader" in u.tags]
+    from .morale31 import morale_snapshot
+    # Officers prefer an explicit support action when morale is failing.
+    if "leader" in actor.tags and not actor.acted and not battle.status_blocks(actor, "act"):
+        if "rally" in battle.rules.commands:
+            allies = sorted((u for u in battle.units
+                             if u.alive and u.team == actor.team and u.id != actor.id
+                             and distance(actor.pos, u.pos) <= 2
+                             and morale_snapshot(battle, u)["can_be_rallied"]),
+                            key=lambda u: (-morale_snapshot(battle, u)["pressure"], u.id))
+            if allies:
+                return {"kind": "rally", "target": allies[0].id}
+
+    state = morale_snapshot(battle, actor)["state"]
     broken = (any(not u.alive for u in leaders)
-              or actor.hp * 3 <= actor.max_hp)
+              or actor.hp * 3 <= actor.max_hp
+              or state in {"wavering", "routing"})
     if broken and "leader" not in actor.tags:
-        if (actor.hp * 2 <= actor.max_hp and
-                "surrender" in battle.rules.commands and not actor.acted):
+        # A cornered routing bandit capitulates; wounded brigands preserve
+        # their existing low-HP surrender behaviour.
+        surrounded = min(distance(actor.pos, e.pos) for e in enemies) <= 2
+        if ("surrender" in battle.rules.commands and not actor.acted
+                and (actor.hp * 2 <= actor.max_hp
+                     or state == "routing" and surrounded)):
             return {"kind": "surrender"}
         fleeing = _move(battle, actor, lambda cell: (
             min(distance(cell, t.pos) for t in enemies) * 4
             + battle.board.tile(cell).cover * .05))
         if fleeing:
             return fleeing
+        if state == "routing" and "surrender" in battle.rules.commands and not actor.acted:
+            return {"kind": "surrender"}
         return {"kind": "end"}
     # An ambusher prefers cover and waits for an exposed target rather than
     # abandoning it to chase across the open.
@@ -216,7 +236,9 @@ def surrender(battle, actor, command):
             and actor.alive and not actor.acted, "Reddition indisponible")
     leaders = [u for u in battle.units if u.team == actor.team
                and "bandit" in u.tags and "leader" in u.tags]
-    require(actor.hp * 3 <= actor.max_hp or any(not u.alive for u in leaders),
+    from .morale31 import morale_snapshot
+    require(actor.hp * 3 <= actor.max_hp or any(not u.alive for u in leaders)
+            or morale_snapshot(battle, actor)["state"] == "routing",
             "Le combattant n'est pas démoralisé")
     actor.hp = 0
     actor.acted = True
