@@ -17,7 +17,6 @@ import time
 import tracemalloc
 from pathlib import Path
 
-from scripts.benchmark_renderers_375 import quantile
 from sporebound.engine import Battle
 from sporebound.game_project import GameProject
 from sporebound.model import Content
@@ -26,6 +25,13 @@ from sporebound.tk_renderer import CanvasRenderer
 from sporebound.visual_motion import MotionDirector
 
 CONTENT = Path(__file__).resolve().parents[1] / "sporebound" / "content"
+
+def quantile(values, fraction):
+    values = sorted(values)
+    offset = (len(values) - 1) * fraction
+    low, high = int(offset), min(len(values) - 1, int(offset) + 1)
+    return values[low] + (values[high] - values[low]) * (offset - low)
+
 
 
 def build_scene(actors=None):
