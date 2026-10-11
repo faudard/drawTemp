@@ -13,9 +13,16 @@ from dataclasses import replace
 import json
 import platform
 import statistics
+import sys
 import time
 import tracemalloc
 from pathlib import Path
+
+# Running this standalone script prepends scripts/ rather than the repo root
+# to sys.path. Support checkout execution without a wheel installation.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from sporebound.engine import Battle
 from sporebound.game_project import GameProject
