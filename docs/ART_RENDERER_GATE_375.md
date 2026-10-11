@@ -2,7 +2,7 @@
 
 ## Statut et décision technique
 
-**Prototype d'intégration livré, validation comparative encore ouverte.**
+**Jalon 3.7.5 : comparaison mesurée et choix du renderer de référence documentés.**
 
 La branche a été réconciliée avec la campagne Acte I de la PR #62 : les 13 scènes,
 les choix de recrutement, les missions de Vaucouleurs et les conséquences restent
@@ -12,9 +12,12 @@ Le renderer de production reste **Tk Canvas** pour le vertical slice Jeanne :
 c'est le seul backend déjà connecté à `BattleFrame`, au Studio et aux contrôles
 de campagne, sans dépendance optionnelle. Le code tactique Python reste headless.
 
-Ce choix est **provisoire** : ni pygame-ce ni PySide6 ne doit être déclaré
-« plus rapide » sans les mesures reproductibles ci-dessous. Ne pas migrer le
-Player avant validation graphique, clavier, DPI, packaging et autosave.
+Ce choix reste **local au vertical slice actuel** : la comparaison des blits
+mesure pygame-ce et PySide6 plus rapides que Tk sur Ubuntu/Xvfb, mais aucun des
+deux n'est actuellement intégré à toutes les interactions du Player.
+Ne pas migrer le Player avant validation clavier, DPI, packaging, autosave
+et mesure des scènes complètes. Le jalon 3.7.5 fixe l'architecture présente ;
+une migration éventuelle relève d'un jalon ultérieur.
 
 ## Première héroïne jouable : Jeanne
 
@@ -114,18 +117,57 @@ outil OS dans le relevé final. La parité des outils GUI ne signifie pas
 encore parité complète avec le Player (tuiles, overlays, sélection) : ce
 prototype isole le coût du blit, avant un éventuel spike de Player alternatif.
 
-### Gate à fermer avant choix final
+### Mesures reproductibles : Ubuntu/Xvfb — 11 octobre 2026
+
+Le [workflow comparatif #38131081008](https://github.com/faudard/drawTemp/actions/runs/38131081008)
+a exécuté avec succès **54 échantillons réels** sur **un même runner**
+(Python 3.12.15, viewport 800×600, 120 frames + warmup,
+3 backends × 3 populations × 2 échelles × 3 répétitions).
+La synthèse ci-dessous donne la **médiane des p95** de trois répétitions,
+en millisecondes, selon le collecteur de la PR.
+
+| Population et échelle | Tk Canvas | pygame-ce | PySide6 |
+| --- | ---: | ---: | ---: |
+| 20 acteurs / 1× | 1,299 | 1,295 | 0,209 |
+| 20 acteurs / 2× | 2,088 | 1,410 | 0,227 |
+| 80 acteurs / 1× | 4,415 | 1,626 | 0,420 |
+| 80 acteurs / 2× | 7,321 | 1,948 | 0,490 |
+| 200 acteurs / 1× | 10,428 | 2,369 | 0,874 |
+| 200 acteurs / 2× | 17,572 | 2,926 | 1,042 |
+
+**Portée exacte :** le benchmark mesure le coût du dessin de la même image,
+de l'effacement et du traitement des événements ; il ne compare pas encore
+le moteur de rendu *complet* de drawTemp, les tuiles, surcouches, télégraphes,
+animations complexes, réactivité des menus ou consommation mémoire native.
+L'API `QWidget.repaint()` n'offre pas exactement la même garantie de
+présentation écran que `pygame.display.flip()` : comparer les valeurs en
+tant qu'indicateurs de coût CPU sur ce workload, **pas** comme des FPS
+équivalents ou une preuve de supériorité visuelle. Xvfb n'est pas un
+GPU de joueur. Les p95 ne sont pas des délais garantis.
+
+**Arbitrage 3.7.5 :** conserver **Tk Canvas** comme backend de référence
+du vertical slice Jeanne, car il existe déjà, a des contrôles de campagne,
+un registre d'assets, les tests clavier et des builds Windows/Linux/macOS.
+Le scénario synthétique 200 acteurs × 2× reste sous **33,3 ms p95**
+sur ce runner. Pour des batailles plus riches et/ou un objectif 60 FPS
+à 200 acteurs, prioriser un **spike pygame-ce** centré sur `BattleFrame` ;
+tester PySide6 si l'accessibilité native, le DPI et les outils GUI compensent
+sa distribution Qt. La migration ne doit jamais altérer le moteur headless.
+
+### Gate 3.7.5 et limites avant migration
 
 | Critère | Cible | Situation |
 | --- | --- | --- |
-| 4 directions × 5 états + portrait | Runtime et validation sans lib externe | Implanté |
-| Sécurité des régions d'atlas | Rejet des dimensions/coords invalides | Implanté |
-| Gameplay et replay headless inchangés | Tests existants + nouveaux | Tests ajoutés |
-| Comparaison Tk/pygame-ce/PySide6 | p50/p95 à 20/80/200 acteurs en 1x/2x | Harness livré ; mesures à exécuter |
-| Performance Player réel | p95 < 33,3 ms à l'échelle cible, commandes fluides | Non encore mesurée |
-| A11y, contrôle clavier, packaging sur 3 OS | Aucun recul fonctionnel | Non encore validé |
+| 4 directions × 5 états + portraits | Runtime, PNG validés, GUI Tk | Réussi (PR #64) |
+| Sécurité des régions d'atlas | Rejet des dimensions/coords invalides | Réussi (tests) |
+| Gameplay et replay headless inchangés | CI Python 3.10/3.12/3.14 sur 3 OS | Réussi sur le head de référence |
+| Comparaison Tk/pygame-ce/PySide6 | 54 mesures réelles × p50/p95, un même runner | Réussi (Linux/Xvfb) |
+| Performance Player réel | 20 à 200 acteurs + overlay/zoom/caméra, p95 cible | À mesurer avant migration |
+| A11y et contrôles clavier | Aucun recul sur Player complet | Régressions de base couvertes ; audit manuel restant |
+| Packaging multi-OS | Wheel avec atlas, portrait et expressions | Réussi (distribution CI) |
+| GPU/hardware et macOS/Windows | Comparatif visuel sur machines de jeu | À programmer en validation approfondie |
 
-**Décision de repli :** conserver Tk tant que ces gates restent ouverts.
+**Décision de livraison 3.7.5 :** Tk est conservé ; les gates de migration sont distincts.
 En cas de p95 trop élevé sur le Player réel, privilégier un spike
 `pygame-ce` pour le combat, tout en gardant le Studio en Tk, et mesurer le
 coût de deux runtimes. Considérer PySide6 si l'accessibilité et la gestion DPI
