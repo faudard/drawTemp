@@ -12,7 +12,7 @@ from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
 from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
                             transform_terrain)
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
-                      _line_cells, render_isometric, SURFACE_COLORS)
+                      _line_cells, render_isometric, SURFACE_COLORS, IsoTerrainAtlas)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -747,7 +747,7 @@ def launch(path):
                 canvas, board, mission, units, cell_size=tile_size,
                 layers={name: var.get() for name, var in layer_vars.items()},
                 selected_cell=selected_cell, selected_tiles=selected_tiles,
-                reachable=())
+                reachable=(), atlas=iso_atlas)
         else:
             iso_geometry = None
             canvas.delete('all')
@@ -950,6 +950,7 @@ def launch(path):
     canvas_frame = ttk.Frame(work)
     canvas_frame.pack(side='left',fill='both',expand=True)
     canvas = tk.Canvas(canvas_frame,background='#eeeeee',takefocus=1)
+    iso_atlas = IsoTerrainAtlas(canvas)
     xs,ys = ttk.Scrollbar(canvas_frame,orient='horizontal',command=canvas.xview),ttk.Scrollbar(canvas_frame,orient='vertical',command=canvas.yview)
     canvas.configure(xscrollcommand=xs.set,yscrollcommand=ys.set)
     xs.pack(side='bottom',fill='x'); ys.pack(side='right',fill='y'); canvas.pack(fill='both',expand=True)
