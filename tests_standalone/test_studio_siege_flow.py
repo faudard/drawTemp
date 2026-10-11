@@ -73,6 +73,27 @@ class GuidedSiegeTests(unittest.TestCase):
         self.assertNotIn('walls_open_gate', session.fired_graph)
         self.assertNotIn('gate', session.front_overrides)
 
+    def test_authentic_walls_interaction_opens_gate_on_unloaded_front(self):
+        raw = self.content.to_dict()
+        walls = next(row for row in raw['missions']
+                     if row['id'] == 'castle_ramparts')
+        lever = next(o for o in walls['objects'] if o['id'] == 'portcullis_lever')
+        lever['pos'] = [2, 3]
+        content = Content.from_dict(raw)
+        project = build_guided_siege(
+            self.project, content, siege_id='authentic',
+            campaign_id='main', missions=MISSIONS,
+            link_lever='portcullis_lever', link_door='main_gate')
+        session = make_session(project.sieges[0], content)
+        self.assertNotIn('gate', session.battles)
+        session.execute({'kind': 'start_battle'})
+        self.assertNotIn('walls_open_gate', session.fired_graph)
+        session.execute({'kind': 'interact', 'object': 'portcullis_lever'})
+        self.assertIn('walls_open_gate', session.fired_graph)
+        self.assertTrue(session.front_overrides['gate']['main_gate']['open'])
+        self.assertEqual(MultiFrontSession.replay(session.recording()).digest(),
+                         session.digest())
+
     def test_wrong_ids_missing_partner_and_invalid_budget_leave_project_unchanged(self):
         saved = deepcopy(self.project.to_dict())
         variants = (
