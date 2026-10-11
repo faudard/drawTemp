@@ -7,7 +7,7 @@ from copy import deepcopy
 
 from . import story_authoring as edit
 from .campaign import Campaign
-from .model import RuleError
+from .model import RuleError, require
 from .narrative import StoryBook
 
 
@@ -117,6 +117,7 @@ class StoryEditor:
         self._button(line,'Appliquer suite de victoire',self.set_outcome)
         self._button(line,'Retirer introduction',lambda:self.set_intro(clear=True))
         self._button(line,'Retirer suite',lambda:self.set_outcome(clear=True))
+        self._button(line,'Cinématique de cette scène…',self.open_scene_cinematic)
         self._button(line,'Lier événement stratégique',self.set_strategic_scene)
         self._button(line,'Délier événement',lambda:self.set_strategic_scene(clear=True))
         ttk.Label(routes,text='Sur une mission avec dialogue de victoire, seul le choix narratif débloque la suite (et non tous les liens classiques).',
@@ -340,6 +341,29 @@ class StoryEditor:
         self._apply(lambda project, content: edit.set_strategic_scene(
             project, content, siege, node,
             '' if clear else self.strategic_scene.get()))
+
+    def open_scene_cinematic(self):
+        """Navigate to the authoring timeline of the selected narrative scene."""
+        scene_id = self.scene_id
+        require(bool(scene_id) and any(
+            scene['id'] == scene_id for scene in self._scenes()),
+            'Sélectionner une scène narrative avant sa cinématique.')
+        studio = self.owner.cinematic_studio
+        selected = next((clip for clip in self.owner.project.cinematics
+                         if clip['trigger'] == {'kind': 'scene',
+                                               'target': scene_id}), None)
+        if selected is not None:
+            studio.clip_id = selected['id']
+        else:
+            studio.clip_id = ''
+        studio.refresh()
+        if selected is None:
+            studio.vars['cid'].set('scene_' + scene_id)
+            studio.vars['name'].set('Cinématique — ' + scene_id)
+            studio.vars['trigger'].set('scene')
+            studio._trigger_change()
+            studio.vars['target'].set(scene_id)
+        self.notebook.select(studio.tab)
 
     def select_condition_target(self, scene_id, choice_id):
         """Open the canonical condition definition of a selected graph edge."""
