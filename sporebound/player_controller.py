@@ -24,6 +24,7 @@ class PlayerController:
         self.session = None
         self.campaign_id = None
         self.slot = None
+        self.last_load_status = None
 
     def path_for(self, campaign_id, slot):
         require(self.project.campaign(campaign_id) is not None, "Unknown campaign")
@@ -41,35 +42,55 @@ class PlayerController:
                 "Save already exists; explicit overwrite required")
         # Validate the previous generation without deleting it: SessionStore.save
         # retains the last verified checkpoint as a recovery backup.
-        if overwrite and (path.exists() or SessionStore(path).backup.exists()):
-            previous = self._load_compatible(SessionStore(path))
-            require(previous.campaign_id == campaign_id, "Slot belongs to another campaign")
+        store = SessionStore(path)
+        if overwrite and (path.exists() or store.backup.exists()):
+            previous = self._load_compatible(store)
+            require(previous.session.campaign_id == campaign_id,
+                    "Slot belongs to another campaign")
         candidate = GameSession.new(self.content, self.project, campaign_id,
                                     seed=seed, rules=self.rules)
+        # Publish before switching away from the current in-memory campaign.
+        store.save(candidate)
         self.campaign_id, self.slot, self.session = campaign_id, slot, candidate
-        self.save()
+        self.last_load_status = None
         return candidate
 
-    def load_game(self, campaign_id, slot):
+    def load_game(self, campaign_id, slot, *, allow_legacy_default_rules=False):
         path = self.path_for(campaign_id, slot)
-        candidate = self._load_compatible(SessionStore(path))
-        require(candidate.campaign_id == campaign_id, "Save belongs to another campaign")
-        self.campaign_id, self.slot, self.session = campaign_id, slot, candidate
-        return candidate
+        outcome = self._load_compatible(
+            SessionStore(path), allow_legacy_default_rules=allow_legacy_default_rules)
+        require(not outcome.migrated_from_v1,
+                "Legacy v1 save: explicitly migrate_game() before continuing")
+        require(outcome.session.campaign_id == campaign_id,
+                "Save belongs to another campaign")
+        self.campaign_id, self.slot, self.session = campaign_id, slot, outcome.session
+        self.last_load_status = outcome
+        return outcome.session
 
-    def _load_compatible(self, store):
-        """Accept old default-rule checkpoints without silently migrating them."""
+    def _load_compatible(self, store, *, allow_legacy_default_rules=False):
+        """Never switch gameplay rules silently when loading a replay."""
         from .model import RuleError
         from .rules import default_rules
         try:
-            return store.load(self.content, self.project, rules=self.rules)
+            return store.load_with_status(self.content, self.project, rules=self.rules)
         except RuleError as error:
-            if self.rules.manifest() == default_rules().manifest():
+            if (not allow_legacy_default_rules or
+                    self.rules.manifest() == default_rules().manifest()):
                 raise
             try:
-                return store.load(self.content, self.project, rules=default_rules())
+                # Caller opted into the *old* default rules, without converting
+                # the journal to the current authored ruleset.
+                return store.load_with_status(
+                    self.content, self.project, rules=default_rules())
             except RuleError:
                 raise error
+
+    def migrate_game(self, campaign_id, slot, *, allow_legacy_default_rules=False):
+        """User-initiated v1->v2 envelope upgrade; keep v1 bytes in .bak."""
+        from .rules import default_rules
+        rules = default_rules() if allow_legacy_default_rules else self.rules
+        return SessionStore(self.path_for(campaign_id, slot)).migrate_v1(
+            self.content, self.project, rules=rules, expected_campaign_id=campaign_id)
 
     def save(self):
         require(self.session is not None, "No campaign loaded")

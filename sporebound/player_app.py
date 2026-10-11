@@ -76,6 +76,7 @@ class PlayerApplication:
         self._explore_feedback = ""
         self._explore_scene_id = None
         self._audible_scene = None
+        self._closing = False
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.bind("<Escape>", lambda event: self.root.attributes("-fullscreen", False))
         self.title_screen()
@@ -154,10 +155,12 @@ class PlayerApplication:
             row=2, column=0, columnspan=2, sticky="ew", pady=(20, 4))
         self._button(panel, "Continuer", self._load_game).grid(
             row=3, column=0, columnspan=2, sticky="ew", pady=4)
+        self._button(panel, "Migrer une sauvegarde v1", self._migrate_game).grid(
+            row=4, column=0, columnspan=2, sticky="ew", pady=4)
         # The authored castle example is a repository demo, not packaged
         # core content. Show its entry only when that source is available.
         castle_example = Path(__file__).resolve().parent.parent / "examples" / "castle_vertical_slice.py"
-        row = 4
+        row = 5
         if self.project.sieges:
             self._button(panel, "Sièges créés dans le Studio", self._authored_siege_menu).grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=4)
@@ -220,7 +223,26 @@ class PlayerApplication:
 
     def _load_game(self):
         self.player.load_game(self.campaign_var.get(), int(self.slot_var.get()))
+        status = self.player.last_load_status
+        if status is not None and status.source == "backup":
+            self.messagebox.showwarning(
+                "Récupération de sauvegarde",
+                "Le fichier principal est invalide. Une copie de secours a été "
+                "chargée en mémoire, sans modifier les fichiers. "
+                "Une partie de la progression récente peut manquer.")
         self.show()
+
+    def _migrate_game(self):
+        if not self.messagebox.askyesno(
+                "Migration explicite",
+                "Convertir la sauvegarde v1 sélectionnée vers le format v2 ? "
+                "Une copie de l'original sera conservée en .bak. "
+                "Les règles et les données du jeu ne seront pas converties."):
+            return
+        self.player.migrate_game(self.campaign_var.get(), int(self.slot_var.get()))
+        self.messagebox.showinfo(
+            "Migration terminée", "Sauvegarde v2 vérifiée. L'original v1 est conservé.")
+        self._load_game()
 
     def options_screen(self):
         self._clear()
@@ -920,16 +942,25 @@ class PlayerApplication:
                         self.front_var.get()))).pack(side="left", padx=4)
 
     def close(self):
-        if self.player.session is not None:
-            try:
-                self.player.save()
-            except (RuleError, OSError, ValueError) as exc:
-                if not self.messagebox.askyesno(
-                        "Sauvegarde impossible",
-                        str(exc) + "\nQuitter malgré l'échec ?"):
-                    return
-        self.audio.close()
-        self.root.destroy()
+        # Multiple WM_DELETE/button callbacks must never double-close audio/Tk.
+        if self._closing:
+            return
+        self._closing = True
+        try:
+            if self.player.session is not None:
+                try:
+                    self.player.save()
+                except (RuleError, OSError, ValueError) as exc:
+                    if not self.messagebox.askyesno(
+                            "Sauvegarde impossible",
+                            str(exc) + "\nQuitter malgré l'échec ?"):
+                        self._closing = False
+                        return
+            self.audio.close()
+            self.root.destroy()
+        except Exception:
+            self._closing = False
+            raise
 
     def run(self):
         self.root.mainloop()

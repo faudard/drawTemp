@@ -23,6 +23,26 @@ def digest(value):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+class IncompatibleSaveError(RuleError):
+    """A verified save belongs to other content, project or gameplay rules.
+
+    Identity changes are never coerced, reconstructed or replayed with new
+    rules. A future migration must be opt-in and independently verified.
+    """
+
+    def __init__(self, dimension, saved, running):
+        def fingerprint(value):
+            return value[:12] if isinstance(value, str) and len(value) == 64 else digest(value)[:12]
+
+        self.dimension = dimension
+        super().__init__(
+            f"Save incompatible ({dimension}): recorded={fingerprint(saved)}, "
+            f"current={fingerprint(running)}. Reopen with the original "
+            "content/project/rules or run a validated, explicit migration. "
+            "The replay has not been modified."
+        )
+
+
 class GameSession:
     """Compose Campaign, StoryBook, Battle and MultiFrontSession.
 
@@ -396,9 +416,15 @@ class GameSession:
         require(data["digest"] == digest({k: v for k, v in data.items()
                                          if k != "digest"}), "Game session checksum mismatch")
         rules = rules if rules is not None else default_rules()
-        require(data["content_digest"] == digest(content.to_dict()), "Content mismatch")
-        require(data["project_digest"] == digest(project.to_dict()), "Project mismatch")
-        require(data["rules"] == rules.manifest(), "Ruleset mismatch")
+        current_content = digest(content.to_dict())
+        current_project = digest(project.to_dict())
+        current_rules = rules.manifest()
+        if data["content_digest"] != current_content:
+            raise IncompatibleSaveError("content", data["content_digest"], current_content)
+        if data["project_digest"] != current_project:
+            raise IncompatibleSaveError("project", data["project_digest"], current_project)
+        if data["rules"] != current_rules:
+            raise IncompatibleSaveError("rules", data["rules"], current_rules)
         session = cls(content, project, data["campaign_id"],
                       seed=data["seed"], rules=rules)
         session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
