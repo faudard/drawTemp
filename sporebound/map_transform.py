@@ -40,8 +40,8 @@ def _validate_clipboard(clip):
                 'Invalid stamp tile properties')
         require(type(tile.get('blocked', False)) is bool,
                 'Invalid stamp blocked flag')
-        require(tile.get('surface', 'grass') in SURFACES and type(tile.get('surface', 'grass')) is str, 'Invalid surface')
-        require(tile.get('feature', '') in FEATURES and type(tile.get('feature', '')) is str, 'Invalid feature')
+        require(type(tile.get('surface', 'grass')) is str and tile.get('surface', 'grass') in SURFACES, 'Invalid surface')
+        require(type(tile.get('feature', '')) is str and tile.get('feature', '') in FEATURES, 'Invalid feature')
         for key, low, high in (('height', 0, 99), ('cost', 1, 99),
                                ('cover', 0, 100), ('hazard', 0, 10000)):
             if key in tile:
