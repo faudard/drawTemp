@@ -189,3 +189,25 @@ jobs:
           name: player-canvas-376-ubuntu
           path: ${{ runner.temp }}/player-canvas-376.json
           if-no-files-found: error
+      - name: Verify cached terrain and fresh combat overlays in Tk (3.7.7)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_player_canvas_377_gui.py -v
+      - name: Measure cached terrain on real authored Jeanne battle (3.7.7)
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_player_canvas_376.py
+          --actors 0 --cell 52 --frames 120
+          --output "${{ runner.temp }}/player-canvas-377-authored.json"
+      - name: Measure cached terrain at 80 actors (3.7.7)
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_player_canvas_376.py
+          --actors 80 --cell 52 --frames 120
+          --output "${{ runner.temp }}/player-canvas-377-stress.json"
+      - name: Preserve 3.7.7 layer cache evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-canvas-377-ubuntu
+          path: |
+            ${{ runner.temp }}/player-canvas-377-authored.json
+            ${{ runner.temp }}/player-canvas-377-stress.json
+          if-no-files-found: error
