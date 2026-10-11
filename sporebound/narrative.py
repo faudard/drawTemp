@@ -81,7 +81,8 @@ def validate_story(raw, content, campaigns):
     require(isinstance(raw, dict), 'Story must be an object')
     if not raw:
         return
-    require(set(raw) <= {'scenes', 'entry_scenes', 'after_mission'}, 'Unknown story field')
+    require(set(raw) <= {'scenes', 'entry_scenes', 'after_mission',
+                         'after_strategic_event'}, 'Unknown story field')
     scenes = raw.get('scenes')
     require(isinstance(scenes, list) and bool(scenes), 'Story requires scenes')
     ids, edges = set(), {}
@@ -127,11 +128,19 @@ def validate_story(raw, content, campaigns):
     campaign_ids = {c['id'] for c in campaigns}
     entries = raw.get('entry_scenes', {})
     outcomes = raw.get('after_mission', {})
-    require(isinstance(entries, dict) and isinstance(outcomes, dict),
-            'Story links must be objects')
+    strategic = raw.get('after_strategic_event', {})
+    require(isinstance(entries, dict) and isinstance(outcomes, dict)
+            and isinstance(strategic, dict) and len(strategic) <= 128,
+            'Story links must be bounded objects')
+    for key in strategic:
+        require(isinstance(key, str) and key.count('/') == 1,
+                'Strategic story link requires siege/node id')
+        siege, node = key.split('/')
+        _id(siege, 'Siege id')
+        _id(node, 'Strategic node id')
     require(set(entries) <= campaign_ids, 'Unknown narrative campaign')
     require(set(outcomes) <= set(content.missions), 'Unknown narrative mission')
-    for ref in [*entries.values(), *outcomes.values(),
+    for ref in [*entries.values(), *outcomes.values(), *strategic.values(),
                 *(dest for links in edges.values() for dest in links)]:
         require(ref in ids, f'Unknown narrative scene: {ref}')
     # No scene can cause unbounded automatic/interactive narrative loops.
@@ -175,6 +184,7 @@ class StoryBook:
         self.scenes = {scene['id']: scene for scene in raw.get('scenes', [])}
         self.entry = dict(raw.get('entry_scenes', {}))
         self.after = dict(raw.get('after_mission', {}))
+        self.after_strategic_event = dict(raw.get('after_strategic_event', {}))
         self.digest = (hashlib.sha256(json.dumps(raw, sort_keys=True,
                        ensure_ascii=False).encode('utf-8')).hexdigest() if raw else '')
 
