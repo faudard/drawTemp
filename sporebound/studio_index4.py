@@ -84,7 +84,9 @@ class StudioIndex:
         bindings = self.project.asset_registry().to_dict()['bindings'].get('sound', {})
         for clip in self.project.cinematics:
             kind = clip['trigger']['kind']
-            source = ('campaign:' if kind == 'campaign_start' else 'mission:') + clip['trigger']['target']
+            source = (('campaign:' if kind == 'campaign_start'
+                       else 'scene:' if kind == 'scene' else 'mission:')
+                      + clip['trigger']['target'])
             add(source, 'cinematic:' + clip['id'], 'Déclenchement cinématique')
             for event in clip['events']:
                 if event['kind'] == 'sound':

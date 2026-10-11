@@ -6,6 +6,7 @@ and all user intents are delegated to authored_siege_player controller.
 from pathlib import Path
 
 from .audio_stage import AudioStage
+from .cinematic_player import CinematicPlayback
 from .tk_renderer import CanvasRenderer
 from .authored_siege_player import AuthoredSiegeController
 from .castle_player_app import CastlePlayerApplication
@@ -17,6 +18,7 @@ class StudioSiegePlayerApplication(CastlePlayerApplication):
                  *, rules=None, master=None, controller=None):
         self.authored_project = project
         self._narrative_job = None
+        self._cutscene = None
         self.presentation_registry = project.asset_registry()
         self.presentation_asset_root = Path(project_path).parent
         self.narrative_audio = AudioStage(
@@ -55,6 +57,9 @@ class StudioSiegePlayerApplication(CastlePlayerApplication):
         self._button(box, "Fermer", self.close).pack(fill="x", pady=6)
 
     def _clear(self):
+        if self._cutscene is not None:
+            self._cutscene.close()
+            self._cutscene = None
         if self._narrative_job is not None:
             self.root.after_cancel(self._narrative_job)
             self._narrative_job = None
@@ -64,9 +69,34 @@ class StudioSiegePlayerApplication(CastlePlayerApplication):
         if self.controller.session is not None:
             scene = self.controller.active_scene()
             if scene is not None:
+                clip = self.controller.pending_cinematic()
+                if clip is not None:
+                    self._cutscene_screen(clip)
+                    return
                 self._scene_screen(scene)
                 return
         super().show()
+
+    def _cutscene_screen(self, clip):
+        """Pure presentation. Persist explicit completion only on finish/skip."""
+        self._clear()
+        self._heading(clip["name"], "Cinématique de scène — espace : pause, "
+                      "Échap : passer ; aucune issue tactique simulée.")
+
+        def finished():
+            try:
+                self._safe(lambda: self.controller.acknowledge_cinematic(clip["id"]))
+            finally:
+                # Disk-write failure keeps the cinematic unacknowledged; show()
+                # will open it again instead of silently losing the event.
+                if self.root.winfo_exists():
+                    self.show()
+
+        self._cutscene = CinematicPlayback(
+            self.view, self.tk, self.ttk, clip, finished,
+            audio=self.narrative_audio,
+            registry=self.presentation_registry,
+            asset_root=self.presentation_asset_root)
 
     def _scene_screen(self, scene):
         """Interactive narrative gate; StoryBook owns all conditions/effects."""

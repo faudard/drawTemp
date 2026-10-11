@@ -37,8 +37,15 @@ class SiegeStory:
             for ref, scene in self.book.after_strategic_event.items()
             if ref.startswith(blueprint['id'] + '/')
         }
-        # Legacy projects retain v1 recordings and digests unchanged.
-        self.VERSION = 2 if self.mapped_nodes else 1
+        # Scene-triggered cutscenes opt into v3; legacy v1/v2 remain unchanged.
+        self.scene_clips = {}
+        for clip in project.cinematics:
+            if clip["trigger"]["kind"] == "scene":
+                self.scene_clips.setdefault(clip["trigger"]["target"], []).append(
+                    clip["id"])
+        self.played_cinematics = set()
+        self.VERSION = (3 if self.scene_clips else
+                        2 if self.mapped_nodes else 1)
         self.seen_strategic = (set(fronts.fired_graph)
                                if self.baseline['at'] else set())
         self.pending_scenes = []
@@ -64,6 +71,27 @@ class SiegeStory:
         self._queue_scene(self.mapped_nodes[node])
         self.events.append({'kind': 'strategic', 'node': node, 'at': at})
 
+    def next_cinematic(self):
+        scene = self.active_scene()
+        if self.VERSION != 3 or scene is None:
+            return None
+        for clip_id in self.scene_clips.get(scene["id"], ()):
+            if clip_id not in self.played_cinematics:
+                return deepcopy(next(c for c in self.project.cinematics
+                                     if c["id"] == clip_id))
+        return None
+
+    def acknowledge_cinematic(self, clip_id, at):
+        require(type(at) is int and at >= self.baseline["at"],
+                "Invalid cinematic operation index")
+        next_clip = self.next_cinematic()
+        require(next_clip is not None and clip_id == next_clip["id"],
+                "Cinematic is not pending for the active narrative scene")
+        scene_id = self.progress.story_pending
+        self.played_cinematics.add(clip_id)
+        self.events.append({"kind": "cinematic", "clip": clip_id,
+                            "scene": scene_id, "at": at})
+
     def _victory(self, front, at):
         require(front not in self.won, "Narrative front was already won")
         self.won.add(front)
@@ -71,7 +99,7 @@ class SiegeStory:
         if mission not in self.progress.completed:
             self.progress.completed.append(mission)
         if mission in self.book.after:
-            if self.VERSION == 2:
+            if self.VERSION >= 2:
                 self._queue_scene(self.book.after[mission])
             elif self.progress.story_pending:
                 self.pending_missions.append(mission)
@@ -82,7 +110,7 @@ class SiegeStory:
     def sync(self, fronts):
         index = len(fronts.history)
         require(index >= self.baseline["at"], "Siege clock cannot move backwards")
-        if self.VERSION == 2:
+        if self.VERSION >= 2:
             # Only one-shot, authenticated graph events may advance the story.
             for event in fronts.timeline.events:
                 node = event.get('id')
@@ -104,6 +132,8 @@ class SiegeStory:
     def choose(self, choice, at):
         require(type(at) is int and at >= self.baseline["at"],
                 "Invalid narrative operation index")
+        require(self.next_cinematic() is None,
+                "Finish or skip the pending cinematic before this choice")
         self.progress = self.book.choose(self.progress, choice)
         self.events.append({"kind": "choice", "choice": choice, "at": at})
         if not self.progress.story_pending:
@@ -117,9 +147,11 @@ class SiegeStory:
         state = {'progress': asdict(self.progress),
                  'pending_missions': self.pending_missions,
                  'won': sorted(self.won)}
-        if self.VERSION == 2:
+        if self.VERSION >= 2:
             state['seen_strategic'] = sorted(self.seen_strategic)
             state['pending_scenes'] = list(self.pending_scenes)
+        if self.VERSION == 3:
+            state["played_cinematics"] = sorted(self.played_cinematics)
         body = {"version": self.VERSION,
                 "project_digest": digest(self.project.to_dict()),
                 "baseline": deepcopy(self.baseline),
@@ -131,7 +163,7 @@ class SiegeStory:
     def replay(cls, record, project, content, blueprint, tactical, *, rules=None):
         require(isinstance(record, dict) and set(record) == {
             "version", "project_digest", "baseline", "events",
-            "state_digest", "digest"} and record["version"] in (1, 2),
+            "state_digest", "digest"} and record["version"] in (1, 2, 3),
                 "Unsupported siege narrative recording")
         require(record["digest"] == digest({key: value for key, value in
                 record.items() if key != "digest"}), "Narrative checksum mismatch")
@@ -184,13 +216,19 @@ class SiegeStory:
                 story._victory(event["front"], index)
             elif event.get("kind") == "strategic":
                 require(set(event) == {"kind", "node", "at"}
-                        and story.VERSION == 2
+                        and story.VERSION >= 2
                         and index > baseline["at"]
                         and event["node"] in story.mapped_nodes
                         and event["node"] in prefix(index).fired_graph
                         and event["node"] not in prefix(index-1).fired_graph,
                         "Strategic scene has no authenticated graph firing")
                 story._strategic(event["node"], index)
+            elif event.get("kind") == "cinematic":
+                require(set(event) == {"kind", "clip", "scene", "at"}
+                        and story.VERSION == 3
+                        and event["scene"] == story.progress.story_pending,
+                        "Malformed or displaced cinematic acknowledgement")
+                story.acknowledge_cinematic(event["clip"], index)
             elif event.get("kind") == "choice":
                 require(set(event) == {"kind", "choice", "at"}
                         and isinstance(event["choice"], str),

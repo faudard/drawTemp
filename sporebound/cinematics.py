@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from .model import RuleError, require
 
 KINDS = ("background", "actor", "camera", "dialogue", "fade", "sound")
-TRIGGERS = ("campaign_start", "before_mission", "after_mission")
+TRIGGERS = ("campaign_start", "before_mission", "after_mission", "scene")
 COLORS = ("#101a2b", "#243c56", "#f3dfbf", "#000000", "#ffffff")
 
 
@@ -28,12 +28,13 @@ def _color(value):
             and value[0] == "#" and all(c in "0123456789abcdefABCDEF" for c in value[1:]))
 
 
-def validate_cinematics(clips, content, campaigns):
+def validate_cinematics(clips, content, campaigns, scenes=None):
     """Reject invalid / dangling authoring data before it reaches a save."""
     require(isinstance(clips, list) and len(clips) <= 128, "Cinematics must be a list (max 128)")
     ids = set()
     campaign_ids = {c["id"] for c in campaigns}
     mission_ids = set(content.missions)
+    scene_ids = {scene["id"] for scene in (scenes or [])}
     for clip in clips:
         require(isinstance(clip, dict) and set(clip) ==
                 {"id", "name", "trigger", "duration_ms", "events"},
@@ -47,9 +48,10 @@ def validate_cinematics(clips, content, campaigns):
         trigger = clip["trigger"]
         require(isinstance(trigger, dict) and set(trigger) == {"kind", "target"}
                 and trigger["kind"] in TRIGGERS, "Invalid cinematic trigger")
-        targets = campaign_ids if trigger["kind"] == "campaign_start" else mission_ids
+        targets = (campaign_ids if trigger["kind"] == "campaign_start"
+                   else scene_ids if trigger["kind"] == "scene" else mission_ids)
         require(isinstance(trigger["target"], str) and trigger["target"] in targets,
-                "Cinematic trigger refers to unknown campaign or mission")
+                "Cinematic trigger refers to unknown campaign, mission or scene")
         events = clip["events"]
         require(isinstance(events, list) and len(events) <= 256,
                 "Cinematic timeline must be a list (max 256 events)")
