@@ -69,11 +69,18 @@ def architecture_instances(board):
         for turns in range(4):
             for door_slot in range(len(door_slots(name))):
                 clip = structure_template(name, turns, door_slot=door_slot)
-                size = clip.width * clip.height
-                for x, y in anchors:
-                    if x + clip.width > board.width or y + clip.height > board.height:
-                        continue
-                    if not _same_tile(board.tile((x, y)), clip.terrain[0]):
+                # A rotated plan need not begin with a wall in its top-left
+                # cell. Derive each candidate's origin from one known wall
+                # offset to recognise every orientation without full scanning.
+                wall = next(((dx, dy) for (dx, dy), spec
+                             in zip(clip.offsets, clip.terrain)
+                             if spec.get('feature') == 'stone_wall'), None)
+                if wall is None:
+                    continue
+                for wx, wy in anchors:
+                    x, y = wx-wall[0], wy-wall[1]
+                    if (x < 0 or y < 0 or x + clip.width > board.width
+                            or y + clip.height > board.height):
                         continue
                     cells = tuple((x+dx, y+dy) for dx, dy in clip.offsets)
                     if not all(_same_tile(board.tile(cell), spec)
