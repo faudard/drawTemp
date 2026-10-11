@@ -4,6 +4,7 @@ Uses Tk only at launch, and sends every player intent through PlayerController.
 No game mechanics, AI rules, dice or persistence schemas live in this module.
 """
 import json
+import time
 from pathlib import Path
 
 from .audio_stage import AudioStage
@@ -16,6 +17,7 @@ from .siege import available_operations
 from .tactical_actions import tactical_action_options, tactical_command
 from .tactical_rpg3 import authored_rules_for_document
 from .tk_renderer import CanvasRenderer
+from .visual_motion import MotionDirector
 
 
 class PlayerApplication:
@@ -67,6 +69,9 @@ class PlayerApplication:
         self.convoy_var = tk.StringVar()
         self.selection = (0, 0)
         self.camera = Camera(52, 8, 8)
+        self.motion = MotionDirector()
+        self._motion_frame = None
+        self._motion_job = None
         self.canvas = None
         self.renderer = None
         self.info = None
@@ -103,6 +108,10 @@ class PlayerApplication:
         if self._stage_job is not None:
             self.root.after_cancel(self._stage_job)
             self._stage_job = None
+        if self._motion_job is not None:
+            self.root.after_cancel(self._motion_job)
+            self._motion_job = None
+        self._motion_frame = None
         for key in ("<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q", "e"):
             self.root.unbind(key)
         if self.renderer:
@@ -592,6 +601,21 @@ class PlayerApplication:
             self._button(self.view, "Abandonner l'opération",
                          self._abandon).pack(anchor="e", pady=4)
 
+    def _motion_tick(self):
+        self._motion_job = None
+        self._render_motion(time.monotonic() * 1000)
+
+    def _render_motion(self, clock_ms):
+        if self.renderer is None or self.canvas is None or self._motion_frame is None:
+            return
+        self.renderer.draw(
+            self._motion_frame, self.camera, poses=self.motion.poses(clock_ms),
+            elapsed_ms=self.motion.elapsed_ms(clock_ms), clock_ms=int(clock_ms))
+        if (self.motion.active(clock_ms) or
+                self.renderer.animates_when_idle(self._motion_frame)):
+            if self._motion_job is None:
+                self._motion_job = self.root.after(60, self._motion_tick)
+
     def _redraw(self):
         if self.canvas is None:
             return
@@ -600,7 +624,10 @@ class PlayerApplication:
         skill = skill if skill == "attack" or skill in (
             battle.active.skills if battle.active else ()) else None
         frame = battle_frame(battle, self.selection, skill)
-        self.renderer.draw(frame, self.camera)
+        clock_ms = time.monotonic() * 1000
+        self.motion.observe(frame, clock_ms)
+        self._motion_frame = frame
+        self._render_motion(clock_ms)
         self.audio.observe(battle)
         rows = ["Case : " + str(self.selection), "", "Escouades"]
         rows.extend(u.name + " (" + u.team + ") : PV " + str(u.hp) + "/" +
