@@ -15,8 +15,10 @@ GROUPS = (
     ('game', 'Jeu et menus'),
     ('campaign', 'Campagnes'),
     ('siege', 'Sièges multi-fronts'),
+    ('strategic_event', 'Événements stratégiques'),
     ('mission', 'Cartes et missions'),
     ('scene', 'Scénarios et dialogues'),
+    ('cinematic', 'Cinématiques'),
     ('actor', 'Personnages et monstres'),
     ('skill', 'Compétences'),
     ('job', 'Classes'),
@@ -65,6 +67,18 @@ class ProjectWorkspaceIndex:
                 f"Fronts : {', '.join(siege['fronts'])}\n"
                 f"Départ : {siege['focused']} | "
                 f"Finale : {(siege['campaign'] or {}).get('final_front', 'aucune')}"))
+        for siege in self.project.sieges:
+            for event in siege.get('event_graph', []):
+                result['strategic_event'].append(WorkspaceNode(
+                    'strategic_event', siege['id'] + '/' + event['id'],
+                    event['id'], 'Siège : ' + siege['id'] +
+                    ' | Effets : ' + ', '.join(e['kind'] for e in event['effects'])))
+        for clip in self.project.cinematics:
+            trigger = clip['trigger']
+            result['cinematic'].append(WorkspaceNode(
+                'cinematic', clip['id'], clip['name'],
+                'Déclencheur : ' + trigger['kind'] + ' / ' + trigger['target'] +
+                ' | Pistes : ' + str(len(clip['events']))))
         for mission in self.content.missions.values():
             result['mission'].append(WorkspaceNode(
                 'mission', mission.id, mission.name,
