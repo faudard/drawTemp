@@ -3,6 +3,7 @@
 Importing this module is display-free. All tactical rules remain headless.
 """
 from pathlib import Path
+from math import gcd
 
 from .model import RuleError
 from .visual_motion import animation_sprite_id
@@ -14,6 +15,7 @@ class CanvasRenderer:
         self.registry = registry
         self.asset_root = Path(asset_root) if asset_root is not None else None
         self._images = {}
+        self._cell_images = {}  # Sized sprite cache, (Tk image ID, cell pixels).
         self._sources = {}  # Shared PNG atlas decoded once for all regions.
         self._missing = set()
 
@@ -52,6 +54,32 @@ class CanvasRenderer:
             self._missing.add(asset_id)
             return None
 
+    def _cell_photo(self, photo, cell_size):
+        """Nearest-neighbour sprite fitted to a zoomed grid cell.
+
+        Tk's native PhotoImage copy supports rational zoom/subsample factors,
+        including the default 52px camera cell. No Pillow dependency and no
+        resizing on each idle animation frame: one image per sprite/zoom.
+        Portraits keep their original resolution through image().
+        """
+        if photo is None or (photo.width() == cell_size and
+                             photo.height() == cell_size):
+            return photo
+        key = (str(photo), cell_size)
+        if key in self._cell_images:
+            return self._cell_images[key]
+        import tkinter as tk
+        source_width, source_height = photo.width(), photo.height()
+        gx, gy = gcd(cell_size, source_width), gcd(cell_size, source_height)
+        sized = tk.PhotoImage(master=self.canvas, width=cell_size, height=cell_size)
+        sized.tk.call(str(sized), "copy", str(photo),
+                      "-from", 0, 0, source_width, source_height,
+                      "-to", 0, 0,
+                      "-zoom", cell_size // gx, cell_size // gy,
+                      "-subsample", source_width // gx, source_height // gy)
+        self._cell_images[key] = sized
+        return sized
+
     def image(self, kind, slot):
         """Resolve a static image binding, falling back to vector geometry."""
         if self.registry is None:
@@ -81,6 +109,17 @@ class CanvasRenderer:
         cell = camera.cell_size
         selected = frame.selected
         reachable = set(frame.reachable)
+        # Canvas dimensions are 1x1 before Tk finishes layout: do not cull
+        # the initial Player frame in that case. Fake canvases in unit tests
+        # also deliberately skip these measurements.
+        viewport_w, viewport_h = canvas.winfo_width(), canvas.winfo_height()
+        bounded = (type(viewport_w) is int and type(viewport_h) is int
+                   and viewport_w > 1 and viewport_h > 1)
+
+        def visible(x, y, width, height):
+            return (not bounded or
+                    (x < viewport_w and y < viewport_h and
+                     x + width > 0 and y + height > 0))
         # Source-of-truth engine telegraphs; distinguish scheduled and possible.
         priority = {"hazard": 0, "charge": 1, "prepared": 2, "cast": 3}
         threat_style = {"hazard": "#fd766f", "charge": "#f5ae60",
@@ -93,6 +132,8 @@ class CanvasRenderer:
         # Tile height, cover, danger and blockage are presentation only.
         for tile in frame.tiles:
             x, y = camera.cell_to_screen(tile.pos)
+            if not visible(x, y, cell, cell):
+                continue
             color = ("#45546a" if tile.blocked else "#7c4433" if tile.hazard
                      else "#446b5b" if tile.height else "#26384b")
             canvas.create_rectangle(x, y, x + cell, y + cell,
@@ -118,6 +159,8 @@ class CanvasRenderer:
                                         outline="#ffe78a", width=3)
         for obj in frame.objects:
             x, y = camera.cell_to_screen(obj.pos)
+            if not visible(x, y, cell, cell):
+                continue
             canvas.create_rectangle(x + cell // 4, y + cell // 4,
                                     x + 3 * cell // 4, y + 3 * cell // 4,
                                     fill="#47b9a4" if obj.opened else "#d99554",
@@ -132,6 +175,8 @@ class CanvasRenderer:
             direction = pose.direction if pose else "south"
             width, height = actor.footprint
             w, h = cell * width, cell * height
+            if not visible(x, y, w, h):
+                continue
             if actor.active:
                 canvas.create_rectangle(x + 2, y + 2, x + w - 2, y + h - 2,
                                         outline="#facc15", width=3)
@@ -141,6 +186,7 @@ class CanvasRenderer:
             sprite = (self._photo(animated_id) if animated_id else None)
             sprite = sprite or self.image("sprite", actor.id) or self.image("sprite", actor.team)
             if sprite is not None and width == height == 1:
+                sprite = self._cell_photo(sprite, cell)
                 canvas.create_image(x + w / 2, y + h / 2, image=sprite)
             else:
                 color = "#648cdb" if actor.team == "player" else "#d26b7b"
@@ -168,6 +214,7 @@ class CanvasRenderer:
                                font=("TkDefaultFont", 17, "bold"))
 
     def dispose(self):
+        self._cell_images.clear()
         self._images.clear()
         self._sources.clear()
         self._missing.clear()

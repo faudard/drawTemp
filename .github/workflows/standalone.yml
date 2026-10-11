@@ -174,3 +174,18 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_logistics_studio_gui.py -v
+      - name: Verify Jeanne tactical canvas zoom, culling and frame purity (3.7.6)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_player_canvas_376_gui.py -v
+      - name: Measure real Jeanne BattleFrame rendering (3.7.6)
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_player_canvas_376.py
+          --actors 80 --cell 52 --frames 120
+          --output "${{ runner.temp }}/player-canvas-376.json"
+      - name: Preserve 3.7.6 real canvas benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-canvas-376-ubuntu
+          path: ${{ runner.temp }}/player-canvas-376.json
+          if-no-files-found: error
