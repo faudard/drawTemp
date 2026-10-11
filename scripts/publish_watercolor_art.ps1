@@ -67,6 +67,12 @@ try {
     }
     $copied = @(Get-ChildItem -LiteralPath $target -Recurse -File -Filter "*.png")
     if ($copied.Count -ne 88) { throw "Copy incomplete: $($copied.Count) PNGs" }
+    # Validate actual PNG IHDR dimensions, manifest IDs and all animations
+    # before staging or pushing. A partial/malformed pack must not enter PR #71.
+    python (Join-Path $repo "scripts/verify_watercolor_release.py") --root (Join-Path $repo "assets/watercolor")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Release preflight failed: PNGs do not match index.json/registry.json."
+    }
     git -C $repo add -- assets/watercolor/sprites
     if ($LASTEXITCODE -ne 0) { throw "git add failed" }
     git -C $repo diff --cached --stat
