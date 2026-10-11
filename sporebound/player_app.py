@@ -4,6 +4,7 @@ Uses Tk only at launch, and sends every player intent through PlayerController.
 No game mechanics, AI rules, dice or persistence schemas live in this module.
 """
 import json
+import time
 from pathlib import Path
 
 from .audio_stage import AudioStage
@@ -16,6 +17,7 @@ from .siege import available_operations
 from .tactical_actions import tactical_action_options, tactical_command
 from .tactical_rpg3 import authored_rules_for_document
 from .tk_renderer import CanvasRenderer
+from .visual_motion import MotionDirector
 
 
 class PlayerApplication:
@@ -69,6 +71,10 @@ class PlayerApplication:
         self.camera = Camera(52, 8, 8)
         self.canvas = None
         self.renderer = None
+        self.motion = MotionDirector(duration_ms=260)
+        self._motion_battle = None
+        self._motion_frame = None
+        self._motion_job = None
         self.info = None
         self.cinematic = None
         self._typewriter_job = None
@@ -105,6 +111,9 @@ class PlayerApplication:
             self._stage_job = None
         for key in ("<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q", "e"):
             self.root.unbind(key)
+        if self._motion_job is not None:
+            self.root.after_cancel(self._motion_job)
+            self._motion_job = None
         if self.renderer:
             self.renderer.dispose()
             self.renderer = None
@@ -593,11 +602,14 @@ class PlayerApplication:
                     self._button(actions, "Fin de tour", self._end).pack(side="left", padx=5)
         body = self.ttk.Frame(self.view)
         body.pack(fill="both", expand=True, pady=9)
-        self.canvas = self.tk.Canvas(body, background="#172638", highlightthickness=0)
+        self.canvas = self.tk.Canvas(body, background="#172638", highlightthickness=0,
+                                     takefocus=1)
         self.canvas.pack(side="left", fill="both", expand=True)
         self.renderer = CanvasRenderer(self.canvas, registry=self.registry,
                                        asset_root=self.asset_root)
         self.canvas.bind("<Button-1>", self._select_cell)
+        self.canvas.bind("<Return>", lambda _event: self._safe(self._execute))
+        self.canvas.bind("<space>", lambda _event: self._safe(self._end))
         self.canvas.bind("<MouseWheel>", self._zoom)
         self.canvas.bind("<Button-4>", lambda _: self._zoom_step(1))
         self.canvas.bind("<Button-5>", lambda _: self._zoom_step(-1))
@@ -607,6 +619,9 @@ class PlayerApplication:
                                  bg="#182a40", relief="flat")
         self.info.pack(side="right", fill="y", padx=(9, 0))
         self._redraw()
+        self.ttk.Label(self.view, text="Sur la carte : Entrée = exécuter • Espace = fin de tour  |  "
+                                      "Rouge = terrain, violet = sort annoncé, orange = charge possible").pack(
+                                          anchor="w", pady=(0, 4))
         if not session.finalized:
             self._button(self.view, "Abandonner l'opération",
                          self._abandon).pack(anchor="e", pady=4)
@@ -619,7 +634,16 @@ class PlayerApplication:
         skill = skill if skill == "attack" or skill in (
             battle.active.skills if battle.active else ()) else None
         frame = battle_frame(battle, self.selection, skill)
-        self.renderer.draw(frame, self.camera)
+        # Capture the authoritative frame once. Redraws and animation frames
+        # never execute gameplay commands or advance the replay clock.
+        if battle is not self._motion_battle:
+            self.motion.reset()
+            self._motion_battle = battle
+        now = time.monotonic() * 1000
+        self.motion.observe(frame, now)
+        self._motion_frame = frame
+        self.renderer.draw(frame, self.camera, poses=self.motion.poses(now))
+        self._schedule_motion()
         self.audio.observe(battle)
         rows = ["Case : " + str(self.selection), "", "Escouades"]
         rows.extend(u.name + " (" + u.team + ") : PV " + str(u.hp) + "/" +
@@ -628,6 +652,23 @@ class PlayerApplication:
         if frame.forecast:
             rows.extend(["", "Prévisions"])
             rows.extend(str(item) for item in frame.forecast)
+        # A scheduled cast is a warning, not a guaranteed hit; charges are
+        # only possible corridors. Present each separately from real hazards.
+        dangers = {}
+        for danger in frame.danger:
+            dangers.setdefault(danger["kind"], set()).add(tuple(danger["cell"]))
+        threat_labels = (
+            ("hazard", "Terrain dangereux (certain)"),
+            ("cast", "Incantation programmée"),
+            ("prepared", "Réaction armée"),
+            ("charge", "Charge possible (non garantie)"),
+        )
+        rows.extend(["", "Menaces visibles (cases distinctes)"])
+        rows.extend(f"{title} : {len(dangers[kind])}"
+                    for kind, title in threat_labels if dangers.get(kind))
+        local = [title for kind, title in threat_labels
+                 if tuple(self.selection) in dangers.get(kind, set())]
+        rows.append("Case sélectionnée : " + (", ".join(local) if local else "aucune menace signalée"))
         rows.extend(["", "Prochaines activations (CT estimé)"])
         rows.extend(f"{entry['unit']} : " +
                     ("actif" if entry["active"] else
@@ -647,7 +688,25 @@ class PlayerApplication:
         self.info.insert("1.0", "\n".join(rows))
         self.info.configure(state="disabled")
 
+    def _schedule_motion(self):
+        if self._motion_job is not None:
+            self.root.after_cancel(self._motion_job)
+            self._motion_job = None
+        if self.motion.active(time.monotonic() * 1000):
+            self._motion_job = self.root.after(32, self._animate)
+
+    def _animate(self):
+        self._motion_job = None
+        if self.canvas is None or self.renderer is None or self._motion_frame is None:
+            return
+        now = time.monotonic() * 1000
+        self.renderer.draw(self._motion_frame, self.camera,
+                           poses=self.motion.poses(now))
+        if self.motion.active(now):
+            self._motion_job = self.root.after(32, self._animate)
+
     def _select_cell(self, event):
+        self.canvas.focus_set()
         battle = self.player.session.active_battle
         cell = self.camera.screen_to_cell(event.x, event.y)
         if battle.board.contains(cell):
