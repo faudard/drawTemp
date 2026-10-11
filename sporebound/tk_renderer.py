@@ -20,6 +20,8 @@ class CanvasRenderer:
         self._missing = set()
         self._terrain_key = None  # Tiles + camera + viewport identity.
         self._terrain_rebuilds = 0
+        self._overlay_key = None
+        self._overlay_rebuilds = 0
         self._actor_items = {}  # Stable Canvas item handles, indexed by actor ID.
         self._actor_creations = 0
         self._actor_updates = 0
@@ -205,6 +207,7 @@ class CanvasRenderer:
         if frame is None:
             canvas.delete("all")
             self._terrain_key = None
+            self._overlay_key = None
             self._actor_items.clear()
             return
         cell = camera.cell_size
@@ -240,6 +243,7 @@ class CanvasRenderer:
         if refresh_terrain:
             canvas.delete("all")
             self._actor_items.clear()
+            self._overlay_key = None
             for tile in frame.tiles:
                 x, y = camera.cell_to_screen(tile.pos)
                 if not visible(x, y, cell, cell):
@@ -259,37 +263,47 @@ class CanvasRenderer:
             canvas.addtag_withtag("terrain", "all")
             self._terrain_key = terrain_key
             self._terrain_rebuilds += 1
-        else:
+        # Cache only the visual tactical overlay: authored threats, reachable
+        # tiles, selection, objects, and the result banner. A camera or
+        # viewport change invalidates these cached Canvas item coordinates.
+        overlay_key = (frame.mission, frame.width, frame.height, camera,
+                       viewport_w, viewport_h, selected,
+                       frozenset(reachable), tuple(sorted(threats.items())),
+                       frame.objects, frame.result)
+        refresh_overlay = overlay_key != self._overlay_key
+        if refresh_overlay:
             canvas.delete("dynamic")
-
-        # Overlay paint always reflects the latest authoritative frame.
-        # These shapes are tagged dynamic at the end of this method.
-        for tile in frame.tiles:
-            x, y = camera.cell_to_screen(tile.pos)
-            if not visible(x, y, cell, cell):
-                continue
-            if tile.pos in reachable:
-                canvas.create_rectangle(x + 4, y + 4, x + cell - 4, y + cell - 4,
-                                        outline="#58d6cd", width=2, dash=(3, 3))
-            if tile.pos in threats:
-                kind = threats[tile.pos]
-                canvas.create_rectangle(x + 6, y + 6, x + cell - 6, y + cell - 6,
-                                        outline=threat_style[kind], width=3,
-                                        dash=(5, 3) if kind == "charge" else (2, 3))
-            if selected == tile.pos:
-                canvas.create_rectangle(x + 2, y + 2, x + cell - 2, y + cell - 2,
-                                        outline="#ffe78a", width=3)
-        for obj in frame.objects:
-            x, y = camera.cell_to_screen(obj.pos)
-            if not visible(x, y, cell, cell):
-                continue
-            canvas.create_rectangle(x + cell // 4, y + cell // 4,
-                                    x + 3 * cell // 4, y + 3 * cell // 4,
-                                    fill="#47b9a4" if obj.opened else "#d99554",
-                                    outline="#101b2d", width=2)
-            canvas.create_text(x + cell / 2, y + cell - 5,
-                               text=obj.id[:10], fill="#ffffff",
-                               font=("TkDefaultFont", max(7, cell // 7)))
+            for tile in frame.tiles:
+                x, y = camera.cell_to_screen(tile.pos)
+                if not visible(x, y, cell, cell):
+                    continue
+                if tile.pos in reachable:
+                    canvas.create_rectangle(x + 4, y + 4, x + cell - 4, y + cell - 4,
+                                            outline="#58d6cd", width=2, dash=(3, 3))
+                if tile.pos in threats:
+                    kind = threats[tile.pos]
+                    canvas.create_rectangle(x + 6, y + 6, x + cell - 6, y + cell - 6,
+                                            outline=threat_style[kind], width=3,
+                                            dash=(5, 3) if kind == "charge" else (2, 3))
+                if selected == tile.pos:
+                    canvas.create_rectangle(x + 2, y + 2, x + cell - 2, y + cell - 2,
+                                            outline="#ffe78a", width=3)
+            for obj in frame.objects:
+                x, y = camera.cell_to_screen(obj.pos)
+                if not visible(x, y, cell, cell):
+                    continue
+                canvas.create_rectangle(x + cell // 4, y + cell // 4,
+                                        x + 3 * cell // 4, y + 3 * cell // 4,
+                                        fill="#47b9a4" if obj.opened else "#d99554",
+                                        outline="#101b2d", width=2)
+                canvas.create_text(x + cell / 2, y + cell - 5,
+                                   text=obj.id[:10], fill="#ffffff",
+                                   font=("TkDefaultFont", max(7, cell // 7)))
+            canvas.addtag_withtag("dynamic", "all")
+            canvas.dtag("terrain", "dynamic")
+            canvas.dtag("actor", "dynamic")
+            self._overlay_key = overlay_key
+            self._overlay_rebuilds += 1
         # Reconcile stable actor item handles with the current projection.
         # Visibility culling also prunes cached offscreen units; no ghost items.
         visible_ids = set()
@@ -307,23 +321,21 @@ class CanvasRenderer:
         for stale in tuple(self._actor_items):
             if stale not in visible_ids:
                 self._remove_actor(stale)
-        # Existing actor shapes must be above freshly created threat overlays;
-        # the result banner, added below, remains above all actors.
+        # Cached actors remain above danger markers. The result banner
+        # remains above all actors, even on cached redraws.
         canvas.tag_raise("actor")
-        if frame.result:
+        if frame.result and refresh_overlay:
             canvas.create_text(camera.offset_x + frame.width * cell / 2,
                                camera.offset_y + 14,
                                text=frame.result.upper(), fill="#ffe38d",
-                               font=("TkDefaultFont", 17, "bold"))
-        # Tag only new foreground objects. Terrain must stay untagged
-        # "dynamic" so the next animation tick retains those items.
-        canvas.addtag_withtag("dynamic", "all")
-        canvas.dtag("terrain", "dynamic")
-        canvas.dtag("actor", "dynamic")
+                               font=("TkDefaultFont", 17, "bold"),
+                               tags=("dynamic", "result"))
+        canvas.tag_raise("result")
 
     def dispose(self):
         self._actor_items.clear()
         self._terrain_key = None
+        self._overlay_key = None
         self._cell_images.clear()
         self._images.clear()
         self._sources.clear()
