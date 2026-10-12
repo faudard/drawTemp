@@ -1,8 +1,7 @@
-"""Presentation-only architectural overlays inferred from intact structure stamps.
+"""Visual architecture with authored identity and legacy stamp inference.
 
-Recognise the 3.7.12 multi-cell terrain plans instead of persisting an extra
-building object. Reopening old Content files remains byte-schema compatible.
-Detection and placement pivot computation are pure/headless; Tk is not imported.
+New structures remain visible after painting a tile. Old Content without
+metadata still uses deterministic intact-tile recognition. No Tk imports.
 """
 from dataclasses import dataclass
 
@@ -48,6 +47,7 @@ class ArchitectureInstance:
     height: int
     cells: frozenset
     entry: tuple | None
+    id: str = ''
 
 
 def preview_structure_sprite_position(geo, name, anchor, turns=0, *, door_slot=0):
@@ -85,12 +85,27 @@ def _same_tile(current, expected):
                for key in MATCH_KEYS)
 
 
-def architecture_instances(board):
-    """Recognise complete, intact building stamps without changing saved data.
+def _stored_instance(record):
+    """Recompute geometry from a validated visual identity, not current tiles."""
+    clip = structure_template(record['name'], record['turns'],
+                              door_slot=record['door_slot'])
+    x, y = record['anchor']
+    cells = frozenset((x+dx, y+dy) for dx, dy in clip.offsets)
+    entry = next(((x+dx, y+dy) for (dx, dy), tile
+                  in zip(clip.offsets, clip.terrain)
+                  if tile.get('surface') == 'cobble' and not tile.get('blocked')),
+                 None)
+    return ArchitectureInstance(record['name'], (x, y),
+                                record['turns'], record['door_slot'],
+                                clip.width, clip.height, cells, entry,
+                                record['id'])
 
-    Source candidates are explicit wall tiles; no scanning of every sparse
-    board cell for every template. Overlapping matches resolve deterministically
-    to the largest, then row-major instance.
+
+def architecture_instances(board, structures=()):
+    """Use stable authored identities first, and infer only remaining legacy.
+
+    Existing missions keep their previous detection logic. Recorded buildings
+    do not disappear when a tactical wall, floor or door tile is repainted.
     """
     seed_cells = {
         'wall': [cell for cell, tile in board.tiles.items()
@@ -142,6 +157,12 @@ def architecture_instances(board):
     # Matching rotated symmetric stamps produce duplicates; choose one stable
     # representation and never paint two roofs over the same ground cells.
     claimed, result = set(), []
+    for record in structures:
+        persistent = _stored_instance(record)
+        require(not persistent.cells.intersection(claimed),
+                'Overlapping authored structure identities')
+        result.append(persistent)
+        claimed.update(persistent.cells)
     for candidate in sorted(candidates,
                             key=lambda v: (-len(v.cells), v.anchor[1],
                                            v.anchor[0], v.name, v.turns, v.door_slot)):
@@ -177,7 +198,7 @@ def architecture_outline(geo, instance, wall_level=2):
 
 
 def draw_architecture(canvas, geo, board, units, selected_cell, layers,
-                      atlas=None, scenery_atlas=None, poses=None):
+                      atlas=None, scenery_atlas=None, poses=None, structures=()):
     """Paint hand-authored sprite overlays with deterministic vector fallback.
 
     Cutaway remains a vector outline: opaque sprites may never hide occupants.
@@ -185,7 +206,7 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
     """
     if not (layers.get('Bâtiments', True) or layers.get('Toitures', True)):
         return ()
-    instances = architecture_instances(board)
+    instances = architecture_instances(board, structures)
     for index, building in enumerate(instances):
         instance_tag = 'architecture_instance_' + str(index)
         outline, peak = architecture_outline(geo, building)
