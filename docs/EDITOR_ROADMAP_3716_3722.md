@@ -4,6 +4,59 @@ Audit du 12 octobre 2026, base `master` **1af3b41**. Les statuts ci-dessous
 portent sur les gates utilisateur, pas sur le nombre de modules présents.
 Aucune gate graphique multiplateforme n'est déclarée terminée.
 
+## Actualisation après les fusions du 12 octobre 2026
+
+La base a évolué depuis l'audit initial `1af3b41`. Le tableau d'audit
+initial ci-dessous est conservé comme référence **historique** et ne doit
+plus être lu comme un état instantané. État GitHub vérifié :
+
+| Livrable | Statut constaté | Référence |
+| --- | --- | --- |
+| 3.7.11–3.7.15 outils, architecture et quatre atlas | Fusionné, gate esthétique final non fermé | PR #73–#77 |
+| 3.7.16A palette de 26 entrées / miniatures / défaut PNG | Fusionné ; gate 3.7.16 encore partiel | PR #78 |
+| 3.7.18A scène isométrique Studio + Player | Fusionné, Players château spécialisés non couverts | PR #79 |
+| 3.7.18B mouvement animé, ordre de profondeur, coupe | Fusionné ; occlusion volumétrique complète non prouvée | PR #80 |
+| 3.7.18C réutilisation Canvas pendant mouvements | Fusionné ; benchmark représentatif 128² à consolider | PR #81 |
+| 3.7.18C correction invalidation des attributs d'acteurs | **Ouvert** ; ne pas le dupliquer | PR #82 |
+| 3.7.16B prévisualisation WYSIWYG sous le pointeur | **En revue** dans `feat/3.7.16b-wysiwyg-scene-preview` | [note technique](ISOMETRIC_PLACEMENT_PREVIEW_3716B.md) |
+
+### Priorités et PR suivantes (ordre ajusté)
+
+1. **P0, S — 3.7.16B** : même PNG/ancrage entre catalogue,
+   pointeur et pose réelle ; test souris Tk, fallback absent, rotations.
+   Indépendant de #82. Gate : survol/pose/undo/save/reopen sans dérive
+   d'alignement et sans JSON manuel.
+2. **P0, M — 3.7.17A** : village test construit *avec les outils de
+   l'éditeur*, comprenant une rivière, un pont, deux maisons, une tour,
+   un rempart, un accès et de la végétation. Dépend du preview.
+   Gate : capture 24/54/96, inspection de raccords, rechargement,
+   projet + Player identiques.
+3. **P0, L — 3.7.17B** : remplacer la reconnaissance fragile de
+   bâtiments basée uniquement sur des tampons strictement intacts
+   par une identité de structure compatible avec les anciennes cartes
+   (contrat/migration à valider avant modification). Dépend de 17A.
+4. **P0, M — 3.7.18D** : rafraîchissement terrain / overlays et
+   profil mémoire, avec comparaison des p95 32²/64²/128².
+   Dépend de la clôture de #82. Ne pas déclarer un budget
+   atteint sans mesure sur le SHA livré.
+5. **P1, L — 3.7.19 / 3.7.21** : personnages et objets interactifs
+   par palette, inspecteur de propriétés contextualisé, historique
+   continu sans recours au JSON. Sous-PR ciblées indépendantes si possible.
+6. **P1, XL — 3.7.20** : intérieurs visibles en premier, puis RFC
+   des véritables étages superposés avant toute règle tactique nouvelle.
+7. **P0 final, L — 3.7.22** : petite mission de siège avec export
+   et reprise Player sans JSON ; ne se ferme qu'après preuves Linux,
+   Windows et macOS et livrable Python installé hors dépôt.
+
+Criticité : qualité visuelle et continuité **édition → Player** avant
+quantité d'assets. Les PNG pixel-art actuellement livrés sont des
+prototypes graphiques, pas des illustrations finales manga/chibi.
+Les entrées `assets/watercolor` ne prouvent pas la présence des 88 PNG.
+Risques : effets d'édition qui rompent la détection des structures,
+survol opaque dans les bâtiments, changement de caméra et zoom,
+redraws complets après nouveau snapshot, ergonomie du `editor.py`
+monolithique. Aucune PR de présentation ne doit altérer le moteur.
+
 ## État factuel et problèmes par impact
 
 | Impact | Constat vérifiable | Source / conséquence |
