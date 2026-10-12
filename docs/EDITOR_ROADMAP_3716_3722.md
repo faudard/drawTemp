@@ -1,5 +1,35 @@
 # Éditeur drawTemp — audit et roadmap 3.7.16–3.7.22
 
+## Suivi de livraison — 12 octobre 2026, après audit historique
+
+Les statuts du tableau initial plus bas datent de la base `1af3b41` ;
+ils sont conservés pour expliquer les décisions, et non comme état GitHub
+instantané. Vérification GitHub effectuée sur `master` 8d5867b :
+
+| Séquence / jalon | Statut GitHub ou gate | Priorité | Complexité / suite |
+| --- | --- | --- | --- |
+| #73–#77 — constructeurs + atlas 3.7.11–15 | Fusionnées ; validation artistique incomplète | P0 | Base existante |
+| #78 — 3.7.16A palette 26 assets | Fusionnée ; import de projet et variantes absents | P0 | M |
+| #79–#81 — 3.7.18A–C Player, profondeur, cache de mouvement | Fusionnées ; occlusion/échelle à valider | P0 | L |
+| [#82](https://github.com/faudard/drawTemp/pull/82) — cache acteur | Ouverte Draft ; indépendante | P0 | S, tests puis CI |
+| [#83](https://github.com/faudard/drawTemp/pull/83) — 3.7.16B survol PNG | Ouverte Draft ; CI testée verte sur 42bf34e | P0 | S, revue visuelle |
+| **3.7.17A — scène village Valcroix** | **Implémentée sur branche, gate à vérifier en CI** | **P0** | M ; [guide et captures](REFERENCE_FORTIFIED_VILLAGE_3717A.md) |
+| 3.7.17B — bâtiments éditables persistants | À faire, risque compatibilité Content | P0 | L après 17A |
+| 3.7.18D — budget graphique et profondeur | À faire après #82 | P0 | M |
+| 3.7.19 — entités et objets interactifs, édition guidée | Partiel | P1 | M |
+| 3.7.21 — ergonomie/favoris/inspecteur | Partiel | P1 | L |
+| 3.7.20 — intérieurs et niveaux superposés | Partiel/absent ; RFC gameplay préalable | P1 | XL |
+| 3.7.22 — sauvegarde, export, Player et validation 3 OS | Gate final non fermé | P0 final | L |
+
+Le village de référence assemble **les outils existants**, y compris
+`Document`, `place_structure`, `add_object` et `add_event`.
+Il ne réécrit pas le moteur et ne dépend pas du ghost-preview de #83 :
+les deux PR peuvent être évaluées puis fusionnées séparément.
+La preuve graphique sera conservée en artefact du job Linux/Tk/Xvfb ;
+une capture générée mais non inspectée **ne ferme pas** le gate esthétique.
+Ne pas fusionner automatiquement.
+
+
 Audit du 12 octobre 2026, base `master` **1af3b41**. Les statuts ci-dessous
 portent sur les gates utilisateur, pas sur le nombre de modules présents.
 Aucune gate graphique multiplateforme n'est déclarée terminée.
