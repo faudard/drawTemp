@@ -71,3 +71,28 @@ python -m unittest discover -s tests_standalone -v
 Gates : tests éditeur avec Xvfb ; moteur Linux/Windows/macOS sous
 Python 3.10/3.12/3.14 ; packaging Python sur les trois OS et inspection
 visuelle à trois niveaux de zoom. Cette PR est empilée après #76.
+
+## Correctif artistique 3.7.17A — alpha du pont et des ombres
+
+La scène de référence Valcroix a révélé deux éléments parasites dans
+`fortifications.png` : les sprites Pont incluaient des polygones d'eau
+bleue dessinés *en dehors du tablier*, et les six frames contenaient
+une ombre elliptique détachée sous les structures. Le terrain possède
+déjà ses propres atlas d'eau et son propre relief ; ces pixels statiques
+ne doivent donc pas recouvrir les berges ni dépasser du plateau.
+
+Correction **sans transformation géométrique, régénération des sprites
+ou dépendance de rendu** : le PNG palettisé d'origine conserve exactement
+ses 2700×250 pixels, ses six frames, ses morceaux de pierre/bois et ses
+blocs IDAT compressés. Seules quatre entrées du canal alpha indexé
+(tRNS : 1 pour l'ombre, 7/8/9 pour l'eau décorative) sont rendues
+transparentes ; le CRC du chunk est recalculé. Le même code Tk charge
+les frames sans nouvelle étape runtime. Le test
+`test_real_png_frames_have_crc_alpha_and_nonempty_art` vérifie les
+indices alpha, le CRC, les frames et la préservation de l'opacité
+des matériaux de structure.
+
+**Limites :** ce correctif ne remplace pas la direction artistique du
+pont, dont le tablier reste un prototype. Une revue de captures CI
+après modification doit confirmer visuellement qu'il n'existe pas
+d'autres halos, et vérifier les échelles 24/54/96.
