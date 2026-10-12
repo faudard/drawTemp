@@ -11,6 +11,7 @@ from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
                             selected_cells as validate_selection)
 from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
                             transform_terrain)
+from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, render_isometric, SURFACE_COLORS, IsoTerrainAtlas)
 from .iso_props import IsoPropAtlas
@@ -588,13 +589,13 @@ def launch(path):
 
     def event_cell(event):
         px, py = canvas.canvasx(event.x), canvas.canvasy(event.y)
-        if iso_var.get() and not battle and iso_geometry is not None:
+        if iso_var.get() and iso_geometry is not None:
             return iso_geometry.hit_test(px, py)
         return int(px // tile_size), int(py // tile_size)
 
     def preview_cells(cells, *, tag, color):
         canvas.delete(tag)
-        if iso_var.get() and not battle and iso_geometry is not None:
+        if iso_var.get() and iso_geometry is not None:
             for cell in cells:
                 if iso_geometry.board.contains(cell):
                     canvas.create_polygon(*_flatten(iso_geometry.polygon(cell)),
@@ -892,12 +893,18 @@ def launch(path):
         if object_var.get() not in object_box['values']:
             object_var.set(object_box['values'][0] if object_box['values'] else '')
         selected_tiles.intersection_update(set(board.cells()))
-        if iso_var.get() and not battle:
+        if iso_var.get():
+            # Editor and its actual Battle use the identical terrain/asset
+            # scene. Intents come from battle_frame: no game-rule duplication.
+            live = battle_frame(battle, selected_cell) if battle else None
             iso_geometry = render_isometric(
                 canvas, board, mission, units, cell_size=tile_size,
                 layers={name: var.get() for name, var in layer_vars.items()},
                 selected_cell=selected_cell, selected_tiles=selected_tiles,
-                reachable=(), atlas=iso_atlas, prop_atlas=iso_props,
+                reachable=live.reachable if live else (),
+                danger=live.danger if live else (),
+                active_id=live.active_id if live else None,
+                atlas=iso_atlas, prop_atlas=iso_props,
                 building_atlas=building_atlas,
                 fortification_atlas=fortification_atlas)
         else:

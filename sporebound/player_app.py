@@ -17,6 +17,7 @@ from .siege import available_operations
 from .tactical_actions import tactical_action_options, tactical_command
 from .tactical_rpg3 import authored_rules_for_document
 from .tk_renderer import CanvasRenderer
+from .iso_battle_view import IsoBattleCanvas, anchored_iso_zoom
 from .visual_motion import MotionDirector
 
 
@@ -68,6 +69,7 @@ class PlayerApplication:
         self.logistics_y_var = tk.StringVar(value="1")
         self.convoy_var = tk.StringVar()
         self.selection = (0, 0)
+        self.iso_view_var = tk.BooleanVar(value=False)
         self.camera = Camera(52, 8, 8)
         self.motion = MotionDirector()
         self._motion_source = None
@@ -75,6 +77,7 @@ class PlayerApplication:
         self._motion_job = None
         self.canvas = None
         self.renderer = None
+        self.iso_renderer = None
         self.info = None
         self.cinematic = None
         self._typewriter_job = None
@@ -119,6 +122,9 @@ class PlayerApplication:
         if self.renderer:
             self.renderer.dispose()
             self.renderer = None
+        if self.iso_renderer:
+            self.iso_renderer.dispose()
+            self.iso_renderer = None
         for child in self.view.winfo_children():
             child.destroy()
         self.canvas = None
@@ -579,6 +585,9 @@ class PlayerApplication:
                          self._finish_mission_with_cinematic).pack(
                              side="left", padx=4)
         self._button(nav, "Sauvegarder", self.player.save).pack(side="right", padx=4)
+        self.ttk.Checkbutton(nav, text="Vue isométrique 2.5D",
+                             variable=self.iso_view_var,
+                             command=self._switch_projection).pack(side="right", padx=8)
         if not session.finalized and not battle.result:
             actions = self.ttk.Frame(self.view)
             actions.pack(fill="x", pady=9)
@@ -625,6 +634,7 @@ class PlayerApplication:
         self.canvas.pack(side="left", fill="both", expand=True)
         self.renderer = CanvasRenderer(self.canvas, registry=self.registry,
                                        asset_root=self.asset_root)
+        self.iso_renderer = IsoBattleCanvas(self.canvas)
         self.canvas.bind("<Button-1>", self._select_cell)
         self.canvas.bind("<Return>", lambda _event: self._safe(self._execute))
         self.canvas.bind("<space>", lambda _event: self._safe(self._end))
@@ -650,6 +660,17 @@ class PlayerApplication:
 
     def _render_motion(self, clock_ms):
         if self.renderer is None or self.canvas is None or self._motion_frame is None:
+            return
+        if self.iso_view_var.get() and self.iso_renderer is not None:
+            # Same scene as Editor playtest. Use the engine snapshot for this
+            # rendering gate; interpolated actor poses remain in 2D mode.
+            battle = self.player.session.active_battle
+            if battle is not None:
+                self.iso_renderer.draw(
+                    battle, self._motion_frame, self.camera,
+                    poses=self.motion.poses(clock_ms))
+            if self.motion.active(clock_ms) and self._motion_job is None:
+                self._motion_job = self.root.after(60, self._motion_tick)
             return
         self.renderer.draw(
             self._motion_frame, self.camera, poses=self.motion.poses(clock_ms),
@@ -717,11 +738,21 @@ class PlayerApplication:
         self.info.insert("1.0", "\n".join(rows))
         self.info.configure(state="disabled")
 
+    def _switch_projection(self):
+        # CanvasRenderer caches item IDs. Force a rebuild after swapping
+        # the image-oriented and vector-oriented Canvas item sets.
+        if self.renderer is not None:
+            self.renderer.dispose()
+        self._redraw()
+
     def _select_cell(self, event):
         self.canvas.focus_set()
         battle = self.player.session.active_battle
-        cell = self.camera.screen_to_cell(event.x, event.y)
-        if battle.board.contains(cell):
+        if self.iso_view_var.get() and self.iso_renderer is not None:
+            cell = self.iso_renderer.hit_test(event.x, event.y)
+        else:
+            cell = self.camera.screen_to_cell(event.x, event.y)
+        if cell is not None and battle.board.contains(cell):
             self.selection = cell
             self._redraw()
 
@@ -729,7 +760,14 @@ class PlayerApplication:
         self._zoom_step(1 if event.delta > 0 else -1, (event.x, event.y))
 
     def _zoom_step(self, direction, anchor=(300, 200)):
-        self.camera = self.camera.zoomed(direction, anchor)
+        if self.iso_view_var.get() and self.iso_renderer is not None:
+            battle = self.player.session.active_battle
+            if battle is not None:
+                self.camera = anchored_iso_zoom(
+                    battle.board, self.camera, self.iso_renderer.viewport(),
+                    direction, anchor)
+        else:
+            self.camera = self.camera.zoomed(direction, anchor)
         self._redraw()
 
     def _pan_start(self, event):
