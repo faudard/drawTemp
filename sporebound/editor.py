@@ -15,6 +15,7 @@ from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, render_isometric, SURFACE_COLORS, IsoTerrainAtlas)
 from .iso_props import IsoPropAtlas
 from .iso_building_atlas import IsoBuildingAtlas
+from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
                              structure_footprint, validate_structure_placement,
                              place_structure)
@@ -896,7 +897,8 @@ def launch(path):
                 layers={name: var.get() for name, var in layer_vars.items()},
                 selected_cell=selected_cell, selected_tiles=selected_tiles,
                 reachable=(), atlas=iso_atlas, prop_atlas=iso_props,
-                building_atlas=building_atlas)
+                building_atlas=building_atlas,
+                fortification_atlas=fortification_atlas)
         else:
             iso_geometry = None
             canvas.delete('all')
@@ -1142,6 +1144,7 @@ def launch(path):
     iso_atlas = IsoTerrainAtlas(canvas)
     iso_props = IsoPropAtlas(canvas)
     building_atlas = IsoBuildingAtlas(canvas)
+    fortification_atlas = IsoFortificationAtlas(canvas)
     xs,ys = ttk.Scrollbar(canvas_frame,orient='horizontal',command=canvas.xview),ttk.Scrollbar(canvas_frame,orient='vertical',command=canvas.yview)
     canvas.configure(xscrollcommand=xs.set,yscrollcommand=ys.set)
     xs.pack(side='bottom',fill='x'); ys.pack(side='right',fill='y'); canvas.pack(fill='both',expand=True)
