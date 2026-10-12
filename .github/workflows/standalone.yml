@@ -80,6 +80,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_map_editor_gui.py -v
+      - name: Verify shared isometric Editor and Player in real Tk (3.7.18A)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_iso_battle_view_3718_gui.py -v
       - name: Exercise asset palette scene authoring and missing PNG fallback (3.7.16)
         env:
           SPOREBOUND_GUI_SMOKE: '1'
