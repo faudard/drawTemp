@@ -15,6 +15,42 @@ from sporebound.visual_motion import ActorPose
 @unittest.skipUnless(os.environ.get('SPOREBOUND_GUI_SMOKE') == '1',
                      'Needs a real Tk/Xvfb screen')
 class ActorSpriteGUITests(unittest.TestCase):
+    def test_player_keeps_actor_item_ids_when_direction_changes_on_cached_frame(self):
+        import tkinter as tk
+        from sporebound.engine import Battle
+        from sporebound.iso_battle_view import IsoBattleCanvas
+        from sporebound.presentation import Camera, battle_frame
+        root = tk.Tk()
+        root.geometry('980x740+0+0')
+        canvas = tk.Canvas(root, width=900, height=700)
+        canvas.pack(fill='both', expand=True)
+        try:
+            root.update()
+            battle = Battle(Content.load(DEFAULT_CONTENT), 'garden', seed=2)
+            frame = battle_frame(battle, (2, 2))
+            camera = Camera(54, 0, 0)
+            renderer = IsoBattleCanvas(canvas)
+            hero = next(u for u in battle.units if u.team == 'player')
+            idle = {hero.id: ActorPose(*hero.pos, 'idle', 'south')}
+            move = {hero.id: ActorPose(*hero.pos, 'move', 'east')}
+            renderer.draw(battle, frame, camera, poses=idle)
+            items = [i for i in canvas.find_withtag('iso_actor_unit_0')
+                     if canvas.type(i) == 'image']
+            self.assertTrue(items)
+            image_before = canvas.itemcget(items[0], 'image')
+            creations_before = renderer._scene_rebuilds
+            renderer.draw(battle, frame, camera, poses=move)
+            self.assertEqual(renderer._scene_rebuilds, creations_before)
+            self.assertEqual(renderer._actor_only_frames, 1)
+            self.assertEqual(
+                items, [i for i in canvas.find_withtag('iso_actor_unit_0')
+                        if canvas.type(i) == 'image'])
+            self.assertNotEqual(image_before, canvas.itemcget(items[0], 'image'))
+            renderer.dispose()
+            self.assertEqual(renderer._actor_sprite_states, ())
+        finally:
+            root.destroy()
+
     def test_zoom_player_enemy_archer_animation_and_missing_png_fallback(self):
         import tkinter as tk
         root = tk.Tk()
