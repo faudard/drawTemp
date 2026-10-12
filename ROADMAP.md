@@ -1,5 +1,10 @@
 # Roadmap — priorité gameplay, sans dépendance à Godot
 
+## Priorité éditeur — audit réel du 12 octobre 2026
+
+Voir [roadmap vérifiée 3.7.16–3.7.22](docs/EDITOR_ROADMAP_3716_3722.md) :
+statuts, limites artistiques, dépendances, PR et gates mesurables.
+
 ## Research gate — Combat Fundamentals 1.0
 
 La profondeur tactique n'est plus développée comme une liste ouverte de features. Les décisions de gameplay doivent d'abord être confrontées au cadre de recherche et au journal de décisions :

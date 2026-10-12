@@ -4,8 +4,9 @@ This is an editor visualization; the tactical board and all pathfinding remain
 orthogonal. Geometry and hit-testing work without importing tkinter.
 """
 from dataclasses import dataclass
-from math import gcd
 from pathlib import Path
+
+from .tk_images import crop_scaled
 
 from .iso_connections import (shoreline_mask, waterfall_mask, bridge_axis,
                               transition_segments, bridge_rails)
@@ -69,13 +70,9 @@ class IsoTerrainAtlas:
             target_width, target_height = 2*cell_size, cell_size
             sx = ATLAS_MATERIALS.index(surface) * ATLAS_VARIANTS + variant
             x = sx * source_width
-            photo = tk.PhotoImage(master=self.canvas,
-                                  width=target_width, height=target_height)
-            factor = gcd(target_width, source_width)
-            photo.tk.call(str(photo), 'copy', str(self._source),
-                          '-from', x, 0, x+source_width, source_height,
-                          '-to', 0, 0, '-zoom', target_width // factor,
-                          '-subsample', source_width // factor)
+            photo = crop_scaled(self._source,
+                                (x, 0, source_width, source_height),
+                                (target_width, target_height), master=self.canvas)
             self._tiles[key] = photo
             return photo
         except (OSError, ValueError, RuntimeError, ImportError, tk.TclError):

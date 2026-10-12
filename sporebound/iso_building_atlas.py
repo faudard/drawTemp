@@ -4,8 +4,9 @@ Frame order: Maison/0, Maison/1, Tour/0, Tour/1, Ruines/0, Ruines/1.
 Sprites are decorative overlays inferred from existing authored terrain.
 Never import tkinter (or Pillow) until a visual sprite is requested.
 """
-from math import gcd
 from pathlib import Path
+
+from .tk_images import crop_scaled
 
 BUILDING_FRAMES = (('Maison', 0), ('Maison', 1),
                    ('Tour', 0), ('Tour', 1),
@@ -58,13 +59,9 @@ class IsoBuildingAtlas:
                 self._source = source
             tw = max(1, round(fw*cell_size/BUILDING_SOURCE_CELL_SIZE))
             th = max(1, round(fh*cell_size/BUILDING_SOURCE_CELL_SIZE))
-            gx, gy = gcd(fw, tw), gcd(fh, th)
             sx = BUILDING_FRAMES.index((name, turns % 2))*fw
-            photo = tk.PhotoImage(master=self.canvas, width=tw, height=th)
-            photo.tk.call(str(photo), 'copy', str(self._source),
-                          '-from', sx, 0, sx+fw, fh,
-                          '-to', 0, 0, '-zoom', tw//gx, th//gy,
-                          '-subsample', fw//gx, fh//gy)
+            photo = crop_scaled(self._source, (sx, 0, fw, fh), (tw, th),
+                                master=self.canvas)
             self._cache[key] = photo
             return photo
         except (OSError, ValueError, RuntimeError, tk.TclError):
