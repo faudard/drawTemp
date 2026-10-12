@@ -12,6 +12,7 @@ from .model import RuleError, require
 
 PIVOTS = ('Coin', 'Centre', 'Porte')
 ARCHITECTURE_NAMES = ('Maison', 'Tour', 'Ruines')
+SCENERY_NAMES = ('Rempart', 'Escalier', 'Pont')
 # Only appearance tokens are matched; an edited wall, floor or entrance
 # intentionally invalidates the derived facade until the stamp is reapplied.
 MATCH_KEYS = ('surface', 'feature', 'height', 'blocked', 'cost', 'cover', 'hazard')
@@ -62,23 +63,39 @@ def architecture_instances(board):
     board cell for every template. Overlapping matches resolve deterministically
     to the largest, then row-major instance.
     """
-    anchors = [cell for cell, tile in board.tiles.items()
-               if tile.feature == 'stone_wall']
+    seed_cells = {
+        'wall': [cell for cell, tile in board.tiles.items()
+                 if tile.feature == 'stone_wall'],
+        'stairs': [cell for cell, tile in board.tiles.items()
+                   if tile.feature == 'stairs'],
+        'bridge': [cell for cell, tile in board.tiles.items()
+                   if tile.surface == 'bridge'],
+    }
     candidates = []
-    for name in ARCHITECTURE_NAMES:
+    for name in (*ARCHITECTURE_NAMES, *SCENERY_NAMES):
         for turns in range(4):
             for door_slot in range(len(door_slots(name))):
                 clip = structure_template(name, turns, door_slot=door_slot)
-                # A rotated plan need not begin with a wall in its top-left
-                # cell. Derive each candidate's origin from one known wall
-                # offset to recognise every orientation without full scanning.
-                wall = next(((dx, dy) for (dx, dy), spec
-                             in zip(clip.offsets, clip.terrain)
-                             if spec.get('feature') == 'stone_wall'), None)
-                if wall is None:
+                # A rotated plan need not begin with its distinguishing
+                # wall/step/bridge tile. Seed from a matching non-default
+                # terrain token; legacy blank maps remain untouched.
+                if name == 'Escalier':
+                    kind = 'stairs'
+                    index = next((i for i, t in enumerate(clip.terrain)
+                                  if t.get('feature') == 'stairs'), None)
+                elif name == 'Pont':
+                    kind = 'bridge'
+                    index = next((i for i, t in enumerate(clip.terrain)
+                                  if t.get('surface') == 'bridge'), None)
+                else:
+                    kind = 'wall'
+                    index = next((i for i, t in enumerate(clip.terrain)
+                                  if t.get('feature') == 'stone_wall'), None)
+                if index is None:
                     continue
-                for wx, wy in anchors:
-                    x, y = wx-wall[0], wy-wall[1]
+                dx, dy = clip.offsets[index]
+                for wx, wy in seed_cells[kind]:
+                    x, y = wx-dx, wy-dy
                     if (x < 0 or y < 0 or x + clip.width > board.width
                             or y + clip.height > board.height):
                         continue
@@ -140,7 +157,7 @@ def architecture_outline(geo, instance, wall_level=2):
 
 
 def draw_architecture(canvas, geo, board, units, selected_cell, layers,
-                      atlas=None):
+                      atlas=None, scenery_atlas=None):
     """Paint hand-authored sprite overlays with deterministic vector fallback.
 
     Cutaway remains a vector outline: opaque sprites may never hide occupants.
@@ -153,6 +170,20 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
         outline, peak = architecture_outline(geo, building)
         north, east, south, west = outline
         cutaway = roof_cutaway(building, selected_cell, units)
+        if building.name in SCENERY_NAMES:
+            # No opaque scenery may hide selected cells or tactical actors.
+            # Without a PNG, the existing tile/prop renderer is the fallback.
+            if (layers.get('Bâtiments', True) and not cutaway
+                    and scenery_atlas is not None):
+                photo = scenery_atlas.sprite(building.name, building.turns,
+                                             geo.cell_size)
+                if photo is not None:
+                    from .iso_fortification_atlas import fortification_sprite_top_left
+                    x, y = fortification_sprite_top_left(geo, building)
+                    canvas.create_image(x, y, image=photo, anchor='nw',
+                                        tags=('architecture',
+                                              'architecture_scenery_sprite'))
+            continue
         use_sprite = ((layers.get('Bâtiments', True)
                        and (building.name == 'Ruines' or layers.get('Toitures', True)))
                       and not cutaway and atlas is not None)
@@ -219,6 +250,7 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                                tags=('architecture', 'architecture_ruin'))
     # Canvas items for selection are emitted by the existing tile pass and
     # must remain visible even when a roof spans several of those cells.
+    canvas.tag_raise('iso_actor')
     canvas.tag_raise('selection')
     return instances
 

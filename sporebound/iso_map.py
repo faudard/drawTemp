@@ -161,7 +161,7 @@ class IsoGeometry:
 
 def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                      selected_cell, selected_tiles, reachable=(), atlas=None, prop_atlas=None,
-                     building_atlas=None):
+                     building_atlas=None, fortification_atlas=None):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = IsoGeometry(board, cell_size)
     canvas.delete('all')
@@ -276,9 +276,9 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         if layers.get('Unités', True):
             for actor in actors.get(c, ()):
                 color = '#3b82c6' if actor.team == 'player' else '#ca6654'
-                canvas.create_oval(cx-10,cy-24,cx+10,cy-5,fill=color,outline='#323441')
+                canvas.create_oval(cx-10,cy-24,cx+10,cy-5,fill=color,outline='#323441',tags='iso_actor')
                 canvas.create_text(cx,cy-28,text=actor.name[:6],
-                                   font=('TkDefaultFont',8,'bold'))
+                                   font=('TkDefaultFont',8,'bold'),tags='iso_actor')
         if c in selected_tiles:
             canvas.create_polygon(*_flatten(corners),outline='#23689e',fill='',width=3,
                                   tags='selection')
@@ -289,7 +289,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     # fields, no rendered logic in the tactical simulation or battle engine.
     from .iso_architecture import draw_architecture
     draw_architecture(canvas, geo, board, units, selected_cell, layers,
-                      atlas=building_atlas)
+                      atlas=building_atlas, scenery_atlas=fortification_atlas)
     return geo
 
 

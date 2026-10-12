@@ -624,5 +624,73 @@ class MapEditorGUITests(unittest.TestCase):
                 dialog_error.assert_not_called()
 
 
+
+    def test_fortification_png_renders_three_structures_and_safe_cutaway(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.authoring import add_blank_mission
+        from sporebound.iso_map import IsoGeometry
+        from sporebound.iso_structures import place_structure
+        from sporebound.model import Content
+
+        def descendants(parent):
+            for child in parent.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        with TemporaryDirectory() as tmp:
+            source = Path(tmp)/'fortifications_gui.json'
+            mid = 'fortifications_gui'
+            doc = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
+                                    mid, 'Fortifications', 12, 12)
+            doc = place_structure(doc, mid, 'Rempart', (3, 3))
+            doc = place_structure(doc, mid, 'Escalier', (5, 5))
+            doc = place_structure(doc, mid, 'Pont', (7, 8))
+            source.write_text(json.dumps(doc), encoding='utf-8')
+            errors = []
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = lambda *exc: errors.append(exc)
+                    root.update()
+                    children = list(descendants(root))
+                    canvas = next(w for w in children if isinstance(w, tk.Canvas))
+                    mission = next(w for w in children if isinstance(w, ttk.Combobox)
+                                   and mid in w.cget('values'))
+                    tool = next(w for w in children if isinstance(w, ttk.Combobox)
+                                and 'Sélection' in w.cget('values'))
+                    toggle = next(w for w in children if isinstance(w, ttk.Checkbutton)
+                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    mission.set(mid)
+                    mission.event_generate('<<ComboboxSelected>>')
+                    toggle.invoke()
+                    root.update()
+                    self.assertEqual(len(canvas.find_withtag('architecture_scenery_sprite')), 3)
+                    board = Content.from_dict(doc).missions[mid].board
+                    geo = IsoGeometry(board, 54)
+                    cell = (8, 9)
+                    px, py = geo.center(cell)
+                    canvas.xview_moveto(max(0.0, (px-canvas.winfo_width()/2)/geo.width))
+                    canvas.yview_moveto(max(0.0, (py-canvas.winfo_height()/2)/geo.height))
+                    root.update()
+                    x, y = int(px-canvas.canvasx(0)), int(py-canvas.canvasy(0))
+                    self.assertTrue(0 <= x < canvas.winfo_width())
+                    self.assertTrue(0 <= y < canvas.winfo_height())
+                    tool.set('Sélection')
+                    canvas.event_generate('<Button-1>', x=x, y=y)
+                    canvas.event_generate('<ButtonRelease-1>', x=x, y=y)
+                    root.update()
+                    self.assertEqual(len(canvas.find_withtag('architecture_scenery_sprite')), 2)
+                    self.assertTrue(canvas.find_withtag('selection'))
+                    self.assertEqual(errors, [])
+                finally:
+                    root.destroy()
+
+            with (patch.object(tk.Tk, 'mainloop', drive),
+                  patch('tkinter.messagebox.showerror') as dialog_error):
+                launch(source)
+                dialog_error.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
