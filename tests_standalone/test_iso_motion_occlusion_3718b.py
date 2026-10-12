@@ -89,7 +89,7 @@ class IsoMotionAndDepthTests(unittest.TestCase):
         self.assertEqual(depth_order((house,), (rear, near)),
                          ('iso_actor_unit_0', 'architecture_instance_0',
                           'iso_actor_unit_1'))
-        rear_pose = {'rear': ActorPose(10., 8., 'move', 'east')}
+        rear_pose = {'rear': ActorPose(10.5, 8., 'move', 'east')}
         self.assertEqual(depth_order((house,), (rear, near), rear_pose),
                          ('architecture_instance_0', 'iso_actor_unit_1',
                           'iso_actor_unit_0'))
