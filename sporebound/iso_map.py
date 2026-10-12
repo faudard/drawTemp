@@ -160,7 +160,8 @@ class IsoGeometry:
 
 
 def render_isometric(canvas, board, mission, units, *, cell_size, layers,
-                     selected_cell, selected_tiles, reachable=(), atlas=None, prop_atlas=None):
+                     selected_cell, selected_tiles, reachable=(), atlas=None, prop_atlas=None,
+                     building_atlas=None):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = IsoGeometry(board, cell_size)
     canvas.delete('all')
@@ -287,7 +288,8 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     # Derive roof/facade overlays from intact 3.7.12 stamps. No new content
     # fields, no rendered logic in the tactical simulation or battle engine.
     from .iso_architecture import draw_architecture
-    draw_architecture(canvas, geo, board, units, selected_cell, layers)
+    draw_architecture(canvas, geo, board, units, selected_cell, layers,
+                      atlas=building_atlas)
     return geo
 
 
