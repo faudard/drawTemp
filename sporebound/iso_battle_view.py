@@ -192,7 +192,8 @@ class IsoBattleCanvas:
         self._viewport = viewport
         self._unit_ids = ids
         self._unit_state = actor_state
-        self._architecture = architecture_instances(battle.board)
+        self._architecture = architecture_instances(
+            battle.board, getattr(battle.mission, 'structures', ()))
         self._cutaways = self._cutaway_flags(frame, units, poses)
         self._positions = self._pose_centers(units, poses)
         self._actor_sprite_states = self._sprite_states(units, poses)
