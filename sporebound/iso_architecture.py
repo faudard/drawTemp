@@ -50,6 +50,34 @@ class ArchitectureInstance:
     entry: tuple | None
 
 
+def preview_structure_sprite_position(geo, name, anchor, turns=0, *, door_slot=0):
+    """Position an uncommitted structure exactly like the rendered atlas.
+
+    Preview and final display share the same structure plan, roof geometry
+    and PNG anchor. No tiles are changed and no editor/Tk import is needed.
+    """
+    from .iso_structures import structure_footprint
+
+    require(isinstance(anchor, (tuple, list)) and len(anchor) == 2
+            and all(type(value) is int for value in anchor),
+            'Choose a valid structure anchor')
+    clip = structure_template(name, turns, door_slot=door_slot)
+    cells = frozenset(structure_footprint(clip, anchor))
+    entry = next(((anchor[0] + dx, anchor[1] + dy)
+                  for (dx, dy), tile in zip(clip.offsets, clip.terrain)
+                  if tile.get('surface') == 'cobble'
+                  and not tile.get('blocked')), None)
+    instance = ArchitectureInstance(name, tuple(anchor), turns, door_slot,
+                                    clip.width, clip.height, cells, entry)
+    if name in ARCHITECTURE_NAMES:
+        from .iso_building_atlas import building_sprite_top_left
+        origin = building_sprite_top_left(geo, instance)
+    else:
+        from .iso_fortification_atlas import fortification_sprite_top_left
+        origin = fortification_sprite_top_left(geo, instance)
+    return instance, origin
+
+
 def _same_tile(current, expected):
     defaults = dict(surface='grass', feature='', height=0, blocked=False,
                     cost=1, cover=0, hazard=0)
