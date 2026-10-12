@@ -157,7 +157,8 @@ class IsoGeometry:
 
 
 def render_isometric(canvas, board, mission, units, *, cell_size, layers,
-                     selected_cell, selected_tiles, reachable=(), atlas=None, prop_atlas=None,
+                     selected_cell, selected_tiles, reachable=(), danger=(), active_id=None,
+                     atlas=None, prop_atlas=None,
                      building_atlas=None, fortification_atlas=None):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = IsoGeometry(board, cell_size)
@@ -172,6 +173,16 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     for obj in mission.objects:
         objects.setdefault(tuple(obj['pos']), []).append(obj)
     reachable = set(reachable)
+    # Source-of-truth tactical intents use the same priority as CanvasRenderer.
+    danger_priority = {'hazard': 0, 'charge': 1, 'prepared': 2, 'cast': 3}
+    danger_colors = {'hazard': '#fd766f', 'charge': '#f5ae60',
+                     'prepared': '#f5d07a', 'cast': '#c69df8'}
+    threats = {}
+    for entry in danger:
+        cell, kind = tuple(entry['cell']), entry['kind']
+        if kind in danger_priority and (cell not in threats or
+                danger_priority[kind] > danger_priority[threats[cell]]):
+            threats[cell] = kind
 
     for c in geo.draw_order:
         tile = board.tile(c)
@@ -256,7 +267,13 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
             canvas.create_oval(cx-8, cy-6, cx+8, cy+6, fill='#eec65a', outline='')
         if c in reachable:
             canvas.create_polygon(*_flatten(corners), outline='#25a885', fill='',
-                                  width=2)
+                                  width=2, tags='iso_reachable')
+        if c in threats:
+            kind = threats[c]
+            canvas.create_polygon(*_flatten(corners),
+                                  outline=danger_colors[kind], fill='', width=3,
+                                  dash=(5, 3) if kind == 'charge' else (2, 3),
+                                  tags=('iso_danger', 'iso_danger_' + kind))
         if layers.get('Décors', True) and tile.feature:
             sprite = (prop_atlas.sprite(tile.feature, cell_size)
                       if prop_atlas is not None else None)
@@ -273,9 +290,18 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         if layers.get('Unités', True):
             for actor in actors.get(c, ()):
                 color = '#3b82c6' if actor.team == 'player' else '#ca6654'
-                canvas.create_oval(cx-10,cy-24,cx+10,cy-5,fill=color,outline='#323441',tags='iso_actor')
+                if not actor.alive:
+                    color = '#888d94'
+                active = actor.id == active_id
+                canvas.create_oval(cx-10,cy-24,cx+10,cy-5,fill=color,
+                                   outline='#ffe78a' if active else '#323441',
+                                   width=3 if active else 1, tags='iso_actor')
                 canvas.create_text(cx,cy-28,text=actor.name[:6],
                                    font=('TkDefaultFont',8,'bold'),tags='iso_actor')
+                if active_id is not None:
+                    canvas.create_text(cx,cy+2,text=f'{actor.hp} PV',
+                                       font=('TkDefaultFont',8,'bold'),
+                                       fill='#ffffff',tags='iso_actor')
         if c in selected_tiles:
             canvas.create_polygon(*_flatten(corners),outline='#23689e',fill='',width=3,
                                   tags='selection')
