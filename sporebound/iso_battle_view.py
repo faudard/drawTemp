@@ -10,6 +10,7 @@ from .iso_map import IsoGeometry, IsoTerrainAtlas, render_isometric
 from .iso_props import IsoPropAtlas
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
+from .iso_actor_atlas import IsoActorAtlas
 
 
 def battle_layers(*, deploying=False):
@@ -64,6 +65,7 @@ class IsoBattleCanvas:
         self.props = IsoPropAtlas(canvas)
         self.buildings = IsoBuildingAtlas(canvas)
         self.fortifications = IsoFortificationAtlas(canvas)
+        self.actors = IsoActorAtlas(canvas)
         self.geometry = None
         self.shift = (0, 0)
         # A frame is immutable and identical throughout each MotionDirector
@@ -133,7 +135,7 @@ class IsoBattleCanvas:
             reachable=frame.reachable, danger=frame.danger,
             active_id=frame.active_id, atlas=self.terrain, prop_atlas=self.props,
             building_atlas=self.buildings, fortification_atlas=self.fortifications,
-            poses=poses)
+            actor_atlas=self.actors, poses=poses)
         self.geometry = geo
         self.shift = viewport_shift(geo, camera, viewport)
         self.canvas.move('all', *self.shift)
@@ -172,3 +174,4 @@ class IsoBattleCanvas:
         self.props.clear_cache()
         self.buildings.clear_cache()
         self.fortifications.clear_cache()
+        self.actors.clear_cache()
