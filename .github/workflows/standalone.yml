@@ -84,6 +84,16 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_iso_battle_view_3718_gui.py -v
+      - name: Verify isometric motion and architectural occlusion in Tk (3.7.18B)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_iso_motion_occlusion_3718b_gui.py -v
+      - name: Verify retained ISO terrain and animated actor items in Tk (3.7.18C)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_iso_frame_cache_3718c_gui.py -v
+      - name: Benchmark cached ISO frames on 32 and 64 square maps (3.7.18C)
+        run: xvfb-run -a python3 scripts/benchmark_iso_frame_cache_3718c.py --sizes 32,64 --frames 4
       - name: Exercise asset palette scene authoring and missing PNG fallback (3.7.16)
         env:
           SPOREBOUND_GUI_SMOKE: '1'

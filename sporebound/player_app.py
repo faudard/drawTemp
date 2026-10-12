@@ -666,7 +666,11 @@ class PlayerApplication:
             # rendering gate; interpolated actor poses remain in 2D mode.
             battle = self.player.session.active_battle
             if battle is not None:
-                self.iso_renderer.draw(battle, self._motion_frame, self.camera)
+                self.iso_renderer.draw(
+                    battle, self._motion_frame, self.camera,
+                    poses=self.motion.poses(clock_ms))
+            if self.motion.active(clock_ms) and self._motion_job is None:
+                self._motion_job = self.root.after(60, self._motion_tick)
             return
         self.renderer.draw(
             self._motion_frame, self.camera, poses=self.motion.poses(clock_ms),

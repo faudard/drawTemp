@@ -7,6 +7,7 @@ Detection and placement pivot computation are pure/headless; Tk is not imported.
 from dataclasses import dataclass
 
 from .iso_structures import structure_template, door_slots
+from .iso_depth import cutaway_intersects, depth_order
 from .model import RuleError, require
 
 
@@ -122,19 +123,10 @@ def architecture_instances(board):
     return tuple(result)
 
 
-def roof_cutaway(instance, selected_cell, units):
-    """Make interior editing and actors visible rather than hiding them below roof."""
-    if selected_cell in instance.cells:
-        return True
-    for actor in units:
-        if not getattr(actor, 'alive', True):
-            continue
-        x, y = actor.pos
-        width, height = actor.footprint
-        if any((x+dx, y+dy) in instance.cells
-               for dy in range(height) for dx in range(width)):
-            return True
-    return False
+def roof_cutaway(instance, selected_cell, units, poses=None):
+    """Cut away the roof even while a unit moves across its footprint."""
+    return (selected_cell in instance.cells or
+            any(cutaway_intersects(instance, actor, poses) for actor in units))
 
 
 def architecture_outline(geo, instance, wall_level=2):
@@ -157,7 +149,7 @@ def architecture_outline(geo, instance, wall_level=2):
 
 
 def draw_architecture(canvas, geo, board, units, selected_cell, layers,
-                      atlas=None, scenery_atlas=None):
+                      atlas=None, scenery_atlas=None, poses=None):
     """Paint hand-authored sprite overlays with deterministic vector fallback.
 
     Cutaway remains a vector outline: opaque sprites may never hide occupants.
@@ -166,10 +158,11 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
     if not (layers.get('Bâtiments', True) or layers.get('Toitures', True)):
         return ()
     instances = architecture_instances(board)
-    for building in instances:
+    for index, building in enumerate(instances):
+        instance_tag = 'architecture_instance_' + str(index)
         outline, peak = architecture_outline(geo, building)
         north, east, south, west = outline
-        cutaway = roof_cutaway(building, selected_cell, units)
+        cutaway = roof_cutaway(building, selected_cell, units, poses)
         if building.name in SCENERY_NAMES:
             # No opaque scenery may hide selected cells or tactical actors.
             # Without a PNG, the existing tile/prop renderer is the fallback.
@@ -182,7 +175,8 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                     x, y = fortification_sprite_top_left(geo, building)
                     canvas.create_image(x, y, image=photo, anchor='nw',
                                         tags=('architecture',
-                                              'architecture_scenery_sprite'))
+                                              'architecture_scenery_sprite',
+                                              instance_tag))
             continue
         use_sprite = ((layers.get('Bâtiments', True)
                        and (building.name == 'Ruines' or layers.get('Toitures', True)))
@@ -193,7 +187,8 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                 from .iso_building_atlas import building_sprite_top_left
                 x, y = building_sprite_top_left(geo, building)
                 canvas.create_image(x, y, image=photo, anchor='nw',
-                                    tags=('architecture', 'architecture_sprite'))
+                                    tags=('architecture', 'architecture_sprite',
+                                          instance_tag))
                 # The sprite includes both stone facades and a roof.
                 continue
         if layers.get('Bâtiments', True):
@@ -206,7 +201,8 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                                       b[0], b[1]+depth, a[0], a[1]+depth,
                                       fill=tone if not cutaway else '',
                                       outline='#66594e', width=2,
-                                      tags=('architecture', 'architecture_facade'))
+                                      tags=('architecture', 'architecture_facade',
+                                            instance_tag))
             if building.entry:
                 # Door is an editable floor token (cobble), not a new entity.
                 dx, dy = building.entry
@@ -219,18 +215,21 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                                             door_y+geo.cell_size*.03,
                                             fill='#684b37', outline='#dfc196',
                                             width=2,
-                                            tags=('architecture', 'architecture_door'))
+                                            tags=('architecture', 'architecture_door',
+                                                  instance_tag))
                     canvas.create_oval(door_x+geo.cell_size*.07,
                                        door_y-geo.cell_size*.16,
                                        door_x+geo.cell_size*.10,
                                        door_y-geo.cell_size*.13,
                                        fill='#edcb69', outline='',
-                                       tags=('architecture', 'architecture_door'))
+                                       tags=('architecture', 'architecture_door',
+                                             instance_tag))
         if layers.get('Toitures', True) and building.name != 'Ruines':
             if cutaway:
                 canvas.create_polygon(*_flat(outline), fill='', outline='#b66e5c',
                                       dash=(5, 4), width=2,
-                                      tags=('architecture', 'architecture_cutaway'))
+                                      tags=('architecture', 'architecture_cutaway',
+                                          instance_tag))
             else:
                 tones = (('#a85749', '#c47759', '#b15d4b', '#dd9470')
                          if building.name == 'Maison' else
@@ -241,16 +240,23 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                     canvas.create_polygon(*_flat((a, b, peak)),
                                           fill=tones[index], outline='#534c48',
                                           width=2,
-                                          tags=('architecture', 'architecture_roof'))
+                                          tags=('architecture', 'architecture_roof',
+                                                instance_tag))
                 canvas.create_line(*north, *peak, fill='#f1c49c',
-                                   width=2, tags=('architecture', 'architecture_ridge'))
+                                   width=2, tags=('architecture', 'architecture_ridge',
+                                                  instance_tag))
         elif layers.get('Bâtiments', True) and building.name == 'Ruines':
             canvas.create_line(*north, *east, fill='#6d7468',
                                width=3, dash=(4, 3),
-                               tags=('architecture', 'architecture_ruin'))
+                               tags=('architecture', 'architecture_ruin',
+                                     instance_tag))
     # Canvas items for selection are emitted by the existing tile pass and
     # must remain visible even when a roof spans several of those cells.
-    canvas.tag_raise('iso_actor')
+    # Sort whole actor and architecture groups by ground depth. Actors behind
+    # a façade stay behind it; foreground actors rise above its silhouette.
+    # Individual tag groups prevent an "all actors on top" regression.
+    for tag in depth_order(instances, units, poses):
+        canvas.tag_raise(tag)
     canvas.tag_raise('selection')
     return instances
 
