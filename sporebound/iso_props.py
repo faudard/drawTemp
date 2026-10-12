@@ -3,8 +3,9 @@
 Sprites are presentation-only and anchored at the tile centre. The module
 does not import Tk until a sprite is requested, keeping headless builds safe.
 """
-from math import gcd
 from pathlib import Path
+
+from .tk_images import crop_scaled
 
 PROP_NAMES = ('tree', 'bush', 'boulder', 'ruin', 'crate', 'lantern',
               'stairs', 'stone_wall', 'arch', 'fence', 'reeds', 'pillar')
@@ -43,14 +44,9 @@ class IsoPropAtlas:
                 self._source = source
             tw = max(1, round(width * cell_size / 54))
             th = max(1, round(height * cell_size / 54))
-            gx, gy = gcd(width, tw), gcd(height, th)
             x = PROP_NAMES.index(name) * width
-            result = tk.PhotoImage(master=self.canvas, width=tw, height=th)
-            result.tk.call(str(result), 'copy', str(self._source),
-                           '-from', x, 0, x+width, height,
-                           '-to', 0, 0,
-                           '-zoom', tw//gx, th//gy,
-                           '-subsample', width//gx, height//gy)
+            result = crop_scaled(self._source, (x, 0, width, height), (tw, th),
+                                 master=self.canvas)
             self._cache[key] = result
             return result
         except (OSError, RuntimeError, ValueError, tk.TclError):

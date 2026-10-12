@@ -144,7 +144,7 @@ class MapEditorGUITests(unittest.TestCase):
                     # Map canvas is the first canvas constructed by the editor.
                     main_canvas = canvases[0]
                     # The minimap has a full tactical overview (184x184).
-                    mini = next(w for w in canvases if int(w.cget('width')) == 184)
+                    mini = next(w for w in canvases if w.winfo_pixels(w.cget('width')) == 184)
                     self.assertTrue(mini.find_all())
                     tool = next(w for w in widgets if isinstance(w, ttk.Combobox)
                                 and 'Sélection' in w.cget('values'))

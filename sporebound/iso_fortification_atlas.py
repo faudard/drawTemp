@@ -3,8 +3,9 @@
 Pure data until sprite() is requested; no Pillow or Tk dependency in the
 game engine, Content serializer or tests that operate headlessly.
 """
-from math import gcd
 from pathlib import Path
+
+from .tk_images import crop_scaled
 
 FORTIFICATION_FRAMES = (
     ('Rempart', 0), ('Rempart', 1),
@@ -59,13 +60,9 @@ class IsoFortificationAtlas:
                 self._source = source
             tw = max(1, round(fw*cell_size/FORTIFICATION_SOURCE_CELL_SIZE))
             th = max(1, round(fh*cell_size/FORTIFICATION_SOURCE_CELL_SIZE))
-            gx, gy = gcd(fw, tw), gcd(fh, th)
             sx = FORTIFICATION_FRAMES.index((name, turns % 2))*fw
-            photo = tk.PhotoImage(master=self.canvas, width=tw, height=th)
-            photo.tk.call(str(photo), 'copy', str(self._source),
-                          '-from', sx, 0, sx+fw, fh,
-                          '-to', 0, 0, '-zoom', tw//gx, th//gy,
-                          '-subsample', fw//gx, fh//gy)
+            photo = crop_scaled(self._source, (sx, 0, fw, fh), (tw, th),
+                                master=self.canvas)
             self._cache[key] = photo
             return photo
         except (OSError, ValueError, RuntimeError, tk.TclError):

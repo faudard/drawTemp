@@ -238,6 +238,7 @@ def launch(path):
     structure_pivot_var = tk.StringVar(value='Coin')
     structure_door_var = tk.StringVar(value='Entrée A')
     structure_turns = 0
+    asset_palette = None
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
@@ -1088,8 +1089,42 @@ def launch(path):
     ttk.Button(scenery_controls, text='Fixer niveau',
                command=lambda: (brush_var.set('height_set'),
                                 tool_var.set('Pinceau'))).pack(side='left',padx=4)
+    def choose_palette_asset(entry, turns):
+        nonlocal structure_turns
+        if battle is not None:
+            status_var.set('Revenir en mode Éditer avant de choisir un asset à placer.')
+            return False
+        if entry.kind == 'structure':
+            structure_var.set(entry.value)
+            structure_turns = turns
+            structure_door_var.set('Entrée A')
+            tool_var.set('Structure')
+        else:
+            (surface_var if entry.kind == 'surface' else feature_var).set(entry.value)
+            brush_var.set(entry.id)
+            tool_var.set('Pinceau')
+        iso_var.set(True)
+        notebook.select(work)
+        refresh()
+        status_var.set(entry.name + ' : cliquer sur la carte. ' + entry.effect)
+        canvas.focus_set()
+        return True
+
+    def open_asset_palette():
+        nonlocal asset_palette
+        if asset_palette is None:
+            from .studio_asset_palette import AssetPalette
+            asset_palette = AssetPalette(
+                root, terrain=iso_atlas, props=iso_props,
+                buildings=building_atlas, fortifications=fortification_atlas,
+                choose=choose_palette_asset, cell_size=lambda: tile_size)
+        else:
+            asset_palette.show()
+
     structure_controls = ttk.Frame(root)
     structure_controls.pack(fill='x', padx=5)
+    ttk.Button(structure_controls, text='Bibliothèque d’assets',
+               command=open_asset_palette).pack(side='left', padx=4)
     ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
     structure_box = ttk.Combobox(structure_controls, textvariable=structure_var,
                                  state='readonly', width=16, values=STRUCTURE_NAMES)
