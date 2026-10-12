@@ -49,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Tk and virtual display
-        run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb
+        run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb python3-pil
       - name: Gate actual 88 watercolor PNGs when art is published
         run: python3 scripts/verify_watercolor_release.py --root assets/watercolor --allow-missing
       - name: Exercise the real editor
@@ -98,6 +98,18 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_asset_palette_gui.py -v
+      - name: Verify chibi sprites, directional poses and zooms in real Tk (3.7.19A)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+          SPOREBOUND_ACTOR_SCREENSHOT_DIR: ${{ runner.temp }}/chibi-actors
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_iso_actor_atlas_3719a_gui.py -v
+      - name: Preserve 3.7.19A real actor screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso-chibi-actors-3719a
+          path: ${{ runner.temp }}/chibi-actors/
+          if-no-files-found: warn
       - name: Exercise 2.5.3.2 visual synergy unlock and secret combinations
         env:
           SPOREBOUND_GUI_SMOKE: '1'
