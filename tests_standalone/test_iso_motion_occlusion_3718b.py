@@ -131,7 +131,8 @@ class IsoMotionAndDepthTests(unittest.TestCase):
         oval = canvas.tagged('iso_actor_unit_1', 'create_oval')[0]
         point = visual_center(geo, actors[1], poses)
         self.assertAlmostEqual((oval[1][0]+oval[1][2])/2, point[0])
-        self.assertAlmostEqual((oval[1][1]+oval[1][3])/2, point[1])
+        # The oval is centered 14.5 px above its ground-contact point.
+        self.assertAlmostEqual((oval[1][1]+oval[1][3])/2, point[1]-14.5)
         self.assertEqual(actors[1].pos, (9, 9))
 
     def test_authoritative_motion_director_is_reused_without_advancing_battle(self):
