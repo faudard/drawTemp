@@ -18,7 +18,7 @@ DEFAULT_BUILDING_ATLAS = (Path(__file__).parent / 'content' / 'art'
                           / 'iso' / 'buildings.png')
 
 
-def building_sprite_top_left(geo, building, size=None):
+def building_sprite_top_left(geo, building):
     """Anchor a frame's roof-north pixel to the rendered building roof."""
     from .iso_architecture import architecture_outline
     north = architecture_outline(geo, building)[0][0]
@@ -37,11 +37,11 @@ class IsoBuildingAtlas:
         self._unavailable = False
 
     def sprite(self, name, turns, cell_size):
-        key = (name, turns % 2, cell_size)
-        if (self._unavailable or (name, turns % 2) not in BUILDING_FRAMES
-                or type(turns) is not int or type(cell_size) is not int
-                or cell_size < 1):
+        if (self._unavailable or type(turns) is not int
+                or type(cell_size) is not int or cell_size < 1
+                or (name, turns % 2) not in BUILDING_FRAMES):
             return None
+        key = (name, turns % 2, cell_size)
         if key in self._cache:
             return self._cache[key]
         try:
