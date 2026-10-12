@@ -124,6 +124,17 @@ class ActorSpriteGUITests(unittest.TestCase):
                              cell_size=54, layers=layers,
                              selected_cell=(0, 0), selected_tiles=(),
                              actor_atlas=unavailable)
+            # Independent approved Jeanne asset remains visible if only the
+            # new generic chibi atlas is missing. Guard/archer become circles.
+            self.assertEqual(len(canvas.find_withtag('iso_actor_sprite')), 1)
+            self.assertEqual(len(canvas.find_withtag('iso_actor')), 6)
+            entirely_missing = IsoActorAtlas(
+                canvas, path=Path('/missing/actors.png'),
+                jeanne_path=Path('/missing/jeanne.png'))
+            render_isometric(canvas, mission.board, mission, actors,
+                             cell_size=54, layers=layers,
+                             selected_cell=(0, 0), selected_tiles=(),
+                             actor_atlas=entirely_missing)
             self.assertFalse(canvas.find_withtag('iso_actor_sprite'))
             self.assertEqual(len(canvas.find_withtag('iso_actor')), 6)
         finally:
