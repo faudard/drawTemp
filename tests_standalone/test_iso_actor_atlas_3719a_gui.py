@@ -51,6 +51,7 @@ class ActorSpriteGUITests(unittest.TestCase):
                     self.assertEqual(len(items), 3)
                     self.assertEqual(len(canvas.find_withtag('iso_actor')), 6)
                     self.assertIsNotNone(atlas._source)
+                    self.assertIsNotNone(atlas._jeanne_source)
                     for iid in items:
                         self.assertEqual(canvas.type(iid), 'image')
                         self.assertTrue(canvas.itemcget(iid, 'image'))
