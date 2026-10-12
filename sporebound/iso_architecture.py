@@ -139,8 +139,13 @@ def architecture_outline(geo, instance, wall_level=2):
     return roof, peak
 
 
-def draw_architecture(canvas, geo, board, units, selected_cell, layers):
-    """Paint derived facades, hip roofs and cutaway outlines over the base map."""
+def draw_architecture(canvas, geo, board, units, selected_cell, layers,
+                      atlas=None):
+    """Paint hand-authored sprite overlays with deterministic vector fallback.
+
+    Cutaway remains a vector outline: opaque sprites may never hide occupants.
+    Existing layer flags continue to work independently.
+    """
     if not (layers.get('Bâtiments', True) or layers.get('Toitures', True)):
         return ()
     instances = architecture_instances(board)
@@ -148,6 +153,18 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers):
         outline, peak = architecture_outline(geo, building)
         north, east, south, west = outline
         cutaway = roof_cutaway(building, selected_cell, units)
+        use_sprite = ((layers.get('Bâtiments', True)
+                       and (building.name == 'Ruines' or layers.get('Toitures', True)))
+                      and not cutaway and atlas is not None)
+        if use_sprite:
+            photo = atlas.sprite(building.name, building.turns, geo.cell_size)
+            if photo is not None:
+                from .iso_building_atlas import building_sprite_top_left
+                x, y = building_sprite_top_left(geo, building)
+                canvas.create_image(x, y, image=photo, anchor='nw',
+                                    tags=('architecture', 'architecture_sprite'))
+                # The sprite includes both stone facades and a roof.
+                continue
         if layers.get('Bâtiments', True):
             # Faces on the two foreground sides. Separate faces preserve
             # painter order; this remains a decorative visual layer only.
