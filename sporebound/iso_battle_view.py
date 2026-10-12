@@ -3,7 +3,8 @@
 The same render_isometric pipeline draws authored and live battle terrain.
 The tactical model, movement, save schema and replay never depend on Tk.
 """
-from dataclasses import dataclass
+from .iso_architecture import architecture_instances, roof_cutaway
+from .iso_depth import depth_order, visual_center
 
 from .iso_map import IsoGeometry, IsoTerrainAtlas, render_isometric
 from .iso_props import IsoPropAtlas
@@ -65,14 +66,67 @@ class IsoBattleCanvas:
         self.fortifications = IsoFortificationAtlas(canvas)
         self.geometry = None
         self.shift = (0, 0)
+        # A frame is immutable and identical throughout each MotionDirector
+        # animation. Preserve authored scenery on animation-only redraws.
+        self._frame = None
+        self._board = None
+        self._camera = None
+        self._viewport = None
+        self._unit_ids = ()
+        self._positions = ()
+        self._architecture = ()
+        self._cutaways = ()
+        self._scene_rebuilds = 0
+        self._actor_only_frames = 0
 
     def viewport(self):
         return (self.canvas.winfo_width(), self.canvas.winfo_height())
 
+    def _cutaway_flags(self, frame, units, poses):
+        return tuple(roof_cutaway(building, frame.selected, units, poses)
+                     for building in self._architecture)
+
+    def _pose_centers(self, units, poses):
+        return tuple(visual_center(self.geometry, actor, poses)
+                     for actor in units)
+
     def draw(self, battle, frame, camera, *, poses=None):
-        """One snapshot: authored terrain, actors, reachable and danger overlays."""
+        """Reuse the scene on motion ticks; repaint on any meaningful change.
+
+        A changed frame, board, camera, viewport, actor list or roof-cutaway
+        boundary forces a full redraw. During stable motion only the actor
+        canvas groups are moved and their depth ordering recomputed.
+        """
+        units = battle.units
+        viewport = self.viewport()
+        ids = tuple(actor.id for actor in units)
+        reusable = (
+            self.geometry is not None
+            and frame is self._frame
+            and battle.board is self._board
+            and camera == self._camera
+            and viewport == self._viewport
+            and ids == self._unit_ids
+            and self._cutaways == self._cutaway_flags(frame, units, poses)
+        )
+        if reusable:
+            moved = False
+            positions = self._pose_centers(units, poses)
+            for index, (before, after) in enumerate(zip(self._positions, positions)):
+                dx, dy = after[0] - before[0], after[1] - before[1]
+                if abs(dx) > 1e-9 or abs(dy) > 1e-9:
+                    self.canvas.move('iso_actor_unit_' + str(index), dx, dy)
+                    moved = True
+            if moved:
+                for tag in depth_order(self._architecture, units, poses):
+                    self.canvas.tag_raise(tag)
+                self.canvas.tag_raise('selection')
+            self._positions = positions
+            self._actor_only_frames += 1
+            return self.geometry
+
         geo = render_isometric(
-            self.canvas, battle.board, battle.mission, battle.units,
+            self.canvas, battle.board, battle.mission, units,
             cell_size=camera.cell_size,
             layers=battle_layers(deploying=battle.deploying),
             selected_cell=frame.selected, selected_tiles=(),
@@ -81,14 +135,22 @@ class IsoBattleCanvas:
             building_atlas=self.buildings, fortification_atlas=self.fortifications,
             poses=poses)
         self.geometry = geo
-        self.shift = viewport_shift(geo, camera, self.viewport())
+        self.shift = viewport_shift(geo, camera, viewport)
         self.canvas.move('all', *self.shift)
         if frame.result:
-            self.canvas.create_text(self.viewport()[0]/2, 22,
+            self.canvas.create_text(viewport[0]/2, 22,
                                     text=frame.result.upper(), fill='#ffe38d',
                                     font=('TkDefaultFont', 16, 'bold'),
                                     tags='iso_result')
-        # render_isometric manages the same roof cutaways as in the editor.
+        self._frame = frame
+        self._board = battle.board
+        self._camera = camera
+        self._viewport = viewport
+        self._unit_ids = ids
+        self._architecture = architecture_instances(battle.board)
+        self._cutaways = self._cutaway_flags(frame, units, poses)
+        self._positions = self._pose_centers(units, poses)
+        self._scene_rebuilds += 1
         return geo
 
     def hit_test(self, x, y):
@@ -98,6 +160,14 @@ class IsoBattleCanvas:
 
     def dispose(self):
         self.geometry = None
+        self._frame = None
+        self._board = None
+        self._camera = None
+        self._viewport = None
+        self._unit_ids = ()
+        self._architecture = ()
+        self._cutaways = ()
+        self._positions = ()
         self.terrain._tiles.clear()
         self.props.clear_cache()
         self.buildings.clear_cache()
