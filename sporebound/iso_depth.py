@@ -7,7 +7,9 @@ from math import floor
 
 def visual_position(actor, poses=None):
     """Select a cosmetic MotionDirector pose or authoritative board position."""
-    pose = (poses or {}).get(actor.id)
+    # Legacy presentation tests can use anonymous unit-like objects. An ID
+    # is required only to look up an optional animated pose, not for cutaway.
+    pose = (poses or {}).get(getattr(actor, 'id', None))
     return (float(pose.x), float(pose.y)) if pose is not None else tuple(actor.pos)
 
 
