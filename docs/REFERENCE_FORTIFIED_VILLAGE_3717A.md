@@ -144,3 +144,31 @@ Première inspection humaine des vues générées sur
 à la seule lecture des tests automatiques. Donner priorité au traitement
 des défauts visibles avant d'élargir les packs d'assets.
 
+## Revue après correction atlas — 12 octobre 2026
+
+Cause désormais identifiée dans `sporebound/content/art/iso/fortifications.png`
+(PNG indexé, six frames) :
+
+- L'entrée de palette alpha **1** dessinait les ombres elliptiques
+  déconnectées du pied des structures.
+- Les entrées **7, 8 et 9** dessinaient l'eau précomposée autour du
+  tablier de pont, en plus de l'eau déjà rendue sur la grille.
+- Le correctif rend transparentes exactement ces quatre entrées
+  `tRNS` et recalcule le CRC. Les trames d'images compressées,
+  les dimensions 2700×250, les positions, les attaches, l'ensemble
+  des surfaces tactiques et les autres matériaux restent inchangés.
+
+**Preuve réelle après correctif** : les captures 24/54/96 du
+[run CI sur le correctif](https://github.com/faudard/drawTemp/actions/runs/38272603436),
+artefact `village-reference-3717a`, ont été récupérées et inspectées.
+Sur la vue complète 24, l'ombre isolée sous le bord du plateau a disparu.
+Sur la vue 96, la large nappe bleue autour du pont a disparu et les
+véritables cases eau/berge redeviennent visibles ; le tablier, les
+piliers, le garde-corps et les remparts sont préservés.
+
+Le test du PNG/CRC/alpha a été étendu pour bloquer une réintroduction
+de ces indices graphiques. **Sous-gate pont/ombres corrigé visuellement**
+sur Linux/Xvfb. Le gate esthétique global reste **partiel** : les
+personnages sont toujours des marqueurs géométriques et la validation
+native Windows/macOS de la vue reste à fournir.
+
