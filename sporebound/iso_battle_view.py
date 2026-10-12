@@ -10,7 +10,8 @@ from .iso_map import IsoGeometry, IsoTerrainAtlas, render_isometric
 from .iso_props import IsoPropAtlas
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
-from .iso_actor_atlas import IsoActorAtlas
+from .iso_actor_atlas import (
+    IsoActorAtlas, actor_style, actor_direction, actor_frame)
 
 
 def battle_layers(*, deploying=False):
@@ -76,6 +77,7 @@ class IsoBattleCanvas:
         self._viewport = None
         self._unit_ids = ()
         self._positions = ()
+        self._actor_sprite_states = ()
         self._architecture = ()
         self._cutaways = ()
         self._scene_rebuilds = 0
@@ -91,6 +93,35 @@ class IsoBattleCanvas:
     def _pose_centers(self, units, poses):
         return tuple(visual_center(self.geometry, actor, poses)
                      for actor in units)
+
+    @staticmethod
+    def _sprite_states(units, poses=None):
+        return tuple((actor_style(actor),
+                      actor_direction(actor, (poses or {}).get(actor.id)),
+                      actor_frame((poses or {}).get(actor.id)),
+                      actor.alive)
+                     for actor in units)
+
+    def _refresh_sprite_frames(self, units, poses, camera):
+        """Swap only image handles on a cached frame; never rebuild terrain."""
+        states = self._sprite_states(units, poses)
+        if states == self._actor_sprite_states:
+            return
+        # Fake headless canvases intentionally lack find_withtag/itemconfigure.
+        if hasattr(self.canvas, 'find_withtag') and hasattr(self.canvas, 'itemconfigure'):
+            for i, (before, after) in enumerate(zip(self._actor_sprite_states, states)):
+                if before == after or not after[3]:
+                    continue
+                images = [item for item in self.canvas.find_withtag(
+                          'iso_actor_unit_' + str(i))
+                          if self.canvas.type(item) == 'image']
+                if not images:
+                    continue
+                image = self.actors.sprite(*after[:3], camera.cell_size)
+                if image is not None:
+                    for item in images:
+                        self.canvas.itemconfigure(item, image=image)
+        self._actor_sprite_states = states
 
     def draw(self, battle, frame, camera, *, poses=None):
         """Reuse the scene on motion ticks; repaint on any meaningful change.
@@ -123,6 +154,7 @@ class IsoBattleCanvas:
                 for tag in depth_order(self._architecture, units, poses):
                     self.canvas.tag_raise(tag)
                 self.canvas.tag_raise('selection')
+            self._refresh_sprite_frames(units, poses, camera)
             self._positions = positions
             self._actor_only_frames += 1
             return self.geometry
@@ -152,6 +184,7 @@ class IsoBattleCanvas:
         self._architecture = architecture_instances(battle.board)
         self._cutaways = self._cutaway_flags(frame, units, poses)
         self._positions = self._pose_centers(units, poses)
+        self._actor_sprite_states = self._sprite_states(units, poses)
         self._scene_rebuilds += 1
         return geo
 
@@ -170,6 +203,7 @@ class IsoBattleCanvas:
         self._architecture = ()
         self._cutaways = ()
         self._positions = ()
+        self._actor_sprite_states = ()
         self.terrain._tiles.clear()
         self.props.clear_cache()
         self.buildings.clear_cache()
