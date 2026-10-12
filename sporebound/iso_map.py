@@ -319,8 +319,14 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                     canvas.create_oval(ax-10,ay-24,ax+10,ay-5,fill=color,
                                        outline='#ffe78a' if active else '#323441',
                                        width=3 if active else 1, tags=actor_tags)
-                canvas.create_text(ax,ay-30,text=actor.name[:6],
-                                   font=('TkDefaultFont',8,'bold'),tags=actor_tags)
+                # Labels sit above the entire scaled 64px frame, not over
+                # Jeanne's face. Vector fallback keeps its compact label.
+                label_y = (ay + cell_size*5/54
+                           - max(1, round(64*cell_size/54)) - 9
+                           if photo is not None else ay-28)
+                canvas.create_text(ax, label_y, text=actor.name[:6],
+                                   font=('TkDefaultFont',8,'bold'),
+                                   fill='#18202f', tags=actor_tags)
                 if active_id is not None:
                     canvas.create_text(ax,ay+2,text=f'{actor.hp} PV',
                                        font=('TkDefaultFont',8,'bold'),
