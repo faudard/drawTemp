@@ -148,6 +148,18 @@ class AssetPaletteGUITests(unittest.TestCase):
                         x, y = int(px-canvas.canvasx(0)), int(py-canvas.canvasy(0))
                         self.assertTrue(0 <= x < canvas.winfo_width())
                         self.assertTrue(0 <= y < canvas.winfo_height())
+                        # Real pointer hover must show the same atlas at the
+                        # target tile, before the click mutates any content.
+                        canvas.event_generate('<Motion>', x=x, y=y)
+                        root.update()
+                        self.assertTrue(canvas.find_withtag('asset_ghost'))
+                        outline = ('structure_preview'
+                                   if identifier.startswith('structure:')
+                                   else 'brush_preview')
+                        self.assertTrue(canvas.find_withtag(outline))
+                        canvas.event_generate('<Leave>')
+                        root.update()
+                        self.assertFalse(canvas.find_withtag('asset_ghost'))
                         canvas.event_generate('<Button-1>', x=x, y=y)
                         canvas.event_generate('<ButtonRelease-1>', x=x, y=y)
                         root.update()
