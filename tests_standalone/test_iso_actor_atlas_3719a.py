@@ -34,7 +34,7 @@ class IsoActorAtlasTests(unittest.TestCase):
         self.assertEqual((w, h, bitdepth, mode), (512, 192, 8, 3))
         self.assertEqual(ACTOR_FRAME_SIZE, (64, 64))
         self.assertEqual((len(ACTOR_STYLES), len(ACTOR_DIRECTIONS),
-                          ACTOR_FRAMES), (3, 4, 2))
+                          ACTOR_FRAMES), (4, 4, 2))
         self.assertEqual(chunks[b'tRNS'][0], 0)
         self.assertTrue(all(v == 255 for v in chunks[b'tRNS'][1:]))
         import zlib
@@ -56,6 +56,8 @@ class IsoActorAtlasTests(unittest.TestCase):
 
     def test_roles_and_orientation_are_presentation_only(self):
         self.assertEqual(actor_style(actor(team='player')), 'hero')
+        self.assertEqual(actor_style(actor(id='jeanne', team='player')), 'jeanne')
+        self.assertEqual(actor_style(actor(name='Jeanne', team='player')), 'jeanne')
         self.assertEqual(actor_style(actor(team='enemy')), 'guard')
         self.assertEqual(actor_style(actor(team='neutral')), 'archer')
         self.assertEqual(actor_style(actor(team='enemy', weapon='bow')), 'archer')
