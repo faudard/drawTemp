@@ -69,7 +69,7 @@ class IsoBattleCanvas:
     def viewport(self):
         return (self.canvas.winfo_width(), self.canvas.winfo_height())
 
-    def draw(self, battle, frame, camera):
+    def draw(self, battle, frame, camera, *, poses=None):
         """One snapshot: authored terrain, actors, reachable and danger overlays."""
         geo = render_isometric(
             self.canvas, battle.board, battle.mission, battle.units,
@@ -78,7 +78,8 @@ class IsoBattleCanvas:
             selected_cell=frame.selected, selected_tiles=(),
             reachable=frame.reachable, danger=frame.danger,
             active_id=frame.active_id, atlas=self.terrain, prop_atlas=self.props,
-            building_atlas=self.buildings, fortification_atlas=self.fortifications)
+            building_atlas=self.buildings, fortification_atlas=self.fortifications,
+            poses=poses)
         self.geometry = geo
         self.shift = viewport_shift(geo, camera, self.viewport())
         self.canvas.move('all', *self.shift)
