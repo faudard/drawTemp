@@ -68,6 +68,10 @@ class IsoActorAtlas:
             return self._cache[key]
         try:
             import tkinter as tk
+        except ImportError:
+            self._unavailable = True
+            return None
+        try:
             width, height = ACTOR_FRAME_SIZE
             if self._source is None:
                 source = tk.PhotoImage(file=str(self.path), master=self.canvas)
@@ -84,7 +88,7 @@ class IsoActorAtlas:
                                 master=self.canvas)
             self._cache[key] = photo
             return photo
-        except (ImportError, OSError, RuntimeError, ValueError, tk.TclError):
+        except (OSError, RuntimeError, ValueError, tk.TclError):
             self._unavailable = True
             return None
 
