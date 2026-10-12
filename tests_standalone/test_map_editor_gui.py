@@ -552,5 +552,77 @@ class MapEditorGUITests(unittest.TestCase):
                 dialog_error.assert_not_called()
 
 
+
+    def test_isometric_building_png_renders_and_cuts_away_after_selection(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.authoring import add_blank_mission
+        from sporebound.iso_map import IsoGeometry
+        from sporebound.iso_structures import place_structure
+        from sporebound.model import Content
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        with TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'buildings_gui.json'
+            mid = 'buildings_gui'
+            payload = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
+                                        mid, 'Architecture PNG', 12, 12)
+            payload = place_structure(payload, mid, 'Maison', (3, 3))
+            source.write_text(json.dumps(payload), encoding='utf-8')
+            errors = []
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = lambda *err: errors.append(err)
+                    root.update()
+                    widgets = list(descendants(root))
+                    canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
+                    mission = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                   and mid in w.cget('values'))
+                    tool = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                and 'Sélection' in w.cget('values'))
+                    toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
+                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    buttons = {w.cget('text'): w for w in widgets
+                               if isinstance(w, ttk.Button)}
+                    mission.set(mid)
+                    mission.event_generate('<<ComboboxSelected>>')
+                    toggle.invoke()
+                    root.update()
+                    self.assertTrue(canvas.find_withtag('architecture_sprite'))
+                    self.assertFalse(canvas.find_withtag('architecture_roof'))
+                    buttons['+'].invoke()
+                    root.update()
+                    self.assertTrue(canvas.find_withtag('architecture_sprite'))
+
+                    tool.set('Sélection')
+                    board = Content.from_dict(payload).missions[mid].board
+                    geo = IsoGeometry(board, 60)
+                    px, py = geo.center((4, 4))
+                    canvas.xview_moveto(max(0.0, (px-canvas.winfo_width()/2)/geo.width))
+                    canvas.yview_moveto(max(0.0, (py-canvas.winfo_height()/2)/geo.height))
+                    root.update()
+                    x, y = int(px-canvas.canvasx(0)), int(py-canvas.canvasy(0))
+                    self.assertTrue(0 <= x < canvas.winfo_width())
+                    self.assertTrue(0 <= y < canvas.winfo_height())
+                    canvas.event_generate('<Button-1>', x=x, y=y)
+                    canvas.event_generate('<ButtonRelease-1>', x=x, y=y)
+                    root.update()
+                    self.assertFalse(canvas.find_withtag('architecture_sprite'))
+                    self.assertTrue(canvas.find_withtag('architecture_cutaway'))
+                    self.assertEqual(errors, [])
+                finally:
+                    root.destroy()
+
+            with (patch.object(tk.Tk, 'mainloop', drive),
+                  patch('tkinter.messagebox.showerror') as dialog_error):
+                launch(source)
+                dialog_error.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
