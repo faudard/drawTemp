@@ -109,7 +109,7 @@ class ActorSpriteGUITests(unittest.TestCase):
                              cell_size=54, layers=layers,
                              selected_cell=(0, 0), selected_tiles=(),
                              actor_atlas=atlas, poses=poses)
-            self.assertIn(('hero', 'east', 1, 54), atlas._cache)
+            self.assertIn(('jeanne', 'east', 1, 54), atlas._cache)
             atlas.clear_cache()
             unavailable = IsoActorAtlas(canvas, path=Path('/missing/actors.png'))
             render_isometric(canvas, mission.board, mission, actors,
