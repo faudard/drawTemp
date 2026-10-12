@@ -76,6 +76,7 @@ class IsoBattleCanvas:
         self._camera = None
         self._viewport = None
         self._unit_ids = ()
+        self._unit_state = ()
         self._positions = ()
         self._actor_sprite_states = ()
         self._architecture = ()
@@ -92,6 +93,13 @@ class IsoBattleCanvas:
 
     def _pose_centers(self, units, poses):
         return tuple(visual_center(self.geometry, actor, poses)
+                     for actor in units)
+
+    @staticmethod
+    def _actor_state(units):
+        """Snapshot all actor data painted by the static Canvas groups."""
+        return tuple((actor.id, actor.name, actor.team, actor.pos,
+                      actor.footprint, actor.alive, actor.hp)
                      for actor in units)
 
     @staticmethod
@@ -133,6 +141,7 @@ class IsoBattleCanvas:
         units = battle.units
         viewport = self.viewport()
         ids = tuple(actor.id for actor in units)
+        actor_state = self._actor_state(units)
         reusable = (
             self.geometry is not None
             and frame is self._frame
@@ -140,6 +149,7 @@ class IsoBattleCanvas:
             and camera == self._camera
             and viewport == self._viewport
             and ids == self._unit_ids
+            and actor_state == self._unit_state
             and self._cutaways == self._cutaway_flags(frame, units, poses)
         )
         if reusable:
@@ -181,6 +191,7 @@ class IsoBattleCanvas:
         self._camera = camera
         self._viewport = viewport
         self._unit_ids = ids
+        self._unit_state = actor_state
         self._architecture = architecture_instances(battle.board)
         self._cutaways = self._cutaway_flags(frame, units, poses)
         self._positions = self._pose_centers(units, poses)
@@ -200,6 +211,7 @@ class IsoBattleCanvas:
         self._camera = None
         self._viewport = None
         self._unit_ids = ()
+        self._unit_state = ()
         self._architecture = ()
         self._cutaways = ()
         self._positions = ()
