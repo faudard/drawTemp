@@ -1,11 +1,13 @@
-"""Reusable, headless multi-cell scenery presets for the 2.5D map editor.
+"""Headless structure presets and optional authoring-only identities.
 
-These are ordinary, rotated terrain stamps, NOT new tactical entities or a new
-save schema. Their footprint is checked before one validated paste transaction.
+Tactical terrain remains the source of truth. New placements remember their
+visual identity, whereas old maps without records are still recognised.
 """
+from copy import deepcopy
+
 from .map_authoring import _cell, _mission, paste_terrain, TerrainClipboard
 from .map_transform import _validate_clipboard, transform_terrain
-from .model import RuleError, require
+from .model import Content, RuleError, require
 
 
 # Fixed, inspectable terrain plans; coordinates are relative to the top-left
@@ -120,6 +122,13 @@ def validate_structure_placement(data, mission_id, clip, anchor):
     if relic is not None:
         require(tuple(relic) not in selected,
                 'Structure overlaps a mission relic')
+    # Overwriting recorded footprints would leave contradictory identities.
+    for existing in mission.get('structures', ()):
+        prior = structure_template(existing['name'], existing['turns'],
+                                   door_slot=existing['door_slot'])
+        require(not selected.intersection(structure_footprint(
+                    prior, existing['anchor'])),
+                'Structure overlaps an existing authored structure')
     blocked = {cell for cell, tile in zip(destination, clip.terrain)
                if tile.get('blocked', False)}
     zones = {tuple(cell) for zone in mission.get('deployment', ())
@@ -130,7 +139,40 @@ def validate_structure_placement(data, mission_id, clip, anchor):
 
 
 def place_structure(data, mission_id, name, anchor, quarter_turns=0, *, door_slot=0):
-    """Commit all cells in one content-validation transaction or none."""
+    """Paste tiles and store an optional, stable visual identity atomically."""
     clip = structure_template(name, quarter_turns, door_slot=door_slot)
     validate_structure_placement(data, mission_id, clip, anchor)
-    return paste_terrain(data, mission_id, clip, anchor)
+    updated = paste_terrain(data, mission_id, clip, anchor)
+    mission = _mission(updated, mission_id)
+    structures = mission.setdefault('structures', [])
+    names = {record['id'] for record in structures}
+    index = 1
+    while 'structure_' + str(index) in names:
+        index += 1
+    structures.append({'id': 'structure_' + str(index), 'name': name,
+                       'anchor': list(anchor), 'turns': quarter_turns,
+                       'door_slot': door_slot})
+    return Content.from_dict(updated).to_dict()
+
+
+def remove_structure(data, mission_id, cell):
+    """Remove a persistent OR legacy building and its tiles in one edit.
+
+    A normal paint brush never removes an identity. Use this explicit
+    operation to delete the visual instance together with its footprint.
+    """
+    from .iso_architecture import architecture_instances
+    target = _cell(_mission(data, mission_id), cell)
+    content = Content.from_dict(data)
+    mission_obj = content.missions[mission_id]
+    instance = next((item for item in architecture_instances(
+        mission_obj.board, mission_obj.structures) if target in item.cells), None)
+    require(instance is not None, 'No structure at selected cell')
+    updated = deepcopy(data)
+    mission = _mission(updated, mission_id)
+    if instance.id:
+        mission['structures'] = [record for record in mission.get('structures', ())
+                                 if record['id'] != instance.id]
+    mission['board']['tiles'] = [tile for tile in mission['board']['tiles']
+                                 if tuple(tile['pos']) not in instance.cells]
+    return Content.from_dict(updated).to_dict()
