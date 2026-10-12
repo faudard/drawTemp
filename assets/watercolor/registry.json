@@ -1,0 +1,699 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "vfx_moon_small",
+      "kind": "sprite",
+      "path": "sprites/vfx/moon_small.png"
+    },
+    {
+      "id": "vfx_moon_large",
+      "kind": "sprite",
+      "path": "sprites/vfx/moon_large.png"
+    },
+    {
+      "id": "vfx_moon_break",
+      "kind": "sprite",
+      "path": "sprites/vfx/moon_break.png"
+    },
+    {
+      "id": "vfx_moon_dissolve",
+      "kind": "sprite",
+      "path": "sprites/vfx/moon_dissolve.png"
+    },
+    {
+      "id": "vfx_spark_small",
+      "kind": "sprite",
+      "path": "sprites/vfx/spark_small.png"
+    },
+    {
+      "id": "vfx_spark_burst",
+      "kind": "sprite",
+      "path": "sprites/vfx/spark_burst.png"
+    },
+    {
+      "id": "vfx_spark_fragments",
+      "kind": "sprite",
+      "path": "sprites/vfx/spark_fragments.png"
+    },
+    {
+      "id": "vfx_spark_dissolve",
+      "kind": "sprite",
+      "path": "sprites/vfx/spark_dissolve.png"
+    },
+    {
+      "id": "vfx_dust_small",
+      "kind": "sprite",
+      "path": "sprites/vfx/dust_small.png"
+    },
+    {
+      "id": "vfx_dust_large",
+      "kind": "sprite",
+      "path": "sprites/vfx/dust_large.png"
+    },
+    {
+      "id": "vfx_dust_wide",
+      "kind": "sprite",
+      "path": "sprites/vfx/dust_wide.png"
+    },
+    {
+      "id": "vfx_dust_dissolve",
+      "kind": "sprite",
+      "path": "sprites/vfx/dust_dissolve.png"
+    },
+    {
+      "id": "vfx_arc_start",
+      "kind": "sprite",
+      "path": "sprites/vfx/arc_start.png"
+    },
+    {
+      "id": "vfx_arc_grow",
+      "kind": "sprite",
+      "path": "sprites/vfx/arc_grow.png"
+    },
+    {
+      "id": "vfx_arc_complete",
+      "kind": "sprite",
+      "path": "sprites/vfx/arc_complete.png"
+    },
+    {
+      "id": "vfx_arc_dissolve",
+      "kind": "sprite",
+      "path": "sprites/vfx/arc_dissolve.png"
+    },
+    {
+      "id": "wolf_idle",
+      "kind": "sprite",
+      "path": "sprites/wolf/idle.png"
+    },
+    {
+      "id": "wolf_walk_a",
+      "kind": "sprite",
+      "path": "sprites/wolf/walk_a.png"
+    },
+    {
+      "id": "wolf_walk_b",
+      "kind": "sprite",
+      "path": "sprites/wolf/walk_b.png"
+    },
+    {
+      "id": "wolf_crouch",
+      "kind": "sprite",
+      "path": "sprites/wolf/crouch.png"
+    },
+    {
+      "id": "wolf_pounce",
+      "kind": "sprite",
+      "path": "sprites/wolf/pounce.png"
+    },
+    {
+      "id": "wolf_leap",
+      "kind": "sprite",
+      "path": "sprites/wolf/leap.png"
+    },
+    {
+      "id": "wolf_growl",
+      "kind": "sprite",
+      "path": "sprites/wolf/growl.png"
+    },
+    {
+      "id": "wolf_defend",
+      "kind": "sprite",
+      "path": "sprites/wolf/defend.png"
+    },
+    {
+      "id": "wolf_snarl",
+      "kind": "sprite",
+      "path": "sprites/wolf/snarl.png"
+    },
+    {
+      "id": "wolf_hit",
+      "kind": "sprite",
+      "path": "sprites/wolf/hit.png"
+    },
+    {
+      "id": "wolf_ko",
+      "kind": "sprite",
+      "path": "sprites/wolf/ko.png"
+    },
+    {
+      "id": "wolf_howl",
+      "kind": "sprite",
+      "path": "sprites/wolf/howl.png"
+    },
+    {
+      "id": "jeanne_idle",
+      "kind": "sprite",
+      "path": "sprites/jeanne/idle.png"
+    },
+    {
+      "id": "jeanne_walk_a",
+      "kind": "sprite",
+      "path": "sprites/jeanne/walk_a.png"
+    },
+    {
+      "id": "jeanne_walk_b",
+      "kind": "sprite",
+      "path": "sprites/jeanne/walk_b.png"
+    },
+    {
+      "id": "jeanne_ready",
+      "kind": "sprite",
+      "path": "sprites/jeanne/ready.png"
+    },
+    {
+      "id": "jeanne_windup",
+      "kind": "sprite",
+      "path": "sprites/jeanne/windup.png"
+    },
+    {
+      "id": "jeanne_slash",
+      "kind": "sprite",
+      "path": "sprites/jeanne/slash.png"
+    },
+    {
+      "id": "jeanne_followthrough",
+      "kind": "sprite",
+      "path": "sprites/jeanne/followthrough.png"
+    },
+    {
+      "id": "jeanne_guard",
+      "kind": "sprite",
+      "path": "sprites/jeanne/guard.png"
+    },
+    {
+      "id": "jeanne_hit",
+      "kind": "sprite",
+      "path": "sprites/jeanne/hit.png"
+    },
+    {
+      "id": "jeanne_kneel",
+      "kind": "sprite",
+      "path": "sprites/jeanne/kneel.png"
+    },
+    {
+      "id": "jeanne_ko",
+      "kind": "sprite",
+      "path": "sprites/jeanne/ko.png"
+    },
+    {
+      "id": "jeanne_victory",
+      "kind": "sprite",
+      "path": "sprites/jeanne/victory.png"
+    },
+    {
+      "id": "spearman_idle",
+      "kind": "sprite",
+      "path": "sprites/spearman/idle.png"
+    },
+    {
+      "id": "spearman_walk_a",
+      "kind": "sprite",
+      "path": "sprites/spearman/walk_a.png"
+    },
+    {
+      "id": "spearman_walk_b",
+      "kind": "sprite",
+      "path": "sprites/spearman/walk_b.png"
+    },
+    {
+      "id": "spearman_guard",
+      "kind": "sprite",
+      "path": "sprites/spearman/guard.png"
+    },
+    {
+      "id": "spearman_windup",
+      "kind": "sprite",
+      "path": "sprites/spearman/windup.png"
+    },
+    {
+      "id": "spearman_thrust",
+      "kind": "sprite",
+      "path": "sprites/spearman/thrust.png"
+    },
+    {
+      "id": "spearman_recover",
+      "kind": "sprite",
+      "path": "sprites/spearman/recover.png"
+    },
+    {
+      "id": "spearman_ready",
+      "kind": "sprite",
+      "path": "sprites/spearman/ready.png"
+    },
+    {
+      "id": "spearman_block",
+      "kind": "sprite",
+      "path": "sprites/spearman/block.png"
+    },
+    {
+      "id": "spearman_hit",
+      "kind": "sprite",
+      "path": "sprites/spearman/hit.png"
+    },
+    {
+      "id": "spearman_kneel",
+      "kind": "sprite",
+      "path": "sprites/spearman/kneel.png"
+    },
+    {
+      "id": "spearman_ko",
+      "kind": "sprite",
+      "path": "sprites/spearman/ko.png"
+    },
+    {
+      "id": "props_chapel",
+      "kind": "sprite",
+      "path": "sprites/props/chapel.png"
+    },
+    {
+      "id": "props_forge",
+      "kind": "sprite",
+      "path": "sprites/props/forge.png"
+    },
+    {
+      "id": "props_market_stall",
+      "kind": "sprite",
+      "path": "sprites/props/market_stall.png"
+    },
+    {
+      "id": "props_camp_tent",
+      "kind": "sprite",
+      "path": "sprites/props/camp_tent.png"
+    },
+    {
+      "id": "props_stone_bridge",
+      "kind": "sprite",
+      "path": "sprites/props/stone_bridge.png"
+    },
+    {
+      "id": "props_ruined_arch",
+      "kind": "sprite",
+      "path": "sprites/props/ruined_arch.png"
+    },
+    {
+      "id": "props_oak_tree",
+      "kind": "sprite",
+      "path": "sprites/props/oak_tree.png"
+    },
+    {
+      "id": "props_pine_tree",
+      "kind": "sprite",
+      "path": "sprites/props/pine_tree.png"
+    },
+    {
+      "id": "props_supply_cart",
+      "kind": "sprite",
+      "path": "sprites/props/supply_cart.png"
+    },
+    {
+      "id": "props_palisade_gate",
+      "kind": "sprite",
+      "path": "sprites/props/palisade_gate.png"
+    },
+    {
+      "id": "props_stone_stairs",
+      "kind": "sprite",
+      "path": "sprites/props/stone_stairs.png"
+    },
+    {
+      "id": "props_treasure_chest",
+      "kind": "sprite",
+      "path": "sprites/props/treasure_chest.png"
+    },
+    {
+      "id": "townfolk_scout",
+      "kind": "sprite",
+      "path": "sprites/townfolk/scout.png"
+    },
+    {
+      "id": "townfolk_blacksmith",
+      "kind": "sprite",
+      "path": "sprites/townfolk/blacksmith.png"
+    },
+    {
+      "id": "townfolk_messenger",
+      "kind": "sprite",
+      "path": "sprites/townfolk/messenger.png"
+    },
+    {
+      "id": "townfolk_royal_knight",
+      "kind": "sprite",
+      "path": "sprites/townfolk/royal_knight.png"
+    },
+    {
+      "id": "townfolk_veteran_commander",
+      "kind": "sprite",
+      "path": "sprites/townfolk/veteran_commander.png"
+    },
+    {
+      "id": "townfolk_militia_axewoman",
+      "kind": "sprite",
+      "path": "sprites/townfolk/militia_axewoman.png"
+    },
+    {
+      "id": "soldiers_bandit",
+      "kind": "sprite",
+      "path": "sprites/soldiers/bandit.png"
+    },
+    {
+      "id": "soldiers_spearman",
+      "kind": "sprite",
+      "path": "sprites/soldiers/spearman.png"
+    },
+    {
+      "id": "soldiers_crossbowman",
+      "kind": "sprite",
+      "path": "sprites/soldiers/crossbowman.png"
+    },
+    {
+      "id": "soldiers_royal_squire",
+      "kind": "sprite",
+      "path": "sprites/soldiers/royal_squire.png"
+    },
+    {
+      "id": "soldiers_heavy_guard",
+      "kind": "sprite",
+      "path": "sprites/soldiers/heavy_guard.png"
+    },
+    {
+      "id": "soldiers_ranger",
+      "kind": "sprite",
+      "path": "sprites/soldiers/ranger.png"
+    },
+    {
+      "id": "bestiary_wolf",
+      "kind": "sprite",
+      "path": "sprites/bestiary/wolf.png"
+    },
+    {
+      "id": "bestiary_boar",
+      "kind": "sprite",
+      "path": "sprites/bestiary/boar.png"
+    },
+    {
+      "id": "bestiary_bear",
+      "kind": "sprite",
+      "path": "sprites/bestiary/bear.png"
+    },
+    {
+      "id": "bestiary_gargoyle",
+      "kind": "sprite",
+      "path": "sprites/bestiary/gargoyle.png"
+    },
+    {
+      "id": "bestiary_ogre",
+      "kind": "sprite",
+      "path": "sprites/bestiary/ogre.png"
+    },
+    {
+      "id": "bestiary_spectral_hound",
+      "kind": "sprite",
+      "path": "sprites/bestiary/spectral_hound.png"
+    },
+    {
+      "id": "heroes_jeanne",
+      "kind": "sprite",
+      "path": "sprites/heroes/jeanne.png"
+    },
+    {
+      "id": "heroes_knight_captain",
+      "kind": "sprite",
+      "path": "sprites/heroes/knight_captain.png"
+    },
+    {
+      "id": "heroes_healer",
+      "kind": "sprite",
+      "path": "sprites/heroes/healer.png"
+    },
+    {
+      "id": "heroes_nun",
+      "kind": "sprite",
+      "path": "sprites/heroes/nun.png"
+    },
+    {
+      "id": "heroes_red_knight",
+      "kind": "sprite",
+      "path": "sprites/heroes/red_knight.png"
+    },
+    {
+      "id": "heroes_english_champion",
+      "kind": "sprite",
+      "path": "sprites/heroes/english_champion.png"
+    },
+    {
+      "id": "anim_jeanne_walk",
+      "kind": "animation",
+      "loop": true,
+      "frames": [
+        {
+          "sprite": "jeanne_walk_a",
+          "duration_ms": 180
+        },
+        {
+          "sprite": "jeanne_walk_b",
+          "duration_ms": 180
+        }
+      ]
+    },
+    {
+      "id": "anim_jeanne_attack",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "jeanne_windup",
+          "duration_ms": 125
+        },
+        {
+          "sprite": "jeanne_slash",
+          "duration_ms": 125
+        },
+        {
+          "sprite": "jeanne_followthrough",
+          "duration_ms": 125
+        }
+      ]
+    },
+    {
+      "id": "anim_jeanne_hit",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "jeanne_hit",
+          "duration_ms": 240
+        }
+      ]
+    },
+    {
+      "id": "anim_jeanne_ko",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "jeanne_ko",
+          "duration_ms": 500
+        }
+      ]
+    },
+    {
+      "id": "anim_wolf_walk",
+      "kind": "animation",
+      "loop": true,
+      "frames": [
+        {
+          "sprite": "wolf_walk_a",
+          "duration_ms": 180
+        },
+        {
+          "sprite": "wolf_walk_b",
+          "duration_ms": 180
+        }
+      ]
+    },
+    {
+      "id": "anim_wolf_pounce",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "wolf_crouch",
+          "duration_ms": 135
+        },
+        {
+          "sprite": "wolf_pounce",
+          "duration_ms": 135
+        },
+        {
+          "sprite": "wolf_leap",
+          "duration_ms": 135
+        }
+      ]
+    },
+    {
+      "id": "anim_wolf_ko",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "wolf_ko",
+          "duration_ms": 500
+        }
+      ]
+    },
+    {
+      "id": "anim_spearman_walk",
+      "kind": "animation",
+      "loop": true,
+      "frames": [
+        {
+          "sprite": "spearman_walk_a",
+          "duration_ms": 190
+        },
+        {
+          "sprite": "spearman_walk_b",
+          "duration_ms": 190
+        }
+      ]
+    },
+    {
+      "id": "anim_spearman_attack",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "spearman_windup",
+          "duration_ms": 145
+        },
+        {
+          "sprite": "spearman_thrust",
+          "duration_ms": 145
+        },
+        {
+          "sprite": "spearman_recover",
+          "duration_ms": 145
+        }
+      ]
+    },
+    {
+      "id": "anim_spearman_guard",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "spearman_guard",
+          "duration_ms": 240
+        },
+        {
+          "sprite": "spearman_block",
+          "duration_ms": 240
+        }
+      ]
+    },
+    {
+      "id": "anim_spearman_ko",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "spearman_ko",
+          "duration_ms": 500
+        }
+      ]
+    },
+    {
+      "id": "anim_vfx_moon",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "vfx_moon_small",
+          "duration_ms": 95
+        },
+        {
+          "sprite": "vfx_moon_large",
+          "duration_ms": 95
+        },
+        {
+          "sprite": "vfx_moon_break",
+          "duration_ms": 95
+        },
+        {
+          "sprite": "vfx_moon_dissolve",
+          "duration_ms": 95
+        }
+      ]
+    },
+    {
+      "id": "anim_vfx_spark",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "vfx_spark_small",
+          "duration_ms": 85
+        },
+        {
+          "sprite": "vfx_spark_burst",
+          "duration_ms": 85
+        },
+        {
+          "sprite": "vfx_spark_fragments",
+          "duration_ms": 85
+        },
+        {
+          "sprite": "vfx_spark_dissolve",
+          "duration_ms": 85
+        }
+      ]
+    },
+    {
+      "id": "anim_vfx_dust",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "vfx_dust_small",
+          "duration_ms": 110
+        },
+        {
+          "sprite": "vfx_dust_large",
+          "duration_ms": 110
+        },
+        {
+          "sprite": "vfx_dust_wide",
+          "duration_ms": 110
+        },
+        {
+          "sprite": "vfx_dust_dissolve",
+          "duration_ms": 110
+        }
+      ]
+    },
+    {
+      "id": "anim_vfx_arc",
+      "kind": "animation",
+      "loop": false,
+      "frames": [
+        {
+          "sprite": "vfx_arc_start",
+          "duration_ms": 95
+        },
+        {
+          "sprite": "vfx_arc_grow",
+          "duration_ms": 95
+        },
+        {
+          "sprite": "vfx_arc_complete",
+          "duration_ms": 95
+        },
+        {
+          "sprite": "vfx_arc_dissolve",
+          "duration_ms": 95
+        }
+      ]
+    }
+  ],
+  "bindings": {}
+}

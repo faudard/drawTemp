@@ -3,7 +3,6 @@
 Importing this module is display-free. All tactical rules remain headless.
 """
 from pathlib import Path
-from math import gcd
 
 from .model import RuleError
 from .visual_motion import animation_sprite_id
@@ -59,13 +58,36 @@ class CanvasRenderer:
             self._missing.add(asset_id)
             return None
 
-    def _cell_photo(self, photo, cell_size):
-        """Nearest-neighbour sprite fitted to a zoomed grid cell.
+    @staticmethod
+    def _nearest_scale_factors(source_size, target_size):
+        """Small integer zoom/subsample ratio approximating a target pixel size.
 
-        Tk's native PhotoImage copy supports rational zoom/subsample factors,
-        including the default 52px camera cell. No Pillow dependency and no
-        resizing on each idle animation frame: one image per sprite/zoom.
-        Portraits keep their original resolution through image().
+        Tk's photo copy with -zoom a -subsample b samples the SOURCE at
+        b-pixel steps before magnification. It only repeats a small source
+        corner for large PNGs. A separate magnification step is required.
+        """
+        if source_size < 1 or target_size < 1:
+            raise ValueError("Image dimensions must be positive")
+        candidates = []
+        # Bound temporary images (one axis <= 2048px) while allowing
+        # precise resizing of small 64px atlas sprites at high camera zoom.
+        max_zoom = max(1, min(16, 2048 // source_size))
+        for zoom in range(1, max_zoom + 1):
+            estimated = max(1, round(source_size * zoom / target_size))
+            for subsample in range(max(1, estimated - 2), estimated + 3):
+                output = (source_size * zoom + subsample - 1) // subsample
+                candidates.append((abs(output - target_size), zoom, subsample))
+        _, zoom, subsample = min(candidates)
+        return zoom, subsample
+
+    def _cell_photo(self, photo, cell_size):
+        """Cache a whole-frame nearest-neighbour Tk sprite for one cell.
+
+        No Pillow dependency. First enlarge the ENTIRE PNG, then downsample
+        the intermediate photo, centring any <=1px rounding discrepancy.
+        Combining -zoom and -subsample in one copy samples only the upper-left
+        source region (hiding most 384x341 watercolor illustrations).
+        Work occurs once per asset/cell size, not on every game tick.
         """
         if photo is None or (photo.width() == cell_size and
                              photo.height() == cell_size):
@@ -74,16 +96,24 @@ class CanvasRenderer:
         if key in self._cell_images:
             return self._cell_images[key]
         import tkinter as tk
-        source_width, source_height = photo.width(), photo.height()
-        gx, gy = gcd(cell_size, source_width), gcd(cell_size, source_height)
-        sized = tk.PhotoImage(master=self.canvas, width=cell_size, height=cell_size)
-        sized.tk.call(str(sized), "copy", str(photo),
-                      "-from", 0, 0, source_width, source_height,
-                      "-to", 0, 0,
-                      "-zoom", cell_size // gx, cell_size // gy,
-                      "-subsample", source_width // gx, source_height // gy)
-        self._cell_images[key] = sized
-        return sized
+        zx, sx = self._nearest_scale_factors(photo.width(), cell_size)
+        zy, sy = self._nearest_scale_factors(photo.height(), cell_size)
+        intermediate = photo.zoom(zx, zy)
+        sampled = intermediate.subsample(sx, sy)
+        width, height = sampled.width(), sampled.height()
+        resized = tk.PhotoImage(master=self.canvas,
+                                width=cell_size, height=cell_size)
+        src_x = max(0, (width - cell_size) // 2)
+        src_y = max(0, (height - cell_size) // 2)
+        dst_x = max(0, (cell_size - width) // 2)
+        dst_y = max(0, (cell_size - height) // 2)
+        resized.tk.call(str(resized), "copy", str(sampled),
+                        "-from", src_x, src_y,
+                        src_x + min(width, cell_size),
+                        src_y + min(height, cell_size),
+                        "-to", dst_x, dst_y)
+        self._cell_images[key] = resized
+        return resized
 
     def image(self, kind, slot):
         """Resolve a static image binding, falling back to vector geometry."""

@@ -1,0 +1,1664 @@
+{
+  "schema_version": 1,
+  "sheets": [
+    {
+      "id": "vfx",
+      "original_filename": "Planche de 16 effets de combat.png",
+      "columns": 4,
+      "rows": 4,
+      "sha256": "30c4210af7a1d88c5f761d150ef537aea9a3c67275187ea29a6039ea764237ae",
+      "frame_count": 16
+    },
+    {
+      "id": "wolf",
+      "original_filename": "Planche d’animation du loup gris.png",
+      "columns": 4,
+      "rows": 3,
+      "sha256": "bb882ed74d8542029fdf0e10fc62209b10b5658837dfed4d3e6249977ef0199a",
+      "frame_count": 12
+    },
+    {
+      "id": "jeanne",
+      "original_filename": "Jeanne : planche d’action en 12 poses.png",
+      "columns": 4,
+      "rows": 3,
+      "sha256": "0b05fcc45bca3ff5181ba34c871730368de20d16a9545db66bd3c9d37eb509c3",
+      "frame_count": 12
+    },
+    {
+      "id": "spearman",
+      "original_filename": "Planche d’action : douze poses du lancier.png",
+      "columns": 4,
+      "rows": 3,
+      "sha256": "c4d78ef6143f9df9b4e674f4185e5d86d9a7bbb419bffec5f1fbd813052db1bf",
+      "frame_count": 12
+    },
+    {
+      "id": "props",
+      "original_filename": "Douze objets médiévaux modulaires en aquarelle.png",
+      "columns": 4,
+      "rows": 3,
+      "sha256": "95f50ab51cda1e97053d3e5d4898c8da1a98ced352ca2c395c80f9516bc66d18",
+      "frame_count": 12
+    },
+    {
+      "id": "townfolk",
+      "original_filename": "Six personnages médiévaux en feuille d’assets.png",
+      "columns": 3,
+      "rows": 2,
+      "sha256": "021a299815cf1275ee3d64fddef8f81ffd47e47a151d3b38f2c9343c5b2f8a6b",
+      "frame_count": 6
+    },
+    {
+      "id": "soldiers",
+      "original_filename": "Six soldats tactiques en aquarelle.png",
+      "columns": 3,
+      "rows": 2,
+      "sha256": "67e986451b9a76f3b3a81d4e50a44550a965ab59303cf865a40a829e45130d19",
+      "frame_count": 6
+    },
+    {
+      "id": "bestiary",
+      "original_filename": "Bestiaire médiéval fantastique en six créatures.png",
+      "columns": 3,
+      "rows": 2,
+      "sha256": "def599768db84421889751f4a004f9fb4a36faa4e72d4cd8fbf95c8339d75028",
+      "frame_count": 6
+    },
+    {
+      "id": "heroes",
+      "original_filename": "Six héros tactiques en aquarelle.png",
+      "columns": 3,
+      "rows": 2,
+      "sha256": "8f2fcf3505aa081cc15a53dfacf81f686b53258d1feeef9687f10bd6f320d244",
+      "frame_count": 6
+    }
+  ],
+  "sprites": [
+    {
+      "id": "vfx_moon_small",
+      "kind": "sprite",
+      "path": "sprites/vfx/moon_small.png",
+      "sheet": "vfx",
+      "cell": [
+        0,
+        0
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_moon_large",
+      "kind": "sprite",
+      "path": "sprites/vfx/moon_large.png",
+      "sheet": "vfx",
+      "cell": [
+        1,
+        0
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_moon_break",
+      "kind": "sprite",
+      "path": "sprites/vfx/moon_break.png",
+      "sheet": "vfx",
+      "cell": [
+        2,
+        0
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_moon_dissolve",
+      "kind": "sprite",
+      "path": "sprites/vfx/moon_dissolve.png",
+      "sheet": "vfx",
+      "cell": [
+        3,
+        0
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_spark_small",
+      "kind": "sprite",
+      "path": "sprites/vfx/spark_small.png",
+      "sheet": "vfx",
+      "cell": [
+        0,
+        1
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_spark_burst",
+      "kind": "sprite",
+      "path": "sprites/vfx/spark_burst.png",
+      "sheet": "vfx",
+      "cell": [
+        1,
+        1
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_spark_fragments",
+      "kind": "sprite",
+      "path": "sprites/vfx/spark_fragments.png",
+      "sheet": "vfx",
+      "cell": [
+        2,
+        1
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_spark_dissolve",
+      "kind": "sprite",
+      "path": "sprites/vfx/spark_dissolve.png",
+      "sheet": "vfx",
+      "cell": [
+        3,
+        1
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_dust_small",
+      "kind": "sprite",
+      "path": "sprites/vfx/dust_small.png",
+      "sheet": "vfx",
+      "cell": [
+        0,
+        2
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_dust_large",
+      "kind": "sprite",
+      "path": "sprites/vfx/dust_large.png",
+      "sheet": "vfx",
+      "cell": [
+        1,
+        2
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_dust_wide",
+      "kind": "sprite",
+      "path": "sprites/vfx/dust_wide.png",
+      "sheet": "vfx",
+      "cell": [
+        2,
+        2
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_dust_dissolve",
+      "kind": "sprite",
+      "path": "sprites/vfx/dust_dissolve.png",
+      "sheet": "vfx",
+      "cell": [
+        3,
+        2
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_arc_start",
+      "kind": "sprite",
+      "path": "sprites/vfx/arc_start.png",
+      "sheet": "vfx",
+      "cell": [
+        0,
+        3
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_arc_grow",
+      "kind": "sprite",
+      "path": "sprites/vfx/arc_grow.png",
+      "sheet": "vfx",
+      "cell": [
+        1,
+        3
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_arc_complete",
+      "kind": "sprite",
+      "path": "sprites/vfx/arc_complete.png",
+      "sheet": "vfx",
+      "cell": [
+        2,
+        3
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "vfx_arc_dissolve",
+      "kind": "sprite",
+      "path": "sprites/vfx/arc_dissolve.png",
+      "sheet": "vfx",
+      "cell": [
+        3,
+        3
+      ],
+      "frame_size": [
+        384,
+        256
+      ],
+      "pivot": [
+        192,
+        230
+      ]
+    },
+    {
+      "id": "wolf_idle",
+      "kind": "sprite",
+      "path": "sprites/wolf/idle.png",
+      "sheet": "wolf",
+      "cell": [
+        0,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "wolf_walk_a",
+      "kind": "sprite",
+      "path": "sprites/wolf/walk_a.png",
+      "sheet": "wolf",
+      "cell": [
+        1,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "wolf_walk_b",
+      "kind": "sprite",
+      "path": "sprites/wolf/walk_b.png",
+      "sheet": "wolf",
+      "cell": [
+        2,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "wolf_crouch",
+      "kind": "sprite",
+      "path": "sprites/wolf/crouch.png",
+      "sheet": "wolf",
+      "cell": [
+        3,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "wolf_pounce",
+      "kind": "sprite",
+      "path": "sprites/wolf/pounce.png",
+      "sheet": "wolf",
+      "cell": [
+        0,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "wolf_leap",
+      "kind": "sprite",
+      "path": "sprites/wolf/leap.png",
+      "sheet": "wolf",
+      "cell": [
+        1,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "wolf_growl",
+      "kind": "sprite",
+      "path": "sprites/wolf/growl.png",
+      "sheet": "wolf",
+      "cell": [
+        2,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "wolf_defend",
+      "kind": "sprite",
+      "path": "sprites/wolf/defend.png",
+      "sheet": "wolf",
+      "cell": [
+        3,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "wolf_snarl",
+      "kind": "sprite",
+      "path": "sprites/wolf/snarl.png",
+      "sheet": "wolf",
+      "cell": [
+        0,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "wolf_hit",
+      "kind": "sprite",
+      "path": "sprites/wolf/hit.png",
+      "sheet": "wolf",
+      "cell": [
+        1,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "wolf_ko",
+      "kind": "sprite",
+      "path": "sprites/wolf/ko.png",
+      "sheet": "wolf",
+      "cell": [
+        2,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "wolf_howl",
+      "kind": "sprite",
+      "path": "sprites/wolf/howl.png",
+      "sheet": "wolf",
+      "cell": [
+        3,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "jeanne_idle",
+      "kind": "sprite",
+      "path": "sprites/jeanne/idle.png",
+      "sheet": "jeanne",
+      "cell": [
+        0,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "jeanne_walk_a",
+      "kind": "sprite",
+      "path": "sprites/jeanne/walk_a.png",
+      "sheet": "jeanne",
+      "cell": [
+        1,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "jeanne_walk_b",
+      "kind": "sprite",
+      "path": "sprites/jeanne/walk_b.png",
+      "sheet": "jeanne",
+      "cell": [
+        2,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "jeanne_ready",
+      "kind": "sprite",
+      "path": "sprites/jeanne/ready.png",
+      "sheet": "jeanne",
+      "cell": [
+        3,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "jeanne_windup",
+      "kind": "sprite",
+      "path": "sprites/jeanne/windup.png",
+      "sheet": "jeanne",
+      "cell": [
+        0,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "jeanne_slash",
+      "kind": "sprite",
+      "path": "sprites/jeanne/slash.png",
+      "sheet": "jeanne",
+      "cell": [
+        1,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "jeanne_followthrough",
+      "kind": "sprite",
+      "path": "sprites/jeanne/followthrough.png",
+      "sheet": "jeanne",
+      "cell": [
+        2,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "jeanne_guard",
+      "kind": "sprite",
+      "path": "sprites/jeanne/guard.png",
+      "sheet": "jeanne",
+      "cell": [
+        3,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "jeanne_hit",
+      "kind": "sprite",
+      "path": "sprites/jeanne/hit.png",
+      "sheet": "jeanne",
+      "cell": [
+        0,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "jeanne_kneel",
+      "kind": "sprite",
+      "path": "sprites/jeanne/kneel.png",
+      "sheet": "jeanne",
+      "cell": [
+        1,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "jeanne_ko",
+      "kind": "sprite",
+      "path": "sprites/jeanne/ko.png",
+      "sheet": "jeanne",
+      "cell": [
+        2,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "jeanne_victory",
+      "kind": "sprite",
+      "path": "sprites/jeanne/victory.png",
+      "sheet": "jeanne",
+      "cell": [
+        3,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "spearman_idle",
+      "kind": "sprite",
+      "path": "sprites/spearman/idle.png",
+      "sheet": "spearman",
+      "cell": [
+        0,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "spearman_walk_a",
+      "kind": "sprite",
+      "path": "sprites/spearman/walk_a.png",
+      "sheet": "spearman",
+      "cell": [
+        1,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "spearman_walk_b",
+      "kind": "sprite",
+      "path": "sprites/spearman/walk_b.png",
+      "sheet": "spearman",
+      "cell": [
+        2,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "spearman_guard",
+      "kind": "sprite",
+      "path": "sprites/spearman/guard.png",
+      "sheet": "spearman",
+      "cell": [
+        3,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "spearman_windup",
+      "kind": "sprite",
+      "path": "sprites/spearman/windup.png",
+      "sheet": "spearman",
+      "cell": [
+        0,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "spearman_thrust",
+      "kind": "sprite",
+      "path": "sprites/spearman/thrust.png",
+      "sheet": "spearman",
+      "cell": [
+        1,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "spearman_recover",
+      "kind": "sprite",
+      "path": "sprites/spearman/recover.png",
+      "sheet": "spearman",
+      "cell": [
+        2,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "spearman_ready",
+      "kind": "sprite",
+      "path": "sprites/spearman/ready.png",
+      "sheet": "spearman",
+      "cell": [
+        3,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "spearman_block",
+      "kind": "sprite",
+      "path": "sprites/spearman/block.png",
+      "sheet": "spearman",
+      "cell": [
+        0,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "spearman_hit",
+      "kind": "sprite",
+      "path": "sprites/spearman/hit.png",
+      "sheet": "spearman",
+      "cell": [
+        1,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "spearman_kneel",
+      "kind": "sprite",
+      "path": "sprites/spearman/kneel.png",
+      "sheet": "spearman",
+      "cell": [
+        2,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "spearman_ko",
+      "kind": "sprite",
+      "path": "sprites/spearman/ko.png",
+      "sheet": "spearman",
+      "cell": [
+        3,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "props_chapel",
+      "kind": "sprite",
+      "path": "sprites/props/chapel.png",
+      "sheet": "props",
+      "cell": [
+        0,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "props_forge",
+      "kind": "sprite",
+      "path": "sprites/props/forge.png",
+      "sheet": "props",
+      "cell": [
+        1,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "props_market_stall",
+      "kind": "sprite",
+      "path": "sprites/props/market_stall.png",
+      "sheet": "props",
+      "cell": [
+        2,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "props_camp_tent",
+      "kind": "sprite",
+      "path": "sprites/props/camp_tent.png",
+      "sheet": "props",
+      "cell": [
+        3,
+        0
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "props_stone_bridge",
+      "kind": "sprite",
+      "path": "sprites/props/stone_bridge.png",
+      "sheet": "props",
+      "cell": [
+        0,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "props_ruined_arch",
+      "kind": "sprite",
+      "path": "sprites/props/ruined_arch.png",
+      "sheet": "props",
+      "cell": [
+        1,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "props_oak_tree",
+      "kind": "sprite",
+      "path": "sprites/props/oak_tree.png",
+      "sheet": "props",
+      "cell": [
+        2,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "props_pine_tree",
+      "kind": "sprite",
+      "path": "sprites/props/pine_tree.png",
+      "sheet": "props",
+      "cell": [
+        3,
+        1
+      ],
+      "frame_size": [
+        384,
+        341
+      ],
+      "pivot": [
+        192,
+        306
+      ]
+    },
+    {
+      "id": "props_supply_cart",
+      "kind": "sprite",
+      "path": "sprites/props/supply_cart.png",
+      "sheet": "props",
+      "cell": [
+        0,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "props_palisade_gate",
+      "kind": "sprite",
+      "path": "sprites/props/palisade_gate.png",
+      "sheet": "props",
+      "cell": [
+        1,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "props_stone_stairs",
+      "kind": "sprite",
+      "path": "sprites/props/stone_stairs.png",
+      "sheet": "props",
+      "cell": [
+        2,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "props_treasure_chest",
+      "kind": "sprite",
+      "path": "sprites/props/treasure_chest.png",
+      "sheet": "props",
+      "cell": [
+        3,
+        2
+      ],
+      "frame_size": [
+        384,
+        342
+      ],
+      "pivot": [
+        192,
+        307
+      ]
+    },
+    {
+      "id": "townfolk_scout",
+      "kind": "sprite",
+      "path": "sprites/townfolk/scout.png",
+      "sheet": "townfolk",
+      "cell": [
+        0,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "townfolk_blacksmith",
+      "kind": "sprite",
+      "path": "sprites/townfolk/blacksmith.png",
+      "sheet": "townfolk",
+      "cell": [
+        1,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "townfolk_messenger",
+      "kind": "sprite",
+      "path": "sprites/townfolk/messenger.png",
+      "sheet": "townfolk",
+      "cell": [
+        2,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "townfolk_royal_knight",
+      "kind": "sprite",
+      "path": "sprites/townfolk/royal_knight.png",
+      "sheet": "townfolk",
+      "cell": [
+        0,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "townfolk_veteran_commander",
+      "kind": "sprite",
+      "path": "sprites/townfolk/veteran_commander.png",
+      "sheet": "townfolk",
+      "cell": [
+        1,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "townfolk_militia_axewoman",
+      "kind": "sprite",
+      "path": "sprites/townfolk/militia_axewoman.png",
+      "sheet": "townfolk",
+      "cell": [
+        2,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "soldiers_bandit",
+      "kind": "sprite",
+      "path": "sprites/soldiers/bandit.png",
+      "sheet": "soldiers",
+      "cell": [
+        0,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "soldiers_spearman",
+      "kind": "sprite",
+      "path": "sprites/soldiers/spearman.png",
+      "sheet": "soldiers",
+      "cell": [
+        1,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "soldiers_crossbowman",
+      "kind": "sprite",
+      "path": "sprites/soldiers/crossbowman.png",
+      "sheet": "soldiers",
+      "cell": [
+        2,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "soldiers_royal_squire",
+      "kind": "sprite",
+      "path": "sprites/soldiers/royal_squire.png",
+      "sheet": "soldiers",
+      "cell": [
+        0,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "soldiers_heavy_guard",
+      "kind": "sprite",
+      "path": "sprites/soldiers/heavy_guard.png",
+      "sheet": "soldiers",
+      "cell": [
+        1,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "soldiers_ranger",
+      "kind": "sprite",
+      "path": "sprites/soldiers/ranger.png",
+      "sheet": "soldiers",
+      "cell": [
+        2,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "bestiary_wolf",
+      "kind": "sprite",
+      "path": "sprites/bestiary/wolf.png",
+      "sheet": "bestiary",
+      "cell": [
+        0,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "bestiary_boar",
+      "kind": "sprite",
+      "path": "sprites/bestiary/boar.png",
+      "sheet": "bestiary",
+      "cell": [
+        1,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "bestiary_bear",
+      "kind": "sprite",
+      "path": "sprites/bestiary/bear.png",
+      "sheet": "bestiary",
+      "cell": [
+        2,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "bestiary_gargoyle",
+      "kind": "sprite",
+      "path": "sprites/bestiary/gargoyle.png",
+      "sheet": "bestiary",
+      "cell": [
+        0,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "bestiary_ogre",
+      "kind": "sprite",
+      "path": "sprites/bestiary/ogre.png",
+      "sheet": "bestiary",
+      "cell": [
+        1,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "bestiary_spectral_hound",
+      "kind": "sprite",
+      "path": "sprites/bestiary/spectral_hound.png",
+      "sheet": "bestiary",
+      "cell": [
+        2,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "heroes_jeanne",
+      "kind": "sprite",
+      "path": "sprites/heroes/jeanne.png",
+      "sheet": "heroes",
+      "cell": [
+        0,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "heroes_knight_captain",
+      "kind": "sprite",
+      "path": "sprites/heroes/knight_captain.png",
+      "sheet": "heroes",
+      "cell": [
+        1,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "heroes_healer",
+      "kind": "sprite",
+      "path": "sprites/heroes/healer.png",
+      "sheet": "heroes",
+      "cell": [
+        2,
+        0
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "heroes_nun",
+      "kind": "sprite",
+      "path": "sprites/heroes/nun.png",
+      "sheet": "heroes",
+      "cell": [
+        0,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "heroes_red_knight",
+      "kind": "sprite",
+      "path": "sprites/heroes/red_knight.png",
+      "sheet": "heroes",
+      "cell": [
+        1,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    },
+    {
+      "id": "heroes_english_champion",
+      "kind": "sprite",
+      "path": "sprites/heroes/english_champion.png",
+      "sheet": "heroes",
+      "cell": [
+        2,
+        1
+      ],
+      "frame_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        460
+      ]
+    }
+  ],
+  "notes": "single-view concept poses; not directional/loop seamless"
+}
