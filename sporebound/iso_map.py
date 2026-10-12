@@ -284,6 +284,10 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         if c == selected_cell:
             canvas.create_polygon(*_flatten(corners),outline='#2361ff',fill='',width=3,
                                   tags='selection')
+    # Derive roof/facade overlays from intact 3.7.12 stamps. No new content
+    # fields, no rendered logic in the tactical simulation or battle engine.
+    from .iso_architecture import draw_architecture
+    draw_architecture(canvas, geo, board, units, selected_cell, layers)
     return geo
 
 
