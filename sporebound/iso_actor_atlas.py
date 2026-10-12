@@ -88,7 +88,8 @@ class IsoActorAtlas:
                                 master=self.canvas)
             self._cache[key] = photo
             return photo
-        except (OSError, RuntimeError, ValueError, tk.TclError):
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError,
+                tk.TclError):
             self._unavailable = True
             return None
 
