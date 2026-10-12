@@ -103,6 +103,17 @@ class ActorSpriteGUITests(unittest.TestCase):
                                      (2, 4))
                     root.update()
                     if output:
+                        # CI screenshot viewport follows the actor group. The
+                        # renderer and its tactical camera remain untouched.
+                        bounds = [canvas.bbox(i) for i in items]
+                        left = min(box[0] for box in bounds)
+                        right = max(box[2] for box in bounds)
+                        top = min(box[1] for box in bounds)
+                        bottom = max(box[3] for box in bounds)
+                        canvas.move('all',
+                                    canvas.winfo_width()/2 - (left+right)/2,
+                                    canvas.winfo_height()/2 - (top+bottom)/2)
+                        root.update()
                         from PIL import ImageGrab
                         dest = Path(output)
                         dest.mkdir(parents=True, exist_ok=True)
