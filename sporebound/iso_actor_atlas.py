@@ -7,17 +7,22 @@ from pathlib import Path
 
 from .tk_images import crop_scaled
 
-ACTOR_STYLES = ('hero', 'guard', 'archer')
+ACTOR_STYLES = ('hero', 'guard', 'archer', 'jeanne')
 ACTOR_DIRECTIONS = ('south', 'north', 'east', 'west')
 ACTOR_FRAMES = 2
 ACTOR_FRAME_SIZE = (64, 64)
 ACTOR_SOURCE_CELL_SIZE = 54
 DEFAULT_ACTOR_ATLAS = (Path(__file__).parent / 'content' / 'art'
                        / 'iso' / 'chibi_actors.png')
+DEFAULT_JEANNE_ATLAS = (Path(__file__).parent / 'content' / 'art'
+                       / 'jeanne' / 'jeanne_atlas.png')
 
 
 def actor_style(actor):
     """Select an illustration without persisting any new gameplay field."""
+    if (str(getattr(actor, 'id', '')).casefold() == 'jeanne'
+            or str(getattr(actor, 'name', '')).casefold() == 'jeanne'):
+        return 'jeanne'
     archetype = getattr(actor, 'archetype', '')
     weapon = getattr(actor, 'weapon', '')
     if (archetype in ('archer', 'ranger', 'bowman', 'crossbowman')
@@ -50,15 +55,19 @@ def actor_frame(pose=None):
 
 class IsoActorAtlas:
     """Cached nearest-neighbour Tk actor PNG; missing art never breaks play."""
-    def __init__(self, canvas, path=DEFAULT_ACTOR_ATLAS):
+    def __init__(self, canvas, path=DEFAULT_ACTOR_ATLAS,
+                 jeanne_path=DEFAULT_JEANNE_ATLAS):
         self.canvas = canvas
         self.path = Path(path)
+        self.jeanne_path = Path(jeanne_path)
         self._source = None
+        self._jeanne_source = None
         self._cache = {}
         self._unavailable = False
+        self._jeanne_unavailable = False
 
     def sprite(self, style, direction, frame, cell_size):
-        if (self._unavailable or style not in ACTOR_STYLES
+        if (style not in ACTOR_STYLES
                 or direction not in ACTOR_DIRECTIONS
                 or type(frame) is not int or frame not in range(ACTOR_FRAMES)
                 or type(cell_size) is not int or cell_size < 1):
@@ -71,19 +80,42 @@ class IsoActorAtlas:
         except ImportError:
             self._unavailable = True
             return None
+        width, height = ACTOR_FRAME_SIZE
+        size = (max(1, round(width * cell_size / ACTOR_SOURCE_CELL_SIZE)),
+                max(1, round(height * cell_size / ACTOR_SOURCE_CELL_SIZE)))
+        if style == 'jeanne' and not self._jeanne_unavailable:
+            try:
+                if self._jeanne_source is None:
+                    source = tk.PhotoImage(file=str(self.jeanne_path),
+                                           master=self.canvas)
+                    if (source.width(), source.height()) != (256, 512):
+                        raise ValueError('Invalid Jeanne atlas dimensions')
+                    self._jeanne_source = source
+                # Existing approved Jeanne atlas: four direction columns and
+                # idle_0 / move_0 on rows 0 / 2, respectively.
+                x = ACTOR_DIRECTIONS.index(direction) * width
+                y = (2 if frame else 0) * height
+                photo = crop_scaled(self._jeanne_source, (x, y, width, height),
+                                    size, master=self.canvas)
+                self._cache[key] = photo
+                return photo
+            except (AttributeError, OSError, RuntimeError, TypeError,
+                    ValueError, tk.TclError):
+                self._jeanne_unavailable = True
+                # Missing Jeanne art must not prevent generic team rendering.
+        if self._unavailable:
+            return None
         try:
-            width, height = ACTOR_FRAME_SIZE
             if self._source is None:
                 source = tk.PhotoImage(file=str(self.path), master=self.canvas)
                 if ((source.width(), source.height())
                         != (width * len(ACTOR_DIRECTIONS) * ACTOR_FRAMES,
-                            height * len(ACTOR_STYLES))):
+                            height * (len(ACTOR_STYLES) - 1))):
                     raise ValueError('Invalid chibi actor atlas dimensions')
                 self._source = source
+            fallback = 'hero' if style == 'jeanne' else style
             x = (ACTOR_DIRECTIONS.index(direction) * ACTOR_FRAMES + frame) * width
-            y = ACTOR_STYLES.index(style) * height
-            size = (max(1, round(width * cell_size / ACTOR_SOURCE_CELL_SIZE)),
-                    max(1, round(height * cell_size / ACTOR_SOURCE_CELL_SIZE)))
+            y = ACTOR_STYLES.index(fallback) * height
             photo = crop_scaled(self._source, (x, y, width, height), size,
                                 master=self.canvas)
             self._cache[key] = photo
@@ -96,4 +128,6 @@ class IsoActorAtlas:
     def clear_cache(self):
         self._cache.clear()
         self._source = None
+        self._jeanne_source = None
         self._unavailable = False
+        self._jeanne_unavailable = False
