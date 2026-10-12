@@ -91,6 +91,14 @@ class ActorSpriteGUITests(unittest.TestCase):
                     for iid in items:
                         self.assertEqual(canvas.type(iid), 'image')
                         self.assertTrue(canvas.itemcget(iid, 'image'))
+                    # Sprite transparent margins still count as image extent:
+                    # name labels must not cover the head at any camera zoom.
+                    for idx in range(len(actors)):
+                        group = canvas.find_withtag('iso_actor_unit_' + str(idx))
+                        picture = next(i for i in group if canvas.type(i) == 'image')
+                        title = next(i for i in group if canvas.type(i) == 'text')
+                        self.assertLessEqual(canvas.bbox(title)[3],
+                                             canvas.bbox(picture)[1])
                     self.assertEqual(geo.hit_test(*geo.center((2, 4))),
                                      (2, 4))
                     root.update()
