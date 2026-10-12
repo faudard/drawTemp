@@ -21,7 +21,8 @@ from .iso_actor_atlas import IsoActorAtlas
 from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
                              structure_footprint, validate_structure_placement,
                              place_structure)
-from .iso_architecture import PIVOTS, placement_origin
+from .iso_architecture import (PIVOTS, ARCHITECTURE_NAMES, placement_origin,
+                               preview_structure_sprite_position)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -607,10 +608,13 @@ def launch(path):
                                         (x+1)*tile_size-3, (y+1)*tile_size-3,
                                         outline=color, width=3, tags=tag)
 
+    def clear_placement_preview(_event=None):
+        for tag in ('paste_preview', 'fill_preview', 'structure_preview',
+                    'brush_preview', 'asset_ghost'):
+            canvas.delete(tag)
+
     def paste_preview(event):
-        canvas.delete('paste_preview')
-        canvas.delete('fill_preview')
-        canvas.delete('structure_preview')
+        clear_placement_preview()
         if battle:
             return
         if tool_var.get() == 'Structure':
@@ -635,7 +639,43 @@ def launch(path):
                 color = '#36a16c'
             except RuleError:
                 color = '#e05252'
+            if iso_var.get() and iso_geometry is not None:
+                instance, origin = preview_structure_sprite_position(
+                    iso_geometry, structure_var.get(), anchor, structure_turns,
+                    door_slot=structure_door_slot())
+                loader = (building_atlas if instance.name in ARCHITECTURE_NAMES
+                          else fortification_atlas)
+                photo = loader.sprite(instance.name, instance.turns, tile_size)
+                if photo is not None:
+                    # The PNG's top-left is derived from the exact same roof
+                    # geometry used to draw the structure after placement.
+                    canvas.create_image(*origin, image=photo, anchor='nw',
+                                        tags='asset_ghost')
             preview_cells(inside, tag='structure_preview', color=color)
+            return
+        if tool_var.get() == 'Pinceau' and iso_var.get() and iso_geometry is not None:
+            cell = event_cell(event)
+            if cell is None or not iso_geometry.board.contains(cell):
+                return
+            brush = active_brush()
+            cx, cy = iso_geometry.center(cell)
+            if brush.startswith('surface:'):
+                surface = brush.partition(':')[2]
+                variant = (cell[0]*37 + cell[1]*19) % 2
+                photo = iso_atlas.tile(surface, tile_size, variant=variant)
+                if photo is not None:
+                    canvas.create_image(cx-tile_size, cy-tile_size/2,
+                                        image=photo, anchor='nw', tags='asset_ghost')
+            elif brush.startswith('feature:'):
+                feature = brush.partition(':')[2]
+                photo = iso_props.sprite(feature, tile_size)
+                if photo is not None:
+                    canvas.create_image(cx, cy+tile_size*18/54,
+                                        image=photo, anchor='s', tags='asset_ghost')
+            else:
+                return
+            # Keep the tile selection visible over opaque sprite previews.
+            preview_cells([cell], tag='brush_preview', color='#2361ff')
             return
         if tool_var.get() == 'Remplissage':
             anchor = event_cell(event)
@@ -1197,6 +1237,7 @@ def launch(path):
     canvas.bind('<B1-Motion>',drag)
     canvas.bind('<ButtonRelease-1>',end_stroke)
     canvas.bind('<Motion>',paste_preview)
+    canvas.bind('<Leave>',clear_placement_preview)
     canvas.bind('<Control-c>',lambda _e: copy_selection())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
