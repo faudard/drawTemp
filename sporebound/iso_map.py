@@ -161,7 +161,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                      selected_cell, selected_tiles, reachable=(), danger=(), active_id=None,
                      atlas=None, prop_atlas=None,
                      building_atlas=None, fortification_atlas=None,
-                     poses=None):
+                     actor_atlas=None, poses=None):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = IsoGeometry(board, cell_size)
     canvas.delete('all')
@@ -299,10 +299,27 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 if not actor.alive:
                     color = '#888d94'
                 active = actor.id == active_id
-                canvas.create_oval(ax-10,ay-24,ax+10,ay-5,fill=color,
-                                   outline='#ffe78a' if active else '#323441',
-                                   width=3 if active else 1, tags=actor_tags)
-                canvas.create_text(ax,ay-28,text=actor.name[:6],
+                photo = None
+                if actor_atlas is not None and actor.alive:
+                    from .iso_actor_atlas import actor_direction, actor_frame, actor_style
+                    pose = (poses or {}).get(actor.id)
+                    photo = actor_atlas.sprite(actor_style(actor),
+                                              actor_direction(actor, pose),
+                                              actor_frame(pose), cell_size)
+                if photo is not None:
+                    # The avatar foot (lower image edge) follows the SAME
+                    # interpolated cell projection as the legacy oval.
+                    canvas.create_image(ax, ay+cell_size*5/54, image=photo,
+                                        anchor='s', tags=actor_tags + ('iso_actor_sprite',))
+                    if active:
+                        canvas.create_oval(ax-12, ay-6, ax+12, ay+5,
+                                          outline='#ffe78a', width=2,
+                                          tags=actor_tags)
+                else:
+                    canvas.create_oval(ax-10,ay-24,ax+10,ay-5,fill=color,
+                                       outline='#ffe78a' if active else '#323441',
+                                       width=3 if active else 1, tags=actor_tags)
+                canvas.create_text(ax,ay-30,text=actor.name[:6],
                                    font=('TkDefaultFont',8,'bold'),tags=actor_tags)
                 if active_id is not None:
                     canvas.create_text(ax,ay+2,text=f'{actor.hp} PV',
