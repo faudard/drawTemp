@@ -470,5 +470,87 @@ class MapEditorGUITests(unittest.TestCase):
                 dialog_error.assert_not_called()
 
 
+
+    def test_roof_cutaway_and_door_pivot_after_save(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.authoring import add_blank_mission
+        from sporebound.model import Content
+
+        def descendants(parent):
+            for child in parent.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        with TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'architecture_source.json'
+            saved = Path(tmp) / 'architecture_saved.json'
+            mid = 'roof_gui'
+            payload = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
+                                        mid, 'Roof GUI', 12, 12)
+            source.write_text(json.dumps(payload), encoding='utf-8')
+            errors = []
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = lambda *exc: errors.append(exc)
+                    root.update()
+                    widgets = list(descendants(root))
+                    canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
+                    buttons = {w.cget('text'): w for w in widgets
+                               if isinstance(w, ttk.Button)}
+                    comboboxes = [w for w in widgets if isinstance(w, ttk.Combobox)]
+                    mission = next(w for w in comboboxes if mid in w.cget('values'))
+                    tool = next(w for w in comboboxes
+                                if 'Structure' in w.cget('values'))
+                    pivot = next(w for w in comboboxes
+                                 if 'Centre' in w.cget('values'))
+                    door = next(w for w in comboboxes
+                                if 'Entrée B' in w.cget('values'))
+                    mission.set(mid)
+                    mission.event_generate('<<ComboboxSelected>>')
+                    root.update()
+                    pivot.set('Centre')
+                    door.set('Entrée B')
+                    buttons['Poser structure'].invoke()
+                    self.assertEqual(tool.get(), 'Structure')
+
+                    def click(x, y):
+                        canvas.event_generate('<Button-1>', x=x, y=y)
+                        canvas.event_generate('<ButtonRelease-1>', x=x, y=y)
+                        root.update()
+
+                    click(4*54+12, 4*54+12)
+                    buttons['Enregistrer sous'].invoke()
+                    board = Content.load(saved).missions[mid].board
+                    self.assertTrue(board.tile((3, 3)).blocked)
+                    self.assertEqual(board.tile((5, 5)).surface, 'cobble')
+                    toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
+                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    toggle.invoke()
+                    root.update()
+                    # The selected cell is inside the house: no opaque roof.
+                    self.assertEqual(len(canvas.find_withtag('architecture_roof')), 0)
+                    self.assertGreater(len(canvas.find_withtag('architecture_cutaway')), 0)
+                    roofs = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
+                                 and w.cget('text') == 'Toitures')
+                    roofs.invoke()
+                    root.update()
+                    self.assertEqual(len(canvas.find_withtag('architecture_cutaway')), 0)
+                    roofs.invoke()
+                    root.update()
+                    self.assertGreater(len(canvas.find_withtag('architecture_cutaway')), 0)
+                    self.assertEqual(errors, [])
+                finally:
+                    root.destroy()
+
+            with (patch.object(tk.Tk, 'mainloop', drive),
+                  patch('tkinter.filedialog.asksaveasfilename',
+                        return_value=str(saved)),
+                  patch('tkinter.messagebox.showerror') as dialog_error):
+                launch(source)
+                dialog_error.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
