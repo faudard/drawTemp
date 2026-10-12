@@ -115,3 +115,32 @@ sur 32²/64²/128², après clôture de #82.
 pixel-art. Un passage de validation graphique humaine devra unifier
 proportions, échelle, palette, relief, éclairage et silhouettes des acteurs.
 Produire davantage de PNG avant cela ajouterait surtout de la dette.
+
+## Revue de trois captures CI — 12 octobre 2026
+
+Première inspection humaine des vues générées sur
+[la CI de la PR #84](https://github.com/faudard/drawTemp/actions/runs/38264348042)
+(artefact `village-reference-3717a`) :
+
+- Le village est lisible en plan isométrique : route et franchissement,
+  espaces bâtis et accès à la forteresse se distinguent. Le plateau tient
+  dans la vue générale à 24 px/case.
+- **Défaut P0 :** aux zooms 54/96, une zone d'eau décorative déborde
+  visuellement sous le pont et ne suit pas le chenal du terrain. Examiner
+  le PNG pont de `fortifications.png`, ses pixels alpha, son ancrage et
+  l'ordre de dessin avant de décider du correctif. L'origine exacte
+  n'est pas encore prouvée.
+- **Défaut P0 :** dans la vue générale une ombre apparaît détachée
+  sous le plateau ; inspecter le cadrage et les ombres incorporées aux
+  sprites. Ne pas considérer ce rendu comme final.
+- **Dette artistique P1 :** les combattants restent des marqueurs ronds
+  avec noms hérités du contenu standard, non des personnages chibi
+  illustrés. Le décor pixel-art et les acteurs ne partagent pas encore
+  la direction artistique demandée.
+- La scène générée et trois PNG peuvent être téléchargés ensemble dans
+  l'artefact du job `editor`. Ils ne valent pas preuve Windows/macOS.
+
+**Gate visuel 3.7.17A : non validé.** Ne pas marquer ce jalon « terminé »
+à la seule lecture des tests automatiques. Donner priorité au traitement
+des défauts visibles avant d'élargir les packs d'assets.
+
