@@ -20,7 +20,7 @@ from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import IsoActorAtlas
 from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
                              structure_footprint, validate_structure_placement,
-                             place_structure)
+                             place_structure, remove_structure)
 from .iso_architecture import (PIVOTS, ARCHITECTURE_NAMES, placement_origin,
                                preview_structure_sprite_position)
 from .siege import available_operations
@@ -561,6 +561,16 @@ def launch(path):
         canvas.delete('structure_preview')
         status_var.set(f'Structure {structure_var.get()} : rotation '
                        f'{structure_turns * 90} degrés ; cliquer pour poser.')
+
+    @guarded
+    def remove_selected_structure():
+        if battle is not None:
+            raise RuleError('Quitter le playtest avant de supprimer une structure.')
+        if source_pending():
+            raise RuleError('Appliquer ou abandonner le JSON avant la suppression.')
+        design_change(lambda: doc.replace(remove_structure(
+            doc.data, mission_var.get(), selected_cell)))
+        status_var.set('Structure supprimée ; annulation possible.')
 
     def structure_door_slot():
         return 0 if structure_door_var.get() == 'Entrée A' else 1
@@ -1184,6 +1194,8 @@ def launch(path):
     structure_box.bind('<<ComboboxSelected>>', change_structure)
     ttk.Button(structure_controls, text='Poser structure',
                command=lambda: tool_var.set('Structure')).pack(side='left',padx=3)
+    ttk.Button(structure_controls, text='Supprimer structure',
+               command=remove_selected_structure).pack(side='left',padx=3)
     ttk.Button(structure_controls, text='↺ Bâtiment',
                command=lambda: rotate_structure(-1)).pack(side='left',padx=2)
     ttk.Button(structure_controls, text='↻ Bâtiment',
