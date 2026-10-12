@@ -250,6 +250,7 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                                tags=('architecture', 'architecture_ruin'))
     # Canvas items for selection are emitted by the existing tile pass and
     # must remain visible even when a roof spans several of those cells.
+    canvas.tag_raise('iso_actor')
     canvas.tag_raise('selection')
     return instances
 
