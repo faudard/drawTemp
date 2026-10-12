@@ -14,6 +14,10 @@ from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, render_isometric, SURFACE_COLORS, IsoTerrainAtlas)
 from .iso_props import IsoPropAtlas
+from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
+                             structure_footprint, validate_structure_placement,
+                             place_structure)
+from .iso_architecture import PIVOTS, placement_origin
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -142,6 +146,43 @@ class Document:
         cells = [(x, y) for y in range(y1, y2 + 1) for x in range(x1, x2 + 1)]
         self.paint_many(mid, cells, brush)
 
+    def flood_surface(self, mid, start, surface):
+        """Fill four-connected cells of the same surface in one atomic edit.
+
+        Empty sparse tiles are grass. The existing paint_many path owns surface
+        collisions, Content validation and undo; no runtime Battle is changed.
+        """
+        if surface not in SURFACES:
+            raise RuleError('Surface inconnue')
+        mission = next((m for m in self.data['missions'] if m['id'] == mid), None)
+        if mission is None:
+            raise RuleError(f'Unknown mission: {mid}')
+        width, height = mission['board']['width'], mission['board']['height']
+        if (not isinstance(start, (list, tuple)) or len(start) != 2 or
+                any(type(v) is not int for v in start) or
+                not (0 <= start[0] < width and 0 <= start[1] < height)):
+            raise RuleError('Choisir une case dans la carte.')
+        tiles = {tuple(tile['pos']): tile for tile in mission['board']['tiles']}
+        start = tuple(start)
+        original = tiles.get(start, {}).get('surface', 'grass')
+        if original == surface:
+            return 0
+        region, visited, pending = [], set(), [start]
+        while pending:
+            x, y = pending.pop()
+            if (not (0 <= x < width and 0 <= y < height) or
+                    (x, y) in visited):
+                continue
+            visited.add((x, y))
+            if tiles.get((x, y), {}).get('surface', 'grass') != original:
+                continue
+            region.append((x, y))
+            pending.extend(((x-1, y), (x+1, y), (x, y-1), (x, y+1)))
+        # Validation is performed before replace(), so an illegal blocked
+        # spawn or objective leaves the map and both undo stacks unchanged.
+        self.paint_many(mid, region, 'surface:' + surface)
+        return len(region)
+
     def place_unit(self, mid, uid, cell):
         data = deepcopy(self.data)
         mission = next(m for m in data['missions'] if m['id'] == mid)
@@ -191,6 +232,10 @@ def launch(path):
     surface_var = tk.StringVar(value='grass')
     feature_var = tk.StringVar(value='tree')
     level_var = tk.IntVar(value=2)
+    structure_var = tk.StringVar(value='Maison')
+    structure_pivot_var = tk.StringVar(value='Coin')
+    structure_door_var = tk.StringVar(value='Entrée A')
+    structure_turns = 0
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
@@ -200,7 +245,8 @@ def launch(path):
     object_var = tk.StringVar()
     zone_var = tk.StringVar(value='attackers')
     layer_vars = {name: tk.BooleanVar(value=True) for name in
-                  ('Terrain', 'Relief', 'Décors', 'Déploiement', 'Objectifs', 'Objets', 'Unités')}
+                  ('Terrain', 'Relief', 'Décors', 'Bâtiments', 'Toitures',
+                   'Déploiement', 'Objectifs', 'Objets', 'Unités')}
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
 
     def guarded(fn):
@@ -501,6 +547,25 @@ def launch(path):
             refresh()
             status_var.set(f'Zoom carte : {tile_size}px/case')
 
+    @guarded
+    def rotate_structure(direction):
+        nonlocal structure_turns
+        structure_turns = (structure_turns + direction) % 4
+        tool_var.set('Structure')
+        canvas.delete('structure_preview')
+        status_var.set(f'Structure {structure_var.get()} : rotation '
+                       f'{structure_turns * 90} degrés ; cliquer pour poser.')
+
+    def structure_door_slot():
+        return 0 if structure_door_var.get() == 'Entrée A' else 1
+
+    def structure_clip():
+        return structure_template(structure_var.get(), structure_turns,
+                                  door_slot=structure_door_slot())
+
+    def structure_anchor(cursor):
+        return placement_origin(structure_clip(), cursor, structure_pivot_var.get())
+
     def active_brush():
         return f'height:{level_var.get()}' if brush_var.get() == 'height_set' else brush_var.get()
 
@@ -539,7 +604,40 @@ def launch(path):
 
     def paste_preview(event):
         canvas.delete('paste_preview')
-        if battle or tool_var.get() != 'Collage' or terrain_clipboard is None:
+        canvas.delete('fill_preview')
+        canvas.delete('structure_preview')
+        if battle:
+            return
+        if tool_var.get() == 'Structure':
+            cursor = event_cell(event)
+            if cursor is None:
+                return
+            try:
+                clip = structure_clip()
+                anchor = placement_origin(clip, cursor, structure_pivot_var.get())
+            except RuleError:
+                preview_cells([cursor], tag='structure_preview', color='#e05252')
+                return
+            cells = structure_footprint(clip, anchor)
+            mission = next(m for m in doc.data['missions']
+                           if m['id'] == mission_var.get())
+            width, height = mission['board']['width'], mission['board']['height']
+            inside = [c for c in cells
+                      if 0 <= c[0] < width and 0 <= c[1] < height]
+            try:
+                validate_structure_placement(doc.data, mission_var.get(),
+                                             clip, anchor)
+                color = '#36a16c'
+            except RuleError:
+                color = '#e05252'
+            preview_cells(inside, tag='structure_preview', color=color)
+            return
+        if tool_var.get() == 'Remplissage':
+            anchor = event_cell(event)
+            if anchor is not None:
+                preview_cells([anchor], tag='fill_preview', color='#36a16c')
+            return
+        if tool_var.get() != 'Collage' or terrain_clipboard is None:
             return
         anchor = event_cell(event)
         if anchor is None:
@@ -558,6 +656,25 @@ def launch(path):
         preview_cells([c for c in cells if inside(c)], tag='paste_preview',
                       color='#36a16c' if all(map(inside,cells)) else '#e05252')
 
+    def sample_appearance(cell, *, decor=False):
+        if source_pending():
+            raise RuleError('Appliquer ou abandonner le JSON avant la pipette.')
+        mission = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
+        tile = next((t for t in mission['board']['tiles']
+                     if tuple(t['pos']) == cell), {})
+        if decor:
+            feature = tile.get('feature', '')
+            feature_var.set(feature if feature else 'tree')
+            brush_var.set('feature:' + feature if feature else 'feature-erase')
+            status_var.set('Pipette décor : ' + (feature or 'aucun'))
+        else:
+            surface = tile.get('surface', 'grass')
+            surface_var.set(surface)
+            brush_var.set('surface:' + surface)
+            status_var.set('Pipette sol : ' + surface)
+        tool_var.set('Pinceau')
+        refresh()
+
     @guarded
     def click(event):
         nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive
@@ -573,6 +690,35 @@ def launch(path):
             refresh()
         elif tool == 'Collage':
             paste_at(selected_cell)
+        elif tool == 'Structure':
+            if source_pending():
+                raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
+            name = structure_var.get()
+            rotation = structure_turns
+            door = structure_door_slot()
+            anchor = structure_anchor(selected_cell)
+            design_change(lambda: doc.replace(place_structure(
+                doc.data, mission_var.get(), name, anchor, rotation,
+                door_slot=door)))
+            status_var.set(f'Structure {name} posée en {anchor} '
+                           f'(rotation {rotation * 90} degrés, pivot '
+                           f'{structure_pivot_var.get()}).')
+        elif tool == 'Remplissage':
+            if not brush.startswith('surface:'):
+                raise RuleError('Choisir un sol dans la palette avant le remplissage.')
+            if source_pending():
+                raise RuleError('Appliquer ou abandonner le JSON avant de remplir.')
+            count = 0
+            def fill():
+                nonlocal count
+                count = doc.flood_surface(mission_var.get(), selected_cell,
+                                         brush.partition(':')[2])
+            design_change(fill)
+            status_var.set(f'Remplissage : {count} case(s) modifiée(s).')
+        elif tool == 'Pipette sol':
+            sample_appearance(selected_cell)
+        elif tool == 'Pipette décor':
+            sample_appearance(selected_cell, decor=True)
         elif tool in ('Sélection', 'Rectangle') and (tool == 'Sélection' or brush not in ('unit', 'object')):
             rectangle_anchor = selected_cell
             selection_additive = bool(event.state & 0x0001)
@@ -850,6 +996,12 @@ def launch(path):
                      f' | Presse-papiers : {len(terrain_clipboard.offsets) if terrain_clipboard else 0}'
                      '\nRotation/symétrie : modifier le modèle puis coller.'
                      '\nGroupe : sélectionner les unités/objets et utiliser les flèches.'
+                     '\nStructures : rotation, point d’ancrage Coin/Centre/Porte.'
+                     '\nEntrée B : deuxième porte possible sur Maison ou Ruines.'
+                     '\nToitures : visibles hors des intérieurs sélectionnés/occupés.'
+                     '\nAperçu vert : emplacement libre ; rouge : interdit/hors carte.'
+                     '\nRemplissage : choisir un sol puis remplir une zone contiguë.'
+                     '\nPipette sol/décor : cliquer une case pour reprendre son pinceau.'
                      '\nCouches : visibilité d’édition seulement ; règles inchangées.'
                      '\nDonnées tactiques avancées : onglet JSON.')
         inspector.delete('1.0','end')
@@ -869,8 +1021,10 @@ def launch(path):
     mission_box.pack(side='left')
     mission_box.bind('<<ComboboxSelected>>', lambda e: stop())
     ttk.Label(controls,text='Outil').pack(side='left')
-    ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=11,
-                 values=['Pinceau','Rectangle','Sélection','Collage']).pack(side='left')
+    ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=15,
+                 values=['Pinceau','Rectangle','Sélection','Collage',
+                         'Remplissage','Pipette sol','Pipette décor',
+                         'Structure']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -919,12 +1073,44 @@ def launch(path):
                                 tool_var.set('Pinceau')))
     ttk.Button(scenery_controls, text='Effacer décor',
                command=lambda: brush_var.set('feature-erase')).pack(side='left',padx=4)
+    for label, tool in [('Remplir sol', 'Remplissage'),
+                        ('Pipette sol', 'Pipette sol'),
+                        ('Pipette décor', 'Pipette décor')]:
+        ttk.Button(scenery_controls, text=label,
+                   command=lambda name=tool: tool_var.set(name)).pack(side='left',padx=2)
     ttk.Label(scenery_controls, text='Niveau :').pack(side='left',padx=(10,2))
     ttk.Spinbox(scenery_controls, from_=0, to=99, textvariable=level_var,
                 width=4).pack(side='left')
     ttk.Button(scenery_controls, text='Fixer niveau',
                command=lambda: (brush_var.set('height_set'),
                                 tool_var.set('Pinceau'))).pack(side='left',padx=4)
+    structure_controls = ttk.Frame(root)
+    structure_controls.pack(fill='x', padx=5)
+    ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
+    structure_box = ttk.Combobox(structure_controls, textvariable=structure_var,
+                                 state='readonly', width=16, values=STRUCTURE_NAMES)
+    structure_box.pack(side='left', padx=2)
+    def change_structure(_event):
+        structure_door_var.set('Entrée A')
+        tool_var.set('Structure')
+    structure_box.bind('<<ComboboxSelected>>', change_structure)
+    ttk.Button(structure_controls, text='Poser structure',
+               command=lambda: tool_var.set('Structure')).pack(side='left',padx=3)
+    ttk.Button(structure_controls, text='↺ Bâtiment',
+               command=lambda: rotate_structure(-1)).pack(side='left',padx=2)
+    ttk.Button(structure_controls, text='↻ Bâtiment',
+               command=lambda: rotate_structure(1)).pack(side='left',padx=2)
+    structure_options = ttk.Frame(root)
+    structure_options.pack(fill='x', padx=5)
+    ttk.Label(structure_options, text='Pivot :').pack(side='left',padx=(2, 4))
+    ttk.Combobox(structure_options, textvariable=structure_pivot_var,
+                 state='readonly', width=8, values=PIVOTS).pack(side='left',padx=2)
+    ttk.Label(structure_options, text='Position de porte :').pack(side='left',padx=(12, 4))
+    ttk.Combobox(structure_options, textvariable=structure_door_var,
+                 state='readonly', width=10,
+                 values=('Entrée A','Entrée B')).pack(side='left',padx=2)
+    ttk.Label(structure_options,
+              text='Entrée B : Maison/Ruines seulement ; masquage automatique des toits en édition.').pack(side='left',padx=8)
     advanced_controls = ttk.Frame(root)
     advanced_controls.pack(fill='x', padx=5)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
