@@ -44,7 +44,7 @@ class PlayerTerrainLayer377Tests(unittest.TestCase):
             tiles, (hero,), (), (2, 2), ((2, 3),), (), (),
             ({"cell": [3, 2], "kind": "cast"},))
 
-    def test_idle_redraw_reuses_static_items_and_only_recreates_foreground(self):
+    def test_idle_redraw_reuses_static_and_tactical_overlay_items(self):
         frame = self.frame()
         self.renderer.draw(frame, self.camera, clock_ms=0)
         terrain = self.canvas.find_withtag("terrain")
@@ -53,14 +53,15 @@ class PlayerTerrainLayer377Tests(unittest.TestCase):
         self.assertTrue(dynamic)
         self.assertFalse(set(terrain) & set(dynamic))
         self.assertEqual(self.renderer._terrain_rebuilds, 1)
+        self.assertEqual(self.renderer._overlay_rebuilds, 1)
 
         for timestamp in (60, 120, 180, 240):
             self.renderer.draw(frame, self.camera, clock_ms=timestamp)
             self.assertEqual(self.canvas.find_withtag("terrain"), terrain)
             self.assertEqual(self.renderer._terrain_rebuilds, 1)
-            self.assertTrue(self.canvas.find_withtag("dynamic"))
+            self.assertEqual(self.canvas.find_withtag("dynamic"), dynamic)
+            self.assertEqual(self.renderer._overlay_rebuilds, 1)
             self.assertFalse(set(terrain) & set(self.canvas.find_withtag("dynamic")))
-        self.assertNotEqual(self.canvas.find_withtag("dynamic"), dynamic)
 
     def test_live_threat_selection_and_hp_refresh_without_terrain_repaint(self):
         frame = self.frame()

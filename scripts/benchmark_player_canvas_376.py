@@ -112,6 +112,7 @@ def measure(frame, registry, *, cell_size=52, frames=120, pan=False):
             "canvas_items": item_count,
             "terrain_items": len(canvas.find_withtag("terrain")),
             "dynamic_items": len(canvas.find_withtag("dynamic")),
+            "overlay_rebuilds": renderer._overlay_rebuilds,
             "terrain_rebuilds": renderer._terrain_rebuilds,
             "actor_creations": renderer._actor_creations,
             "actor_updates": renderer._actor_updates,

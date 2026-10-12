@@ -239,3 +239,18 @@ jobs:
             ${{ runner.temp }}/player-canvas-378-authored.json
             ${{ runner.temp }}/player-canvas-378-stress.json
           if-no-files-found: error
+      - name: Verify cached tactical overlays and live threat invalidation (3.7.9)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_player_overlays_379_gui.py -v
+      - name: Benchmark real Jeanne Player overlays at 80 actors (3.7.9)
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_player_canvas_376.py
+          --actors 80 --cell 52 --frames 120
+          --output "${{ runner.temp }}/player-canvas-379-stress.json"
+      - name: Preserve 3.7.9 tactical overlay cache measurements
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-canvas-379-ubuntu
+          path: ${{ runner.temp }}/player-canvas-379-stress.json
+          if-no-files-found: error
