@@ -84,6 +84,16 @@ class FortificationAtlasTests(unittest.TestCase):
         alpha = chunks[b'tRNS'][0]
         self.assertGreaterEqual(len(palette), 16*3)
         self.assertEqual(alpha[0], 0)
+        # The ground and river are already rendered by IsoTerrainAtlas.
+        # An earlier art pack baked an extra river wedge into both bridge
+        # sprites and large ellipses under every fortification sprite.
+        # Those palette indices must stay transparent so Atlas sprites
+        # never paint over neighbouring terrain or beyond the map edge.
+        self.assertEqual(alpha[1], 0, 'Baked detached ground shadows')
+        self.assertEqual(tuple(alpha[idx] for idx in (7, 8, 9)), (0, 0, 0),
+                         'Baked bridge water would overlap the actual river')
+        self.assertEqual(tuple(alpha[idx] for idx in (2, 3, 4, 5, 10, 11)),
+                         (255,) * 6, 'Keep stone and timber opaque')
         raw = zlib.decompress(b''.join(chunks[b'IDAT']))
         stride = width+1
         self.assertEqual(len(raw), stride*height)
