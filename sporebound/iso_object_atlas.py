@@ -31,6 +31,10 @@ class IsoObjectAtlas:
             return self._cache[key]
         try:
             import tkinter as tk
+        except ImportError:
+            self._unavailable = True
+            return None
+        try:
             if self._source is None:
                 source = tk.PhotoImage(master=self.canvas, file=str(self.path))
                 if (source.width(), source.height()) != (
@@ -47,7 +51,7 @@ class IsoObjectAtlas:
                 master=self.canvas)
             self._cache[key] = photo
             return photo
-        except (OSError, ValueError, ImportError, RuntimeError, tk.TclError):
+        except (OSError, ValueError, RuntimeError, tk.TclError):
             self._unavailable = True
             return None
 
