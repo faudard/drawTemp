@@ -121,7 +121,9 @@ def _validate_prefab(prefab):
     for item in prefab['tiles']:
         require(type(item) is dict and set(item) == {'pos', 'tile'},
                 'Invalid prefab tile')
-        _point(item['pos'])
+        p = _point(item['pos'])
+        require(0 <= p[0] < size[0] and 0 <= p[1] < size[1],
+                'Prefab terrain outside its bounds')
         require(item['tile'] is None or type(item['tile']) is dict,
                 'Invalid prefab terrain payload')
     require(len({_point(item['pos']) for item in prefab['tiles']}) ==
@@ -272,7 +274,7 @@ def place_group_prefab(data, mission_id, prefab, anchor):
     for row in prefab['structures']:
         clip = structure_template(row['name'], row['turns'],
                                   door_slot=row['door_slot'])
-        cells = {tuple(world(c)) for c in _stamp(clip, world(row['anchor']))}
+        cells = _stamp(clip, world(row['anchor']))
         require(not cells.intersection(structures | planned_structures),
                 'Prefab collides with a building')
         planned_structures.update(cells)
@@ -284,18 +286,18 @@ def place_group_prefab(data, mission_id, prefab, anchor):
         point = tuple(world(item['pos']))
         require(point not in structures, 'Prefab terrain overlaps a building')
         local_tiles.add(point)
-    require(not (local_tiles - planned_structures).intersection(
-                planned_structures),
-            'Invalid prefab geometry')
     for point in local_tiles | planned_structures:
         existing = tiles.get(point)
         require(existing is None or
                 {k: v for k, v in existing.items() if k != 'pos'} == default,
                 'Prefab would overwrite existing terrain at ' + str(point))
-    require(not (local_tiles | planned_structures).intersection(
-        {tuple(p) for zone in mission_before.get('deployment', ())
-         for p in zone.get('cells', ())}),
-        'Prefab overlaps a deployment zone')
+    blocked = {tuple(p) for zone in mission_before.get('deployment', ())
+               for p in zone.get('cells', ())}
+    blocked.update(tuple(p) for p in mission_before.get('goal', ()))
+    if mission_before.get('relic') is not None:
+        blocked.add(tuple(mission_before['relic']))
+    require(not (local_tiles | planned_structures).intersection(blocked),
+            'Prefab overlaps a mission objective or deployment zone')
     for unit in prefab['units']:
         world(unit['pos'])
         for pos in unit.get('patrol_route', ()):
