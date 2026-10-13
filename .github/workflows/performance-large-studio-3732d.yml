@@ -1,0 +1,42 @@
+name: Large Studio refresh 3.7.32D
+on:
+  pull_request:
+    paths:
+      - 'sporebound/editor.py'
+      - 'sporebound/editor_render_cache.py'
+      - 'sporebound/editor_refresh_scale.py'
+      - 'sporebound/studio_panels.py'
+      - 'tests_standalone/test_large_map_refresh_3732d.py'
+      - 'tests_standalone/test_large_map_refresh_3732d_gui.py'
+      - 'scripts/benchmark_large_studio_refresh_3732d.py'
+      - '.github/workflows/performance-large-studio-3732d.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  large-studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tk and Xvfb
+        run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb python3-pil
+      - name: Assert value-invalidation and minimap behavior
+        run: python3 -m unittest tests_standalone.test_large_map_refresh_3732d -v
+      - name: Exercise real 128x128 Editor/Studio UI
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: >-
+          xvfb-run -a python3 -m unittest -v
+          tests_standalone.test_large_map_refresh_3732d_gui
+      - name: Compare baseline and revision-aware 32²/64²/128² Tk refresh
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_large_studio_refresh_3732d.py
+          --quick --output performance-large-studio-3732d.json
+      - name: Keep performance evidence on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: large-studio-refresh-3732d
+          path: performance-large-studio-3732d.json
+          if-no-files-found: warn
