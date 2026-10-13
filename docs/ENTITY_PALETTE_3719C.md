@@ -10,13 +10,14 @@ modification des formats Content/Replay.
 ## Parcours utilisateur
 
 1. Ouvrir **Acteurs et objets** dans la barre supérieure du Map Editor.
-2. Rechercher un acteur déjà présent dans la mission (Jeanne, bandit, loup,
-   garde, etc.) ou choisir Porte, Levier, Coffre, Bélier, Catapulte, Passage ou
-   Défense.
+2. Rechercher un acteur déjà présent dans la mission, un **archétype installé**
+   dans Character/Bestiary Studio (loup, bandit, chevalier, etc.) ou choisir
+   Porte, Levier, Coffre, Bélier, Catapulte, Passage ou Défense.
 3. La liste affiche des **miniatures PNG**, avec le même atlas que le renderer
    pour les acteurs, et des icônes du décor existant pour les objets. Un acteur
    permet de prévisualiser ses quatre orientations et ses deux poses idle/marche.
-4. Pour un levier, bélier ou une catapulte, sélectionner **une porte existante**
+4. Pour un archétype, choisir le camp **player/enemy** avant la pose.
+   Pour un levier, bélier ou une catapulte, sélectionner **une porte existante**
    comme cible. Pour un passage, saisir sa destination sous forme `x,y`.
 5. Cliquer **Placer sur la carte**, puis survoler une case de l'éditeur.
    L'empreinte complète s'affiche en **vert si la pose réelle est valide** ou
@@ -28,9 +29,10 @@ modification des formats Content/Replay.
 ## Contrats
 
 - `entity_entries(data, mission_id)` construit la liste depuis les acteurs
-  présents dans la mission, même si `Content.archetypes` est vide (cas des
-  campagnes existantes). Les archétypes réutilisables restent gérés par le
-  Character & Bestiary Studio.
+  présents dans la mission **et** les archétypes installés dans
+  `Content.archetypes`. Les campagnes anciennes sans archétypes continuent
+  de fonctionner. Les modèles restent gérés par Character/Bestiary Studio,
+  sans création d'un catalogue parallèle.
 - `place_entity` retourne une copie validée du document, jamais une
   mutation in-place. Les identifiants d'acteurs et d'objets sont générés sans
   collisions à l'intérieur de la mission.
@@ -38,7 +40,9 @@ modification des formats Content/Replay.
   change son ID, sa position et son orientation, restaure PV/MP lorsque ces
   maxima figurent dans la définition et remet l'état de tour à zéro.
   Les patrouilles suivent la translation (elles sont rejetées si elles sortent
-  de la carte).
+  de la carte). Une insertion directe d'archétype conserve sa référence
+  `archetype` et laisse `ActorFactory` résoudre ses propriétés au chargement.
+  Le camp choisi n'affecte que cette nouvelle instance.
 - La gestion des liens, des destinations, des collisions et des contraintes
   des objets utilise `authoring.add_object` et le modèle Content existants.
 - Les changements sont tous effectués par `Document.replace` et sont donc
