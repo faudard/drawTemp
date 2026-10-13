@@ -450,3 +450,217 @@ def move_editor_groups(data, mission_id, group_ids, dx, dy):
         if group['id'] in changed_ids:
             group['cells'] = [[x+dx, y+dy] for x, y in group['cells']]
     return _validate_document(result)
+
+
+def _copy_identifier(original, taken, prefix):
+    """Stable, legal Content ID; deterministic even after repeated duplicates."""
+    import re
+    root = re.sub(r'[^A-Za-z0-9_-]', '_', str(original))
+    if not root or not root[0].isalpha():
+        root = prefix + '_' + root
+    root = root[:48] + '_copy'
+    number = 1
+    while True:
+        suffix = '' if number == 1 else '_' + str(number)
+        name = root[:64-len(suffix)] + suffix
+        if name not in taken:
+            taken.add(name)
+            return name
+        number += 1
+
+
+def duplicate_editor_groups(data, mission_id, group_ids, dx, dy):
+    """Copy a subtree/forest as regular authoring data in one validated edit.
+
+    Terrain tiles, authored structures with independent underlays, interior
+    decks, entities and *internal* ID links are cloned. The copied hierarchy
+    receives new IDs. Mission events, objectives and externally anchored
+    passage destinations intentionally remain unchanged.
+    """
+    require(type(dx) is int and type(dy) is int and (dx or dy),
+            'Duplicating groups requires a nonzero integer offset')
+    original = _mission(data, mission_id)
+    roots, selected = selected_group_closure(original, group_ids)
+    require(len(original.get('editor_groups', ())) + len(selected) <= MAX_GROUPS,
+            'Too many groups after duplication')
+    members = {key: set() for key in _MEMBER_FIELDS}
+    free_cells = set()
+    for group in selected:
+        free_cells.update(tuple(cell) for cell in group['cells'])
+        for field in members:
+            members[field].update(group[field])
+    require(bool(free_cells or any(members.values())),
+            'Select at least one non-empty group to duplicate')
+
+    width = original['board']['width']
+    height = original['board']['height']
+    def shift(cell):
+        return _cell(original, (cell[0] + dx, cell[1] + dy))
+
+    old_tiles = {tuple(t['pos']): t for t in original['board']['tiles']}
+    old_structures = {s['id']: s for s in original.get('structures', ())}
+    from dataclasses import asdict
+    from .model import Tile
+    default = asdict(Tile())
+    existing_structures = set()
+    for s in old_structures.values():
+        clip = structure_template(s['name'], s['turns'],
+                                  door_slot=s['door_slot'])
+        existing_structures.update(structure_footprint(clip, s['anchor']))
+    new_structure_cells = set()
+    for sid in members['structure_ids']:
+        structure = old_structures[sid]
+        clip = structure_template(structure['name'], structure['turns'],
+                                  door_slot=structure['door_slot'])
+        cells = {shift(cell) for cell in
+                 structure_footprint(clip, structure['anchor'])}
+        require(not cells.intersection(existing_structures |
+                                       new_structure_cells),
+                'Copied structures overlap an existing building')
+        new_structure_cells.update(cells)
+    new_free_cells = {shift(cell) for cell in free_cells}
+    require(not new_free_cells.intersection(existing_structures |
+                                            new_structure_cells),
+            'Copied terrain overlaps an authored building')
+    # A copy never consumes another author's map tile, even when the
+    # destination partly overlaps source cells.
+    for cell in new_free_cells | new_structure_cells:
+        raw = old_tiles.get(cell)
+        require(raw is None or
+                {k: v for k, v in raw.items() if k != 'pos'} == default,
+                'Copied group would overwrite terrain at ' + str(cell))
+    # Guard objectives and mission-specific anchors before stamping terrain.
+    blocked_references = {tuple(c) for c in original.get('goal', ())}
+    if original.get('relic') is not None:
+        blocked_references.add(tuple(original['relic']))
+    blocked_references.update(
+        tuple(c) for zone in original.get('deployment', ())
+        for c in zone.get('cells', ()))
+    require(not (new_free_cells | new_structure_cells).intersection(
+                blocked_references), 'Copied group intersects a mission anchor')
+
+    updated = deepcopy(data)
+    mission = _mission(updated, mission_id)
+    # Structural authoring owns underlay captures and actual bridge/wall tiles.
+    # All destination footprints are prechecked before the first placement.
+    structure_map = {}
+    from .iso_structures import place_structure
+    for structure in original.get('structures', ()):
+        if structure['id'] not in members['structure_ids']:
+            continue
+        copied = place_structure(
+            updated, mission_id, structure['name'], shift(structure['anchor']),
+            structure['turns'], door_slot=structure['door_slot'])
+        updated = copied
+        mission = _mission(updated, mission_id)
+        structure_map[structure['id']] = mission['structures'][-1]['id']
+
+    # These are local-to-structure coordinates, so only remap identity.
+    for floor in original.get('interior_floors', ()):
+        if floor['structure_id'] in structure_map:
+            clone = deepcopy(floor)
+            clone['structure_id'] = structure_map[floor['structure_id']]
+            mission.setdefault('interior_floors', []).append(clone)
+
+    tiles = {tuple(t['pos']): deepcopy(t) for t in mission['board']['tiles']}
+    for cell in sorted(free_cells, key=lambda p: (p[1], p[0])):
+        target = shift(cell)
+        original_tile = old_tiles.get(cell)
+        if original_tile is None:
+            tiles.pop(target, None)
+        else:
+            copied_tile = deepcopy(original_tile)
+            copied_tile['pos'] = list(target)
+            tiles[target] = copied_tile
+    mission['board']['tiles'] = list(tiles.values())
+
+    unit_names = {u['id'] for u in mission['units']}
+    object_names = {o['id'] for o in mission['objects']}
+    unit_map = {}
+    object_map = {}
+    for u in original['units']:
+        if u['id'] in members['unit_ids']:
+            unit_map[u['id']] = _copy_identifier(u['id'], unit_names, 'unit')
+    for obj in original['objects']:
+        if obj['id'] in members['object_ids']:
+            object_map[obj['id']] = _copy_identifier(obj['id'], object_names,
+                                                     'object')
+    for source in original['units']:
+        if source['id'] not in unit_map:
+            continue
+        clone = deepcopy(source)
+        clone['id'] = unit_map[source['id']]
+        clone['pos'] = list(shift(source['pos']))
+        clone['patrol_route'] = [list(shift(p)) for p in
+                                 source.get('patrol_route', ())]
+        tags = []
+        for tag in clone.get('tags', ()):
+            if type(tag) is str and tag.startswith('formation:escort:'):
+                uid = tag[len('formation:escort:'):]
+                tag = 'formation:escort:' + unit_map.get(uid, uid)
+            tags.append(tag)
+        clone['tags'] = tags
+        mission['units'].append(clone)
+        if source['id'] in original.get('unit_levels', {}):
+            require(bool(structure_map),
+                    'Copy the associated building for an upper-floor actor')
+            mission.setdefault('unit_levels', {})[clone['id']] = (
+                original['unit_levels'][source['id']])
+
+    for source in original['objects']:
+        if source['id'] not in object_map:
+            continue
+        clone = deepcopy(source)
+        clone['id'] = object_map[source['id']]
+        clone['pos'] = list(shift(source['pos']))
+        if 'link' in clone:
+            clone['link'] = object_map.get(clone['link'], clone['link'])
+        if clone['kind'] == 'defense':
+            clone['cells'] = [list(shift(c)) for c in clone['cells']]
+        # Passage destination is an intentional absolute point, not a relative
+        # offset; retain it just like the existing map group authoring.
+        mission['objects'].append(clone)
+
+    # Copy only connectors whose endpoints both belong to selected buildings.
+    # Cross-boundary links remain external and are never silently rewritten.
+    link_names = {link['id'] for link in mission.get('level_links', ())}
+    source_structure_cells = set()
+    for sid in members['structure_ids']:
+        item = old_structures[sid]
+        clip = structure_template(item['name'], item['turns'],
+                                  door_slot=item['door_slot'])
+        source_structure_cells.update(structure_footprint(
+            clip, item['anchor']))
+    copied_connector_count = 0
+    for edge in original.get('level_links', ()):
+        a, b = edge['from'], edge['to']
+        if (tuple(a[1:]) in source_structure_cells and
+                tuple(b[1:]) in source_structure_cells and
+                (a[0] > 0 or b[0] > 0)):
+            clone = deepcopy(edge)
+            clone['id'] = _copy_identifier(edge['id'], link_names, 'link')
+            clone['from'] = [a[0], *shift(a[1:])]
+            clone['to'] = [b[0], *shift(b[1:])]
+            mission.setdefault('level_links', []).append(clone)
+            copied_connector_count += 1
+    if any(uid in original.get('unit_levels', {}) for uid in unit_map):
+        require(copied_connector_count > 0,
+                'Cannot duplicate upper-floor actors without their connectors')
+
+    group_names = {g['id'] for g in original.get('editor_groups', ())}
+    group_map = {}
+    for group in selected:
+        group_map[group['id']] = _copy_identifier(group['id'], group_names,
+                                                   'group')
+    for group in selected:
+        clone = deepcopy(group)
+        clone['id'] = group_map[group['id']]
+        clone['name'] = group['name'][:72] + ' (copie)'
+        clone['parent'] = group_map.get(group['parent'], group['parent'])
+        clone['cells'] = [list(shift(cell)) for cell in group['cells']]
+        clone['unit_ids'] = [unit_map[uid] for uid in group['unit_ids']]
+        clone['object_ids'] = [object_map[oid] for oid in group['object_ids']]
+        clone['structure_ids'] = [structure_map[sid] for sid in
+                                  group['structure_ids']]
+        mission.setdefault('editor_groups', []).append(clone)
+    return _validate_document(updated)
