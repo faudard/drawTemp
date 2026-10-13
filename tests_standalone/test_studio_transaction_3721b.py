@@ -107,6 +107,57 @@ class StudioTransactionTests(unittest.TestCase):
         self.assertEqual(GameProject.load(self.store.project_path, self.content).to_dict(),
                          self.project)
 
+    def test_expected_revisions_protect_both_documents_against_external_edits(self):
+        originals = self.first_save()
+        baseline = self.store.revisions()
+        for index in (0, 1):
+            path = self.store.paths[index]
+            changed = path.read_bytes() + b" "
+            path.write_bytes(changed)
+            with self.assertRaisesRegex(RuleError, "changé sur disque"):
+                self.store.save(self.new, self.next_project,
+                                expected_previous=baseline)
+            self.assertEqual(path.read_bytes(), changed)
+            self.assertFalse(self.store.pending)
+            path.write_bytes(originals[index])
+        self.store.save(self.new, self.next_project, expected_previous=baseline)
+        self.assertNotEqual(self.store.revisions(), baseline)
+
+    def test_edit_during_staging_never_replaces_destination(self):
+        self.first_save()
+        from sporebound import studio_transaction as transactions
+        original_write = transactions.write_bytes
+        changed = b'{"changed":"outside Studio"}'
+        calls = []
+        def interfere(path, raw):
+            original_write(path, raw)
+            calls.append(path)
+            if len(calls) == 1:
+                self.store.project_path.write_bytes(changed)
+        with patch.object(transactions, "write_bytes", side_effect=interfere):
+            with self.assertRaisesRegex(RuleError, "pendant la préparation"):
+                self.store.save(self.new, self.next_project)
+        self.assertEqual(self.store.project_path.read_bytes(), changed)
+        self.assertFalse(self.store.pending)
+
+    def test_edit_between_publishes_blocks_second_overwrite(self):
+        self.first_save()
+        original_publish = self.store._publish_one
+        external = b'{"changed":"another writer"}'
+        calls = []
+        def interfere(path):
+            original_publish(path)
+            calls.append(path)
+            if len(calls) == 1:
+                self.store.project_path.write_bytes(external)
+        with patch.object(self.store, "_publish_one", side_effect=interfere):
+            with self.assertRaisesRegex(RuleError, "modifié pendant la sauvegarde"):
+                self.store.save(self.new, self.next_project)
+        self.assertEqual(self.store.project_path.read_bytes(), external)
+        self.assertTrue(self.store.pending)
+        with self.assertRaisesRegex(RuleError, "modifié"):
+            self.store.recover("rollback")
+
     def test_invalid_project_aborts_without_creating_files(self):
         bad = deepcopy(self.project)
         bad["campaigns"][0]["start_mission"] = "not_a_mission"
