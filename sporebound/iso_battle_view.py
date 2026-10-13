@@ -14,11 +14,12 @@ from .iso_actor_atlas import (
     IsoActorAtlas, actor_style, actor_direction, actor_frame)
 
 
-def battle_layers(*, deploying=False):
+def battle_layers(*, deploying=False, active_level=0):
     """Visible game layers, not authoring-only zones when battle has started."""
     return {'Terrain': True, 'Relief': True, 'Décors': True,
             'Bâtiments': True, 'Toitures': True, 'Déploiement': deploying,
-            'Objectifs': True, 'Objets': True, 'Unités': True}
+            'Objectifs': True, 'Objets': True, 'Unités': True,
+            'Intérieurs': active_level > 0, 'Étage actif': active_level}
 
 
 def viewport_shift(geo, camera, viewport):
@@ -81,6 +82,8 @@ class IsoBattleCanvas:
         self._actor_sprite_states = ()
         self._architecture = ()
         self._cutaways = ()
+        self._level_map = {}
+        self._floor_records = ()
         self._scene_rebuilds = 0
         self._actor_only_frames = 0
 
@@ -92,8 +95,9 @@ class IsoBattleCanvas:
                      for building in self._architecture)
 
     def _pose_centers(self, units, poses):
-        return tuple(visual_center(self.geometry, actor, poses)
-                     for actor in units)
+        return tuple((x, y-self._level_map.get(actor.id, 0)*3*self.geometry.step)
+                     for actor in units
+                     for x, y in [visual_center(self.geometry, actor, poses)])
 
     @staticmethod
     def _actor_state(units):
@@ -141,7 +145,10 @@ class IsoBattleCanvas:
         units = battle.units
         viewport = self.viewport()
         ids = tuple(actor.id for actor in units)
-        actor_state = self._actor_state(units)
+        actor_state = (self._actor_state(units),
+                       tuple(sorted(battle.unit_levels.items())))
+        self._level_map = dict(battle.unit_levels)
+        self._floor_records = tuple(battle.mission.interior_floors)
         reusable = (
             self.geometry is not None
             and frame is self._frame
@@ -163,6 +170,9 @@ class IsoBattleCanvas:
             if moved:
                 for tag in depth_order(self._architecture, units, poses):
                     self.canvas.tag_raise(tag)
+                for index, actor in enumerate(units):
+                    if self._level_map.get(actor.id, 0) > 0:
+                        self.canvas.tag_raise('iso_actor_unit_' + str(index))
                 self.canvas.tag_raise('selection')
             self._refresh_sprite_frames(units, poses, camera)
             self._positions = positions
@@ -172,12 +182,16 @@ class IsoBattleCanvas:
         geo = render_isometric(
             self.canvas, battle.board, battle.mission, units,
             cell_size=camera.cell_size,
-            layers=battle_layers(deploying=battle.deploying),
+            layers=battle_layers(
+                deploying=battle.deploying,
+                active_level=battle.unit_levels.get(battle.active_id, 0)
+                if battle.active_id else 0),
             selected_cell=frame.selected, selected_tiles=(),
             reachable=frame.reachable, danger=frame.danger,
             active_id=frame.active_id, atlas=self.terrain, prop_atlas=self.props,
             building_atlas=self.buildings, fortification_atlas=self.fortifications,
-            actor_atlas=self.actors, poses=poses)
+            actor_atlas=self.actors, poses=poses,
+            unit_levels=battle.unit_levels)
         self.geometry = geo
         self.shift = viewport_shift(geo, camera, viewport)
         self.canvas.move('all', *self.shift)
@@ -200,10 +214,20 @@ class IsoBattleCanvas:
         self._scene_rebuilds += 1
         return geo
 
-    def hit_test(self, x, y):
+    def hit_test(self, x, y, *, level=0):
         if self.geometry is None:
             return None
-        return self.geometry.hit_test(x-self.shift[0], y-self.shift[1])
+        px, py = x-self.shift[0], y-self.shift[1]
+        if level > 0:
+            from .interior_levels import floor_hit_test
+            for building in reversed(self._architecture):
+                for floor in self._floor_records:
+                    if floor['structure_id'] == building.id and floor['level'] == level:
+                        result = floor_hit_test(self.geometry, building, floor, px, py)
+                        if result is not None:
+                            return result
+            return None
+        return self.geometry.hit_test(px, py)
 
     def dispose(self):
         self.geometry = None
@@ -217,6 +241,8 @@ class IsoBattleCanvas:
         self._cutaways = ()
         self._positions = ()
         self._actor_sprite_states = ()
+        self._floor_records = ()
+        self._level_map = {}
         self.terrain._tiles.clear()
         self.props.clear_cache()
         self.buildings.clear_cache()
