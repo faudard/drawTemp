@@ -80,5 +80,63 @@ class LargeMapRefreshGuiTests(unittest.TestCase):
                 self.assertFalse(errors.called, errors.call_args_list)
 
 
+    def test_128_iso_revision_invalidates_scene_and_matches_clean_draw(self):
+        import tkinter as tk
+        from sporebound.editor_refresh_scale import EditorContentProjection
+        from sporebound.editor_render_cache import EditorRenderCache
+
+        root = tk.Tk()
+        try:
+            root.geometry("700x500")
+            canvas = tk.Canvas(root, width=650, height=450)
+            canvas.pack()
+            root.update()
+            raw = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
+                                    "iso_large", "Grande carte ISO", 128, 128)
+            model = EditorContentProjection()
+            renderer = EditorRenderCache(canvas)
+
+            def draw(selected):
+                content = model.get(raw)
+                mission = content.missions["iso_large"]
+                renderer.draw(
+                    mission.board, mission, mission.units, cell_size=54,
+                    layers={}, selected_cell=selected, selected_tiles=(),
+                    scene_revision=(model.generation, mission.id))
+                root.update_idletasks()
+
+            draw((0, 0))
+            self.assertEqual(renderer.stats["fast_path"], "full")
+            draw((1, 0))
+            self.assertEqual(renderer.stats["fast_path"], "selection")
+            # A nested terrain mutation must reject the old scene,
+            # including its cached isometric geometry.
+            row = next(m for m in raw["missions"] if m["id"] == "iso_large")
+            row["board"]["tiles"].append(
+                {"pos": [2, 2], "height": 1, "surface": "water",
+                 "blocked": True})
+            draw((1, 0))
+            self.assertEqual(renderer.stats["fast_path"], "full")
+            self.assertTrue(renderer.stats["geometry_rebuilt"])
+
+            # Same renderer after explicit cache reset is the parity oracle.
+            def canvas_snapshot():
+                return tuple((
+                    canvas.type(i), tuple(canvas.coords(i)),
+                    canvas.itemcget(i, "fill"),
+                    canvas.itemcget(i, "outline")
+                    if canvas.type(i) in ("polygon", "rectangle", "oval") else "",
+                    canvas.itemcget(i, "text")
+                    if canvas.type(i) == "text" else "",
+                ) for i in canvas.find_all())
+
+            fast = canvas_snapshot()
+            renderer.invalidate()
+            draw((1, 0))
+            self.assertEqual(canvas_snapshot(), fast)
+        finally:
+            root.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()
