@@ -1,5 +1,6 @@
 """3.7.24A World Map gates: authoring, navigation, validation, save compatibility."""
 from copy import deepcopy
+from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -47,7 +48,7 @@ class WorldMapTests(TestCase):
             loaded = load_slot(path, reopened, self.content,
                                reopened.campaigns[0]["id"], 1)
             self.assertTrue(slot.exists())
-            self.assertEqual(loaded.to_dict(), progress.to_dict())
+            self.assertEqual(asdict(loaded), asdict(progress))
         self.assertEqual(self.content.to_dict(), content_before)
 
     def test_drag_region_and_removal_do_not_rewrite_tactical_links(self):
