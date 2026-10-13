@@ -439,6 +439,9 @@ class Content:
                 from .rules.triggers import ValidationContext
                 context = ValidationContext(b, ids, rules, self.archetypes, object_ids)
                 rules.trigger_conditions.get(trigger['condition']).validate(context, trigger)
+                if 'when' in trigger:
+                    from .rules.triggers import validate_composite
+                    validate_composite(context, trigger['when'])
                 for action in trigger['actions']:
                     rules.trigger_actions.get(action['kind']).validate(context, action)
         def unlock_rule(rule):
