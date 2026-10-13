@@ -147,7 +147,7 @@ class EntityPaletteTests(TestCase):
         self.assertEqual(len(OBJECT_SPRITE_NAMES), 7)
         self.assertEqual(set(OBJECT_SPRITE_NAMES), set(OBJECT_PROP_HINTS))
         data = DEFAULT_OBJECT_ATLAS.read_bytes()
-        self.assertEqual(data[:8], b'\\x89PNG\\r\\n\\x1a\\n')
+        self.assertEqual(data[:8], b'\x89PNG\r\n\x1a\n')
         width, height = unpack('>II', data[16:24])
         self.assertEqual((width, height),
                          (OBJECT_FRAME[0] * len(OBJECT_SPRITE_NAMES),
