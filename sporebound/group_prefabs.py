@@ -80,12 +80,18 @@ def _validate_prefab(prefab):
         require(type(group) is dict and set(group) == _FIELDS,
                 'Invalid prefab group record')
         gid = group['id']
-        require(type(gid) is str and gid not in ids['groups'],
-                'Duplicate prefab group id')
+        require(type(gid) is str and bool(re.fullmatch(
+                    r'[A-Za-z][A-Za-z0-9_-]{0,63}', gid))
+                and gid not in ids['groups'],
+                'Invalid or duplicate prefab group id')
         ids['groups'].add(gid)
+        require(group['parent'] is None or type(group['parent']) is str,
+                'Invalid prefab group parent')
         group_parent[gid] = group['parent']
-        require(type(group['name']) is str and group['name'].strip(),
-                'Unnamed prefab group')
+        require(type(group['name']) is str and
+                1 <= len(group['name'].strip()) <= 80,
+                'Invalid prefab group name')
+        require(type(group['cells']) is list, 'Invalid prefab group cells')
         for cell in group['cells']:
             pos = _point(cell)
             require(0 <= pos[0] < size[0] and 0 <= pos[1] < size[1]
@@ -118,13 +124,51 @@ def _validate_prefab(prefab):
                 'Prefab has orphaned or missing group members: ' + field)
     require(set(prefab['unit_levels']) <= ids['units'],
             'Prefab levels refer to missing actors')
+    require(all(type(level) is int and 1 <= level <= 3 for level in
+                prefab['unit_levels'].values()),
+            'Invalid prefab actor floor')
+    for unit in prefab['units']:
+        pos = _point(unit.get('pos'))
+        require(0 <= pos[0] < size[0] and 0 <= pos[1] < size[1],
+                'Prefab actor outside its bounds')
+        for tag in unit.get('tags', ()):
+            require(type(tag) is str, 'Invalid prefab actor tag')
+            if tag.startswith('formation:escort:'):
+                require(tag[len('formation:escort:'):] in ids['units'],
+                        'Prefab escort refers to a missing actor')
+    for obj in prefab['objects']:
+        pos = _point(obj.get('pos'))
+        require(0 <= pos[0] < size[0] and 0 <= pos[1] < size[1],
+                'Prefab object outside its bounds')
+        if obj.get('link'):
+            require(type(obj['link']) is str and
+                    obj['link'] in ids['objects'],
+                    'Prefab object refers to missing linked member')
+        if obj.get('kind') == 'passage':
+            _point(obj.get('destination'))
+    for deck in prefab['interior_floors']:
+        require(type(deck) is dict and
+                deck.get('structure_id') in ids['structures'],
+                'Prefab floor refers to an unknown building')
+    for edge in prefab['level_links']:
+        for side in ('from', 'to'):
+            end = edge.get(side)
+            require(type(end) is list and len(end) == 3 and
+                    all(type(n) is int for n in end) and
+                    0 <= end[0] <= 3,
+                    'Invalid prefab floor connector')
+            _point(end[1:])
+    require(not prefab['unit_levels'] or prefab['level_links'],
+            'Upper-floor prefab requires its staircase')
     for item in prefab['tiles']:
         require(type(item) is dict and set(item) == {'pos', 'tile'},
                 'Invalid prefab tile')
         p = _point(item['pos'])
         require(0 <= p[0] < size[0] and 0 <= p[1] < size[1],
                 'Prefab terrain outside its bounds')
-        require(item['tile'] is None or type(item['tile']) is dict,
+        require(item['tile'] is None or
+                (type(item['tile']) is dict and
+                 set(item['tile']) == set(asdict(Tile()))),
                 'Invalid prefab terrain payload')
     require(len({_point(item['pos']) for item in prefab['tiles']}) ==
             len(prefab['tiles']), 'Duplicate prefab terrain')
