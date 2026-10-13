@@ -27,10 +27,13 @@ sauvegarde ou les assets.
    actualisé séparément. Le mode combat reconstruit toujours le fond et ne
    réutilise jamais une scène statique de l'édition. Un élément Canvas ajouté
    hors du composant invalide le fond.
-4. **StudioPanels.** Le parcours explicitement identifié « sélection de
-   cases » actualise uniquement le libellé de sélection ; il ne réexécute pas
-   tous les éditeurs, graphes, index, médias et projets. Les actions qui
-   modifient les contenus passent toujours par le rafraîchissement complet.
+4. **StudioPanels.** La sélection de cases met uniquement à jour le
+   libellé. Les coups de pinceau sur le terrain (hors effacement et objectif)
+   actualisent immédiatement la carte, l'inspecteur et la mini-carte mais
+   **diffèrent le rafraîchissement des onglets Studio masqués**. L'événement
+   `<<NotebookTabChanged>>` force leur synchronisation dès qu'un onglet est
+   ouvert. Les modifications d'acteurs, d'objets, d'événements, de déploiement
+   ou d'objectifs continuent le parcours de rafraîchissement complet.
 5. **Sélection de cases.** La restriction aux limites de carte parcourt les
    cases sélectionnées, et non toutes les cases du plateau.
 
