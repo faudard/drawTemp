@@ -7,6 +7,7 @@ from sporebound.authoring import add_blank_mission
 from sporebound.editor import Document
 from sporebound.editor_architecture import (
     EditingContext, EditorChange, ChangeNotifications, StructureCommand,
+    StructureGroupCommand,
     EntityCommand, TacticalEventCommand, SelectionController, ToolController,
     RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
 from sporebound.event_composer import save_event, condition, action
@@ -53,6 +54,28 @@ class EditorArchitectureTests(TestCase):
         self.assertEqual(self.doc.data, before)
         self.doc.redo()
         self.assertEqual(tuple(self.mission()['structures'][-1]['anchor']), (10, 10))
+
+    def test_bridge_group_uses_same_preview_and_one_undo(self):
+        from sporebound.structure_groups import selected_structures
+        self.doc.replace(place_structure(self.doc.data, self.mid,
+                                         'Pont', (6, 6)))
+        raw = self.doc.data
+        mission = self.mission()
+        clip = next(x for x in mission['structures'] if x['name'] == 'Pont')
+        selection = tuple((x, y) for y in range(6, 8) for x in range(6, 9))
+        self.assertEqual(len(selected_structures(raw, self.mid, selection)), 1)
+        baseline = deepcopy(self.doc.data)
+        count = len(self.doc.undo_stack)
+        cmd = StructureGroupCommand(selection, dx=0, dy=3)
+        preview = self.ctx.preview(cmd)
+        self.assertEqual(self.doc.data, baseline)
+        self.ctx.apply(preview)
+        self.assertEqual(tuple(self.mission()['structures'][-1]['anchor']), (6, 9))
+        self.assertEqual(len(self.doc.undo_stack), count+1)
+        self.doc.undo()
+        self.assertEqual(self.doc.data, baseline)
+        with self.assertRaises(RuleError):
+            self.ctx.preview(StructureGroupCommand(selection, dx=100, dy=0))
 
     def test_actor_edit_and_rejected_mutations_never_touch_history(self):
         original = deepcopy(self.doc.data)
