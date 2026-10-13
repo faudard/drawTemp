@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
+from .editor_refresh_scale import EditorContentProjection, MinimapBackgroundCache
 from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
                                   StructureGroupCommand, EditorGroupMoveCommand,
                                   EditorGroupTreeDropCommand, EditorGroupBatchCommand,
@@ -55,12 +56,15 @@ from .editor_groups import (create_editor_group, add_selection_to_group,
 from .group_prefabs import (capture_group_prefab, load_group_prefab,
                             save_group_prefab, list_group_prefabs,
                             prefab_file_slug, prefab_display_cells)
+from .prefab_catalog import prefab_card, broken_prefab_card
+from .prefab_palette import VisualPrefabPalette
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
 from .studio_transaction import StudioTransactionStore
 from .performance_trace import begin_ui, finish_ui
 from .workspace_shell import inspect_map, LayoutStore, palette_source_for_tree
+from .workspace_editing import WorkspacePropertyCommand, editable_form
 
 
 class Document:
@@ -298,6 +302,10 @@ def launch(path):
     editor_group_dx = tk.IntVar(value=1)
     editor_group_dy = tk.IntVar(value=0)
     group_prefab_var = tk.StringVar(value='')
+    prefab_gallery = None
+    prefab_floating = None
+    prefab_window = None
+    prefab_drag_hover = None
     selected_group_id = None
     group_tree_signature = None
     group_tree_items = {}
@@ -343,6 +351,8 @@ def launch(path):
         status_var.set('Préférences de carte ignorées : ' + str(exc))
     doc.edit_policy = lambda before, after: ensure_unlocked(before, after, map_view_data)
     editing_context = EditingContext(doc, mission_var.get)
+    editor_content_cache = EditorContentProjection()
+    minimap_background = MinimapBackgroundCache()
 
     def guarded(fn):
         def run(*args):
@@ -403,7 +413,7 @@ def launch(path):
         source.delete('1.0', 'end')
         source.insert('1.0', json.dumps(doc.data, indent=2, ensure_ascii=False))
 
-    def design_change(fn):
+    def design_change(fn, *, board_only=False):
         nonlocal battle
         if source_pending() and not messagebox.askyesno('JSON non appliqué', 'Abandonner les modifications JSON non appliquées ?'):
             return
@@ -416,7 +426,7 @@ def launch(path):
             # Commands publish only after JSON and Studio history are in sync.
             editing_context.notify(notice)
         else:
-            refresh()
+            refresh(board_only=board_only)
 
     @guarded
     def open_doc():
@@ -1036,6 +1046,20 @@ def launch(path):
         group_prefab_box.configure(values=options)
         if group_prefab_var.get() not in options:
             group_prefab_var.set(options[0] if options else '')
+        if prefab_gallery is not None:
+            rows = []
+            for item in paths:
+                try:
+                    rows.append(prefab_card(item, load_group_prefab(item)))
+                except (RuleError, ValueError, OSError, KeyError, TypeError) as exc:
+                    rows.append(broken_prefab_card(item, str(exc)))
+            prefab_gallery.update(rows)
+            prefab_gallery.selected = group_prefab_var.get()
+            prefab_gallery.render()
+            if prefab_floating is not None:
+                prefab_floating.update(rows)
+                prefab_floating.selected = group_prefab_var.get()
+                prefab_floating.render()
         return paths
 
     def _chosen_prefab():
@@ -1086,40 +1110,138 @@ def launch(path):
         group_prefab_var.set(target.name)
         status_var.set('Préfab ajouté à la bibliothèque : '+target.name)
 
-    @guarded
-    def place_chosen_prefab(*, preview=False):
+    def _prefab_world_at(screen_pixel):
+        """Window-relative pointer to board coordinates in both map modes."""
+        x, y = screen_pixel
+        x, y = canvas.canvasx(x), canvas.canvasy(y)
+        if iso_var.get() and iso_geometry is not None:
+            cell = iso_geometry.hit_test(x, y)
+        else:
+            cell = (int(x // tile_size), int(y // tile_size))
+        if cell is None:
+            return None
+        board = _group_tree_mission()['board']
+        return cell if 0 <= cell[0] < board['width'] and 0 <= cell[1] < board['height'] else None
+
+    def clear_prefab_drag():
+        nonlocal prefab_drag_hover
+        prefab_drag_hover = None
+        canvas.delete('prefab_drag_preview')
+
+    def preview_prefab_at(prefab, anchor, *, drag=False):
+        """Pure preview; rejected placements turn red, never enter history."""
+        nonlocal prefab_drag_hover
+        target_tag = 'prefab_drag_preview' if drag else 'editor_group_preview'
+        hover_key = (prefab['name'], tuple(anchor), mission_var.get(),
+                     id(doc.data))
+        if drag and prefab_drag_hover == hover_key:
+            return
+        prefab_drag_hover = hover_key
+        try:
+            if battle is not None or source_pending():
+                raise RuleError('Terminer le playtest et appliquer le JSON.')
+            editing_context.preview(GroupPrefabPlaceCommand(prefab, tuple(anchor)))
+            color, message = '#36a16c', 'destination valide'
+        except (RuleError, ValueError, KeyError) as exc:
+            color, message = '#e05252', str(exc)
+        board = _group_tree_mission()['board']
+        cells = sorted(prefab_display_cells(prefab, anchor))
+        visible = (cell for cell in cells if 0 <= cell[0] < board['width']
+                   and 0 <= cell[1] < board['height'])
+        from itertools import islice
+        preview_cells(islice(visible, 512), tag=target_tag, color=color)
+        status_var.set(f'Préfab {prefab["name"]} : {message}')
+
+    def commit_prefab_at(prefab, anchor):
         nonlocal selected_group_id, selected_tiles, selected_cell
         if battle is not None or source_pending():
             raise RuleError('Terminer le playtest et appliquer le JSON.')
-        prefab = _chosen_prefab()
-        anchor = tuple(selected_cell)
-        command = GroupPrefabPlaceCommand(prefab, anchor)
-        if preview:
-            try:
-                editing_context.preview(command)
-                color, note = '#36a16c', 'valide'
-            except RuleError as exc:
-                color, note = '#e05252', str(exc)
-            preview_cells(
-                tuple(sorted(prefab_display_cells(prefab, anchor)))[:512],
-                tag='editor_group_preview', color=color)
-            status_var.set(f'Prévisualisation préfab {prefab["name"]} : {note}')
-            return
-        old = {g['id'] for g in _group_tree_mission().get('editor_groups', ())}
+        before = {g['id'] for g in _group_tree_mission().get('editor_groups', ())}
+        command = GroupPrefabPlaceCommand(prefab, tuple(anchor))
+        # This uses exactly the existing typed authoring and undo transaction.
+        # A drag never dispatches a terrain-brush click.
         design_change(lambda: editing_context.execute(command, publish=False))
         mission = _group_tree_mission()
-        inserted = {g['id'] for g in mission.get('editor_groups', ())} - old
-        parents = [g['id'] for g in mission['editor_groups']
-                   if g['id'] in inserted and g['parent'] not in inserted]
-        selected_group_id = parents[0] if parents else None
-        if parents:
-            selected_tiles = set().union(
-                *(group_display_cells(mission, gid) for gid in parents))
+        created = {g['id'] for g in mission.get('editor_groups', ())} - before
+        roots = [g['id'] for g in mission['editor_groups']
+                 if g['id'] in created and g['parent'] not in created]
+        selected_group_id = roots[0] if roots else None
+        selected_tiles = set().union(
+            *(group_display_cells(mission, gid) for gid in roots))
+        selected_cell = tuple(anchor)
+        clear_prefab_drag()
         refresh()
         if selected_group_id and group_tree.exists('g:'+selected_group_id):
             group_tree.selection_set('g:'+selected_group_id)
-        status_var.set(f'Préfab {prefab["name"]} inséré sur la carte ; '
-                       'annulation disponible.')
+        status_var.set(f'Préfab {prefab["name"]} placé en {tuple(anchor)} '
+                       '— Annuler/Rétablir disponibles.')
+
+    @guarded
+    def place_chosen_prefab(*, preview=False):
+        prefab = _chosen_prefab()
+        if preview:
+            preview_prefab_at(prefab, tuple(selected_cell))
+        else:
+            commit_prefab_at(prefab, tuple(selected_cell))
+
+    def palette_prefab_hover(filename, screen_pixel):
+        anchor = _prefab_world_at(screen_pixel)
+        if anchor is None:
+            clear_prefab_drag()
+            return
+        try:
+            prefab = load_group_prefab(_prefab_library() / filename)
+        except (RuleError, ValueError, OSError):
+            clear_prefab_drag()
+            return
+        preview_prefab_at(prefab, anchor, drag=True)
+
+    @guarded
+    def palette_prefab_drop(filename, screen_pixel):
+        anchor = _prefab_world_at(screen_pixel)
+        if anchor is None:
+            raise RuleError('Déposer le préfab à l’intérieur de la carte.')
+        prefab = load_group_prefab(_prefab_library() / filename)
+        commit_prefab_at(prefab, anchor)
+
+    def open_visual_prefab_palette():
+        """Roomy nonmodal palette; the author can still drop onto the map."""
+        nonlocal prefab_window, prefab_floating
+        if prefab_window is not None and prefab_window.winfo_exists():
+            prefab_window.lift()
+            prefab_window.focus_set()
+            return
+        window = tk.Toplevel(root)
+        window.title('Palette visuelle — Préfabs')
+        window.geometry('390x540')
+        window.transient(root)
+        ttk.Label(window,
+                  text='Choisir un modèle puis glisser sa miniature sur la carte.',
+                  wraplength=355).pack(anchor='w', padx=8, pady=6)
+        floating = VisualPrefabPalette(
+            window, tk, ttk,
+            on_select=group_prefab_var.set,
+            on_preview=palette_prefab_hover,
+            on_drop=palette_prefab_drop,
+            on_cancel=clear_prefab_drag,
+            map_canvas=canvas,
+            status=status_var.set)
+        floating.frame.pack(fill='both', expand=True, padx=6, pady=4)
+        prefab_window, prefab_floating = window, floating
+
+        def close():
+            nonlocal prefab_window, prefab_floating
+            floating.cancel()
+            window.destroy()
+            prefab_window = None
+            prefab_floating = None
+
+        window.protocol('WM_DELETE_WINDOW', close)
+        window.bind('<Escape>', lambda _e: close())
+        ttk.Button(window, text='Actualiser les modèles',
+                   command=refresh_group_prefabs).pack(fill='x',
+                                                       padx=8, pady=(0, 6))
+        refresh_group_prefabs()
 
     def _group_tree_mission():
         return next(m for m in doc.data['missions']
@@ -1550,7 +1672,11 @@ def launch(path):
                 doc.data, mission_var.get(), zone_var.get(), cells,
                 erase=brush == 'zone-')))
         else:
-            design_change(lambda: doc.paint_many(mission_var.get(), cells, brush))
+            # Erase and goal brushes also edit mission objectives and must
+            # refresh all Studio consumers synchronously.
+            design_change(
+                lambda: doc.paint_many(mission_var.get(), cells, brush),
+                board_only=brush not in ('erase', 'goal'))
 
     def event_cell(event):
         px, py = canvas.canvasx(event.x), canvas.canvasy(event.y)
@@ -1609,7 +1735,7 @@ def launch(path):
                     'brush_preview', 'asset_ghost', 'entity_preview',
                     'entity_ghost', 'entity_route', 'entity_source',
                     'entity_target_preview', 'floor_preview',
-                    'editor_group_preview'):
+                    'editor_group_preview', 'prefab_drag_preview'):
             canvas.delete(tag)
 
     def paste_preview(event):
@@ -2182,7 +2308,7 @@ def launch(path):
                                        stroke_cells[-1])
             selected_tiles = selected_tiles | set(cells) if selection_additive else set(cells)
             selected_cell = stroke_cells[-1]
-            refresh()
+            refresh(selection_only=True)
             if studio is not None:
                 studio.workspace.sync_map_selection(
                     mission_var.get(), selected_cell, cells=selected_tiles)
@@ -2220,7 +2346,7 @@ def launch(path):
                 ensure_unlocked(stroke_before, temporary.data, map_view_data)
                 doc.data = temporary.data
                 refresh_source()
-                refresh()
+                refresh(board_only=brush not in ('erase', 'goal'))
         if stroke_before is not None and studio is not None:
             studio.capture_history()
         stroke_cells = []
@@ -2230,59 +2356,74 @@ def launch(path):
         canvas.delete('stroke_preview')
 
 
-    def draw_minimap(board, mission, units):
-        """Compact tactical overview; renders only sparse tiles and entities."""
-        mini_canvas.delete('all')
+    def refresh_minimap_viewport():
+        # Pan/scroll and selection-only refreshes never repaint static tiles.
+        mini_canvas.delete('viewport')
         size = 184
-        sx, sy = size / board.width, size / board.height
-        mini_canvas.create_rectangle(0, 0, size, size, fill='#e4e4e4',
-                                     outline='#999999')
-        if layer_vars['Terrain'].get() or layer_vars['Relief'].get():
-            for (x, y), tile in board.tiles.items():
-                color = None
-                if layer_vars['Terrain'].get():
-                    if tile.surface != 'grass': color = SURFACE_COLORS[tile.surface]
-                    if tile.blocked and tile.surface != 'water': color = '#515151'
-                    elif tile.hazard: color = '#e3a187'
-                    elif tile.cover: color = '#a4c599'
-                    elif tile.cost > 1: color = '#b8a37c'
-                if color is None and layer_vars['Relief'].get() and tile.height:
-                    color = '#b7b9d2'
-                if color:
+        left, right = canvas.xview()
+        top, bottom = canvas.yview()
+        mini_canvas.create_rectangle(
+            left*size, top*size, right*size, bottom*size,
+            outline='#2369ac', width=2, tags='viewport')
+
+    def draw_minimap(board, mission, units):
+        """Static minimap only changes with authored scene, layers or combat."""
+        # A combat frame is dynamic and must never be reused by authoring revision.
+        key = (editor_content_cache.generation, mission.id,
+               board.width, board.height,
+               tuple((name, layer_vars[name].get())
+                     for name in ('Terrain', 'Relief', 'Déploiement',
+                                  'Objectifs', 'Objets', 'Unités')),
+               object() if battle is not None else None)
+        redraw = minimap_background.needs_background(key, mini_canvas)
+        if redraw:
+            mini_canvas.delete('all')
+            size = 184
+            sx, sy = size / board.width, size / board.height
+            mini_canvas.create_rectangle(0, 0, size, size, fill='#e4e4e4',
+                                         outline='#999999')
+            if layer_vars['Terrain'].get() or layer_vars['Relief'].get():
+                for (x, y), tile in board.tiles.items():
+                    color = None
+                    if layer_vars['Terrain'].get():
+                        if tile.surface != 'grass': color = SURFACE_COLORS[tile.surface]
+                        if tile.blocked and tile.surface != 'water': color = '#515151'
+                        elif tile.hazard: color = '#e3a187'
+                        elif tile.cover: color = '#a4c599'
+                        elif tile.cost > 1: color = '#b8a37c'
+                    if color is None and layer_vars['Relief'].get() and tile.height:
+                        color = '#b7b9d2'
+                    if color:
+                        mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                                     fill=color,outline=color)
+            if layer_vars['Déploiement'].get():
+                for zone in mission.deployment:
+                    for x, y in zone['cells']:
+                        mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                                     fill='#a5dbe6',outline='')
+            if layer_vars['Objectifs'].get():
+                for x, y in mission.goal:
                     mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
-                                                 fill=color,outline=color)
-        if layer_vars['Déploiement'].get():
-            for zone in mission.deployment:
-                for x, y in zone['cells']:
-                    mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
-                                                 fill='#a5dbe6',outline='')
-        if layer_vars['Objectifs'].get():
-            for x, y in mission.goal:
-                mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
-                                             fill='#d8c86e',outline='')
-        if layer_vars['Objets'].get():
-            for obj in mission.objects:
-                x,y = obj['pos']
-                mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
-                                        fill='#7047ad',outline='')
-        if layer_vars['Unités'].get():
-            for actor in units:
-                x,y = actor.pos
-                color = '#27649c' if actor.team == 'player' else '#bb503b'
-                mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
-                                        fill=color,outline='')
-        # Current map viewport, useful for navigating large boards.
-        left,right = canvas.xview()
-        top,bottom = canvas.yview()
-        mini_canvas.create_rectangle(left*size,top*size,right*size,bottom*size,
-                                     outline='#2369ac',width=2,tags='viewport')
+                                                 fill='#d8c86e',outline='')
+            if layer_vars['Objets'].get():
+                for obj in mission.objects:
+                    x,y = obj['pos']
+                    mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                            fill='#7047ad',outline='')
+            if layer_vars['Unités'].get():
+                for actor in units:
+                    x,y = actor.pos
+                    color = '#27649c' if actor.team == 'player' else '#bb503b'
+                    mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                            fill=color,outline='')
+        refresh_minimap_viewport()
+        minimap_background.complete(key, mini_canvas, background_redrawn=redraw)
 
     def minimap_navigate(event):
-        # Jump to a map area without altering the selected tactical cell.
-        # Fractions are interpreted by the scrollable map's x/y views.
+        # Navigating changes only the main canvas view and its viewport overlay.
         canvas.xview_moveto(max(0.0, min(1.0, event.x / 184 - 0.2)))
         canvas.yview_moveto(max(0.0, min(1.0, event.y / 184 - 0.2)))
-        refresh()
+        refresh_minimap_viewport()
 
     @guarded
     def open_selected_entity(kind):
@@ -2312,7 +2453,7 @@ def launch(path):
         studio.focus_gate_event(
             selected['id'] if selected['kind'] == 'door' else selected['link'])
 
-    def refresh(*args, views=None):
+    def refresh(*args, views=None, selection_only=False, board_only=False):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal selected_group_id, group_tree_signature
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
@@ -2355,7 +2496,7 @@ def launch(path):
                 structure_selection_id = None
             else:
                 structure_selection_cell = tuple(record['anchor'])
-        content = Content.from_dict(doc.data)
+        content = editor_content_cache.get(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
         refresh_group_tree(content.missions[mission_var.get()])
         board = battle.board if battle else mission.board
@@ -2367,7 +2508,9 @@ def launch(path):
         object_box['values'] = [o['id'] for o in mission.objects]
         if object_var.get() not in object_box['values']:
             object_var.set(object_box['values'][0] if object_box['values'] else '')
-        selected_tiles.intersection_update(set(board.cells()))
+        # Bound the work to the selection, not all 16,384 board cells.
+        selected_tiles.intersection_update(
+            {c for c in selected_tiles if board.contains(c)})
         editing_context.selection.set(mission_var.get(), selected_cell,
                                       selected_tiles, publish=False)
         if views is None or RENDERER in views:
@@ -2394,7 +2537,9 @@ def launch(path):
                     building_atlas=building_atlas,
                     fortification_atlas=fortification_atlas,
                     actor_atlas=actor_atlas, object_atlas=object_atlas,
-                    unit_levels=battle.unit_levels if battle else None)
+                    unit_levels=battle.unit_levels if battle else None,
+                    scene_revision=None if battle else
+                    (editor_content_cache.generation, mission.id))
             else:
                 iso_geometry = None
                 editor_renderer.invalidate()
@@ -2584,7 +2729,12 @@ def launch(path):
         if views is None or MINIMAP in views:
             draw_minimap(board, mission, units)
         if studio is not None and (views is None or WORKSPACE in views):
-            studio.refresh()
+            if board_only and battle is None and views is None:
+                studio.defer_map_refresh()
+            elif selection_only and battle is None and views is None:
+                studio.refresh_selection()
+            else:
+                studio.refresh()
             if studio.history is not None:
                 history_status.set(
                     f'Historique Studio : {studio.history._cursor} modification(s) '
@@ -3017,6 +3167,9 @@ def launch(path):
     canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
     canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
     canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
+    ttk.Button(side_panel, text='Ouvrir la palette visuelle de préfabs',
+               command=open_visual_prefab_palette).pack(
+                   fill='x', padx=6, pady=(4, 0))
     ttk.Label(side_panel, text='INSPECTEUR', font=('TkDefaultFont', 11, 'bold')).pack(
         anchor='w', padx=6, pady=(8, 3))
     ttk.Label(side_panel, textvariable=mode_var).pack(anchor='w', padx=6)
@@ -3106,6 +3259,21 @@ def launch(path):
                command=place_chosen_prefab).pack(side='left', padx=2)
     ttk.Label(group_prefab_row_2, text='À la case sélectionnée'
               ).pack(side='left', padx=3)
+    ttk.Label(side_panel, text='PALETTE VISUELLE · GLISSER SUR LA CARTE',
+              font=('TkDefaultFont', 9, 'bold')).pack(anchor='w', padx=6,
+                                                     pady=(3, 2))
+    prefab_gallery = VisualPrefabPalette(
+        side_panel, tk, ttk,
+        on_select=group_prefab_var.set,
+        on_preview=palette_prefab_hover,
+        on_drop=palette_prefab_drop,
+        on_cancel=clear_prefab_drag,
+        map_canvas=canvas,
+        status=status_var.set)
+    prefab_gallery.frame.pack(fill='x', padx=5, pady=(0, 5))
+    group_prefab_box.bind(
+        '<<ComboboxSelected>>',
+        lambda _event: prefab_gallery.choose(group_prefab_var.get()))
     refresh_group_prefabs()
     inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
     inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
@@ -3232,6 +3400,19 @@ def launch(path):
             disk_revisions = (disk_revisions[0],
                               StudioTransactionStore(current_path).revisions()[1])
 
+    def commit_workspace_properties(key, baseline, values):
+        """One typed, validated edit with Editor undo and Studio history."""
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        form = editable_form(doc.data, key)
+        if form.mission_id != mission_var.get():
+            select_workspace_mission(form.mission_id)
+        command = WorkspacePropertyCommand(
+            key, baseline, tuple(values.items()))
+        design_change(lambda: editing_context.execute(command, publish=False))
+        status_var.set('Propriétés Workspace enregistrées (Annuler/Rétablir).')
+        return True
+
     studio = StudioPanels(
         notebook, tk, ttk,
         SimpleNamespace(showerror=messagebox.showerror,
@@ -3243,7 +3424,8 @@ def launch(path):
         status=status_var, mission_change=stop,
         select_mission=select_workspace_mission,
         on_project_saved=on_project_saved, set_active_mission=mission_var.set,
-        focus_map_cell=focus_workspace_map)
+        focus_map_cell=focus_workspace_map,
+        workspace_edit=commit_workspace_properties)
     studio.workspace.attach_navigator(sidebar)
     studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
