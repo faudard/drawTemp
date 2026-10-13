@@ -168,6 +168,25 @@ class EditorGroupMoveCommand:
 
 
 @dataclass(frozen=True)
+class EditorGroupBatchCommand:
+    """Preview/apply multi-selected group translation or deep duplication."""
+    group_ids: Tuple[str, ...]
+    dx: int
+    dy: int
+    duplicate: bool = False
+    kind: str = 'editor-groups'
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+
+    def transform(self, data, mission_id):
+        from .editor_groups import duplicate_editor_groups, move_editor_groups
+        if self.duplicate:
+            return duplicate_editor_groups(data, mission_id,
+                                           self.group_ids, self.dx, self.dy)
+        return move_editor_groups(data, mission_id, self.group_ids,
+                                  self.dx, self.dy)
+
+
+@dataclass(frozen=True)
 class EditorGroupTreeDropCommand:
     """Reorganize a mission hierarchy from Treeview without moving the map."""
     source_group_id: str
