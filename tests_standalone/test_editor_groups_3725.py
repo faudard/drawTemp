@@ -135,6 +135,31 @@ class EditorHierarchyTests(unittest.TestCase):
         self.assertEqual(self.groups(moved)[0]['cells'], [[5, 10]])
         self.assertEqual(self.groups(moved)[0]['structure_ids'], [sid])
 
+    def test_existing_structure_edit_and_delete_keep_group_valid(self):
+        from sporebound.iso_structures import edit_structure, remove_structure
+        raw = place_structure(self.base, self.MID, 'Pont', (6, 6))
+        region = [(x, y) for y in range(6, 8) for x in range(6, 9)]
+        grouped = create_editor_group(raw, self.MID, 'Passerelle',
+                                      cells=region)
+        sid = self.groups(grouped)[0]['structure_ids'][0]
+        moved = edit_structure(grouped, self.MID, (6, 6), anchor=(11, 11))
+        self.assertEqual(self.groups(moved)[0]['structure_ids'], [sid])
+        self.assertEqual(next(s for s in self.mission(moved)['structures']
+                              if s['id'] == sid)['anchor'], [11, 11])
+        removed = remove_structure(moved, self.MID, (11, 11))
+        self.assertEqual(self.groups(removed)[0]['structure_ids'], [])
+        self.assertEqual(len(self.mission(removed)['structures']), 0)
+
+    def test_entity_delete_dissociates_reference_but_preserves_terrain(self):
+        from sporebound.entity_editing import remove_entity
+        raw = add_object(self.base, self.MID, 'supply', 'chest', (8, 8))
+        grouped = create_editor_group(raw, self.MID, 'Matériel',
+                                      cells=((8, 8),))
+        self.assertIn('supply', self.groups(grouped)[0]['object_ids'])
+        result = remove_entity(grouped, self.MID, 'object', 'supply')
+        self.assertEqual(self.groups(result)[0]['object_ids'], [])
+        self.assertEqual(self.groups(result)[0]['cells'], [[8, 8]])
+
     def test_preview_is_side_effect_free_and_stale_preview_is_rejected(self):
         raw = create_editor_group(self.base, self.MID, 'Atelier',
                                   cells=((8, 8),))
