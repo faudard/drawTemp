@@ -1,5 +1,17 @@
 # Éditeur drawTemp — audit et roadmap 3.7.16–3.7.22
 
+## 3.7.20 — suivi d'implémentation (13 octobre 2026)
+
+- **3.7.20A en PR** : mode d'intérieurs consultables (coupe des toits,
+  sols/murs/entrées, mobilier existant et inspecteur contextuel) ; mêmes
+  tuiles tactiques, même rendu Studio/Player et anciens fichiers préservés.
+- **3.7.20B non livré** : vrais étages simultanément jouables. RFC et gates
+  multi-niveaux dans [INTERIORS_MULTILEVEL_3720.md](INTERIORS_MULTILEVEL_3720.md).
+  La vue 2.5D actuelle ne constitue pas un modèle tactique à plusieurs plans.
+- Preuves : tests headless 3.7.20A ajoutés ; CI/captures GUI et inspection
+  visuelle multi-OS restent nécessaires avant fermeture du gate artistique.
+
+
 ## 3.7.17B — proposition : identité visuelle durable
 
 Les nouvelles structures enregistrent une identité visuelle optionnelle,
