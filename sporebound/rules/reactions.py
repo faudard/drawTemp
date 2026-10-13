@@ -103,7 +103,9 @@ def _hurt(battle, target: Unit, amount: int, source: Unit | None = None, reactio
 
 def _prepared_attack(battle, watcher: Unit, mover: Unit, mode: str):
     prep = battle.prepared_reactions.get(watcher.id)
-    if not prep or prep.get("charges", 0) <= 0 or not battle._can_react(watcher) or not mover.alive:
+    if (not prep or prep.get("charges", 0) <= 0
+            or not battle._can_react(watcher) or not mover.alive
+            or battle.unit_levels.get(watcher.id, 0) != battle.unit_levels.get(mover.id, 0)):
         return
     skill = battle._basic(watcher)
     d = distance(watcher.pos, mover.pos)
@@ -125,7 +127,8 @@ def _prepared_on_move(battle, mover: Unit, previous: Cell):
         if not mover.alive:
             break
         watcher = battle.unit(uid)
-        if watcher.team == mover.team or not watcher.alive:
+        if (watcher.team == mover.team or not watcher.alive
+                or battle.unit_levels.get(watcher.id, 0) != battle.unit_levels.get(mover.id, 0)):
             continue
         prep = battle.prepared_reactions.get(uid)
         if not prep:

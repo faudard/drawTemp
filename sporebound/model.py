@@ -182,6 +182,9 @@ class Mission:
     structures: list[dict] = field(default_factory=list)
     # Optional visual upper decks; Battle remains strictly 2D in Content v1.
     interior_floors: list[dict] = field(default_factory=list)
+    # Optional 3.7.20C tactical metadata, absent from all legacy missions.
+    unit_levels: dict[str, int] = field(default_factory=dict)
+    level_links: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -234,7 +237,8 @@ class Content:
         missions = []
         for mission in self.missions.values():
             row = {k: v for k, v in asdict(mission).items()
-                   if k != "board" and (k not in ("structures", "interior_floors") or v)}
+                   if k != "board" and (k not in ("structures", "interior_floors",
+                                               "unit_levels", "level_links") or v)}
             row["board"] = {"width": mission.board.width, "height": mission.board.height,
                             "tiles": [{"pos": list(c), **asdict(t)} for c, t in sorted(mission.board.tiles.items())]}
             missions.append(row)
@@ -372,6 +376,8 @@ class Content:
                 structure_cells.update(footprint)
             from .interior_levels import validate_interior_floors
             validate_interior_floors(m.interior_floors, m.structures)
+            from .level_navigation import validate_levels, walkable_levels
+            level_cells = validate_levels(m)
             ids, occupied = set(), set()
             for u in m.units:
                 require(u.id and u.id not in ids, f"Duplicate/empty unit: {u.id}")
@@ -380,9 +386,11 @@ class Content:
                         and all(type(n) is int and 1 <= n <= 4 for n in u.footprint),
                         f"Invalid footprint: {u.id}")
                 cells = u.occupied_cells()
-                require(all(b.contains(c) and not b.tile(c).blocked and c not in occupied
+                level = m.unit_levels.get(u.id, 0)
+                require(all(c in level_cells.get(level, set())
+                            and (level, *c) not in occupied
                             for c in cells), f"Invalid spawn: {u.id}")
-                occupied.update(cells)
+                occupied.update((level, *c) for c in cells)
                 validate_actor(u, self.skills, self.archetypes, rules)
                 for waypoint in u.patrol_route:
                     cell(waypoint, b)

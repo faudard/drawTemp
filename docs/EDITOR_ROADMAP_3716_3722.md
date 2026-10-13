@@ -8,7 +8,10 @@
 - **3.7.20B en PR empilée** : plateaux intérieurs visuels de niveaux 1–3,
   sols/mobilier/trous et édition isométrique dans le Studio. Voir
   [INTERIOR_FLOORS_3720B.md](INTERIOR_FLOORS_3720B.md).
-- **3.7.20C non livré** : vrais étages simultanément jouables. RFC et gates
+- **3.7.20C1 en PR empilée** : déplacement tactique par graphe (level,x,y),
+  escaliers et unités à niveau distinct, attaque adjacente sur même niveau,
+  état/replay et Player. Voir [TACTICAL_FLOORS_3720C.md](TACTICAL_FLOORS_3720C.md).
+- **3.7.20C2 non livré** : combat interétages complet. RFC et gates
   multi-niveaux dans [INTERIORS_MULTILEVEL_3720.md](INTERIORS_MULTILEVEL_3720.md).
   La vue 2.5D actuelle ne constitue pas un modèle tactique à plusieurs plans.
 - Preuves : tests headless 3.7.20A ajoutés ; CI/captures GUI et inspection

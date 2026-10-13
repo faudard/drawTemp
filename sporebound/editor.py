@@ -21,6 +21,7 @@ from .interior_levels import (FLOOR_SURFACES, FLOOR_FEATURES, MAX_INTERIOR_LEVEL
                               add_interior_floor, delete_interior_floor,
                               edit_interior_tile, floor_hit_test,
                               projected_floor_polygon)
+from .level_navigation import add_level_link, place_unit_on_level
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import IsoActorAtlas
@@ -270,6 +271,7 @@ def launch(path):
     iso_var = tk.BooleanVar(value=False)
     interior_var = tk.BooleanVar(value=False)  # Editor visibility only.
     floor_var = tk.IntVar(value=1)  # Selected visual deck (ground always 0).
+    travel_level_var = tk.IntVar(value=0)  # Combat target includes ground floor.
     floor_surface_var = tk.StringVar(value='stone')
     floor_feature_var = tk.StringVar(value='crate')
     floor_action_var = tk.StringVar(value='Sol')
@@ -557,6 +559,12 @@ def launch(path):
                    'facing': directions[facing_var.get()]}
         elif action == 'move':
             cmd = {'kind': 'move', 'cell': list(selected_cell)}
+        elif action == 'level_move':
+            cmd = {'kind': 'level_move', 'level': travel_level_var.get(),
+                   'cell': list(selected_cell)}
+        elif action == 'level_attack':
+            cmd = {'kind': 'level_attack', 'level': travel_level_var.get(),
+                   'cell': list(selected_cell)}
         elif action.startswith('item:'):
             cmd = {'kind': 'item', 'item': action[5:], 'cell': list(selected_cell)}
         elif action.startswith('object:'):
@@ -884,6 +892,28 @@ def launch(path):
             doc.data, mission_var.get(), sid, level)))
         status_var.set(f'Étage visuel {level} supprimé (Undo disponible).')
 
+    @guarded
+    def create_level_stair():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        destination = floor_var.get()
+        start = [destination-1, *selected_cell]
+        end = [destination, *selected_cell]
+        design_change(lambda: doc.replace(add_level_link(
+            doc.data, mission_var.get(), start, end)))
+        status_var.set(f'Escalier bidirectionnel N{destination-1} ↔ N{destination}'
+                       f' créé en {selected_cell}.')
+
+    @guarded
+    def set_unit_floor():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        level = floor_var.get()
+        design_change(lambda: doc.replace(place_unit_on_level(
+            doc.data, mission_var.get(), unit_var.get(), level,
+            selected_cell)))
+        status_var.set(f'{unit_var.get()} positionné à N{level} en {selected_cell}.')
+
     def select_interior_paint():
         interior_var.set(True)
         iso_var.set(True)
@@ -910,6 +940,19 @@ def launch(path):
 
     def event_cell(event):
         px, py = canvas.canvasx(event.x), canvas.canvasy(event.y)
+        if (battle and iso_var.get() and iso_geometry is not None
+                and action_var.get() in {'level_move', 'level_attack'}
+                and travel_level_var.get() > 0):
+            scene = battle.mission
+            for building in reversed(getattr(iso_geometry, 'architecture_instances', ())):
+                floor = next((row for row in scene.interior_floors
+                              if row['structure_id'] == building.id and
+                              row['level'] == travel_level_var.get()), None)
+                if floor is not None:
+                    found = floor_hit_test(iso_geometry, building, floor, px, py)
+                    if found is not None:
+                        return found
+            return None
         if (tool_var.get() == 'Étage intérieur' and iso_var.get()
                 and iso_geometry is not None):
             scene = Content.from_dict(doc.data).missions[mission_var.get()]
@@ -1570,7 +1613,9 @@ def launch(path):
                 board, mission, units, cell_size=tile_size,
                 layers={**{name: var.get() for name, var in layer_vars.items()},
                         'Intérieurs': interior_var.get(),
-                        'Étage actif': floor_var.get() if interior_var.get() and not battle else 0},
+                        'Étage actif': (battle.unit_levels.get(battle.active_id, 0)
+                                        if battle and battle.active_id else
+                                        floor_var.get() if interior_var.get() else 0)},
                 selected_cell=selected_cell, selected_tiles=selected_tiles,
                 reachable=live.reachable if live else (),
                 danger=live.danger if live else (),
@@ -1578,7 +1623,8 @@ def launch(path):
                 atlas=iso_atlas, prop_atlas=iso_props,
                 building_atlas=building_atlas,
                 fortification_atlas=fortification_atlas,
-                actor_atlas=actor_atlas, object_atlas=object_atlas)
+                actor_atlas=actor_atlas, object_atlas=object_atlas,
+                unit_levels=battle.unit_levels if battle else None)
         else:
             iso_geometry = None
             editor_renderer.invalidate()
@@ -1695,6 +1741,10 @@ def launch(path):
                 u = battle.active
                 text += f'Actif : {u.name} ({u.team})\nPV {u.hp}/{u.max_hp} | MP {u.mp}/{u.max_mp} | CT {u.ct}\nDéplacement : {"utilisé" if u.moved else "libre"}\nAction : {"utilisée" if u.acted else "libre"}\n'
                 actions = ['move','attack',*u.skills,'item:potion','item:ether','item:phoenix',*['object:'+o['id'] for o in mission.objects],*available_operations(battle,u)]
+                if mission.level_links:
+                    actions = (['level_move', 'level_attack', 'attack']
+                               if battle.unit_levels.get(u.id, 0) else
+                               ['level_move', 'level_attack', *actions])
                 action_box['values'] = actions
                 if action_var.get() not in actions: action_var.set('move')
                 if action_var.get() not in {'move'} and not action_var.get().startswith(('item:','object:','siege-attack:','repair-siege:')):
@@ -2008,6 +2058,17 @@ def launch(path):
                  width=9, values=sorted(FLOOR_FEATURES)).pack(side='left')
     ttk.Button(floor_controls, text='Peindre étage',
                command=select_interior_paint).pack(side='left',padx=4)
+    tactical_floors = ttk.Frame(tools_selection)
+    tactical_floors.pack(fill='x', padx=5, pady=2)
+    ttk.Label(tactical_floors, text='Gameplay vertical :').pack(side='left',padx=3)
+    ttk.Label(tactical_floors, text='Destination N').pack(side='left',padx=3)
+    ttk.Combobox(tactical_floors, textvariable=travel_level_var,
+                 state='readonly', width=3,
+                 values=tuple(range(MAX_INTERIOR_LEVEL+1))).pack(side='left')
+    ttk.Button(tactical_floors, text='Escalier N-1 ↔ N',
+               command=create_level_stair).pack(side='left',padx=3)
+    ttk.Button(tactical_floors, text='Placer unité à N',
+               command=set_unit_floor).pack(side='left',padx=3)
     advanced_controls = ttk.Frame(tools_selection)
     advanced_controls.pack(fill='x', padx=5, pady=3)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
