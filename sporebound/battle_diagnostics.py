@@ -137,7 +137,7 @@ def trace_seed(content, mission_id, *, seed=42, max_commands=500, rules=None,
             "Invalid unsigned 32-bit seed")
     require(type(max_commands) is int and 1 <= max_commands <= MAX_TRACE_COMMANDS,
             "Diagnostic trace command cap must be 1..5000")
-    require(type(stall_window) is int and 2 <= stall_window <= max_commands,
+    require(type(stall_window) is int and 2 <= stall_window <= MAX_TRACE_COMMANDS,
             "Invalid no-progress threshold")
     battle = Battle(content, mission_id, seed=seed, rules=rules)
     initial = _frame(battle)
