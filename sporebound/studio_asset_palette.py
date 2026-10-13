@@ -95,9 +95,10 @@ class AssetPalette:
             row = ttk.Frame(self.entity_frame)
             row.pack(fill='x', padx=5, pady=1)
             ttk.Label(row, text=label, width=24).pack(side='left')
-            widget = (ttk.Combobox(row, textvariable=variable, values=values,
-                                   state='readonly', width=18)
-                      if values else ttk.Entry(row, textvariable=variable, width=20))
+            widget = (ttk.Combobox(row, textvariable=variable,
+                                   values=values or (), state='readonly', width=18)
+                      if values or label == 'Porte liée (ID)'
+                      else ttk.Entry(row, textvariable=variable, width=20))
             widget.pack(side='left', fill='x', expand=True)
             self.entity_rows[label] = row
         for variable in (self.entity_facing, self.entity_pose, self.entity_team):
@@ -196,6 +197,14 @@ class AssetPalette:
         entry = self.selected()
         if entry is not None:
             self.entity_id.set('')
+            self.entity_destination.set('')
+            if self.content is not None and self.mission is not None:
+                data, mid = self.content(), self.mission()
+                mission = next((m for m in data['missions'] if m['id'] == mid), None)
+                doors = [o['id'] for o in mission['objects'] if o['kind'] == 'door'] if mission else []
+                self.entity_rows['Porte liée (ID)'].winfo_children()[1]['values'] = doors
+                self.entity_link.set(doors[0] if len(doors) == 1 else '')
+
             self.entity_name.set(entry.name.split(' (', 1)[0] if entry.kind == 'actor' else '')
             self.entity_pose.set('idle')
             if entry.kind == 'actor' and self.content is not None and self.mission is not None:
@@ -265,5 +274,18 @@ class AssetPalette:
 
     def use(self):
         entry = self.selected()
-        if entry is not None and self.choose(entry, self.turns):
+        if entry is None:
+            return
+        if entry.kind == 'object':
+            if entry.value in ('switch', 'ram', 'catapult') and not self.entity_link.get():
+                self.detail.set('Créer d’abord une porte, puis choisir sa référence.')
+                return
+            if entry.value == 'passage':
+                from .entity_placement import parse_destination
+                try:
+                    parse_destination(self.entity_destination.get())
+                except ValueError as exc:
+                    self.detail.set(str(exc))
+                    return
+        if self.choose(entry, self.turns):
             self.window.withdraw()
