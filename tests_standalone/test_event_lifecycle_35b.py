@@ -47,7 +47,9 @@ class DurableTemporalLifecycleTests(unittest.TestCase):
                                  delay_ticks=1, expire_after_ticks=2)
         battle = Battle(Content.from_dict(doc), self.MID, seed=9)
         first = temporal_status(battle, self.row(doc, 'reinforce'))
-        self.assertIn(first['state'], ('scheduled', 'ready'))
+        # The constructor advances CT until the first activation, so a
+        # short deadline may already have passed before control returns.
+        self.assertIn(first['state'], ('scheduled', 'ready', 'expired'))
         self.step_until(battle, 'expired')
         state = deepcopy(battle.state())
         result = next(t for t in state['scheduled_events']
