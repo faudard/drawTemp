@@ -70,6 +70,25 @@ class LargeMapRefreshGuiTests(unittest.TestCase):
                     after_edit = mini.find_all()
                     self.assertNotEqual(after_pan[:-1], after_edit[:-1],
                                         "Brush edit unexpectedly reused terrain")
+                    # An invisible Studio remains deferred until its tab is
+                    # opened. At that point all editors must catch up safely.
+                    from tkinter import ttk
+                    notebooks = [w for w in descendants(root)
+                                 if isinstance(w, ttk.Notebook)]
+                    project_tabs = next(w for w in notebooks
+                                        if 'Espace projet' in [
+                                            w.tab(t, 'text') for t in w.tabs()])
+                    workspace_tab = next(
+                        t for t in project_tabs.tabs()
+                        if project_tabs.tab(t, 'text') == 'Espace projet')
+                    project_tabs.select(workspace_tab)
+                    root.update()
+                    workspace = root.nametowidget(workspace_tab)
+                    resource_tree = next(w for w in descendants(workspace)
+                                         if isinstance(w, ttk.Treeview)
+                                         and w.exists('mission:performance_large'))
+                    self.assertTrue(resource_tree.exists(
+                        'mission:performance_large'))
                     self.assertFalse(failures, failures)
                 finally:
                     root.destroy()
