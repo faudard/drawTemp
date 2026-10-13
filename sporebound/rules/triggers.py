@@ -197,14 +197,33 @@ def matches_composite(battle, node):
 
 
 def dispatch(battle):
-    for trigger in battle.mission.triggers:
-        if trigger['id'] in battle.fired:
-            continue
-        if not battle.rules.trigger_conditions.get(trigger['condition']).matches(battle, trigger):
-            continue
-        if 'when' in trigger and not matches_composite(battle, trigger['when']):
-            continue
-        battle.fired.append(trigger['id'])
-        battle.emit('trigger', id=trigger['id'])
-        for action in trigger['actions']:
-            battle.rules.trigger_actions.get(action['kind']).apply(battle, action)
+    """Dispatch the canonical one-shot triggers, including dependency cascades.
+
+    Legacy missions use exactly the historical single pass. Authored chained
+    missions settle dependencies at the *same command boundary*, regardless of
+    serialized trigger order. The number of passes is bounded by the number
+    of one-shot events; Content validation rejects reference cycles.
+    """
+    events = battle.mission.triggers
+    cascades = any('after' in row for row in events)
+    for _ in range(len(events) if cascades else 1):
+        progressed = False
+        for trigger in events:
+            if trigger['id'] in battle.fired:
+                continue
+            if not all(ref in battle.fired for ref in trigger.get('after', ())):
+                continue
+            if not battle.rules.trigger_conditions.get(
+                    trigger['condition']).matches(battle, trigger):
+                continue
+            if 'when' in trigger and not matches_composite(
+                    battle, trigger['when']):
+                continue
+            battle.fired.append(trigger['id'])
+            battle.emit('trigger', id=trigger['id'])
+            for action in trigger['actions']:
+                battle.rules.trigger_actions.get(action['kind']).apply(
+                    battle, action)
+            progressed = True
+        if not cascades or not progressed:
+            break

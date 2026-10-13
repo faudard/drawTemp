@@ -434,6 +434,29 @@ class Content:
                 if obj["kind"] in {"ram", "catapult"}:
                     require(any(o["id"] == obj.get("link") and o["kind"] == "door" for o in m.objects),
                             "Siege engine needs a gate target")
+            # Chained events use ordinary Mission.triggers and stored event IDs;
+            # validate the complete graph before allowing any Player load.
+            if any('after' in t for t in m.triggers):
+                require(len(m.triggers) <= 200,
+                        "Event chain budget exceeded (200 triggers)")
+                dependencies = {}
+                known = {t['id'] for t in m.triggers}
+                for row in m.triggers:
+                    refs = row.get('after', [])
+                    if 'after' in row:
+                        require(isinstance(refs, list) and 1 <= len(refs) <= 8,
+                                "Event prerequisites must have 1..8 entries")
+                    require(all(isinstance(ref, str) and ref in known
+                                and ref != row['id'] for ref in refs)
+                            and len(refs) == len(set(refs)),
+                            "Unknown, self-referential or duplicate event prerequisite")
+                    dependencies[row['id']] = set(refs)
+                remaining = {key: set(refs) for key, refs in dependencies.items()}
+                while remaining:
+                    ready = set(key for key, refs in remaining.items() if not refs)
+                    require(bool(ready), "Cyclic tactical event dependency")
+                    remaining = {key: refs - ready for key, refs in
+                                 remaining.items() if key not in ready}
             trigger_ids = set()
             for trigger in m.triggers:
                 require(trigger["id"] not in trigger_ids, "Duplicate trigger")

@@ -48,7 +48,7 @@ def inspect_event(data, mission_id, event_id, project=None):
     return {
         'mission_id': mission_id,
         'event_id': event_id,
-        'condition': event_graph.condition_title(event),
+        'condition': event_graph.condition_summary(event),
         'condition_kind': event['condition'],
         'actions': [event_graph.action_title(action)
                     for action in event['actions']],
@@ -240,6 +240,56 @@ def _state_changes(before, after):
     return changes
 
 
+def condition_trace(battle, event):
+    """Explain canonical rule results without implementing any new leaf rule.
+
+    The trace is a read-only observation at the pre-dispatch boundary;
+    composite groups combine the same boolean results as the dispatcher.
+    """
+    result = []
+
+    def visit(node, path):
+        if 'condition' in node:
+            passed = bool(battle.rules.trigger_conditions.get(
+                node['condition']).matches(battle, node))
+            label = event_graph.condition_title(node)
+            kind = 'leaf'
+            children = []
+        elif 'not' in node:
+            child_passed, child_rows = visit(node['not'], path + (0,))
+            passed = not child_passed
+            label = 'NON'
+            kind = 'not'
+            children = child_rows
+        else:
+            kind = 'all' if 'all' in node else 'any'
+            operands = [visit(child, path + (i,))
+                        for i, child in enumerate(node[kind])]
+            passed = (all(val for val, _ in operands) if kind == 'all'
+                      else any(val for val, _ in operands))
+            label = 'ET' if kind == 'all' else 'OU'
+            children = [row for _, rows in operands for row in rows]
+        row = {'path': path, 'label': label, 'kind': kind, 'passed': passed}
+        return passed, [row, *children]
+
+    primary = bool(battle.rules.trigger_conditions.get(
+        event['condition']).matches(battle, event))
+    result.append({'path': 'primary',
+                   'label': event_graph.condition_title(event),
+                   'kind': 'primary', 'passed': primary})
+    secondary = True
+    if 'when' in event:
+        secondary, rows = visit(event['when'], ())
+        result.extend(rows)
+    prerequisites = True
+    for prior in event.get('after', []):
+        passed = prior in battle.fired
+        prerequisites = prerequisites and passed
+        result.append({'path': 'after:' + prior, 'label': 'APRÈS ' + prior,
+                       'kind': 'prerequisite', 'passed': passed})
+    return primary and secondary and prerequisites, result
+
+
 def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial',
                   include_scene=False):
     """Probe one trigger with the real dispatcher in a disposable battle.
@@ -264,6 +314,22 @@ def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial',
     battle.mission.triggers = [deepcopy(event)]
     notes = _prepare_scenario(battle, event, scenario)
     scene_before = deepcopy(battle) if include_scene else None
+    # Evaluate all leaves BEFORE their actions change battle state. For a
+    # lever interaction, perform the actual command on a throwaway clone with
+    # only its triggers isolated, not a synthetic "interact" event.
+    diagnostic = deepcopy(battle)
+    diagnostic_error = ''
+    trace = []
+    condition_passed = False
+    try:
+        if event['condition'] == 'interact' and scenario == 'satisfied':
+            diagnostic.mission.triggers = []
+            diagnostic.execute({'kind': 'interact',
+                                'unit': diagnostic.active_id,
+                                'object': event['object']})
+        condition_passed, trace = condition_trace(diagnostic, event)
+    except (RuleError, ValueError, KeyError, IndexError) as exc:
+        diagnostic_error = str(exc)
     first_event = len(battle.events)
     hazard_cells = {tuple(a['pos']) for a in event['actions']
                     if a['kind'] == 'hazard'}
@@ -291,6 +357,9 @@ def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial',
         'outcome': 'error' if error else 'applied' if activated else 'inactive',
         'actions': [event_graph.action_title(a) for a in event['actions']],
         'condition': event_graph.condition_summary(event),
+        'condition_trace': trace,
+        'condition_passed': condition_passed,
+        'diagnostic_error': diagnostic_error,
         'events': deepcopy(battle.events[first_event:]),
         'changes': _state_changes(before, after),
         'spawned': sorted(after['units'].keys() - before['units'].keys()),
@@ -303,6 +372,104 @@ def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial',
         report['scene_before'] = scene_before
         report['scene_after'] = battle
     return report
+
+
+def preview_event_chain(data, mission_id, event_id, *, project=None,
+                        tick=0, scenario='satisfied', include_scene=False):
+    """Isolated *real-engine* cascade preview (no document, save or replay writes).
+
+    Includes the selected trigger and all downstream dependents in authoring
+    order. Other triggers are deliberately excluded: no unrelated turn-zero
+    events may contaminate the report. A dependent with prerequisites outside
+    this chain remains blocked; the preview never forges them.
+    """
+    require(type(tick) is int and 0 <= tick <= 100000,
+            'Preview tick must be 0..100000')
+    require(scenario in PREVIEW_SCENARIOS, 'Unknown chain preview scenario')
+    _, event = _authored_event(data, mission_id, event_id)
+    ordered = event_graph.chain_descendants(data, mission_id, event_id)
+    ids = {row['id'] for row in ordered}
+    rules = authored_rules_for_document(data)
+    Content.from_dict(data, rules=rules)  # validate all references first
+    staged = deepcopy(data)
+    active = next(m for m in staged['missions'] if m['id'] == mission_id)
+    active['triggers'] = []
+    battle = Battle(Content.from_dict(staged, rules=rules),
+                    mission_id, seed=1, rules=rules)
+    battle.tick = tick
+    battle.mission.triggers = deepcopy(ordered)
+    notes = _prepare_scenario(battle, event, scenario)
+    before_scene = deepcopy(battle) if include_scene else None
+    hazard_cells = {tuple(a['pos']) for row in ordered
+                    for a in row['actions'] if a['kind'] == 'hazard'}
+    before = _snapshot(battle, hazard_cells)
+    first = len(battle.events)
+    error = ''
+    try:
+        if scenario == 'satisfied' and event['condition'] == 'interact':
+            battle.execute({'kind': 'interact', 'unit': battle.active_id,
+                            'object': event['object']})
+        triggers.dispatch(battle)
+    except (RuleError, ValueError, KeyError, IndexError) as exc:
+        error = str(exc)
+    after = _snapshot(battle, hazard_cells)
+    fired = [eid for eid in battle.fired if eid in ids]
+    waiting = [{'event_id': row['id'],
+                'missing': [ref for ref in row.get('after', [])
+                            if ref not in battle.fired]}
+               for row in ordered if row['id'] not in fired]
+    clips = []
+    scenes = []
+    if project is not None:
+        from .cinematics import triggered_tactical_cinematics
+        triggered, _ = triggered_tactical_cinematics(project, battle)
+        clips = [clip['id'] for clip in triggered]
+        links = project.story.get('during_tactical_event', {})
+        scenes = [links[mission_id + '/' + eid] for eid in fired
+                  if mission_id + '/' + eid in links]
+    report = {
+        'mission_id': mission_id, 'event_id': event_id,
+        'scenario': scenario, 'tick': battle.tick,
+        'scenario_notes': notes,
+        'chain_ids': [row['id'] for row in ordered],
+        'fired_ids': fired,
+        'waiting': waiting, 'events': deepcopy(battle.events[first:]),
+        'changes': _state_changes(before, after),
+        'cinematic_ids': clips, 'narrative_scene_ids': scenes,
+        'error': error, 'isolated': True,
+        'outcome': 'error' if error else 'applied' if fired else 'inactive',
+        'replay_verified': None,  # staged state cannot be authenticated
+    }
+    if include_scene:
+        report['scene_before'] = before_scene
+        report['scene_after'] = battle
+    return report
+
+
+def format_chain_report(report):
+    lines = [
+        'CASCADE ISOLÉE — déclencheurs et effets du vrai moteur',
+        'Séquence : ' + ' → '.join(report['chain_ids']),
+        'Déclenchés : ' + (', '.join(report['fired_ids']) or 'aucun'),
+        'Contexte : ' + report['scenario'] + ' | tick ' + str(report['tick']),
+        'Replay : non attesté (préparation de test non journalisée)',
+    ]
+    lines.extend('Préparation : ' + note for note in report['scenario_notes'])
+    for row in report['waiting']:
+        lines.append('En attente : ' + row['event_id'] +
+                     (' ← ' + ', '.join(row['missing']) if row['missing']
+                      else ' (condition gameplay non satisfaite)'))
+    if report['changes']:
+        lines.append('CONSÉQUENCES :')
+        lines.extend('  ' + line for line in report['changes'])
+    if report['cinematic_ids']:
+        lines.append('Cinématiques : ' + ', '.join(report['cinematic_ids']))
+    if report['narrative_scene_ids']:
+        lines.append('Scènes narratives : ' +
+                     ', '.join(report['narrative_scene_ids']))
+    if report['error']:
+        lines.append('Erreur moteur : ' + report['error'])
+    return lines
 
 
 def format_preview_report(report):
@@ -320,6 +487,15 @@ def format_preview_report(report):
         'Actions prévues : ' + ' → '.join(report['actions']),
     ]
     lines.extend('Préparation : ' + note for note in report['scenario_notes'])
+    if report.get('condition_trace'):
+        lines.append('DIAGNOSTIC DES CONDITIONS (moteur réel, avant effets) :')
+        for node in report['condition_trace']:
+            depth = (0 if node['path'] == 'primary' else
+                     len(node['path']) + 1)
+            lines.append('  ' * depth + ('✓ ' if node['passed'] else '✗ ')
+                         + node['label'])
+    if report.get('diagnostic_error'):
+        lines.append('Diagnostic indisponible : ' + report['diagnostic_error'])
     if report['changes']:
         lines.append('CONSÉQUENCES :')
         lines.extend('  ' + change for change in report['changes'])
