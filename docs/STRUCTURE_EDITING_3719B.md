@@ -49,3 +49,53 @@ Gate **fonctionnel** : sélection → modification/duplication → Undo/Redo →
 - Un glisser non valide ne modifie ni le document ni l'historique ; Échap annule le geste.
 - Après un Undo d'un déplacement, l'inspecteur et le déplacement clavier retrouvent la structure via son identifiant, pas via l'ancienne case.
 - Les anciennes cartes restent reconnues par leur tampon initial et sont migrées à la première transformation.
+
+
+## 3.7.19B — structures groupées (passe complémentaire)
+
+L'outil de **Sélection** existant (rectangle) sert aussi à sélectionner
+plusieurs bâtiments. Chaque bâtiment est inclus uniquement si *toutes*
+ses cases tactiques figurent dans la sélection : une maison partiellement
+survolée n'est pas embarquée par erreur.
+
+1. Utiliser l'outil **Sélection**, puis tracer un rectangle contenant toutes
+   les cases des bâtiments à manipuler.
+2. Régler les décalages **ΔX/ΔY** dans le bandeau *Structures groupées*.
+3. Choisir **Aperçu groupe**. Les cases prévues sont vertes si valides,
+   rouges si refusées ; la vue isométrique affiche aussi les sprites
+   déplacés aux ancrages prévus.
+4. Choisir **Déplacer groupe** ou **Dupliquer groupe**. Le groupe se
+   transforme en une transaction `Document.replace`, donc un seul Undo.
+5. La sélection suit les empreintes d'arrivée, afin d'enchaîner un autre
+   déplacement/une duplication. Une copie reçoit de nouveaux IDs, tandis
+   qu'un déplacement conserve les IDs persistants existants.
+
+### Sécurité et compatibilité
+
+- La validation se fait sur une copie : retrait simultané des anciennes
+  emprises (pour le déplacement), puis contrôle des nouvelles emprises sans
+  ajouter de bâtiment en cours de validation.
+- Les sources adjacentes peuvent se recouvrir avec leurs propres anciennes
+  cases après translation. Deux nouvelles emprises ne peuvent jamais se
+  chevaucher.
+- La destination ne peut recouvrir des unités, objets interactifs, objectifs,
+  reliques, déploiements incompatibles ou autres structures (persistantes ou
+  inférées depuis une ancienne carte).
+- Les structures issues d'une ancienne carte sans ID reçoivent une identité
+  persistante lors de la première transformation.
+- Limite temporaire de 128 bâtiments par opération, afin de contenir le coût
+  des validations et l'historique.
+- Un décalage `(0,0)` n'engendre pas de nouvelle opération Undo ;
+  une duplication `(0,0)` est refusée.
+- L'édition en groupe ne transporte pas les retouches de terrain indépendantes
+  de l'ancien tampon. Une reconstruction du fond de terrain nécessiterait un
+  contrat de sauvegarde des cellules sous-jacentes, traité séparément.
+
+### Gates ajoutés
+
+- `python -m unittest tests_standalone.test_structure_groups_3719b -v`
+  : identités, translation adjacente, duplication, Undo/Redo, format sauvegardé,
+  sélection incomplète, collisions et legacy.
+- `SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_structure_groups_3719b_gui.py -v`
+  : rectangle, aperçu, déplacement, duplication et Undo/Rétablir depuis la
+  vraie interface, câblé au job `editor` du workflow Standalone.
