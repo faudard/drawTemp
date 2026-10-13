@@ -2502,6 +2502,11 @@ def launch(path):
             draw_minimap(board, mission, units)
         if studio is not None and (views is None or WORKSPACE in views):
             studio.refresh()
+            if studio.history is not None:
+                history_status.set(
+                    f'Historique Studio : {studio.history._cursor} modification(s) '
+                    f'· Annuler : {"oui" if studio.history.can_undo else "non"} '
+                    f'· Rétablir : {"oui" if studio.history.can_redo else "non"}')
         finish_ui("map.refresh", ui_started, canvas, counts={
             "map_cells": board.width * board.height,
             "cell_size": tile_size, "isometric": iso_var.get(),
@@ -2509,11 +2514,6 @@ def launch(path):
             "selected_tiles": len(selected_tiles),
             "renderer_enabled": views is None or RENDERER in views,
         })
-            if studio.history is not None:
-                history_status.set(
-                    f'Historique Studio : {studio.history._cursor} modification(s) '
-                    f'· Annuler : {"oui" if studio.history.can_undo else "non"} '
-                    f'· Rétablir : {"oui" if studio.history.can_redo else "non"}')
 
     bar = ttk.Frame(root)
     bar.pack(fill='x')
