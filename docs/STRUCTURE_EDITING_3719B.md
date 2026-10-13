@@ -183,3 +183,27 @@ Le test historique d'underlay a également été corrigé dans `master`
 pour lire `structures` comme un champ optionnel lorsque la dernière
 structure est supprimée ; le format Content v1 omet volontairement
 la liste vide.
+
+
+## Gate de résistance — éditions successives (passe 3.7.19B)
+
+Une validation déterministe supplémentaire vérifie que les fonds enregistrés
+ne se dégradent pas pendant de longues chaînes de modifications :
+
+- **32 modifications successives** d'une maison alternant ancrages,
+  rotations (0/90/180/270°) et portes (A/B), avec vérification d'un ID
+  invariant ; Undo/Redo et sauvegarde/relecture à intervalles réguliers.
+- **12 translations groupées aller-retour** de trois maisons accolées,
+  puis une duplication du groupe, retrait des six bâtiments et comparaison
+  *exacte* avec le document sparse de départ.
+- **Échec atomique au milieu de la séquence** : déplacement hors de la
+  carte interdit, aucune mutation du document ni de l'historique, et
+  possibilité de poursuivre les éditions.
+- **Compatibilité persistante historique** : un enregistrement sans
+  `underlay` ne peut pas restituer son sol initial, mais capture le sol
+  des nouveaux emplacements dès la première transformation.
+
+Test ajouté : `python -m unittest discover -s tests_standalone -p test_structure_underlay_stress_3719b.py -v`.
+
+La réussite de ce gate complète mais ne remplace pas la revue du
+rendu isométrique réel Valcroix à 24/54/96.
