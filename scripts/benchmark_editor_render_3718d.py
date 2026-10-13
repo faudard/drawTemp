@@ -107,6 +107,13 @@ def measure(size, frames, assets):
                     timings[operation]['cache_mode'] = changes[-1]['mode']
                     timings[operation]['max_created_items'] = max((c['created'] for c in changes if c['created'] is not None), default=None)
                     timings[operation]['max_updated_items'] = max(c['updated'] for c in changes)
+                    # 3.7.24B: quantify fast paths separately from timings.
+                    # A fast path is a measured result, not a benchmark claim.
+                    fast_paths = {}
+                    for sample in changes:
+                        key = sample.get('fast_path', 'retained')
+                        fast_paths[key] = fast_paths.get(key, 0) + 1
+                    timings[operation]['fast_paths'] = fast_paths
             # Retained Python memory, not Tcl image memory or process RSS.
             renderer.invalidate()
             tracemalloc.start()
