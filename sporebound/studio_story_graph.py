@@ -7,6 +7,7 @@ import json
 
 from . import story_authoring as edit
 from .story_graph import build_story_tree
+from .performance_trace import begin_ui, finish_ui
 
 
 class StoryGraphEditor:
@@ -165,6 +166,7 @@ class StoryGraphEditor:
         return int(x*scale),int(y*scale)
 
     def draw(self):
+        ui_started = begin_ui()
         canvas=self.canvas
         canvas.delete('all')
         if not self.current_root:
@@ -172,6 +174,7 @@ class StoryGraphEditor:
                                anchor='nw',fill='#334155')
             self.layout=None
             self._details()
+            finish_ui("story_graph.draw", ui_started, canvas, counts={"nodes": 0})
             return
         layout=self._model()
         self.layout=layout
@@ -250,6 +253,11 @@ class StoryGraphEditor:
             ('arbre limité (replier des branches)' if layout['truncated']
              else 'clic = sélectionner · double-clic = éditer'))
         self._details()
+        finish_ui("story_graph.draw", ui_started, canvas, counts={
+            "nodes": len(layout["nodes"]), "edges": len(layout["edges"]),
+            "canvas_items": len(canvas.find_all()) if ui_started is not None else 0,
+            "truncated": layout["truncated"],
+        })
 
     def _node_click(self,index):
         self.selected_path=self.layout['nodes'][index]['path']
