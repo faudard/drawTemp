@@ -461,6 +461,28 @@ class Content:
                     require(bool(ready), "Cyclic tactical event dependency")
                     remaining = {key: refs - ready for key, refs in
                                  remaining.items() if key not in ready}
+            # Optional timed gates use the canonical trigger journal; no queue.
+            known_trigger_ids = {row['id'] for row in m.triggers}
+            for row in m.triggers:
+                delayed = False
+                for key in ('delay_ticks', 'delay_activations'):
+                    if key in row:
+                        require(type(row[key]) is int and 1 <= row[key] <= 10000,
+                                f'{key} must be 1..10000')
+                        delayed = True
+                if delayed:
+                    require(bool(row.get('after') or row.get('after_any')),
+                            'Timed trigger requires a predecessor')
+                    require(len(m.triggers) <= 200,
+                            'Temporal event budget exceeded (200 triggers)')
+                if 'cancel_after' in row:
+                    refs = row['cancel_after']
+                    require(isinstance(refs, list) and 1 <= len(refs) <= 8,
+                            'Cancellation requires 1..8 event IDs')
+                    require(all(type(ref) is str and ref in known_trigger_ids
+                                and ref != row['id'] for ref in refs)
+                            and len(refs) == len(set(refs)),
+                            'Invalid cancellation reference')
             trigger_ids = set()
             for trigger in m.triggers:
                 require(trigger["id"] not in trigger_ids, "Duplicate trigger")

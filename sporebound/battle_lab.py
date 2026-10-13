@@ -6,6 +6,8 @@ Ticks/commands are pacing proxies, never minutes of human play.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from copy import deepcopy
+from dataclasses import asdict
 import hashlib
 import json
 import math
@@ -50,7 +52,8 @@ def _totals(samples, key):
 
 
 def run_lab(content, mission_id, *, seeds=(1, 7, 42, 99),
-            max_commands=500, rules=None, stall_window=30):
+            max_commands=500, rules=None, stall_window=30,
+            progress=None, initial_state=None):
     """Measure fresh battles using the *existing* AI and execution pipeline.
 
     Input Content and rules are never modified. Replay checks detect divergence;
@@ -65,10 +68,28 @@ def run_lab(content, mission_id, *, seeds=(1, 7, 42, 99),
             "Invalid Battle Lab command limit")
     require(type(stall_window) is int and 2 <= stall_window <= 100000,
             "Invalid inactivity window")
+    # Campaign-dependent runs use exactly Campaign.prepare (hero levels,
+    # jobs, equipment, recruits, morale, talents) and standard Battle setup.
+    # Fresh deepcopy per seed is required: prepare may materialize hero data.
+    if progress is not None:
+        from .campaign import Campaign
+        require(isinstance(progress, Campaign), "Battle Lab needs a campaign snapshot")
+        require(mission_id in progress.unlocked,
+                "Battle Lab campaign mission is locked")
+    require(initial_state is None or isinstance(initial_state, dict),
+            "Invalid Battle Lab initial state")
+    context_hash = (_fingerprint({
+        "progress": asdict(progress) if progress is not None else None,
+        "initial_state": initial_state,
+    }) if progress is not None or initial_state is not None else None)
     samples = []
     class_totals = defaultdict(lambda: {"alive": 0, "total": 0})
     for seed in seeds:
-        battle = Battle(content, mission_id, seed=seed, rules=rules)
+        battle = (deepcopy(progress).prepare(content, mission_id, seed=seed,
+                                           ruleset=rules, initial_state=initial_state)
+                  if progress is not None else
+                  Battle(content, mission_id, seed=seed, rules=rules,
+                         initial_state=initial_state))
         decisions = Counter()
         class_decisions = Counter()
         max_inactive = 0
@@ -118,6 +139,9 @@ def run_lab(content, mission_id, *, seeds=(1, 7, 42, 99),
             class_totals[key]["alive"] += int(unit.alive)
         sample = {
             "seed": seed, "result": result["result"], "ticks": result["ticks"],
+            "initial_inventory": deepcopy(battle.initial_state.get("inventory",
+                                               {"potion": 3, "ether": 2,
+                                                "phoenix": 1})),
             "commands": result["commands"], "digest": result["digest"],
             "replay_verified": True,
             "activations_ct": events["activation"],
@@ -152,8 +176,11 @@ def run_lab(content, mission_id, *, seeds=(1, 7, 42, 99),
     return {
         "schema": SCHEMA, "kind": "battle_lab", "mission": mission_id,
         "content_sha256": _fingerprint(content.to_dict()),
-        "rules_manifest": Battle(content, mission_id, seed=seeds[0],
-                                 rules=rules).rules.manifest(),
+        "rules_manifest": battle.rules.manifest(),
+        **({"setup_sha256": context_hash,
+            "contextual": True,
+            "initial_inventory": deepcopy(samples[0]["initial_inventory"])}
+           if context_hash is not None else {}),
         "seeds": list(seeds), "max_commands": max_commands,
         "design_targets": DESIGN_TARGETS.copy(),
         "runs": len(samples),
@@ -217,7 +244,8 @@ def compare_reports(before, after, *, max_victory_drop=0.25,
     if new_limits > max_new_limits:
         issues.append("New unresolved encounters beyond tolerance")
     changed = (before["content_sha256"] != after["content_sha256"]
-               or before["rules_manifest"] != after["rules_manifest"])
+               or before["rules_manifest"] != after["rules_manifest"]
+               or before.get("setup_sha256") != after.get("setup_sha256"))
     paired = []
     for old, new in zip(before["samples"], after["samples"]):
         require(old["seed"] == new["seed"], "Paired seed mismatch")

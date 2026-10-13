@@ -80,14 +80,8 @@ def transform_structure_group(data, mission_id, cells, dx, dy, *,
     for item, new_anchor in zip(originals, anchors):
         result = place_structure(result, mission_id, item.name, new_anchor,
                                  item.turns, door_slot=item.door_slot)
-        new_record = _mission(result, mission_id)['structures'][-1]
-        if item.id:
-            original = next((row for row in _mission(data, mission_id).get('structures', ())
-                             if row['id'] == item.id), None)
-            if original is not None and 'appearance' in original:
-                new_record['appearance'] = deepcopy(original['appearance'])
         if not duplicate and item.id:
-            new_record['id'] = item.id
+            _mission(result, mission_id)['structures'][-1]['id'] = item.id
     if held_groups is not None:
         _mission(result, mission_id)['editor_groups'] = held_groups
     return Content.from_dict(result).to_dict()

@@ -86,6 +86,14 @@ autosave = AutosaveSession(resumed.session, store)
 Voir [le guide Persistence 2.0](docs/PERSISTENCE_2.md). L'autosave reste
 **opt-in** et n'est pas encore connecté à l'interface joueur Tk.
 
+## Battle Diagnostics 3.8.1 — replay inspectable par seed
+
+Depuis **Battle Lab**, sélectionner une seed et cliquer **Diagnostiquer seed**
+pour rejouer les commandes réellement exécutées, naviguer dans la timeline
+CT/PV/positions et vérifier les anomalies signalées sans modifier la mission.
+En CLI : `python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 500 --report trace.json`.
+Voir [Combat Diagnostics 3.8.1](docs/BATTLE_DIAGNOSTICS_381.md).
+
 ## Battle Lab 3.8 — équilibrage reproductible
 
 Le **Game Studio** dispose d'un onglet **Battle Lab** (également accessible

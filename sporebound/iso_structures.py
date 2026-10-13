@@ -170,7 +170,7 @@ def _floor_owners(mission, instance):
     return floors, occupants
 
 
-def _move_authored_decks(prepared, mission_id, instance, requested, *, appearance=None):
+def _move_authored_decks(prepared, mission_id, instance, requested):
     """Restamp and translate an authored interior as ONE validated transaction.
 
     Never parse an intermediate document with orphaned floors or stair links.
