@@ -389,6 +389,10 @@ def place_group_prefab(data, mission_id, prefab, anchor):
             row['turns'], door_slot=row['door_slot'])
         mission = _mission(result, mission_id)
         new_structures[row['id']] = mission['structures'][-1]['id']
+        # Keep optional visual customization on the *existing* authored
+        # structure identity, not in a parallel prefab runtime component.
+        if 'appearance' in row:
+            mission['structures'][-1]['appearance'] = deepcopy(row['appearance'])
     for floor in prefab['interior_floors']:
         require(floor['structure_id'] in new_structures,
                 'Prefab floor references an absent structure')
