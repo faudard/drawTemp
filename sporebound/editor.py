@@ -2379,8 +2379,9 @@ def launch(path):
         object_box['values'] = [o['id'] for o in mission.objects]
         if object_var.get() not in object_box['values']:
             object_var.set(object_box['values'][0] if object_box['values'] else '')
+        # Bound the work to the selection, not all 16,384 board cells.
         selected_tiles.intersection_update(
-            c for c in selected_tiles if board.contains(c))
+            {c for c in selected_tiles if board.contains(c)})
         editing_context.selection.set(mission_var.get(), selected_cell,
                                       selected_tiles, publish=False)
         if views is None or RENDERER in views:
