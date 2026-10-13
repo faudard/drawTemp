@@ -103,5 +103,34 @@ class MapRefreshScaleTests(unittest.TestCase):
         self.assertTrue(cache.needs_background(key, canvas))
 
 
+    def test_selection_only_studio_does_not_rebuild_expensive_panels(self):
+        from types import SimpleNamespace
+        from sporebound.studio_panels import StudioPanels
+
+        class Label:
+            text = None
+
+            def config(self, **kw):
+                self.text = kw.get("text")
+
+        studio = StudioPanels.__new__(StudioPanels)
+        studio.project = object()
+        studio.doc = lambda: SimpleNamespace(
+            data={"missions": [{"id": "large_map", "name": "Grande carte"}]})
+        studio.mission = lambda: "large_map"
+        studio.selection = lambda: (120, 120)
+        studio.cell_label = Label()
+
+        class NeverRefresh:
+            def refresh(self):
+                raise AssertionError("Full Studio refresh on selection-only!")
+
+        studio.workspace = NeverRefresh()
+        studio.advanced = NeverRefresh()
+        studio.world_studio = NeverRefresh()
+        studio.refresh_selection()
+        self.assertIn("(120, 120)", studio.cell_label.text)
+
+
 if __name__ == "__main__":
     unittest.main()
