@@ -120,7 +120,7 @@ class EntityPalette:
             if entry.kind in ('actor', 'archetype'):
                 photo = self.actors.sprite(entry.style, 'south', 0, 42)
             else:
-                photo = (self.props.sprite(OBJECT_PROP_HINTS[entry.id.partition(':')[2]], 34)
+                photo = (self.props.sprite(OBJECT_PROP_HINTS[entry.id.partition(':')[2]], 28)
                          if self.props is not None else None)
             options = {}
             if photo is not None:
