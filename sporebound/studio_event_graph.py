@@ -461,7 +461,7 @@ class EventGraphStudio:
     def _set_context_text(self, lines):
         self.context_text.config(state='normal')
         self.context_text.delete('1.0', 'end')
-        self.context_text.insert('1.0', '\\n'.join(lines))
+        self.context_text.insert('1.0', '\n'.join(lines))
         self.context_text.config(state='disabled')
 
     def _refresh_context(self):
