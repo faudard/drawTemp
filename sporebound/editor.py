@@ -815,8 +815,9 @@ def launch(path):
             raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
         current = selected_structure()
         anchor = (current.anchor[0] + dx, current.anchor[1] + dy)
-        design_change(lambda: doc.replace(edit_structure(
-            doc.data, mission_var.get(), structure_selection_cell, anchor=anchor)))
+        design_change(lambda: editing_context.execute(
+            StructureCommand(structure_selection_cell, anchor=anchor),
+            publish=False))
         structure_selection_cell = anchor
         structure_selection_id = structure_at(doc.data, mission_var.get(), anchor).id
         status_var.set(f'{current.name} déplacée en {anchor} (Undo disponible).')
@@ -833,9 +834,10 @@ def launch(path):
         if chosen == (current.name, current.turns, current.door_slot):
             status_var.set('Structure inchangée.')
             return
-        design_change(lambda: doc.replace(edit_structure(
-            doc.data, mission_var.get(), structure_selection_cell,
-            name=chosen[0], quarter_turns=chosen[1], door_slot=chosen[2])))
+        design_change(lambda: editing_context.execute(
+            StructureCommand(structure_selection_cell,
+                             name=chosen[0], quarter_turns=chosen[1],
+                             door_slot=chosen[2]), publish=False))
         structure_selection_cell = current.anchor
         status_var.set('Propriétés de structure appliquées (Undo disponible).')
 
@@ -1190,11 +1192,12 @@ def launch(path):
             current = selected_structure()
             anchor = structure_anchor(selected_cell)
             duplicate = tool == 'Dupliquer structure'
-            design_change(lambda: doc.replace(edit_structure(
-                doc.data, mission_var.get(), structure_selection_cell,
-                anchor=anchor, name=structure_var.get(),
-                quarter_turns=structure_turns, door_slot=structure_door_slot(),
-                duplicate=duplicate)))
+            design_change(lambda: editing_context.execute(
+                StructureCommand(
+                    structure_selection_cell, anchor=anchor,
+                    name=structure_var.get(), quarter_turns=structure_turns,
+                    door_slot=structure_door_slot(), duplicate=duplicate),
+                publish=False))
             structure_selection_cell = anchor
             structure_selection_id = structure_at(doc.data, mission_var.get(), anchor).id
             tool_var.set('Sélection structure')
@@ -1213,9 +1216,9 @@ def launch(path):
                 raise RuleError('La sélection de départ ne correspond pas à cette mission.')
             if battle or source_pending():
                 raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
-            updated = (relocate_entity if operation == 'move' else duplicate_entity)(
-                doc.data, mid, kind, identifier, selected_cell)
-            design_change(lambda: doc.replace(updated))
+            design_change(lambda: editing_context.execute(
+                EntityCommand(operation, kind, identifier,
+                              cell=selected_cell), publish=False))
             entity_target = None
             tool_var.set('Inspecter entité')
             status_var.set(f'{kind} {identifier} : {operation} vers {selected_cell}; annulation possible.')
@@ -1390,9 +1393,9 @@ def launch(path):
             if anchor is None:
                 return  # A click selects; only a real drag commits a change.
             current = selected_structure()
-            design_change(lambda: doc.replace(edit_structure(
-                doc.data, mission_var.get(), structure_selection_cell,
-                anchor=anchor, duplicate=duplicate)))
+            design_change(lambda: editing_context.execute(
+                StructureCommand(structure_selection_cell, anchor=anchor,
+                                 duplicate=duplicate), publish=False))
             structure_selection_cell = anchor
             structure_selection_id = structure_at(doc.data, mission_var.get(), anchor).id
             selected_cell = anchor
@@ -1921,13 +1924,11 @@ def launch(path):
         if battle is not None or source_pending():
             raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
         mid = mission_var.get()
-        if operation == 'edit':
-            result = edit_entity(doc.data, mid, kind, identifier, **values)
-        elif operation == 'remove':
-            result = remove_entity(doc.data, mid, kind, identifier)
-        else:
+        if operation not in ('edit', 'remove'):
             raise RuleError('Unknown entity edit action')
-        design_change(lambda: doc.replace(result))
+        cmd = EntityCommand(operation, kind, identifier,
+                            fields=tuple(values.items()))
+        design_change(lambda: editing_context.execute(cmd, publish=False))
         status_var.set(f'{kind} {identifier} : {operation} confirmé (Undo/Redo disponible).')
         return True
 
