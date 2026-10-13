@@ -26,6 +26,8 @@ class EventGraphStudio:
         self.cond_pos = self.tk.StringVar(value='0,0')
         self.cond_object = self.tk.StringVar()
         self.composite_summary = self.tk.StringVar(value='Aucune condition ajoutée')
+        self.prereq_choice = self.tk.StringVar()
+        self.condition_path = None
         self.action_kind = self.tk.StringVar(value='message')
         self.action_text = self.tk.StringVar(value='Renforts !')
         self.action_amount = self.tk.StringVar(value='4')
@@ -133,6 +135,10 @@ class EventGraphStudio:
             preview_controls, text='Vue isométrique avant/après',
             command=lambda: self.owner._run(self.preview_scene))
         self.scene_button.pack(side='left', padx=3)
+        self.chain_button = ttk.Button(
+            preview_controls, text='Simuler chaîne',
+            command=lambda: self.owner._run(self.preview_chain))
+        self.chain_button.pack(side='left', padx=3)
         scenario_controls = ttk.Frame(contextual)
         scenario_controls.pack(fill='x', pady=2)
         ttk.Label(scenario_controls, text='Scénario :').pack(side='left', padx=3)
@@ -177,16 +183,50 @@ class EventGraphStudio:
         ttk.Button(cond, text='Appliquer condition',
                    command=lambda: self.owner._run(self.save_condition)).grid(
                        row=6, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
+        dependencies = ttk.LabelFrame(cond, text='Événements précédents (chaîne)')
+        dependencies.grid(row=12, column=0, columnspan=2,
+                          sticky='ew', padx=4, pady=5)
+        ttk.Label(dependencies, text='APRÈS').pack(anchor='w', padx=4)
+        self.prereq_box = ttk.Combobox(
+            dependencies, textvariable=self.prereq_choice,
+            values=[], state='readonly', width=28)
+        self.prereq_box.pack(fill='x', padx=4)
+        dep_controls = ttk.Frame(dependencies)
+        dep_controls.pack(fill='x')
+        self._button(dep_controls, '+ Lier événement', self.link_predecessor)
+        self._button(dep_controls, '− Délier événement', self.unlink_predecessor)
+        self.prereq_text = ttk.Label(
+            dependencies, text='Aucune dépendance', wraplength=300)
+        self.prereq_text.pack(fill='x', padx=4, pady=3)
         composite = ttk.LabelFrame(cond, text='Conditions supplémentaires (ET / OU / NON)')
         composite.grid(row=11, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
         ttk.Label(composite, textvariable=self.composite_summary,
                   wraplength=300).pack(fill='x', padx=4, pady=3)
+        self.composite_tree = ttk.Treeview(
+            composite, show='tree', height=7, selectmode='browse')
+        self.composite_tree.pack(fill='both', padx=4, pady=3)
+        self.composite_tree.bind('<<TreeviewSelect>>',
+                                 lambda _e: self.select_composite_node())
+        ttk.Label(
+            composite, text='Sélectionner un nœud pour modifier ses valeurs '
+            'ou imbriquer une condition. Sans sélection, ET/OU agissent sur '
+            'l’ensemble des conditions secondaires.',
+            wraplength=300).pack(fill='x', padx=4)
         combinators = ttk.Frame(composite)
         combinators.pack(fill='x')
         self._button(combinators, '+ ET', lambda: self.add_composite('all'))
         self._button(combinators, '+ OU', lambda: self.add_composite('any'))
         self._button(combinators, '+ NON', lambda: self.add_composite('all', True))
-        self._button(composite, 'Effacer les ajouts', self.clear_composite)
+        node_buttons = ttk.Frame(composite)
+        node_buttons.pack(fill='x')
+        self._button(node_buttons, 'Remplacer nœud', self.replace_composite)
+        self._button(node_buttons, 'Retirer nœud', self.remove_composite)
+        self._button(node_buttons, 'Inverser NON', self.negate_composite)
+        order_buttons = ttk.Frame(composite)
+        order_buttons.pack(fill='x')
+        self._button(order_buttons, '↑ Nœud', lambda: self.move_composite(-1))
+        self._button(order_buttons, '↓ Nœud', lambda: self.move_composite(1))
+        self._button(order_buttons, 'Effacer les ajouts', self.clear_composite)
         ttk.Label(cond, text='Nouvel ID').grid(row=7, column=0, sticky='w', padx=5)
         ttk.Entry(cond, textvariable=self.new_id, width=24).grid(
             row=7, column=1, sticky='ew', padx=5)
@@ -246,6 +286,7 @@ class EventGraphStudio:
 
     def _edit(self, transform):
         self.advanced._edit(transform)
+        self.last_preview = None  # No stale green status after a graph edit.
         self.refresh()
 
     def _pos(self, raw):
@@ -292,13 +333,113 @@ class EventGraphStudio:
         self._edit(lambda doc: event_graph.update_condition(
             doc, self.owner.mission(), eid, spec))
 
+    def _composite_path(self):
+        require(self.condition_path is not None,
+                'Sélectionner un nœud de condition secondaire.')
+        event_graph.composite_at(self._event(), self.condition_path)
+        return self.condition_path
+
     def add_composite(self, join, negate=False):
         event = self._event()
         leaf = self._condition()
-        self._edit(lambda doc: event_graph.extend_condition(
-            doc, self.owner.mission(), event['id'], leaf,
-            join=join, negate=negate))
+        if self.condition_path is not None and not negate:
+            path = self._composite_path()
+            self._edit(lambda doc: event_graph.edit_composite_node(
+                doc, self.owner.mission(), event['id'], path,
+                operation='wrap', predicate=leaf, join=join))
+        else:
+            self._edit(lambda doc: event_graph.extend_condition(
+                doc, self.owner.mission(), event['id'], leaf,
+                join=join, negate=negate))
         self.status.set('Condition secondaire ajoutée au trigger existant.')
+
+    def replace_composite(self):
+        event, path = self._event(), self._composite_path()
+        spec = self._condition()
+        self._edit(lambda doc: event_graph.edit_composite_node(
+            doc, self.owner.mission(), event['id'], path,
+            operation='replace', predicate=spec))
+
+    def remove_composite(self):
+        event, path = self._event(), self._composite_path()
+        self.condition_path = None
+        self._edit(lambda doc: event_graph.edit_composite_node(
+            doc, self.owner.mission(), event['id'], path,
+            operation='remove'))
+
+    def negate_composite(self):
+        event, path = self._event(), self._composite_path()
+        self._edit(lambda doc: event_graph.edit_composite_node(
+            doc, self.owner.mission(), event['id'], path,
+            operation='negate'))
+
+    def move_composite(self, direction):
+        event, path = self._event(), self._composite_path()
+        self._edit(lambda doc: event_graph.edit_composite_node(
+            doc, self.owner.mission(), event['id'], path,
+            operation='move', direction=direction))
+        self.condition_path = path[:-1] + (path[-1] + direction,)
+        self._load_event()
+
+    def select_composite_node(self):
+        selection = self.composite_tree.selection()
+        if not selection:
+            return
+        iid = selection[0]
+        path = (() if iid == 'when' else
+                tuple(int(part) for part in iid.split('.')[1:]))
+        node = event_graph.composite_at(self._event(), path)
+        self.condition_path = path
+        if 'condition' in node:
+            self._set_condition_form(node)
+
+    def _set_condition_form(self, node):
+        self.cond_kind.set(node['condition'])
+        self.cond_value.set(str(node.get('value', node.get('percent',
+                                node.get('max_alive', 10)))))
+        self.cond_unit.set(node.get('unit', ''))
+        self.cond_team.set(node.get('team', 'enemy'))
+        self.cond_object.set(node.get('object', ''))
+        self.cond_pos.set(','.join(map(str, node.get(
+            'pos', self.owner.selection()))))
+
+    def _render_composite_tree(self, event):
+        tree = self.composite_tree
+        for child in tree.get_children():
+            tree.delete(child)
+        paths = event_graph.composite_nodes(event)
+        known = set()
+        for node in paths:
+            path = node['path']
+            iid = ('when' if not path else
+                   'when.' + '.'.join(map(str, path)))
+            parent = ('when' if len(path) == 1 else
+                      'when.' + '.'.join(map(str, path[:-1]))
+                      if path else '')
+            kind = node['kind']
+            label = {'all': 'ET', 'any': 'OU', 'not': 'NON'}.get(
+                kind, node['label'])
+            tree.insert(parent, 'end', iid=iid, text=label, open=True)
+            known.add(path)
+        if self.condition_path in known:
+            iid = ('when' if not self.condition_path else
+                   'when.' + '.'.join(map(str, self.condition_path)))
+            tree.selection_set(iid)
+        else:
+            self.condition_path = None
+
+    def link_predecessor(self):
+        event, prior = self._event(), self.prereq_choice.get()
+        require(bool(prior), 'Choisir un événement précédent')
+        self._edit(lambda doc: event_graph.link_event(
+            doc, self.owner.mission(), event['id'], prior))
+        self.status.set('Dépendance enregistrée dans les triggers existants.')
+
+    def unlink_predecessor(self):
+        event, prior = self._event(), self.prereq_choice.get()
+        require(bool(prior), 'Choisir une dépendance à retirer')
+        self._edit(lambda doc: event_graph.unlink_event(
+            doc, self.owner.mission(), event['id'], prior))
 
     def clear_composite(self):
         event = self._event()
@@ -380,6 +521,8 @@ class EventGraphStudio:
 
     def select_event(self):
         self.action_index = None
+        self.condition_path = None
+        self.last_preview = None
         self._load_event()
         self._refresh_context()
         self.draw()
@@ -389,16 +532,19 @@ class EventGraphStudio:
             event = self._event()
         except RuleError:
             return
-        self.cond_kind.set(event['condition'])
+        self._set_condition_form(event)
         self.composite_summary.set(
             event_graph.composite_title(event['when'])
             if 'when' in event else 'Aucune condition ajoutée')
-        self.cond_value.set(str(event.get('value', event.get('percent',
-                               event.get('max_alive', 10)))))
-        self.cond_unit.set(event.get('unit', ''))
-        self.cond_team.set(event.get('team', 'enemy'))
-        self.cond_object.set(event.get('object', ''))
-        self.cond_pos.set(','.join(map(str, event.get('pos', self.owner.selection()))))
+        self._render_composite_tree(event)
+        options = [row['id'] for row in self._mission()['triggers']
+                   if row['id'] != event['id']]
+        self.prereq_box['values'] = options
+        if self.prereq_choice.get() not in options:
+            self.prereq_choice.set(options[0] if options else '')
+        self.prereq_text.config(
+            text='Attend : ' + ', '.join(event.get('after', []))
+            if event.get('after') else 'Aucune dépendance')
         self.action_list.delete(0, 'end')
         for i, action in enumerate(event['actions']):
             self.action_list.insert('end', f"{i+1}. {event_graph.action_title(action)}")
@@ -632,6 +778,23 @@ class EventGraphStudio:
         lines = self._context_lines(self.context)
         lines.extend(['', *event_context.format_preview_report(report)])
         self._set_context_text(lines, show_end=True)
+        self.draw()
+
+    def preview_chain(self):
+        require(self.context is not None, 'Choisir un événement tactique')
+        report = event_context.preview_event_chain(
+            self.owner.doc().data, self.owner.mission(),
+            self.context['event_id'], project=self.owner.project,
+            tick=int(self.preview_tick.get()),
+            scenario=self.scenario_labels[self.preview_scenario.get()])
+        self.last_preview = None
+        lines = self._context_lines(self.context)
+        lines.extend(['', *event_context.format_chain_report(report)])
+        self._set_context_text(lines, show_end=True)
+        self.status.set(
+            str(len(report['fired_ids'])) + '/' +
+            str(len(report['chain_ids'])) +
+            ' événements de la chaîne exécutés dans Battle.')
         self.draw()
 
     def preview_scene(self):
