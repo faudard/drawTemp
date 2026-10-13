@@ -35,6 +35,14 @@ class EventGraphStudio:
         self.zoom = self.tk.StringVar(value='100%')
         self.status = self.tk.StringVar(value='Choisir ou créer un événement.')
         self.preview_tick = self.tk.StringVar(value='0')
+        self.scenario_labels = {
+            'État initial': 'initial',
+            'Condition vraie': 'satisfied',
+            'Condition fausse': 'unsatisfied',
+        }
+        self.preview_scenario = self.tk.StringVar(value='État initial')
+        self.cinematic_choice = self.tk.StringVar()
+        self.last_preview = None
         self.context = None
         self._build(notebook)
 
@@ -113,15 +121,26 @@ class EventGraphStudio:
             preview_controls, text='Tester avec le moteur',
             command=lambda: self.owner._run(self.preview_selected))
         self.preview_button.pack(side='left', padx=3)
+        scenario_controls = ttk.Frame(contextual)
+        scenario_controls.pack(fill='x', pady=2)
+        ttk.Label(scenario_controls, text='Scénario :').pack(side='left', padx=3)
+        self.scenario_box = ttk.Combobox(
+            scenario_controls, textvariable=self.preview_scenario,
+            state='readonly', width=21, values=list(self.scenario_labels))
+        self.scenario_box.pack(side='left', padx=3)
         links = ttk.Frame(contextual)
         links.pack(fill='x', pady=2)
         self.story_button = ttk.Button(
             links, text='Scène liée', command=lambda: self.owner._run(self.open_linked_story))
         self.story_button.pack(side='left', padx=3)
         self.cinematic_button = ttk.Button(
-            links, text='Cinématique liée',
+            links, text='Ouvrir séquence',
             command=lambda: self.owner._run(self.open_linked_cinematic))
         self.cinematic_button.pack(side='left', padx=3)
+        self.cinematic_box = ttk.Combobox(
+            contextual, textvariable=self.cinematic_choice, width=37,
+            state='readonly')
+        self.cinematic_box.pack(fill='x', padx=3, pady=2)
         cond = ttk.Frame(tabs)
         tabs.add(cond, text='Condition')
         self._field(cond, 0, 'Type', self.cond_kind,
@@ -413,8 +432,15 @@ class EventGraphStudio:
             selected = node['event_id'] == self.event_id.get()
             if node['kind'] == 'action':
                 selected = selected and node['index'] == self.action_index
-            fill = ('#bbf7d0' if node['kind'] == 'condition'
-                    else '#dbeafe' if selected else '#f1f5f9')
+            if node['kind'] == 'condition':
+                report = self.last_preview
+                if selected and report and report['event_id'] == node['event_id']:
+                    fill = ('#fecaca' if report['error'] else
+                            '#bbf7d0' if report['fired'] else '#fef3c7')
+                else:
+                    fill = '#f1f5f9'
+            else:
+                fill = '#dbeafe' if selected else '#f1f5f9'
             tag = 'event_node_'+str(index)
             canvas.create_rectangle(x,y-height//2,x+width,y+height//2,
                                     fill=fill,outline='#2563eb' if selected else '#94a3b8',
@@ -457,11 +483,11 @@ class EventGraphStudio:
         lines.append('Scène après victoire (mission) : ' +
                      (context['scene_id'] or 'aucune'))
         clips = context['cinematics']
-        lines.append('Cinématiques de mission : ' +
+        lines.append('Cinématiques associées à la mission / scène : ' +
                      (', '.join(c['id'] + ' (' + c['stage'] + ')' for c in clips)
                       if clips else 'aucune'))
-        lines.append('Liens de mission uniquement, pas de déclenchement direct '
-                     'par cet événement tactique.')
+        lines.append('Attention : les liens sont des déclenchements de mission '
+                     'ou de scène, pas de cet événement tactique.')
         return lines
 
     def _set_context_text(self, lines, *, show_end=False):
@@ -472,6 +498,7 @@ class EventGraphStudio:
         self.context_text.see('end' if show_end else '1.0')
 
     def _refresh_context(self):
+        self.last_preview = None
         self.context = None
         if not self.event_id.get():
             self._set_context_text(['Créer ou sélectionner un événement tactique.'])
@@ -484,32 +511,25 @@ class EventGraphStudio:
         self.story_button.config(
             state='normal' if self.context and self.context['scene_id']
             else 'disabled')
-        self.cinematic_button.config(
-            state='normal' if self.context and self.context['cinematics']
-            else 'disabled')
+        clips = self.context['cinematics'] if self.context else []
+        labels = [c['id'] + ' — ' + c['stage'] for c in clips]
+        self.cinematic_box['values'] = labels
+        if self.cinematic_choice.get() not in labels:
+            self.cinematic_choice.set(labels[0] if labels else '')
+        self.cinematic_box.config(state='readonly' if clips else 'disabled')
+        self.cinematic_button.config(state='normal' if clips else 'disabled')
 
     def preview_selected(self):
         require(self.context is not None, 'Choisir un événement tactique')
         report = event_context.preview_event(
             self.owner.doc().data, self.owner.mission(),
-            self.context['event_id'], tick=int(self.preview_tick.get()))
+            self.context['event_id'], tick=int(self.preview_tick.get()),
+            scenario=self.scenario_labels[self.preview_scenario.get()])
+        self.last_preview = report
         lines = self._context_lines(self.context)
-        lines.extend([
-            '',
-            'APERÇU ISOLÉ — pas de sauvegarde ni simulation des tours précédents',
-            f"Tick demandé {report['tick']} : " +
-            ('déclencheur activé' if report['fired'] else 'condition non satisfaite'),
-        ])
-        lines.extend('Moteur : ' + str(row) for row in report['events'][:8])
-        if len(report['events']) > 8:
-            lines.append(f"… {len(report['events']) - 8} autres événements moteur")
-        if report['spawned']:
-            lines.append('Unités créées : ' + ', '.join(report['spawned']))
-        if report['despawned']:
-            lines.append('Unités retirées : ' + ', '.join(report['despawned']))
-        if report['error']:
-            lines.append('Erreur du moteur : ' + report['error'])
+        lines.extend(['', *event_context.format_preview_report(report)])
         self._set_context_text(lines, show_end=True)
+        self.draw()
 
     def open_linked_story(self):
         require(self.context is not None and bool(self.context['scene_id']),
@@ -519,7 +539,10 @@ class EventGraphStudio:
     def open_linked_cinematic(self):
         require(self.context is not None and bool(self.context['cinematics']),
                 'Aucune cinématique liée à cette mission')
+        selection = self.cinematic_choice.get().split(' — ', 1)[0]
+        require(any(c['id'] == selection for c in self.context['cinematics']),
+                'Sélectionner une cinématique associée à la mission ou scène')
         studio = self.owner.cinematic_studio
-        studio.clip_id = self.context['cinematics'][0]['id']
+        studio.clip_id = selection
         studio.refresh()
         self.notebook.select(studio.tab)
