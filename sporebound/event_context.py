@@ -48,7 +48,7 @@ def inspect_event(data, mission_id, event_id, project=None):
     return {
         'mission_id': mission_id,
         'event_id': event_id,
-        'condition': event_graph.condition_title(event),
+        'condition': event_graph.condition_summary(event),
         'condition_kind': event['condition'],
         'actions': [event_graph.action_title(action)
                     for action in event['actions']],
