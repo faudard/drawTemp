@@ -123,18 +123,26 @@ class GameSession:
             self.tactical_story_pending = self.tactical_story_queue.pop(0)
 
     def choose_tactical_story_option(self, choice_id):
-        """Apply existing StoryBook effects atomically while combat is paused."""
-        projected = self._tactical_story_progress()
-        updated = self.story.choose(projected, choice_id)
-        next_scene = updated.story_pending
-        updated.story_pending = ""
-        self.progress = updated
-        self.tactical_story_pending = (next_scene or
-                                       (self.tactical_story_queue.pop(0)
-                                        if self.tactical_story_queue else ""))
-        if not self.tactical_story_pending:
-            self._settle()
-        return self.tactical_scene() if self.tactical_story_pending else None
+        """Atomically apply canonical StoryBook choice and resume the Battle."""
+        require(self.mode == "battle", "No standalone tactical dialogue")
+        previous = deepcopy((self.progress, self.tactical_story_pending,
+                             self.tactical_story_queue, self.finalized))
+        try:
+            updated = self.story.choose(
+                self._tactical_story_progress(), choice_id)
+            next_scene = updated.story_pending
+            updated.story_pending = ""
+            self.progress = updated
+            self.tactical_story_pending = (next_scene or
+                                           (self.tactical_story_queue.pop(0)
+                                            if self.tactical_story_queue else ""))
+            if not self.tactical_story_pending:
+                self._settle()
+            return self.tactical_scene() if self.tactical_story_pending else None
+        except Exception:
+            (self.progress, self.tactical_story_pending,
+             self.tactical_story_queue, self.finalized) = previous
+            raise
 
     def exploration_state(self):
         scene = self.active_scene()
