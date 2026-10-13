@@ -19,7 +19,9 @@ def auto_potion(b, target, source, amount):
 
 
 def counter(b, target, source, amount):
-    if source.alive and b.rng.randrange(100) < target.brave:
+    if (source.alive
+            and b.unit_levels.get(source.id, 0) == b.unit_levels.get(target.id, 0)
+            and b.rng.randrange(100) < target.brave):
         skill = b._basic(target)
         if skill.min_range <= distance(target.pos, source.pos) <= skill.range and b.line_of_sight(target.pos, source.pos):
             if b.rng.random() < b.hit_chance(target, source, skill):
