@@ -106,6 +106,28 @@ def add_effect(project, content, scene_id, choice_id, effect):
     return _edit(project, content, change)
 
 
+def add_tactical_effect(project, content, scene_id, choice_id, effect):
+    """Transactionally append a replayable Battle consequence to one choice."""
+    def change(story):
+        choice = next((c for c in _scene(story, scene_id)['choices']
+                       if c['id'] == choice_id), None)
+        require(choice is not None, 'Unknown narrative choice')
+        choice.setdefault('tactical_effects', []).append(deepcopy(effect))
+    return _edit(project, content, change)
+
+
+def remove_tactical_effect(project, content, scene_id, choice_id):
+    def change(story):
+        choice = next((c for c in _scene(story, scene_id)['choices']
+                       if c['id'] == choice_id), None)
+        require(choice is not None and choice.get('tactical_effects'),
+                'No tactical choice effect to remove')
+        choice['tactical_effects'].pop()
+        if not choice['tactical_effects']:
+            choice.pop('tactical_effects')
+    return _edit(project, content, change)
+
+
 def set_scene_entry(project, content, campaign_id, scene_id=''):
     def change(story):
         mapping = story.setdefault('entry_scenes', {})
