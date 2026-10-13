@@ -141,7 +141,9 @@ def validate_structure_placement(data, mission_id, clip, anchor):
 def place_structure(data, mission_id, name, anchor, quarter_turns=0, *, door_slot=0):
     """Paste tiles and store an optional, stable visual identity atomically."""
     clip = structure_template(name, quarter_turns, door_slot=door_slot)
-    validate_structure_placement(data, mission_id, clip, anchor)
+    footprint = validate_structure_placement(data, mission_id, clip, anchor)
+    from .structure_underlay import capture_underlay
+    underlay = capture_underlay(_mission(data, mission_id), footprint)
     updated = paste_terrain(data, mission_id, clip, anchor)
     mission = _mission(updated, mission_id)
     structures = mission.setdefault('structures', [])
@@ -151,7 +153,7 @@ def place_structure(data, mission_id, name, anchor, quarter_turns=0, *, door_slo
         index += 1
     structures.append({'id': 'structure_' + str(index), 'name': name,
                        'anchor': list(anchor), 'turns': quarter_turns,
-                       'door_slot': door_slot})
+                       'door_slot': door_slot, 'underlay': underlay})
     return Content.from_dict(updated).to_dict()
 
 
@@ -170,11 +172,8 @@ def remove_structure(data, mission_id, cell):
     require(instance is not None, 'No structure at selected cell')
     updated = deepcopy(data)
     mission = _mission(updated, mission_id)
-    if instance.id:
-        mission['structures'] = [record for record in mission.get('structures', ())
-                                 if record['id'] != instance.id]
-    mission['board']['tiles'] = [tile for tile in mission['board']['tiles']
-                                 if tuple(tile['pos']) not in instance.cells]
+    from .structure_underlay import restore_footprint
+    restore_footprint(mission, instance)
     return Content.from_dict(updated).to_dict()
 
 
@@ -221,13 +220,8 @@ def _structure_edit_plan(data, mission_id, cell, *, anchor=None,
     prepared = deepcopy(data)
     mission = _mission(prepared, mission_id)
     if not duplicate:
-        if instance.id:
-            mission['structures'] = [
-                row for row in mission.get('structures', ())
-                if row['id'] != instance.id]
-        mission['board']['tiles'] = [
-            tile for tile in mission['board']['tiles']
-            if tuple(tile['pos']) not in instance.cells]
+        from .structure_underlay import restore_footprint
+        restore_footprint(mission, instance)
     if duplicate or requested != original:
         validate_structure_placement(prepared, mission_id, clip, anchor)
         # Legacy stamps also reserve real ground. Do not overwrite them
@@ -254,11 +248,11 @@ def edit_structure(data, mission_id, cell, *, anchor=None, name=None,
                    quarter_turns=None, door_slot=None, duplicate=False):
     """Edit a whole structure atomically; legacy stamps gain an identity.
 
-    A changed structure is re-stamped from its canonical preset. Any
-    per-cell tactical repaint within the *old* footprint is intentionally
-    cleared, matching explicit remove/place; ordinary brushing remains
-    non-destructive to visual identities. The source ID survives a move
-    or property edit; copies receive a new unique ID.
+    A changed structure is re-stamped from its canonical preset. Newly
+    authored structures restore their recorded sparse underlying terrain;
+    records predating snapshots keep legacy erase semantics. Tactical
+    repaint done over the structure itself does not overwrite its underlay.
+    The source ID survives a move/property edit; copies receive a new ID.
     """
     prepared, instance, requested, original = _structure_edit_plan(
         data, mission_id, cell, anchor=anchor, name=name,
