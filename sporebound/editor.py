@@ -1407,7 +1407,7 @@ def launch(path):
         design_change=design_change, play_campaign=start_campaign,
         status=status_var, mission_change=stop,
         select_mission=select_workspace_mission,
-        on_project_saved=on_project_saved)
+        on_project_saved=on_project_saved, set_active_mission=mission_var.set)
     ttk.Label(root,textvariable=status_var).pack(fill='x')
     root.protocol('WM_DELETE_WINDOW',lambda: root.destroy() if discard_ok() else None)
     refresh_source()
