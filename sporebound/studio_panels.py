@@ -60,8 +60,13 @@ class StudioPanels:
         from .studio_battle_lab import BattleLabStudio
         self.battle_lab = BattleLabStudio(self, notebook)
         self._last_mission_signature=None
+        self._deferred_map_refresh = False
         self.reload_project()
         self.refresh()
+        # Map-only brush strokes do not need to rebuild hidden editors.
+        # A tab switch flushes them before their data is inspected.
+        self.notebook.bind('<<NotebookTabChanged>>',
+                           self._flush_deferred_map_refresh, add='+')
 
     def _field(self, parent, row, caption, value='', *, choices=None, width=22):
         ttk = self.ttk
@@ -681,6 +686,25 @@ class StudioPanels:
             window,text=f"Langue : {self.project.options['language']} | Musique : {self.project.options['music_volume']}%").pack()).pack(pady=5)
         self.ttk.Button(window,text='Quitter l’aperçu',command=window.destroy).pack(pady=7)
 
+    def defer_map_refresh(self):
+        """Postpone heavy invisible Studio panels after a terrain-only edit."""
+        self._deferred_map_refresh = True
+        self.refresh_selection()
+
+    def _flush_deferred_map_refresh(self, _event=None):
+        if self._deferred_map_refresh:
+            self.refresh()
+
+    def refresh_selection(self):
+        """Update only map-context controls; no Studio-wide editor rebuild."""
+        if self.project is None:
+            return
+        chosen = next((m for m in self.doc().data['missions']
+                       if m['id'] == self.mission()), None)
+        if chosen is not None:
+            self.cell_label.config(
+                text=f'Case choisie : {self.selection()} | Mission : {chosen["name"]}')
+
     def refresh(self):
         if self.project is None:
             return
@@ -730,3 +754,4 @@ class StudioPanels:
         self.workspace.refresh()
         self.world_studio.refresh()
         self.battle_lab.refresh()
+        self._deferred_map_refresh = False
