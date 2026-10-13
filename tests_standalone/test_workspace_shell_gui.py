@@ -50,6 +50,9 @@ class WorkspaceShellGUITests(TestCase):
                 navigator.event_generate('<Return>')
                 root.update()
                 self.assertEqual(main.tab(main.select(), 'text'), 'Carte et combat')
+                self.assertTrue(any(w.get() == 'escape' for w in descendants(root)
+                                    if isinstance(w, ttk.Combobox)),
+                                'Navigating the sidebar must change the active mission')
 
                 buttons = {w.cget('text'): w for w in descendants(root)
                            if isinstance(w, ttk.Button)}
