@@ -28,6 +28,7 @@ class StudioPanels:
         self.project_path = None
         self.project_saved = ''
         self.history = None
+        self._history_busy = 0
         self.session = None
         self.session_campaign = ''
         from .studio_workspace import ProjectWorkspaceTab
@@ -63,14 +64,20 @@ class StudioPanels:
         return var, widget
 
     def _run(self, operation):
+        # Nested editor commands publish one coordinated snapshot after the
+        # complete user action, not one snapshot for each internal sub-edit.
+        self._history_busy += 1
         try:
             operation()
-            self.capture_history()
         except (RuleError, ValueError, KeyError, TypeError, OSError, StopIteration) as exc:
             self.dialogs.showerror('Édition refusée', str(exc))
+        finally:
+            self._history_busy -= 1
+            if self._history_busy == 0:
+                self.capture_history()
 
     def capture_history(self):
-        if self.history is not None and self.project is not None:
+        if self._history_busy == 0 and self.history is not None and self.project is not None:
             return self.history.record(self.doc().data, self.project)
         return False
 
