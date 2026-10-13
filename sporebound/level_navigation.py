@@ -126,33 +126,54 @@ def available_level_moves(battle, unit=None):
 
 
 def navigate_level(battle, unit, *, level, cell):
-    """Execute one full layered move as a single undoable/replayable command.
+    """Run a floor-aware path step by step inside Battle's atomic transaction.
 
-    Reactions, hazards and 3D LOS are not yet defined for upstairs traversal;
-    they cannot be silently applied using ground-floor collision rules.
+    Floor changes enter at the stair landing; same-floor prepared reactions
+    may fire on arrival. Ground hazards, pickups and triggers only run for
+    cells actually visited at N0. Movement stops on death or battle end.
     """
     require(type(level) is int and 0 <= level <= MAX_INTERIOR_LEVEL,
             'Invalid destination level')
     require(type(cell) in (tuple, list) and len(cell) == 2
             and all(type(v) is int for v in cell), 'Invalid level destination')
     destination = (level, *cell)
-    current = (battle.unit_levels.get(unit.id, 0), *unit.pos)
-    require(current[0] > 0 or level > 0,
+    origin = (battle.unit_levels.get(unit.id, 0), *unit.pos)
+    require(origin[0] > 0 or level > 0,
             'Use ordinary ground movement for ground-only destinations')
     reachable = available_level_moves(battle, unit)
-    require(destination != current and destination in reachable,
+    require(destination != origin and destination in reachable,
             'Layered destination unreachable or movement spent')
     cost, path = reachable[destination]
-    # Legacy event consumers still see the 2D position, but level transition
-    # and path are recorded explicitly. All mutation belongs to Battle.execute.
-    unit.pos = tuple(cell)
-    if level:
-        battle.unit_levels[unit.id] = level
-    else:
-        battle.unit_levels.pop(unit.id, None)
+    if unit.id in battle.prepared_reactions:
+        battle.prepared_reactions.pop(unit.id)
+        battle.emit('prepared_cancelled', unit=unit.id, reason='moved')
     unit.moved = True
-    battle.emit('level_move', unit=unit.id, start=list(current),
-                end=list(destination), path=[list(p) for p in path], cost=cost)
+    visited = [origin]
+    for nxt in path[1:]:
+        previous = unit.pos
+        next_level, x, y = nxt
+        unit.pos = (x, y)
+        if next_level:
+            battle.unit_levels[unit.id] = next_level
+        else:
+            battle.unit_levels.pop(unit.id, None)
+        visited.append(nxt)
+        # Watchers on a different deck are filtered in reactions.py.
+        battle._prepared_on_move(unit, previous)
+        if not unit.alive:
+            break
+        if next_level == 0:
+            tile = battle.board.tile(unit.pos)
+            if tile.hazard:
+                battle._hurt(unit, tile.hazard)
+            if unit.alive:
+                battle._collect(unit)
+                battle._triggers()
+        battle._outcome()
+        if not unit.alive or battle.result or battle.status_blocks(unit, 'continue_move'):
+            break
+    battle.emit('level_move', unit=unit.id, start=list(origin),
+                end=list(visited[-1]), path=[list(p) for p in visited], cost=cost)
     return cost
 
 
