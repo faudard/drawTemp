@@ -104,6 +104,45 @@ class VerticalCombatTests(unittest.TestCase):
         battle.execute(command)
         self.assertTrue(enemy.moved)
 
+    def test_enemy_archer_fires_through_floor_aperture(self):
+        content, mid = scenario(aperture=True)
+        data = content.to_dict()
+        mission = next(m for m in data['missions'] if m['id'] == mid)
+        for row in mission['units']:
+            row['speed'] = 1000 if row['team'] == 'enemy' else 1
+            if row['team'] == 'enemy':
+                row['weapon'] = 'ranged'
+                row['attack_range'] = 4
+        battle = Battle(Content.from_dict(data), mid, seed=13,
+                        battle_id='archer-upper')
+        archer = next(u for u in battle.units if u.team == 'enemy')
+        self.assertEqual(battle.active_id, archer.id)
+        decision = choose_command(battle)
+        self.assertEqual(decision['kind'], 'level_attack')
+        self.assertEqual(decision['level'], 0)
+        battle.execute(decision)
+        self.assertTrue(archer.acted)
+        self.assertTrue(any(row['kind'] == 'vertical_shot'
+                            for row in battle.events))
+        self.assertEqual(Battle.replay(battle.recording()).digest(),
+                         battle.digest())
+
+    def test_prepared_archer_reacts_only_after_arrival_upstairs(self):
+        content, mid = scenario(aperture=False)
+        battle = Battle(content, mid, seed=19, battle_id='stair-reaction')
+        archer = next(u for u in battle.units if u.team == 'enemy')
+        archer.weapon = 'ranged'
+        archer.attack_range = 4
+        battle.prepared_reactions[archer.id] = {
+            'mode': 'overwatch', 'charges': 1, 'ct_tax': 20}
+        battle.execute({'kind': 'level_move', 'level': 1,
+                        'cell': [5, 5]})
+        self.assertEqual(battle.unit_levels[battle.active_id], 1)
+        fired = [row for row in battle.events
+                 if row['kind'] == 'prepared_triggered']
+        self.assertEqual(len(fired), 1)
+        self.assertEqual(fired[0]['unit'], archer.id)
+
     def test_legacy_content_and_shots_are_unmodified(self):
         from sporebound.__main__ import DEFAULT_CONTENT
         original = Content.load(DEFAULT_CONTENT)
