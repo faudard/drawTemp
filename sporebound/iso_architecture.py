@@ -200,7 +200,7 @@ def architecture_outline(geo, instance, wall_level=2):
 
 def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                       atlas=None, scenery_atlas=None, poses=None, structures=(),
-                      interior_floors=()):
+                      interior_floors=(), prop_atlas=None):
     """Paint hand-authored sprite overlays with deterministic vector fallback.
 
     Cutaway remains a vector outline: opaque sprites may never hide occupants.
@@ -231,7 +231,7 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
         if (active_level > 0 and building_floors
                 and layers.get('Bâtiments', True)):
             draw_stacked_floors(canvas, geo, building, building_floors,
-                                active_level, instance_tag)
+                                active_level, instance_tag, prop_atlas=prop_atlas)
         if building.name in SCENERY_NAMES:
             # No opaque scenery may hide selected cells or tactical actors.
             # Without a PNG, the existing tile/prop renderer is the fallback.
