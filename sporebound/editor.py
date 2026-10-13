@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
+from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
+                                  EntityCommand, RENDERER, MINIMAP, INSPECTOR,
+                                  WORKSPACE)
 from .ai import play_activation
 from .engine import Battle
 from .model import Content, RuleError
@@ -306,6 +309,7 @@ def launch(path):
                    'Déploiement', 'Objectifs', 'Objets', 'Unités')}
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
     mode_var = tk.StringVar(value='MODE : ÉDITION')
+    editing_context = EditingContext(doc, mission_var.get)
 
     def guarded(fn):
         def run(*args):
@@ -329,12 +333,16 @@ def launch(path):
         nonlocal battle
         if source_pending() and not messagebox.askyesno('JSON non appliqué', 'Abandonner les modifications JSON non appliquées ?'):
             return
-        fn()
+        notice = fn()
         if studio is not None and stroke_before is None:
             studio.capture_history()
         battle = None
         refresh_source()
-        refresh()
+        if isinstance(notice, EditorChange):
+            # Commands publish only after JSON and Studio history are in sync.
+            editing_context.notify(notice)
+        else:
+            refresh()
 
     @guarded
     def open_doc():
@@ -349,6 +357,7 @@ def launch(path):
             candidate = Document(Content.from_dict(
                 raw, rules=authored_rules_for_document(raw)))
             doc, current_path, battle = candidate, Path(name), None
+            editing_context.document = doc
             disk_revisions = StudioTransactionStore(current_path).revisions()
             mission_var.set(doc.data['missions'][0]['id'])
             if studio is not None:
