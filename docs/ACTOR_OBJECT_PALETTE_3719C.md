@@ -64,3 +64,50 @@ SPOREBOUND_GUI_SMOKE=1 python -m unittest tests_standalone.test_entity_palette_3
 orientation d'un acteur, levier relié à une porte, emplacement invalide,
 Undo/Redo, sauvegarde/rechargement, interaction dans le Player et disposition
 de la palette sur écrans compacts. Ne pas confondre tests ajoutés avec CI verte.
+
+## Approfondissement : inspection et édition des instances
+
+La palette ne se limite plus à créer de nouvelles entités. Le bouton
+**Inspecter acteur / objet** ou l'outil **Inspecter entité** ouvre un panneau
+contextuel sur une case de la scène. L'inspecteur propose un sélecteur lorsque
+plusieurs entités partagent la même case ; les acteurs multicases sont
+sélectionnés sur toute leur emprise, pas seulement sur leur origine.
+
+- **Acteur :** nom, équipe et orientation initiale modifiables, avec aperçu
+  de l'atlas existant dans les deux poses disponibles (immobile / marche).
+  L'orientation est persistée et utilisée par le renderer Studio/Player.
+- **Objets :** porte (PV, verrouillage), coffre (contenu), levier (porte
+  liée), engins de siège (porte cible, puissance, équipe, munitions),
+  passage (destination, coût, disponibilité, sens), défense (équipe,
+  puissance, charges, état).
+- **Manipulation :** « Déplacer au clic » et « Dupliquer au clic »
+  réutilisent les modèles existants. L'identité d'une entité déplacée
+  demeure stable ; une copie reçoit une nouvelle identité. Les cellules
+  de défense et patrouilles suivent leur entité à déplacement/duplication.
+  La destination d'un passage reste absolue par conception.
+- **Suppression :** les références doivent rester valides. Supprimer une
+  porte utilisée par un levier, ou la dernière unité d'une équipe requise,
+  est refusé par `Content` ; rien n'entre dans l'historique.
+- **Palette de placement :** les objets nécessitant une porte proposent
+  maintenant une liste des portes existantes. Un passage exige une
+  destination `x,y` lisible avant d'entrer en mode placement.
+
+L'interface affiche une cible **bleue informative** lors d'un déplacement
+ou d'une duplication, car la validité tactique finale dépend de l'ensemble
+des règles. Aucune réussite n'est promise par le simple survol.
+
+### Tests de cette extension
+
+```sh
+python -m unittest tests_standalone.test_entity_editing_3719c -v
+SPOREBOUND_GUI_SMOKE=1 python -m unittest tests_standalone.test_entity_editing_3719c_gui -v
+```
+
+Ces commandes sont des gates à exécuter sur les SHA publiés, pas des
+résultats de tests déclarés. Également vérifier des acteurs ayant une
+patrouille, le refus de retirer une porte référencée et la manipulation
+à 24/54/96 sous Windows, macOS et Tk/Xvfb Linux. La branche est en brouillon
+et ne prétend pas fournir des sprites d'attaque, de dégâts ou de mort :
+l'atlas isométrique n'offre actuellement que deux frames disponibles
+par direction. L'animation de combat doit rester synchronisée avec
+`MotionDirector` dans un lot artistique distinct.
