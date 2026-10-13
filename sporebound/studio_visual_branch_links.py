@@ -20,6 +20,33 @@ class VisualBranchInteractions:
         self.visual_mission = self.tk.StringVar(value=self.owner.mission())
         self.canvas.bind('<B1-Motion>', self._visual_motion, add='+')
         self.canvas.bind('<ButtonRelease-1>', self._visual_release, add='+')
+        details = self.visual_details
+        self.ttk.Separator(details, orient='horizontal').pack(
+            fill='x', padx=8, pady=(8, 5))
+        self.ttk.Label(
+            details, text='Connexion : tirer le point turquoise vers la cible',
+            wraplength=280).pack(anchor='w', padx=8)
+        line = self.ttk.Frame(details)
+        line.pack(fill='x', padx=8, pady=2)
+        self.ttk.Label(line, text='Événement → événement :').pack(side='left')
+        self.ttk.Combobox(
+            line, textvariable=self.event_join_var,
+            values=('ET', 'OU'), state='readonly', width=5).pack(
+                side='left', padx=4)
+        line = self.ttk.Frame(details)
+        line.pack(fill='x', padx=8, pady=2)
+        self.ttk.Label(line, text='Mission :').pack(side='left')
+        self.visual_mission_box = self.ttk.Combobox(
+            line, textvariable=self.visual_mission, state='readonly',
+            width=20, values=[m['id'] for m in
+                              self.owner.doc().data['missions']])
+        self.visual_mission_box.pack(side='left', padx=4)
+        self.visual_mission_box.bind(
+            '<<ComboboxSelected>>', lambda event: self.draw())
+        self.ttk.Button(
+            details, text='Éditer événement sélectionné',
+            command=lambda: self.owner._run(
+                self._visual_open_event)).pack(fill='x', padx=8, pady=3)
 
     def _visual_mission_id(self):
         missions = [row['id'] for row in self.owner.doc().data['missions']]
