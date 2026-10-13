@@ -31,6 +31,8 @@ jobs:
         run: python -m unittest tests_standalone.test_world_events_3724c -v
       - name: Verify 3.7.24D multiple encounters, forks and backtracking
         run: python -m unittest tests_standalone.test_world_forks_3724d -v
+      - name: Verify 3.7.24E world event authoring, route picking and persistence
+        run: python -m unittest tests_standalone.test_world_event_studio_3724e -v
       - name: Generate and validate a playable 3.7.24A World Map campaign
         run: |
           python -m examples.world_map_3724a --output "${{ runner.temp }}/world-3724a.json"
@@ -72,6 +74,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_map_3724a_gui.py -v
+      - name: Verify 3.7.24E visual road events Studio, Undo Redo Save All
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_event_studio_3724e_gui.py -v
       - name: Verify 3.7.21B common undo/redo and Save All through real Tk
         env:
           SPOREBOUND_GUI_SMOKE: '1'

@@ -133,3 +133,35 @@ les nouvelles connexions sont ajoutées seulement à la copie du contenu
 générée pour cette démonstration.
 
 Gate : `python -m unittest tests_standalone.test_world_forks_3724d -v`.
+
+## 3.7.24E — éditeur visuel des rencontres de voyage
+
+L'onglet **Monde** existant possède maintenant un inspecteur latéral :
+- cliquer sur le trait d'une route autorisée (liens canoniques
+  `Mission.next_missions`), ou sur une pastille `!` d'un événement existant ;
+- créer une rencontre, saisir son ID, sélectionner une **scène StoryBook
+  existante** et la position 1..7/8 sur le tronçon ;
+- afficher plusieurs rencontres d'une même route, les sélectionner,
+  les modifier et les supprimer ;
+- associer individuellement chaque choix réel de la scène à `continue`,
+  `return` ou `destination` avec sélection de la destination sur la carte ;
+- afficher le texte, les choix, leurs effets et les itinéraires dans un
+  aperçu **sans mutation** ; continuer d'éditer le contenu narratif
+  (conditions, dialogues, effets) dans l'éditeur de scènes existant.
+
+Les mutations sont validées via `GameProject.from_dict` et consignées dans
+le `StudioHistory` transversal. `Annuler`, `Rétablir` et `Enregistrer
+tout` concernent une seule version de `GameProject.world`, sans toucher au
+contenu tactique. Le renderer Player reste inchangé : les pastilles `!`
+de l'éditeur ne divulguent pas les rencontres en jeu.
+
+Validation :
+```sh
+python -m unittest tests_standalone.test_world_event_studio_3724e -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_world_event_studio_3724e_gui -v
+```
+
+Limite explicite : le panneau propose une **prévisualisation statique** de la
+scène et du branchement configurés, pas une exécution de campagne. La
+simulation narrative/tactique complète et le sélecteur visuel des conditions
+composites restent des extensions ultérieures du Story Studio.
