@@ -7,7 +7,8 @@ The existing **Bibliothèque d’assets — Carte** palette now contains an
 entries in `assets/watercolor/registry.json`.
 
 - Search by sprite or animation ID, family and author-readable title.
-- Select an animated entry and step through its *actual authored* frames.
+- Select an animated entry, step through its frames or play them at their
+  *actual authored durations* (with clean timer cancellation on close).
 - Preview only PNGs that exist and match the tracked SHA-256 provenance.
 - Distinguish **unpublished**, **changed/tampered** and **verified** art.
 - Decode an image only when selected (the 103-entry list is text-only).
