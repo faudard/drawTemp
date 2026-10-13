@@ -54,7 +54,12 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                                    for tag in event_graph.gettags(item))
                     self.assertFalse(existing)
 
-                    buttons['Créer événement'].invoke()
+                    # Let CI expose the original Python traceback rather
+                    # than the Studio's user-facing error dialog.
+                    from sporebound.studio_panels import StudioPanels
+                    with patch.object(StudioPanels, '_run',
+                                      lambda self, operation: operation()):
+                        buttons['Créer événement'].invoke()
                     root.update()
                     # Show the authoring validation error at the failing step,
                     # instead of reporting an unhelpful empty graph.
