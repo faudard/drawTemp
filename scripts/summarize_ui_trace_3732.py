@@ -24,6 +24,12 @@ BUCKET_BY_OPERATION = {
     "story_graph.draw": "nodes",
 }
 FIELDS = ("callback_ms", "callback_to_idle_ms", "queued_idle_ms")
+EXTRA_BUCKETS = {
+    "map.refresh": ("cell_size", "isometric", "renderer_enabled"),
+    "workspace.refresh": ("visible_nodes",),
+    "event_graph.draw": ("zoom_pct",),
+    "story_graph.draw": ("zoom_pct",),
+}
 
 
 def summarize(lines):
@@ -50,7 +56,12 @@ def summarize(lines):
             if (not isinstance(value, (int, float)) or isinstance(value, bool)
                     or not isfinite(value) or value < 0):
                 raise ValueError("Invalid %s, row %d" % (field, number))
-        key = (operation, bucket, complexity)
+        counts = row["counts"]
+        attributes = tuple((name, counts[name]) for name in EXTRA_BUCKETS[operation]
+                           if name in counts)
+        if any(type(value) not in (int, bool) for _, value in attributes):
+            raise ValueError("Invalid scene attribute at row %d" % number)
+        key = (operation, bucket, complexity, attributes)
         group = groups.setdefault(key, {name: [] for name in FIELDS})
         for field in FIELDS:
             group[field].append(row[field])
@@ -58,11 +69,12 @@ def summarize(lines):
     if not groups:
         raise ValueError("No valid UI trace samples")
     results = []
-    for (operation, bucket, complexity), values in sorted(groups.items()):
+    for (operation, bucket, complexity, attributes), values in sorted(groups.items()):
         results.append({
             "operation": operation,
             "complexity_dimension": bucket,
             "complexity_value": complexity,
+            "scene_dimensions": dict(attributes),
             "samples": len(values[FIELDS[0]]),
             "sufficient_for_tail_exploration": len(values[FIELDS[0]]) >= 100,
             "timings": {key: percentiles(sample) for key, sample in values.items()},
