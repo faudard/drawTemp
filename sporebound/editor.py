@@ -18,6 +18,8 @@ from .iso_props import IsoPropAtlas
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import IsoActorAtlas
+from .entity_placement import (palette_entities, place_palette_entity,
+                               preview_entity_cells)
 from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
                              structure_footprint, validate_structure_placement,
                              place_structure, remove_structure)
@@ -242,6 +244,8 @@ def launch(path):
     structure_door_var = tk.StringVar(value='Entrée A')
     structure_turns = 0
     asset_palette = None
+    entity_entry = None
+    entity_settings = {}
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
@@ -627,6 +631,40 @@ def launch(path):
         clear_placement_preview()
         if battle:
             return
+        if tool_var.get() == 'Entité' and entity_entry is not None:
+            cursor = event_cell(event)
+            if cursor is None:
+                return
+            mission = next(m for m in doc.data['missions']
+                           if m['id'] == mission_var.get())
+            cells, valid = preview_entity_cells(
+                doc.data, mission_var.get(), entity_entry, cursor,
+                link=entity_settings.get('link', ''),
+                destination=entity_settings.get('destination', ''))
+            preview_cells([c for c in cells if 0 <= c[0] < mission['board']['width']
+                           and 0 <= c[1] < mission['board']['height']],
+                          tag='brush_preview', color='#36a16c' if valid else '#e05252')
+            if valid and entity_entry.kind == 'actor':
+                facing = entity_settings.get('facing', 'south')
+                style = asset_palette.actor_visual_style(entity_entry)
+                photo = actor_atlas.sprite(style, facing, 0, tile_size)
+                if photo is not None:
+                    if iso_var.get() and iso_geometry is not None:
+                        cx, cy = iso_geometry.center(cursor)
+                        x, y = cx, cy + tile_size*5/54
+                    else:
+                        x, y = (cursor[0]+.5)*tile_size, (cursor[1]+1)*tile_size
+                    canvas.create_image(x, y, image=photo, anchor='s', tags='asset_ghost')
+            elif valid and entity_entry.kind == 'object':
+                if iso_var.get() and iso_geometry is not None:
+                    x, y = iso_geometry.center(cursor)
+                else:
+                    x, y = (cursor[0]+.5)*tile_size, (cursor[1]+.5)*tile_size
+                canvas.create_rectangle(x-11, y-19, x+11, y+1, fill='#9264ab',
+                                        outline='#3d2554', tags='asset_ghost')
+                canvas.create_text(x, y-23, text=entity_entry.name[:9],
+                                   tags='asset_ghost')
+            return
         if tool_var.get() == 'Structure':
             cursor = event_cell(event)
             if cursor is None:
@@ -745,6 +783,16 @@ def launch(path):
             refresh()
         elif tool == 'Collage':
             paste_at(selected_cell)
+        elif tool == 'Entité':
+            if source_pending():
+                raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
+            if entity_entry is None:
+                raise RuleError('Choisir un acteur ou objet dans la bibliothèque.')
+            design_change(lambda: doc.replace(place_palette_entity(
+                doc.data, mission_var.get(), entity_entry, selected_cell,
+                **entity_settings)))
+            status_var.set(f'{entity_entry.name} placé en {selected_cell} '
+                           '(annulation et sauvegarde disponibles).')
         elif tool == 'Structure':
             if source_pending():
                 raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
@@ -1067,6 +1115,7 @@ def launch(path):
                      '\nRemplissage : choisir un sol puis remplir une zone contiguë.'
                      '\nPipette sol/décor : cliquer une case pour reprendre son pinceau.'
                      '\nCouches : visibilité d’édition seulement ; règles inchangées.'
+                     '\nActeurs et objets : bibliothèque → orientation, ID, cible → cliquer.'
                      '\nDonnées tactiques avancées : onglet JSON.')
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
@@ -1088,7 +1137,7 @@ def launch(path):
     ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=15,
                  values=['Pinceau','Rectangle','Sélection','Collage',
                          'Remplissage','Pipette sol','Pipette décor',
-                         'Structure']).pack(side='left')
+                         'Structure', 'Entité']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -1149,11 +1198,15 @@ def launch(path):
                command=lambda: (brush_var.set('height_set'),
                                 tool_var.set('Pinceau'))).pack(side='left',padx=4)
     def choose_palette_asset(entry, turns):
-        nonlocal structure_turns
+        nonlocal structure_turns, entity_entry, entity_settings
         if battle is not None:
             status_var.set('Revenir en mode Éditer avant de choisir un asset à placer.')
             return False
-        if entry.kind == 'structure':
+        if entry.kind in ('actor', 'object'):
+            entity_entry = entry
+            entity_settings = asset_palette.placement_settings()
+            tool_var.set('Entité')
+        elif entry.kind == 'structure':
             structure_var.set(entry.value)
             structure_turns = turns
             structure_door_var.set('Entrée A')
@@ -1176,7 +1229,10 @@ def launch(path):
             asset_palette = AssetPalette(
                 root, terrain=iso_atlas, props=iso_props,
                 buildings=building_atlas, fortifications=fortification_atlas,
-                choose=choose_palette_asset, cell_size=lambda: tile_size)
+                choose=choose_palette_asset, cell_size=lambda: tile_size,
+                actors=actor_atlas, content=lambda: doc.data,
+                mission=mission_var.get,
+                entities=lambda: palette_entities(doc.data, mission_var.get()))
         else:
             asset_palette.show()
 
