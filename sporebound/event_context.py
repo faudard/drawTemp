@@ -10,6 +10,7 @@ from . import event_graph
 from .engine import Battle
 from .model import Content, RuleError, require
 from .rules import triggers
+from .tactical_rpg3 import authored_rules_for_document
 
 
 def inspect_event(data, mission_id, event_id, project=None):
@@ -55,11 +56,15 @@ def preview_event(data, mission_id, event_id, *, tick=0):
     require(type(tick) is int and 0 <= tick <= 100000,
             'Preview tick must be an integer from 0 to 100000')
     context = inspect_event(data, mission_id, event_id)
+    # Preserve the same rule family selection used by the Studio and Player.
+    # It must inspect the full authored document BEFORE removing triggers.
+    rules = authored_rules_for_document(data)
     snapshot = deepcopy(data)
     mission = next(m for m in snapshot['missions'] if m['id'] == mission_id)
     trigger = next(e for e in mission['triggers'] if e['id'] == event_id)
     mission['triggers'] = []
-    battle = Battle(Content.from_dict(snapshot), mission_id, seed=1)
+    battle = Battle(Content.from_dict(snapshot, rules=rules),
+                    mission_id, seed=1, rules=rules)
     battle.tick = tick
     battle.mission.triggers = [trigger]
 
