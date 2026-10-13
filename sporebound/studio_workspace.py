@@ -4,6 +4,7 @@ Only this module creates widgets; the index and game engine remain headless.
 """
 from .model import RuleError
 from .studio_index4 import StudioIndex
+from .performance_trace import begin_ui, finish_ui
 from .game_export4 import export_game
 from .studio_release_gate import verify_game_bundle
 from .workspace import (GROUPS, ProjectWorkspaceIndex, create_blank_mission,
@@ -162,6 +163,7 @@ class ProjectWorkspaceTab:
     def refresh(self):
         if self.owner.project is None:
             return
+        ui_started = begin_ui()
         model = self.model()
         sections = model.sections
         shown = {node.key for node in model.search(self.query.get())}
@@ -180,6 +182,10 @@ class ProjectWorkspaceTab:
         self.status.config(text=f'{sum(len(items) for items in sections.values())} '
                                 'ressources indexées — modifications non sauvegardées : '
                                 f'{"oui" if self.owner.doc().dirty or self.owner.dirty() else "non"}')
+        finish_ui("workspace.refresh", ui_started, self.tree, counts={
+            "resource_nodes": len(model.nodes), "visible_nodes": len(shown),
+            "reference_edges": len(model.references),
+        })
 
     @staticmethod
     def _populate_tree(tree, sections, shown):
