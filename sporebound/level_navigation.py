@@ -90,8 +90,9 @@ def available_level_moves(battle, unit=None):
     level = battle.unit_levels.get(unit.id, 0)
     origin = (level, *unit.pos)
     budget = battle.movement_budget(unit)
-    occupied = {(battle.unit_levels.get(o.id, 0), *o.pos)
-                for o in battle.units if o.alive and o.id != unit.id}
+    occupied = {(battle.unit_levels.get(o.id, 0), *cell)
+                for o in battle.units if o.alive and o.id != unit.id
+                for cell in o.occupied_cells()}
     links = {}
     for edge in battle.mission.level_links:
         a, b = tuple(edge['from']), tuple(edge['to'])
@@ -136,6 +137,8 @@ def navigate_level(battle, unit, *, level, cell):
             and all(type(v) is int for v in cell), 'Invalid level destination')
     destination = (level, *cell)
     current = (battle.unit_levels.get(unit.id, 0), *unit.pos)
+    require(current[0] > 0 or level > 0,
+            'Use ordinary ground movement for ground-only destinations')
     reachable = available_level_moves(battle, unit)
     require(destination != current and destination in reachable,
             'Layered destination unreachable or movement spent')
