@@ -380,7 +380,7 @@ class Content:
                 require(trigger["id"] not in trigger_ids, "Duplicate trigger")
                 trigger_ids.add(trigger["id"])
                 from .rules.triggers import ValidationContext
-                context = ValidationContext(b, ids, rules, self.archetypes)
+                context = ValidationContext(b, ids, rules, self.archetypes, object_ids)
                 rules.trigger_conditions.get(trigger['condition']).validate(context, trigger)
                 for action in trigger['actions']:
                     rules.trigger_actions.get(action['kind']).validate(context, action)
