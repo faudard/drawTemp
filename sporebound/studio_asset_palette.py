@@ -204,7 +204,7 @@ class AssetPalette:
                 source = next((u for u in mission['units'] if entry.value == 'unit:' + u['id']), None) if mission else None
                 self.entity_team.set(source['team'] if source else 'enemy')
             if entry.kind in ('actor', 'object'):
-                self.entity_frame.pack(fill='x', padx=8, pady=4)
+                self.entity_frame.pack(fill='x', padx=8, pady=4, before=self.use_button)
                 for label, row in self.entity_rows.items():
                     visible = (label.startswith('ID') or
                                (entry.kind == 'actor' and label in ('Nom de l’acteur', 'Équipe', 'Orientation', 'Pose (aperçu)')) or
