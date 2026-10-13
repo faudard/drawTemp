@@ -114,20 +114,39 @@ class StudioTransactionStore:
     def pending(self):
         return self.journal.exists()
 
+    def revisions(self):
+        """SHA-256 of the exact on-disk bytes; None means not yet created."""
+        return tuple(_digest(path.read_bytes()) if path.exists() else None
+                     for path in self.paths)
+
     def _publish_one(self, path):
         os.replace(self._stage(path), path)
 
-    def save(self, content_data, project_data):
+    def save(self, content_data, project_data, *, expected_previous=None):
+        """Reject external modifications to either document before publication.
+
+        The editor supplies the fingerprints from the last successful load or
+        save. This prevents silently overwriting work from another Studio.
+        """
         require(not self.pending,
                 "Enregistrement interrompu : récupérer le projet avant de réenregistrer")
         validated_content, validated_project = validate_pair(content_data, project_data)
         payloads = (json_text(validated_content).encode("utf-8"),
                     json_text(validated_project).encode("utf-8"))
         previous = tuple(p.read_bytes() if p.exists() else None for p in self.paths)
+        previous_revisions = tuple(_digest(raw) for raw in previous)
+        if expected_previous is not None:
+            require(isinstance(expected_previous, (tuple, list)) and
+                    len(expected_previous) == 2 and
+                    all(x is None or isinstance(x, str) and len(x) == 64
+                        for x in expected_previous), "Empreintes attendues invalides")
+            require(previous_revisions == tuple(expected_previous),
+                    "Les fichiers Content/GameProject ont changé sur disque. "
+                    "Recharger avant de remplacer leurs modifications.")
         manifest = {
             "kind": "studio_save", "version": self.VERSION,
             "paths": [str(p) for p in self.paths],
-            "previous": [_digest(raw) for raw in previous],
+            "previous": list(previous_revisions),
             "next": [_digest(raw) for raw in payloads],
         }
         # Stage *both* payloads and both recovery generations before journal.
@@ -136,9 +155,18 @@ class StudioTransactionStore:
             write_bytes(self._stage(path), payload)
             if prior is not None:
                 write_bytes(self._backup(path), prior)
+        # A second process might edit either document during staging. In that
+        # case do not start a journal or replace any user-owned target.
+        require(self.revisions() == previous_revisions,
+                "Les fichiers du Studio ont changé pendant la préparation de la sauvegarde.")
         write_json(self.journal, manifest)
         # Once the journal exists, retain it on ANY failure for explicit repair.
-        for path in self.paths:
+        # Check again before each replacement: concurrent modifications must
+        # remain untouched, with the journal available for manual inspection.
+        for index, path in enumerate(self.paths):
+            require(self.revisions()[index] == previous_revisions[index],
+                    f"{path.name} a été modifié pendant la sauvegarde; "
+                    "récupération manuelle requise")
             self._publish_one(path)
         self.journal.unlink()
         for path in self.paths:
