@@ -690,8 +690,9 @@ class EventGraphStudio:
                 x2, y2 = int(b['x'] * scale), int(b['y'] * scale)
                 canvas.create_line(x1 + width, y1, x2, y2, arrow='last',
                                    fill='#64748b', width=2)
-        debug_report = (self.debugger.report()
-                        if self.debugger is not None else None)
+        # Lightweight rendering tests may build a view without running __init__.
+        debugger = getattr(self, 'debugger', None)
+        debug_report = debugger.report() if debugger is not None else None
         updates = 0
         for index, node in enumerate(graph['nodes']):
             style = self._node_style(
