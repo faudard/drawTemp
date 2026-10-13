@@ -923,7 +923,13 @@ def launch(path):
         nonlocal structure_drag_anchor, structure_drag_hover
         if not battle and tool_var.get() == 'Sélection structure' and structure_drag_from is not None:
             cell = event_cell(event)
-            if cell is None or cell == structure_drag_hover:
+            if cell is None:
+                structure_drag_anchor = None
+                structure_drag_hover = None
+                canvas.delete('structure_drag_preview')
+                canvas.delete('structure_drag_sprite')
+                return
+            if cell == structure_drag_hover:
                 return
             structure_drag_hover = cell
             current = selected_structure()
