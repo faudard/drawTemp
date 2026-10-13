@@ -387,3 +387,19 @@ jobs:
           name: player-canvas-379-ubuntu
           path: ${{ runner.temp }}/player-canvas-379-stress.json
           if-no-files-found: error
+
+  balance-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Capture reproducible garden balance evidence
+        run: python -m sporebound battle-lab --mission garden --seed 1 --runs 8 --limit 500 --report battle_lab_garden_38.json
+      - name: Preserve balance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: battle-lab-garden-38
+          path: battle_lab_garden_38.json
+          if-no-files-found: error
