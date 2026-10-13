@@ -161,10 +161,12 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                      selected_cell, selected_tiles, reachable=(), danger=(), active_id=None,
                      atlas=None, prop_atlas=None,
                      building_atlas=None, fortification_atlas=None,
-                     actor_atlas=None, poses=None, object_atlas=None):
+                     actor_atlas=None, poses=None, object_atlas=None,
+                     geometry=None, retained=False):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
-    geo = IsoGeometry(board, cell_size)
-    canvas.delete('all')
+    geo = geometry if geometry is not None else IsoGeometry(board, cell_size)
+    if not retained:
+        canvas.delete('all')
     canvas.configure(scrollregion=(0, 0, geo.width, geo.height))
     goals = set(mission.goal)
     deploy = {tuple(c) for z in mission.deployment for c in z['cells']}
@@ -187,6 +189,8 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
             threats[cell] = kind
 
     for c in geo.draw_order:
+        if retained:
+            canvas.begin_group(c)
         tile = board.tile(c)
         corners = geo.polygon(c)
         north, east, south, west = corners
@@ -349,6 +353,8 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     # Prefer authored visual identities; infer legacy stamps as a fallback.
     # Board is always the tactical source of truth for height and collisions.
     from .iso_architecture import draw_architecture
+    if retained:
+        canvas.begin_group('architecture')
     draw_architecture(canvas, geo, board, units, selected_cell, layers,
                       atlas=building_atlas, scenery_atlas=fortification_atlas,
                       poses=poses, structures=getattr(mission, 'structures', ()))

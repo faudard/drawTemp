@@ -155,6 +155,8 @@ def condition_title(event):
     kind = event['condition']
     if kind == 'tick':
         return f"Tick ≥ {event['value']}"
+    if kind == 'interact':
+        return f"Objet actionné : {event['object']}"
     if kind == 'enter':
         return f"Entrée en {tuple(event['pos'])}"
     if kind == 'defeated':
