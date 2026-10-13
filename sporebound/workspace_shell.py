@@ -121,8 +121,18 @@ def palette_source_for_tree(key, data, mission_id):
         if mid != mission_id:
             raise RuleError('Changer de mission avant de dupliquer cet acteur.')
         source = 'actor:' + entity_id
+    elif key.startswith('map_object:'):
+        mid, entity_id = key.partition(':')[2].split('/', 1)
+        if mid != mission_id:
+            raise RuleError('Changer de mission avant de copier cet objet.')
+        mission = next(m for m in data['missions'] if m['id'] == mid)
+        original = next((o for o in mission.get('objects', [])
+                         if o['id'] == entity_id), None)
+        if original is None:
+            raise RuleError('Objet introuvable : ' + key)
+        source = 'object:' + original['kind']
     else:
-        raise RuleError('Déposer un acteur depuis la bibliothèque ou la carte.')
+        raise RuleError('Déposer un acteur ou objet depuis le Workspace.')
     return next((entry for entry in entity_entries(data, mission_id)
                  if entry.id == source),
                 None) or _missing_entry(key)
