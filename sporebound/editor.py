@@ -3,6 +3,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 
+from .editor_render_cache import EditorRenderCache
 from .ai import play_activation
 from .engine import Battle
 from .model import Content, RuleError
@@ -13,7 +14,7 @@ from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
                             transform_terrain)
 from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
-                      _line_cells, render_isometric, SURFACE_COLORS, IsoTerrainAtlas)
+                      _line_cells, SURFACE_COLORS, IsoTerrainAtlas)
 from .iso_props import IsoPropAtlas
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
@@ -1061,9 +1062,11 @@ def launch(path):
         if iso_var.get():
             # Editor and its actual Battle use the identical terrain/asset
             # scene. Intents come from battle_frame: no game-rule duplication.
+            clear_placement_preview()
+            canvas.delete('stroke_preview')
             live = battle_frame(battle, selected_cell) if battle else None
-            iso_geometry = render_isometric(
-                canvas, board, mission, units, cell_size=tile_size,
+            iso_geometry = editor_renderer.draw(
+                board, mission, units, cell_size=tile_size,
                 layers={name: var.get() for name, var in layer_vars.items()},
                 selected_cell=selected_cell, selected_tiles=selected_tiles,
                 reachable=live.reachable if live else (),
@@ -1075,7 +1078,7 @@ def launch(path):
                 actor_atlas=actor_atlas)
         else:
             iso_geometry = None
-            canvas.delete('all')
+            editor_renderer.invalidate()
             canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
             reachable = battle.reachable() if battle else {}
             deployment_cells = ({tuple(c) for z in mission.deployment for c in z['cells']}
@@ -1351,6 +1354,7 @@ def launch(path):
     canvas_frame = ttk.Frame(work)
     canvas_frame.pack(side='left',fill='both',expand=True)
     canvas = tk.Canvas(canvas_frame,background='#eeeeee',takefocus=1)
+    editor_renderer = EditorRenderCache(canvas)
     iso_atlas = IsoTerrainAtlas(canvas)
     iso_props = IsoPropAtlas(canvas)
     building_atlas = IsoBuildingAtlas(canvas)

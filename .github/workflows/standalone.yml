@@ -98,6 +98,25 @@ jobs:
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_iso_frame_cache_3718c_gui.py -v
       - name: Benchmark cached ISO frames on 32 and 64 square maps (3.7.18C)
         run: xvfb-run -a python3 scripts/benchmark_iso_frame_cache_3718c.py --sizes 32,64 --frames 4
+      - name: Verify retained Studio rendering against full Tk scenes (3.7.18D)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_editor_render_cache_3718d_gui.py -v
+      - name: Profile Studio authoring at 32/64/128 and the reference village (3.7.18D)
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_editor_render_3718d.py
+          --frames 20 --output "${{ runner.temp }}/studio-render-3718d.json"
+      - name: Profile reference village with PNG atlases (3.7.18D)
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_editor_render_3718d.py
+          --sizes village --assets --frames 20
+          --output "${{ runner.temp }}/studio-render-assets-3718d.json"
+      - name: Preserve Studio profiling evidence (3.7.18D)
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-render-3718d-ubuntu
+          path: ${{ runner.temp }}/studio-render*-3718d.json
+          if-no-files-found: error
       - name: Exercise asset palette scene authoring and missing PNG fallback (3.7.16)
         env:
           SPOREBOUND_GUI_SMOKE: '1'
