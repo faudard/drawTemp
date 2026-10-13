@@ -9,6 +9,7 @@ from .authoring import _cell, _identifier, _mission, add_object
 from .cinematics import (cinematic_template, event_template,
                          tactical_event_target, triggered_tactical_cinematics)
 from .event_composer import action, condition, save_event
+from .event_graph import extend_condition
 from .event_context import preview_event
 from .game_project import GameProject
 from .model import Content, require
@@ -29,7 +30,8 @@ def gate_context(data, mission_id, door_id):
 
 def author_gate_sequence(data, project, mission_id, *, door_id, lever_id,
                          lever_cell, event_id, danger_cell, danger=4,
-                         dialogue='La porte est ouverte !', cinematic_id=''):
+                         dialogue='La porte est ouverte !', cinematic_id='',
+                         min_tick=None, extra_actions=()):
     """Prepare BOTH documents atomically, without mutating either input.
 
     An existing linked lever is reused; otherwise it is placed through the
@@ -71,11 +73,19 @@ def author_gate_sequence(data, project, mission_id, *, door_id, lever_id,
                 'La case du levier contient une unité')
         staged = add_object(data, mission_id, lever_id, 'switch',
                             lever_cell, link=door_id)
+    require(isinstance(extra_actions, (list, tuple)) and
+            len(extra_actions) <= 12, 'Au maximum 12 effets supplémentaires')
     staged = save_event(
         staged, mission_id, event_id,
         condition('interact', object_id=lever_id),
         [action('message', text=dialogue.strip()),
-         action('hazard', pos=danger_cell, amount=danger)])
+         action('hazard', pos=danger_cell, amount=danger),
+         *deepcopy(list(extra_actions))])
+    if min_tick is not None:
+        require(type(min_tick) is int and 0 <= min_tick <= 100000,
+                'Tick minimum invalide')
+        staged = extend_condition(
+            staged, mission_id, event_id, condition('tick', tick=min_tick))
 
     clip = cinematic_template(
         clip_id, 'Siège · ' + event_id,
