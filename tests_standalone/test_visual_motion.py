@@ -22,9 +22,11 @@ class MotionTests(unittest.TestCase):
         director.observe(first, 1000)
         director.observe(second, 1100)
         self.assertEqual(director.poses(1100)["jeanne"].x, 0)
+        self.assertEqual(director.poses(1100)["jeanne"].frame, 0)
         pose = director.poses(1200)["jeanne"]
         self.assertEqual((pose.x, pose.y, pose.action, pose.direction),
                          (1., 0., "move", "east"))
+        self.assertEqual(pose.frame, 1)
         self.assertTrue(director.active(1200))
         self.assertFalse(director.active(1300))
         self.assertEqual(director.poses(1300)["jeanne"].x, 2)
