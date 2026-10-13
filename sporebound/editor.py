@@ -20,6 +20,10 @@ from .iso_object_atlas import IsoObjectAtlas
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import IsoActorAtlas
+from .entity_placement import (palette_entities, place_palette_entity,
+                               preview_entity_cells)
+from .entity_editing import (edit_entity, relocate_entity, duplicate_entity,
+                             remove_entity, entities_at)
 from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
                              structure_footprint, validate_structure_placement,
                              place_structure, remove_structure, structure_at,
@@ -285,6 +289,10 @@ def launch(path):
     entity_choice = None
     entity_hover_key = None
     entity_passage_entry = None
+    entity_entry = None
+    entity_settings = {}
+    entity_inspector = None
+    entity_target = None
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
@@ -302,7 +310,7 @@ def launch(path):
     def guarded(fn):
         def run(*args):
             try:
-                fn(*args)
+                return fn(*args)
             except (RuleError, OSError, ValueError, KeyError, StopIteration) as exc:
                 messagebox.showerror('Opération refusée', str(exc))
         return run
@@ -885,7 +893,8 @@ def launch(path):
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
                     'structure_group_preview', 'structure_group_ghost',
                     'brush_preview', 'asset_ghost', 'entity_preview',
-                    'entity_ghost', 'entity_route', 'entity_source'):
+                    'entity_ghost', 'entity_route', 'entity_source',
+                    'entity_target_preview'):
             canvas.delete(tag)
 
     def paste_preview(event):
@@ -908,6 +917,48 @@ def launch(path):
         structure_preview_key = key
         if battle:
             clear_placement_preview()
+            return
+        if tool_var.get() in ('Déplacer entité', 'Dupliquer entité') and entity_target:
+            cell = event_cell(event)
+            if cell is not None:
+                mission = next(m for m in doc.data['missions']
+                               if m['id'] == mission_var.get())
+                if 0 <= cell[0] < mission['board']['width'] and 0 <= cell[1] < mission['board']['height']:
+                    preview_cells([cell], tag='entity_target_preview', color='#2361ff')
+            return
+        if tool_var.get() == 'Entité' and entity_entry is not None:
+            cursor = event_cell(event)
+            if cursor is None:
+                return
+            mission = next(m for m in doc.data['missions']
+                           if m['id'] == mission_var.get())
+            cells, valid = preview_entity_cells(
+                doc.data, mission_var.get(), entity_entry, cursor,
+                link=entity_settings.get('link', ''),
+                destination=entity_settings.get('destination', ''))
+            preview_cells([c for c in cells if 0 <= c[0] < mission['board']['width']
+                           and 0 <= c[1] < mission['board']['height']],
+                          tag='brush_preview', color='#36a16c' if valid else '#e05252')
+            if valid and entity_entry.kind == 'actor':
+                facing = entity_settings.get('facing', 'south')
+                style = asset_palette.actor_visual_style(entity_entry)
+                photo = actor_atlas.sprite(style, facing, 0, tile_size)
+                if photo is not None:
+                    if iso_var.get() and iso_geometry is not None:
+                        cx, cy = iso_geometry.center(cursor)
+                        x, y = cx, cy + tile_size*5/54
+                    else:
+                        x, y = (cursor[0]+.5)*tile_size, (cursor[1]+1)*tile_size
+                    canvas.create_image(x, y, image=photo, anchor='s', tags='asset_ghost')
+            elif valid and entity_entry.kind == 'object':
+                if iso_var.get() and iso_geometry is not None:
+                    x, y = iso_geometry.center(cursor)
+                else:
+                    x, y = (cursor[0]+.5)*tile_size, (cursor[1]+.5)*tile_size
+                canvas.create_rectangle(x-11, y-19, x+11, y+1, fill='#9264ab',
+                                        outline='#3d2554', tags='asset_ghost')
+                canvas.create_text(x, y-23, text=entity_entry.name[:9],
+                                   tags='asset_ghost')
             return
         if tool_var.get() == 'Entité' and entity_choice is not None:
             cell = event_cell(event)
@@ -1091,7 +1142,7 @@ def launch(path):
 
     @guarded
     def click(event):
-        nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive
+        nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive, entity_target
         nonlocal structure_turns, structure_selection_cell, structure_selection_id
         nonlocal structure_drag_from, structure_drag_anchor, structure_drag_duplicate
         nonlocal entity_passage_entry
@@ -1141,6 +1192,34 @@ def launch(path):
             status_var.set(('Structure dupliquée' if duplicate else 'Structure déplacée')
                            + f' en {anchor}. Annuler/Rétablir disponibles.')
             refresh()
+        elif tool == 'Inspecter entité':
+            open_entity_inspector(selected_cell)
+            return
+        elif tool in ('Déplacer entité', 'Dupliquer entité'):
+            nonlocal_entity_target = entity_target
+            if nonlocal_entity_target is None:
+                raise RuleError('Sélectionner une entité à déplacer ou dupliquer.')
+            operation, kind, identifier, mid = nonlocal_entity_target
+            if mid != mission_var.get() or (operation == 'move') != (tool == 'Déplacer entité'):
+                raise RuleError('La sélection de départ ne correspond pas à cette mission.')
+            if battle or source_pending():
+                raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+            updated = (relocate_entity if operation == 'move' else duplicate_entity)(
+                doc.data, mid, kind, identifier, selected_cell)
+            design_change(lambda: doc.replace(updated))
+            entity_target = None
+            tool_var.set('Inspecter entité')
+            status_var.set(f'{kind} {identifier} : {operation} vers {selected_cell}; annulation possible.')
+        elif tool == 'Entité' and entity_entry is not None:
+            if source_pending():
+                raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
+            if entity_entry is None:
+                raise RuleError('Choisir un acteur ou objet dans la bibliothèque.')
+            design_change(lambda: doc.replace(place_palette_entity(
+                doc.data, mission_var.get(), entity_entry, selected_cell,
+                **entity_settings)))
+            status_var.set(f'{entity_entry.name} placé en {selected_cell} '
+                           '(annulation et sauvegarde disponibles).')
         elif tool == 'Entité':
             if battle or source_pending():
                 raise RuleError('Terminer le playtest et appliquer le JSON avant la pose.')
@@ -1611,7 +1690,9 @@ def launch(path):
             text += (f'\nSélection : {len(selected_tiles)} case(s)\n'
                      f'Presse-papiers : '
                      f'{len(terrain_clipboard.offsets) if terrain_clipboard else 0} case(s)\n'
-                     'Aide détaillée : panneau Raccourcis et aide.')
+                     'Aide détaillée : panneau Raccourcis et aide.'
+                     '\nActeurs/objets : palette pour placer, inspecteur pour modifier.'
+                     '\nInspecter entité : cliquer un acteur/objet; déplacer, dupliquer ou supprimer.')
         inspector.configure(state='normal')
         if not battle and structure_selection_cell is not None:
             try:
@@ -1675,7 +1756,7 @@ def launch(path):
                          'Remplissage','Pipette sol','Pipette décor',
                          'Structure','Sélection structure',
                          'Déplacer structure','Dupliquer structure',
-                         'Entité']).pack(side='left')
+                         'Entité','Inspecter entité','Déplacer entité','Dupliquer entité']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -1746,11 +1827,16 @@ def launch(path):
                command=lambda: (brush_var.set('height_set'),
                                 tool_var.set('Pinceau'))).pack(side='left',padx=4)
     def choose_palette_asset(entry, turns):
-        nonlocal structure_turns
+        nonlocal structure_turns, entity_entry, entity_settings, entity_choice
         if battle is not None:
             status_var.set('Revenir en mode Éditer avant de choisir un asset à placer.')
             return False
-        if entry.kind == 'structure':
+        if entry.kind in ('actor', 'object'):
+            entity_entry = entry
+            entity_choice = None
+            entity_settings = asset_palette.placement_settings()
+            tool_var.set('Entité')
+        elif entry.kind == 'structure':
             tool_tabs.select(tools_structure)
             structure_var.set(entry.value)
             structure_turns = turns
@@ -1769,11 +1855,12 @@ def launch(path):
         return True
 
     def choose_entity(entry, facing, link, destination, team):
-        nonlocal entity_choice, entity_passage_entry
+        nonlocal entity_choice, entity_passage_entry, entity_entry
         if battle is not None or source_pending():
             status_var.set('Terminer le playtest et appliquer le JSON avant édition.')
             return False
         entity_choice = (entry, facing, link, destination, team)
+        entity_entry = None
         entity_passage_entry = None
         tool_var.set('Entité')
         iso_var.set(True)
@@ -1810,9 +1897,60 @@ def launch(path):
             asset_palette = AssetPalette(
                 root, terrain=iso_atlas, props=iso_props,
                 buildings=building_atlas, fortifications=fortification_atlas,
-                choose=choose_palette_asset, cell_size=lambda: tile_size)
+                choose=choose_palette_asset, cell_size=lambda: tile_size,
+                actors=actor_atlas, content=lambda: doc.data,
+                mission=mission_var.get,
+                entities=lambda: palette_entities(doc.data, mission_var.get()))
         else:
             asset_palette.show()
+
+    @guarded
+    def commit_entity_edit(operation, kind, identifier, values):
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        mid = mission_var.get()
+        if operation == 'edit':
+            result = edit_entity(doc.data, mid, kind, identifier, **values)
+        elif operation == 'remove':
+            result = remove_entity(doc.data, mid, kind, identifier)
+        else:
+            raise RuleError('Unknown entity edit action')
+        design_change(lambda: doc.replace(result))
+        status_var.set(f'{kind} {identifier} : {operation} confirmé (Undo/Redo disponible).')
+        return True
+
+    def begin_entity_target(operation, kind, identifier):
+        nonlocal entity_target
+        if battle is not None or source_pending():
+            messagebox.showerror('Édition indisponible',
+                                 'Quitter le combat et appliquer le JSON.')
+            return False
+        entity_target = (operation, kind, identifier, mission_var.get())
+        tool_var.set('Déplacer entité' if operation == 'move' else 'Dupliquer entité')
+        notebook.select(work)
+        status_var.set(f'{operation} {kind} {identifier} : cliquer la case cible.')
+        canvas.focus_set()
+        return True
+
+    def open_entity_inspector(cell):
+        nonlocal entity_inspector
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        if not entities_at(doc.data, mission_var.get(), cell):
+            raise RuleError('Aucun acteur ou objet sur cette case.')
+        if entity_inspector is None:
+            from .studio_entity_inspector import EntityInspector
+            entity_inspector = EntityInspector(
+                root, snapshot=lambda: (doc.data, mission_var.get()),
+                actors=actor_atlas, commit=commit_entity_edit,
+                begin_target=begin_entity_target,
+                cell_size=lambda: tile_size)
+        entity_inspector.show_at(cell)
+
+    @guarded
+    def inspect_selected_entity():
+        tool_var.set('Inspecter entité')
+        open_entity_inspector(selected_cell)
 
     structure_controls = ttk.Frame(tools_structure)
     structure_controls.pack(fill='x', padx=5, pady=2)
@@ -1820,6 +1958,8 @@ def launch(path):
                command=open_asset_palette).pack(side='left', padx=4)
     ttk.Button(structure_controls, text='Acteurs et objets',
                command=open_entity_palette).pack(side='left', padx=4)
+    ttk.Button(structure_controls, text='Inspecter acteur / objet',
+               command=inspect_selected_entity).pack(side='left', padx=4)
     ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
     structure_box = ttk.Combobox(structure_controls, textvariable=structure_var,
                                  state='readonly', width=16, values=STRUCTURE_NAMES)
