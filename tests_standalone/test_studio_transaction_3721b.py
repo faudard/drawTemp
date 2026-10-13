@@ -131,8 +131,9 @@ class StudioTransactionTests(unittest.TestCase):
         self.first_save()
         self.interrupt_second_publish(self.new, self.next_project)
         self.store.recover("complete")
+        # Content.to_dict() contains tuple coordinates; JSON restores lists.
         self.assertEqual(json.loads(self.store.content_path.read_text(encoding="utf-8")),
-                         self.new)
+                         json.loads(json.dumps(self.new)))
         self.assertEqual(json.loads(self.store.project_path.read_text(encoding="utf-8")),
                          self.next_project)
         self.assertFalse(self.store.pending)
