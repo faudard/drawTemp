@@ -1,0 +1,51 @@
+name: Performance & Scale instrumentation
+on:
+  pull_request:
+    paths:
+      - 'scripts/profile_scale_3732.py'
+      - 'scripts/compare_profile_scale_3732.py'
+      - 'scripts/summarize_ui_trace_3732.py'
+      - 'sporebound/performance_trace.py'
+      - 'tests_standalone/test_performance_reporting_3732b.py'
+      - 'sporebound/editor.py'
+      - 'sporebound/studio_workspace.py'
+      - 'sporebound/studio_event_graph.py'
+      - 'sporebound/studio_story_graph.py'
+      - 'scripts/benchmark_editor_render_3718d.py'
+      - 'scripts/benchmark_player_canvas_376.py'
+      - 'tests_standalone/test_profile_scale_3732.py'
+      - '.github/workflows/performance-scale.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  profile-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tk and virtual screen
+        run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb python3-pil
+      - name: Verify profiler contracts
+        run: python3 -m unittest tests_standalone.test_profile_scale_3732 -v
+      - name: Verify report comparisons and opt-in UI trace
+        run: python3 -m unittest tests_standalone.test_performance_reporting_3732b -v
+      - name: Produce non-blocking time baseline
+        run: >-
+          xvfb-run -a python3 scripts/profile_scale_3732.py
+          --quick --frames 5 --samples 5
+          --output performance-scale-smoke.json
+      - name: Verify smoke report is self-comparable
+        run: >-
+          python3 scripts/compare_profile_scale_3732.py
+          performance-scale-smoke.json performance-scale-smoke.json
+          --output performance-scale-comparison-smoke.json
+      - name: Preserve report even when the smoke fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-scale-smoke
+          path: |
+            performance-scale-smoke.json
+            performance-scale-comparison-smoke.json
+          if-no-files-found: warn

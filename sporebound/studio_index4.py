@@ -3,9 +3,12 @@
 Projection of the existing Content and GameProject, not an extra manifest.
 """
 from dataclasses import dataclass
+import json
 from unicodedata import normalize
 
 from .workspace import ProjectWorkspaceIndex
+from .model import Content
+from .tactical_rpg3 import authored_rules_for_document
 
 
 @dataclass(frozen=True, order=True)
@@ -27,6 +30,17 @@ class StudioIndex:
         self.sections = self.workspace.sections()
         self.nodes = {n.key: n for items in self.sections.values() for n in items}
         self.references = self._references()
+        # Read-only indexes are built once per model, not on every selection.
+        self._search_text = {
+            key: fold(' '.join((node.key, node.label, node.summary)))
+            for key, node in self.nodes.items()
+        }
+        outgoing, incoming = {}, {}
+        for link in self.references:
+            outgoing.setdefault(link.source, []).append(link)
+            incoming.setdefault(link.target, []).append(link)
+        self._outgoing = {key: tuple(links) for key, links in outgoing.items()}
+        self._incoming = {key: tuple(links) for key, links in incoming.items()}
 
     def _references(self):
         links = set()
@@ -101,15 +115,14 @@ class StudioIndex:
 
     def search(self, query):
         terms = [fold(s) for s in query.split()]
-        return tuple(node for _, node in sorted(self.nodes.items())
-                     if all(term in fold(' '.join((node.key, node.label, node.summary)))
-                            for term in terms))
+        return tuple(node for key, node in sorted(self.nodes.items())
+                     if all(term in self._search_text[key] for term in terms))
 
     def outgoing(self, key):
-        return tuple(link for link in self.references if link.source == key)
+        return self._outgoing.get(key, ())
 
     def incoming(self, key):
-        return tuple(link for link in self.references if link.target == key)
+        return self._incoming.get(key, ())
 
     def diagnostics(self, root):
         issues = [('error', 'asset:' + i['asset_id'], i['message'])
@@ -124,3 +137,37 @@ class StudioIndex:
                 issues.append(('warning', 'cinematic:' + clip['id'],
                                'Cinématique vide'))
         return tuple(sorted(issues))
+
+
+class WorkspaceModelCache:
+    """One validated StudioIndex reused for unchanged authored *values*.
+
+    Editing may modify nested Content/Project dictionaries in place, so neither
+    Python object identity nor a document revision alone is a valid key.
+    Compare canonical JSON snapshots before rebuilding; a single old model is
+    retained, never an unbounded cache of project generations.
+    """
+
+    def __init__(self):
+        self._stamp = None
+        self._model = None
+        self.builds = 0
+
+    def invalidate(self):
+        self._stamp = None
+        self._model = None
+
+    def get(self, content_data, project):
+        if project is None:
+            raise ValueError("Workspace requires a game project")
+        stamp = (json.dumps(content_data, sort_keys=True, ensure_ascii=True),
+                 json.dumps(project.to_dict(), sort_keys=True, ensure_ascii=True))
+        if self._model is not None and stamp == self._stamp:
+            return self._model
+        # Validate before changing the cache: failed edits cannot poison it.
+        content = Content.from_dict(
+            content_data, rules=authored_rules_for_document(content_data))
+        model = StudioIndex(content, project)
+        self._stamp, self._model = stamp, model
+        self.builds += 1
+        return model
