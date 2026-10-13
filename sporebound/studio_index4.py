@@ -69,10 +69,17 @@ class StudioIndex:
                         add(key, 'mission:' + s['fronts'][effect['front']],
                             'Effet ' + effect['kind'])
         for mission in self.content.missions.values():
+            source = 'mission:' + mission.id
+            for actor in mission.units:
+                key = 'map_actor:' + mission.id + '/' + actor.id
+                add(source, key, 'Acteur placé')
+                if actor.archetype:
+                    add(key, 'actor:' + actor.archetype, 'Archétype')
             for obj in mission.objects:
+                key = 'map_object:' + mission.id + '/' + obj['id']
+                add(source, key, 'Objet placé')
                 if obj.get('kind') in ('switch', 'ram', 'catapult') and obj.get('link'):
-                    add('map_object:' + mission.id + '/' + obj['id'],
-                        'map_object:' + mission.id + '/' + obj['link'],
+                    add(key, 'map_object:' + mission.id + '/' + obj['link'],
                         'Porte associée')
         story = self.project.story
         for reference, scene_id in story.get('after_strategic_event', {}).items():
