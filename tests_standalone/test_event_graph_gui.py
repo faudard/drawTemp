@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import traceback
 from unittest.mock import patch
 
 from sporebound.__main__ import DEFAULT_CONTENT
@@ -56,6 +57,10 @@ class TacticalEventGraphGUITests(unittest.TestCase):
 
                     buttons['Créer événement'].invoke()
                     root.update()
+                    # Show the authoring validation error at the failing step,
+                    # instead of reporting an unhelpful empty graph.
+                    self.assertFalse(callback_errors, [''.join(traceback.format_exception(*err)) for err in callback_errors])
+                    self.assertFalse(show_error.called, show_error.call_args_list)
                     self.assertTrue(any('event_node_' in tag
                                         for item in event_graph.find_all()
                                         for tag in event_graph.gettags(item)))
@@ -63,6 +68,42 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                                      if isinstance(w, ttk.Combobox)
                                      and 'event_new' in tuple(w['values']))
                     self.assertEqual(event_box.get(), 'event_new')
+
+                    # 3.7.21C: the same graph exposes read-only contextual
+                    # inspection and a real-engine preview, without saving.
+                    self.assertIn('Tester avec le moteur', buttons)
+                    buttons['Tester avec le moteur'].invoke()
+                    root.update()
+                    context_text = next(w for w in widgets if isinstance(w, tk.Text))
+                    self.assertIn('APERÇU ISOLÉ', context_text.get('1.0', 'end'))
+                    self.assertIn('Condition non satisfaite',
+                                  context_text.get('1.0', 'end'))
+                    self.assertEqual(context_text.cget('state'), 'disabled')
+                    # The scene uses the shared isometric renderer on two
+                    # disposable Battle states, without replacing the editor.
+                    buttons['Vue isométrique avant/après'].invoke()
+                    root.update()
+                    comparisons = [w for w in descendants(root)
+                                   if isinstance(w, tk.Toplevel)
+                                   and w.title().startswith('Aperçu isométrique')]
+                    self.assertEqual(len(comparisons), 1)
+                    canvases = [w for w in descendants(comparisons[0])
+                                if isinstance(w, tk.Canvas)]
+                    self.assertEqual(len(canvases), 2)
+                    self.assertTrue(all(w.find_all() for w in canvases))
+                    comparisons[0].destroy()
+                    scenario = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                    and 'Condition vraie' in tuple(w['values']))
+                    scenario.set('Condition vraie')
+                    buttons['Tester avec le moteur'].invoke()
+                    root.update()
+                    self.assertIn('Condition satisfaite',
+                                  context_text.get('1.0', 'end'))
+                    scenario.set('Condition fausse')
+                    buttons['Tester avec le moteur'].invoke()
+                    root.update()
+                    self.assertIn('Condition non satisfaite',
+                                  context_text.get('1.0', 'end'))
 
                     action_box = next(w for w in widgets if isinstance(w, ttk.Combobox)
                                       and 'queue_wave' in tuple(w['values']))

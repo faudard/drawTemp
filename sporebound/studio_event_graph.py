@@ -5,7 +5,7 @@ event model. Clicking a node selects the canonical authored condition/action.
 """
 from copy import deepcopy
 
-from . import event_composer, event_graph
+from . import event_composer, event_graph, event_context
 from .model import RuleError, require
 
 
@@ -23,6 +23,7 @@ class EventGraphStudio:
         self.cond_unit = self.tk.StringVar()
         self.cond_team = self.tk.StringVar(value='enemy')
         self.cond_pos = self.tk.StringVar(value='0,0')
+        self.cond_object = self.tk.StringVar()
         self.action_kind = self.tk.StringVar(value='message')
         self.action_text = self.tk.StringVar(value='Renforts !')
         self.action_amount = self.tk.StringVar(value='4')
@@ -34,6 +35,16 @@ class EventGraphStudio:
         self.action_lifetime = self.tk.StringVar()
         self.zoom = self.tk.StringVar(value='100%')
         self.status = self.tk.StringVar(value='Choisir ou créer un événement.')
+        self.preview_tick = self.tk.StringVar(value='0')
+        self.scenario_labels = {
+            'État initial': 'initial',
+            'Condition vraie': 'satisfied',
+            'Condition fausse': 'unsatisfied',
+        }
+        self.preview_scenario = self.tk.StringVar(value='État initial')
+        self.cinematic_choice = self.tk.StringVar()
+        self.last_preview = None
+        self.context = None
         self._build(notebook)
 
     def _button(self, parent, label, callback):
@@ -91,16 +102,63 @@ class EventGraphStudio:
         inspector.pack_propagate(False)
         tabs = ttk.Notebook(inspector)
         tabs.pack(fill='both', expand=True)
+        contextual = ttk.LabelFrame(inspector, text='Contexte et prévisualisation')
+        contextual.pack(side='bottom', fill='x', pady=(6, 0))
+        report_view = ttk.Frame(contextual)
+        report_view.pack(fill='x', padx=3, pady=3)
+        self.context_text = tk.Text(report_view, height=7, wrap='word',
+                                    font=('TkDefaultFont', 9), state='disabled')
+        report_scroll = ttk.Scrollbar(report_view, orient='vertical',
+                                      command=self.context_text.yview)
+        self.context_text.configure(yscrollcommand=report_scroll.set)
+        report_scroll.pack(side='right', fill='y')
+        self.context_text.pack(side='left', fill='both', expand=True)
+        preview_controls = ttk.Frame(contextual)
+        preview_controls.pack(fill='x')
+        ttk.Label(preview_controls, text='Tick :').pack(side='left')
+        ttk.Entry(preview_controls, textvariable=self.preview_tick, width=6).pack(
+            side='left', padx=3)
+        self.preview_button = ttk.Button(
+            preview_controls, text='Tester avec le moteur',
+            command=lambda: self.owner._run(self.preview_selected))
+        self.preview_button.pack(side='left', padx=3)
+        self.scene_button = ttk.Button(
+            preview_controls, text='Vue isométrique avant/après',
+            command=lambda: self.owner._run(self.preview_scene))
+        self.scene_button.pack(side='left', padx=3)
+        scenario_controls = ttk.Frame(contextual)
+        scenario_controls.pack(fill='x', pady=2)
+        ttk.Label(scenario_controls, text='Scénario :').pack(side='left', padx=3)
+        self.scenario_box = ttk.Combobox(
+            scenario_controls, textvariable=self.preview_scenario,
+            state='readonly', width=21, values=list(self.scenario_labels))
+        self.scenario_box.pack(side='left', padx=3)
+        links = ttk.Frame(contextual)
+        links.pack(fill='x', pady=2)
+        self.story_button = ttk.Button(
+            links, text='Scène liée', command=lambda: self.owner._run(self.open_linked_story))
+        self.story_button.pack(side='left', padx=3)
+        self.cinematic_button = ttk.Button(
+            links, text='Ouvrir séquence',
+            command=lambda: self.owner._run(self.open_linked_cinematic))
+        self.cinematic_button.pack(side='left', padx=3)
+        self.cinematic_box = ttk.Combobox(
+            contextual, textvariable=self.cinematic_choice, width=37,
+            state='readonly')
+        self.cinematic_box.pack(fill='x', padx=3, pady=2)
         cond = ttk.Frame(tabs)
         tabs.add(cond, text='Condition')
         self._field(cond, 0, 'Type', self.cond_kind,
-                    choices=['tick', 'enter', 'defeated', 'hp_below', 'wave_capacity'])
+                    choices=['tick', 'enter', 'defeated', 'hp_below', 'wave_capacity',
+                             'interact'])
         self._field(cond, 1, 'Tick / % PV / limite', self.cond_value)
         self.cond_unit_box = self._field(cond, 2, 'Unité surveillée', self.cond_unit,
                                          choices=[])
         self._field(cond, 3, 'Camp (capacité)', self.cond_team,
                     choices=['enemy', 'player', 'neutral'])
         self._field(cond, 4, 'Position x,y', self.cond_pos)
+        self.cond_object_box = self._field(cond, 10, 'Objet interactif', self.cond_object,
+                                          choices=[])
         ttk.Button(cond, text='Position sélectionnée dans la carte',
                    command=lambda: self.cond_pos.set(
                        ','.join(map(str, self.owner.selection())))).grid(
@@ -180,7 +238,8 @@ class EventGraphStudio:
         return event_composer.condition(kind, tick=n, percent=n,
                                         max_alive=n, unit=self.cond_unit.get(),
                                         team=self.cond_team.get(),
-                                        pos=self._pos(self.cond_pos.get()))
+                                        pos=self._pos(self.cond_pos.get()),
+                                        object_id=self.cond_object.get())
 
     def _action(self):
         kind = self.action_kind.get()
@@ -288,6 +347,7 @@ class EventGraphStudio:
     def select_event(self):
         self.action_index = None
         self._load_event()
+        self._refresh_context()
         self.draw()
 
     def _load_event(self):
@@ -300,6 +360,7 @@ class EventGraphStudio:
                                event.get('max_alive', 10)))))
         self.cond_unit.set(event.get('unit', ''))
         self.cond_team.set(event.get('team', 'enemy'))
+        self.cond_object.set(event.get('object', ''))
         self.cond_pos.set(','.join(map(str, event.get('pos', self.owner.selection()))))
         self.action_list.delete(0, 'end')
         for i, action in enumerate(event['actions']):
@@ -334,6 +395,7 @@ class EventGraphStudio:
         if selected:
             self.action_index = selected[0]
             self._load_action(self._event()['actions'][self.action_index])
+            self._refresh_context()
             self.draw()
 
     def open_blocks(self):
@@ -354,9 +416,14 @@ class EventGraphStudio:
             self.action_index = None
         unit_ids = [u['id'] for u in self._mission()['units']]
         self.cond_unit_box['values'] = unit_ids
+        objects = [o['id'] for o in self._mission().get('objects', [])]
+        self.cond_object_box['values'] = objects
+        if self.cond_object.get() not in objects:
+            self.cond_object.set(objects[0] if objects else '')
         self.action_archetype_box['values'] = sorted(
             self.owner.doc().data.get('archetypes', {}))
         self._load_event()
+        self._refresh_context()
         self.draw()
 
     def draw(self):
@@ -379,8 +446,15 @@ class EventGraphStudio:
             selected = node['event_id'] == self.event_id.get()
             if node['kind'] == 'action':
                 selected = selected and node['index'] == self.action_index
-            fill = ('#bbf7d0' if node['kind'] == 'condition'
-                    else '#dbeafe' if selected else '#f1f5f9')
+            if node['kind'] == 'condition':
+                report = self.last_preview
+                if selected and report and report['event_id'] == node['event_id']:
+                    fill = ('#fecaca' if report['error'] else
+                            '#bbf7d0' if report['fired'] else '#fef3c7')
+                else:
+                    fill = '#f1f5f9'
+            else:
+                fill = '#dbeafe' if selected else '#f1f5f9'
             tag = 'event_node_'+str(index)
             canvas.create_rectangle(x,y-height//2,x+width,y+height//2,
                                     fill=fill,outline='#2563eb' if selected else '#94a3b8',
@@ -409,4 +483,87 @@ class EventGraphStudio:
         self.event_id.set(key[0])
         self.action_index = key[2] if len(key) == 3 else None
         self._load_event()
+        self._refresh_context()
         self.draw()
+
+    def _context_lines(self, context):
+        lines = [
+            f"{context['event_id']} — SI {context['condition']}",
+            'Actions dans l’ordre du moteur :',
+        ]
+        for index, action in enumerate(context['actions']):
+            prefix = '→' if index == self.action_index else '·'
+            lines.append(f" {prefix} {index + 1}. {action}")
+        lines.append('Scène après victoire (mission) : ' +
+                     (context['scene_id'] or 'aucune'))
+        clips = context['cinematics']
+        lines.append('Cinématiques associées à la mission / scène : ' +
+                     (', '.join(c['id'] + ' (' + c['stage'] + ')' for c in clips)
+                      if clips else 'aucune'))
+        lines.append('Attention : les liens sont des déclenchements de mission '
+                     'ou de scène, pas de cet événement tactique.')
+        return lines
+
+    def _set_context_text(self, lines, *, show_end=False):
+        self.context_text.config(state='normal')
+        self.context_text.delete('1.0', 'end')
+        self.context_text.insert('1.0', '\n'.join(lines))
+        self.context_text.config(state='disabled')
+        self.context_text.see('end' if show_end else '1.0')
+
+    def _refresh_context(self):
+        self.last_preview = None
+        self.context = None
+        if not self.event_id.get():
+            self._set_context_text(['Créer ou sélectionner un événement tactique.'])
+        else:
+            self.context = event_context.inspect_event(
+                self.owner.doc().data, self.owner.mission(),
+                self.event_id.get(), self.owner.project)
+            self._set_context_text(self._context_lines(self.context))
+        self.preview_button.config(state='normal' if self.context else 'disabled')
+        self.scene_button.config(state='normal' if self.context else 'disabled')
+        self.story_button.config(
+            state='normal' if self.context and self.context['scene_id']
+            else 'disabled')
+        clips = self.context['cinematics'] if self.context else []
+        labels = [c['id'] + ' — ' + c['stage'] for c in clips]
+        self.cinematic_box['values'] = labels
+        if self.cinematic_choice.get() not in labels:
+            self.cinematic_choice.set(labels[0] if labels else '')
+        self.cinematic_box.config(state='readonly' if clips else 'disabled')
+        self.cinematic_button.config(state='normal' if clips else 'disabled')
+
+    def preview_selected(self):
+        require(self.context is not None, 'Choisir un événement tactique')
+        report = event_context.preview_event(
+            self.owner.doc().data, self.owner.mission(),
+            self.context['event_id'], tick=int(self.preview_tick.get()),
+            scenario=self.scenario_labels[self.preview_scenario.get()])
+        self.last_preview = report
+        lines = self._context_lines(self.context)
+        lines.extend(['', *event_context.format_preview_report(report)])
+        self._set_context_text(lines, show_end=True)
+        self.draw()
+
+    def preview_scene(self):
+        require(self.context is not None, 'Choisir un événement tactique')
+        from .studio_event_scene import show_event_scene
+        show_event_scene(self, scenario=self.scenario_labels[self.preview_scenario.get()],
+                         tick=int(self.preview_tick.get()))
+
+    def open_linked_story(self):
+        require(self.context is not None and bool(self.context['scene_id']),
+                'Aucune scène narrative liée à cette mission')
+        self.owner.story_editor.select_graph_target(self.context['scene_id'])
+
+    def open_linked_cinematic(self):
+        require(self.context is not None and bool(self.context['cinematics']),
+                'Aucune cinématique liée à cette mission')
+        selection = self.cinematic_choice.get().split(' — ', 1)[0]
+        require(any(c['id'] == selection for c in self.context['cinematics']),
+                'Sélectionner une cinématique associée à la mission ou scène')
+        studio = self.owner.cinematic_studio
+        studio.clip_id = selection
+        studio.refresh()
+        self.notebook.select(studio.tab)
