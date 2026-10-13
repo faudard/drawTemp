@@ -38,7 +38,9 @@ def update_condition(data, mission_id, event_id, condition):
             'Choose a valid trigger condition')
     event = deepcopy(_find_event(data, mission_id, event_id))
     # Editing the primary condition must not silently erase secondary predicates.
-    extras = {key: deepcopy(event[key]) for key in ('when', 'after')
+    extras = {key: deepcopy(event[key]) for key in (
+        'when', 'after', 'after_any', 'after_choice',
+        'delay_ticks', 'delay_activations', 'cancel_after')
               if key in event and key not in condition}
     event = {'id': event_id, **deepcopy(condition), **extras,
              'actions': event['actions']}
@@ -260,12 +262,51 @@ def edit_composite_node(data, mission_id, event_id, path, *,
     return _save(data, mission_id, event_id, event)
 
 
+def configure_schedule(data, mission_id, event_id, *,
+                       delay_ticks=None, delay_activations=None,
+                       cancel_after=None):
+    """Atomically update a canonical event's delays and cancellation guards.
+
+    Zero removes a delay, [] clears cancellation, and None preserves a value.
+    The existing Content.from_dict validation rejects orphan timers and bad
+    references. No second authoring model or editor-side dispatcher is added.
+    """
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    for key, value in (('delay_ticks', delay_ticks),
+                       ('delay_activations', delay_activations)):
+        if value is None:
+            continue
+        require(type(value) is int and 0 <= value <= 10000,
+                key + ' must be 0..10000')
+        if value:
+            event[key] = value
+        else:
+            event.pop(key, None)
+    if cancel_after is not None:
+        require(isinstance(cancel_after, (list, tuple)),
+                'Choose cancellation events')
+        if cancel_after:
+            event['cancel_after'] = list(cancel_after)
+        else:
+            event.pop('cancel_after', None)
+    return _save(data, mission_id, event_id, event)
+
+
 def condition_summary(event):
     root = condition_title(event)
     root += (' ET ' + composite_title(event['when'])
              if 'when' in event else '')
     if event.get('after'):
         root += ' APRÈS ' + ', '.join(event['after'])
+    wait = []
+    if event.get('delay_ticks'):
+        wait.append(str(event['delay_ticks']) + ' ticks')
+    if event.get('delay_activations'):
+        wait.append(str(event['delay_activations']) + ' activations')
+    if wait:
+        root += ' ATTENDRE ' + ' ET '.join(wait)
+    if event.get('cancel_after'):
+        root += ' ANNULÉ APRÈS ' + ', '.join(event['cancel_after'])
     return root
 
 
