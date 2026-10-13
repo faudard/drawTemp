@@ -86,6 +86,22 @@ autosave = AutosaveSession(resumed.session, store)
 Voir [le guide Persistence 2.0](docs/PERSISTENCE_2.md). L'autosave reste
 **opt-in** et n'est pas encore connecté à l'interface joueur Tk.
 
+## Battle Lab 3.8 — équilibrage reproductible
+
+Le **Game Studio** dispose d'un onglet **Battle Lab** (également accessible
+depuis l'Espace projet) : simulations seedées via le moteur réel, décisions IA,
+activations CT, dommages/soins, survie des classes, objectifs, replays vérifiés
+et comparaison avant/après avec alertes de difficulté et de durée.
+
+```sh
+python -m sporebound battle-lab --mission garden --seed 1 --runs 20 --limit 500 --report before.json
+python -m sporebound battle-lab --mission garden --seed 1 --runs 20 --limit 500 --baseline before.json --report after.json
+```
+
+Une régression majeure fait échouer la comparaison (code 2). Les ticks CT
+ne sont **pas** des minutes de jeu humain. Voir le
+[guide Battle Lab 3.8](docs/BATTLE_LAB_38.md).
+
 ## Démarrer
 
 Depuis la racine du dépôt :
