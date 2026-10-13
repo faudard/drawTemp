@@ -60,6 +60,6 @@ def finish_ui(operation, started, widget, *, counts=None):
 
     try:
         widget.after_idle(on_idle)
-    except (AttributeError, RuntimeError):
-        # Tk widget is already gone.
+    except Exception:
+        # Tk was destroyed or tracing is unavailable; never break editing.
         pass
