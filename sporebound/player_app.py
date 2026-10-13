@@ -415,11 +415,20 @@ class PlayerApplication:
                 self._button(self.view, "Carte du monde",
                              self.world_screen).pack(fill="x", padx=80, pady=(3, 9))
             self.ttk.Label(self.view, text="Choisir une mission :").pack(anchor="w", pady=8)
+            journey = session.world_state() if self.project.world else None
+            world_missions = ({node["mission"] for node in self.project.world["nodes"]}
+                              if self.project.world else set())
             for mission_id in available:
                 mission = self.player.content.missions[mission_id]
-                self._button(self.view, mission.name + " — " + mission.objective,
-                             lambda mid=mission_id: self._start_mission_with_cinematic(mid)).pack(
-                                     fill="x", padx=80, pady=5)
+                if (journey is not None and mission_id in world_missions
+                        and not session.world_can_enter(mission_id)):
+                    self._button(self.view, mission.name + " — rejoindre sur la carte",
+                                 self.world_screen).pack(fill="x", padx=80, pady=5)
+                else:
+                    self._button(
+                        self.view, mission.name + " — " + mission.objective,
+                        lambda mid=mission_id: self._start_mission_with_cinematic(mid)
+                    ).pack(fill="x", padx=80, pady=5)
             # Studio blueprints are distinct from ad-hoc multi-front battles.
             # Locked or duplicate-mission plans remain visible but not playable.
             sieges = self.player.available_sieges()

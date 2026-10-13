@@ -15,8 +15,9 @@ accessible locations. It deliberately does **not** add a new mission graph.
 - Click a mission **at the party's location**, with no journey in progress,
   to enter its normal cinematic, deployment and battle. Locked/completed nodes
   cannot launch a mission. Clicks on unrelated/locked nodes do not unlock them.
-- The campaign mission list is preserved for legacy projects and for missions
-  omitted from a partial map.
+- The campaign mission list remains available for legacy projects and
+  missions omitted from a partial map. Authored world destinations instead
+  direct the party to the World screen before they can be entered.
 
 ## Data ownership and compatibility
 

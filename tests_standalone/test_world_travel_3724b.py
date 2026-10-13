@@ -70,6 +70,22 @@ class ContinuousWorldJourneyTests(TestCase):
         self.assertTrue(restored.world_can_enter(destination))
         self.assertEqual(self.session.world_state()["at"], self.start)
 
+    def test_multi_leg_route_uses_only_accessible_mission_links(self):
+        first = self._link()
+        second = self.content.missions[first].next_missions[0]
+        third = self.content.missions[second].next_missions[0]
+        self.session.progress.unlocked.extend([first, second])
+        journey = self.session.world_destination(second)
+        self.assertEqual(journey["route"], [self.start, first, second])
+        self.assertNotIn(third, journey["reachable"])
+        with self.assertRaises(RuleError):
+            self.session.world_destination(third)
+        for _ in range(STEPS_PER_EDGE * 2):
+            journey = self.session.world_advance()
+        self.assertEqual(journey["at"], second)
+        self.assertFalse(journey["traveling"])
+        self.assertTrue(self.session.world_can_enter(second))
+
     def test_reverse_access_and_corrupt_checkpoint(self):
         destination = self._link()
         self.session.progress.unlocked.append(destination)
