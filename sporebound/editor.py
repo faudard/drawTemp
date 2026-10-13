@@ -55,6 +55,8 @@ from .editor_groups import (create_editor_group, add_selection_to_group,
 from .group_prefabs import (capture_group_prefab, load_group_prefab,
                             save_group_prefab, list_group_prefabs,
                             prefab_file_slug, prefab_display_cells)
+from .prefab_catalog import prefab_card, broken_prefab_card
+from .prefab_palette import VisualPrefabPalette
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -298,6 +300,8 @@ def launch(path):
     editor_group_dx = tk.IntVar(value=1)
     editor_group_dy = tk.IntVar(value=0)
     group_prefab_var = tk.StringVar(value='')
+    prefab_gallery = None
+    prefab_drag_hover = None
     selected_group_id = None
     group_tree_signature = None
     group_tree_items = {}
@@ -1036,6 +1040,16 @@ def launch(path):
         group_prefab_box.configure(values=options)
         if group_prefab_var.get() not in options:
             group_prefab_var.set(options[0] if options else '')
+        if prefab_gallery is not None:
+            rows = []
+            for item in paths:
+                try:
+                    rows.append(prefab_card(item, load_group_prefab(item)))
+                except (RuleError, ValueError, OSError, KeyError, TypeError) as exc:
+                    rows.append(broken_prefab_card(item, str(exc)))
+            prefab_gallery.update(rows)
+            prefab_gallery.selected = group_prefab_var.get()
+            prefab_gallery.render()
         return paths
 
     def _chosen_prefab():
@@ -1606,7 +1620,7 @@ def launch(path):
                     'brush_preview', 'asset_ghost', 'entity_preview',
                     'entity_ghost', 'entity_route', 'entity_source',
                     'entity_target_preview', 'floor_preview',
-                    'editor_group_preview'):
+                    'editor_group_preview', 'prefab_drag_preview'):
             canvas.delete(tag)
 
     def paste_preview(event):
