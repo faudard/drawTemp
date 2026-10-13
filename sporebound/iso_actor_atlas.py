@@ -11,8 +11,14 @@ ACTOR_STYLES = ('hero', 'guard', 'archer', 'jeanne')
 ACTOR_DIRECTIONS = ('south', 'north', 'east', 'west')
 ACTOR_FRAMES = 2
 ACTOR_ACTIONS = ('idle', 'move', 'attack', 'hit', 'defeat')
-# Jeanne's approved 8-row atlas carries the full cosmetic action cycle.
-JEANNE_ROWS = {'idle': 0, 'move': 2, 'attack': 4, 'hit': 6, 'defeat': 7}
+# Jeanne's eight real rows: do not silently discard walk_1 / attack_1.
+JEANNE_ACTION_ROWS = {
+    'idle': (0, 1), 'move': (2, 3), 'attack': (4, 5),
+    'hit': (6,), 'defeat': (7,),
+}
+# Preserve legacy first-row mapping for callers importing this constant.
+JEANNE_ROWS = {action: rows[0] for action, rows in JEANNE_ACTION_ROWS.items()}
+ACTOR_FOOT_PIVOT = (0.5, 1.0)
 ACTOR_FRAME_SIZE = (64, 64)
 ACTOR_SOURCE_CELL_SIZE = 54
 DEFAULT_ACTOR_ATLAS = (Path(__file__).parent / 'content' / 'art'
@@ -53,6 +59,9 @@ def actor_direction(actor, pose=None):
 
 def actor_frame(pose=None):
     """Two safe frames: pose changes are cosmetic, not simulation clocks."""
+    sample = getattr(pose, 'frame', None)
+    if type(sample) is int and sample in (0, 1):
+        return sample
     return int(getattr(pose, 'action', '') == 'move')
 
 
@@ -60,6 +69,27 @@ def actor_action(pose=None):
     """Return the cosmetic action, or idle for unrecognized legacy poses."""
     action = getattr(pose, 'action', 'idle')
     return action if action in ACTOR_ACTIONS else 'idle'
+
+
+def actor_foot_point(x, y, cell_size):
+    """South-anchor at projected feet; fixed for all poses and zoom levels."""
+    return x, y + cell_size * 5 / ACTOR_SOURCE_CELL_SIZE
+
+
+def packaged_actor_catalog():
+    """Read-only inventory for the common Studio/Player actor renderer.
+
+    Do not advertise combat art that generic chibi actors lack. Project
+    artwork stays in the existing AssetRegistry (no parallel manifest).
+    """
+    return {
+        style: {'atlas': DEFAULT_JEANNE_ATLAS if style == 'jeanne'
+                else DEFAULT_ACTOR_ATLAS,
+                'actions': tuple(JEANNE_ACTION_ROWS) if style == 'jeanne'
+                else ('idle', 'move'),
+                'directions': ACTOR_DIRECTIONS, 'foot_pivot': ACTOR_FOOT_PIVOT}
+        for style in ACTOR_STYLES
+    }
 
 
 class IsoActorAtlas:
@@ -110,7 +140,10 @@ class IsoActorAtlas:
                 # Full approved Jeanne atlas: idle/move/attack/hit/defeat
                 # rows 0/2/4/6/7. Generic chibi actors remain two-pose.
                 x = ACTOR_DIRECTIONS.index(direction) * width
-                row = (2 if frame else 0) if action is None else JEANNE_ROWS[action]
+                # Old frame=1 cache key also covers explicit move frame 1;
+                # both paths must select the same second walking frame.
+                rows = ((3 if frame else 0),) if action is None else JEANNE_ACTION_ROWS[action]
+                row = rows[min(frame, len(rows) - 1)]
                 y = row * height
                 photo = crop_scaled(self._jeanne_source, (x, y, width, height),
                                     size, master=self.canvas)
