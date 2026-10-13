@@ -146,3 +146,15 @@ font échouer la comparaison afin d'empêcher des gains artificiels.
 native par plateforme (RSS seul insuffisant), instrumentation de l'entrée
 utilisateur, segmentation modèle→rendu→Tk idle, validation des graphes par les
 éditeurs réels et tests de vieillissement sur plusieurs heures.
+
+
+Agréger les traces réelles par opération et niveau de complexité :
+
+    python scripts/summarize_ui_trace_3732.py \
+      /tmp/drawtemp-ui-trace.jsonl --output perf-ui-summary.json
+
+Le script sépare notamment les tailles de carte (\`map_cells\`), le nombre
+de ressources (\`resource_nodes\`) et les nœuds des graphes. Pour chacun,
+il calcule le p50/p95/p99 de callback, callback→idle et temps d'attente
+idle ; les groupes de moins de 100 échantillons restent exploratoires.
+Ne pas fusionner des scènes de tailles différentes dans un même percentile.
