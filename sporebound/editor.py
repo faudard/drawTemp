@@ -243,6 +243,7 @@ def launch(path):
     structure_door_var = tk.StringVar(value='Entrée A')
     structure_turns = 0
     structure_selection_cell = None
+    structure_preview_key = None
     asset_palette = None
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
@@ -657,12 +658,26 @@ def launch(path):
                                         outline=color, width=3, tags=tag)
 
     def clear_placement_preview(_event=None):
+        nonlocal structure_preview_key
+        structure_preview_key = None
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
                     'brush_preview', 'asset_ghost'):
             canvas.delete(tag)
 
     def paste_preview(event):
+        nonlocal structure_preview_key
+        tool = tool_var.get()
+        key = None
+        if tool in ('Structure', 'Déplacer structure', 'Dupliquer structure'):
+            cursor = event_cell(event)
+            key = (tool, cursor, mission_var.get(), structure_var.get(),
+                   structure_turns, structure_door_var.get(),
+                   structure_pivot_var.get(), structure_selection_cell,
+                   id(doc.data))
+            if key == structure_preview_key:
+                return
         clear_placement_preview()
+        structure_preview_key = key
         if battle:
             return
         if tool_var.get() in ('Structure', 'Déplacer structure', 'Dupliquer structure'):
@@ -987,7 +1002,8 @@ def launch(path):
 
     def refresh(*args):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
-        nonlocal structure_selection_cell
+        nonlocal structure_selection_cell, structure_preview_key
+        structure_preview_key = None
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
             from .narrative import StoryBook
             story = StoryBook(studio.project.story, Content.from_dict(doc.data),
