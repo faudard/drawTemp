@@ -563,6 +563,22 @@ def duplicate_editor_groups(data, mission_id, group_ids, dx, dy):
             mission.setdefault('interior_floors', []).append(clone)
 
     tiles = {tuple(t['pos']): deepcopy(t) for t in mission['board']['tiles']}
+    # A structure may have been repainted after placement. Preserve those
+    # authored per-tile edits instead of reverting its new copy to the preset.
+    # Its fresh underlay remains the destination's pre-placement terrain.
+    for sid in members['structure_ids']:
+        structure = old_structures[sid]
+        clip = structure_template(structure['name'], structure['turns'],
+                                  door_slot=structure['door_slot'])
+        for point in structure_footprint(clip, structure['anchor']):
+            target = shift(point)
+            original_tile = old_tiles.get(point)
+            if original_tile is None:
+                tiles.pop(target, None)
+            else:
+                copied_tile = deepcopy(original_tile)
+                copied_tile['pos'] = list(target)
+                tiles[target] = copied_tile
     for cell in sorted(free_cells, key=lambda p: (p[1], p[0])):
         target = shift(cell)
         original_tile = old_tiles.get(cell)
