@@ -59,7 +59,8 @@ def draw_interior(canvas, geo, plan, instance_tag):
                            tags=tags + ('architecture_entry',))
 
 
-def draw_stacked_floors(canvas, geo, building, floors, selected_level, instance_tag):
+def draw_stacked_floors(canvas, geo, building, floors, selected_level, instance_tag,
+                        prop_atlas=None):
     """Draw visual upper decks, leaving the tactical board untouched.
 
     The selected level is filled to make authored openings and material visible.
@@ -83,9 +84,16 @@ def draw_stacked_floors(canvas, geo, building, floors, selected_level, instance_
             if focused and tile['feature']:
                 cx = sum(point[0] for point in corners) / 4
                 cy = sum(point[1] for point in corners) / 4
-                canvas.create_text(cx, cy, text=tile['feature'][:5],
-                                   fill='#293441', font=('TkDefaultFont', 8),
-                                   tags=tags + ('architecture_floor_prop',))
+                sprite = (prop_atlas.sprite(tile['feature'], geo.cell_size)
+                          if prop_atlas is not None else None)
+                if sprite is not None:
+                    canvas.create_image(cx, cy + geo.cell_size * 18/54,
+                                        image=sprite, anchor='s',
+                                        tags=tags + ('architecture_floor_prop',))
+                else:
+                    canvas.create_text(cx, cy, text=tile['feature'][:5],
+                                       fill='#293441', font=('TkDefaultFont', 8),
+                                       tags=tags + ('architecture_floor_prop',))
         # Label only a non-empty floor: empty decks are still valid (holes).
         if floor['tiles'] and focused:
             first = min(floor['tiles'], key=lambda t: (t['pos'][1], t['pos'][0]))
