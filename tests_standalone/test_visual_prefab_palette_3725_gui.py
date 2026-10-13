@@ -59,11 +59,6 @@ class VisualPrefabPaletteTests(unittest.TestCase):
                     picture = next(w for w in all_widgets
                                    if isinstance(w, tk.Canvas) and
                                    int(w.cget('width')) == 132)
-                    entry = next(w for w in all_widgets
-                                 if isinstance(w, ttk.Entry) and
-                                 not isinstance(w, ttk.Combobox) and
-                                 str(w.master) == str(picture.master.master.master)
-                                 ) if False else None
                     categories = next(
                         w for w in all_widgets if isinstance(w, ttk.Combobox)
                         and 'Fortifications' in w.cget('values'))
@@ -79,9 +74,11 @@ class VisualPrefabPaletteTests(unittest.TestCase):
                     categories.set('Décors')
                     categories.event_generate('<<ComboboxSelected>>')
                     root.update()
-
-                    # Search is available as a typed Tk entry in the gallery.
-                    # Category filtering must leave the same source thumbnail.
+                    # A filter rerenders cards; select the newly rendered one.
+                    all_widgets = list(widgets(root))
+                    picture = next(w for w in all_widgets
+                                   if isinstance(w, tk.Canvas) and
+                                   int(w.cget('width')) == 132)
                     self.assertTrue(picture.winfo_exists())
                     self.assertGreater(len(picture.find_all()), 0)
 
