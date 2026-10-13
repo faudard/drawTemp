@@ -113,6 +113,60 @@ class EditorRenderCacheTests(unittest.TestCase):
         self.check_scene()
         self.assertEqual(self.renderer.stats['mode'], 'retained')
 
+    def test_large_noop_and_selection_match_full_canvas(self):
+        # Force the exact large-map branch on a small, known scene so
+        # complete item/type/coordinate/configuration parity is practical.
+        self.renderer.max_retained_cells = 1
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        original_ids = self.canvas.find_all()
+
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'noop')
+        self.assertEqual(self.canvas.find_all(), original_ids)
+
+        self.options['selected_cell'] = (25, 19)
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'selection')
+        self.options['selected_tiles'] = {(0, 0), (12, 10), (25, 19)}
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'selection')
+
+        # An edit in-place must invalidate the scene even when Content and
+        # the geometry dimensions remain exactly the same.
+        mission = next(m for m in self.doc.data['missions'] if m['id'] == MISSION_ID)
+        mission['units'][0]['name'] = 'Repainted unit'
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        self.doc.paint_many(MISSION_ID, [(10, 10)], 'surface:water')
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'noop')
+
+        # Canvas items drawn by other UI code must not survive an unexpected
+        # refresh as an undetected cached frame.
+        self.canvas.create_rectangle(0, 0, 5, 5, tags='external')
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+
+    def test_large_selection_crossing_roof_forces_repaint(self):
+        self.renderer.max_retained_cells = 1
+        self.check_scene()
+        buildings = [instance for instance in
+                     self.renderer.geometry.architecture_instances
+                     if instance.name in ('Maison', 'Tour', 'Ruines')]
+        self.assertTrue(buildings)
+        building = buildings[0]
+        outside = next(cell for cell in self.renderer.geometry.draw_order
+                       if cell not in building.cells)
+        inside = next(iter(building.cells))
+        self.options['selected_cell'] = outside
+        self.check_scene()
+        self.options['selected_cell'] = inside
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+
     def test_actor_and_structure_edits(self):
         self.check_scene()
         mission = next(m for m in self.doc.data['missions'] if m['id'] == MISSION_ID)
