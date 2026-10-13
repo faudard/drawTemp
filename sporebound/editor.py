@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
+from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
+                                  StructureGroupCommand, EntityCommand,
+                                  RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
 from .ai import play_activation
 from .engine import Battle
 from .model import Content, RuleError
@@ -317,6 +320,7 @@ def launch(path):
                    'Déploiement', 'Objectifs', 'Objets', 'Unités')}
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
     mode_var = tk.StringVar(value='MODE : ÉDITION')
+    editing_context = EditingContext(doc, mission_var.get)
 
     def guarded(fn):
         def run(*args):
@@ -340,12 +344,16 @@ def launch(path):
         nonlocal battle
         if source_pending() and not messagebox.askyesno('JSON non appliqué', 'Abandonner les modifications JSON non appliquées ?'):
             return
-        fn()
+        notice = fn()
         if studio is not None and stroke_before is None:
             studio.capture_history()
         battle = None
         refresh_source()
-        refresh()
+        if isinstance(notice, EditorChange):
+            # Commands publish only after JSON and Studio history are in sync.
+            editing_context.notify(notice)
+        else:
+            refresh()
 
     @guarded
     def open_doc():
@@ -360,6 +368,7 @@ def launch(path):
             candidate = Document(Content.from_dict(
                 raw, rules=authored_rules_for_document(raw)))
             doc, current_path, battle = candidate, Path(name), None
+            editing_context.document = doc
             disk_revisions = StudioTransactionStore(current_path).revisions()
             mission_var.set(doc.data['missions'][0]['id'])
             if studio is not None:
@@ -717,8 +726,9 @@ def launch(path):
             status_var.set('Décalage nul : aucune modification à enregistrer.')
             return
         # A single Document.replace is the whole Undo transaction.
-        design_change(lambda: doc.replace(transform_structure_group(
-            doc.data, mission_var.get(), cells, dx, dy, duplicate=duplicate)))
+        design_change(lambda: editing_context.execute(
+            StructureGroupCommand(tuple(cells), dx, dy, duplicate=duplicate),
+            publish=False))
         moved_cells = {(x + dx, y + dy) for item in group for x, y in item.cells}
         selected_tiles = moved_cells
         selected_cell = (group[0].anchor[0] + dx, group[0].anchor[1] + dy)
@@ -742,8 +752,8 @@ def launch(path):
         width, height = mission['board']['width'], mission['board']['height']
         footprint = [(x + dx, y + dy) for item in group for x, y in item.cells]
         try:
-            transform_structure_group(doc.data, mission_var.get(),
-                                      _selection_for_current_map(), dx, dy)
+            editing_context.preview(StructureGroupCommand(
+                tuple(_selection_for_current_map()), dx, dy))
             color, note = '#36a16c', 'valide'
         except RuleError as exc:
             color, note = '#e05252', str(exc)
@@ -823,8 +833,9 @@ def launch(path):
             raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
         current = selected_structure()
         anchor = (current.anchor[0] + dx, current.anchor[1] + dy)
-        design_change(lambda: doc.replace(edit_structure(
-            doc.data, mission_var.get(), structure_selection_cell, anchor=anchor)))
+        design_change(lambda: editing_context.execute(
+            StructureCommand(structure_selection_cell, anchor=anchor),
+            publish=False))
         structure_selection_cell = anchor
         structure_selection_id = structure_at(doc.data, mission_var.get(), anchor).id
         status_var.set(f'{current.name} déplacée en {anchor} (Undo disponible).')
@@ -841,9 +852,10 @@ def launch(path):
         if chosen == (current.name, current.turns, current.door_slot):
             status_var.set('Structure inchangée.')
             return
-        design_change(lambda: doc.replace(edit_structure(
-            doc.data, mission_var.get(), structure_selection_cell,
-            name=chosen[0], quarter_turns=chosen[1], door_slot=chosen[2])))
+        design_change(lambda: editing_context.execute(
+            StructureCommand(structure_selection_cell,
+                             name=chosen[0], quarter_turns=chosen[1],
+                             door_slot=chosen[2]), publish=False))
         structure_selection_cell = current.anchor
         status_var.set('Propriétés de structure appliquées (Undo disponible).')
 
@@ -1268,6 +1280,8 @@ def launch(path):
         if selected_cell is None:
             return
         validate_selection(doc.data, mission_var.get(), [selected_cell])
+        editing_context.selection.set(mission_var.get(), selected_cell,
+                                      selected_tiles, publish=False)
         tool, brush = tool_var.get(), active_brush()
         canvas.delete('stroke_preview')
         if battle:
@@ -1296,11 +1310,12 @@ def launch(path):
             current = selected_structure()
             anchor = structure_anchor(selected_cell)
             duplicate = tool == 'Dupliquer structure'
-            design_change(lambda: doc.replace(edit_structure(
-                doc.data, mission_var.get(), structure_selection_cell,
-                anchor=anchor, name=structure_var.get(),
-                quarter_turns=structure_turns, door_slot=structure_door_slot(),
-                duplicate=duplicate)))
+            design_change(lambda: editing_context.execute(
+                StructureCommand(
+                    structure_selection_cell, anchor=anchor,
+                    name=structure_var.get(), quarter_turns=structure_turns,
+                    door_slot=structure_door_slot(), duplicate=duplicate),
+                publish=False))
             structure_selection_cell = anchor
             structure_selection_id = structure_at(doc.data, mission_var.get(), anchor).id
             tool_var.set('Sélection structure')
@@ -1319,9 +1334,9 @@ def launch(path):
                 raise RuleError('La sélection de départ ne correspond pas à cette mission.')
             if battle or source_pending():
                 raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
-            updated = (relocate_entity if operation == 'move' else duplicate_entity)(
-                doc.data, mid, kind, identifier, selected_cell)
-            design_change(lambda: doc.replace(updated))
+            design_change(lambda: editing_context.execute(
+                EntityCommand(operation, kind, identifier,
+                              cell=selected_cell), publish=False))
             entity_target = None
             tool_var.set('Inspecter entité')
             status_var.set(f'{kind} {identifier} : {operation} vers {selected_cell}; annulation possible.')
@@ -1511,9 +1526,9 @@ def launch(path):
             if anchor is None:
                 return  # A click selects; only a real drag commits a change.
             current = selected_structure()
-            design_change(lambda: doc.replace(edit_structure(
-                doc.data, mission_var.get(), structure_selection_cell,
-                anchor=anchor, duplicate=duplicate)))
+            design_change(lambda: editing_context.execute(
+                StructureCommand(structure_selection_cell, anchor=anchor,
+                                 duplicate=duplicate), publish=False))
             structure_selection_cell = anchor
             structure_selection_id = structure_at(doc.data, mission_var.get(), anchor).id
             selected_cell = anchor
@@ -1647,7 +1662,7 @@ def launch(path):
         studio.focus_gate_event(
             selected['id'] if selected['kind'] == 'door' else selected['link'])
 
-    def refresh(*args):
+    def refresh(*args, views=None):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
         nonlocal entity_hover_key, entity_passage_entry
@@ -1696,208 +1711,213 @@ def launch(path):
         if object_var.get() not in object_box['values']:
             object_var.set(object_box['values'][0] if object_box['values'] else '')
         selected_tiles.intersection_update(set(board.cells()))
-        if iso_var.get():
-            # Editor and its actual Battle use the identical terrain/asset
-            # scene. Intents come from battle_frame: no game-rule duplication.
-            clear_placement_preview()
-            canvas.delete('stroke_preview')
-            live = battle_frame(battle, selected_cell) if battle else None
-            iso_geometry = editor_renderer.draw(
-                board, mission, units, cell_size=tile_size,
-                layers={**{name: var.get() for name, var in layer_vars.items()},
-                        'Intérieurs': interior_var.get(),
-                        'Étage actif': (battle.unit_levels.get(battle.active_id, 0)
-                                        if battle and battle.active_id else
-                                        floor_var.get() if interior_var.get() else 0)},
-                selected_cell=selected_cell, selected_tiles=selected_tiles,
-                reachable=live.reachable if live else (),
-                danger=live.danger if live else (),
-                active_id=live.active_id if live else None,
-                atlas=iso_atlas, prop_atlas=iso_props,
-                building_atlas=building_atlas,
-                fortification_atlas=fortification_atlas,
-                actor_atlas=actor_atlas, object_atlas=object_atlas,
-                unit_levels=battle.unit_levels if battle else None)
-        else:
-            iso_geometry = None
-            editor_renderer.invalidate()
-            canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
-            reachable = battle.reachable() if battle else {}
-            deployment_cells = ({tuple(c) for z in mission.deployment for c in z['cells']}
-                                if layer_vars['Déploiement'].get() else set())
-            danger_cells = ({tuple(c) for o in mission.objects if o['kind'] == 'defense'
-                             and not o.get('disabled') and o.get('charges', 2) > 0
-                             for c in o['cells']} if layer_vars['Objets'].get() else set())
-            for c in board.cells():
-                t = board.tile(c)
-                color = '#dddddd'
-                if layer_vars['Terrain'].get():
-                    color = SURFACE_COLORS[t.surface]
-                    if t.cost > 1: color = '#b29f78'
-                    if t.cover: color = '#b0c9a8'
-                    if t.hazard: color = '#eead93'
-                    if t.blocked and t.surface != 'water': color = '#555555'
-                if layer_vars['Relief'].get() and t.height: color = '#c3c3df'
-                if c in deployment_cells and (not battle or battle.deploying): color = '#a8dce8'
-                if c in mission.goal and layer_vars['Objectifs'].get(): color = '#d7c469'
-                if c in danger_cells: color = '#f0a181'
-                x, y = c[0] * tile_size, c[1] * tile_size
-                canvas.create_rectangle(x, y, x+tile_size, y+tile_size, fill=color,
-                                        outline='#288949' if c in reachable else '#999999', width=3 if c in reachable else 1)
-                if t.height and layer_vars['Relief'].get():
-                    canvas.create_text(x+8, y+8, text=str(t.height), anchor='nw')
-                if t.hazard and layer_vars['Terrain'].get():
-                    canvas.create_text(x+tile_size-3, y+tile_size-3, text=f'!{t.hazard}', anchor='se')
-                if t.feature and layer_vars['Décors'].get():
-                    canvas.create_text(x+tile_size//2, y+tile_size//2,
-                                       text=t.feature[:5], fill='#293e30',
-                                       font=('TkDefaultFont', 8, 'bold'))
-            for obj in mission.objects if layer_vars['Objets'].get() else ():
-                x,y = obj['pos']
-                if obj['kind'] == 'passage':
-                    dx,dy = obj['destination']
-                    canvas.create_line((x+.5)*tile_size,(y+.5)*tile_size,
-                                       (dx+.5)*tile_size,(dy+.5)*tile_size,
-                                       fill='#6e42a1', width=2, arrow='last',
-                                       dash=() if obj.get('enabled', True) else (4, 3))
-                canvas.create_text(x*tile_size+tile_size//2,y*tile_size+8,text=obj['kind'][:2], fill='#5b3294')
-            relic = battle.relic_pos if battle else mission.relic
-            if relic is not None and layer_vars['Objectifs'].get():
-                canvas.create_text(relic[0]*tile_size+tile_size//2,relic[1]*tile_size+tile_size//2,text='R',fill='#a06c00',font=('TkDefaultFont',16))
-            for u in units if layer_vars['Unités'].get() else ():
-                x,y = (v*tile_size for v in u.pos)
-                color = '#cce2ff' if u.team == 'player' else '#ffc8bc'
-                if not u.alive: color = '#aaaaaa'
-                canvas.create_oval(x+6,y+10,x+tile_size-6,y+tile_size-4,fill=color,outline='#111111',width=3 if battle and u.id==battle.active_id else 1)
-                canvas.create_text(x+tile_size//2,y+tile_size//2,text=u.name[:3])
-                canvas.create_text(x+tile_size//2,y+tile_size-10,text=str(u.hp),font=('TkDefaultFont',8))
-            for sx, sy in sorted(selected_tiles):
-                canvas.create_rectangle(sx*tile_size+4, sy*tile_size+4,
-                                        (sx+1)*tile_size-4, (sy+1)*tile_size-4,
-                                        outline='#1f6e9a', width=3, tags='selection')
-            x,y = (v*tile_size for v in selected_cell)
-            canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
-        inspected_tile = board.tile(selected_cell) if board.contains(selected_cell) else None
-        mode_var.set('MODE : PLAYTEST (édition verrouillée)' if battle else 'MODE : ÉDITION')
-        selected_units = [u for u in units if tuple(u.pos) == selected_cell]
-        selected_objects = [o for o in mission.objects if tuple(o['pos']) == selected_cell]
-        if selected_units:
-            heading = 'PERSONNAGE — ' + ', '.join(u.name for u in selected_units)
-        elif selected_objects:
-            heading = 'OBJET — ' + ', '.join(o['id'] for o in selected_objects)
-        else:
-            heading = 'TERRAIN — case ' + str(selected_cell)
-        text = f'{heading}\n\n{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
-        for actor in selected_units:
-            text += (f'Acteur {actor.id} • {actor.team} • '
-                     f'PV {actor.hp}/{actor.max_hp} • CT {actor.ct}\n')
-        for obj in selected_objects:
-            text += f'Objet {obj["id"]} : {obj["kind"]}\n'
-        actor_focus.configure(state='normal' if selected_units and not battle else 'disabled')
-        object_focus.configure(state='normal' if selected_objects and not battle else 'disabled')
-        event_focus.configure(state='normal' if not battle and
-                              any(o['kind'] in ('door', 'switch')
-                                  for o in selected_objects) else 'disabled')
-        if inspected_tile is not None:
-            text += (f'Surface : {inspected_tile.surface} | Décor : '
-                     f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
-        if iso_var.get() and board.contains(selected_cell):
-            from .iso_interiors import interior_plan
-            building = next((instance for instance in getattr(
-                iso_geometry, 'architecture_instances', ())
-                if selected_cell in instance.cells), None)
-            if building is not None and building.name in ARCHITECTURE_NAMES:
-                room = interior_plan(board, building)
-                text += (f'Intérieur : {building.name} ({building.id or "hérité"})'
-                         f' | {len(room.floors)} cases accessibles'
-                         f' | {len(room.walls)} murs'
-                         f' | {len(room.furnishings)} décors'
-                         f' | entrée {"visible" if room.doors else "obstruée"}\n')
-                floors = [f for f in mission.interior_floors
-                          if f['structure_id'] == building.id]
-                if floors:
-                    text += ('Plateaux visuels (non jouables) : '
-                             + ', '.join(f'N{f["level"]} ({len(f["tiles"])} cases)'
-                                         for f in sorted(floors, key=lambda f: f['level']))
-                             + '\n')
-        for obj in selected_objects:
-            if obj['kind'] == 'defense':
-                text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
-            if obj['kind'] == 'passage':
-                text += f"Passage {obj['id']} : {obj['pos']} → {obj['destination']} ({'installé' if obj.get('enabled',True) else 'à installer'})\n"
-        if battle:
-            text += f'Tick : {battle.tick} | Résultat : {battle.result or "en cours"}\nTenue : {battle.hold_ticks}/{mission.target_ticks}\n'
-            if mission.objective == 'crown':
-                text += f'Couronne : {battle.carrier or battle.relic_pos}\n'
-            if battle.deploying:
-                text += 'DÉPLOIEMENT — horloge arrêtée.\nChoisir une unité, une case bleue et son orientation, puis deploy / Exécuter.\nChoisir start_battle / Exécuter pour lancer l’assaut.\n'
-                action_box['values'] = ['deploy', 'start_battle']
-                if action_var.get() not in action_box['values']: action_var.set('deploy')
-            if battle.active:
-                u = battle.active
-                text += f'Actif : {u.name} ({u.team})\nPV {u.hp}/{u.max_hp} | MP {u.mp}/{u.max_mp} | CT {u.ct}\nDéplacement : {"utilisé" if u.moved else "libre"}\nAction : {"utilisée" if u.acted else "libre"}\n'
-                actions = ['move','attack',*u.skills,'item:potion','item:ether','item:phoenix',*['object:'+o['id'] for o in mission.objects],*available_operations(battle,u)]
-                if mission.level_links:
-                    actions = (['level_move', 'level_attack', 'attack']
-                               if battle.unit_levels.get(u.id, 0) else
-                               ['level_move', 'level_attack', *actions])
-                action_box['values'] = actions
-                if action_var.get() not in actions: action_var.set('move')
-                if action_var.get() not in {'move'} and not action_var.get().startswith(('item:','object:','siege-attack:','repair-siege:')):
-                    try:
-                        forecast = battle.forecast(action_var.get(), selected_cell)
-                        text += '\nPrévision immédiate (avant réactions) :\n'
-                        text += '\n'.join(f'{r["unit"]}: {r["kind"]} {r["amount"]} {r["status"]} ({r["chance"]:.0%})' for r in forecast)
-                    except RuleError as exc:
-                        text += '\nCible : '+str(exc)
+        editing_context.selection.set(mission_var.get(), selected_cell,
+                                      selected_tiles, publish=False)
+        if views is None or RENDERER in views:
+            if iso_var.get():
+                # Editor and its actual Battle use the identical terrain/asset
+                # scene. Intents come from battle_frame: no game-rule duplication.
+                clear_placement_preview()
+                canvas.delete('stroke_preview')
+                live = battle_frame(battle, selected_cell) if battle else None
+                iso_geometry = editor_renderer.draw(
+                    board, mission, units, cell_size=tile_size,
+                    layers={**{name: var.get() for name, var in layer_vars.items()},
+                            'Intérieurs': interior_var.get(),
+                            'Étage actif': (battle.unit_levels.get(battle.active_id, 0)
+                                            if battle and battle.active_id else
+                                            floor_var.get() if interior_var.get() else 0)},
+                    selected_cell=selected_cell, selected_tiles=selected_tiles,
+                    reachable=live.reachable if live else (),
+                    danger=live.danger if live else (),
+                    active_id=live.active_id if live else None,
+                    atlas=iso_atlas, prop_atlas=iso_props,
+                    building_atlas=building_atlas,
+                    fortification_atlas=fortification_atlas,
+                    actor_atlas=actor_atlas, object_atlas=object_atlas,
+                    unit_levels=battle.unit_levels if battle else None)
+            else:
+                iso_geometry = None
+                editor_renderer.invalidate()
+                canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
+                reachable = battle.reachable() if battle else {}
+                deployment_cells = ({tuple(c) for z in mission.deployment for c in z['cells']}
+                                    if layer_vars['Déploiement'].get() else set())
+                danger_cells = ({tuple(c) for o in mission.objects if o['kind'] == 'defense'
+                                 and not o.get('disabled') and o.get('charges', 2) > 0
+                                 for c in o['cells']} if layer_vars['Objets'].get() else set())
+                for c in board.cells():
+                    t = board.tile(c)
+                    color = '#dddddd'
+                    if layer_vars['Terrain'].get():
+                        color = SURFACE_COLORS[t.surface]
+                        if t.cost > 1: color = '#b29f78'
+                        if t.cover: color = '#b0c9a8'
+                        if t.hazard: color = '#eead93'
+                        if t.blocked and t.surface != 'water': color = '#555555'
+                    if layer_vars['Relief'].get() and t.height: color = '#c3c3df'
+                    if c in deployment_cells and (not battle or battle.deploying): color = '#a8dce8'
+                    if c in mission.goal and layer_vars['Objectifs'].get(): color = '#d7c469'
+                    if c in danger_cells: color = '#f0a181'
+                    x, y = c[0] * tile_size, c[1] * tile_size
+                    canvas.create_rectangle(x, y, x+tile_size, y+tile_size, fill=color,
+                                            outline='#288949' if c in reachable else '#999999', width=3 if c in reachable else 1)
+                    if t.height and layer_vars['Relief'].get():
+                        canvas.create_text(x+8, y+8, text=str(t.height), anchor='nw')
+                    if t.hazard and layer_vars['Terrain'].get():
+                        canvas.create_text(x+tile_size-3, y+tile_size-3, text=f'!{t.hazard}', anchor='se')
+                    if t.feature and layer_vars['Décors'].get():
+                        canvas.create_text(x+tile_size//2, y+tile_size//2,
+                                           text=t.feature[:5], fill='#293e30',
+                                           font=('TkDefaultFont', 8, 'bold'))
+                for obj in mission.objects if layer_vars['Objets'].get() else ():
+                    x,y = obj['pos']
+                    if obj['kind'] == 'passage':
+                        dx,dy = obj['destination']
+                        canvas.create_line((x+.5)*tile_size,(y+.5)*tile_size,
+                                           (dx+.5)*tile_size,(dy+.5)*tile_size,
+                                           fill='#6e42a1', width=2, arrow='last',
+                                           dash=() if obj.get('enabled', True) else (4, 3))
+                    canvas.create_text(x*tile_size+tile_size//2,y*tile_size+8,text=obj['kind'][:2], fill='#5b3294')
+                relic = battle.relic_pos if battle else mission.relic
+                if relic is not None and layer_vars['Objectifs'].get():
+                    canvas.create_text(relic[0]*tile_size+tile_size//2,relic[1]*tile_size+tile_size//2,text='R',fill='#a06c00',font=('TkDefaultFont',16))
+                for u in units if layer_vars['Unités'].get() else ():
+                    x,y = (v*tile_size for v in u.pos)
+                    color = '#cce2ff' if u.team == 'player' else '#ffc8bc'
+                    if not u.alive: color = '#aaaaaa'
+                    canvas.create_oval(x+6,y+10,x+tile_size-6,y+tile_size-4,fill=color,outline='#111111',width=3 if battle and u.id==battle.active_id else 1)
+                    canvas.create_text(x+tile_size//2,y+tile_size//2,text=u.name[:3])
+                    canvas.create_text(x+tile_size//2,y+tile_size-10,text=str(u.hp),font=('TkDefaultFont',8))
+                for sx, sy in sorted(selected_tiles):
+                    canvas.create_rectangle(sx*tile_size+4, sy*tile_size+4,
+                                            (sx+1)*tile_size-4, (sy+1)*tile_size-4,
+                                            outline='#1f6e9a', width=3, tags='selection')
+                x,y = (v*tile_size for v in selected_cell)
+                canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
+        if views is None or INSPECTOR in views:
+            inspected_tile = board.tile(selected_cell) if board.contains(selected_cell) else None
+            mode_var.set('MODE : PLAYTEST (édition verrouillée)' if battle else 'MODE : ÉDITION')
+            selected_units = [u for u in units if tuple(u.pos) == selected_cell]
+            selected_objects = [o for o in mission.objects if tuple(o['pos']) == selected_cell]
             if selected_units:
-                text += '\nÉtats sélectionnés :\n' + '\n'.join(
-                    f'{u.name}: {u.statuses}' for u in selected_units)
-            journal.configure(state='normal')
-            journal.delete('1.0','end')
-            journal.insert('1.0','\n'.join(json.dumps(e,ensure_ascii=False) for e in battle.events[-100:]))
-            journal.see('end')
-            journal.configure(state='disabled')
-        else:
-            journal.configure(state='normal')
-            journal.delete('1.0', 'end')
-            journal.configure(state='disabled')
-            text += (f'\nSélection : {len(selected_tiles)} case(s)\n'
-                     f'Presse-papiers : '
-                     f'{len(terrain_clipboard.offsets) if terrain_clipboard else 0} case(s)\n'
-                     'Aide détaillée : panneau Raccourcis et aide.'
-                     '\nActeurs/objets : palette pour placer, inspecteur pour modifier.'
-                     '\nInspecter entité : cliquer un acteur/objet; déplacer, dupliquer ou supprimer.')
-        inspector.configure(state='normal')
-        if not battle and structure_selection_cell is not None:
-            try:
-                structure = structure_at(doc.data, mission_var.get(),
-                                         structure_selection_cell)
-                record = next((row for row in mission.structures
-                               if row['id'] == structure.id), None)
-                ground_status = ('Sauvegardé (' + str(len(record['underlay'])) +
-                                 ' cases)' if record is not None and
-                                 'underlay' in record else
-                                 'Ancienne structure : sol non récupérable')
-                text += ('\n\nSTRUCTURE SÉLECTIONNÉE\n'
-                         f'{structure.name} — {structure.id or "héritée (sans ID)"}\n'
-                         f'Ancrage : {structure.anchor}\n'
-                         f'Emprise : {structure.width}×{structure.height}\n'
-                         f'Rotation : {structure.turns * 90}°\n'
-                         f'Entrée : {structure.door_slot + 1}\n'
-                         f'Terrain sous le bâtiment : {ground_status}\n'
-                         'Éditer les propriétés dans la barre Structure, '
-                         'puis Appliquer ; déplacer ou dupliquer par clic.')
-                preview_cells(structure.cells, tag='structure_selection',
-                              color='#2369ac')
-            except RuleError:
-                structure_selection_cell = None
-                structure_selection_id = None
-        inspector.delete('1.0','end')
-        inspector.insert('1.0', text)
-        inspector.configure(state='disabled')
-        draw_minimap(board, mission, units)
-        if studio is not None:
+                heading = 'PERSONNAGE — ' + ', '.join(u.name for u in selected_units)
+            elif selected_objects:
+                heading = 'OBJET — ' + ', '.join(o['id'] for o in selected_objects)
+            else:
+                heading = 'TERRAIN — case ' + str(selected_cell)
+            text = f'{heading}\n\n{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
+            for actor in selected_units:
+                text += (f'Acteur {actor.id} • {actor.team} • '
+                         f'PV {actor.hp}/{actor.max_hp} • CT {actor.ct}\n')
+            for obj in selected_objects:
+                text += f'Objet {obj["id"]} : {obj["kind"]}\n'
+            actor_focus.configure(state='normal' if selected_units and not battle else 'disabled')
+            object_focus.configure(state='normal' if selected_objects and not battle else 'disabled')
+            event_focus.configure(state='normal' if not battle and
+                                  any(o['kind'] in ('door', 'switch')
+                                      for o in selected_objects) else 'disabled')
+            if inspected_tile is not None:
+                text += (f'Surface : {inspected_tile.surface} | Décor : '
+                         f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
+            if iso_var.get() and board.contains(selected_cell):
+                from .iso_interiors import interior_plan
+                building = next((instance for instance in getattr(
+                    iso_geometry, 'architecture_instances', ())
+                    if selected_cell in instance.cells), None)
+                if building is not None and building.name in ARCHITECTURE_NAMES:
+                    room = interior_plan(board, building)
+                    text += (f'Intérieur : {building.name} ({building.id or "hérité"})'
+                             f' | {len(room.floors)} cases accessibles'
+                             f' | {len(room.walls)} murs'
+                             f' | {len(room.furnishings)} décors'
+                             f' | entrée {"visible" if room.doors else "obstruée"}\n')
+                    floors = [f for f in mission.interior_floors
+                              if f['structure_id'] == building.id]
+                    if floors:
+                        text += ('Plateaux visuels (non jouables) : '
+                                 + ', '.join(f'N{f["level"]} ({len(f["tiles"])} cases)'
+                                             for f in sorted(floors, key=lambda f: f['level']))
+                                 + '\n')
+            for obj in selected_objects:
+                if obj['kind'] == 'defense':
+                    text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
+                if obj['kind'] == 'passage':
+                    text += f"Passage {obj['id']} : {obj['pos']} → {obj['destination']} ({'installé' if obj.get('enabled',True) else 'à installer'})\n"
+            if battle:
+                text += f'Tick : {battle.tick} | Résultat : {battle.result or "en cours"}\nTenue : {battle.hold_ticks}/{mission.target_ticks}\n'
+                if mission.objective == 'crown':
+                    text += f'Couronne : {battle.carrier or battle.relic_pos}\n'
+                if battle.deploying:
+                    text += 'DÉPLOIEMENT — horloge arrêtée.\nChoisir une unité, une case bleue et son orientation, puis deploy / Exécuter.\nChoisir start_battle / Exécuter pour lancer l’assaut.\n'
+                    action_box['values'] = ['deploy', 'start_battle']
+                    if action_var.get() not in action_box['values']: action_var.set('deploy')
+                if battle.active:
+                    u = battle.active
+                    text += f'Actif : {u.name} ({u.team})\nPV {u.hp}/{u.max_hp} | MP {u.mp}/{u.max_mp} | CT {u.ct}\nDéplacement : {"utilisé" if u.moved else "libre"}\nAction : {"utilisée" if u.acted else "libre"}\n'
+                    actions = ['move','attack',*u.skills,'item:potion','item:ether','item:phoenix',*['object:'+o['id'] for o in mission.objects],*available_operations(battle,u)]
+                    if mission.level_links:
+                        actions = (['level_move', 'level_attack', 'attack']
+                                   if battle.unit_levels.get(u.id, 0) else
+                                   ['level_move', 'level_attack', *actions])
+                    action_box['values'] = actions
+                    if action_var.get() not in actions: action_var.set('move')
+                    if action_var.get() not in {'move'} and not action_var.get().startswith(('item:','object:','siege-attack:','repair-siege:')):
+                        try:
+                            forecast = battle.forecast(action_var.get(), selected_cell)
+                            text += '\nPrévision immédiate (avant réactions) :\n'
+                            text += '\n'.join(f'{r["unit"]}: {r["kind"]} {r["amount"]} {r["status"]} ({r["chance"]:.0%})' for r in forecast)
+                        except RuleError as exc:
+                            text += '\nCible : '+str(exc)
+                if selected_units:
+                    text += '\nÉtats sélectionnés :\n' + '\n'.join(
+                        f'{u.name}: {u.statuses}' for u in selected_units)
+                journal.configure(state='normal')
+                journal.delete('1.0','end')
+                journal.insert('1.0','\n'.join(json.dumps(e,ensure_ascii=False) for e in battle.events[-100:]))
+                journal.see('end')
+                journal.configure(state='disabled')
+            else:
+                journal.configure(state='normal')
+                journal.delete('1.0', 'end')
+                journal.configure(state='disabled')
+                text += (f'\nSélection : {len(selected_tiles)} case(s)\n'
+                         f'Presse-papiers : '
+                         f'{len(terrain_clipboard.offsets) if terrain_clipboard else 0} case(s)\n'
+                         'Aide détaillée : panneau Raccourcis et aide.'
+                         '\nActeurs/objets : palette pour placer, inspecteur pour modifier.'
+                         '\nInspecter entité : cliquer un acteur/objet; déplacer, dupliquer ou supprimer.')
+            inspector.configure(state='normal')
+            if not battle and structure_selection_cell is not None:
+                try:
+                    structure = structure_at(doc.data, mission_var.get(),
+                                             structure_selection_cell)
+                    record = next((row for row in mission.structures
+                                   if row['id'] == structure.id), None)
+                    ground_status = ('Sauvegardé (' + str(len(record['underlay'])) +
+                                     ' cases)' if record is not None and
+                                     'underlay' in record else
+                                     'Ancienne structure : sol non récupérable')
+                    text += ('\n\nSTRUCTURE SÉLECTIONNÉE\n'
+                             f'{structure.name} — {structure.id or "héritée (sans ID)"}\n'
+                             f'Ancrage : {structure.anchor}\n'
+                             f'Emprise : {structure.width}×{structure.height}\n'
+                             f'Rotation : {structure.turns * 90}°\n'
+                             f'Entrée : {structure.door_slot + 1}\n'
+                             f'Terrain sous le bâtiment : {ground_status}\n'
+                             'Éditer les propriétés dans la barre Structure, '
+                             'puis Appliquer ; déplacer ou dupliquer par clic.')
+                    preview_cells(structure.cells, tag='structure_selection',
+                                  color='#2369ac')
+                except RuleError:
+                    structure_selection_cell = None
+                    structure_selection_id = None
+            inspector.delete('1.0','end')
+            inspector.insert('1.0', text)
+            inspector.configure(state='disabled')
+        if views is None or MINIMAP in views:
+            draw_minimap(board, mission, units)
+        if studio is not None and (views is None or WORKSPACE in views):
             studio.refresh()
 
     bar = ttk.Frame(root)
@@ -2085,13 +2105,11 @@ def launch(path):
         if battle is not None or source_pending():
             raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
         mid = mission_var.get()
-        if operation == 'edit':
-            result = edit_entity(doc.data, mid, kind, identifier, **values)
-        elif operation == 'remove':
-            result = remove_entity(doc.data, mid, kind, identifier)
-        else:
+        if operation not in ('edit', 'remove'):
             raise RuleError('Unknown entity edit action')
-        design_change(lambda: doc.replace(result))
+        cmd = EntityCommand(operation, kind, identifier,
+                            fields=tuple(values.items()))
+        design_change(lambda: editing_context.execute(cmd, publish=False))
         status_var.set(f'{kind} {identifier} : {operation} confirmé (Undo/Redo disponible).')
         return True
 
@@ -2374,6 +2392,16 @@ def launch(path):
         entry = studio.workspace.sidebar_search
         entry.focus_set()
         entry.selection_range(0, 'end')
+
+    # Subscription order is intentionally renderer -> inspector -> minimap ->
+    # workspace. A typed edit publishes once; each view consumes only its
+    # topic and render caching remains owned by EditorRenderCache.
+    for topic in (RENDERER, INSPECTOR, MINIMAP, WORKSPACE):
+        editing_context.notifications.subscribe(
+            topic, lambda notice, view=topic: refresh(views=(view,)))
+    tool_var.trace_add(
+        'write', lambda *_: editing_context.tools.set(
+            tool_var.get(), mission_var.get()))
 
     root.bind('<Control-f>', focus_project_search)
     root.bind('<Alt-KeyPress-1>', lambda _event: notebook.select(work))
