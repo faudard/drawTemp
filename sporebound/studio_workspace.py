@@ -16,6 +16,8 @@ class ProjectWorkspaceTab:
         self.notebook = notebook
         self.query = owner.tk.StringVar()
         self.sidebar_tree = None
+        self.sidebar_search = None
+        self._sidebar_mission = None
         ttk = owner.ttk
         root = ttk.Frame(notebook)
         notebook.add(root, text='Espace projet')
@@ -98,8 +100,11 @@ class ProjectWorkspaceTab:
         ttk.Label(parent, text='Rechercher les ressources').pack(
             anchor='w', padx=7)
         search = ttk.Entry(parent, textvariable=self.query)
+        self.sidebar_search = search
         search.pack(fill='x', padx=7, pady=(2, 6))
-        search.bind('<Return>', lambda _event: self.open_sidebar_selected())
+        search.bind('<Return>', lambda _event: self.owner._run(
+            self.open_sidebar_selected))
+        search.bind('<Escape>', lambda _event: self.query.set(''))
         frame = ttk.Frame(parent)
         frame.pack(fill='both', expand=True, padx=6, pady=4)
         self.sidebar_tree = ttk.Treeview(
@@ -113,6 +118,8 @@ class ProjectWorkspaceTab:
             '<Double-1>', lambda _event: self.owner._run(self.open_sidebar_selected))
         self.sidebar_tree.bind(
             '<Return>', lambda _event: self.owner._run(self.open_sidebar_selected))
+        self.sidebar_count = ttk.Label(parent, text='')
+        self.sidebar_count.pack(anchor='w', padx=7, pady=(0, 4))
         self.refresh()
         return self.sidebar_tree
 
@@ -150,6 +157,14 @@ class ProjectWorkspaceTab:
         self._populate_tree(self.tree, sections, shown)
         if self.sidebar_tree is not None:
             self._populate_tree(self.sidebar_tree, sections, shown)
+            self.sidebar_count.config(
+                text=f'{len(shown)} résultat(s) • Entrée pour ouvrir')
+            mission = 'mission:' + self.owner.mission()
+            if mission != self._sidebar_mission:
+                self._sidebar_mission = mission
+                if self.sidebar_tree.exists(mission):
+                    self.sidebar_tree.selection_set(mission)
+                    self.sidebar_tree.see(mission)
         self._select()
         self.status.config(text=f'{sum(len(items) for items in sections.values())} '
                                 'ressources indexées — modifications non sauvegardées : '
