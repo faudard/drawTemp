@@ -16,7 +16,7 @@ DEFAULT_CONTENT = Path(__file__).parent / 'content' / 'core.json'
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Sporebound standalone gameplay workbench')
-    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','export'])
+    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','battle-diagnostics','export'])
     parser.add_argument('--content', type=Path, default=DEFAULT_CONTENT)
     parser.add_argument('--project', type=Path, help='Game presentation manifest for player')
     parser.add_argument('--output', type=Path, help='Destination ZIP for export')
@@ -74,6 +74,23 @@ def main(argv=None):
                     print(json.dumps({'valid': False, 'assets': issues}, ensure_ascii=False))
                     return 1
             print(f'Valid: {len(content.missions)} missions, {len(content.skills)} skills, {len(content.jobs)} jobs')
+            return 0
+        if args.command == 'battle-diagnostics':
+            from .battle_diagnostics import trace_seed, trace_report
+            from .tactical_rpg3 import authored_rules_for_document
+            rules = authored_rules_for_document(content.to_dict())
+            trace = trace_seed(content, args.mission, seed=args.seed,
+                               max_commands=args.limit, rules=rules)
+            if args.report:
+                trace_report(args.report, trace)
+            print(json.dumps({
+                'mission': trace['mission'], 'seed': trace['seed'],
+                'result': trace['result'], 'commands': trace['commands'],
+                'ticks': trace['ticks'], 'digest': trace['digest'],
+                'replay_verified': trace['replay_verified'],
+                'diagnostics': trace['diagnostics'],
+                'trace_report': str(args.report) if args.report else None
+            }, ensure_ascii=False, sort_keys=True))
             return 0
         if args.command == 'battle-lab':
             from .battle_lab import compare_reports, run_lab, save_report
