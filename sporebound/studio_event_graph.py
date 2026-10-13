@@ -5,7 +5,7 @@ event model. Clicking a node selects the canonical authored condition/action.
 """
 from copy import deepcopy
 
-from . import event_composer, event_graph
+from . import event_composer, event_graph, event_context
 from .model import RuleError, require
 
 
@@ -34,6 +34,8 @@ class EventGraphStudio:
         self.action_lifetime = self.tk.StringVar()
         self.zoom = self.tk.StringVar(value='100%')
         self.status = self.tk.StringVar(value='Choisir ou créer un événement.')
+        self.preview_tick = self.tk.StringVar(value='0')
+        self.context = None
         self._build(notebook)
 
     def _button(self, parent, label, callback):
@@ -91,6 +93,29 @@ class EventGraphStudio:
         inspector.pack_propagate(False)
         tabs = ttk.Notebook(inspector)
         tabs.pack(fill='both', expand=True)
+        contextual = ttk.LabelFrame(inspector, text='Contexte et prévisualisation')
+        contextual.pack(side='bottom', fill='x', pady=(6, 0))
+        self.context_text = tk.Text(contextual, height=7, wrap='word',
+                                    font=('TkDefaultFont', 9), state='disabled')
+        self.context_text.pack(fill='x', padx=3, pady=3)
+        preview_controls = ttk.Frame(contextual)
+        preview_controls.pack(fill='x')
+        ttk.Label(preview_controls, text='Tick :').pack(side='left')
+        ttk.Entry(preview_controls, textvariable=self.preview_tick, width=6).pack(
+            side='left', padx=3)
+        self.preview_button = ttk.Button(
+            preview_controls, text='Tester avec le moteur',
+            command=lambda: self.owner._run(self.preview_selected))
+        self.preview_button.pack(side='left', padx=3)
+        links = ttk.Frame(contextual)
+        links.pack(fill='x', pady=2)
+        self.story_button = ttk.Button(
+            links, text='Scène liée', command=lambda: self.owner._run(self.open_linked_story))
+        self.story_button.pack(side='left', padx=3)
+        self.cinematic_button = ttk.Button(
+            links, text='Cinématique liée',
+            command=lambda: self.owner._run(self.open_linked_cinematic))
+        self.cinematic_button.pack(side='left', padx=3)
         cond = ttk.Frame(tabs)
         tabs.add(cond, text='Condition')
         self._field(cond, 0, 'Type', self.cond_kind,
@@ -288,6 +313,7 @@ class EventGraphStudio:
     def select_event(self):
         self.action_index = None
         self._load_event()
+        self._refresh_context()
         self.draw()
 
     def _load_event(self):
@@ -334,6 +360,7 @@ class EventGraphStudio:
         if selected:
             self.action_index = selected[0]
             self._load_action(self._event()['actions'][self.action_index])
+            self._refresh_context()
             self.draw()
 
     def open_blocks(self):
@@ -357,6 +384,7 @@ class EventGraphStudio:
         self.action_archetype_box['values'] = sorted(
             self.owner.doc().data.get('archetypes', {}))
         self._load_event()
+        self._refresh_context()
         self.draw()
 
     def draw(self):
@@ -409,4 +437,82 @@ class EventGraphStudio:
         self.event_id.set(key[0])
         self.action_index = key[2] if len(key) == 3 else None
         self._load_event()
+        self._refresh_context()
         self.draw()
+
+    def _context_lines(self, context):
+        lines = [
+            f"{context['event_id']} — SI {context['condition']}",
+            'Actions dans l’ordre du moteur :',
+        ]
+        for index, action in enumerate(context['actions']):
+            prefix = '→' if index == self.action_index else '·'
+            lines.append(f" {prefix} {index + 1}. {action}")
+        lines.append('Scène après victoire (mission) : ' +
+                     (context['scene_id'] or 'aucune'))
+        clips = context['cinematics']
+        lines.append('Cinématiques de mission : ' +
+                     (', '.join(c['id'] + ' (' + c['stage'] + ')' for c in clips)
+                      if clips else 'aucune'))
+        lines.append('Liens de mission uniquement, pas de déclenchement direct '
+                     'par cet événement tactique.')
+        return lines
+
+    def _set_context_text(self, lines):
+        self.context_text.config(state='normal')
+        self.context_text.delete('1.0', 'end')
+        self.context_text.insert('1.0', '\\n'.join(lines))
+        self.context_text.config(state='disabled')
+
+    def _refresh_context(self):
+        self.context = None
+        if not self.event_id.get():
+            self._set_context_text(['Créer ou sélectionner un événement tactique.'])
+        else:
+            self.context = event_context.inspect_event(
+                self.owner.doc().data, self.owner.mission(),
+                self.event_id.get(), self.owner.project)
+            self._set_context_text(self._context_lines(self.context))
+        self.preview_button.config(state='normal' if self.context else 'disabled')
+        self.story_button.config(
+            state='normal' if self.context and self.context['scene_id']
+            else 'disabled')
+        self.cinematic_button.config(
+            state='normal' if self.context and self.context['cinematics']
+            else 'disabled')
+
+    def preview_selected(self):
+        require(self.context is not None, 'Choisir un événement tactique')
+        report = event_context.preview_event(
+            self.owner.doc().data, self.owner.mission(),
+            self.context['event_id'], tick=int(self.preview_tick.get()))
+        lines = self._context_lines(self.context)
+        lines.extend([
+            '',
+            'APERÇU ISOLÉ — pas de sauvegarde ni simulation des tours précédents',
+            f"Tick demandé {report['tick']} : " +
+            ('déclencheur activé' if report['fired'] else 'condition non satisfaite'),
+        ])
+        lines.extend('Moteur : ' + str(row) for row in report['events'][:8])
+        if len(report['events']) > 8:
+            lines.append(f"… {len(report['events']) - 8} autres événements moteur")
+        if report['spawned']:
+            lines.append('Unités créées : ' + ', '.join(report['spawned']))
+        if report['despawned']:
+            lines.append('Unités retirées : ' + ', '.join(report['despawned']))
+        if report['error']:
+            lines.append('Erreur du moteur : ' + report['error'])
+        self._set_context_text(lines)
+
+    def open_linked_story(self):
+        require(self.context is not None and bool(self.context['scene_id']),
+                'Aucune scène narrative liée à cette mission')
+        self.owner.story_editor.select_graph_target(self.context['scene_id'])
+
+    def open_linked_cinematic(self):
+        require(self.context is not None and bool(self.context['cinematics']),
+                'Aucune cinématique liée à cette mission')
+        studio = self.owner.cinematic_studio
+        studio.clip_id = self.context['cinematics'][0]['id']
+        studio.refresh()
+        self.notebook.select(studio.tab)
