@@ -15,6 +15,7 @@ from .world_event_authoring import (
 from .world_map import (WORLD_THEMES, default_world, upsert_location,
                         remove_location, world_projection)
 from .world_map_view import draw_world_map, pick_world_mission
+from .world_travel_lab import WorldTravelLab
 
 
 class WorldMapStudio:
@@ -45,6 +46,14 @@ class WorldMapStudio:
         self.event_action = tk.StringVar(value="continue")
         self.event_destination = tk.StringVar(value="")
         self.road_label = tk.StringVar(value="Cliquez sur une route de la carte.")
+        self.lab = None
+        self._lab_signature = None
+        self.lab_campaign = tk.StringVar(value="")
+        self.lab_start = tk.StringVar(value="")
+        self.lab_destination = tk.StringVar(value="")
+        self.lab_choice = tk.StringVar(value="")
+        self.lab_author_mode = tk.BooleanVar(value=True)
+        self.lab_status = tk.StringVar(value="Simulation isolée : aucune sauvegarde modifiée.")
         ttk.Button(toolbar, text="Créer la carte du monde",
                    command=lambda: owner._run(self.create_world)).pack(
                        side="left", padx=3)
@@ -166,6 +175,46 @@ class WorldMapStudio:
         ttk.Label(events, text="Les scènes et leurs effets se créent dans "
                   "l'éditeur narratif existant.",
                   wraplength=280).pack(anchor="w", pady=(5, 0))
+        lab_frame = ttk.LabelFrame(
+            self.tab, text="Laboratoire de voyage · simulation sans sauvegarde", padding=7)
+        lab_frame.pack(fill="x", padx=10, pady=(0, 8))
+        lab_bar = ttk.Frame(lab_frame)
+        lab_bar.pack(fill="x")
+        for caption, variable, attr, width in (
+                ("Campagne", self.lab_campaign, "lab_campaign_box", 17),
+                ("Départ", self.lab_start, "lab_start_box", 19),
+                ("Arrivée", self.lab_destination, "lab_destination_box", 19)):
+            ttk.Label(lab_bar, text=caption).pack(side="left", padx=(5, 3))
+            widget = ttk.Combobox(
+                lab_bar, textvariable=variable, width=width, state="readonly")
+            widget.pack(side="left", padx=(0, 5))
+            setattr(self, attr, widget)
+        ttk.Checkbutton(
+            lab_frame, text="Mode auteur : accès provisoire aux lieux de l'itinéraire sélectionné",
+            variable=self.lab_author_mode).pack(anchor="w", padx=5)
+        lab_actions = ttk.Frame(lab_frame)
+        lab_actions.pack(fill="x", pady=3)
+        for label, action in (
+                ("Initialiser", self.start_lab),
+                ("Un pas", self.step_lab),
+                ("Jusqu'au prochain événement", self.run_lab),
+                ("Nouvelle destination", self.destination_lab),
+                ("Réinitialiser", self.reset_lab)):
+            ttk.Button(lab_actions, text=label,
+                       command=lambda action=action:
+                       owner._run(action)).pack(side="left", padx=3)
+        ttk.Label(lab_actions, text="Choix").pack(side="left", padx=(8, 3))
+        self.lab_choice_box = ttk.Combobox(
+            lab_actions, textvariable=self.lab_choice,
+            state="readonly", width=17)
+        self.lab_choice_box.pack(side="left", padx=3)
+        ttk.Button(lab_actions, text="Décider", command=lambda:
+                   owner._run(self.choose_lab)).pack(side="left", padx=3)
+        ttk.Label(lab_frame, textvariable=self.lab_status,
+                  wraplength=1100).pack(anchor="w", padx=5)
+        self.lab_log = tk.Text(
+            lab_frame, height=4, wrap="word", state="disabled")
+        self.lab_log.pack(fill="x", padx=5, pady=(3, 0))
         self.canvas.bind("<Button-1>", self.on_press)
         self.canvas.bind("<B1-Motion>", self.on_motion)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
@@ -255,6 +304,106 @@ class WorldMapStudio:
         updated["theme"] = self.theme.get()
         self._commit(updated)
 
+
+
+    def _model_signature(self):
+        """Invalidate private previews when Studio content or story changes."""
+        return json.dumps((self._project().to_dict(), self.owner.doc().data),
+                          sort_keys=True)
+
+    def _lab_is_fresh(self):
+        if self.lab is None:
+            raise RuleError("Initialiser le simulateur de voyage")
+        if self._lab_signature != self._model_signature():
+            self.reset_lab()
+            raise RuleError("Studio modifié : réinitialiser la simulation")
+        return self.lab
+
+    def reset_lab(self):
+        self.lab = None
+        self._lab_signature = None
+        self.lab_choice.set("")
+        self.lab_choice_box["values"] = ()
+        self.lab_status.set("Simulation arrêtée (les sauvegardes restent inchangées).")
+        self._set_lab_log("")
+        self.canvas.delete("world_lab_party")
+        self.canvas.delete("world_lab_route")
+
+    def start_lab(self):
+        project = self._project()
+        if not project.world:
+            raise RuleError("Créer d'abord la carte du monde")
+        campaign = self.lab_campaign.get()
+        content = self.owner._content()
+        candidate = WorldTravelLab(
+            content, project, campaign,
+            self.lab_start.get(), self.lab_destination.get(),
+            author_mode=self.lab_author_mode.get())
+        self.lab = candidate
+        self._lab_signature = self._model_signature()
+        self._render_lab()
+
+    def _set_lab_log(self, report):
+        self.lab_log.configure(state="normal")
+        self.lab_log.delete("1.0", "end")
+        self.lab_log.insert("1.0", report)
+        self.lab_log.see("end")
+        self.lab_log.configure(state="disabled")
+
+    def _render_lab(self):
+        self.canvas.delete("world_lab_party")
+        self.canvas.delete("world_lab_route")
+        if self.lab is None:
+            return
+        report = self.lab.snapshot()
+        state = report["world"]
+        coords = {row["mission"]: (row["x"], row["y"])
+                  for row in self._project().world["nodes"]}
+        if len(state["route"]) > 1:
+            points = [value for mid in state["route"]
+                      for value in coords[mid]]
+            self.canvas.create_line(
+                *points, fill="#247fb6", width=4, dash=(5, 5),
+                tags=("world_lab_route",))
+        px, py = state["position"]
+        self.canvas.create_oval(
+            px-10, py-28, px+10, py-8, fill="#32b1e2",
+            outline="#183b56", width=3, tags=("world_lab_party",))
+        scene = report["scene"]
+        self.lab_choice_box["values"] = [
+            row["id"] for row in report["choices"]]
+        if self.lab_choice.get() not in self.lab_choice_box["values"]:
+            options = self.lab_choice_box["values"]
+            self.lab_choice.set(options[0] if options else "")
+        if scene is not None:
+            message = "Dialogue : " + scene["title"]
+            message += " | " + scene["text"][:160]
+        elif state["traveling"]:
+            message = "En route : " + " → ".join(state["route"])
+        else:
+            message = "Arrivé à : " + state["at"]
+        self.lab_status.set(
+            f'Simulation {report["mode"]} | {message} | Or : {report["gold"]}'
+            " | Aucun fichier écrit")
+        self._set_lab_log(
+            "\n".join([*report["log"], "— Écarts par rapport au départ —",
+                       *(report["changes"] or ["Aucune conséquence narrative."])]))
+
+    def step_lab(self):
+        self._lab_is_fresh().step()
+        self._render_lab()
+
+    def run_lab(self):
+        self._lab_is_fresh().run_to_stop()
+        self._render_lab()
+
+    def choose_lab(self):
+        self._lab_is_fresh().choose(self.lab_choice.get())
+        self._render_lab()
+
+    def destination_lab(self):
+        self._lab_is_fresh().destination(self.lab_destination.get())
+        self._render_lab()
 
     def _scene(self, scene_id):
         return next((scene for scene in self._project().story.get("scenes", [])
@@ -442,6 +591,9 @@ class WorldMapStudio:
                           self.event_selected), sort_keys=True)
         if sig == self._signature:
             return
+        if self.lab is not None and self._lab_signature != self._model_signature():
+            self.reset_lab()
+            self.lab_status.set("Projet ou carte modifiés : simulation invalidée.")
         content = self.owner._content()
         self.mission_box["values"] = list(content.missions)
         if world:
@@ -458,6 +610,20 @@ class WorldMapStudio:
         self.event_destination_box["values"] = [
             node["mission"] for node in world.get("nodes", [])
             if not self.road or node["mission"] not in self.road]
+        campaigns = [item["id"] for item in project.campaigns]
+        self.lab_campaign_box["values"] = campaigns
+        if self.lab_campaign.get() not in campaigns:
+            self.lab_campaign.set(campaigns[0] if campaigns else "")
+        places = [node["mission"] for node in world.get("nodes", [])]
+        self.lab_start_box["values"] = places
+        self.lab_destination_box["values"] = places
+        if self.lab_start.get() not in places:
+            self.lab_start.set(project.campaigns[0]["start_mission"]
+                               if project.campaigns[0]["start_mission"] in places
+                               else places[0] if places else "")
+        if self.lab_destination.get() not in places:
+            self.lab_destination.set(next((mid for mid in places
+                                           if mid != self.lab_start.get()), ""))
         self.road_label.set(
             f"Route : {self.road[0]} → {self.road[1]}" if self.road
             else "Cliquez sur une route de la carte.")
@@ -475,6 +641,7 @@ class WorldMapStudio:
         else:
             self._scene_changed()
         self._signature = sig
+        self._render_lab()
 
     def on_press(self, event):
         if not self._projection:

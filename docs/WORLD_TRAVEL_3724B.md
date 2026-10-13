@@ -165,3 +165,40 @@ Limite explicite : le panneau propose une **prévisualisation statique** de la
 scène et du branchement configurés, pas une exécution de campagne. La
 simulation narrative/tactique complète et le sélecteur visuel des conditions
 composites restent des extensions ultérieures du Story Studio.
+
+## 3.7.24F — Laboratoire de voyage interactif
+
+L'onglet **Monde** propose un laboratoire isolé, utilisant `GameSession`
+et `StoryBook` réels. Sélectionner campagne, départ et destination, puis :
+
+1. **Initialiser** une simulation en mémoire (aucun slot de sauvegarde).
+2. **Un pas** ou **Jusqu'au prochain événement** : avancer sur les routes
+   canoniques et interrompre à la première scène narrative éligible.
+3. **Décider** via l'ID d'un choix disponible, avec vérification des
+   conditions, effets `gold`, drapeaux, déblocages et branchements.
+4. Voir sur la carte un tracé azur et le curseur mobile, et dans le journal
+   les lieux traversés, événements, décisions, demi-tours et écarts de
+   progression (or, inventaire, flags, missions, recrutement).
+5. **Nouvelle destination** après l'arrivée ou **Réinitialiser** pour
+   retrouver un état initial. Les changements du projet dans le Studio
+   invalident automatiquement la simulation en cours.
+
+Le **mode auteur** (opt-in explicite à l'écran, activé par défaut)
+n'accorde temporairement que les étapes de la *route initiale demandée*.
+Les autres embranchements restent verrouillés, à moins qu'une décision
+narrative ne les ouvre via les effets normaux du moteur. Pour tester les
+contraintes d'une nouvelle campagne réelle, désactiver le mode auteur ;
+les voyages vers des destinations encore verrouillées seront refusés.
+
+Les introductions de campagne sont ignorées **uniquement dans une session
+synthétique** et ce choix est consigné ; les autres scénarios narratifs sont
+résolus normalement. Le simulateur n'enregistre jamais de contenu, n'altère
+pas la `GameProject` ou `Campaign` d'origine, et ne modifie aucun replay.
+Il ne prétend pas simuler les combats : les effets tactiques éventuels
+restent à tester dans le Player.
+
+Gates :
+```sh
+python -m unittest tests_standalone.test_world_travel_lab_3724f -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_world_travel_lab_3724f_gui -v
+```
