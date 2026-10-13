@@ -1,0 +1,160 @@
+"""3.7.31 — Shared, Tk-free workspace inspection and actionable map problems.
+
+The Workspace, map inspector and problems panel project the current Content;
+nothing here writes gameplay documents or creates a competing resource registry.
+"""
+from dataclasses import dataclass
+import json
+from pathlib import Path
+
+from .model import RuleError
+
+
+@dataclass(frozen=True)
+class ContextSnapshot:
+    kind: str
+    title: str
+    detail: str
+    mission_id: str = ''
+    cell: tuple = ()
+    entity_id: str = ''
+
+
+def inspect_resource(node):
+    return ContextSnapshot(node.kind, node.label, node.summary)
+
+
+def inspect_map(data, mission_id, cell, cells=()):
+    """One inspector projection for tiles, actors, objects and selected groups."""
+    mission = next((m for m in data['missions'] if m['id'] == mission_id), None)
+    if mission is None:
+        raise RuleError('Mission introuvable : ' + mission_id)
+    cell = tuple(cell)
+    width, height = mission['board']['width'], mission['board']['height']
+    if len(cell) != 2 or not all(type(n) is int for n in cell) or not (
+            0 <= cell[0] < width and 0 <= cell[1] < height):
+        raise RuleError('Case hors de la carte.')
+    selected = tuple(sorted({tuple(p) for p in cells}))
+    if len(selected) > 1:
+        return ContextSnapshot('group', 'GROUPE — sélection de cases',
+                               f'{len(selected)} cases | Mission : {mission["name"]}\n'
+                               f'Ancre : {cell}\n'
+                               'Déplacer/copier via les outils de sélection existants.',
+                               mission_id, cell)
+    actor = next((a for a in mission['units']
+                  if tuple(a['pos']) == cell), None)
+    obj = next((o for o in mission.get('objects', [])
+                if tuple(o['pos']) == cell), None)
+    tile = next((t for t in mission['board'].get('tiles', [])
+                 if tuple(t['pos']) == cell), {})
+    terrain = ('Sol : ' + str(tile.get('surface', 'grass')) +
+               ' | Décor : ' + str(tile.get('feature', '') or 'aucun') +
+               ' | Hauteur : ' + str(tile.get('height', 0)))
+    if actor:
+        return ContextSnapshot(
+            'actor', 'ACTEUR — ' + actor.get('name', actor['id']),
+            f'ID : {actor["id"]} | Camp : {actor["team"]} | Position : {cell}\n'
+            f'Archétype : {actor.get("archetype", "libre") or "libre"}\n'
+            f'PV : {actor.get("hp", "hérités")} | {terrain}',
+            mission_id, cell, actor['id'])
+    if obj:
+        return ContextSnapshot(
+            'object', 'OBJET — ' + obj['id'],
+            f'Type : {obj["kind"]} | Position : {cell}\n'
+            f'Référence : {obj.get("link", "") or "aucune"}\n{terrain}',
+            mission_id, cell, obj['id'])
+    return ContextSnapshot('cell', 'CASE — ' + str(cell),
+                           'Mission : ' + mission['name'] + '\n' + terrain,
+                           mission_id, cell)
+
+
+def map_reference_problems(content):
+    """Authoring warnings with stable, navigable keys, not schema errors.
+
+    A door with no incoming link is valid to play, but often signals an
+    unfinished lever/ram association. Resolve by linking an interactive
+    object from the existing palette. No invalid Content is ever stored.
+    """
+    issues = []
+    for mission in content.missions.values():
+        linked = {o.get('link') for o in mission.objects
+                  if o.get('kind') in ('switch', 'ram', 'catapult')}
+        for obj in mission.objects:
+            if obj['kind'] == 'door' and obj['id'] not in linked:
+                issues.append((
+                    'warning', f'map_object:{mission.id}/{obj["id"]}',
+                    'Porte sans référence entrante (levier, bélier ou catapulte).'))
+    return tuple(sorted(issues))
+
+
+def problem_delta(before, after):
+    """Return added/resolved triples without reloading the entire Studio."""
+    previous, current = set(before), set(after)
+    return tuple(sorted(current - previous)), tuple(sorted(previous - current))
+
+
+def map_resource_target(key, data):
+    """Resolve a live Workspace key to a real map position, never stale coords."""
+    if not key.startswith(('map_actor:', 'map_object:')):
+        return None
+    kind, identifier = key.split(':', 1)
+    if '/' not in identifier:
+        raise RuleError('Identifiant de carte invalide : ' + key)
+    mid, eid = identifier.split('/', 1)
+    mission = next((m for m in data['missions'] if m['id'] == mid), None)
+    if mission is None:
+        raise RuleError('Mission introuvable : ' + mid)
+    entries = mission['units'] if kind == 'map_actor' else mission.get('objects', [])
+    record = next((o for o in entries if o['id'] == eid), None)
+    if record is None:
+        raise RuleError('Élément supprimé : ' + key)
+    return mid, tuple(record['pos']), ('unit' if kind == 'map_actor' else 'object'), eid
+
+
+def palette_source_for_tree(key, data, mission_id):
+    """Resolve a drag originating in Workspace into the existing palette."""
+    from .entity_placement import palette_entities
+    if key.startswith('actor:'):
+        source = 'archetype:' + key.split(':', 1)[1]
+    elif key.startswith('map_actor:'):
+        mid, entity_id = key.partition(':')[2].split('/', 1)
+        if mid != mission_id:
+            raise RuleError('Changer de mission avant de dupliquer cet acteur.')
+        source = 'unit:' + entity_id
+    else:
+        raise RuleError('Déposer un acteur depuis la bibliothèque ou la carte.')
+    return next((entry for entry in palette_entities(data, mission_id)
+                 if entry.kind == 'actor' and entry.value == source),
+                None) or _missing_entry(key)
+
+
+def _missing_entry(key):
+    raise RuleError('Ressource de palette introuvable : ' + key)
+
+
+class LayoutStore:
+    """Atomic UI-only preferences, deliberately separate from Content/GameProject."""
+    def __init__(self, path):
+        self.path = Path(path)
+
+    def load(self):
+        try:
+            data = json.loads(self.path.read_text(encoding='utf-8'))
+        except (OSError, ValueError, TypeError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return {k: v for k, v in data.items()
+                if k in ('outer', 'vertical', 'tab') and
+                (type(v) is int and v >= 0 if k != 'tab'
+                 else isinstance(v, str) and len(v) <= 100)}
+
+    def save(self, layout):
+        cleaned = {k: v for k, v in dict(layout).items()
+                   if k in ('outer', 'vertical', 'tab') and
+                   (type(v) is int and v >= 0 if k != 'tab'
+                    else isinstance(v, str) and len(v) <= 100)}
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_suffix(self.path.suffix + '.tmp')
+        temporary.write_text(json.dumps(cleaned, sort_keys=True), encoding='utf-8')
+        temporary.replace(self.path)
