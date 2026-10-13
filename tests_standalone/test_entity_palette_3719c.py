@@ -5,6 +5,7 @@ from unittest import TestCase, skipUnless
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
+from sporebound.actor_catalog import create_archetype
 from sporebound.editor import Document
 from sporebound.entity_palette import (entity_entries, place_entity,
                                       preview_entity_placement, OBJECT_PROP_HINTS)
@@ -43,6 +44,29 @@ class EntityPaletteTests(TestCase):
         self.doc.redo()
         self.assertEqual(len(self.row()['units']), 3)
         self.assertEqual(len(Content.from_dict(self.doc.data).missions[self.MID].units), 3)
+
+    def test_installed_bestiary_archetype_is_directly_placeable(self):
+        self.doc.replace(create_archetype(
+            self.doc.data, 'forest_wolf', kind='monster', max_hp=28,
+            attack=7, speed=13))
+        entries = entity_entries(self.doc.data, self.MID)
+        entry = next(e for e in entries if e.id == 'archetype:forest_wolf')
+        self.assertEqual(entry.kind, 'archetype')
+        self.assertEqual(entry.team, 'enemy')
+        feedback = preview_entity_placement(
+            self.doc.data, self.MID, entry.id, (8, 8), team='player')
+        self.assertTrue(feedback.allowed, feedback.reason)
+        self.doc.replace(place_entity(self.doc.data, self.MID, entry.id,
+                                      (8, 8), facing='east', team='player'))
+        unit = self.row()['units'][-1]
+        self.assertEqual(unit['archetype'], 'forest_wolf')
+        self.assertEqual(unit['team'], 'player')
+        self.assertEqual(tuple(unit['pos']), (8, 8))
+        self.assertEqual(tuple(unit['facing']), (1, 0))
+        self.doc.undo()
+        self.assertEqual(len(self.row()['units']), 2)
+        with self.assertRaises(RuleError):
+            place_entity(self.doc.data, self.MID, entry.id, (8, 8), team='neutral')
 
     def test_interactive_door_switch_passage_and_unique_ids(self):
         self.doc.replace(place_entity(self.doc.data, self.MID,
@@ -116,6 +140,7 @@ class EntityPaletteGUITests(TestCase):
 
         data = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
                                  'palette_gui', 'Acteurs', 16, 16)
+        data = create_archetype(data, 'forest_wolf', kind='monster')
         root = tk.Tk()
         try:
             stage = tk.Canvas(root, width=100, height=100)
@@ -141,6 +166,14 @@ class EntityPaletteGUITests(TestCase):
             palette.use()
             self.assertEqual(selected[-1][0].id, actor_entry)
             self.assertEqual(selected[-1][1], 'west')
+            palette.show()
+            palette.tree.selection_set('archetype:forest_wolf')
+            palette.on_selection()
+            self.assertEqual(palette.team_box.cget('state'), 'readonly')
+            palette.team.set('player')
+            palette.use()
+            self.assertEqual(selected[-1][0].id, 'archetype:forest_wolf')
+            self.assertEqual(selected[-1][4], 'player')
             palette.show()
             palette.tree.selection_set('object:door')
             palette.preview()
