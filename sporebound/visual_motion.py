@@ -14,6 +14,8 @@ class ActorPose:
     y: float
     action: str
     direction: str
+    # Optional cosmetic atlas sub-frame; legacy four-argument poses keep working.
+    frame: int | None = None
 
 
 class MotionDirector:
@@ -112,7 +114,9 @@ class MotionDirector:
             else:
                 x, y = actor.pos
             result[actor.id] = ActorPose(
-                x, y, action, self._directions.get(actor.id, "south"))
+                x, y, action, self._directions.get(actor.id, "south"),
+                frame=(int(progress >= .5) if progress < 1. and
+                       action in ("move", "attack") else 0))
         return result
 
 

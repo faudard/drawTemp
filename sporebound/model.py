@@ -185,6 +185,8 @@ class Mission:
     # Optional 3.7.20C tactical metadata, absent from all legacy missions.
     unit_levels: dict[str, int] = field(default_factory=dict)
     level_links: list[dict] = field(default_factory=list)
+    # Mission-local editor hierarchy; ignored by Battle and tactical saves.
+    editor_groups: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -238,7 +240,7 @@ class Content:
         for mission in self.missions.values():
             row = {k: v for k, v in asdict(mission).items()
                    if k != "board" and (k not in ("structures", "interior_floors",
-                                               "unit_levels", "level_links") or v)}
+                                               "unit_levels", "level_links", "editor_groups") or v)}
             row["board"] = {"width": mission.board.width, "height": mission.board.height,
                             "tiles": [{"pos": list(c), **asdict(t)} for c, t in sorted(mission.board.tiles.items())]}
             missions.append(row)
@@ -439,8 +441,13 @@ class Content:
                 from .rules.triggers import ValidationContext
                 context = ValidationContext(b, ids, rules, self.archetypes, object_ids)
                 rules.trigger_conditions.get(trigger['condition']).validate(context, trigger)
+                if 'when' in trigger:
+                    from .rules.triggers import validate_composite
+                    validate_composite(context, trigger['when'])
                 for action in trigger['actions']:
                     rules.trigger_actions.get(action['kind']).validate(context, action)
+            from .editor_groups import validate_editor_groups
+            validate_editor_groups(m)
         def unlock_rule(rule):
             require(isinstance(rule, dict), "Tactic unlock rule must be an object")
             if "all" in rule or "any" in rule:

@@ -127,7 +127,21 @@ def add_interior_floor(data, mid, sid, level=1):
 def delete_interior_floor(data, mid, sid, level):
     updated = deepcopy(data)
     mission = _mission(updated, mid)
-    _floor(mission, sid, level)
+    floor = _floor(mission, sid, level)
+    building = _structure(mission.get('structures', ()), sid)
+    x0, y0 = building['anchor']
+    current = {(x0+t['pos'][0], y0+t['pos'][1])
+               for t in floor['tiles']}
+    require(not any(
+        lvl == level and tuple(actor['pos']) in current
+        for actor in mission.get('units', ())
+        for lvl in [mission.get('unit_levels', {}).get(actor['id'], 0)]),
+        'Move upper-floor units before deleting their floor')
+    require(not any(
+        end[0] == level and tuple(end[1:]) in current
+        for edge in mission.get('level_links', ())
+        for end in (edge['from'], edge['to'])),
+        'Remove stair links before deleting their floor')
     require(not any(f['structure_id'] == sid and f['level'] > level
                     for f in mission.get('interior_floors', ())),
             'Remove upper levels before deleting this floor')

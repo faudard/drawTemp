@@ -14,8 +14,8 @@ L'Acte I commence **après** le prologue jouable de Domrémy, dans le camp des r
 | Étape | Mode | Conséquences |
 |---|---|---|
 | Camp des réfugiés | Scène à choix | Étienne (écuyer) ou Agnès (hospitalière), équipement obtenu et équipé, confiance initiale |
-| Route des fugitifs | Combat tactique | XP/JP, escorte narrative des rescapés, potions supplémentaires si villageois sauvés |
-| Pont de la Brume | Combat tactique | Priorité familles ou reconnaissance ; confiance ou renseignement |
+| Route des fugitifs | Extraction tactique | Rejoindre les cases de sortie sans devoir éliminer tous les brigands ; potions si des villageois ont été sauvés |
+| Pont de la Brume | Tenue du passage (`hold`) | Tenir les cases centrales 35 ticks sans contestation ; choix de protection ou de renseignement |
 | Hospice | Défense tactique (survie) | Approvisionnement des blessés ou préservation des dossiers |
 | Archives **ou** otages | Deux missions exclusives | Preuves sur Valcroix **ou** témoignages et soutien populaire |
 | Vaucouleurs | Combat tactique | Audience avec Robert de Baudricourt, choix politique, drapeaux pour l'Acte II |
@@ -26,6 +26,8 @@ L'Acte I commence **après** le prologue jouable de Domrémy, dans le camp des r
 - Le tag opt-in `recruit:<unit_id>` empêche d'insérer dans une bataille un compagnon non recruté ; les unités des autres campagnes ne sont pas affectées.
 - XP et XP de métier suivent le `Campaign.finish` existant. L'équipement utilise les bonus de `Campaign.prepare`. L'interface Player affiche une synthèse équipe, niveaux, équipement et confiance.
 - `trust_refugies`, `renseignement`, `evidence` et `acte1_choix` suivent les décisions. Un lien `battle_support` convertit certaines décisions en potion tactique réelle, reproductible.
+- Le choix `tenir_passage` apporte une potion au combat du pont ; `contourner` privilégie le renseignement utilisé plus tard. Ces décisions utilisent les effets et l'inventaire tactique existants.
+- Le lancier et l'arbalétrier du pont possèdent des rôles de coordination opt-in dans le Player ; leurs menaces de zone restent des possibilités, jamais des actions garanties.
 - Les missions de branche ne se débloquent pas mutuellement. Les récompenses sont attribuées uniquement après une vraie victoire tactique, par le journal de combat existant ; un combat abandonné n'accorde rien.
 - `acte1_complete`, `acte2_appui` et `acte2_route_ouverte` ouvrent le **point de raccord narratif** de l'Acte II. Aucune fausse mission de l'Acte II n'est débloquée.
 

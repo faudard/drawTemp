@@ -26,15 +26,17 @@ from sporebound.iso_fortification_atlas import IsoFortificationAtlas
 from sporebound.iso_actor_atlas import IsoActorAtlas
 from sporebound.model import Content
 from examples.fortified_village_3717a import build_village_document, MISSION_ID
+from scripts.profile_scale_3732 import resident_set
 
 
 def summary(values):
     ordered = sorted(values)
     return dict(p50_ms=round(median(values), 3),
-                p95_ms=round(ordered[min(len(ordered)-1, int(len(ordered)*.95))], 3))
+                p95_ms=round(ordered[min(len(ordered)-1, int(len(ordered)*.95))], 3),
+                p99_ms=round(ordered[min(len(ordered)-1, int(len(ordered)*.99))], 3))
 
 
-def measure(size, frames, assets):
+def measure(size, frames, assets, cell_size=32):
     import tkinter as tk
     source = Content.load(DEFAULT_CONTENT)
     if size == 'village':
@@ -52,7 +54,7 @@ def measure(size, frames, assets):
         doc.paint_many(mid, [(x, y) for x in range(int(size))
                             for y in range(int(size)) if y % 13 == 0], 'height+')
     baseline = json.loads(json.dumps(doc.data))
-    result = {'map': size, 'samples_per_operation': frames, 'assets': assets, 'modes': {}}
+    result = {'map': size, 'cell_size': cell_size, 'samples_per_operation': frames, 'assets': assets, 'modes': {}}
     for mode in ('full', 'retained'):
         root = tk.Tk()
         try:
@@ -61,7 +63,7 @@ def measure(size, frames, assets):
             canvas.pack(fill='both', expand=True)
             root.update()
             renderer = EditorRenderCache(canvas)
-            options = dict(cell_size=32, layers={}, selected_cell=(0, 0), selected_tiles=set())
+            options = dict(cell_size=cell_size, layers={}, selected_cell=(0, 0), selected_tiles=set())
             if assets:
                 options.update(atlas=IsoTerrainAtlas(canvas), prop_atlas=IsoPropAtlas(canvas),
                                building_atlas=IsoBuildingAtlas(canvas),
@@ -94,7 +96,7 @@ def measure(size, frames, assets):
                     elif operation == 'height':
                         doc.paint_many(mid, [(10, 10)], 'height+' if i % 2 == 0 else 'height-')
                     elif operation == 'zoom':
-                        options['cell_size'] = 32 if i % 2 else 38
+                        options['cell_size'] = cell_size if i % 2 else cell_size + 6
                     elif operation == 'undo_redo':
                         (doc.undo if i % 2 == 0 else doc.redo)()
                     elif operation == 'mass_selection':
@@ -122,7 +124,8 @@ def measure(size, frames, assets):
             draw()
             current, peak = tracemalloc.get_traced_memory()
             tracemalloc.stop()
-            result['modes'][mode] = dict(cold_ms=round(cold, 3), operations=timings,
+            rss, rss_kind = resident_set()
+            result['modes'][mode] = dict(process_rss_bytes=rss, rss_kind=rss_kind,cold_ms=round(cold, 3), operations=timings,
                                        model_parse=summary(parse_times),
                                        python_current_bytes=current, python_peak_bytes=peak,
                                        canvas_items=len(canvas.find_all()))
@@ -135,15 +138,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sizes', default='village,32,64,128')
     parser.add_argument('--frames', type=int, default=20)
+    parser.add_argument('--cell-size', type=int, default=32, help='ISO cell width in px (16..122)')
     parser.add_argument('--assets', action='store_true')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     sizes = args.sizes.split(',')
-    if not 2 <= args.frames <= 100 or any(s not in ('village', '32', '64', '128') for s in sizes):
-        parser.error('frames: 2..100; sizes: village,32,64,128')
+    if not 2 <= args.frames <= 100 or not 16 <= args.cell_size <= 122 or any(s not in ('village', '32', '64', '128') for s in sizes):
+        parser.error('frames: 2..100; cell-size: 16..122; sizes: village,32,64,128')
     report = dict(python=sys.version, platform=platform.platform(), samples=[])
     for size in sizes:
-        sample = measure(size, args.frames, args.assets)
+        sample = measure(size, args.frames, args.assets, args.cell_size)
         report['samples'].append(sample)
         print(json.dumps(sample), flush=True)
     if args.output:

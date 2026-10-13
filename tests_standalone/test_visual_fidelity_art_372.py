@@ -8,7 +8,9 @@ import unittest
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
 from sporebound.iso_actor_atlas import (
-    DEFAULT_ACTOR_ATLAS, DEFAULT_JEANNE_ATLAS, actor_action)
+    DEFAULT_ACTOR_ATLAS, DEFAULT_JEANNE_ATLAS, ACTOR_DIRECTIONS,
+    actor_action, actor_foot_point, actor_frame, jeanne_frame_row,
+    packaged_actor_catalog)
 from sporebound.iso_building_atlas import DEFAULT_BUILDING_ATLAS
 from sporebound.iso_depth import depth_order
 from sporebound.iso_fortification_atlas import DEFAULT_FORTIFICATION_ATLAS
@@ -82,6 +84,31 @@ class VisualFidelityArtTests(unittest.TestCase):
             self.assertEqual(actor_action(ActorPose(2, 3, action, 'east')), action)
         self.assertEqual(actor_action(ActorPose(2, 3, 'unknown', 'east')), 'idle')
         self.assertEqual(actor_action(None), 'idle')
+
+    def test_packaged_actor_catalog_reports_real_pose_coverage_and_pivots(self):
+        catalog = packaged_actor_catalog()
+        self.assertEqual(set(catalog), {'hero', 'guard', 'archer', 'jeanne'})
+        for style, spec in catalog.items():
+            with self.subTest(style=style):
+                self.assertTrue(spec['atlas'].is_file())
+                self.assertEqual(spec['directions'], ACTOR_DIRECTIONS)
+                self.assertEqual(spec['foot_pivot'], (0.5, 1.0))
+                self.assertEqual(set(spec['actions']),
+                                 {'idle', 'move', 'attack', 'hit', 'defeat'}
+                                 if style == 'jeanne' else {'idle', 'move'})
+        for zoom in (24, 54, 96):
+            self.assertEqual(actor_foot_point(100, 200, zoom),
+                             (100, 200 + zoom * 5 / 54))
+        self.assertEqual(actor_frame(ActorPose(1, 1, 'move', 'east', 0)), 0)
+        self.assertEqual(actor_frame(ActorPose(1, 1, 'move', 'east', 1)), 1)
+        self.assertEqual(actor_frame(ActorPose(1, 1, 'move', 'east')), 1)
+        self.assertEqual(tuple(jeanne_frame_row(action, frame) for action, frame
+                               in (('idle', 0), ('idle', 1),
+                                   ('move', 0), ('move', 1),
+                                   ('attack', 0), ('attack', 1),
+                                   ('hit', 0), ('defeat', 0))), tuple(range(8)))
+        self.assertEqual(jeanne_frame_row(None, 1), 3)
+        self.assertEqual(jeanne_frame_row('defeat', 1), 7)
 
     def test_scattered_props_objects_roofs_and_units_share_foot_depth(self):
         house = SimpleNamespace(cells=frozenset(((3, 3), (4, 3))))

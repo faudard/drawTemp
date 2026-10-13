@@ -94,7 +94,7 @@ def structure_footprint(clip, anchor):
     return tuple((x0+dx, y0+dy) for dx, dy in clip.offsets)
 
 
-def validate_structure_placement(data, mission_id, clip, anchor):
+def validate_structure_placement(data, mission_id, clip, anchor, *, ignore_unit_ids=()):
     """Guard tactical references and boundaries before overwriting terrain.
 
     Occupied units (including multi-cell units), interactive objects, mission
@@ -108,6 +108,8 @@ def validate_structure_placement(data, mission_id, clip, anchor):
     selected = set(destination)
     occupied = set()
     for unit in mission.get('units', ()):
+        if unit['id'] in ignore_unit_ids:
+            continue
         x, y = unit['pos']
         width, height = unit.get('footprint', (1, 1))
         occupied.update((x+dx, y+dy) for dy in range(height)
@@ -157,6 +159,62 @@ def place_structure(data, mission_id, name, anchor, quarter_turns=0, *, door_slo
     return Content.from_dict(updated).to_dict()
 
 
+def _floor_owners(mission, instance):
+    """Find attached decks and upper occupants by stable building identity."""
+    floors = [floor for floor in mission.get('interior_floors', ())
+              if floor['structure_id'] == instance.id]
+    levels = {row['level'] for row in floors}
+    occupants = {unit['id'] for unit in mission.get('units', ())
+                 if mission.get('unit_levels', {}).get(unit['id'], 0) in levels
+                 and tuple(unit['pos']) in instance.cells}
+    return floors, occupants
+
+
+def _move_authored_decks(prepared, mission_id, instance, requested):
+    """Restamp and translate an authored interior as ONE validated transaction.
+
+    Never parse an intermediate document with orphaned floors or stair links.
+    Deck tiles remain building-local, while stair endpoints and upper actor
+    positions are world coordinates and must follow the moved building.
+    """
+    name, anchor, turns, door_slot = requested
+    clip = structure_template(name, turns, door_slot=door_slot)
+    mission = _mission(prepared, mission_id)
+    floors, occupants = _floor_owners(mission, instance)
+    require(bool(floors), 'No authored interior decks to translate')
+    dx, dy = anchor[0]-instance.anchor[0], anchor[1]-instance.anchor[1]
+    destination = structure_footprint(clip, anchor)
+    from .structure_underlay import capture_underlay
+    underlay = capture_underlay(mission, destination)
+    cells = set(destination)
+    mission['board']['tiles'] = [
+        tile for tile in mission['board']['tiles']
+        if tuple(tile['pos']) not in cells]
+    mission['board']['tiles'].extend(
+        {'pos': list(cell), **deepcopy(tile)}
+        for cell, tile in zip(destination, clip.terrain) if tile)
+    mission.setdefault('structures', []).append({
+        'id': instance.id, 'name': name, 'anchor': list(anchor),
+        'turns': turns, 'door_slot': door_slot, 'underlay': underlay})
+    for unit in mission['units']:
+        if unit['id'] in occupants:
+            unit['pos'] = [unit['pos'][0]+dx, unit['pos'][1]+dy]
+    levels = {floor['level'] for floor in floors}
+    for edge in mission.get('level_links', ()):
+        connected = any(
+            end[0] in levels and tuple(end[1:]) in instance.cells
+            for end in (edge['from'], edge['to']))
+        if not connected:
+            continue
+        for key in ('from', 'to'):
+            end = edge[key]
+            if tuple(end[1:]) in instance.cells and (
+                    end[0] in levels or end[0] == 0):
+                end[1] += dx
+                end[2] += dy
+    return Content.from_dict(prepared).to_dict()
+
+
 def remove_structure(data, mission_id, cell):
     """Remove a persistent OR legacy building and its tiles in one edit.
 
@@ -170,10 +228,24 @@ def remove_structure(data, mission_id, cell):
     instance = next((item for item in architecture_instances(
         mission_obj.board, mission_obj.structures) if target in item.cells), None)
     require(instance is not None, 'No structure at selected cell')
+    floors, occupants = _floor_owners(_mission(data, mission_id), instance)
+    require(not occupants,
+            'Move upper-floor units to another valid floor before deleting this building')
+    if floors:
+        levels = {floor['level'] for floor in floors}
+        require(not any(
+            any(end[0] in levels and tuple(end[1:]) in instance.cells
+                for end in (edge['from'], edge['to']))
+            for edge in _mission(data, mission_id).get('level_links', ())),
+            'Remove attached stair links before deleting this building')
     updated = deepcopy(data)
     mission = _mission(updated, mission_id)
     from .structure_underlay import restore_footprint
     restore_footprint(mission, instance)
+    if instance.id:
+        for group in mission.get('editor_groups', ()):
+            group['structure_ids'] = [sid for sid in group['structure_ids']
+                                      if sid != instance.id]
     if instance.id and mission.get('interior_floors'):
         mission['interior_floors'] = [
             floor for floor in mission['interior_floors']
@@ -221,19 +293,34 @@ def _structure_edit_plan(data, mission_id, cell, *, anchor=None,
     structure_footprint(clip, anchor)
     original = (instance.name, instance.anchor, instance.turns, instance.door_slot)
     requested = (name, tuple(anchor), quarter_turns, door_slot)
+    source = _mission(data, mission_id)
+    floors, occupants = _floor_owners(source, instance)
+    if floors and not duplicate:
+        require((name, quarter_turns, door_slot)
+                == (instance.name, instance.turns, instance.door_slot),
+                'Change of building type/rotation/door with authored floors needs an explicit floor remap')
     prepared = deepcopy(data)
     mission = _mission(prepared, mission_id)
+    # Intermediate validation occurs without the removed structure. The
+    # caller restores the editor hierarchy after stamping the final ID.
+    mission.pop('editor_groups', None)
     if not duplicate:
         from .structure_underlay import restore_footprint
         restore_footprint(mission, instance)
     if duplicate or requested != original:
-        validate_structure_placement(prepared, mission_id, clip, anchor)
+        validate_structure_placement(prepared, mission_id, clip, anchor,
+                                     ignore_unit_ids=occupants if not duplicate else ())
         # Legacy stamps also reserve real ground. Do not overwrite them
         # merely because they have no authored identity record yet.
         from .iso_architecture import architecture_instances
-        scene = Content.from_dict(prepared).missions[mission_id]
+        # The detached intermediate is not a valid Content document when
+        # its old stair links or upper spawns still refer to this building.
+        # Inspect the valid original, excluding the structure being moved.
+        scene = Content.from_dict(data).missions[mission_id]
         destination = set(structure_footprint(clip, anchor))
         for other in architecture_instances(scene.board, scene.structures):
+            if not duplicate and other == instance:
+                continue
             require(not destination.intersection(other.cells),
                     'Structure overlaps an existing legacy structure')
     return prepared, instance, requested, original
@@ -264,6 +351,9 @@ def edit_structure(data, mission_id, cell, *, anchor=None, name=None,
         duplicate=duplicate)
     if not duplicate and requested == original and instance.id:
         return deepcopy(data)
+    if not duplicate and instance.id and _floor_owners(
+            _mission(data, mission_id), instance)[0]:
+        return _move_authored_decks(prepared, mission_id, instance, requested)
     chosen_name, chosen_anchor, chosen_turns, chosen_door = requested
     result = place_structure(prepared, mission_id, chosen_name,
                              chosen_anchor, chosen_turns, door_slot=chosen_door)
@@ -271,6 +361,9 @@ def edit_structure(data, mission_id, cell, *, anchor=None, name=None,
         # The new record is last; its automatically chosen ID is replaced
         # with the old persistent ID without touching any other record.
         _mission(result, mission_id)['structures'][-1]['id'] = instance.id
+    prior_groups = _mission(data, mission_id).get('editor_groups')
+    if prior_groups is not None:
+        _mission(result, mission_id)['editor_groups'] = deepcopy(prior_groups)
     return Content.from_dict(result).to_dict()
 
 

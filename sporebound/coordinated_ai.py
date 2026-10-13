@@ -245,6 +245,46 @@ def squad_archer_cover_move(battle, actor):
     return {"kind": "move", "cell": list(min(options)[2])}
 
 
+def squad_objective_guard_move(battle, actor):
+    """Contest authored goal tiles rather than chasing kills on objective maps.
+
+    Only opt-in enemy squads use this policy. It chooses a normal, reachable
+    Move with no implicit teleport, damage, CT or state mutation. An available
+    shot takes priority, and units already screening the goal hold their tile.
+    """
+    if (actor.team != "enemy" or actor.moved
+            or battle.status_blocks(actor, "move")
+            or "move" not in battle.rules.commands
+            or battle.mission.objective not in {"extract", "hold", "crown"}
+            or not battle.mission.goal):
+        return None
+    goals = tuple(sorted(battle.mission.goal))
+    current = min(distance(actor.pos, cell) for cell in goals)
+    if current <= 1:
+        return None
+    if not actor.acted and not battle.status_blocks(actor, "act"):
+        attack = battle._basic(actor)
+        if any(opponent.alive and opponent.team != actor.team
+               and attack.min_range <= distance(actor.pos, opponent.pos) <= attack.range
+               and (not attack.los or battle.line_of_sight(actor.pos, opponent.pos))
+               for opponent in battle.units):
+            return None
+    options = []
+    for cell, (cost, path) in battle.reachable(actor).items():
+        goal_distance = min(distance(cell, goal) for goal in goals)
+        if cell == actor.pos or goal_distance >= current:
+            continue
+        risk = sum(row["amount"] * row["chance"]
+                   for row in battle.movement_threats(actor, path))
+        risk += sum(battle.board.tile(pos).hazard for pos in path[1:])
+        if risk > actor.hp / 2:
+            continue
+        options.append((goal_distance, risk, cost, cell))
+    if not options:
+        return None
+    return {"kind": "move", "cell": list(min(options)[3])}
+
+
 def squad_plan_preview(battle, actor_id):
     """Read-only companion/role diagnostics for UI and tests."""
     actor = battle.unit(actor_id)
@@ -272,6 +312,10 @@ def coordinated_command(battle):
         healing = _healing_command(battle, actor)
         if healing is not None:
             return healing
+    if squad_role(actor) or "protector" in actor.tags:
+        objective_move = squad_objective_guard_move(battle, actor)
+        if objective_move is not None:
+            return objective_move
     if "protector" in actor.tags or squad_role(actor) in {"vanguard", "pikeman"}:
         move = _protective_move(battle, actor)
         if move is not None:

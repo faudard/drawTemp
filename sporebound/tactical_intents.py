@@ -44,7 +44,8 @@ def tactical_intents(battle, *, max_cells=1024):
     """
     result = {"timeline": activation_timeline(battle),
               "casts": [], "charges": [], "prepared": [],
-              "danger": [], "doctrines": [], "morale": [], "truncated": False}
+              "danger": [], "doctrines": [], "morale": [],
+              "squads": [], "truncated": False}
     if battle.result or battle.deploying:
         return result
 
@@ -57,6 +58,8 @@ def tactical_intents(battle, *, max_cells=1024):
 
     from .doctrines31 import doctrine
     from .morale31 import morale_snapshot
+    from .coordinated_ai import squad_role
+    from .formations3 import formation_preview
     for actor in sorted(battle.units, key=lambda u: u.id):
         if not actor.alive:
             continue
@@ -67,6 +70,28 @@ def tactical_intents(battle, *, max_cells=1024):
             result["doctrines"].append({"unit": actor.id, "doctrine": role,
                                          "state": "reloading" if "reload:empty" in actor.tags else "ready",
                                          "certainty": "known"})
+        # Authored roles are facts; their next tactical action is uncertain.
+        # The same formation preview determines whether a stance is active.
+        role_name = squad_role(actor)
+        if actor.team == "enemy" and (role_name or "protector" in actor.tags):
+            stance = formation_preview(battle, actor.id)
+            # An escort provider protects its target; stance["escort"] alone
+            # describes whether the provider is itself being escorted.
+            escort_target = stance["mode"].partition(":")[2]
+            providing_escort = bool(escort_target and any(
+                ally.id == escort_target and ally.alive and ally.team == actor.team
+                and distance(ally.pos, actor.pos) == 1 for ally in battle.units))
+            objective = battle.mission.objective
+            contest = objective in {"extract", "hold", "crown"} and bool(battle.mission.goal)
+            result["squads"].append({
+                "unit": actor.id, "role": role_name or "protector",
+                "formation": stance["mode"],
+                "formation_active": bool(stance["shield_wall"] or
+                                         stance["phalanx"] or stance["escort"] or
+                                         providing_escort),
+                "intent": "contest_goal" if contest else "coordinate",
+                "goal_cells": [list(c) for c in sorted(battle.mission.goal)] if contest else [],
+                "certainty": "possible"})
         if actor.cast:
             cast = actor.cast
             skill = battle.content.skills[cast["skill"]]

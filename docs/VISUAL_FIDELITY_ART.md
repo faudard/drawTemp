@@ -83,3 +83,63 @@ metadata). The older 88 PNG archive cannot be recreated from the index.
   pose timing, VFX layering and dynamic objects beyond the existing atlas.
 
 No changes to Content/JSON, save/replay format, battle actions or RNG.
+
+## October 2026 follow-up — frame sampling and release certification
+
+- The shared `IsoActorAtlas` used by the Editor and isometric Player exposes
+  `packaged_actor_catalog()`, with the real action coverage and a
+  bottom-center foot pivot. Generic hero/guard/archer artwork still **lacks**
+  attack/hit/defeat images: the fallback is not advertised as delivered art.
+  Project-specific art remains in the existing `AssetRegistry`.
+- `MotionDirector` supplies cosmetic 0/1 sub-frames for walking and attacks.
+  Jeanne's second `move` (row 3) and `attack` (row 5) frames are now selected
+  from her existing atlas instead of being skipped. Tactical timing, save,
+  replay and existing four-argument `ActorPose` consumers remain unchanged.
+- `actor_foot_point()` is shared at 24/54/96px zoom. The Tk regression also
+  checks actor→façade→foreground stacking plus roof cutaway, beyond mere
+  renderer-to-renderer agreement.
+- The watercolor validator checks PNG chunk CRCs, completeness, dimensions,
+  and SHA-256 hashes when supplied in metadata. The `standalone` workflow
+  checks optional developer packs; **version-tag distribution** performs the
+  strict 88-PNG check without `--allow-missing` and will fail until published.
+
+**Still blocked:** the original 88 watercolor PNG files have not been
+committed. This PR does not reconstruct them from metadata or certify final
+art direction. QA on final art, all actor combat frames and actual Windows,
+macOS and Linux visuals must be completed after delivery.
+
+
+## October 2026 recovery — original V3 source archive found
+
+The historical 23 MB \`drawTemp_assets_Jeanne_88_sprites_v3.zip\`
+has been recovered **in the author's ChatGPT file Library**, not in GitHub.
+Its archive SHA-256 is
+\`2a3089fc05184f62048c1484a114a467d626411452d8e6d9104f57e4cb20bf0a\`.
+The 88 RGBA images decode, their hashes match the archived preflight, and
+\`assets/watercolor/provenance.json\` now pins **all 88** original PNG hashes.
+This tracked provenance is not a substitute for the binary files.
+
+A strict and atomic publisher is provided for the owner to run from a local
+checkout of the PR branch once the original ZIP is downloaded:
+
+\`\`\`sh
+python scripts/publish_watercolor_pack.py --bundle /path/to/drawTemp_assets_Jeanne_88_sprites_v3.zip --dry-run
+python scripts/publish_watercolor_pack.py --bundle /path/to/drawTemp_assets_Jeanne_88_sprites_v3.zip
+python scripts/verify_watercolor_release.py --root assets/watercolor
+git add assets/watercolor/sprites
+git commit -m "art(jeanne): publish 88 approved watercolor v3 PNGs"
+git push origin feat/visual-fidelity-art-gates-20261013
+\`\`\`
+
+On Windows, \`scripts/publish_watercolor_art.ps1 -RepoPath <checkout> -BundlePath <archive>\`
+performs the clean-tree, branch and push checks. Importing never modifies
+savegames, tactical data, or authored campaign JSON. If the target already
+contains a different or partial pack, publishing fails without overwriting it.
+
+The archived visual preflight identified **46/88 manual-review candidates**:
+2 VFX, 6 wolf, 7 Jeanne, 9 spearman, 10 props, 2 townsfolk, 3 soldiers,
+3 bestiary and 4 heroes. See \`docs/evidence/watercolor_v3_art_review.json\`.
+These are transparent-edge/bleed warnings, **not** a claim that every
+flagged image is defective. The real final render review must still compare
+Studio and Player at identical zooms, with roof cutaways and wall occlusion.
+The archive is recovered, but **the 88 PNGs have not been pushed to GitHub**.

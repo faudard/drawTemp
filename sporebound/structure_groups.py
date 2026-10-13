@@ -38,11 +38,21 @@ def transform_structure_group(data, mission_id, cells, dx, dy, *,
             'Duplicating onto the same structures is not allowed')
     originals = selected_structures(data, mission_id, cells)
     require(bool(originals), 'Select the complete footprint of a structure')
+    # Group transformation does not yet remap per-building tactical stair
+    # endpoints. Reject rather than silently keeping them at old positions.
+    moving_ids = {row.id for row in originals if row.id}
+    mission_raw = _mission(data, mission_id)
+    require(not any(f['structure_id'] in moving_ids
+                    for f in mission_raw.get('interior_floors', ())),
+            'Move buildings with authored floors individually until group floor remapping is supported')
     require(len(originals) <= 128, 'Select at most 128 structures per operation')
     if not duplicate and (dx, dy) == (0, 0):
         return deepcopy(data)
     prepared = deepcopy(data)
     mission = _mission(prepared, mission_id)
+    # The move's intermediate Content snapshots omit detached structures;
+    # group references must be restored after all identity IDs are preserved.
+    held_groups = mission.pop('editor_groups', None)
     if not duplicate:
         from .structure_underlay import restore_footprint
         # Restore ALL source grounds before capturing any destination.
@@ -72,4 +82,6 @@ def transform_structure_group(data, mission_id, cells, dx, dy, *,
                                  item.turns, door_slot=item.door_slot)
         if not duplicate and item.id:
             _mission(result, mission_id)['structures'][-1]['id'] = item.id
+    if held_groups is not None:
+        _mission(result, mission_id)['editor_groups'] = held_groups
     return Content.from_dict(result).to_dict()

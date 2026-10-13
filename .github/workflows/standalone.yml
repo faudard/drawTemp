@@ -25,11 +25,23 @@ jobs:
       - run: python -m pip install .
       - name: Verify 3.7.24A World Map model and legacy save compatibility
         run: python -m unittest tests_standalone.test_world_map_3724a -v
+      - name: Verify 3.7.24B continuous world travel and resume
+        run: python -m unittest tests_standalone.test_world_travel_3724b -v
+      - name: Verify 3.7.24C authored road events and StoryBook choices
+        run: python -m unittest tests_standalone.test_world_events_3724c -v
+      - name: Verify 3.7.24D multiple encounters, forks and backtracking
+        run: python -m unittest tests_standalone.test_world_forks_3724d -v
+      - name: Verify 3.7.24E world event authoring, route picking and persistence
+        run: python -m unittest tests_standalone.test_world_event_studio_3724e -v
       - name: Generate and validate a playable 3.7.24A World Map campaign
         run: |
           python -m examples.world_map_3724a --output "${{ runner.temp }}/world-3724a.json"
           python -m sporebound validate --content "${{ runner.temp }}/world-3724a.json" --project "${{ runner.temp }}/world-3724a.game.json"
       - run: python -m unittest discover -s tests_standalone -v
+      - name: Battle Lab 3.8 CLI report and paired deterministic replay gate
+        run: |
+          python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --report battle_lab_ci.json
+          python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --baseline battle_lab_ci.json
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
         run: python -m examples.tactical_rpg3_castle
@@ -56,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Tk and virtual display
         run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb python3-pil
-      - name: Gate actual 88 watercolor PNGs when art is published
+      - name: Development-only watercolor metadata check (NOT release certification)
         run: python3 scripts/verify_watercolor_release.py --root assets/watercolor --allow-missing
       - name: Exercise the real editor
         env:
@@ -66,6 +78,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_map_3724a_gui.py -v
+      - name: Verify 3.7.24E visual road events Studio, Undo Redo Save All
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_event_studio_3724e_gui.py -v
       - name: Verify 3.7.21B common undo/redo and Save All through real Tk
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -74,6 +90,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_studio_gui.py -v
+      - name: Battle Lab 3.8 Tk tab and seeded worker gate
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_battle_lab_38_gui.py -v
       - name: Exercise 2.6 Audio Studio import and sound cues
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -165,6 +185,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_interior_levels_3720b_gui.py -v
+      - name: Verify 3.7.25 moved upper floors, roof toggling and picking at three zooms
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_interior_building_lifecycle_3725_gui.py -v
       - name: Verify 3.7.20C tactical floor traversal and Player elevated picking
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -382,4 +406,20 @@ jobs:
         with:
           name: player-canvas-379-ubuntu
           path: ${{ runner.temp }}/player-canvas-379-stress.json
+          if-no-files-found: error
+
+  balance-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Gate 3.8 difficulty, duration and determinism against pinned garden baseline
+        run: python -m sporebound battle-lab --mission garden --seed 1 --runs 8 --limit 500 --baseline docs/evidence/battle_lab_garden_38.json --max-victory-drop 0.20 --max-p95-growth 0.30 --max-new-limits 0 --report battle_lab_garden_38.json
+      - name: Preserve balance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: battle-lab-garden-38
+          path: battle_lab_garden_38.json
           if-no-files-found: error

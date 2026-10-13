@@ -153,6 +153,70 @@ class StructureGroupCommand:
 
 
 @dataclass(frozen=True)
+class EditorGroupMoveCommand:
+    """Move a persistent hierarchy with the normal validated edit protocol."""
+    group_id: str
+    dx: int
+    dy: int
+    kind: str = 'editor-group'
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+
+    def transform(self, data, mission_id):
+        from .editor_groups import move_editor_group
+        return move_editor_group(data, mission_id, self.group_id,
+                                 self.dx, self.dy)
+
+
+@dataclass(frozen=True)
+class EditorGroupBatchCommand:
+    """Preview/apply multi-selected group translation or deep duplication."""
+    group_ids: Tuple[str, ...]
+    dx: int
+    dy: int
+    duplicate: bool = False
+    kind: str = 'editor-groups'
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+
+    def transform(self, data, mission_id):
+        from .editor_groups import duplicate_editor_groups, move_editor_groups
+        if self.duplicate:
+            return duplicate_editor_groups(data, mission_id,
+                                           self.group_ids, self.dx, self.dy)
+        return move_editor_groups(data, mission_id, self.group_ids,
+                                  self.dx, self.dy)
+
+
+@dataclass(frozen=True)
+class GroupPrefabPlaceCommand:
+    """Preview/apply a validated portable group prefab on an authored mission."""
+    prefab: dict
+    anchor: Tuple[int, int]
+    kind: str = 'editor-prefab'
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+
+    def transform(self, data, mission_id):
+        from .group_prefabs import place_group_prefab
+        return place_group_prefab(data, mission_id, self.prefab, self.anchor)
+
+
+@dataclass(frozen=True)
+class EditorGroupTreeDropCommand:
+    """Reorganize a mission hierarchy from Treeview without moving the map."""
+    source_group_id: str
+    item_kind: str
+    member: object = None
+    target_group_id: Optional[str] = None
+    kind: str = 'editor-group-tree'
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+
+    def transform(self, data, mission_id):
+        from .editor_groups import drop_group_tree_item
+        return drop_group_tree_item(
+            data, mission_id, self.source_group_id, self.item_kind,
+            member=self.member, target_group_id=self.target_group_id)
+
+
+@dataclass(frozen=True)
 class EntityCommand:
     """Move, duplicate, edit or delete an existing unit or interactive object."""
     action: str

@@ -37,8 +37,64 @@ def update_condition(data, mission_id, event_id, condition):
     require(isinstance(condition, dict) and 'condition' in condition,
             'Choose a valid trigger condition')
     event = deepcopy(_find_event(data, mission_id, event_id))
-    event = {'id': event_id, **deepcopy(condition), 'actions': event['actions']}
+    # Editing the primary condition must not silently erase secondary predicates.
+    extras = ({'when': event['when']} if 'when' in event and
+              'when' not in condition else {})
+    event = {'id': event_id, **deepcopy(condition), **extras,
+             'actions': event['actions']}
     return _save(data, mission_id, event_id, event)
+
+
+
+def extend_condition(data, mission_id, event_id, predicate, *,
+                     join='all', negate=False):
+    """Add an AND/OR/NOT constraint to the selected canonical trigger.
+
+    The primary trigger remains mandatory (e.g. a real lever interaction).
+    Secondary clauses can contain nested groups. Every change is validated
+    by Content and committed in a single existing document transaction.
+    """
+    require(join in ('all', 'any') and type(negate) is bool,
+            'Choose AND or OR')
+    require(isinstance(predicate, dict) and
+            isinstance(predicate.get('condition'), str),
+            'Choose a validated atomic condition')
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    node = deepcopy(predicate)
+    if negate:
+        node = {'not': node}
+    if 'when' in event:
+        prior = event['when']
+        if isinstance(prior, dict) and len(prior) == 1 and join in prior and (
+                len(prior[join]) < 8):
+            event['when'] = {join: prior[join] + [node]}
+        else:
+            event['when'] = {join: [prior, node]}
+    else:
+        event['when'] = node
+    return _save(data, mission_id, event_id, event)
+
+
+def clear_composite_condition(data, mission_id, event_id):
+    """Clear only secondary conditions, preserving primary event and actions."""
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    event.pop('when', None)
+    return _save(data, mission_id, event_id, event)
+
+
+def composite_title(node):
+    if 'condition' in node:
+        return condition_title(node)
+    if 'not' in node:
+        return 'NON (' + composite_title(node['not']) + ')'
+    kind = 'all' if 'all' in node else 'any'
+    return '(' + (' ET ' if kind == 'all' else ' OU ').join(
+        composite_title(child) for child in node[kind]) + ')'
+
+
+def condition_summary(event):
+    root = condition_title(event)
+    return root + (' ET ' + composite_title(event['when']) if 'when' in event else '')
 
 
 def add_action(data, mission_id, event_id, action, *, index=None):
@@ -209,7 +265,7 @@ def build_event_graph(data, mission_id, *, max_events=200, max_nodes=600):
         event_id = event['id']
         ckey = (event_id, 'condition')
         nodes.append(dict(key=ckey, event_id=event_id, kind='condition',
-                          label=condition_title(event), x=80, y=90+i*132,
+                          label=condition_summary(event), x=80, y=90+i*132,
                           order=i))
         previous = ckey
         for action_index, action in enumerate(actions):
