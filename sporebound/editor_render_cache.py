@@ -4,6 +4,7 @@ The normal renderer remains the source of drawing/occlusion rules. Replaying its
 commands through this adapter avoids Tcl calls for unchanged items; no document
 revision assumptions are required (Studio panels can edit dictionaries in place).
 """
+from hashlib import blake2b
 from time import perf_counter
 
 from .iso_map import IsoGeometry, render_isometric
@@ -21,6 +22,10 @@ class EditorRenderCache:
         self._region = None
         self.stats = {}
         self._owns_canvas = False
+        self._large_signature = None
+        self._large_selection = None
+        self._large_selected_tiles = frozenset()
+        self._large_item_count = None
 
     def invalidate(self):
         """Call when another renderer takes ownership of the Canvas."""
@@ -32,6 +37,10 @@ class EditorRenderCache:
         self._region = None
         self.geometry = None
         self._geometry_key = None
+        self._large_signature = None
+        self._large_selection = None
+        self._large_selected_tiles = frozenset()
+        self._large_item_count = None
 
     def begin_group(self, group):
         self._group = group
@@ -115,6 +124,52 @@ class EditorRenderCache:
         self.stats.update(created=created, updated=updated, deleted=deleted,
                           items=len(self._items))
 
+    @staticmethod
+    def _large_scene_signature(board, mission, units, options):
+        """Snapshot *values*, never model identities (Studio rebuilds Content).
+
+        Both the authored board and live units can be edited in-place. The
+        display signature includes all non-selection inputs to the renderer,
+        including layer flags, threats, sprite poses and atlas identities.
+        Only the two selection overlays may be updated independently.
+        """
+        visual_options = tuple((name, repr(value))
+                               for name, value in sorted(options.items())
+                               if name not in ('selected_cell', 'selected_tiles'))
+        state = repr((board, mission, units, visual_options))
+        return blake2b(state.encode('utf-8'), digest_size=16).digest()
+
+    def _large_selection_safe(self, before, after):
+        """Changing roof cutaway requires a complete depth/occlusion pass."""
+        return not any((before in building.cells) != (after in building.cells)
+                       for building in getattr(self.geometry,
+                                               'architecture_instances', ()))
+
+    def _draw_large_selection(self, selected_cell, selected_tiles):
+        """Replace only the two selection contours, respecting painter order.
+
+        The normal renderer always raises the 'selection' tag above roofs and
+        actors. Recreating these final overlays is equivalent whenever the
+        authored scene and architectural cutaway state have not changed.
+        """
+        self.canvas.delete('selection')
+        count = 0
+        for cell in self.geometry.draw_order:
+            if cell not in selected_tiles and cell != selected_cell:
+                continue
+            corners = tuple(value for point in self.geometry.polygon(cell)
+                            for value in point)
+            if cell in selected_tiles:
+                self.canvas.create_polygon(*corners, outline='#23689e',
+                                           fill='', width=3, tags='selection')
+                count += 1
+            if cell == selected_cell:
+                self.canvas.create_polygon(*corners, outline='#2361ff',
+                                           fill='', width=3, tags='selection')
+                count += 1
+        self.canvas.tag_raise('selection')
+        return count
+
     def draw(self, board, mission, units, **options):
         start = perf_counter()
         if not self._owns_canvas:
@@ -131,24 +186,64 @@ class EditorRenderCache:
             # Content.from_dict produces fresh models on every Studio refresh.
             self.geometry.board = board
         if board.width * board.height > self.max_retained_cells:
-            # Measurements at 128² show command diffing costs more than Tcl
-            # rebuilding. Keep the cheap geometry cache, bound display-list
-            # memory, and use the established full renderer for large scenes.
+            # Full retained command diffing is too expensive at 128². Skip
+            # genuinely unchanged scenes and redraw just selection contours
+            # when roof cutaway is unaffected. Everything else is a full pass.
             self._items.clear()
             self._order = self._raises = ()
             self._region = None
+            signature = self._large_scene_signature(board, mission, units, options)
+            selected_cell = options['selected_cell']
+            selected_tiles = frozenset(options['selected_tiles'])
+            reusable = (not rebuilt and self.stats.get('mode') == 'geometry'
+                        and signature == self._large_signature
+                        and hasattr(self.canvas, 'find_all')
+                        and self._large_item_count == len(self.canvas.find_all()))
+            if reusable:
+                if (selected_cell == self._large_selection
+                        and selected_tiles == self._large_selected_tiles):
+                    self.stats = dict(mode='geometry', fast_path='noop',
+                                      geometry_rebuilt=False, created=0,
+                                      updated=0, deleted=0,
+                                      items=self._large_item_count,
+                                      render_ms=(perf_counter() - start) * 1000)
+                    return self.geometry
+                if self._large_selection_safe(self._large_selection, selected_cell):
+                    try:
+                        count = self._draw_large_selection(selected_cell,
+                                                           selected_tiles)
+                        self._large_selection = selected_cell
+                        self._large_selected_tiles = selected_tiles
+                        self._large_item_count = len(self.canvas.find_all())
+                    except Exception:
+                        self.invalidate()
+                        raise
+                    self.stats = dict(mode='geometry', fast_path='selection',
+                                      geometry_rebuilt=False, created=count,
+                                      updated=0, deleted=None,
+                                      items=self._large_item_count,
+                                      render_ms=(perf_counter() - start) * 1000)
+                    return self.geometry
             try:
                 render_isometric(self.canvas, board, mission, units,
                                  geometry=self.geometry, **options)
             except Exception:
                 self.invalidate()
                 raise
-            self.stats = dict(mode='geometry', geometry_rebuilt=rebuilt,
-                              created=None, updated=0, deleted=None, items=None,
+            self._large_signature = signature
+            self._large_selection = selected_cell
+            self._large_selected_tiles = selected_tiles
+            self._large_item_count = (len(self.canvas.find_all())
+                                      if hasattr(self.canvas, 'find_all') else None)
+            self.stats = dict(mode='geometry', fast_path='full',
+                              geometry_rebuilt=rebuilt, created=None,
+                              updated=0, deleted=None, items=self._large_item_count,
                               render_ms=(perf_counter() - start) * 1000)
             return self.geometry
         if self.stats.get('mode') == 'geometry':
             self.canvas.delete('all')
+        self._large_signature = None
+        self._large_item_count = None
         self._commands = {}
         self._pending_raises = []
         self.begin_group('scene')
