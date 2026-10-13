@@ -146,4 +146,8 @@ def remove_entity(data, mission_id, kind, entity_id):
     def change(_, mission):
         field = 'units' if kind == 'actor' else 'objects'
         mission[field] = [e for e in mission[field] if e['id'] != entity_id]
+        member_field = 'unit_ids' if kind == 'actor' else 'object_ids'
+        for group in mission.get('editor_groups', ()):
+            group[member_field] = [ref for ref in group[member_field]
+                                   if ref != entity_id]
     return _edit(data, mission_id, change)
