@@ -161,13 +161,15 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                      selected_cell, selected_tiles, reachable=(), danger=(), active_id=None,
                      atlas=None, prop_atlas=None,
                      building_atlas=None, fortification_atlas=None,
-                     actor_atlas=None, poses=None):
+                     actor_atlas=None, poses=None, unit_levels=None):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = IsoGeometry(board, cell_size)
     canvas.delete('all')
     canvas.configure(scrollregion=(0, 0, geo.width, geo.height))
     goals = set(mission.goal)
     deploy = {tuple(c) for z in mission.deployment for c in z['cells']}
+    actor_levels = (unit_levels if unit_levels is not None
+                    else getattr(mission, 'unit_levels', {}))
     actors = {}
     for index, actor in enumerate(units):
         actors.setdefault(tuple(actor.pos), []).append((index, actor))
@@ -294,6 +296,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 # MotionDirector feeds fractional positions, not tactical
                 # moves. Do not change the board cell used for game logic.
                 ax, ay = visual_center(geo, actor, poses)
+                ay -= actor_levels.get(actor.id, 0) * 3 * geo.step
                 actor_tags = ('iso_actor', 'iso_actor_unit_' + str(actor_index))
                 color = '#3b82c6' if actor.team == 'player' else '#ca6654'
                 if not actor.alive:
@@ -348,6 +351,10 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         poses=poses, structures=getattr(mission, 'structures', ()),
         interior_floors=getattr(mission, 'interior_floors', ()),
         prop_atlas=prop_atlas)
+    for index, actor in enumerate(units):
+        if actor_levels.get(actor.id, 0) > 0:
+            canvas.tag_raise('iso_actor_unit_' + str(index))
+    canvas.tag_raise('selection')
     return geo
 
 
