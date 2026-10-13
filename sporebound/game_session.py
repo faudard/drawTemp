@@ -11,6 +11,7 @@ from .ai import play_activation
 from .campaign import Campaign
 from .engine import Battle
 from .exploration import Exploration
+from .world_travel import WorldJourney
 from .fronts import MultiFrontSession
 from .model import RuleError, require
 from .narrative import StoryBook
@@ -197,6 +198,33 @@ class GameSession:
         require(scene is not None, "No active narrative scene")
         return self.exploration.actor_action(self.progress, scene["id"],
                                              actor_id, action)
+
+    def world_state(self):
+        """Read the party cursor without mutating an old campaign slot."""
+        return WorldJourney(self.project.world, self.content,
+                            self.project.campaign(self.campaign_id)).state(self.progress)
+
+    def world_destination(self, mission_id):
+        require(self.mode == "campaign" and not self.progress.story_pending
+                and self.active_scene() is None,
+                "Resolve combat and narrative scenes before traveling")
+        return WorldJourney(self.project.world, self.content,
+                            self.project.campaign(self.campaign_id)).destination(
+                                self.progress, mission_id)
+
+    def world_advance(self):
+        require(self.mode == "campaign" and not self.progress.story_pending
+                and self.active_scene() is None,
+                "Resolve combat and narrative scenes before traveling")
+        return WorldJourney(self.project.world, self.content,
+                            self.project.campaign(self.campaign_id)).advance(self.progress)
+
+    def world_can_enter(self, mission_id):
+        return (self.mode == "campaign" and
+                mission_id in self.available_missions() and
+                WorldJourney(self.project.world, self.content,
+                             self.project.campaign(self.campaign_id)).can_enter(
+                                 self.progress, mission_id))
 
     def available_choices(self):
         stage = self.exploration_state()
@@ -661,6 +689,9 @@ class GameSession:
                                 and identity not in seen, "Invalid or duplicate battle identity")
                         battles[key].battle_id = identity
                         seen.add(identity)
+        # World map travel is optional, but an existing cursor must never be
+        # accepted from a malformed or inaccessible persisted route.
+        session.world_state()
         return session
 
     @classmethod

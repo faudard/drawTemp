@@ -127,6 +127,12 @@ class PlayerController:
     def explore_actor(self, actor_id, action):
         return self._apply(self.session.explore_actor, actor_id, action)
 
+    def world_destination(self, mission_id):
+        return self._apply(self.session.world_destination, mission_id)
+
+    def world_advance(self):
+        return self._apply(self.session.world_advance)
+
     def start_mission(self, mission_id):
         return self._apply(self.session.start_mission, mission_id)
 

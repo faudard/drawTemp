@@ -88,6 +88,7 @@ class PlayerApplication:
         self._seen_tactical_cinematics = {}
         self._typewriter_job = None
         self._stage_job = None
+        self._world_job = None
         self._explore_feedback = ""
         self._explore_scene_id = None
         self._audible_scene = None
@@ -119,6 +120,9 @@ class PlayerApplication:
         if self._stage_job is not None:
             self.root.after_cancel(self._stage_job)
             self._stage_job = None
+        if self._world_job is not None:
+            self.root.after_cancel(self._world_job)
+            self._world_job = None
         if self._motion_job is not None:
             self.root.after_cancel(self._motion_job)
             self._motion_job = None
@@ -449,12 +453,11 @@ class PlayerApplication:
         self._button(footer, "Menu principal", self.title_screen).pack(side="left", padx=6)
 
     def world_screen(self):
-        """Travel through the authored mission map; no alternate unlock rules."""
+        """Walk the canonical campaign roads; save each visible travel step."""
         session = self.player.session
         if session is None or not self.project.world:
             self.campaign_screen() if session is not None else self.title_screen()
             return
-        # Active narrative decisions cannot be bypassed through world travel.
         if session.active_scene():
             self.campaign_screen()
             return
@@ -463,8 +466,8 @@ class PlayerApplication:
             available=session.available_missions(),
             completed=session.progress.completed)
         self._clear()
-        self._heading("Carte du monde", "Destinations accessibles : vert • "
-                      "terminées : bleu • verrouillées : gris")
+        self._heading("Carte du monde", "Déplacez votre groupe sur les routes. "
+                      "Cliquez à nouveau sur un lieu atteint pour y combattre.")
         surface = self.ttk.Frame(self.view)
         surface.pack(fill="both", expand=True, padx=24, pady=8)
         surface.columnconfigure(0, weight=1)
@@ -481,8 +484,33 @@ class PlayerApplication:
         scrollbar_y.grid(row=0, column=1, sticky="ns")
         scrollbar_x.grid(row=1, column=0, sticky="ew")
         draw_world_map(canvas, projection)
-        label = self.tk.StringVar(value="Choisir un lieu sur la carte.")
+        label = self.tk.StringVar(value="Choisissez une destination accessible.")
         self.ttk.Label(self.view, textvariable=label).pack(anchor="w", padx=26)
+
+        def paint(state):
+            canvas.delete("world_party")
+            if state is None:
+                return
+            x, y = state["position"]
+            canvas.create_oval(x-13, y-32, x+13, y-6, fill="#f4c75a",
+                               outline="#172b44", width=3, tags=("world_party",))
+            canvas.create_text(x, y-19, text="◆", fill="#192d46",
+                               font=("TkDefaultFont", 12, "bold"),
+                               tags=("world_party",))
+            if state["traveling"]:
+                label.set("En route : " + " → ".join(state["route"]))
+            else:
+                label.set("Groupe à " + state["at"] +
+                          " — cliquez sur ce lieu pour jouer s'il est disponible.")
+
+        def tick():
+            self._world_job = None
+            if not canvas.winfo_exists():
+                return
+            state = self.player.world_advance()
+            paint(state)
+            if state["traveling"]:
+                self._world_job = self.root.after(125, lambda: self._safe(tick))
 
         def choose(event):
             mid = pick_world_mission(canvas, projection, event)
@@ -490,11 +518,32 @@ class PlayerApplication:
                 return
             location = next(node for node in projection["nodes"]
                             if node["mission"] == mid)
-            label.set(location["label"] + " — " + location["status"])
-            if location["status"] == "available":
-                self._start_mission_with_cinematic(mid)
+            state = session.world_state()
+            if location["status"] == "locked":
+                label.set(location["label"] + " — destination verrouillée")
+                return
+            if state is None:
+                # A partial world belonging to another campaign retains 3.7.24A.
+                if location["status"] == "available":
+                    self._start_mission_with_cinematic(mid)
+                return
+            if state["traveling"]:
+                label.set("Terminez votre trajet avant de changer de destination.")
+                return
+            if mid == state["at"]:
+                if session.world_can_enter(mid):
+                    self._start_mission_with_cinematic(mid)
+                else:
+                    label.set(location["label"] + " — mission déjà terminée")
+                return
+            paint(self.player.world_destination(mid))
+            self._world_job = self.root.after(125, lambda: self._safe(tick))
 
         canvas.bind("<Button-1>", lambda e: self._safe(lambda: choose(e)))
+        current = session.world_state()
+        paint(current)
+        if current is not None and current["traveling"]:
+            self._world_job = self.root.after(125, lambda: self._safe(tick))
         footer = self.ttk.Frame(self.view)
         footer.pack(fill="x", pady=12)
         self._button(footer, "Retour à la campagne",
