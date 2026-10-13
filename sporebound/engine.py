@@ -603,7 +603,10 @@ class Battle:
         u.ct = min(60, max(0, u.ct - cost))
         statuses.end_turn(self, u)
         for zone in self.zones:
-            if u.alive and u.pos in zone["cells"] and (zone["scope"] in {"all", "target"} or (u.team == zone["team"]) == (zone["scope"] == "allies")):
+            if (u.alive and self.unit_levels.get(u.id, 0) == 0
+                    and u.pos in zone["cells"] and
+                    (zone["scope"] in {"all", "target"} or
+                     (u.team == zone["team"]) == (zone["scope"] == "allies"))):
                 self._hurt(u, zone["power"])
         self.emit("end_turn", unit=u.id, cost=cost, ct=u.ct)
         self.active_id = None
