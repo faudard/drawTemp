@@ -566,6 +566,9 @@ def launch(path):
         if not group:
             raise RuleError('Sélectionner la totalité des cases de chaque bâtiment (outil Sélection).')
         dx, dy = structure_group_dx.get(), structure_group_dy.get()
+        if (dx, dy) == (0, 0) and not duplicate:
+            status_var.set('Décalage nul : aucune modification à enregistrer.')
+            return
         # A single Document.replace is the whole Undo transaction.
         design_change(lambda: doc.replace(transform_structure_group(
             doc.data, mission_var.get(), cells, dx, dy, duplicate=duplicate)))
@@ -597,6 +600,19 @@ def launch(path):
             color, note = '#36a16c', 'valide'
         except RuleError as exc:
             color, note = '#e05252', str(exc)
+        canvas.delete('structure_group_ghost')
+        if iso_var.get() and iso_geometry is not None:
+            for item in group:
+                moved_anchor = item.anchor[0] + dx, item.anchor[1] + dy
+                instance, origin = preview_structure_sprite_position(
+                    iso_geometry, item.name, moved_anchor, item.turns,
+                    door_slot=item.door_slot)
+                loader = (building_atlas if instance.name in ARCHITECTURE_NAMES
+                          else fortification_atlas)
+                photo = loader.sprite(instance.name, instance.turns, tile_size)
+                if photo is not None:
+                    canvas.create_image(*origin, image=photo, anchor='nw',
+                                        tags='structure_group_ghost')
         preview_cells((c for c in footprint if 0 <= c[0] < width and
                        0 <= c[1] < height), tag='structure_group_preview',
                       color=color)
@@ -743,7 +759,8 @@ def launch(path):
         nonlocal structure_preview_key
         structure_preview_key = None
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
-                    'structure_group_preview', 'brush_preview', 'asset_ghost'):
+                    'structure_group_preview', 'structure_group_ghost',
+                    'brush_preview', 'asset_ghost'):
             canvas.delete(tag)
 
     def paste_preview(event):
