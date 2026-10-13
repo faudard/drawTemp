@@ -497,11 +497,16 @@ class EventGraphStudio:
         lines.append('Scène après victoire (mission) : ' +
                      (context['scene_id'] or 'aucune'))
         clips = context['cinematics']
-        lines.append('Cinématiques associées à la mission / scène : ' +
-                     (', '.join(c['id'] + ' (' + c['stage'] + ')' for c in clips)
-                      if clips else 'aucune'))
-        lines.append('Attention : les liens sont des déclenchements de mission '
-                     'ou de scène, pas de cet événement tactique.')
+        direct = [c for c in clips if c['scope'] == 'event']
+        contextual = [c for c in clips if c['scope'] != 'event']
+        lines.append('Cinématiques jouées au déclenchement tactique : ' +
+                     (', '.join(c['id'] for c in direct) if direct else 'aucune'))
+        lines.append('Cinématiques de mission / scène (cycle séparé) : ' +
+                     (', '.join(c['id'] + ' (' + c['stage'] + ')' for c in contextual)
+                      if contextual else 'aucune'))
+        lines.append('Le Player joue les cinématiques tactiques au premier '
+                     'déclenchement réel. Les scènes narratives de victoire '
+                     'restent des transitions de campagne.')
         return lines
 
     def _set_context_text(self, lines, *, show_end=False):
