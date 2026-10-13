@@ -200,7 +200,7 @@ def architecture_outline(geo, instance, wall_level=2):
 
 def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                       atlas=None, scenery_atlas=None, poses=None, structures=(),
-                      interior_floors=(), prop_atlas=None):
+                      interior_floors=(), prop_atlas=None, unit_levels=None):
     """Paint hand-authored sprite overlays with deterministic vector fallback.
 
     Cutaway remains a vector outline: opaque sprites may never hide occupants.
@@ -228,7 +228,10 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
             # remain the source of truth in both Studio and Player.
             draw_interior(canvas, geo, interior_plan(board, building),
                           instance_tag)
-        if (active_level > 0 and building_floors
+        upper_occupied = any(
+            (unit_levels or {}).get(actor.id, 0) > 0
+            and tuple(actor.pos) in building.cells for actor in units)
+        if ((active_level > 0 or upper_occupied) and building_floors
                 and layers.get('Bâtiments', True)):
             draw_stacked_floors(canvas, geo, building, building_floors,
                                 active_level, instance_tag, prop_atlas=prop_atlas)
