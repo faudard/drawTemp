@@ -351,8 +351,10 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 if photo is not None:
                     # The avatar foot (lower image edge) follows the SAME
                     # interpolated cell projection as the legacy oval.
-                    canvas.create_image(ax, ay+cell_size*5/54, image=photo,
-                                        anchor='s', tags=actor_tags + ('iso_actor_sprite',))
+                    from .iso_actor_atlas import actor_foot_point
+                    canvas.create_image(*actor_foot_point(ax, ay, cell_size),
+                                        image=photo, anchor='s',
+                                        tags=actor_tags + ('iso_actor_sprite',))
                     if active:
                         canvas.create_oval(ax-12, ay-6, ax+12, ay+5,
                                           outline='#ffe78a', width=2,

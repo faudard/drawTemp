@@ -160,3 +160,22 @@ SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest discover -s tests_standalo
 The GUI test constructs transparent 384×341 source pixels with a bright rectangle in the **lower-right**. That rectangle was lost with single-pass Tk zoom/subsample, and must survive the corrected two-pass resize at 52px. The test also checks the existing 64×64 atlas, stable image caching and camera zoom to 78px.
 
 Local offscreen Tk proof on the v3 ZIP: all 18 reviewed action poses for Jeanne, spearman and wolf are visible at the Player's 52px cell size. This is a renderer QA snapshot, **not** an end-to-end interactive Player gameplay test; that remains required once the 88 PNGs are committed.
+
+
+## 2026-10-13: V3 provenance and current PR #114
+
+The corrected V3 ZIP was recovered in the author's personal file Library
+(the PNG binaries are still absent from GitHub). SHA-256 of the complete ZIP:
+\`2a3089fc05184f62048c1484a114a467d626411452d8e6d9104f57e4cb20bf0a\`.
+
+For a clean local checkout, use \`scripts/publish_watercolor_pack.py\` to
+validate and atomically add exactly 88 real PNGs against the tracked
+\`assets/watercolor/provenance.json\`. The command is idempotent but refuses
+partial packs or edited art. \`--dry-run\` validates without writing. To
+commit and push directly to PR #114 on Windows, use the updated
+\`scripts/publish_watercolor_art.ps1\` with \`-RepoPath\` and \`-BundlePath\`.
+Do not use the older instructions above targeting the historical PR #71.
+
+The preflight identified 46 potential transparency/bleed issues requiring
+visual review. See \`docs/evidence/watercolor_v3_art_review.json\`.
+A successful hash gate proves **identity and integrity**, not visual quality.

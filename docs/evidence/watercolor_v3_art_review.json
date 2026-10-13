@@ -1,0 +1,599 @@
+{
+  "schema_version": 1,
+  "source_archive_sha256": "2a3089fc05184f62048c1484a114a467d626411452d8e6d9104f57e4cb20bf0a",
+  "kind": "source-image alpha/edge preflight (not Editor/Player render proof)",
+  "sprites": 88,
+  "manual_review": 46,
+  "groups": {
+    "vfx": {
+      "total": 16,
+      "manual_review": 2
+    },
+    "wolf": {
+      "total": 12,
+      "manual_review": 6
+    },
+    "jeanne": {
+      "total": 12,
+      "manual_review": 7
+    },
+    "spearman": {
+      "total": 12,
+      "manual_review": 9
+    },
+    "props": {
+      "total": 12,
+      "manual_review": 10
+    },
+    "townfolk": {
+      "total": 6,
+      "manual_review": 2
+    },
+    "soldiers": {
+      "total": 6,
+      "manual_review": 3
+    },
+    "bestiary": {
+      "total": 6,
+      "manual_review": 3
+    },
+    "heroes": {
+      "total": 6,
+      "manual_review": 4
+    }
+  },
+  "review_candidates": [
+    {
+      "asset_id": "vfx_dust_large",
+      "path": "sprites/vfx/dust_large.png",
+      "alpha_coverage": 0.3616,
+      "edge_ratio": 0.2292,
+      "visible_bbox": [
+        0,
+        29,
+        359,
+        256
+      ]
+    },
+    {
+      "asset_id": "vfx_arc_grow",
+      "path": "sprites/vfx/arc_grow.png",
+      "alpha_coverage": 0.1271,
+      "edge_ratio": 0.2161,
+      "visible_bbox": [
+        37,
+        0,
+        298,
+        193
+      ]
+    },
+    {
+      "asset_id": "wolf_idle",
+      "path": "sprites/wolf/idle.png",
+      "alpha_coverage": 0.4628,
+      "edge_ratio": 0.2995,
+      "visible_bbox": [
+        28,
+        49,
+        368,
+        341
+      ]
+    },
+    {
+      "asset_id": "wolf_walk_a",
+      "path": "sprites/wolf/walk_a.png",
+      "alpha_coverage": 0.4496,
+      "edge_ratio": 0.2031,
+      "visible_bbox": [
+        11,
+        79,
+        384,
+        341
+      ]
+    },
+    {
+      "asset_id": "wolf_walk_b",
+      "path": "sprites/wolf/walk_b.png",
+      "alpha_coverage": 0.4374,
+      "edge_ratio": 0.1589,
+      "visible_bbox": [
+        1,
+        75,
+        363,
+        341
+      ]
+    },
+    {
+      "asset_id": "wolf_leap",
+      "path": "sprites/wolf/leap.png",
+      "alpha_coverage": 0.4122,
+      "edge_ratio": 0.1202,
+      "visible_bbox": [
+        17,
+        28,
+        384,
+        239
+      ]
+    },
+    {
+      "asset_id": "wolf_ko",
+      "path": "sprites/wolf/ko.png",
+      "alpha_coverage": 0.4128,
+      "edge_ratio": 0.2222,
+      "visible_bbox": [
+        0,
+        82,
+        384,
+        267
+      ]
+    },
+    {
+      "asset_id": "wolf_howl",
+      "path": "sprites/wolf/howl.png",
+      "alpha_coverage": 0.4889,
+      "edge_ratio": 0.1615,
+      "visible_bbox": [
+        9,
+        0,
+        364,
+        296
+      ]
+    },
+    {
+      "asset_id": "jeanne_idle",
+      "path": "sprites/jeanne/idle.png",
+      "alpha_coverage": 0.4528,
+      "edge_ratio": 0.2917,
+      "visible_bbox": [
+        49,
+        10,
+        370,
+        341
+      ]
+    },
+    {
+      "asset_id": "jeanne_walk_a",
+      "path": "sprites/jeanne/walk_a.png",
+      "alpha_coverage": 0.3945,
+      "edge_ratio": 0.3047,
+      "visible_bbox": [
+        68,
+        10,
+        346,
+        341
+      ]
+    },
+    {
+      "asset_id": "jeanne_walk_b",
+      "path": "sprites/jeanne/walk_b.png",
+      "alpha_coverage": 0.3994,
+      "edge_ratio": 0.3021,
+      "visible_bbox": [
+        39,
+        10,
+        309,
+        341
+      ]
+    },
+    {
+      "asset_id": "jeanne_ready",
+      "path": "sprites/jeanne/ready.png",
+      "alpha_coverage": 0.4447,
+      "edge_ratio": 0.25,
+      "visible_bbox": [
+        41,
+        13,
+        346,
+        341
+      ]
+    },
+    {
+      "asset_id": "jeanne_guard",
+      "path": "sprites/jeanne/guard.png",
+      "alpha_coverage": 0.4176,
+      "edge_ratio": 0.263,
+      "visible_bbox": [
+        25,
+        24,
+        324,
+        341
+      ]
+    },
+    {
+      "asset_id": "jeanne_hit",
+      "path": "sprites/jeanne/hit.png",
+      "alpha_coverage": 0.4499,
+      "edge_ratio": 0.1667,
+      "visible_bbox": [
+        65,
+        0,
+        384,
+        327
+      ]
+    },
+    {
+      "asset_id": "jeanne_ko",
+      "path": "sprites/jeanne/ko.png",
+      "alpha_coverage": 0.3721,
+      "edge_ratio": 0.1784,
+      "visible_bbox": [
+        0,
+        154,
+        384,
+        328
+      ]
+    },
+    {
+      "asset_id": "spearman_idle",
+      "path": "sprites/spearman/idle.png",
+      "alpha_coverage": 0.3653,
+      "edge_ratio": 0.2083,
+      "visible_bbox": [
+        53,
+        11,
+        373,
+        341
+      ]
+    },
+    {
+      "asset_id": "spearman_walk_a",
+      "path": "sprites/spearman/walk_a.png",
+      "alpha_coverage": 0.2989,
+      "edge_ratio": 0.2604,
+      "visible_bbox": [
+        90,
+        11,
+        324,
+        341
+      ]
+    },
+    {
+      "asset_id": "spearman_walk_b",
+      "path": "sprites/spearman/walk_b.png",
+      "alpha_coverage": 0.3169,
+      "edge_ratio": 0.1771,
+      "visible_bbox": [
+        39,
+        21,
+        296,
+        341
+      ]
+    },
+    {
+      "asset_id": "spearman_guard",
+      "path": "sprites/spearman/guard.png",
+      "alpha_coverage": 0.3276,
+      "edge_ratio": 0.3079,
+      "visible_bbox": [
+        0,
+        100,
+        377,
+        341
+      ]
+    },
+    {
+      "asset_id": "spearman_windup",
+      "path": "sprites/spearman/windup.png",
+      "alpha_coverage": 0.394,
+      "edge_ratio": 0.2865,
+      "visible_bbox": [
+        25,
+        22,
+        384,
+        341
+      ]
+    },
+    {
+      "asset_id": "spearman_thrust",
+      "path": "sprites/spearman/thrust.png",
+      "alpha_coverage": 0.3244,
+      "edge_ratio": 0.2031,
+      "visible_bbox": [
+        0,
+        87,
+        384,
+        341
+      ]
+    },
+    {
+      "asset_id": "spearman_recover",
+      "path": "sprites/spearman/recover.png",
+      "alpha_coverage": 0.3233,
+      "edge_ratio": 0.2734,
+      "visible_bbox": [
+        27,
+        13,
+        384,
+        341
+      ]
+    },
+    {
+      "asset_id": "spearman_ready",
+      "path": "sprites/spearman/ready.png",
+      "alpha_coverage": 0.3447,
+      "edge_ratio": 0.2656,
+      "visible_bbox": [
+        30,
+        45,
+        336,
+        341
+      ]
+    },
+    {
+      "asset_id": "spearman_ko",
+      "path": "sprites/spearman/ko.png",
+      "alpha_coverage": 0.288,
+      "edge_ratio": 0.2164,
+      "visible_bbox": [
+        0,
+        143,
+        377,
+        300
+      ]
+    },
+    {
+      "asset_id": "props_chapel",
+      "path": "sprites/props/chapel.png",
+      "alpha_coverage": 0.6293,
+      "edge_ratio": 0.6849,
+      "visible_bbox": [
+        13,
+        13,
+        384,
+        341
+      ]
+    },
+    {
+      "asset_id": "props_forge",
+      "path": "sprites/props/forge.png",
+      "alpha_coverage": 0.6895,
+      "edge_ratio": 0.6198,
+      "visible_bbox": [
+        22,
+        13,
+        384,
+        341
+      ]
+    },
+    {
+      "asset_id": "props_market_stall",
+      "path": "sprites/props/market_stall.png",
+      "alpha_coverage": 0.5586,
+      "edge_ratio": 0.6432,
+      "visible_bbox": [
+        31,
+        46,
+        358,
+        341
+      ]
+    },
+    {
+      "asset_id": "props_camp_tent",
+      "path": "sprites/props/camp_tent.png",
+      "alpha_coverage": 0.5746,
+      "edge_ratio": 0.3073,
+      "visible_bbox": [
+        0,
+        31,
+        377,
+        341
+      ]
+    },
+    {
+      "asset_id": "props_stone_bridge",
+      "path": "sprites/props/stone_bridge.png",
+      "alpha_coverage": 0.4505,
+      "edge_ratio": 0.3284,
+      "visible_bbox": [
+        19,
+        5,
+        384,
+        336
+      ]
+    },
+    {
+      "asset_id": "props_ruined_arch",
+      "path": "sprites/props/ruined_arch.png",
+      "alpha_coverage": 0.4729,
+      "edge_ratio": 0.3594,
+      "visible_bbox": [
+        5,
+        5,
+        384,
+        341
+      ]
+    },
+    {
+      "asset_id": "props_oak_tree",
+      "path": "sprites/props/oak_tree.png",
+      "alpha_coverage": 0.5397,
+      "edge_ratio": 0.4076,
+      "visible_bbox": [
+        58,
+        0,
+        384,
+        341
+      ]
+    },
+    {
+      "asset_id": "props_pine_tree",
+      "path": "sprites/props/pine_tree.png",
+      "alpha_coverage": 0.3272,
+      "edge_ratio": 0.4349,
+      "visible_bbox": [
+        10,
+        4,
+        349,
+        341
+      ]
+    },
+    {
+      "asset_id": "props_palisade_gate",
+      "path": "sprites/props/palisade_gate.png",
+      "alpha_coverage": 0.4462,
+      "edge_ratio": 0.6111,
+      "visible_bbox": [
+        77,
+        8,
+        384,
+        312
+      ]
+    },
+    {
+      "asset_id": "props_stone_stairs",
+      "path": "sprites/props/stone_stairs.png",
+      "alpha_coverage": 0.4709,
+      "edge_ratio": 0.2515,
+      "visible_bbox": [
+        0,
+        0,
+        384,
+        311
+      ]
+    },
+    {
+      "asset_id": "townfolk_royal_knight",
+      "path": "sprites/townfolk/royal_knight.png",
+      "alpha_coverage": 0.6208,
+      "edge_ratio": 0.2207,
+      "visible_bbox": [
+        49,
+        0,
+        512,
+        506
+      ]
+    },
+    {
+      "asset_id": "townfolk_veteran_commander",
+      "path": "sprites/townfolk/veteran_commander.png",
+      "alpha_coverage": 0.5167,
+      "edge_ratio": 0.1719,
+      "visible_bbox": [
+        47,
+        0,
+        491,
+        505
+      ]
+    },
+    {
+      "asset_id": "soldiers_bandit",
+      "path": "sprites/soldiers/bandit.png",
+      "alpha_coverage": 0.4755,
+      "edge_ratio": 0.2461,
+      "visible_bbox": [
+        14,
+        50,
+        512,
+        512
+      ]
+    },
+    {
+      "asset_id": "soldiers_crossbowman",
+      "path": "sprites/soldiers/crossbowman.png",
+      "alpha_coverage": 0.4187,
+      "edge_ratio": 0.1875,
+      "visible_bbox": [
+        25,
+        45,
+        493,
+        512
+      ]
+    },
+    {
+      "asset_id": "soldiers_heavy_guard",
+      "path": "sprites/soldiers/heavy_guard.png",
+      "alpha_coverage": 0.5869,
+      "edge_ratio": 0.2031,
+      "visible_bbox": [
+        32,
+        0,
+        512,
+        496
+      ]
+    },
+    {
+      "asset_id": "bestiary_gargoyle",
+      "path": "sprites/bestiary/gargoyle.png",
+      "alpha_coverage": 0.6474,
+      "edge_ratio": 0.5195,
+      "visible_bbox": [
+        19,
+        0,
+        512,
+        445
+      ]
+    },
+    {
+      "asset_id": "bestiary_ogre",
+      "path": "sprites/bestiary/ogre.png",
+      "alpha_coverage": 0.6127,
+      "edge_ratio": 0.2539,
+      "visible_bbox": [
+        31,
+        0,
+        512,
+        450
+      ]
+    },
+    {
+      "asset_id": "bestiary_spectral_hound",
+      "path": "sprites/bestiary/spectral_hound.png",
+      "alpha_coverage": 0.5295,
+      "edge_ratio": 0.1387,
+      "visible_bbox": [
+        0,
+        0,
+        497,
+        448
+      ]
+    },
+    {
+      "asset_id": "heroes_jeanne",
+      "path": "sprites/heroes/jeanne.png",
+      "alpha_coverage": 0.4458,
+      "edge_ratio": 0.1914,
+      "visible_bbox": [
+        51,
+        8,
+        502,
+        512
+      ]
+    },
+    {
+      "asset_id": "heroes_knight_captain",
+      "path": "sprites/heroes/knight_captain.png",
+      "alpha_coverage": 0.5582,
+      "edge_ratio": 0.252,
+      "visible_bbox": [
+        46,
+        0,
+        491,
+        512
+      ]
+    },
+    {
+      "asset_id": "heroes_healer",
+      "path": "sprites/heroes/healer.png",
+      "alpha_coverage": 0.4283,
+      "edge_ratio": 0.1699,
+      "visible_bbox": [
+        88,
+        4,
+        419,
+        512
+      ]
+    },
+    {
+      "asset_id": "heroes_english_champion",
+      "path": "sprites/heroes/english_champion.png",
+      "alpha_coverage": 0.5241,
+      "edge_ratio": 0.166,
+      "visible_bbox": [
+        59,
+        0,
+        463,
+        512
+      ]
+    }
+  ]
+}
