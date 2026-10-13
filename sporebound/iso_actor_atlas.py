@@ -71,6 +71,14 @@ def actor_action(pose=None):
     return action if action in ACTOR_ACTIONS else 'idle'
 
 
+def jeanne_frame_row(action, frame):
+    """Frame-to-atlas row for all five Jeanne poses (0..7, no duplicate rows)."""
+    if action is None:
+        return 3 if frame else 0
+    rows = JEANNE_ACTION_ROWS[action]
+    return rows[min(frame, len(rows) - 1)]
+
+
 def actor_foot_point(x, y, cell_size):
     """South-anchor at projected feet; fixed for all poses and zoom levels."""
     return x, y + cell_size * 5 / ACTOR_SOURCE_CELL_SIZE
@@ -142,8 +150,7 @@ class IsoActorAtlas:
                 x = ACTOR_DIRECTIONS.index(direction) * width
                 # Old frame=1 cache key also covers explicit move frame 1;
                 # both paths must select the same second walking frame.
-                rows = ((3 if frame else 0),) if action is None else JEANNE_ACTION_ROWS[action]
-                row = rows[min(frame, len(rows) - 1)]
+                row = jeanne_frame_row(action, frame)
                 y = row * height
                 photo = crop_scaled(self._jeanne_source, (x, y, width, height),
                                     size, master=self.canvas)
