@@ -14,11 +14,12 @@ from .iso_actor_atlas import (
     IsoActorAtlas, actor_style, actor_direction, actor_frame)
 
 
-def battle_layers(*, deploying=False):
+def battle_layers(*, deploying=False, active_level=0):
     """Visible game layers, not authoring-only zones when battle has started."""
     return {'Terrain': True, 'Relief': True, 'Décors': True,
             'Bâtiments': True, 'Toitures': True, 'Déploiement': deploying,
-            'Objectifs': True, 'Objets': True, 'Unités': True}
+            'Objectifs': True, 'Objets': True, 'Unités': True,
+            'Intérieurs': active_level > 0, 'Étage actif': active_level}
 
 
 def viewport_shift(geo, camera, viewport):
@@ -81,6 +82,7 @@ class IsoBattleCanvas:
         self._actor_sprite_states = ()
         self._architecture = ()
         self._cutaways = ()
+        self._level_map = {}
         self._scene_rebuilds = 0
         self._actor_only_frames = 0
 
@@ -92,8 +94,9 @@ class IsoBattleCanvas:
                      for building in self._architecture)
 
     def _pose_centers(self, units, poses):
-        return tuple(visual_center(self.geometry, actor, poses)
-                     for actor in units)
+        return tuple((x, y-self._level_map.get(actor.id, 0)*3*self.geometry.step)
+                     for actor in units
+                     for x, y in [visual_center(self.geometry, actor, poses)])
 
     @staticmethod
     def _actor_state(units):
@@ -141,7 +144,9 @@ class IsoBattleCanvas:
         units = battle.units
         viewport = self.viewport()
         ids = tuple(actor.id for actor in units)
-        actor_state = self._actor_state(units)
+        actor_state = (self._actor_state(units),
+                       tuple(sorted(battle.unit_levels.items())))
+        self._level_map = dict(battle.unit_levels)
         reusable = (
             self.geometry is not None
             and frame is self._frame
@@ -172,12 +177,16 @@ class IsoBattleCanvas:
         geo = render_isometric(
             self.canvas, battle.board, battle.mission, units,
             cell_size=camera.cell_size,
-            layers=battle_layers(deploying=battle.deploying),
+            layers=battle_layers(
+                deploying=battle.deploying,
+                active_level=battle.unit_levels.get(battle.active_id, 0)
+                if battle.active_id else 0),
             selected_cell=frame.selected, selected_tiles=(),
             reachable=frame.reachable, danger=frame.danger,
             active_id=frame.active_id, atlas=self.terrain, prop_atlas=self.props,
             building_atlas=self.buildings, fortification_atlas=self.fortifications,
-            actor_atlas=self.actors, poses=poses)
+            actor_atlas=self.actors, poses=poses,
+            unit_levels=battle.unit_levels)
         self.geometry = geo
         self.shift = viewport_shift(geo, camera, viewport)
         self.canvas.move('all', *self.shift)
