@@ -169,3 +169,36 @@ limites de la carte, objectifs et déploiements) sont refusées.
 ni zones de déploiement ne sont copiés. Export refusé si un levier ou engin
 référence une porte non sélectionnée. Fichiers JSON plafonnés à 2 MiB,
 version et schéma contrôlés avant import.
+
+
+## Palette de préfabs visuelle (3.7.25E)
+
+La bibliothèque existante reste compatible avec les fichiers JSON v1 :
+aucune migration de format et aucun atlas supplémentaire ne sont nécessaires.
+
+- La section **PALETTE VISUELLE · GLISSER SUR LA CARTE** contient une grille
+  de miniatures produites à partir des terrains, bâtiments et entités présents
+  dans chaque fichier. Les couleurs différencient eau, arbres, constructions,
+  personnages et objets interactifs.
+- **Rechercher** filtre par nom de modèle/fichier ; un menu affiche **Tous**,
+  **Quartiers**, **Bâtiments**, **Fortifications**, **Décors**,
+  **Interactifs**, **Personnages**. La catégorie est calculée à la lecture,
+  sans changer les JSON existants.
+- Un clic sélectionne le préfab (compatible avec l'ancien menu déroulant).
+  Glisser sa miniature sur une case visible du Map Editor affiche une
+  prévisualisation verte si la destination est valide, rouge si elle est
+  refusée. Relâcher sur la carte instancie le modèle dans une seule transaction
+  Undo/Redo.
+- Le drop fonctionne sur les grilles orthogonales et isométriques, et tient
+  compte de la position de défilement de la carte. Le geste ne déclenche ni
+  le pinceau de terrain ni les commandes de jeu.
+- Le bouton **Ouvrir la palette visuelle de préfabs** ouvre une fenêtre non
+  modale plus grande, pour garder la bibliothèque accessible quand
+  l'inspecteur manque de place. Elle utilise les mêmes données et commandes.
+- La grille limite la première page à 80 miniatures et encourage un filtrage
+  supplémentaire pour les très grandes bibliothèques. Les JSON corrompus
+  restent visibles comme invalides et ne peuvent pas être déposés.
+
+Les opérations échouées ne modifient ni la mission, ni l'historique, ni le
+Player. Les prévisualisations utilisent la même commande
+GroupPrefabPlaceCommand que le bouton **Placer préfab**.
