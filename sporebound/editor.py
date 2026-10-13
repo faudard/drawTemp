@@ -6,7 +6,8 @@ from pathlib import Path
 from .editor_render_cache import EditorRenderCache
 from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
                                   StructureGroupCommand, EditorGroupMoveCommand,
-                                  EditorGroupTreeDropCommand, EntityCommand,
+                                  EditorGroupTreeDropCommand, EditorGroupBatchCommand,
+                                  EntityCommand,
                                   RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
 from .ai import play_activation
 from .engine import Battle
@@ -44,7 +45,8 @@ from .editor_groups import (create_editor_group, add_selection_to_group,
                             remove_selection_from_group, transfer_selection_to_group,
                             rename_editor_group, reparent_editor_group,
                             delete_editor_group, descendant_groups,
-                            group_display_cells, check_tree_drop)
+                            group_display_cells, selected_group_roots,
+                            check_tree_drop)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -902,38 +904,70 @@ def launch(path):
             doc.data, mission_var.get(), gid)))
         status_var.set('Groupe dissocié ; ses membres et sous-groupes sont conservés.')
 
+    def _selected_groups_from_tree():
+        """Only explicit group rows are batch targets; children are deduped."""
+        chosen = tuple(iid[2:] for iid in group_tree.selection()
+                       if iid.startswith('g:'))
+        if not chosen and selected_group_id is not None:
+            chosen = (selected_group_id,)
+        return selected_group_roots(_group_tree_mission(), chosen)
+
     @guarded
-    def shift_map_group(dx=None, dy=None, *, preview=False):
-        nonlocal selected_tiles, selected_cell
+    def shift_map_group(dx=None, dy=None, *, preview=False, duplicate=False):
+        nonlocal selected_tiles, selected_cell, selected_group_id
         if battle or source_pending():
             raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
-        mission = _active_group()
+        mission = _group_tree_mission()
+        roots = _selected_groups_from_tree()
         dx = editor_group_dx.get() if dx is None else dx
         dy = editor_group_dy.get() if dy is None else dy
-        cmd = EditorGroupMoveCommand(selected_group_id, dx, dy)
+        cmd = EditorGroupBatchCommand(roots, dx, dy, duplicate=duplicate)
+        footprint = set()
+        for gid in roots:
+            footprint.update(group_display_cells(mission, gid))
         if preview:
-            cells = group_display_cells(mission, selected_group_id)
             try:
                 editing_context.preview(cmd)
                 color, note = '#36a16c', 'valide'
             except RuleError as exc:
                 color, note = '#e05252', str(exc)
             board = mission['board']
-            preview_cells(((x+dx, y+dy) for x, y in cells
-                           if 0 <= x+dx < board['width'] and
-                              0 <= y+dy < board['height']),
-                          tag='editor_group_preview', color=color)
-            status_var.set('Aperçu groupe : ' + note)
+            ghost = ((x+dx, y+dy) for x, y in sorted(footprint)
+                     if 0 <= x+dx < board['width'] and
+                        0 <= y+dy < board['height'])
+            from itertools import islice
+            preview_cells(islice(ghost, 512), tag='editor_group_preview',
+                          color=color)
+            status_var.set(('Copie' if duplicate else 'Déplacement') +
+                           f' de {len(roots)} groupe(s) : {note}')
             return
+        existing_ids = {g['id'] for g in mission.get('editor_groups', ())}
         design_change(lambda: editing_context.execute(cmd, publish=False))
-        moved = group_display_cells(next(m for m in doc.data['missions']
-                                         if m['id'] == mission_var.get()),
-                                    selected_group_id)
-        selected_tiles = set(moved)
-        if moved:
-            selected_cell = min(moved, key=lambda c: (c[1], c[0]))
+        next_mission = _group_tree_mission()
+        if duplicate:
+            copied = {g['id'] for g in next_mission['editor_groups']} - existing_ids
+            copied_roots = tuple(g['id'] for g in next_mission['editor_groups']
+                                 if g['id'] in copied and g['parent'] not in copied)
+            selected_group_id = copied_roots[0] if copied_roots else None
+            selected_tiles = set().union(
+                *(group_display_cells(next_mission, gid) for gid in copied_roots))
+            chosen = copied_roots
+        else:
+            selected_tiles = set().union(
+                *(group_display_cells(next_mission, gid) for gid in roots))
+            chosen = roots
+        if selected_tiles:
+            selected_cell = min(selected_tiles, key=lambda p: (p[1], p[0]))
         refresh()
-        status_var.set(f'Groupe déplacé Δ({dx}, {dy}), une seule annulation.')
+        chosen_items = tuple('g:'+gid for gid in chosen
+                             if group_tree.exists('g:'+gid))
+        if chosen_items:
+            group_tree.selection_set(chosen_items)
+            group_tree.focus(chosen_items[0])
+        status_var.set(
+            f'{len(chosen)} groupe(s) ' +
+            ('dupliqués' if duplicate else 'déplacés') +
+            f' Δ({dx}, {dy}) ; une seule annulation.')
 
     def _group_tree_mission():
         return next(m for m in doc.data['missions']
@@ -979,29 +1013,33 @@ def launch(path):
         nonlocal selected_group_id, selected_tiles, selected_cell
         if group_tree_updating:
             return
-        selected = group_tree.selection()
-        if not selected:
+        selections = group_tree.selection()
+        if not selections:
             return
-        iid = selected[0]
-        info = group_tree_items.get(iid)
+        focus = selections[-1]
+        info = group_tree_items.get(focus)
         if info and info[0] == 'more':
             _load_group_cells(info[1])
             return
-        while iid and not iid.startswith('g:'):
-            iid = group_tree.parent(iid)
-        if not iid:
-            return
-        gid = iid[2:]
         mission = _group_tree_mission()
-        if not any(g['id'] == gid for g in mission.get('editor_groups', ())):
-            return
-        selected_group_id = gid
-        selected_tiles = group_display_cells(mission, gid)
+        groups = [iid[2:] for iid in selections if iid.startswith('g:')]
+        if not groups:
+            iid = focus
+            while iid and not iid.startswith('g:'):
+                iid = group_tree.parent(iid)
+            if not iid:
+                return
+            groups = [iid[2:]]
+        selected_group_id = groups[-1]
+        selected_tiles = set()
+        for gid in selected_group_roots(mission, tuple(groups)):
+            selected_tiles.update(group_display_cells(mission, gid))
         if selected_tiles:
             selected_cell = min(selected_tiles, key=lambda p: (p[1], p[0]))
         tool_var.set('Sélection')
         refresh()
-        status_var.set(f'Groupe {gid} : {len(selected_tiles)} case(s) / emprises.')
+        status_var.set(f'{len(groups)} groupe(s) sélectionné(s) : '
+                       f'{len(selected_tiles)} case(s) et emprises.')
 
     def refresh_group_tree(mission):
         nonlocal group_tree_signature, selected_group_id, group_tree_updating
@@ -2723,7 +2761,7 @@ def launch(path):
               font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=6)
     tree_box = ttk.Frame(side_panel)
     tree_box.pack(fill='x', padx=6, pady=3)
-    group_tree = ttk.Treeview(tree_box, show='tree', height=8, selectmode='browse')
+    group_tree = ttk.Treeview(tree_box, show='tree', height=8, selectmode='extended')
     group_scroll = ttk.Scrollbar(tree_box, orient='vertical',
                                  command=group_tree.yview)
     group_tree.configure(yscrollcommand=group_scroll.set)
@@ -2766,6 +2804,16 @@ def launch(path):
                command=lambda: shift_map_group(preview=True)).pack(side='left',padx=2)
     ttk.Button(group_move_controls, text='Déplacer',
                command=shift_map_group).pack(side='left',padx=2)
+    group_clone_controls = ttk.Frame(side_panel)
+    group_clone_controls.pack(fill='x', padx=5, pady=(0, 5))
+    ttk.Button(group_clone_controls, text='Aperçu copie',
+               command=lambda: shift_map_group(
+                   preview=True, duplicate=True)).pack(side='left',padx=2)
+    ttk.Button(group_clone_controls, text='Dupliquer groupes',
+               command=lambda: shift_map_group(
+                   duplicate=True)).pack(side='left',padx=2)
+    ttk.Label(group_clone_controls, text='Ctrl/Maj : sélection multiple'
+              ).pack(side='left',padx=3)
     inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
     inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
     actor_focus = ttk.Button(side_panel, text='Modifier le personnage sélectionné',
