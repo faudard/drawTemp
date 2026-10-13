@@ -9,7 +9,8 @@ from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
 from sporebound.iso_actor_atlas import (
     DEFAULT_ACTOR_ATLAS, DEFAULT_JEANNE_ATLAS, ACTOR_DIRECTIONS,
-    actor_action, actor_foot_point, actor_frame, packaged_actor_catalog)
+    actor_action, actor_foot_point, actor_frame, jeanne_frame_row,
+    packaged_actor_catalog)
 from sporebound.iso_building_atlas import DEFAULT_BUILDING_ATLAS
 from sporebound.iso_depth import depth_order
 from sporebound.iso_fortification_atlas import DEFAULT_FORTIFICATION_ATLAS
@@ -101,6 +102,13 @@ class VisualFidelityArtTests(unittest.TestCase):
         self.assertEqual(actor_frame(ActorPose(1, 1, 'move', 'east', 0)), 0)
         self.assertEqual(actor_frame(ActorPose(1, 1, 'move', 'east', 1)), 1)
         self.assertEqual(actor_frame(ActorPose(1, 1, 'move', 'east')), 1)
+        self.assertEqual(tuple(jeanne_frame_row(action, frame) for action, frame
+                               in (('idle', 0), ('idle', 1),
+                                   ('move', 0), ('move', 1),
+                                   ('attack', 0), ('attack', 1),
+                                   ('hit', 0), ('defeat', 0))), tuple(range(8)))
+        self.assertEqual(jeanne_frame_row(None, 1), 3)
+        self.assertEqual(jeanne_frame_row('defeat', 1), 7)
 
     def test_scattered_props_objects_roofs_and_units_share_foot_depth(self):
         house = SimpleNamespace(cells=frozenset(((3, 3), (4, 3))))
