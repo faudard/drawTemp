@@ -1269,6 +1269,10 @@ def launch(path):
     canvas.bind('<Control-c>',lambda _e: copy_selection())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
+    def toggle_interiors(_event=None):
+        interior_var.set(not interior_var.get())
+        refresh()
+    canvas.bind('<Control-i>', toggle_interiors)
     canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
     canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
     canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
