@@ -141,6 +141,33 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     self.assertIn('Déclenchés : event_new',
                                   context_text.get('1.0', 'end'))
                     self.assertFalse(callback_errors)
+                    # 3.3: all debugger controls stay in the same Event Graph,
+                    # preserve the Content and never claim an authenticated
+                    # replay for an artificially prepared condition.
+                    for label in ('Démarrer debug', 'Point d’arrêt',
+                                  'Continuer debug', 'Pas suivant',
+                                  'Inspecter condition', 'Arrêter debug'):
+                        self.assertIn(label, buttons)
+                    buttons['Démarrer debug'].invoke()
+                    root.update()
+                    buttons['Point d’arrêt'].invoke()
+                    buttons['Continuer debug'].invoke()
+                    root.update()
+                    self.assertIn('POINT D’ARRÊT — avant effets : event_new',
+                                  context_text.get('1.0', 'end'))
+                    buttons['Inspecter condition'].invoke()
+                    root.update()
+                    self.assertIn('DIAGNOSTIC : event_new',
+                                  context_text.get('1.0', 'end'))
+                    buttons['Pas suivant'].invoke()
+                    root.update()
+                    self.assertIn('1. event_new', context_text.get('1.0', 'end'))
+                    self.assertIn('Replay : NON ATTESTÉ',
+                                  context_text.get('1.0', 'end'))
+                    buttons['Arrêter debug'].invoke()
+                    root.update()
+                    self.assertFalse(callback_errors)
+                    self.assertFalse(show_error.called)
 
                     action_box = next(w for w in widgets if isinstance(w, ttk.Combobox)
                                       and 'queue_wave' in tuple(w['values']))

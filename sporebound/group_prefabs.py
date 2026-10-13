@@ -458,6 +458,7 @@ def place_group_prefab(data, mission_id, prefab, anchor):
         clone['id'] = group_map[group['id']]
         clone['parent'] = (group_map[group['parent']]
                            if group['parent'] is not None else None)
+        # _cell() returns a tuple; content schema requires JSON list positions.
         clone['cells'] = [list(world(c)) for c in group['cells']]
         clone['unit_ids'] = [actor_map[r] for r in group['unit_ids']]
         clone['object_ids'] = [object_map[r] for r in group['object_ids']]

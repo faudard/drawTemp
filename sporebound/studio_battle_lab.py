@@ -21,6 +21,8 @@ class BattleLabStudio:
         self.current = None
         self.baseline = None
         self.comparison = None
+        self.trace = None
+        self._run_snapshot = None
         self.busy = False
         self.mailbox = Queue()
 
@@ -66,6 +68,13 @@ class BattleLabStudio:
                         command=self.export).pack(side="left", padx=4)
         self.ttk.Button(actions, text="Afficher sur la carte",
                         command=self.open_map).pack(side="left", padx=4)
+        self.diagnose_button = self.ttk.Button(
+            actions, text="Diagnostiquer seed", command=self.diagnose_selected)
+        self.diagnose_button.pack(side="left", padx=4)
+        self.replay_button = self.ttk.Button(
+            actions, text="Rejouer la trace", command=self.replay_selected,
+            state="disabled")
+        self.replay_button.pack(side="left", padx=4)
         self.status = self.ttk.Label(frame, text="Prêt · aucune simulation en cours.")
         self.status.pack(anchor="w", pady=4)
         columns = ("seed", "issue", "ticks", "commands", "ct", "stall")
@@ -77,6 +86,7 @@ class BattleLabStudio:
             self.rows.heading(key, text=title)
             self.rows.column(key, width=width, anchor="center")
         self.rows.pack(fill="x", pady=(8, 4))
+        self.rows.bind("<<TreeviewSelect>>", self._select_seed)
         self.output = self.tk.Text(frame, height=15, wrap="word", state="disabled")
         self.output.pack(fill="both", expand=True)
 
@@ -112,7 +122,11 @@ class BattleLabStudio:
             self.owner.dialogs.showerror("Battle Lab", str(exc))
             return
         self.busy = True
+        self._run_snapshot = (content, rules)
+        self.trace = None
+        self.replay_button.configure(state="disabled")
         self.run_button.configure(state="disabled")
+        self.diagnose_button.configure(state="disabled")
         self.status.configure(text="Simulation en cours sur une copie du contenu…")
         # Capture all input values before entering the worker, with no Tk calls
         # from the thread (including document access and error dialogs).
@@ -135,6 +149,18 @@ class BattleLabStudio:
             return
         self.busy = False
         self.run_button.configure(state="normal")
+        self.diagnose_button.configure(state="normal")
+        if kind == "trace_error":
+            self.status.configure(text="Diagnostic échoué")
+            self.owner.dialogs.showerror("Battle Lab · diagnostic", value)
+            return
+        if kind == "trace":
+            self.trace = value
+            self.replay_button.configure(state="normal")
+            self.status.configure(text="Trace vérifiée · {} décisions · {} constats".format(
+                value["commands"], len(value["diagnostics"]["findings"])))
+            self.replay_selected()
+            return
         if kind == "error":
             self.status.configure(text="Simulation échouée")
             self.owner.dialogs.showerror("Battle Lab", value)
@@ -190,6 +216,57 @@ class BattleLabStudio:
         self.status.configure(text="Terminé, replays vérifiés."
                               + (" Gate : " + self.comparison["status"]
                                  if self.comparison else ""))
+
+    def _select_seed(self, _event=None):
+        self.replay_button.configure(state="disabled")
+
+    def diagnose_selected(self):
+        """Re-run one seed against the *same snapshot* as the original sweep."""
+        if self.busy or self.current is None or self._run_snapshot is None:
+            return
+        selection = self.rows.selection()
+        if not selection:
+            self.owner.dialogs.showerror(
+                "Battle Lab", "Sélectionner une seed dans le tableau.")
+            return
+        try:
+            seed = int(self.rows.item(selection[0], "values")[0])
+            max_commands = self.current["max_commands"]
+            if max_commands > 5000:
+                raise RuleError("Tracer une seed exige au plus 5000 commandes.")
+            expected = next(sample for sample in self.current["samples"]
+                            if sample["seed"] == seed)
+        except (RuleError, KeyError, ValueError, StopIteration) as exc:
+            self.owner.dialogs.showerror("Battle Lab", str(exc))
+            return
+        content, rules = self._run_snapshot
+        self.busy = True
+        self.trace = None
+        self.run_button.configure(state="disabled")
+        self.diagnose_button.configure(state="disabled")
+        self.replay_button.configure(state="disabled")
+        self.status.configure(text="Relecture détaillée de la seed {}…".format(seed))
+
+        def worker():
+            try:
+                from .battle_diagnostics import trace_seed
+                trace = trace_seed(content, self.current["mission"], seed=seed,
+                                   max_commands=max_commands, rules=rules)
+                if trace["digest"] != expected["digest"] or (
+                        trace["result"] != expected["result"]):
+                    raise RuleError("Le replay détaillé diverge du rapport initial.")
+                self.mailbox.put(("trace", trace))
+            except Exception as exc:
+                self.mailbox.put(("trace_error", str(exc)))
+
+        Thread(target=worker, daemon=True).start()
+        self.tab.after(80, self._poll)
+
+    def replay_selected(self):
+        if self.trace is None:
+            return
+        from .studio_battle_replay import show_trace
+        show_trace(self, self.trace)
 
     def load_baseline(self):
         from tkinter import filedialog

@@ -35,6 +35,10 @@ jobs:
         run: python -m unittest tests_standalone.test_world_event_studio_3724e -v
       - name: Verify 3.7.24F route sandbox and real StoryBook consequences
         run: python -m unittest tests_standalone.test_world_travel_lab_3724f -v
+      - name: Verify 3.7.24G branching route comparison and isolation
+        run: python -m unittest tests_standalone.test_world_route_comparison_3724g -v
+      - name: Verify 3.7.24H contextual Battle Lab and route tactical evidence
+        run: python -m unittest tests_standalone.test_world_tactical_comparison_3724h -v
       - name: Generate and validate a playable 3.7.24A World Map campaign
         run: |
           python -m examples.world_map_3724a --output "${{ runner.temp }}/world-3724a.json"
@@ -50,6 +54,8 @@ jobs:
         run: |
           python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --report battle_lab_ci.json
           python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --baseline battle_lab_ci.json
+      - name: Combat Diagnostics 3.8.1 canonical trace and CLI replay evidence
+        run: python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 40 --report battle_diagnostics_ci.json
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
         run: python -m examples.tactical_rpg3_castle
@@ -94,6 +100,14 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_travel_lab_3724f_gui.py -v
+      - name: Verify 3.7.24G comparison Studio matrix, branches, reset
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_route_comparison_3724g_gui.py -v
+      - name: Verify 3.7.24H World Studio tactical comparison Tk worker
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_tactical_comparison_3724h_gui.py -v
       - name: Verify 3.7.21B common undo/redo and Save All through real Tk
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -106,6 +120,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_battle_lab_38_gui.py -v
+      - name: Combat Diagnostics 3.8.1 selected-seed replay GUI
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_battle_diagnostics_381_gui.py -v
       - name: Exercise 2.6 Audio Studio import and sound cues
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -130,6 +148,14 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_workspace_shell_3731_gui.py -v
+      - name: Verify 3.7.33A Workspace inline actor editing and global undo
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_workspace_editing_3733a_gui.py -v
+      - name: Verify 3.7.33B Workspace navigation synchronization and history
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_workspace_navigation_3733b_gui.py -v
       - name: Exercise 2.5.1 map selection and deployment UI
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -173,6 +199,10 @@ jobs:
           name: studio-render-3718d-ubuntu
           path: ${{ runner.temp }}/studio-render*-3718d.json
           if-no-files-found: error
+      - name: Verify watercolor V3 Studio gallery in real Tk (VF-B)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_watercolor_catalog_gui.py -v
       - name: Exercise asset palette scene authoring and missing PNG fallback (3.7.16)
         env:
           SPOREBOUND_GUI_SMOKE: '1'
