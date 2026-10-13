@@ -38,6 +38,8 @@ class StudioPanels:
         self.workspace = ProjectWorkspaceTab(self, notebook)
         self._entities_tab(notebook)
         self._project_tab(notebook)
+        from .studio_world_map import WorldMapStudio
+        self.world_studio = WorldMapStudio(self, notebook)
         from .studio_advanced import AdvancedStudio
         self.advanced=AdvancedStudio(self, notebook)
         from .studio_character_rules import CharacterRulesStudio
@@ -596,3 +598,4 @@ class StudioPanels:
         self.cinematic_studio.refresh()
         self.audio_studio.refresh()
         self.workspace.refresh()
+        self.world_studio.refresh()
