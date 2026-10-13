@@ -2674,7 +2674,7 @@ def launch(path):
                          'Structure','Sélection structure',
                          'Déplacer structure','Dupliquer structure',
                          'Entité','Inspecter entité','Déplacer entité',
-                         'Dupliquer entité','Étage intérieur']).pack(side='left')
+                         'Dupliquer entité','Étage intérieur','Préfab']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
