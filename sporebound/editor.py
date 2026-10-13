@@ -16,6 +16,7 @@ from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, SURFACE_COLORS, IsoTerrainAtlas)
 from .iso_props import IsoPropAtlas
+from .iso_object_atlas import IsoObjectAtlas
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import IsoActorAtlas
@@ -280,6 +281,10 @@ def launch(path):
     structure_drag_hover = None
     structure_preview_key = None
     asset_palette = None
+    entity_palette = None
+    entity_choice = None
+    entity_hover_key = None
+    entity_passage_entry = None
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
@@ -875,13 +880,16 @@ def launch(path):
     def clear_placement_preview(_event=None):
         nonlocal structure_preview_key
         structure_preview_key = None
+        nonlocal entity_hover_key
+        entity_hover_key = None
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
                     'structure_group_preview', 'structure_group_ghost',
-                    'brush_preview', 'asset_ghost'):
+                    'brush_preview', 'asset_ghost', 'entity_preview',
+                    'entity_ghost', 'entity_route', 'entity_source'):
             canvas.delete(tag)
 
     def paste_preview(event):
-        nonlocal structure_preview_key
+        nonlocal structure_preview_key, entity_hover_key
         if structure_drag_from is not None:
             if tool_var.get() != 'Sélection structure':
                 cancel_structure_drag()  # Tool changed while dragging.
@@ -897,10 +905,79 @@ def launch(path):
                    id(doc.data))
             if key == structure_preview_key:
                 return
-        clear_placement_preview()
         structure_preview_key = key
         if battle:
+            clear_placement_preview()
             return
+        if tool_var.get() == 'Entité' and entity_choice is not None:
+            cell = event_cell(event)
+            if cell is None:
+                clear_placement_preview()
+                return
+            entry, facing, link, destination, team = entity_choice
+            key = (id(doc.data), mission_var.get(), cell, entry.id, facing,
+                   link, destination, team, entity_passage_entry,
+                   tile_size, iso_var.get())
+            if key == entity_hover_key:
+                return
+            clear_placement_preview()
+            mission = next(m for m in doc.data['missions']
+                           if m['id'] == mission_var.get())
+            from .entity_palette import (
+                preview_entity_placement, preview_passage_source)
+            is_passage = entry.id == 'object:passage' and destination is None
+            if is_passage and entity_passage_entry is None:
+                feedback = preview_passage_source(doc.data, mission_var.get(), cell)
+            elif is_passage:
+                feedback = preview_entity_placement(
+                    doc.data, mission_var.get(), entry.id, entity_passage_entry,
+                    facing=facing, link=link, destination=cell, team=team)
+            else:
+                feedback = preview_entity_placement(
+                    doc.data, mission_var.get(), entry.id, cell, facing=facing,
+                    link=link, destination=destination, team=team)
+            entity_hover_key = key
+            color = '#36a16c' if feedback.allowed else '#e05252'
+            indicated_cells = (cell,) if is_passage and entity_passage_entry is not None else feedback.cells
+            inside = [c for c in indicated_cells
+                      if 0 <= c[0] < mission['board']['width']
+                      and 0 <= c[1] < mission['board']['height']]
+            if is_passage and entity_passage_entry is not None:
+                if iso_var.get() and iso_geometry is not None:
+                    x1, y1 = iso_geometry.center(entity_passage_entry)
+                    x2, y2 = iso_geometry.center(cell)
+                else:
+                    x1, y1 = ((p + .5)*tile_size for p in entity_passage_entry)
+                    x2, y2 = ((p + .5)*tile_size for p in cell)
+                canvas.create_line(x1, y1, x2, y2, fill=color, width=3,
+                                   arrow='last', dash=(5, 3), tags='entity_route')
+                preview_cells((entity_passage_entry,), tag='entity_source',
+                              color='#2361ff')
+            if iso_var.get() and iso_geometry is not None and inside:
+                cx, cy = iso_geometry.center(cell)
+                if entry.kind in ('actor', 'archetype'):
+                    photo = actor_atlas.sprite(entry.style, facing, 0, tile_size)
+                else:
+                    photo = object_atlas.sprite(entry.id.partition(':')[2], tile_size)
+                if photo is not None:
+                    canvas.create_image(cx, cy + tile_size * 18 / 54,
+                                        image=photo, anchor='s',
+                                        tags='entity_ghost')
+                else:
+                    canvas.create_oval(cx-9, cy-9, cx+9, cy+9,
+                                       fill='#9070b1', outline='#4b5261',
+                                       tags='entity_ghost')
+            preview_cells(inside, tag='entity_preview', color=color)
+            if not feedback.allowed:
+                status_var.set('Placement refusé : ' + feedback.reason)
+            elif is_passage:
+                status_var.set('Passage : cliquer la ' +
+                               ('sortie' if entity_passage_entry is not None
+                                else 'case d’entrée') + '.')
+            else:
+                status_var.set(entry.label + ' : emplacement valide, cliquer pour poser.')
+            return
+        clear_placement_preview()
         if tool_var.get() in ('Structure', 'Déplacer structure', 'Dupliquer structure'):
             cursor = event_cell(event)
             if cursor is None:
@@ -1017,6 +1094,7 @@ def launch(path):
         nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive
         nonlocal structure_turns, structure_selection_cell, structure_selection_id
         nonlocal structure_drag_from, structure_drag_anchor, structure_drag_duplicate
+        nonlocal entity_passage_entry
         cancel_structure_drag()
         canvas.focus_set()
         stroke_cells = []
@@ -1063,6 +1141,39 @@ def launch(path):
             status_var.set(('Structure dupliquée' if duplicate else 'Structure déplacée')
                            + f' en {anchor}. Annuler/Rétablir disponibles.')
             refresh()
+        elif tool == 'Entité':
+            if battle or source_pending():
+                raise RuleError('Terminer le playtest et appliquer le JSON avant la pose.')
+            if entity_choice is None:
+                raise RuleError('Choisir un acteur ou objet dans la palette.')
+            from .entity_palette import place_entity, preview_passage_source
+            entry, facing, link, destination, team = entity_choice
+            if entry.id == 'object:passage' and destination is None:
+                if entity_passage_entry is None:
+                    checked = preview_passage_source(
+                        doc.data, mission_var.get(), selected_cell)
+                    if not checked.allowed:
+                        raise RuleError(checked.reason)
+                    entity_passage_entry = selected_cell
+                    refresh()
+                    status_var.set('Entrée ' + str(selected_cell) +
+                                   ' sélectionnée. Cliquer la sortie ou Échap.')
+                    return
+                entrance = entity_passage_entry
+                design_change(lambda: doc.replace(place_entity(
+                    doc.data, mission_var.get(), entry.id, entrance,
+                    facing=facing, link=link, destination=selected_cell,
+                    team=team)))
+                entity_passage_entry = None
+                status_var.set('Passage ' + str(entrance) + ' → ' +
+                               str(selected_cell) + ' créé ; Undo/Redo disponible.')
+            else:
+                design_change(lambda: doc.replace(place_entity(
+                    doc.data, mission_var.get(), entry.id, selected_cell,
+                    facing=facing, link=link, destination=destination,
+                    team=team)))
+                status_var.set(f'{entry.label} placé en {selected_cell} ; '
+                               'Undo/Redo et sauvegarde disponibles.')
         elif tool == 'Structure':
             if source_pending():
                 raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
@@ -1316,7 +1427,9 @@ def launch(path):
     def refresh(*args):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
+        nonlocal entity_hover_key, entity_passage_entry
         structure_preview_key = None
+        entity_hover_key = None
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
             from .narrative import StoryBook
             story = StoryBook(studio.project.story, Content.from_dict(doc.data),
@@ -1336,6 +1449,7 @@ def launch(path):
             structure_selection_cell = None
             structure_selection_id = None
             cancel_structure_drag()
+            entity_passage_entry = None
             selection_mission = mission_var.get()
         if structure_selection_id is not None:
             mission_row = next(m for m in doc.data['missions']
@@ -1375,7 +1489,7 @@ def launch(path):
                 atlas=iso_atlas, prop_atlas=iso_props,
                 building_atlas=building_atlas,
                 fortification_atlas=fortification_atlas,
-                actor_atlas=actor_atlas)
+                actor_atlas=actor_atlas, object_atlas=object_atlas)
         else:
             iso_geometry = None
             editor_renderer.invalidate()
@@ -1560,7 +1674,8 @@ def launch(path):
                  values=['Pinceau','Rectangle','Sélection','Sélection structure','Collage',
                          'Remplissage','Pipette sol','Pipette décor',
                          'Structure','Sélection structure',
-                         'Déplacer structure','Dupliquer structure']).pack(side='left')
+                         'Déplacer structure','Dupliquer structure',
+                         'Entité']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -1653,6 +1768,41 @@ def launch(path):
         canvas.focus_set()
         return True
 
+    def choose_entity(entry, facing, link, destination, team):
+        nonlocal entity_choice, entity_passage_entry
+        if battle is not None or source_pending():
+            status_var.set('Terminer le playtest et appliquer le JSON avant édition.')
+            return False
+        entity_choice = (entry, facing, link, destination, team)
+        entity_passage_entry = None
+        tool_var.set('Entité')
+        iso_var.set(True)
+        notebook.select(work)
+        refresh()
+        status_var.set(entry.label + ' : cliquer sur la carte pour placer une copie.')
+        canvas.focus_set()
+        return True
+
+    def cancel_passage_placement():
+        nonlocal entity_passage_entry
+        if entity_passage_entry is not None:
+            entity_passage_entry = None
+            clear_placement_preview()
+            status_var.set('Placement du passage annulé. Aucun objet créé.')
+            refresh()
+
+    def open_entity_palette():
+        nonlocal entity_palette
+        if entity_palette is None:
+            from .studio_entity_palette import EntityPalette
+            entity_palette = EntityPalette(
+                root, snapshot=lambda: (doc.data, mission_var.get()),
+                actors=actor_atlas, choose=choose_entity,
+                cell_size=lambda: tile_size, props=iso_props,
+                objects=object_atlas)
+        else:
+            entity_palette.show()
+
     def open_asset_palette():
         nonlocal asset_palette
         if asset_palette is None:
@@ -1668,6 +1818,8 @@ def launch(path):
     structure_controls.pack(fill='x', padx=5, pady=2)
     ttk.Button(structure_controls, text='Bibliothèque d’assets',
                command=open_asset_palette).pack(side='left', padx=4)
+    ttk.Button(structure_controls, text='Acteurs et objets',
+               command=open_entity_palette).pack(side='left', padx=4)
     ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
     structure_box = ttk.Combobox(structure_controls, textvariable=structure_var,
                                  state='readonly', width=16, values=STRUCTURE_NAMES)
@@ -1761,6 +1913,7 @@ def launch(path):
     building_atlas = IsoBuildingAtlas(canvas)
     fortification_atlas = IsoFortificationAtlas(canvas)
     actor_atlas = IsoActorAtlas(canvas)
+    object_atlas = IsoObjectAtlas(canvas)
     xs,ys = ttk.Scrollbar(canvas_frame,orient='horizontal',command=canvas.xview),ttk.Scrollbar(canvas_frame,orient='vertical',command=canvas.yview)
     canvas.configure(xscrollcommand=xs.set,yscrollcommand=ys.set)
     xs.pack(side='bottom',fill='x'); ys.pack(side='right',fill='y'); canvas.pack(fill='both',expand=True)
@@ -1770,11 +1923,13 @@ def launch(path):
     canvas.bind('<Motion>',paste_preview)
     canvas.bind('<Leave>', lambda e: (clear_placement_preview(e),
                                             cancel_structure_drag(e)))
-    canvas.bind('<Escape>', cancel_structure_drag)
+    canvas.bind('<Escape>', lambda event: (
+        cancel_structure_drag(event), cancel_passage_placement()))
     canvas.bind('<Left>', lambda _e: nudge_selected_structure(-1, 0))
     canvas.bind('<Right>', lambda _e: nudge_selected_structure(1, 0))
     canvas.bind('<Up>', lambda _e: nudge_selected_structure(0, -1))
     canvas.bind('<Down>', lambda _e: nudge_selected_structure(0, 1))
+    # Escape handles both drag cancellation and passage placement above.
     canvas.bind('<Control-c>',lambda _e: copy_selection())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
