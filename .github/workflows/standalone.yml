@@ -46,6 +46,8 @@ jobs:
         run: |
           python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --report battle_lab_ci.json
           python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --baseline battle_lab_ci.json
+      - name: Combat Diagnostics 3.8.1 canonical trace and CLI replay evidence
+        run: python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 40 --report battle_diagnostics_ci.json
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
         run: python -m examples.tactical_rpg3_castle
@@ -102,6 +104,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_battle_lab_38_gui.py -v
+      - name: Combat Diagnostics 3.8.1 selected-seed replay GUI
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_battle_diagnostics_381_gui.py -v
       - name: Exercise 2.6 Audio Studio import and sound cues
         env:
           SPOREBOUND_GUI_SMOKE: '1'
