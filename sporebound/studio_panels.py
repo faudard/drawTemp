@@ -18,7 +18,8 @@ from .studio_transaction import StudioHistory, StudioTransactionStore
 class StudioPanels:
     def __init__(self, notebook, tk, ttk, dialogs, *, doc, content_path,
                  mission, selection, design_change, play_campaign, status, mission_change=None,
-                 select_mission=None, on_project_saved=None, set_active_mission=None):
+                 select_mission=None, on_project_saved=None, set_active_mission=None,
+                 focus_map_cell=None):
         self.tk, self.ttk, self.dialogs = tk, ttk, dialogs
         self.notebook = notebook
         self.doc, self.content_path = doc, content_path
@@ -27,6 +28,7 @@ class StudioPanels:
         self.mission_change = mission_change or self.refresh
         self.select_mission = select_mission or (lambda _mid: None)
         self.set_active_mission = set_active_mission or self.select_mission
+        self.focus_map_cell = focus_map_cell or (lambda mid, cell: None)
         self.status = status
         self.on_project_saved = on_project_saved or (lambda _path: None)
         self.project = None
