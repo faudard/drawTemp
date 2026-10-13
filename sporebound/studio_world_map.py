@@ -157,6 +157,9 @@ class WorldMapStudio:
         ttk.Button(events, text="Prévisualiser l'événement",
                    command=lambda: owner._run(self.preview_event)).pack(
                        fill="x", pady=(7, 3))
+        ttk.Button(events, text="Ouvrir la scène narrative",
+                   command=lambda: owner._run(self.open_story_scene)).pack(
+                       fill="x", pady=(0, 3))
         self.event_preview = tk.Text(
             events, height=7, width=38, wrap="word", state="disabled")
         self.event_preview.pack(fill="both", expand=True)
@@ -373,6 +376,12 @@ class WorldMapStudio:
             raise RuleError("Sélectionner un événement existant")
         self._set_preview(preview_road_event(
             self._project().world, self._project().story, self.event_selected))
+
+    def open_story_scene(self):
+        scene = self.event_scene.get()
+        if self._scene(scene) is None:
+            raise RuleError("Sélectionner une scène narrative existante")
+        self.owner.story_editor.select_graph_target(scene)
 
     def _set_preview(self, content):
         self.event_preview.configure(state="normal")

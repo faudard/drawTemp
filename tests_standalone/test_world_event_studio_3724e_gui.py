@@ -80,6 +80,10 @@ class WorldEventStudioGUITests(TestCase):
                     tab.owner._run(tab.preview_event)
                     self.assertIn("revenir au carrefour",
                                   tab.event_preview.get("1.0", "end"))
+                    tab.owner._run(tab.open_story_scene)
+                    self.assertEqual(tab.notebook.select(),
+                                     str(tab.owner.story_editor.tab))
+                    tab.show()
 
                     tab.new_event()
                     tab.event_id.set("road_toll")
