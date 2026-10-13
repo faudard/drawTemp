@@ -12,9 +12,9 @@ from sporebound.model import Board, Content, Mission, RuleError, Unit
 
 def arena():
     units = [
-        Unit("hero", "Hero", "player", (0, 1), archetype="knight"),
-        Unit("healer", "Healer", "player", (0, 2), archetype="cleric"),
-        Unit("foe", "Enemy", "enemy", (4, 1), archetype="archer", weapon="ranged"),
+        Unit("hero", "Hero", "player", (0, 1), tags=["class:knight"]),
+        Unit("healer", "Healer", "player", (0, 2), tags=["class:cleric"]),
+        Unit("foe", "Enemy", "enemy", (4, 1), tags=["class:archer"], weapon="ranged"),
     ]
     return Content({}, {"lab": Mission("lab", "Laboratory", Board(7, 5), units)})
 
