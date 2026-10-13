@@ -833,6 +833,12 @@
       "potion_bonus": 1
     },
     {
+      "mission": "a1_02_pont",
+      "flag": "trust_refugies",
+      "gte": 10,
+      "potion_bonus": 1
+    },
+    {
       "mission": "a1_03_hospice",
       "flag": "trust_refugies",
       "gte": 10,
