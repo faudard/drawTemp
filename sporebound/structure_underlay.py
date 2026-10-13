@@ -5,19 +5,23 @@ retain the historical erase-on-remove behavior. The snapshot lives with the
 visual identity and is NOT a second tactical terrain layer.
 """
 from copy import deepcopy
+from dataclasses import asdict
 
-from .model import require
+from .model import Tile, require
 
 
 def capture_underlay(mission, cells):
     """Snapshot the terrain under a future structure, including absent tiles."""
     tiles = {tuple(row['pos']): row for row in mission['board']['tiles']}
-    return [
-        {'pos': list(cell),
-         'tile': deepcopy({key: value for key, value in tiles[cell].items()
-                           if key != 'pos'}) if cell in tiles else None}
-        for cell in sorted(cells, key=lambda c: (c[1], c[0]))
-    ]
+    result = []
+    for cell in sorted(cells, key=lambda c: (c[1], c[0])):
+        raw = tiles.get(cell)
+        # Canonicalize partial tile input (including defaults) to the same
+        # contract emitted by Content.to_dict and validated on reload.
+        payload = None if raw is None else asdict(Tile(**{
+            key: deepcopy(value) for key, value in raw.items() if key != 'pos'}))
+        result.append({'pos': list(cell), 'tile': payload})
+    return result
 
 
 def restore_footprint(mission, instance):
