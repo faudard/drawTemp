@@ -124,7 +124,7 @@ def validate_story(raw, content, campaigns):
         for choice in choices:
             require(isinstance(choice, dict) and
                     {'id', 'label'} <= set(choice) <=
-                    {'id', 'label', 'when', 'effects', 'next_scene'},
+                    {'id', 'label', 'when', 'effects', 'tactical_effects', 'next_scene'},
                     'Invalid choice')
             _id(choice['id'], 'Choice id')
             require(choice['id'] not in choice_ids, 'Duplicate choice id')
@@ -137,6 +137,9 @@ def validate_story(raw, content, campaigns):
                 has_default = True
             effects = choice.get('effects', [])
             require(isinstance(effects, list) and len(effects) <= 20, 'Invalid effects list')
+            require(isinstance(choice.get('tactical_effects', []), list) and
+                    len(choice.get('tactical_effects', [])) <= 12,
+                    'Invalid tactical effects list')
             for effect in effects:
                 _effect(effect, content)
             if 'next_scene' in choice:
@@ -183,6 +186,30 @@ def validate_story(raw, content, campaigns):
         colors[node] = 2
     for sid in ids:
         visit(sid)
+
+    # Validate every tactical consequence in the context of every mission
+    # which can reach the scene, including shared next_scene branches.
+    from .rules import default_rules
+    from .tactical_story_effects import validate_tactical_effects
+    reachable = {}
+    def walk_tactical(scene_id, mission_id):
+        if mission_id in reachable.setdefault(scene_id, set()):
+            return
+        reachable[scene_id].add(mission_id)
+        for child in edges[scene_id]:
+            walk_tactical(child, mission_id)
+
+    for reference, scene_id in tactical.items():
+        walk_tactical(scene_id, reference.split('/', 1)[0])
+    for scene in scenes:
+        for choice in scene['choices']:
+            if 'tactical_effects' not in choice:
+                continue
+            missions = reachable.get(scene['id'], set())
+            require(bool(missions), 'Tactical effects require a linked tactical scene')
+            for mission_id in missions:
+                validate_tactical_effects(choice['tactical_effects'], content,
+                                          mission_id, default_rules())
 
 
 def matches(expression, progress):
