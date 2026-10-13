@@ -5,6 +5,8 @@ in Content; the owner's StudioHistory owns undo/redo and save transactions.
 """
 from copy import deepcopy
 import json
+from queue import Empty, Queue
+from threading import Thread
 
 from .game_project import GameProject
 from .model import RuleError
@@ -16,6 +18,9 @@ from .world_map import (WORLD_THEMES, default_world, upsert_location,
                         remove_location, world_projection)
 from .world_map_view import draw_world_map, pick_world_mission
 from .world_travel_lab import WorldTravelLab
+from .world_route_comparison import WorldRouteComparison
+from .world_tactical_comparison import contextual_battle_comparison, tactical_rows
+from .tactical_rpg3 import authored_rules_for_document
 
 
 class WorldMapStudio:
@@ -54,6 +59,19 @@ class WorldMapStudio:
         self.lab_choice = tk.StringVar(value="")
         self.lab_author_mode = tk.BooleanVar(value=True)
         self.lab_status = tk.StringVar(value="Simulation isolée : aucune sauvegarde modifiée.")
+        self.comparison = None
+        self.comparison_name = tk.StringVar(value="Parcours 1")
+        self.comparison_selected = tk.StringVar(value="")
+        self.comparison_status = tk.StringVar(
+            value="Marquer une rencontre pour comparer plusieurs décisions.")
+        self.tactical_mission = tk.StringVar()
+        self.tactical_seeds = tk.StringVar(value="1,7")
+        self.tactical_limit = tk.StringVar(value="40")
+        self.tactical_status = tk.StringVar(value="Comparer les conséquences tactiques.")
+        self.tactical_report = None
+        self._tactical_busy = False
+        self._tactical_token = 0
+        self._tactical_results = Queue()
         ttk.Button(toolbar, text="Créer la carte du monde",
                    command=lambda: owner._run(self.create_world)).pack(
                        side="left", padx=3)
@@ -215,6 +233,89 @@ class WorldMapStudio:
         self.lab_log = tk.Text(
             lab_frame, height=4, wrap="word", state="disabled")
         self.lab_log.pack(fill="x", padx=5, pady=(3, 0))
+
+        compare = ttk.LabelFrame(
+            self.tab, text="Comparateur de parcours · même point de départ",
+            padding=7)
+        compare.pack(fill="x", padx=10, pady=(0, 8))
+        compare_actions = ttk.Frame(compare)
+        compare_actions.pack(fill="x")
+        for caption, callback in (
+                ("Marquer embranchement", self.mark_comparison),
+                ("Essayer tous les choix", self.auto_comparison),
+                ("Revenir au choix", self.restore_comparison),
+                ("Enregistrer parcours", self.save_comparison),
+                ("Charger parcours", self.load_comparison),
+                ("Effacer", self.clear_comparison)):
+            ttk.Button(compare_actions, text=caption,
+                       command=lambda callback=callback:
+                       owner._run(callback)).pack(side="left", padx=2)
+        controls = ttk.Frame(compare)
+        controls.pack(fill="x", pady=3)
+        ttk.Label(controls, text="Nom").pack(side="left", padx=(4, 3))
+        ttk.Entry(controls, textvariable=self.comparison_name,
+                  width=25).pack(side="left")
+        ttk.Label(controls, text="Parcours enregistré").pack(
+            side="left", padx=(14, 3))
+        self.comparison_selected_box = ttk.Combobox(
+            controls, textvariable=self.comparison_selected,
+            width=34, state="readonly")
+        self.comparison_selected_box.pack(side="left")
+        self.comparison_selected_box.bind(
+            "<<ComboboxSelected>>", lambda _event:
+            self._show_comparison_detail())
+        ttk.Label(compare, textvariable=self.comparison_status,
+                  wraplength=1100).pack(anchor="w", padx=5)
+        compare_table = ttk.Frame(compare)
+        compare_table.pack(fill="x", padx=5)
+        self.comparison_tree = ttk.Treeview(
+            compare_table, columns=("metric",), show="headings", height=6)
+        self.comparison_tree.heading("metric", text="Indicateur")
+        self.comparison_tree.column("metric", width=210, minwidth=140)
+        self.comparison_tree.pack(side="left", fill="x", expand=True)
+        comparison_scroll = ttk.Scrollbar(
+            compare_table, orient="vertical", command=self.comparison_tree.yview)
+        comparison_scroll.pack(side="right", fill="y")
+        self.comparison_tree.configure(yscrollcommand=comparison_scroll.set)
+        horizontal = ttk.Scrollbar(
+            compare, orient="horizontal", command=self.comparison_tree.xview)
+        horizontal.pack(fill="x", padx=5)
+        self.comparison_tree.configure(xscrollcommand=horizontal.set)
+        self.comparison_detail = tk.Text(
+            compare, height=3, wrap="word", state="disabled")
+        self.comparison_detail.pack(fill="x", padx=5, pady=(4, 0))
+
+        tactical = ttk.LabelFrame(
+            self.tab, text="Battle Lab · conséquences tactiques des parcours",
+            padding=7)
+        tactical.pack(fill="x", padx=10, pady=(0, 8))
+        opts = ttk.Frame(tactical)
+        opts.pack(fill="x")
+        ttk.Label(opts, text="Mission").pack(side="left", padx=(4, 3))
+        self.tactical_mission_box = ttk.Combobox(
+            opts, textvariable=self.tactical_mission, state="readonly", width=18)
+        self.tactical_mission_box.pack(side="left", padx=(0, 6))
+        ttk.Label(opts, text="Seeds").pack(side="left", padx=(0, 3))
+        ttk.Entry(opts, textvariable=self.tactical_seeds,
+                  width=17).pack(side="left", padx=(0, 6))
+        ttk.Label(opts, text="Commandes max").pack(side="left", padx=(0, 3))
+        ttk.Entry(opts, textvariable=self.tactical_limit,
+                  width=8).pack(side="left", padx=(0, 6))
+        self.tactical_button = ttk.Button(
+            opts, text="Comparer les combats IA",
+            command=lambda: owner._run(self.start_tactical_comparison))
+        self.tactical_button.pack(side="left", padx=3)
+        ttk.Label(tactical, textvariable=self.tactical_status,
+                  wraplength=1150).pack(anchor="w", padx=4, pady=(4, 2))
+        self.tactical_tree = ttk.Treeview(
+            tactical, columns=("metric",), show="headings", height=7)
+        self.tactical_tree.heading("metric", text="Mesure")
+        self.tactical_tree.column("metric", width=180)
+        self.tactical_tree.pack(fill="x", padx=4)
+        ttk.Label(tactical, text="Même mission et mêmes seeds, roster et "
+                  "ressources propres à chaque parcours. Durées = commandes/CT, "
+                  "pas minutes de jeu. Simulation en mémoire.",
+                  wraplength=1100).pack(anchor="w", padx=4, pady=(4, 0))
         self.canvas.bind("<Button-1>", self.on_press)
         self.canvas.bind("<B1-Motion>", self.on_motion)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
@@ -320,6 +421,7 @@ class WorldMapStudio:
         return self.lab
 
     def reset_lab(self):
+        self.clear_comparison()
         self.lab = None
         self._lab_signature = None
         self.lab_choice.set("")
@@ -339,6 +441,7 @@ class WorldMapStudio:
             content, project, campaign,
             self.lab_start.get(), self.lab_destination.get(),
             author_mode=self.lab_author_mode.get())
+        self.clear_comparison()
         self.lab = candidate
         self._lab_signature = self._model_signature()
         self._render_lab()
@@ -407,6 +510,206 @@ class WorldMapStudio:
         self._lab_is_fresh().destination(self.lab_destination.get())
         self._render_lab()
 
+
+
+    def _clear_tactical_results(self):
+        self._tactical_token += 1
+        self.tactical_report = None
+        for row in self.tactical_tree.get_children():
+            self.tactical_tree.delete(row)
+        self.tactical_status.set("Parcours modifiés : relancer la comparaison tactique.")
+
+    def start_tactical_comparison(self):
+        if self._tactical_busy:
+            raise RuleError("Une comparaison tactique est déjà en cours")
+        comparison = self._comparison_is_ready()
+        if not comparison.variants:
+            raise RuleError("Enregistrer d'abord au moins un parcours")
+        try:
+            seeds = tuple(int(n.strip()) for n in self.tactical_seeds.get().split(","))
+            limit = int(self.tactical_limit.get())
+        except ValueError as exc:
+            raise RuleError("Seeds et limite doivent être des nombres entiers") from exc
+        if not (1 <= len(seeds) <= 20 and len(set(seeds)) == len(seeds)
+                and all(0 <= seed < 2**32 for seed in seeds)):
+            raise RuleError("Entre 1 et 20 seeds uniques, de 0 à 2³²-1")
+        if not 1 <= limit <= 2000:
+            raise RuleError("Limite : 1 à 2000 commandes par seed")
+        snapshot = deepcopy(comparison)
+        mission = self.tactical_mission.get()
+        rules = authored_rules_for_document(self.owner.doc().data)
+        signature = self._model_signature()
+        self._tactical_busy = True
+        self._tactical_token += 1
+        token = self._tactical_token
+        self.tactical_button.configure(state="disabled")
+        self.tactical_status.set("Comparaison tactique en cours, replays vérifiés par seed…")
+
+        def worker():
+            try:
+                result = contextual_battle_comparison(
+                    snapshot, mission, seeds=seeds,
+                    max_commands=limit, rules=rules)
+                self._tactical_results.put((token, signature, "ok", result))
+            except Exception as exc:
+                self._tactical_results.put((token, signature, "error", str(exc)))
+
+        Thread(target=worker, daemon=True).start()
+        self.tab.after(80, self._poll_tactical)
+
+    def _poll_tactical(self):
+        try:
+            token, signature, kind, result = self._tactical_results.get_nowait()
+        except Empty:
+            if self._tactical_busy and self.tab.winfo_exists():
+                self.tab.after(80, self._poll_tactical)
+            return
+        self._tactical_busy = False
+        self.tactical_button.configure(state="normal")
+        if token != self._tactical_token or signature != self._model_signature():
+            self.tactical_status.set("Comparaison obsolète : relancer le calcul.")
+            return
+        if kind == "error":
+            self.tactical_status.set("Comparaison échouée")
+            self.owner.dialogs.showerror("Battle Lab", result)
+            return
+        self.tactical_report = result
+        projection = tactical_rows(result)
+        columns = ("metric",) + tuple(
+            "path_" + str(i) for i in range(len(projection["names"])))
+        self.tactical_tree["columns"] = columns
+        self.tactical_tree.heading("metric", text="Mesure")
+        self.tactical_tree.column("metric", width=180)
+        for index, name in enumerate(projection["names"]):
+            col = "path_" + str(index)
+            self.tactical_tree.heading(col, text=name)
+            self.tactical_tree.column(col, width=175)
+        for row in self.tactical_tree.get_children():
+            self.tactical_tree.delete(row)
+        for row in projection["rows"]:
+            self.tactical_tree.insert(
+                "", "end", values=[row["metric"], *row["values"]])
+        measured = sum(item["status"] == "measured"
+                       for item in result["variants"].values())
+        self.tactical_status.set(
+            f'Battle Lab : {measured}/{len(result["variants"])} parcours '
+            f'jouables pour {result["mission"]}; {len(result["seeds"])} seeds '
+            "appariées · aucun fichier écrit.")
+
+    def _set_comparison_detail(self, value):
+        self.comparison_detail.configure(state="normal")
+        self.comparison_detail.delete("1.0", "end")
+        self.comparison_detail.insert("1.0", value)
+        self.comparison_detail.configure(state="disabled")
+
+    def clear_comparison(self):
+        self._tactical_token += 1
+        self.tactical_report = None
+        self.tactical_status.set("Comparer les conséquences tactiques.")
+        self.tactical_tree["columns"] = ("metric",)
+        for row in self.tactical_tree.get_children():
+            self.tactical_tree.delete(row)
+        self.comparison = None
+        self.comparison_selected.set("")
+        self.comparison_selected_box["values"] = ()
+        self.comparison_status.set(
+            "Marquer une rencontre pour comparer plusieurs décisions.")
+        self.comparison_tree["columns"] = ("metric",)
+        self.comparison_tree.heading("metric", text="Indicateur")
+        self.comparison_tree.column("metric", width=210, minwidth=140)
+        for row in self.comparison_tree.get_children():
+            self.comparison_tree.delete(row)
+        self._set_comparison_detail("")
+
+    def mark_comparison(self):
+        lab = self._lab_is_fresh()
+        candidate = WorldRouteComparison(lab)
+        self.comparison = candidate
+        self.lab = candidate.fork()
+        self.comparison_name.set("Parcours 1")
+        self._render_lab()
+        self._render_comparison()
+
+    def _comparison_is_ready(self):
+        self._lab_is_fresh()
+        if self.comparison is None:
+            raise RuleError("Marquer d'abord une rencontre à comparer")
+        return self.comparison
+
+    def auto_comparison(self):
+        comparison = self._comparison_is_ready()
+        outcome = comparison.compare_choices()
+        if outcome["added"]:
+            self._clear_tactical_results()
+        self._render_comparison()
+        if outcome["failures"]:
+            self.comparison_status.set(
+                f'{len(outcome["added"])} parcours générés ; '
+                f'{len(outcome["failures"])} choix refusés par les règles. '
+                "Voir les détails ci-dessous.")
+
+    def restore_comparison(self):
+        comparison = self._comparison_is_ready()
+        self.lab = comparison.fork()
+        self._render_lab()
+
+    def save_comparison(self):
+        comparison = self._comparison_is_ready()
+        comparison.record(self.comparison_name.get(), self.lab)
+        self._clear_tactical_results()
+        self.comparison_name.set("Parcours " + str(len(comparison.variants) + 1))
+        self._render_comparison()
+
+    def load_comparison(self):
+        comparison = self._comparison_is_ready()
+        self.lab = comparison.checkout(self.comparison_selected.get())
+        self._render_lab()
+        self._show_comparison_detail()
+
+    def _render_comparison(self):
+        comparison = self.comparison
+        if comparison is None:
+            return
+        matrix = comparison.matrix()
+        names = matrix["names"]
+        self.comparison_selected_box["values"] = names
+        if self.comparison_selected.get() not in names:
+            self.comparison_selected.set(names[0] if names else "")
+        columns = ("metric",) + tuple("path_" + str(i) for i in range(len(names)))
+        self.comparison_tree["columns"] = columns
+        self.comparison_tree.heading("metric", text="Indicateur")
+        self.comparison_tree.column("metric", width=220, minwidth=160,
+                                    stretch=False)
+        for i, name in enumerate(names):
+            col = "path_" + str(i)
+            self.comparison_tree.heading(col, text=name)
+            self.comparison_tree.column(
+                col, width=170, minwidth=120, stretch=True)
+        for item in self.comparison_tree.get_children():
+            self.comparison_tree.delete(item)
+        for row in matrix["rows"]:
+            self.comparison_tree.insert(
+                "", "end", values=[row["metric"], *row["values"]])
+        self.comparison_status.set(
+            f'{len(names)} / 8 parcours comparés depuis '
+            f'{comparison.scene_id} · toutes les variantes utilisent '
+            "le même checkpoint · aucun fichier écrit")
+        self._show_comparison_detail()
+
+    def _show_comparison_detail(self):
+        if self.comparison is None:
+            return
+        name = self.comparison_selected.get()
+        lines = []
+        if name in self.comparison.variants:
+            detail = self.comparison.detail(name)
+            lines.extend([name, *detail["log"],
+                          "— Conséquences —", *detail["changes"]])
+        if self.comparison.failures:
+            lines.append("— Choix refusés par le moteur —")
+            lines.extend(row["choice"] + " : " + row["reason"]
+                         for row in self.comparison.failures)
+        self._set_comparison_detail("\n".join(lines))
     def _scene(self, scene_id):
         return next((scene for scene in self._project().story.get("scenes", [])
                      if scene["id"] == scene_id), None)
@@ -612,6 +915,9 @@ class WorldMapStudio:
         self.event_destination_box["values"] = [
             node["mission"] for node in world.get("nodes", [])
             if not self.road or node["mission"] not in self.road]
+        self.tactical_mission_box["values"] = list(content.missions)
+        if self.tactical_mission.get() not in content.missions:
+            self.tactical_mission.set(project.campaigns[0]["start_mission"])
         campaigns = [item["id"] for item in project.campaigns]
         self.lab_campaign_box["values"] = campaigns
         if self.lab_campaign.get() not in campaigns:

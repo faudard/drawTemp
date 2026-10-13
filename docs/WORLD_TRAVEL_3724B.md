@@ -202,3 +202,79 @@ Gates :
 python -m unittest tests_standalone.test_world_travel_lab_3724f -v
 SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_world_travel_lab_3724f_gui -v
 ```
+
+## 3.7.24G — comparaison de plusieurs parcours dans Game Studio
+
+Le simulateur de l'onglet **Monde** permet désormais de **marquer une
+rencontre** pour obtenir un checkpoint de comparaison commun et inaltérable.
+Il faut être face à une scène narrative possédant au moins un choix.
+
+- **Marquer embranchement** : capture une seule situation (ressources,
+  progression, étape de voyage, scène). Le parcours actif repart d'une copie.
+- **Essayer tous les choix** : simule chaque décision accessible depuis ce
+  même checkpoint, avance jusqu'à la prochaine rencontre ou à l'arrivée,
+  puis conserve au plus 8 variantes. Les choix invalides sont signalés
+  individuellement et ne contaminent pas les autres scénarios.
+- **Revenir au choix** : restaure une copie du checkpoint commun pour
+  rejouer une autre décision ou un itinéraire plus long.
+- **Enregistrer parcours** : fige un scénario manuel, son itinéraire,
+  les événements traversés et ses conséquences. **Charger parcours**
+  reprend une copie d'un scénario sans modifier la variante enregistrée.
+- **Comparer** : tableau côte à côte des lieux, destinations, statuts,
+  variation d'or, séquences de décisions, rencontres, missions débloquées,
+  flags narratifs, inventaire et accessibilité. Le panneau détail fournit
+  le journal complet de la variante sélectionnée.
+- **Effacer** et l'invalidation automatique lorsque l'auteur modifie le
+  projet nettoient les comparaisons sans écrire aucun fichier.
+
+Toutes les simulations emploient `GameSession`, `StoryBook` et le même
+`Campaign` initial copié en mémoire. Une variante n'est acceptée que si
+elle a été créée depuis le checkpoint de comparaison, et sa photographie
+est figée au moment de son enregistrement. Aucun changement n'est appliqué
+aux sauvegardes, à la campagne ou aux ressources du projet.
+
+Gates :
+```sh
+python -m unittest tests_standalone.test_world_route_comparison_3724g -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_world_route_comparison_3724g_gui -v
+```
+
+Il s'agit d'une comparaison d'effets narratifs et d'itinéraires :
+la résolution des batailles reste hors périmètre et doit passer par le
+Battle Lab / Player.
+
+## 3.7.24H — Preuves tactiques des itinéraires (Battle Lab)
+
+Le comparateur de parcours **World Studio** comporte une vue Battle Lab
+pour une mission commune, avec une sélection de seeds appariées et une
+limite de commandes par seed (défauts : 1,7 / 40 commandes).
+
+- Chaque variante n'est testée que si sa `GameSession.world_can_enter`
+  confirme que le groupe a atteint la mission, qu'elle est débloquée et
+  qu'aucun dialogue n'est en attente. Les autres variantes affichent
+  explicitement la raison de leur indisponibilité.
+- Pour chaque variante jouable, les rencontres IA utilisent
+  `Campaign.prepare` sur **une copie de sa progression propre** :
+  classes, niveaux, talents, recrutements, équipement et moral sont donc
+  ceux de la branche narrative testée, avec les effets de
+  `GameSession._battle_support` appliqués au `Battle.initial_state`.
+- `battle_lab.run_lab(..., progress=..., initial_state=...)` réutilise la
+  simulation IA canonique, la vérification du replay et les mesures
+  de victoires, commandes et ticks CT. Les rapports contextuels ont
+  un `setup_sha256` de comparaison, distinct de la référence au contenu :
+  deux campagnes différentes ne provoquent pas de fausse alerte
+  de déterminisme sur entrées supposées identiques.
+- La matrice indique disponibilité, potions initiales, victoires IA,
+  commandes p95, ticks CT p95, activations, blocages possibles et replay.
+  Le calcul s'exécute sur **un worker isolé du thread Tk**,
+  sur une copie des données de l'éditeur. Les résultats obsolètes sont
+  écartés si le Studio ou les variantes changent.
+- Aucun combat n'est intégré à la sauvegarde ni aux événements de campagne ;
+  une victoire statistique n'est pas une victoire réellement jouée. Les
+  ticks / commandes ne sont pas des minutes de jeu.
+
+Tests ciblés :
+```sh
+python -m unittest tests_standalone.test_world_tactical_comparison_3724h -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_world_tactical_comparison_3724h_gui -v
+```
