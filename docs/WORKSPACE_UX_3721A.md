@@ -14,15 +14,25 @@ de format de sauvegarde, de règles de combat ni d'index persistant supplémenta
   du navigateur et de l'inspecteur ; un troisième règle la hauteur du journal.
 - **Inspecteur** à droite : identité de l'élément sous la sélection courante
   (terrain / acteur / objet), détails de terrain et d'état tactique, mini-carte,
-  boutons d'accès aux éditeurs spécialisés.
+  **boutons contextuels vers la fiche exacte du personnage ou de l'objet**.
+  Ces boutons sont inactifs en playtest ou sans entité sélectionnée. Le panneau
+  d'inspection et le journal sont en lecture seule.
+- **Barre d'outils compacte** en quatre groupes : Carte & combat,
+  Terrain & couches, Architecture, Sélection & modèles. Les neuf couches sont
+  dans un menu plutôt qu'une rangée de cases qui déborde à 1280 px.
+- **Recherche intégrée** partagée avec l'onglet Espace projet, compteur de
+  résultats, synchronisation sur la mission active et restauration de la
+  sélection des acteurs/objets lors des rafraîchissements.
 - **Journal de combat** sous la carte, dans un onglet bas avec l'aide rapide.
   Les événements restent ceux du `Battle` exécuté ; le panneau ne les interprète
   pas.
 - **Mode explicite** : `ÉDITION` ou `PLAYTEST (édition verrouillée)`.
   Le playtest continue à travailler sur la copie indépendante du `Document`.
 
-Raccourcis : `Alt+1` carte, `Alt+2` Espace projet ; `Ctrl+C` et
-`Ctrl+V` restent attachés au canvas pour la sélection des cases.
+Raccourcis : `Alt+1` carte, `Alt+2` Espace projet, `Ctrl+F` recherche
+sur le projet, `Échap` efface la recherche. `Ctrl+C` et `Ctrl+V`
+restent attachés au canvas pour la sélection des cases. Le démarrage
+d'un playtest réactive automatiquement l'onglet Carte & combat.
 
 ## Préservation des contrats existants
 
@@ -40,6 +50,7 @@ la commande atomique « Enregistrer tout » appartient à **3.7.21B**.
 
 ```sh
 SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest \
+  tests_standalone.test_workspace_gui \
   tests_standalone.test_workspace_shell_gui -v
 python -m unittest discover -s tests_standalone
 ```
