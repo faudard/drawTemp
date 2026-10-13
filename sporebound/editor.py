@@ -3174,6 +3174,21 @@ def launch(path):
                command=place_chosen_prefab).pack(side='left', padx=2)
     ttk.Label(group_prefab_row_2, text='À la case sélectionnée'
               ).pack(side='left', padx=3)
+    ttk.Label(side_panel, text='PALETTE VISUELLE · GLISSER SUR LA CARTE',
+              font=('TkDefaultFont', 9, 'bold')).pack(anchor='w', padx=6,
+                                                     pady=(3, 2))
+    prefab_gallery = VisualPrefabPalette(
+        side_panel, tk, ttk,
+        on_select=group_prefab_var.set,
+        on_preview=palette_prefab_hover,
+        on_drop=palette_prefab_drop,
+        on_cancel=clear_prefab_drag,
+        map_canvas=canvas,
+        status=status_var.set)
+    prefab_gallery.frame.pack(fill='x', padx=5, pady=(0, 5))
+    group_prefab_box.bind(
+        '<<ComboboxSelected>>',
+        lambda _event: prefab_gallery.choose(group_prefab_var.get()))
     refresh_group_prefabs()
     inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
     inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
