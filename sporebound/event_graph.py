@@ -38,8 +38,8 @@ def update_condition(data, mission_id, event_id, condition):
             'Choose a valid trigger condition')
     event = deepcopy(_find_event(data, mission_id, event_id))
     # Editing the primary condition must not silently erase secondary predicates.
-    extras = ({'when': event['when']} if 'when' in event and
-              'when' not in condition else {})
+    extras = {key: deepcopy(event[key]) for key in ('when', 'after')
+              if key in event and key not in condition}
     event = {'id': event_id, **deepcopy(condition), **extras,
              'actions': event['actions']}
     return _save(data, mission_id, event_id, event)
@@ -101,6 +101,51 @@ def _composite_child(node, index):
     kind = 'all' if 'all' in node else 'any' if 'any' in node else ''
     require(bool(kind) and index < len(node[kind]), 'Unknown condition child')
     return node[kind][index]
+
+
+def link_event(data, mission_id, event_id, predecessor_id):
+    """Link a predecessor to the same canonical Mission.triggers event.
+
+    References are validated transitively (unknown IDs, cycles, 8-link limit)
+    by Content.from_dict in _save. No callback, event bus or runtime schema.
+    """
+    require(isinstance(predecessor_id, str) and bool(predecessor_id),
+            'Choose a preceding event')
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    require(event_id != predecessor_id, 'An event cannot depend on itself')
+    links = event.setdefault('after', [])
+    require(predecessor_id not in links, 'Prerequisite already linked')
+    links.append(predecessor_id)
+    return _save(data, mission_id, event_id, event)
+
+
+def unlink_event(data, mission_id, event_id, predecessor_id):
+    """Remove exactly one link without altering condition or actions."""
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    links = event.get('after', [])
+    require(predecessor_id in links, 'No such event prerequisite')
+    links.remove(predecessor_id)
+    if not links:
+        event.pop('after', None)
+    return _save(data, mission_id, event_id, event)
+
+
+def chain_descendants(data, mission_id, event_id):
+    """Connected downstream triggers in stable authoring order."""
+    mission = _mission(data, mission_id)
+    require(mission is not None, 'Unknown mission')
+    _find_event(data, mission_id, event_id)
+    seen = {event_id}
+    for _ in range(len(mission.get('triggers', []))):
+        old_size = len(seen)
+        for candidate in mission.get('triggers', []):
+            if (candidate['id'] not in seen and
+                    any(ref in seen for ref in candidate.get('after', []))):
+                seen.add(candidate['id'])
+        if len(seen) == old_size:
+            break
+    return [deepcopy(row) for row in mission.get('triggers', [])
+            if row['id'] in seen]
 
 
 def composite_at(event, path=()):
@@ -217,7 +262,11 @@ def edit_composite_node(data, mission_id, event_id, path, *,
 
 def condition_summary(event):
     root = condition_title(event)
-    return root + (' ET ' + composite_title(event['when']) if 'when' in event else '')
+    root += (' ET ' + composite_title(event['when'])
+             if 'when' in event else '')
+    if event.get('after'):
+        root += ' APRÈS ' + ', '.join(event['after'])
+    return root
 
 
 def add_action(data, mission_id, event_id, action, *, index=None):
@@ -399,6 +448,23 @@ def build_event_graph(data, mission_id, *, max_events=200, max_nodes=600):
             edges.append(dict(source=previous, target=key, event_id=event_id,
                               label='exécuter' if action_index == 0 else 'puis'))
             previous = key
+    # Dependencies are navigable links between the existing condition/action
+    # vertices. Their IDs are *not* new serialized graph nodes.
+    available = {node['key'] for node in nodes}
+    for event in triggers[:max_events]:
+        target = (event['id'], 'condition')
+        if target not in available:
+            continue
+        for predecessor in event.get('after', []):
+            source = next(((predecessor, 'action', index)
+                           for index in reversed(range(len(
+                               next((row['actions'] for row in triggers
+                                     if row['id'] == predecessor), []))))
+                           if (predecessor, 'action', index) in available), None)
+            if source:
+                edges.append(dict(source=source, target=target,
+                                  event_id=event['id'],
+                                  label='après événement'))
     return dict(mission_id=mission_id, nodes=nodes, edges=edges,
                 truncated=truncated, total_events=len(triggers),
                 drawn_events=len({n['event_id'] for n in nodes}),
