@@ -365,6 +365,8 @@ def launch(path):
             doc.replace(json.loads(source.get('1.0', 'end')))
             refresh_source()
         battle = doc.playtest(mission_var.get())
+        tool_tabs.select(tools_main)
+        notebook.select(work)
         refresh()
         status_var.set('Playtest isolé. Choisir une commande, cliquer une cible, puis Exécuter.')
 
@@ -386,6 +388,7 @@ def launch(path):
                                   mid, ruleset=rules)
         campaign_battle = True
         mission_var.set(mid)
+        tool_tabs.select(tools_main)
         notebook.select(work)
         refresh()
         status_var.set('Campagne : mission lancée. La progression sera validée à la fin du combat.')
@@ -1350,8 +1353,9 @@ def launch(path):
     help_panel = ttk.Frame(bottom_panel)
     bottom_panel.add(help_panel, text='Raccourcis et aide')
     ttk.Label(help_panel, text=(
-        'Alt+1 : carte  •  Alt+2 : espace projet  •  '
-        'Ctrl+C/V : copier/coller la sélection sur la carte\n'
+        'Alt+1 : carte  •  Alt+2 : espace projet  •  Ctrl+F : chercher\n'
+        'Ctrl+C/V : copier/coller la sélection sur la carte  •  '
+        'Échap : vider la recherche\n'
         'Glisser les séparateurs pour adapter le navigateur, la carte, '
         'le journal et l’inspecteur.'),
         justify='left', wraplength=620).pack(anchor='nw', padx=12, pady=12)
@@ -1383,6 +1387,13 @@ def launch(path):
     ttk.Button(sidebar, text='Espace projet complet',
                command=lambda: notebook.select(studio.workspace.tab)).pack(
                    fill='x', padx=7, pady=(3, 8))
+    def focus_project_search(_event=None):
+        notebook.select(work)
+        entry = studio.workspace.sidebar_search
+        entry.focus_set()
+        entry.selection_range(0, 'end')
+
+    root.bind('<Control-f>', focus_project_search)
     root.bind('<Alt-KeyPress-1>', lambda _event: notebook.select(work))
     root.bind('<Alt-KeyPress-2>',
               lambda _event: notebook.select(studio.workspace.tab))
