@@ -18,13 +18,17 @@ modification des formats Content/Replay.
    permet de prévisualiser ses quatre orientations et ses deux poses idle/marche.
 4. Pour un archétype, choisir le camp **player/enemy** avant la pose.
    Pour un levier, bélier ou une catapulte, sélectionner **une porte existante**
-   comme cible. Pour un passage, saisir sa destination sous forme `x,y`.
+   comme cible. Pour un passage, cliquer successivement l'entrée et la sortie
+   **sur la carte**, sans saisir de coordonnées.
 5. Cliquer **Placer sur la carte**, puis survoler une case de l'éditeur.
    L'empreinte complète s'affiche en **vert si la pose réelle est valide** ou
    en **rouge si elle est refusée** ; la barre d'état détaille alors la raison.
    Le sprite ou l'icône est visible à l'échelle de la carte. Cliquer pour poser.
-6. Répéter pour d'autres cases, utiliser **Annuler/Rétablir**, sauvegarder et
-   relancer le playtest.
+6. Pour les passages, une flèche relie l'entrée choisie au pointeur ; la sortie
+   doit être une case distincte, non bloquée, contrôlée par les règles du jeu.
+   Échap annule le mode sans modifier Content. L'opération valide est
+   enregistrée en une seule transaction Undo/Redo.
+7. Répéter pour d'autres cases, enregistrer et relancer le playtest.
 
 ## Contrats
 
@@ -72,3 +76,17 @@ L'orientation choisie est un attribut de spawn persistant ; la prévisualisation
 de la pose de marche reste purement graphique, sans horloge de simulation.
 L'édition des interactions conditionnelles et les inspecteurs communs sont
 prévus pour 3.7.21C et 3.7.21A.
+
+
+## Gate de la deuxième passe : sprites et passage graphique
+
+- Le rendu partagé `render_isometric` prend un `object_atlas` optionnel ;
+  le Player et le Studio y passent la **même classe** `IsoObjectAtlas`.
+- En sélectionnant un passage sans destination, le premier clic mémorise
+  seulement une entrée en mémoire d'UI : **aucune modification du Document**.
+- Le second clic est validé par `place_entity` ; sorties identiques à l'entrée,
+  hors carte ou bloquées sont rejetées sans édition partielle. Le mode reste
+  actif après un refus, sauf annulation explicite par Échap.
+- Passage dessiné au survol : origine bleue, flèche verte/rouge vers la sortie.
+- Tests de PNG, de rendu Tk, de transitions, de sauvegarde/rechargement et
+  de retour arrière à intégrer aux gates CI et revue visuelle multi-zoom.
