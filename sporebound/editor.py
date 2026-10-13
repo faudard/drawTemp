@@ -829,14 +829,34 @@ def launch(path):
                 raise RuleError('Terminer le playtest et appliquer le JSON avant la pose.')
             if entity_choice is None:
                 raise RuleError('Choisir un acteur ou objet dans la palette.')
-            from .entity_palette import place_entity
+            from .entity_palette import place_entity, preview_passage_source
             entry, facing, link, destination, team = entity_choice
-            design_change(lambda: doc.replace(place_entity(
-                doc.data, mission_var.get(), entry.id, selected_cell,
-                facing=facing, link=link, destination=destination,
-                team=team)))
-            status_var.set(f'{entry.label} placé en {selected_cell} ; '
-                           'Undo/Redo et sauvegarde disponibles.')
+            if entry.id == 'object:passage' and destination is None:
+                if entity_passage_entry is None:
+                    checked = preview_passage_source(
+                        doc.data, mission_var.get(), selected_cell)
+                    if not checked.allowed:
+                        raise RuleError(checked.reason)
+                    entity_passage_entry = selected_cell
+                    refresh()
+                    status_var.set('Entrée ' + str(selected_cell) +
+                                   ' sélectionnée. Cliquer la sortie ou Échap.')
+                    return
+                entrance = entity_passage_entry
+                design_change(lambda: doc.replace(place_entity(
+                    doc.data, mission_var.get(), entry.id, entrance,
+                    facing=facing, link=link, destination=selected_cell,
+                    team=team)))
+                entity_passage_entry = None
+                status_var.set('Passage ' + str(entrance) + ' → ' +
+                               str(selected_cell) + ' créé ; Undo/Redo disponible.')
+            else:
+                design_change(lambda: doc.replace(place_entity(
+                    doc.data, mission_var.get(), entry.id, selected_cell,
+                    facing=facing, link=link, destination=destination,
+                    team=team)))
+                status_var.set(f'{entry.label} placé en {selected_cell} ; '
+                               'Undo/Redo et sauvegarde disponibles.')
         elif tool == 'Structure':
             if source_pending():
                 raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
