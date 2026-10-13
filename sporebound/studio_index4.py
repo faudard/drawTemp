@@ -68,6 +68,12 @@ class StudioIndex:
                     if effect.get('front') in s['fronts']:
                         add(key, 'mission:' + s['fronts'][effect['front']],
                             'Effet ' + effect['kind'])
+        for mission in self.content.missions.values():
+            for obj in mission.objects:
+                if obj.get('kind') in ('switch', 'ram', 'catapult') and obj.get('link'):
+                    add('map_object:' + mission.id + '/' + obj['id'],
+                        'map_object:' + mission.id + '/' + obj['link'],
+                        'Porte associée')
         story = self.project.story
         for reference, scene_id in story.get('after_strategic_event', {}).items():
             add('strategic_event:' + reference,
@@ -111,7 +117,7 @@ class StudioIndex:
     def incoming(self, key):
         return tuple(link for link in self.references if link.target == key)
 
-    def diagnostics(self, root):
+    def diagnostics(self, root, *, map_warnings=False):
         issues = [('error', 'asset:' + i['asset_id'], i['message'])
                   for i in self.workspace.asset_issues(root)]
         incoming = {r.target for r in self.references}
@@ -123,4 +129,7 @@ class StudioIndex:
             if not clip['events']:
                 issues.append(('warning', 'cinematic:' + clip['id'],
                                'Cinématique vide'))
+        if map_warnings:
+            from .workspace_shell import map_reference_problems
+            issues.extend(map_reference_problems(self.content))
         return tuple(sorted(issues))
