@@ -1190,6 +1190,9 @@ def launch(path):
             selected_cell = min(selected_tiles, key=lambda p: (p[1], p[0]))
         tool_var.set('Sélection')
         refresh()
+        if studio is not None:
+            studio.workspace.sync_map_selection(
+                mission_var.get(), selected_cell, group_id=selected_group_id)
         status_var.set(f'{len(groups)} groupe(s) sélectionné(s) : '
                        f'{len(selected_tiles)} case(s) et emprises.')
 
@@ -2180,6 +2183,9 @@ def launch(path):
             selected_tiles = selected_tiles | set(cells) if selection_additive else set(cells)
             selected_cell = stroke_cells[-1]
             refresh()
+            if studio is not None:
+                studio.workspace.sync_map_selection(
+                    mission_var.get(), selected_cell, cells=selected_tiles)
         elif not battle and tool == 'Rectangle' and rectangle_anchor is not None and stroke_cells and brush not in ('unit', 'object'):
             end = stroke_cells[-1]
             selected_cell = end
@@ -3180,16 +3186,21 @@ def launch(path):
         mission_var.set(mid)
         stop()
 
-    def focus_workspace_map(mid, cell):
-        nonlocal selected_cell
-        select_workspace_mission(mid)
+    def focus_workspace_map(mid, cell, *, show_map=True):
+        nonlocal selected_cell, selected_group_id
+        if not show_map and battle is not None:
+            return  # Inspecting a project reference never cancels playtest.
+        if mid != mission_var.get() or show_map and battle is not None:
+            select_workspace_mission(mid)
         validate_selection(doc.data, mid, [tuple(cell)])
         # Navigating a diagnostic must replace, not compound, an old
         # multi-selection or hierarchical group brush selection.
         selected_tiles.clear()
+        selected_group_id = None
         selected_cell = tuple(cell)
         editing_context.selection.set(mid, selected_cell, publish=False)
-        notebook.select(work)
+        if show_map:
+            notebook.select(work)
         refresh()
         # A diagnostic must reveal the object, not just update its ID.
         # Use the same coordinate projection as the active map renderer.
@@ -3211,7 +3222,8 @@ def launch(path):
                 canvas.yview_moveto(max(0.0, min(
                     (cy - top - height/2) / (bottom-top),
                     1 - height/(bottom-top))))
-        canvas.focus_set()
+        if show_map:
+            canvas.focus_set()
 
     def on_project_saved(path):
         nonlocal disk_revisions
