@@ -96,6 +96,28 @@ class StoryEditor:
         self.effects_label=ttk.Label(effects,text='',wraplength=420,justify='left')
         self.effects_label.pack(anchor='w',padx=6,pady=4)
 
+        tactical=ttk.LabelFrame(choices,text='Effets tactiques rejouables (dialogue en combat)')
+        tactical.pack(fill='x',padx=5,pady=5)
+        tf=ttk.Frame(tactical);tf.pack(fill='x')
+        self.tactical_kind,self.tactical_kind_box=self._field(
+            tf,0,'Effet','open_door',choices=['open_door','hazard','status','wave'])
+        self.tactical_target,self.tactical_target_box=self._field(
+            tf,1,'Porte / unité / ID renfort',choices=[])
+        self.tactical_pos,_=self._field(tf,2,'Position renfort / danger','0,0')
+        self.tactical_power,_=self._field(tf,3,'Puissance / durée','4')
+        self.tactical_status,self.tactical_status_box=self._field(
+            tf,4,'Statut','haste',choices=['haste','slow','protect','guard'])
+        self.tactical_archetype,self.tactical_archetype_box=self._field(
+            tf,5,'Archétype renfort',choices=[])
+        self.tactical_team,self.tactical_team_box=self._field(
+            tf,6,'Camp renfort','enemy',choices=['enemy','player'])
+        tactical_buttons=ttk.Frame(tactical);tactical_buttons.pack(fill='x')
+        self._button(tactical_buttons,'Ajouter effet tactique',self.add_tactical_effect)
+        self._button(tactical_buttons,'Retirer effet tactique',self.remove_tactical_effect)
+        self.tactical_effects_label=ttk.Label(
+            tactical,text='Aucun effet tactique.',wraplength=420,justify='left')
+        self.tactical_effects_label.pack(anchor='w',padx=6,pady=4)
+
         routes=ttk.LabelFrame(root,text='Déclenchement : campagne / victoire / événement stratégique')
         routes.pack(fill='x',padx=10,pady=6)
         rf=ttk.Frame(routes);rf.pack(fill='x')
@@ -247,8 +269,13 @@ class StoryEditor:
             effects=choice.get('effects',[])
             self.effects_label.config(text='\n'.join(str(effect) for effect in effects)
                                       if effects else 'Aucune conséquence.')
+            tactical=choice.get('tactical_effects',[])
+            self.tactical_effects_label.config(
+                text='\n'.join(str(effect) for effect in tactical)
+                if tactical else 'Aucun effet tactique.')
         except RuleError:
             self.effects_label.config(text='Sélectionner un choix.')
+            self.tactical_effects_label.config(text='Sélectionner un choix.')
 
     def _condition(self):
         mode=self.condition.get()
@@ -334,6 +361,35 @@ class StoryEditor:
         effects.pop()
         self._apply(lambda project,content:edit.update_choice(
             project,content,self.scene_id,self.choice_id,effects=effects))
+
+    def _tactical_effect_spec(self):
+        kind=self.tactical_kind.get()
+        target=self.tactical_target.get().strip()
+        power=int(self.tactical_power.get())
+        if kind=='open_door':
+            return {'kind':kind,'object':target}
+        if kind=='status':
+            return {'kind':kind,'unit':target,
+                    'status':self.tactical_status.get(),'duration':power}
+        x,y=(int(value.strip()) for value in self.tactical_pos.get().split(','))
+        if kind=='hazard':
+            return {'kind':kind,'pos':[x,y],'amount':power}
+        if kind=='wave':
+            from .event_composer import action
+            return action('wave',actor_id=target,name='Renfort',
+                          team=self.tactical_team.get(),
+                          archetype=self.tactical_archetype.get(),
+                          pos=[x,y],max_active=14)
+        raise RuleError('Effet tactique inconnu')
+
+    def add_tactical_effect(self):
+        spec=self._tactical_effect_spec()
+        self._apply(lambda project,content:edit.add_tactical_effect(
+            project,content,self.scene_id,self.choice_id,spec))
+
+    def remove_tactical_effect(self):
+        self._apply(lambda project,content:edit.remove_tactical_effect(
+            project,content,self.scene_id,self.choice_id))
 
     def set_intro(self,clear=False):
         self._apply(lambda project,content:edit.set_scene_entry(
@@ -447,6 +503,14 @@ class StoryEditor:
         self.entry_campaign_box['values']=[row['id'] for row in self.owner.project.campaigns]
         self.after_mission_box['values']=[row['id'] for row in self.owner.doc().data['missions']]
         self.effect_mission_box['values']=[row['id'] for row in self.owner.doc().data['missions']]
+        mid=self.tactical_key.get().split('/',1)[0]
+        mission=next((m for m in self.owner.doc().data['missions']
+                      if m['id']==mid),None)
+        targets=([o['id'] for o in mission.get('objects',[])]
+                 + [u['id'] for u in mission.get('units',[])]) if mission else []
+        self.tactical_target_box['values']=targets
+        self.tactical_archetype_box['values']=list(
+            self.owner.doc().data.get('archetypes',{}))
         self._refreshing=False
         if self.scene_id and self.scene_id not in scene_ids:
             self.scene_id=''

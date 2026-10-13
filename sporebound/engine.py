@@ -619,9 +619,25 @@ class Battle:
     def execute(self, command: dict):
         """Atomic command boundary for UI, AI and replay; invalid input changes nothing."""
         require(isinstance(command, dict), "Expected tactical command")
-        require((self.deploying or self.active is not None) and not self.result, "Battle is not accepting commands")
         snapshot = deepcopy(self.__dict__)
         try:
+            if command.get('kind') == 'story_effects':
+                # Serialized narrative decisions are replayed in the same Battle
+                # command stream, even if a trigger just caused victory.
+                from .tactical_story_effects import apply_tactical_effects
+                require(set(command) == {'kind', 'scene', 'choice', 'effects'}
+                        and all(isinstance(command[key], str)
+                                and 0 < len(command[key]) <= 64
+                                for key in ('scene', 'choice')),
+                        'Malformed replayed narrative choice')
+                apply_tactical_effects(self, command['effects'])
+                self.emit('story_choice', scene=command['scene'],
+                          choice=command['choice'])
+                self.commands.append(deepcopy(command))
+                self._outcome()
+                return
+            require((self.deploying or self.active is not None) and not self.result,
+                    "Battle is not accepting commands")
             if self.deploying:
                 from .deployment import execute
                 execute(self, command)
