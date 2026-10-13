@@ -1,11 +1,14 @@
 """Modeless visual palette using the editor's existing image loaders and tools."""
 from .asset_palette import CATEGORIES, ENTRIES, search_entries
 from .iso_building_atlas import BUILDING_FRAMES
+from .iso_actor_atlas import actor_style
+from types import SimpleNamespace
 
 
 class AssetPalette:
     def __init__(self, parent, *, terrain, props, buildings, fortifications,
-                 choose, cell_size):
+                 choose, cell_size, actors=None, entities=None, content=None,
+                 mission=None):
         import tkinter as tk
         from tkinter import ttk
         self.window = tk.Toplevel(parent)
@@ -16,6 +19,8 @@ class AssetPalette:
         self.window.protocol('WM_DELETE_WINDOW', self.window.withdraw)
         self.loaders = terrain, props, buildings, fortifications
         self.choose, self.cell_size = choose, cell_size
+        self.actors, self.entities = actors, entities
+        self.content, self.mission = content, mission
         self.entries = {e.id: e for e in ENTRIES}
         self.images = {}
         self.turns = 0
@@ -24,6 +29,13 @@ class AssetPalette:
         self.detail = tk.StringVar(self.window)
         self.count = tk.StringVar(self.window)
         self.scale = tk.IntVar(self.window, value=cell_size())
+        self.entity_id = tk.StringVar(self.window)
+        self.entity_name = tk.StringVar(self.window)
+        self.entity_team = tk.StringVar(self.window, value='enemy')
+        self.entity_facing = tk.StringVar(self.window, value='south')
+        self.entity_pose = tk.StringVar(self.window, value='idle')
+        self.entity_link = tk.StringVar(self.window)
+        self.entity_destination = tk.StringVar(self.window)
         controls = ttk.Frame(self.window, padding=8)
         controls.pack(fill='x')
         ttk.Label(controls, text='Rechercher').pack(side='left')
@@ -70,6 +82,26 @@ class AssetPalette:
         scale_box.bind('<<ComboboxSelected>>', self.preview)
         ttk.Button(preview, text='Échelle de la carte', command=self.map_scale).pack(
             anchor='w', padx=8, pady=4)
+        self.entity_frame = ttk.LabelFrame(preview, text='Placement — acteurs / objets')
+        fields = (('ID (vide = automatique)', self.entity_id, None),
+                  ('Nom de l’acteur', self.entity_name, None),
+                  ('Équipe', self.entity_team, ('player', 'enemy')),
+                  ('Orientation', self.entity_facing, ('south', 'north', 'east', 'west')),
+                  ('Pose (aperçu)', self.entity_pose, ('idle', 'move')),
+                  ('Porte liée (ID)', self.entity_link, None),
+                  ('Sortie passage (x,y)', self.entity_destination, None))
+        self.entity_rows = {}
+        for label, variable, values in fields:
+            row = ttk.Frame(self.entity_frame)
+            row.pack(fill='x', padx=5, pady=1)
+            ttk.Label(row, text=label, width=24).pack(side='left')
+            widget = (ttk.Combobox(row, textvariable=variable, values=values,
+                                   state='readonly', width=18)
+                      if values else ttk.Entry(row, textvariable=variable, width=20))
+            widget.pack(side='left', fill='x', expand=True)
+            self.entity_rows[label] = row
+        for variable in (self.entity_facing, self.entity_pose, self.entity_team):
+            variable.trace_add('write', lambda *_: self.preview())
         self.use_button = ttk.Button(preview, text='Utiliser sur la carte', command=self.use)
         self.use_button.pack(fill='x', padx=8, pady=8)
         ttk.Label(self.window, text='Choisir → Utiliser → cliquer sur la carte. '
@@ -83,6 +115,7 @@ class AssetPalette:
         entry.focus_set()
 
     def show(self):
+        self.populate()
         self.window.deiconify()
         self.window.lift()
 
@@ -92,6 +125,15 @@ class AssetPalette:
             loader, photo = terrain, terrain.tile(entry.value, size)
         elif entry.kind == 'feature':
             loader, photo = props, props.sprite(entry.value, size)
+        elif entry.kind == 'object':
+            return None, 'Marqueur tactique vectoriel (aucun PNG requis)', 'Player/Studio'
+        elif entry.kind == 'actor':
+            if self.actors is None:
+                return None, 'Sprite indisponible — secours vectoriel', 'Acteurs'
+            style = self.actor_visual_style(entry)
+            photo = self.actors.sprite(style, self.entity_facing.get(),
+                                       int(self.entity_pose.get() == 'move'), size)
+            loader = self.actors
         else:
             loader = buildings if (entry.value, 0) in BUILDING_FRAMES else fortifications
             photo = loader.sprite(entry.value, turns, size)
@@ -101,10 +143,30 @@ class AssetPalette:
                   else 'PNG invalide ou non lisible par Tk')
         return None, reason + ' — rendu de secours sur la carte', loader.path.name
 
+    def actor_visual_style(self, entry):
+        if self.content is not None and self.mission is not None:
+            data, mid = self.content(), self.mission()
+            if entry.value.startswith('unit:'):
+                mission = next((m for m in data['missions'] if m['id'] == mid), None)
+                actor = next((u for u in mission['units']
+                              if u['id'] == entry.value[5:]), None) if mission else None
+                if actor:
+                    return actor_style(SimpleNamespace(**actor))
+            elif entry.value.startswith('archetype:'):
+                key = entry.value[10:]
+                actor = data.get('archetypes', {}).get(key, {})
+                return actor_style(SimpleNamespace(id=key, name=key,
+                                   team=self.entity_team.get(), **actor))
+        return ('jeanne' if 'jeanne' in entry.value.lower() else
+                'hero' if self.entity_team.get() == 'player' else 'guard')
+
     def populate(self, *_args):
         old = self.tree.selection()
         self.tree.delete(*self.tree.get_children())
-        rows = search_entries(self.query.get(), self.category.get())
+        extra = self.entities() if self.entities is not None else ()
+        self.entries = {e.id: e for e in (*ENTRIES, *extra)}
+        rows = search_entries(self.query.get(), self.category.get(), extra)
+
         for entry in rows:
             photo, state, _path = self.sprite(entry, 8 if entry.kind == 'structure' else 22)
             options = {}
@@ -112,8 +174,8 @@ class AssetPalette:
                 self.images[entry.id] = photo
                 options['image'] = photo
             self.tree.insert('', 'end', iid=entry.id,
-                             text=entry.name + (' ⚠' if photo is None else ''), **options)
-        self.count.set(f'{len(rows)} / {len(ENTRIES)}')
+                             text=entry.name + (' ⚠' if photo is None and entry.kind != 'object' else ''), **options)
+        self.count.set(f'{len(rows)} / {len(self.entries)}')
         if rows:
             selected = old[0] if old and any(e.id == old[0] for e in rows) else rows[0].id
             self.tree.selection_set(selected)
@@ -131,6 +193,29 @@ class AssetPalette:
 
     def select(self, _event=None):
         self.turns = 0
+        entry = self.selected()
+        if entry is not None:
+            self.entity_id.set('')
+            self.entity_name.set(entry.name.split(' (', 1)[0] if entry.kind == 'actor' else '')
+            self.entity_pose.set('idle')
+            if entry.kind == 'actor' and self.content is not None and self.mission is not None:
+                data = self.content()
+                mission = next((m for m in data['missions'] if m['id'] == self.mission()), None)
+                source = next((u for u in mission['units'] if entry.value == 'unit:' + u['id']), None) if mission else None
+                self.entity_team.set(source['team'] if source else 'enemy')
+            if entry.kind in ('actor', 'object'):
+                self.entity_frame.pack(fill='x', padx=8, pady=4)
+                for label, row in self.entity_rows.items():
+                    visible = (label.startswith('ID') or
+                               (entry.kind == 'actor' and label in ('Nom de l’acteur', 'Équipe', 'Orientation', 'Pose (aperçu)')) or
+                               (entry.kind == 'object' and label == 'Porte liée (ID)' and entry.value in ('switch', 'ram', 'catapult')) or
+                               (entry.kind == 'object' and label == 'Sortie passage (x,y)' and entry.value == 'passage'))
+                    if visible:
+                        row.pack(fill='x', padx=5, pady=1)
+                    else:
+                        row.pack_forget()
+            else:
+                self.entity_frame.pack_forget()
         self.preview()
 
     def map_scale(self):
@@ -153,6 +238,12 @@ class AssetPalette:
         if photo is not None:
             self.canvas.create_image(12, 12, anchor='nw', image=photo)
             self.canvas.configure(scrollregion=(0, 0, photo.width()+24, photo.height()+24))
+        elif entry.kind == 'object':
+            self.canvas.create_rectangle(80, 50, 220, 140, fill='#9264ab',
+                                         outline='#3d2554', width=3)
+            self.canvas.create_text(150, 95, text=entry.name,
+                                    fill='white', font=('TkDefaultFont', 14, 'bold'))
+            self.canvas.configure(scrollregion=(0, 0, 320, 180))
         else:
             self.canvas.create_text(20, 30, anchor='nw', text=state, width=330)
             self.canvas.configure(scrollregion=(0, 0, 360, 100))
@@ -164,6 +255,13 @@ class AssetPalette:
         self.detail.set(f'{entry.name} — {entry.category}\n{entry.id}\n'
                         f'Emprise : {w} × {h} case(s) · {path}\n{state}'
                         f'{rotation}\n{entry.effect}')
+
+    def placement_settings(self):
+        return dict(entity_id=self.entity_id.get().strip(),
+                    name=self.entity_name.get().strip(),
+                    team=self.entity_team.get(), facing=self.entity_facing.get(),
+                    link=self.entity_link.get().strip(),
+                    destination=self.entity_destination.get().strip())
 
     def use(self):
         entry = self.selected()
