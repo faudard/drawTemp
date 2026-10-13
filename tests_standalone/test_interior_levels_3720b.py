@@ -80,6 +80,7 @@ class StackedInteriorTests(unittest.TestCase):
         for action in (
             lambda: add_interior_floor(before, self.MID, self.sid, 1),
             lambda: add_interior_floor(before, self.MID, self.sid, 4),
+            lambda: add_interior_floor(before, self.MID, self.sid, 3),
             lambda: edit_interior_tile(before, self.MID, self.sid, 1,
                                        (15, 15), feature='crate'),
             lambda: edit_interior_tile(before, self.MID, self.sid, 1,
@@ -106,6 +107,14 @@ class StackedInteriorTests(unittest.TestCase):
             mutate(floor)
             with self.subTest(floor=floor), self.assertRaises(RuleError):
                 Content.from_dict(data)
+
+    def test_deleting_supporting_deck_is_rejected(self):
+        self.create(1)
+        self.create(2)
+        before = deepcopy(self.doc.data)
+        with self.assertRaisesRegex(RuleError, 'upper levels'):
+            delete_interior_floor(before, self.MID, self.sid, 1)
+        self.assertEqual(self.doc.data, before)
 
     def test_structure_deletion_cascades_upper_decks(self):
         self.create(1)
