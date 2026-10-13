@@ -59,6 +59,8 @@ class StudioPanels:
         self.audio_studio = AudioStudio(self, notebook)
         from .studio_battle_lab import BattleLabStudio
         self.battle_lab = BattleLabStudio(self, notebook)
+        from .studio_balance_matrix import BalanceMatrixStudio
+        self.balance_matrix = BalanceMatrixStudio(self, notebook)
         self._last_mission_signature=None
         self._deferred_map_refresh = False
         self.reload_project()
