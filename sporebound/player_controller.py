@@ -112,6 +112,9 @@ class PlayerController:
     def choose_story_option(self, choice_id):
         return self._apply(self.session.choose_story_option, choice_id)
 
+    def choose_tactical_story_option(self, choice_id):
+        return self._apply(self.session.choose_tactical_story_option, choice_id)
+
     def explore_move(self, dx, dy):
         return self._apply(self.session.explore_move, dx, dy)
 
@@ -143,6 +146,8 @@ class PlayerController:
             if battle.result or battle.active is None or battle.active.id != active:
                 break
             self.execute(choose_command(battle))
+            if self.session.tactical_story_pending:
+                break
 
     def return_to_campaign(self):
         return self._apply(self.session.return_to_campaign)
