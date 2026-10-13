@@ -169,6 +169,10 @@ jobs:
           name: studio-render-3718d-ubuntu
           path: ${{ runner.temp }}/studio-render*-3718d.json
           if-no-files-found: error
+      - name: Verify watercolor V3 Studio gallery in real Tk (VF-B)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_watercolor_catalog_gui.py -v
       - name: Exercise asset palette scene authoring and missing PNG fallback (3.7.16)
         env:
           SPOREBOUND_GUI_SMOKE: '1'
