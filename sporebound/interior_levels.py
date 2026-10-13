@@ -82,6 +82,12 @@ def validate_interior_floors(floors, structures):
             require(type(tile['feature']) is str and
                     tile['feature'] in FLOOR_FEATURES,
                     'Invalid interior floor feature')
+    by_structure = {}
+    for sid, level in seen:
+        by_structure.setdefault(sid, set()).add(level)
+    for levels in by_structure.values():
+        require(levels == set(range(1, max(levels) + 1)),
+                'Interior floors must form a contiguous stack')
 
 
 def _floor(mission, sid, level):
@@ -105,6 +111,10 @@ def add_interior_floor(data, mid, sid, level=1):
     require(all(not (f['structure_id'] == sid and f['level'] == level)
                 for f in mission.get('interior_floors', ())),
             'Interior level already exists')
+    require(level == 1 or any(
+        f['structure_id'] == sid and f['level'] == level-1
+        for f in mission.get('interior_floors', ())),
+        'Create the lower interior level first')
     _, _, clip = _dimensions(building)
     tiles = [{'pos': [dx, dy], 'surface': 'stone', 'feature': ''}
              for (dx, dy), tile in zip(clip.offsets, clip.terrain)
@@ -118,6 +128,9 @@ def delete_interior_floor(data, mid, sid, level):
     updated = deepcopy(data)
     mission = _mission(updated, mid)
     _floor(mission, sid, level)
+    require(not any(f['structure_id'] == sid and f['level'] > level
+                    for f in mission.get('interior_floors', ())),
+            'Remove upper levels before deleting this floor')
     mission['interior_floors'] = [
         floor for floor in mission['interior_floors']
         if not (floor['structure_id'] == sid and floor['level'] == level)]
