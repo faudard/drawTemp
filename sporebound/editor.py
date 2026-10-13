@@ -1137,13 +1137,16 @@ def launch(path):
             group_tree.configure(cursor='hand2')
             status_var.set('Déposer pour réorganiser les groupes (Annuler possible).')
 
-    def tree_drag_release(_event):
+    def tree_drag_release(event):
         nonlocal selected_group_id
         drag = group_tree_drag
         if not drag:
             return
         active, valid, source, target = (drag['active'], drag['valid'],
                                          drag['source'], drag['target'])
+        # The release may occur on a different row than the last motion event.
+        actual_hover, _ = _tree_drop_target(group_tree.identify_row(event.y))
+        valid = valid and actual_hover == drag['hover']
         tree_drag_cancel()
         if not active or not valid:
             return
@@ -1158,6 +1161,9 @@ def launch(path):
             status_var.set('Dépôt refusé : ' + str(exc))
             return
         selected_group_id = target if target is not None else owner
+        row_id = 'g:' + selected_group_id
+        if group_tree.exists(row_id):
+            group_tree.selection_set(row_id)
         refresh()
         status_var.set('Arbre réorganisé vers '+(target or 'racine')+
                        ' ; Annuler / Rétablir disponibles.')
