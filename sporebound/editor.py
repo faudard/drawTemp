@@ -1,5 +1,6 @@
 """Own mission editor and tactical playtest UI. Tk is imported only by launch()."""
 from copy import deepcopy
+from itertools import islice
 import json
 from pathlib import Path
 
