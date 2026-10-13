@@ -187,6 +187,19 @@ class EditorGroupBatchCommand:
 
 
 @dataclass(frozen=True)
+class GroupPrefabPlaceCommand:
+    """Preview/apply a validated portable group prefab on an authored mission."""
+    prefab: dict
+    anchor: Tuple[int, int]
+    kind: str = 'editor-prefab'
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+
+    def transform(self, data, mission_id):
+        from .group_prefabs import place_group_prefab
+        return place_group_prefab(data, mission_id, self.prefab, self.anchor)
+
+
+@dataclass(frozen=True)
 class EditorGroupTreeDropCommand:
     """Reorganize a mission hierarchy from Treeview without moving the map."""
     source_group_id: str
