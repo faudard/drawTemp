@@ -135,11 +135,17 @@ class WatercolorCatalog:
             path = self.registry.resolve(sprite_id, self.root)
         except (RuleError, OSError):
             return 'missing', None
-        if verify and self._sha256:
+        if verify:
+            if not self._sha256:
+                return 'uncertified', None
             try:
+                if not 33 <= path.stat().st_size <= 15_000_000:
+                    return 'modified', None
+                digest = sha256()
                 with path.open('rb') as source:
-                    digest = sha256(source.read()).hexdigest()
-                if digest != self._sha256[spec['path']]:
+                    for chunk in iter(lambda: source.read(262144), b''):
+                        digest.update(chunk)
+                if digest.hexdigest() != self._sha256[spec['path']]:
                     return 'modified', None
             except OSError:
                 return 'missing', None
