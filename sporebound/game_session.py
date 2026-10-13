@@ -268,6 +268,8 @@ class GameSession:
             event_graph=event_graph)
         self.settled_fronts.clear()
         self.siege_id = None
+        self.tactical_story_pending = ""
+        self.tactical_story_queue.clear()
         return self.fronts
 
     def _commit(self, battle):
@@ -298,7 +300,8 @@ class GameSession:
                 "Resolve pending dialogue first")
         before_fired = set(self.active_battle.fired) if self.fronts is None else set()
         before = deepcopy((self.progress, self.battle, self.fronts,
-                           self.finalized, self.settled_fronts))
+                           self.finalized, self.settled_fronts,
+                           self.tactical_story_pending, self.tactical_story_queue))
         try:
             if self.fronts is not None:
                 if self.fronts.recovery_battles:
@@ -313,7 +316,8 @@ class GameSession:
             self._settle()
         except Exception:
             (self.progress, self.battle, self.fronts,
-             self.finalized, self.settled_fronts) = before
+             self.finalized, self.settled_fronts,
+             self.tactical_story_pending, self.tactical_story_queue) = before
             raise
         return self.active_battle
 
