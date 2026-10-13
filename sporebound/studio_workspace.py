@@ -3,6 +3,8 @@
 Only this module creates widgets; the index and game engine remain headless.
 """
 from .model import RuleError
+from .workspace_navigation import (NavigationHistory, map_selection_key,
+                                   navigation_target)
 from .workspace_shell import (inspect_resource, inspect_map,
                               inspect_persistent_group, map_resource_target,
                               problem_delta)
@@ -27,6 +29,10 @@ class ProjectWorkspaceTab:
         self.problem_targets = {}
         self.problem_snapshot = ()
         self.problem_count = None
+        self.navigation = NavigationHistory()
+        self._map_tile_key = ''
+        self.breadcrumb = owner.tk.StringVar(value='Projet')
+        self._navigation_busy = False
         ttk = owner.ttk
         root = ttk.Frame(notebook)
         notebook.add(root, text='Espace projet')
@@ -43,6 +49,16 @@ class ProjectWorkspaceTab:
         ttk.Entry(searchbar, textvariable=self.query).pack(
             side='left', fill='x', expand=True, padx=7)
         self.query.trace_add('write', lambda *_: self.refresh())
+        navigation_bar = ttk.Frame(root)
+        navigation_bar.pack(fill='x', padx=12, pady=(0, 3))
+        ttk.Button(navigation_bar, text='← Précédent',
+                   command=lambda: self.owner._run(
+                       lambda: self.navigate_history(-1))).pack(side='left', padx=(0, 3))
+        ttk.Button(navigation_bar, text='Suivant →',
+                   command=lambda: self.owner._run(
+                       lambda: self.navigate_history(1))).pack(side='left', padx=(0, 9))
+        ttk.Label(navigation_bar, textvariable=self.breadcrumb,
+                  wraplength=620).pack(side='left', fill='x', expand=True)
         body = ttk.Panedwindow(root, orient='horizontal')
         body.pack(fill='both', expand=True, padx=10, pady=6)
         tree_frame = ttk.Frame(body)
@@ -155,16 +171,20 @@ class ProjectWorkspaceTab:
                 self.open_key(matches[0])
                 return
 
-    def open_key(self, key):
-        """Select a resource on the canonical Workspace before opening it."""
+    def open_key(self, key, *, record=True):
+        """Navigate by stable key and keep one shared map/Workspace selection."""
         if self.query.get():
             self.query.set('')
         if not self.tree.exists(key):
             raise RuleError('Ressource introuvable : ' + key)
+        self._map_tile_key = ''
         self.tree.selection_set(key)
         self.tree.see(key)
+        if record:
+            self.navigation.record(key)
         self._select()
         self.open_selected()
+
 
     def index(self):
         return self.model().workspace
@@ -239,7 +259,15 @@ class ProjectWorkspaceTab:
 
     def _select(self, _event=None):
         node = self._selected_node()
+        if _event is not None and node is not None and not self._navigation_busy:
+            self._map_tile_key = ''
+            changed = self.navigation.record(node.key)
+            if changed:
+                self._preview_map_reference(node.key)
         snapshot = inspect_resource(node) if node else None
+        if node is None and self._map_tile_key:
+            mid, cell = navigation_target(self.owner.doc().data, self._map_tile_key)
+            snapshot = inspect_map(self.owner.doc().data, mid, cell)
         if node is not None:
             target = map_resource_target(node.key, self.owner.doc().data)
             if target is not None:
@@ -253,9 +281,15 @@ class ProjectWorkspaceTab:
                 snapshot = inspect_persistent_group(
                     self.owner.doc().data, mid, gid)
         self.heading.config(text=(snapshot.title + ' [' + node.kind + ']')
+                            if node is not None else snapshot.title
                             if snapshot else 'Sélectionner une ressource')
         self.summary.config(text=snapshot.detail if snapshot else
                             'Explorer campagnes, missions, scénarios et bibliothèques.')
+        if snapshot is not None:
+            self.breadcrumb.set(
+                'Projet / ' + (snapshot.mission_id or self.owner.mission()) +
+                (' / ' + str(snapshot.cell) if snapshot.cell else '') +
+                ' / ' + (node.label if node else snapshot.title))
         self.refs.delete(0, 'end')
         self.ref_keys = []
         if node is not None:
@@ -266,6 +300,61 @@ class ProjectWorkspaceTab:
             for relation in model.incoming(node.key):
                 self.ref_keys.append(relation.source)
                 self.refs.insert('end', '← ' + relation.label + ' : ' + relation.source)
+
+    def _preview_map_reference(self, key):
+        """Reveal selection in the live map without stealing the Workspace tab."""
+        mid, cell = navigation_target(self.owner.doc().data, key)
+        if mid is not None and cell is not None:
+            self.owner.focus_map_cell(mid, cell, show_map=False)
+
+    def sync_map_selection(self, mission_id, cell, *, cells=(), group_id=None,
+                           record=True):
+        """Map/group editor -> canonical Workspace tree and inspector."""
+        key = map_selection_key(
+            self.owner.doc().data, mission_id, cell,
+            group_id=group_id, cells=cells)
+        self._map_tile_key = key if key.startswith('map_tile:') else ''
+        if record:
+            self.navigation.record(key)
+        self._navigation_busy = True
+        try:
+            if self.tree.exists(key):
+                self.tree.selection_set(key)
+                self.tree.see(key)
+            else:
+                previous = self.tree.selection()
+                if previous:
+                    self.tree.selection_remove(*previous)
+            if self.sidebar_tree is not None and self.sidebar_tree.exists(key):
+                self.sidebar_tree.selection_set(key)
+                self.sidebar_tree.see(key)
+            self._select()
+        finally:
+            self._navigation_busy = False
+
+    def navigate_history(self, direction):
+        """Visit previous/next valid key; skip deleted resources automatically."""
+        model = self.model()
+        data = self.owner.doc().data
+        def valid(key):
+            try:
+                if key not in model.nodes and not key.startswith('map_tile:'):
+                    return False
+                navigation_target(data, key)
+                return True
+            except (RuleError, ValueError, KeyError):
+                return False
+        key = self.navigation.traverse(direction, valid)
+        if not key:
+            self.status.config(text='Aucun autre emplacement dans l’historique.')
+            return False
+        if key.startswith('map_tile:'):
+            mid, cell = navigation_target(data, key)
+            self.owner.focus_map_cell(mid, cell)
+            self.sync_map_selection(mid, cell, cells=(cell, cell), record=False)
+        else:
+            self.open_key(key, record=False)
+        return True
 
     def open_reference(self):
         selected = self.refs.curselection()
