@@ -96,6 +96,7 @@ class EventGraphStudio:
         self._button(header, '↑ Priorité', lambda: self.reorder_event(-1))
         self._button(header, '↓ Priorité', lambda: self.reorder_event(1))
         self._button(header, 'Supprimer événement', self.delete_event)
+        self._button(header, '+ Choix depuis carte', self.launch_branch_wizard)
         ttk.Label(header, text='Zoom').pack(side='left', padx=(12, 3))
         self.zoom_box = ttk.Combobox(header, textvariable=self.zoom,
                                     values=['70%', '100%', '130%'],
@@ -981,6 +982,14 @@ class EventGraphStudio:
             str(len(report['chain_ids'])) +
             ' événements de la chaîne exécutés dans Battle.')
         self.draw()
+
+    def launch_branch_wizard(self, *, origin_id=None):
+        """Create tactical and narrative branches from the current map cell."""
+        require(self.owner.project is not None, 'Ouvrir un projet de jeu')
+        from .studio_event_branch_wizard import VisualChoiceWizard
+        return VisualChoiceWizard(
+            self, origin_id=self.event_id.get() if origin_id is None
+            else origin_id)
 
     def preview_branches(self):
         require(self.context is not None and self.owner.project is not None,
