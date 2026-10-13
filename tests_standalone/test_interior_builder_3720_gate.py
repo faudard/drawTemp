@@ -3,6 +3,7 @@
 The test exercises authored geometry and the *real* Battle/Storage interfaces,
 not a miniature reimplementation of layered navigation.
 """
+from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -74,13 +75,13 @@ class InteriorBuilderTowerGate(unittest.TestCase):
         self.assertNotIn((2, 4, 4), battle.level_reachable())
 
     def test_upper_floor_edit_does_not_mutate_ground_or_legacy_schema(self):
-        ground = self.mission.board.tile((4, 4)).to_dict()
+        ground = asdict(self.mission.board.tile((4, 4)))
         sid = self.mission.structures[0]['id']
         updated = edit_interior_tile(self.data, self.mid, sid, 1, (4, 4),
                                      feature='crate')
         new_mission = Content.from_dict(updated).missions[self.mid]
-        self.assertEqual(new_mission.board.tile((4, 4)).to_dict(), ground)
-        self.assertEqual(self.mission.board.tile((4, 4)).to_dict(), ground)
+        self.assertEqual(asdict(new_mission.board.tile((4, 4))), ground)
+        self.assertEqual(asdict(self.mission.board.tile((4, 4))), ground)
         legacy = Content.load(DEFAULT_CONTENT).to_dict()
         self.assertEqual(Content.from_dict(legacy).to_dict(), legacy)
 
