@@ -74,6 +74,34 @@ def inspect_map(data, mission_id, cell, cells=(), *, preferred_kind='', preferre
                            mission_id, cell)
 
 
+def inspect_persistent_group(data, mission_id, group_id):
+    """Project the canonical 3.7.25 editor hierarchy, including descendants.
+
+    Group ownership remains in Mission.editor_groups and the existing map
+    Treeview: this creates no parallel group schema or mutable cache.
+    """
+    from .editor_groups import descendant_groups, group_display_cells
+    mission = next((m for m in data['missions'] if m['id'] == mission_id), None)
+    if mission is None:
+        raise RuleError('Mission introuvable : ' + mission_id)
+    groups = descendant_groups(mission, group_id)
+    root = next(g for g in groups if g['id'] == group_id)
+    cells = sorted(group_display_cells(mission, group_id))
+    counts = {field: sum(len(g[field]) for g in groups)
+              for field in ('cells', 'unit_ids', 'object_ids', 'structure_ids')}
+    detail = (f'ID : {group_id} | Mission : {mission["name"]}\n'
+              f'Parent : {root["parent"] or "racine"} | '
+              f'Sous-groupes : {len(groups)-1}\n'
+              f'Cases libres : {counts["cells"]} | '
+              f'Acteurs : {counts["unit_ids"]} | '
+              f'Objets : {counts["object_ids"]} | '
+              f'Structures : {counts["structure_ids"]}\n'
+              f'Emprise totale : {len(cells)} cases')
+    return ContextSnapshot('editor_group', 'GROUPE — ' + root['name'],
+                           detail, mission_id, cells[0] if cells else (),
+                           group_id)
+
+
 def map_reference_problems(content):
     """Authoring warnings with stable, navigable keys, not schema errors.
 
