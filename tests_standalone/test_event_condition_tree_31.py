@@ -10,7 +10,9 @@ from sporebound.event_graph import (
     composite_at, composite_nodes, edit_composite_node,
     extend_condition, clear_composite_condition)
 from sporebound.game_project import GameProject
+from sporebound.game_session import GameSession
 from sporebound.model import Content, RuleError
+from sporebound.tactical_rpg3 import authored_rules_for_document
 
 
 class EventConditionTreeTests(unittest.TestCase):
@@ -72,8 +74,7 @@ class EventConditionTreeTests(unittest.TestCase):
                                 predicate={'condition': 'invalid'}),
             lambda: self.change(data, (), 'wrap',
                                 predicate={'condition': 'no_rule'}),
-            lambda: self.change(data, (), 'negate', direction=9) if False
-                    else composite_at(self.event(data), ('bad',)),
+            lambda: composite_at(self.event(data), ('bad',)),
         ]
         for op in invalid:
             with self.subTest(op=op), self.assertRaises(RuleError):
@@ -125,6 +126,26 @@ class EventConditionTreeTests(unittest.TestCase):
         self.assertIn('tree_gate', report['scene_after'].fired)
         self.assertEqual(staged, before)
         self.assertEqual(project.cinematics[0]['id'], 'cin_tree_gate')
+
+    def test_real_session_replay_and_reload_with_composite_dispatch(self):
+        data = save_event(
+            self.raw, self.mid, 'replay_tree',
+            condition('tick', tick=0),
+            [action('message', text='La tour est en alerte')])
+        data = extend_condition(
+            data, self.mid, 'replay_tree',
+            condition('wave_capacity', max_alive=100))
+        content = Content.from_dict(data, rules=authored_rules_for_document(data))
+        project = GameProject.default(content)
+        session = GameSession.new(
+            content, project, 'main', rules=authored_rules_for_document(data))
+        session.start_mission(self.mid)
+        self.assertIn('replay_tree', session.active_battle.fired)
+        journal = session.recording()  # Engine checks the canonical battle replay.
+        restored = GameSession.from_recording(
+            journal, content, project, rules=authored_rules_for_document(data))
+        self.assertEqual(restored.recording(), journal)
+        self.assertIn('replay_tree', restored.active_battle.fired)
 
     def test_delete_a_not_child_removes_not_and_collapses_parent(self):
         data = extend_condition(
