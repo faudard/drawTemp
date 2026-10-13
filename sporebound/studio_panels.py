@@ -16,7 +16,7 @@ from .studio_transaction import StudioHistory, StudioTransactionStore
 class StudioPanels:
     def __init__(self, notebook, tk, ttk, dialogs, *, doc, content_path,
                  mission, selection, design_change, play_campaign, status, mission_change=None,
-                 select_mission=None):
+                 select_mission=None, on_project_saved=None):
         self.tk, self.ttk, self.dialogs = tk, ttk, dialogs
         self.doc, self.content_path = doc, content_path
         self.mission, self.selection = mission, selection
@@ -24,6 +24,7 @@ class StudioPanels:
         self.mission_change = mission_change or self.refresh
         self.select_mission = select_mission or (lambda _mid: None)
         self.status = status
+        self.on_project_saved = on_project_saved or (lambda _path: None)
         self.project = None
         self.project_path = None
         self.project_saved = ''
@@ -473,6 +474,7 @@ class StudioPanels:
             self.project.save(filename,self._content())
             self.project_path=Path(filename)
             self.project_saved=json.dumps(self.project.to_dict(),sort_keys=True)
+            self.on_project_saved(self.project_path)
             self.project_status.config(text=f'Projet enregistré : {filename}')
 
     def new_game(self):
