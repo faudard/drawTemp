@@ -1100,41 +1100,101 @@ def launch(path):
         group_prefab_var.set(target.name)
         status_var.set('Préfab ajouté à la bibliothèque : '+target.name)
 
-    @guarded
-    def place_chosen_prefab(*, preview=False):
+    def _prefab_world_at(screen_pixel):
+        """Window-relative pointer to board coordinates in both map modes."""
+        x, y = screen_pixel
+        x, y = canvas.canvasx(x), canvas.canvasy(y)
+        if iso_var.get() and iso_geometry is not None:
+            cell = iso_geometry.hit_test(x, y)
+        else:
+            cell = (int(x // tile_size), int(y // tile_size))
+        if cell is None:
+            return None
+        board = _group_tree_mission()['board']
+        return cell if 0 <= cell[0] < board['width'] and 0 <= cell[1] < board['height'] else None
+
+    def clear_prefab_drag():
+        nonlocal prefab_drag_hover
+        prefab_drag_hover = None
+        canvas.delete('prefab_drag_preview')
+
+    def preview_prefab_at(prefab, anchor, *, drag=False):
+        """Pure preview; rejected placements turn red, never enter history."""
+        nonlocal prefab_drag_hover
+        target_tag = 'prefab_drag_preview' if drag else 'editor_group_preview'
+        hover_key = (prefab['name'], tuple(anchor), mission_var.get(),
+                     id(doc.data))
+        if drag and prefab_drag_hover == hover_key:
+            return
+        prefab_drag_hover = hover_key
+        try:
+            if battle is not None or source_pending():
+                raise RuleError('Terminer le playtest et appliquer le JSON.')
+            editing_context.preview(GroupPrefabPlaceCommand(prefab, tuple(anchor)))
+            color, message = '#36a16c', 'destination valide'
+        except (RuleError, ValueError, KeyError) as exc:
+            color, message = '#e05252', str(exc)
+        board = _group_tree_mission()['board']
+        cells = sorted(prefab_display_cells(prefab, anchor))
+        visible = (cell for cell in cells if 0 <= cell[0] < board['width']
+                   and 0 <= cell[1] < board['height'])
+        from itertools import islice
+        preview_cells(islice(visible, 512), tag=target_tag, color=color)
+        status_var.set(f'Préfab {prefab["name"]} : {message}')
+
+    def commit_prefab_at(prefab, anchor):
         nonlocal selected_group_id, selected_tiles, selected_cell
         if battle is not None or source_pending():
             raise RuleError('Terminer le playtest et appliquer le JSON.')
-        prefab = _chosen_prefab()
-        anchor = tuple(selected_cell)
-        command = GroupPrefabPlaceCommand(prefab, anchor)
-        if preview:
-            try:
-                editing_context.preview(command)
-                color, note = '#36a16c', 'valide'
-            except RuleError as exc:
-                color, note = '#e05252', str(exc)
-            preview_cells(
-                tuple(sorted(prefab_display_cells(prefab, anchor)))[:512],
-                tag='editor_group_preview', color=color)
-            status_var.set(f'Prévisualisation préfab {prefab["name"]} : {note}')
-            return
-        old = {g['id'] for g in _group_tree_mission().get('editor_groups', ())}
+        before = {g['id'] for g in _group_tree_mission().get('editor_groups', ())}
+        command = GroupPrefabPlaceCommand(prefab, tuple(anchor))
+        # This uses exactly the existing typed authoring and undo transaction.
+        # A drag never dispatches a terrain-brush click.
         design_change(lambda: editing_context.execute(command, publish=False))
         mission = _group_tree_mission()
-        inserted = {g['id'] for g in mission.get('editor_groups', ())} - old
-        parents = [g['id'] for g in mission['editor_groups']
-                   if g['id'] in inserted and g['parent'] not in inserted]
-        selected_group_id = parents[0] if parents else None
-        if parents:
-            selected_tiles = set().union(
-                *(group_display_cells(mission, gid) for gid in parents))
+        created = {g['id'] for g in mission.get('editor_groups', ())} - before
+        roots = [g['id'] for g in mission['editor_groups']
+                 if g['id'] in created and g['parent'] not in created]
+        selected_group_id = roots[0] if roots else None
+        selected_tiles = set().union(
+            *(group_display_cells(mission, gid) for gid in roots))
+        selected_cell = tuple(anchor)
+        clear_prefab_drag()
         refresh()
         if selected_group_id and group_tree.exists('g:'+selected_group_id):
             group_tree.selection_set('g:'+selected_group_id)
-        status_var.set(f'Préfab {prefab["name"]} inséré sur la carte ; '
-                       'annulation disponible.')
+        status_var.set(f'Préfab {prefab["name"]} placé en {tuple(anchor)} '
+                       '— Annuler/Rétablir disponibles.')
 
+    @guarded
+    def place_chosen_prefab(*, preview=False):
+        prefab = _chosen_prefab()
+        if preview:
+            preview_prefab_at(prefab, tuple(selected_cell))
+        else:
+            commit_prefab_at(prefab, tuple(selected_cell))
+
+    def palette_prefab_hover(filename, screen_pixel):
+        anchor = _prefab_world_at(screen_pixel)
+        if anchor is None:
+            clear_prefab_drag()
+            return
+        try:
+            prefab = load_group_prefab(_prefab_library() / filename)
+        except (RuleError, ValueError, OSError):
+            clear_prefab_drag()
+            return
+        preview_prefab_at(prefab, anchor, drag=True)
+
+    @guarded
+    def palette_prefab_drop(filename, screen_pixel):
+        anchor = _prefab_world_at(screen_pixel)
+        if anchor is None:
+            raise RuleError('Déposer le préfab à l’intérieur de la carte.')
+        prefab = load_group_prefab(_prefab_library() / filename)
+        commit_prefab_at(prefab, anchor)
+
+    def _group_tree_mission():
     def _group_tree_mission():
         return next(m for m in doc.data['missions']
                     if m['id'] == mission_var.get())
