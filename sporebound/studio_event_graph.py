@@ -142,6 +142,10 @@ class EventGraphStudio:
             links, text='Ouvrir séquence',
             command=lambda: self.owner._run(self.open_linked_cinematic))
         self.cinematic_button.pack(side='left', padx=3)
+        self.create_cinematic_button = ttk.Button(
+            links, text='+ Cinématique tactique',
+            command=lambda: self.owner._run(self.create_tactical_cinematic))
+        self.create_cinematic_button.pack(side='left', padx=3)
         self.cinematic_box = ttk.Combobox(
             contextual, textvariable=self.cinematic_choice, width=37,
             state='readonly')
@@ -528,6 +532,8 @@ class EventGraphStudio:
             self._set_context_text(self._context_lines(self.context))
         self.preview_button.config(state='normal' if self.context else 'disabled')
         self.scene_button.config(state='normal' if self.context else 'disabled')
+        self.create_cinematic_button.config(
+            state='normal' if self.context else 'disabled')
         self.story_button.config(
             state='normal' if self.context and self.context['scene_id']
             else 'disabled')
@@ -556,6 +562,30 @@ class EventGraphStudio:
         from .studio_event_scene import show_event_scene
         show_event_scene(self, scenario=self.scenario_labels[self.preview_scenario.get()],
                          tick=int(self.preview_tick.get()))
+
+    def create_tactical_cinematic(self):
+        """One-click authoring through the existing validated Cinematic Studio."""
+        require(self.context is not None and self.owner.project is not None,
+                'Choisir un événement et ouvrir un projet de jeu')
+        from .cinematics import cinematic_template, tactical_event_target
+        studio = self.owner.cinematic_studio
+        event_id = self.context['event_id']
+        target = tactical_event_target(self.owner.mission(), event_id)
+        known = {clip['id'] for clip in self.owner.project.cinematics}
+        stem = ('cin_' + event_id)[:52]
+        cid = stem
+        suffix = 2
+        while cid in known:
+            cid = f"{stem}_{suffix}"
+            suffix += 1
+        clip = cinematic_template(
+            cid, 'Cinématique tactique : ' + event_id,
+            'tactical_event', target)
+        studio._apply(lambda data: data.setdefault('cinematics', []).append(clip))
+        studio.clip_id = cid
+        studio.refresh()
+        self._refresh_context()
+        self.notebook.select(studio.tab)
 
     def open_linked_story(self):
         require(self.context is not None and bool(self.context['scene_id']),
