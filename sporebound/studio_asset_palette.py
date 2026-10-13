@@ -154,6 +154,8 @@ class AssetPalette:
             status, path = self.watercolor.status(sprite_id, verify=True)
             if status != 'ready':
                 label = ('Fichier PNG absent : pack V3 à publier' if status == 'missing'
+                         else 'Provenance SHA-256 absente : image non certifiée'
+                         if status == 'uncertified'
                          else 'PNG modifié : provenance SHA-256 incorrecte')
                 return None, label, 'assets/watercolor/' + sprite_id
             import tkinter as tk
