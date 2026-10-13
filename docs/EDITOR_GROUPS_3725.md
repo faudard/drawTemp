@@ -29,7 +29,10 @@ EditingContext. Pas de nouveau renderer ni de modèle parallèle à Mission.
    conservent le comportement de l'historique transversal.
 6. **Renommer** change le titre ; **Dissocier** supprime le groupe mais
    conserve toutes les ressources et rattache ses enfants à son parent.
-   Raccourci Ctrl+G : créer depuis la sélection actuelle.
+   **Retirer** dissocie uniquement les membres sélectionnés ; **Transférer**
+   déplace l'appartenance de ces membres depuis leur groupe précédent.
+   **Parent…** réorganise l'arbre (ID du parent, vide = racine), en refusant
+   les cycles. Raccourci Ctrl+G : créer depuis la sélection actuelle.
 
 ## Contrat des données
 
