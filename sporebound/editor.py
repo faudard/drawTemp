@@ -363,6 +363,7 @@ def launch(path):
         edited = (json.loads(source.get('1.0', 'end')) if source_pending()
                   else doc.data)
         original = doc.data
+        original_project = studio.project
         try:
             doc.data = Content.from_dict(
                 edited, rules=authored_rules_for_document(edited)).to_dict()
@@ -370,7 +371,11 @@ def launch(path):
             store.save(doc.data, studio.project.to_dict(),
                        expected_previous=disk_revisions)
         except Exception:
+            # A failed save must not silently apply unsaved fields or leave
+            # half an in-memory transaction. Inputs remain in their widgets
+            # so the designer can fix the issue and retry after recovery.
             doc.data = original
+            studio.project = original_project
             raise
         doc.saved = json.dumps(doc.data, sort_keys=True)
         current_path = store.content_path
