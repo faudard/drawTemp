@@ -125,7 +125,13 @@ class EditorRenderCacheTests(unittest.TestCase):
         self.assertEqual(self.renderer.stats['fast_path'], 'noop')
         self.assertEqual(self.canvas.find_all(), original_ids)
 
-        self.options['selected_cell'] = (25, 19)
+        # Pick an empty cell outside every structure so roof cutaway is
+        # unchanged; this is independent of future village layout changes.
+        buildings = self.renderer.geometry.architecture_instances
+        outside = next(cell for cell in self.renderer.geometry.draw_order
+                       if cell != (0, 0) and
+                       all(cell not in b.cells for b in buildings))
+        self.options['selected_cell'] = outside
         self.check_scene()
         self.assertEqual(self.renderer.stats['fast_path'], 'selection')
         self.options['selected_tiles'] = {(0, 0), (12, 10), (25, 19)}
