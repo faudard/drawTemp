@@ -266,7 +266,7 @@ def launch(path):
     def guarded(fn):
         def run(*args):
             try:
-                fn(*args)
+                return fn(*args)
             except (RuleError, OSError, ValueError, KeyError, StopIteration) as exc:
                 messagebox.showerror('Opération refusée', str(exc))
         return run
