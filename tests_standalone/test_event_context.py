@@ -172,5 +172,23 @@ class ContextualEventPreviewTests(unittest.TestCase):
 
 
 
+    def test_action_runtime_failure_is_reported_not_confused_with_unmet_gate(self):
+        data = event_composer.save_event(
+            self.data, self.mid, 'action_failure',
+            event_composer.condition('tick', tick=5),
+            [event_composer.action('message', text='Before failure'),
+             event_composer.action('despawn', unit='absent_runtime_actor')])
+        original = deepcopy(data)
+        report = event_context.preview_event(
+            data, self.mid, 'action_failure', scenario='satisfied')
+        self.assertTrue(report['fired'])
+        self.assertEqual(report['outcome'], 'error')
+        self.assertTrue(report['error'])
+        self.assertEqual(report['events'][0]['kind'], 'trigger')
+        self.assertEqual(report['events'][1]['kind'], 'message')
+        self.assertIn('ERREUR', '\n'.join(event_context.format_preview_report(report)))
+        self.assertEqual(data, original)
+
+
 if __name__ == '__main__':
     unittest.main()
