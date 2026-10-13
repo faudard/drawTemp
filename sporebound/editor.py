@@ -26,6 +26,7 @@ from .iso_architecture import (PIVOTS, ARCHITECTURE_NAMES, placement_origin,
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
+from .studio_transaction import StudioTransactionStore
 
 
 class Document:
@@ -215,6 +216,23 @@ def launch(path):
     root = tk.Tk()
     root.title('Sporebound — Atelier gameplay autonome')
     root.geometry('1280x850')
+    recovery = StudioTransactionStore(path)
+    if recovery.pending:
+        decision = messagebox.askyesnocancel(
+            'Sauvegarde Studio interrompue',
+            'Une écriture Content + GameProject a été interrompue.\n'
+            'Oui : terminer la sauvegarde.\n'
+            'Non : revenir aux fichiers précédents.\n'
+            'Annuler : quitter sans modifier les fichiers.')
+        if decision is None:
+            root.destroy()
+            return
+        try:
+            recovery.recover('complete' if decision else 'rollback')
+        except (RuleError, OSError, ValueError) as exc:
+            messagebox.showerror('Récupération refusée', str(exc))
+            root.destroy()
+            return
     raw = json.loads(Path(path).read_text(encoding='utf-8'))
     doc = Document(Content.from_dict(raw, rules=authored_rules_for_document(raw)))
     current_path = Path(path)
@@ -278,6 +296,8 @@ def launch(path):
         if source_pending() and not messagebox.askyesno('JSON non appliqué', 'Abandonner les modifications JSON non appliquées ?'):
             return
         fn()
+        if studio is not None and stroke_before is None:
+            studio.capture_history()
         battle = None
         refresh_source()
         refresh()
@@ -302,6 +322,8 @@ def launch(path):
     @guarded
     def save_doc():
         nonlocal current_path
+        if StudioTransactionStore(current_path).pending:
+            raise RuleError('Récupérer la sauvegarde Studio interrompue avant toute écriture')
         if source_pending():
             doc.replace(json.loads(source.get('1.0', 'end')))
         name = filedialog.asksaveasfilename(initialfile=current_path.name, defaultextension='.json', filetypes=[('JSON', '*.json')])
@@ -312,9 +334,64 @@ def launch(path):
             status_var.set(f'Projet enregistré : {name}')
 
     @guarded
+    def save_all():
+        """Validate and publish both Studio documents with recovery support."""
+        nonlocal current_path
+        if studio is None:
+            raise RuleError('Studio non initialisé')
+        store = StudioTransactionStore(current_path)
+        edited = (json.loads(source.get('1.0', 'end')) if source_pending()
+                  else doc.data)
+        original = doc.data
+        try:
+            doc.data = Content.from_dict(
+                edited, rules=authored_rules_for_document(edited)).to_dict()
+            studio.apply_project()
+            store.save(doc.data, studio.project.to_dict())
+        except Exception:
+            doc.data = original
+            raise
+        doc.saved = json.dumps(doc.data, sort_keys=True)
+        current_path = store.content_path
+        studio.project_path = store.project_path
+        studio.project_saved = json.dumps(studio.project.to_dict(), sort_keys=True)
+        studio.capture_history()
+        refresh_source()
+        refresh()
+        status_var.set('Contenu et projet enregistrés ensemble (récupération activée).')
+
+    @guarded
+    def undo_global():
+        nonlocal battle
+        if source_pending():
+            raise RuleError('Appliquer ou abandonner les modifications JSON avant annulation.')
+        if studio._pending_fields() and not messagebox.askyesno(
+                'Champs non appliqués', 'Abandonner les champs non appliqués ?'):
+            return
+        studio.undo_global()
+        battle = None
+        refresh_source()
+        refresh()
+
+    @guarded
+    def redo_global():
+        nonlocal battle
+        if source_pending():
+            raise RuleError('Appliquer ou abandonner les modifications JSON avant rétablissement.')
+        if studio._pending_fields() and not messagebox.askyesno(
+                'Champs non appliqués', 'Abandonner les champs non appliqués ?'):
+            return
+        studio.redo_global()
+        battle = None
+        refresh_source()
+        refresh()
+
+    @guarded
     def apply_json():
         nonlocal battle
         doc.replace(json.loads(source.get('1.0', 'end')))
+        if studio is not None:
+            studio.capture_history()
         battle = None
         refresh_source()
         refresh()
@@ -852,6 +929,8 @@ def launch(path):
                 doc.data = temporary.data
                 refresh_source()
                 refresh()
+        if stroke_before is not None and studio is not None:
+            studio.capture_history()
         stroke_cells = []
         stroke_before = None
         stroke_redo = None
@@ -1076,7 +1155,7 @@ def launch(path):
 
     bar = ttk.Frame(root)
     bar.pack(fill='x')
-    for label,cmd in [('Ouvrir',open_doc),('Enregistrer sous',save_doc),('Nouvelle mission',new_mission),('Carte vierge',blank_mission),('Annuler',guarded(lambda: design_change(doc.undo))),('Rétablir',guarded(lambda: design_change(doc.redo))),('Playtest',start),('Éditer',stop),('Sauver combat',save_game),('Charger combat',load_game)]:
+    for label,cmd in [('Ouvrir',open_doc),('Enregistrer sous',save_doc),('Enregistrer tout',save_all),('Nouvelle mission',new_mission),('Carte vierge',blank_mission),('Annuler',undo_global),('Rétablir',redo_global),('Playtest',start),('Éditer',stop),('Sauver combat',save_game),('Charger combat',load_game)]:
         ttk.Button(bar,text=label,command=cmd).pack(side='left',padx=2,pady=4)
     controls = ttk.Frame(root)
     controls.pack(fill='x')
