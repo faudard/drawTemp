@@ -99,6 +99,10 @@ def validate_story(raw, content, campaigns):
     """Strict authoring validation, no mutation and no unbounded scene chains."""
     require(isinstance(raw, dict), 'Story must be an object')
     if not raw:
+        require(not any(event.get('after_choice')
+                        for mission in content.missions.values()
+                        for event in mission.triggers),
+                'Choice-guarded tactical events require linked narrative scenes')
         return
     require(set(raw) <= {'scenes', 'entry_scenes', 'after_mission',
                          'after_strategic_event', 'during_tactical_event'}, 'Unknown story field')
@@ -201,6 +205,23 @@ def validate_story(raw, content, campaigns):
 
     for reference, scene_id in tactical.items():
         walk_tactical(scene_id, reference.split('/', 1)[0])
+    # A choice-guarded tactical trigger may only refer to a genuine choice
+    # reachable from a tactical narrative entry in the *same* mission.
+    # This keeps Battle recording independent of GameProject while rejecting
+    # dead and mistyped authoring branches when a project is loaded.
+    scene_choices = {row['id']: {c['id'] for c in row['choices']}
+                     for row in scenes}
+    for mission in content.missions.values():
+        for event in mission.triggers:
+            guard = event.get('after_choice')
+            if guard is None:
+                continue
+            require(guard['scene'] in scene_choices and
+                    guard['choice'] in scene_choices[guard['scene']],
+                    'Unknown narrative choice for tactical event ' + event['id'])
+            require(mission.id in reachable.get(guard['scene'], set()),
+                    'Tactical choice branch must be reachable from a '
+                    'linked scene in the same mission')
     for scene in scenes:
         for choice in scene['choices']:
             if 'tactical_effects' not in choice:

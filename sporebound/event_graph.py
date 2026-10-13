@@ -38,7 +38,8 @@ def update_condition(data, mission_id, event_id, condition):
             'Choose a valid trigger condition')
     event = deepcopy(_find_event(data, mission_id, event_id))
     # Editing the primary condition must not silently erase secondary predicates.
-    extras = {key: deepcopy(event[key]) for key in ('when', 'after')
+    extras = {key: deepcopy(event[key])
+              for key in ('when', 'after', 'after_any', 'after_choice')
               if key in event and key not in condition}
     event = {'id': event_id, **deepcopy(condition), **extras,
              'actions': event['actions']}
@@ -140,12 +141,51 @@ def chain_descendants(data, mission_id, event_id):
         old_size = len(seen)
         for candidate in mission.get('triggers', []):
             if (candidate['id'] not in seen and
-                    any(ref in seen for ref in candidate.get('after', []))):
+                    any(ref in seen for ref in
+                        candidate.get('after', []) +
+                        candidate.get('after_any', []))):
                 seen.add(candidate['id'])
         if len(seen) == old_size:
             break
     return [deepcopy(row) for row in mission.get('triggers', [])
             if row['id'] in seen]
+
+
+def link_alternative(data, mission_id, event_id, predecessor_id):
+    """Convergent OR route; mutual exclusivity is safe and replayable."""
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    require(isinstance(predecessor_id, str) and
+            predecessor_id != event_id, 'Invalid alternative predecessor')
+    require(predecessor_id not in event.get('after', []) and
+            predecessor_id not in event.get('after_any', []),
+            'Duplicate alternative predecessor')
+    event.setdefault('after_any', []).append(predecessor_id)
+    return _save(data, mission_id, event_id, event)
+
+
+def unlink_alternative(data, mission_id, event_id, predecessor_id):
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    require(predecessor_id in event.get('after_any', []),
+            'Unknown alternative predecessor')
+    event['after_any'].remove(predecessor_id)
+    if not event['after_any']:
+        event.pop('after_any')
+    return _save(data, mission_id, event_id, event)
+
+
+def bind_choice(data, mission_id, event_id, scene_id, choice_id):
+    """Gate this one trigger by an authenticated Battle.story_choice."""
+    require(all(isinstance(value, str) and value
+                for value in (scene_id, choice_id)), 'Choose a scene and choice')
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    event['after_choice'] = {'scene': scene_id, 'choice': choice_id}
+    return _save(data, mission_id, event_id, event)
+
+
+def clear_choice(data, mission_id, event_id):
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    event.pop('after_choice', None)
+    return _save(data, mission_id, event_id, event)
 
 
 def composite_at(event, path=()):
@@ -265,7 +305,12 @@ def condition_summary(event):
     root += (' ET ' + composite_title(event['when'])
              if 'when' in event else '')
     if event.get('after'):
-        root += ' APRÈS ' + ', '.join(event['after'])
+        root += ' APRÈS (ET) ' + ', '.join(event['after'])
+    if event.get('after_any'):
+        root += ' APRÈS (OU) ' + ', '.join(event['after_any'])
+    if event.get('after_choice'):
+        guard = event['after_choice']
+        root += ' SI CHOIX ' + guard['scene'] + ' → ' + guard['choice']
     return root
 
 
@@ -457,12 +502,13 @@ def build_event_graph(data, mission_id, *, max_events=200, max_nodes=600):
         target = (event['id'], 'condition')
         if target not in available:
             continue
-        for predecessor in event.get('after', []):
-            source = last_action.get(predecessor)
-            if source in available:
-                edges.append(dict(source=source, target=target,
-                                  event_id=event['id'],
-                                  label='après événement'))
+        for field, label in (('after', 'après événement'),
+                             ('after_any', 'après un des événements')):
+            for predecessor in event.get(field, []):
+                source = last_action.get(predecessor)
+                if source in available:
+                    edges.append(dict(source=source, target=target,
+                                      event_id=event['id'], label=label))
     return dict(mission_id=mission_id, nodes=nodes, edges=edges,
                 truncated=truncated, total_events=len(triggers),
                 drawn_events=len({n['event_id'] for n in nodes}),

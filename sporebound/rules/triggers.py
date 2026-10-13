@@ -208,7 +208,7 @@ def dispatch(battle, *, observer=None, before_fire=None, fire_limit=None):
             (type(fire_limit) is int and 1 <= fire_limit <= 200),
             'Invalid event-debug step limit')
     events = battle.mission.triggers
-    cascades = any('after' in row for row in events)
+    cascades = any('after' in row or 'after_any' in row for row in events)
     fired_now = 0
     for pass_number in range(len(events) if cascades else 1):
         progressed = False
@@ -218,10 +218,27 @@ def dispatch(battle, *, observer=None, before_fire=None, fire_limit=None):
                 continue
             blocked = [ref for ref in trigger.get('after', ())
                        if ref not in battle.fired]
-            if blocked:
+            options = trigger.get('after_any', ())
+            alternate_missing = (list(options) if options and
+                                 not any(ref in battle.fired for ref in options)
+                                 else [])
+            if blocked or alternate_missing:
                 if observer is not None:
                     observer({'event_id': eid, 'state': 'waiting',
-                              'missing': blocked, 'pass': pass_number})
+                              'missing': blocked,
+                              'any_missing': alternate_missing,
+                              'pass': pass_number})
+                continue
+            guard = trigger.get('after_choice')
+            if guard and not any(
+                    row['kind'] == 'story_choice' and
+                    row.get('scene') == guard['scene'] and
+                    row.get('choice') == guard['choice']
+                    for row in battle.events):
+                if observer is not None:
+                    observer({'event_id': eid, 'state': 'choice_false',
+                              'choice': deepcopy(guard),
+                              'pass': pass_number})
                 continue
             if not battle.rules.trigger_conditions.get(
                     trigger['condition']).matches(battle, trigger):
