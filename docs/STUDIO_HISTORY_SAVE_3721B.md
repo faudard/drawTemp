@@ -45,7 +45,19 @@ de **revenir** aux fichiers précédents ou de **quitter sans rien modifier**.
 Le protocole vérifie les deux destinations et toutes les sources nécessaires
 AVANT de restaurer quoi que ce soit. Une modification externe, un fichier de
 récupération altéré ou une version inconnue bloque la récupération, sans
-écraser les preuves.
+écraser les preuves. Le dialogue de récupération est également proposé lors
+de l'ouverture d'un autre document contenant un journal.
+
+Pour prévenir la **perte de mises à jour**, l'éditeur conserve les empreintes
+SHA-256 des deux fichiers au dernier chargement/enregistrement réussi.
+« Enregistrer tout » refuse de réécrire une paire modifiée entre-temps par
+un autre processus. Le store vérifie encore la paire après préparation et
+chaque destination juste avant publication. Une collision tardive conserve
+le journal et nécessite une récupération contrôlée.
+
+Après un Undo global, les caches du storyboard et du renderer cinématique
+sont réinitialisés, les sons actifs sont arrêtés et la mission courante est
+recalée si la mission restaurée n'existe plus.
 
 Tant qu'un journal est présent, « Enregistrer tout » et les sauvegardes
 anciennes du Studio refusent d'écraser l'état interrompu.
@@ -62,9 +74,12 @@ invalidation redo, panne pendant la deuxième publication, rollback,
 rollforward, premier enregistrement interrompu, fichier externe modifié
 et backup corrompu.
 
-À vérifier en CI et Tk/Xvfb : créer une mission, modifier la configuration,
-annuler/rétablir, sauvegarder, rouvrir; simuler une panne, relancer puis
-choisir explicitement la récupération.
+La matrice Python teste les transactions et les conflits de fichiers.
+Le job Linux Tk/Xvfb exécute explicitement
+tests_standalone/test_studio_history_gui_3721b.py : créer une mission,
+modifier la configuration, annuler/rétablir et enregistrer les deux fichiers.
+La revue manuelle doit encore couvrir une panne réelle, le choix de
+récupération et la réouverture sous Windows/macOS.
 
 ## Limites
 
