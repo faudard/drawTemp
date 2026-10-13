@@ -130,6 +130,14 @@ class ProjectWorkspaceTab:
         selected = self.sidebar_tree.selection()
         if selected and not selected[0].startswith('group:'):
             self.open_key(selected[0])
+            return
+        # Enter from search should open the first visible hit when no tree
+        # selection survives filtering, rather than silently doing nothing.
+        for group in self.sidebar_tree.get_children(''):
+            matches = self.sidebar_tree.get_children(group)
+            if matches:
+                self.open_key(matches[0])
+                return
 
     def open_key(self, key):
         """Select a resource on the canonical Workspace before opening it."""
@@ -182,14 +190,15 @@ class ProjectWorkspaceTab:
             return
         current = tree.selection()
         selected = current[0] if current else ''
-        expanded = {key for key in tree.get_children('')
-                    if tree.item(key, 'open')}
-        for key in tree.get_children(''):
+        existing_groups = tree.get_children('')
+        expanded = {key for key in existing_groups if tree.item(key, 'open')}
+        initial = not existing_groups
+        for key in existing_groups:
             tree.delete(key)
         for (kind, title), (_, entries) in zip(GROUPS, signature):
             parent = 'group:' + kind
             tree.insert('', 'end', iid=parent, text=f'{title} ({len(entries)})',
-                        open=parent in expanded or not expanded)
+                        open=parent in expanded or initial)
             for key, label in entries:
                 tree.insert(parent, 'end', iid=key, text=label)
         tree._workspace_signature = signature
