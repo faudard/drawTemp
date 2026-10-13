@@ -974,7 +974,6 @@ def launch(path):
                 status_var.set(entry.label + ' : emplacement valide, cliquer pour poser.')
             return
         clear_placement_preview()
-        clear_placement_preview()
         if tool_var.get() in ('Structure', 'Déplacer structure', 'Dupliquer structure'):
             cursor = event_cell(event)
             if cursor is None:
@@ -1858,12 +1857,13 @@ def launch(path):
     canvas.bind('<Motion>',paste_preview)
     canvas.bind('<Leave>', lambda e: (clear_placement_preview(e),
                                             cancel_structure_drag(e)))
-    canvas.bind('<Escape>', cancel_structure_drag)
+    canvas.bind('<Escape>', lambda event: (
+        cancel_structure_drag(event), cancel_passage_placement()))
     canvas.bind('<Left>', lambda _e: nudge_selected_structure(-1, 0))
     canvas.bind('<Right>', lambda _e: nudge_selected_structure(1, 0))
     canvas.bind('<Up>', lambda _e: nudge_selected_structure(0, -1))
     canvas.bind('<Down>', lambda _e: nudge_selected_structure(0, 1))
-    canvas.bind('<Escape>', lambda _e: cancel_passage_placement())
+    # Escape handles both drag cancellation and passage placement above.
     canvas.bind('<Control-c>',lambda _e: copy_selection())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
