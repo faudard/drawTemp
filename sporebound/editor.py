@@ -628,7 +628,7 @@ def launch(path):
         entity_hover_key = None
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
                     'brush_preview', 'asset_ghost', 'entity_preview',
-                    'entity_ghost', 'entity_route'):
+                    'entity_ghost', 'entity_route', 'entity_source'):
             canvas.delete(tag)
 
     def paste_preview(event):
@@ -643,28 +643,49 @@ def launch(path):
                 return
             entry, facing, link, destination, team = entity_choice
             key = (id(doc.data), mission_var.get(), cell, entry.id, facing,
-                   link, destination, team, tile_size, iso_var.get())
+                   link, destination, team, entity_passage_entry,
+                   tile_size, iso_var.get())
             if key == entity_hover_key:
                 return
             clear_placement_preview()
             mission = next(m for m in doc.data['missions']
                            if m['id'] == mission_var.get())
-            from .entity_palette import preview_entity_placement, OBJECT_PROP_HINTS
-            feedback = preview_entity_placement(
-                doc.data, mission_var.get(), entry.id, cell, facing=facing,
-                link=link, destination=destination, team=team)
+            from .entity_palette import (
+                preview_entity_placement, preview_passage_source)
+            is_passage = entry.id == 'object:passage' and destination is None
+            if is_passage and entity_passage_entry is None:
+                feedback = preview_passage_source(doc.data, mission_var.get(), cell)
+            elif is_passage:
+                feedback = preview_entity_placement(
+                    doc.data, mission_var.get(), entry.id, entity_passage_entry,
+                    facing=facing, link=link, destination=cell, team=team)
+            else:
+                feedback = preview_entity_placement(
+                    doc.data, mission_var.get(), entry.id, cell, facing=facing,
+                    link=link, destination=destination, team=team)
             entity_hover_key = key
             color = '#36a16c' if feedback.allowed else '#e05252'
-            inside = [c for c in feedback.cells
+            indicated_cells = (cell,) if is_passage and entity_passage_entry is not None else feedback.cells
+            inside = [c for c in indicated_cells
                       if 0 <= c[0] < mission['board']['width']
                       and 0 <= c[1] < mission['board']['height']]
+            if is_passage and entity_passage_entry is not None:
+                if iso_var.get() and iso_geometry is not None:
+                    x1, y1 = iso_geometry.center(entity_passage_entry)
+                    x2, y2 = iso_geometry.center(cell)
+                else:
+                    x1, y1 = ((p + .5)*tile_size for p in entity_passage_entry)
+                    x2, y2 = ((p + .5)*tile_size for p in cell)
+                canvas.create_line(x1, y1, x2, y2, fill=color, width=3,
+                                   arrow='last', dash=(5, 3), tags='entity_route')
+                preview_cells((entity_passage_entry,), tag='entity_source',
+                              color='#2361ff')
             if iso_var.get() and iso_geometry is not None and inside:
                 cx, cy = iso_geometry.center(cell)
                 if entry.kind in ('actor', 'archetype'):
                     photo = actor_atlas.sprite(entry.style, facing, 0, tile_size)
                 else:
-                    photo = iso_props.sprite(
-                        OBJECT_PROP_HINTS[entry.id.partition(':')[2]], tile_size)
+                    photo = object_atlas.sprite(entry.id.partition(':')[2], tile_size)
                 if photo is not None:
                     canvas.create_image(cx, cy + tile_size * 18 / 54,
                                         image=photo, anchor='s',
@@ -676,6 +697,10 @@ def launch(path):
             preview_cells(inside, tag='entity_preview', color=color)
             if not feedback.allowed:
                 status_var.set('Placement refusé : ' + feedback.reason)
+            elif is_passage:
+                status_var.set('Passage : cliquer la ' +
+                               ('sortie' if entity_passage_entry is not None
+                                else 'case d’entrée') + '.')
             else:
                 status_var.set(entry.label + ' : emplacement valide, cliquer pour poser.')
             return
