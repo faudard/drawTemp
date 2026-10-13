@@ -30,6 +30,7 @@ from sporebound.model import Content
 from sporebound.presentation import Camera, battle_frame
 from sporebound.tk_renderer import CanvasRenderer
 from sporebound.visual_motion import MotionDirector
+from scripts.profile_scale_3732 import resident_set
 
 CONTENT = Path(__file__).resolve().parents[1] / "sporebound" / "content"
 
@@ -103,7 +104,10 @@ def measure(frame, registry, *, cell_size=52, frames=120, pan=False):
             item_count = len(canvas.find_all())
         _current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
+        rss, rss_kind = resident_set()
         return {
+            "process_rss_bytes": rss,
+            "rss_kind": rss_kind,
             "p50_ms": round(quantile(samples, 0.5), 3),
             "p95_ms": round(quantile(samples, 0.95), 3),
             "p99_ms": round(quantile(samples, 0.99), 3),
