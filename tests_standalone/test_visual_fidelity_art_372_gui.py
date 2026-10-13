@@ -32,7 +32,9 @@ def signature(canvas, *, shift=(0, 0)):
         coords = canvas.coords(item)
         local = tuple(round(v - shift[index % 2], 2)
                       for index, v in enumerate(coords))
-        tags = tuple(canvas.gettags(item))
+        # Tk automatically adds 'current' to the pointer-hovered item.
+        # It is ephemeral UI state, not a source scene/compositing difference.
+        tags = tuple(tag for tag in canvas.gettags(item) if tag != 'current')
         if kind == 'image':
             image = canvas.itemcget(item, 'image')
             width = int(canvas.tk.call('image', 'width', image))
