@@ -3354,22 +3354,33 @@ def launch(path):
         mission_var.set(mid)
         stop()
 
-    def focus_workspace_map(mid, cell, *, show_map=True):
+    def focus_workspace_map(mid, cell, *, show_map=True, group_id=None):
         nonlocal selected_cell, selected_group_id
         if not show_map and battle is not None:
             return  # Inspecting a project reference never cancels playtest.
         if mid != mission_var.get() or show_map and battle is not None:
             select_workspace_mission(mid)
         validate_selection(doc.data, mid, [tuple(cell)])
-        # Navigating a diagnostic must replace, not compound, an old
-        # multi-selection or hierarchical group brush selection.
+        # Map and project tree share the exact same persistent group identity.
+        # Do not treat a group as merely its first tile.
         selected_tiles.clear()
         selected_group_id = None
+        if group_id is not None:
+            group_mission = next(m for m in doc.data['missions']
+                                 if m['id'] == mid)
+            descendants = descendant_groups(group_mission, group_id)
+            if not descendants:
+                raise RuleError('Groupe introuvable : ' + group_id)
+            selected_group_id = group_id
+            selected_tiles.update(group_display_cells(group_mission, group_id))
         selected_cell = tuple(cell)
-        editing_context.selection.set(mid, selected_cell, publish=False)
+        editing_context.selection.set(mid, selected_cell, selected_tiles,
+                                      publish=False)
         if show_map:
             notebook.select(work)
-        refresh()
+        refresh(selection_only=True)
+        if group_id is not None and group_tree.exists('g:' + group_id):
+            group_tree.selection_set('g:' + group_id)
         # A diagnostic must reveal the object, not just update its ID.
         # Use the same coordinate projection as the active map renderer.
         if iso_var.get() and iso_geometry is not None:
