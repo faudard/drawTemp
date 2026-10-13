@@ -600,6 +600,11 @@ class Battle:
             require(command.get("unit", u.id) == u.id, "Not this unit's turn")
             self.rules.commands.get(command.get("kind")).execute(self, u, command)
             self.commands.append(deepcopy(command))
+            # Interaction events are observable immediately by the Player.
+            # Trigger predicates/actions still belong to the canonical rule
+            # dispatcher (the subsequent turn advance remains idempotent).
+            if command.get("kind") == "interact":
+                triggers.dispatch(self)
             self._outcome()
             if not self.result and self.active and not self.active.alive:
                 self.active_id = None
