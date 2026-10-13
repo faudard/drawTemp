@@ -84,12 +84,12 @@ class EditorHierarchyTests(unittest.TestCase):
         self.assertIn((8, 8), group_display_cells(self.mission(child),
                                                   'group_1'))
         moved = move_editor_group(child, self.MID, 'group_1', 1, 0)
-        self.assertEqual(self.mission(moved)['objects'][0]['pos'], [9, 8])
+        self.assertEqual(tuple(self.mission(moved)['objects'][0]['pos']), (9, 8))
         self.assertEqual(self.groups(moved)[1]['parent'], 'group_1')
         self.assertEqual(self.groups(moved)[1]['cells'], [[9, 8]])
         ungrouped = delete_editor_group(moved, self.MID, 'group_1')
         self.assertEqual(self.groups(ungrouped)[0]['parent'], None)
-        self.assertEqual(self.mission(ungrouped)['objects'][0]['pos'], [9, 8])
+        self.assertEqual(tuple(self.mission(ungrouped)['objects'][0]['pos']), (9, 8))
 
     def test_reject_cycles_duplicate_members_and_invalid_references(self):
         parent = create_editor_group(self.base, self.MID, 'Root',
@@ -172,7 +172,7 @@ class EditorHierarchyTests(unittest.TestCase):
                               if s['id'] == sid)['anchor'], [11, 11])
         removed = remove_structure(moved, self.MID, (11, 11))
         self.assertEqual(self.groups(removed)[0]['structure_ids'], [])
-        self.assertEqual(len(self.mission(removed)['structures']), 0)
+        self.assertEqual(len(self.mission(removed).get('structures', [])), 0)
 
     def test_entity_delete_dissociates_reference_but_preserves_terrain(self):
         from sporebound.entity_editing import remove_entity
@@ -338,7 +338,7 @@ class EditorHierarchyTests(unittest.TestCase):
         copied_switch = groups[-1]['object_ids'][0]
         objects = {o['id']: o for o in self.mission(doc.data)['objects']}
         self.assertEqual(objects[copied_switch]['link'], copied_door)
-        self.assertEqual(objects[copied_switch]['pos'], [5, 9])
+        self.assertEqual(tuple(objects[copied_switch]['pos']), (5, 9))
         self.assertEqual(objects['switchA']['link'], 'gateA')
         self.assertEqual(original, raw)
         snapshot = deepcopy(doc.data)
@@ -359,10 +359,10 @@ class EditorHierarchyTests(unittest.TestCase):
         self.assertEqual(len(members), 1)
         self.assertNotEqual(members[0], original_actor['id'])
         units = {u['id']: u for u in self.mission(copied)['units']}
-        self.assertEqual(units[members[0]]['pos'],
-                         [original_actor['pos'][0]+2, original_actor['pos'][1]-1])
-        self.assertEqual(units[original_actor['id']]['pos'],
-                         original_actor['pos'])
+        self.assertEqual(tuple(units[members[0]]['pos']),
+                         (original_actor['pos'][0]+2, original_actor['pos'][1]-1))
+        self.assertEqual(tuple(units[original_actor['id']]['pos']),
+                         tuple(original_actor['pos']))
 
     def test_clone_structures_preserves_custom_tiles_underlay_and_undo(self):
         from sporebound.iso_structures import remove_structure
@@ -431,8 +431,8 @@ class EditorHierarchyTests(unittest.TestCase):
         self.assertNotEqual(copy_sid, sid)
         self.assertNotEqual(copy_actor, original_actor)
         self.assertEqual(mission['unit_levels'][copy_actor], 1)
-        self.assertEqual(next(x for x in mission['units']
-                              if x['id'] == copy_actor)['pos'], [13, 8])
+        self.assertEqual(tuple(next(x for x in mission['units']
+                              if x['id'] == copy_actor)['pos']), (13, 8))
         self.assertEqual(next(x for x in mission['structures']
                               if x['id'] == copy_sid)['anchor'], [12, 7])
         self.assertTrue(any(x['structure_id'] == copy_sid
