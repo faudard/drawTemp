@@ -14,7 +14,8 @@ from sporebound.editor_groups import (
     descendant_groups, group_display_cells, group_selection,
     move_editor_group, rename_editor_group, reparent_editor_group,
     remove_selection_from_group, transfer_selection_to_group,
-    check_tree_drop, drop_group_tree_item)
+    check_tree_drop, drop_group_tree_item,
+    selected_group_roots, move_editor_groups, duplicate_editor_groups)
 from sporebound.iso_structures import place_structure
 from sporebound.model import Content, RuleError
 
@@ -290,6 +291,143 @@ class EditorHierarchyTests(unittest.TestCase):
                     target_group_id=args[3]))
             self.assertEqual(doc.data, original)
             self.assertEqual(len(doc.undo_stack), count)
+
+    def test_multi_select_deduplicates_nested_groups_and_moves_once(self):
+        raw = create_editor_group(self.base, self.MID, 'Village',
+                                  cells=((3, 3),))
+        raw = create_editor_group(raw, self.MID, 'Jardin',
+                                  parent='group_1', cells=((4, 4),))
+        raw = create_editor_group(raw, self.MID, 'Pont',
+                                  cells=((7, 7),))
+        self.assertEqual(selected_group_roots(self.mission(raw),
+                                               ('group_1', 'group_2', 'group_3')),
+                         ('group_1', 'group_3'))
+        doc = Document(Content.from_dict(raw))
+        before = deepcopy(doc.data)
+        count = len(doc.undo_stack)
+        doc.replace(move_editor_groups(doc.data, self.MID,
+                                       ('group_1', 'group_2', 'group_3'), 0, 2))
+        groups = self.groups(doc.data)
+        self.assertEqual(groups[0]['cells'], [[3, 5]])
+        self.assertEqual(groups[1]['cells'], [[4, 6]])
+        self.assertEqual(groups[2]['cells'], [[7, 9]])
+        self.assertEqual(len(doc.undo_stack), count+1)
+        doc.undo()
+        self.assertEqual(doc.data, before)
+        doc.redo()
+        self.assertEqual(self.groups(doc.data)[1]['cells'], [[4, 6]])
+
+    def test_deep_clone_nested_groups_objects_and_internal_links(self):
+        raw = add_object(self.base, self.MID, 'gateA', 'door', (4, 4))
+        raw = add_object(raw, self.MID, 'switchA', 'switch', (5, 4),
+                         link='gateA')
+        raw = create_editor_group(raw, self.MID, 'Cour', cells=((4, 4),))
+        raw = create_editor_group(raw, self.MID, 'Levier',
+                                  parent='group_1', cells=((5, 4),))
+        original = deepcopy(raw)
+        doc = Document(Content.from_dict(raw))
+        doc.replace(duplicate_editor_groups(doc.data, self.MID,
+                                             ('group_1', 'group_2'), 0, 5))
+        groups = self.groups(doc.data)
+        self.assertEqual(len(groups), 4)
+        self.assertEqual(groups[-1]['parent'], groups[-2]['id'])
+        self.assertNotEqual(groups[-2]['id'], groups[0]['id'])
+        self.assertEqual(groups[-2]['cells'], [[4, 9]])
+        self.assertEqual(groups[-1]['cells'], [[5, 9]])
+        copied_door = groups[-2]['object_ids'][0]
+        copied_switch = groups[-1]['object_ids'][0]
+        objects = {o['id']: o for o in self.mission(doc.data)['objects']}
+        self.assertEqual(objects[copied_switch]['link'], copied_door)
+        self.assertEqual(objects[copied_switch]['pos'], [5, 9])
+        self.assertEqual(objects['switchA']['link'], 'gateA')
+        self.assertEqual(original, raw)
+        snapshot = deepcopy(doc.data)
+        doc.replace(duplicate_editor_groups(doc.data, self.MID,
+                                             ('group_1',), 0, 9))
+        self.assertEqual(len({g['id'] for g in self.groups(doc.data)}), 6)
+        self.assertEqual(len({o['id'] for o in
+                              self.mission(doc.data)['objects']}), 6)
+        doc.undo()
+        self.assertEqual(doc.data, snapshot)
+
+    def test_clone_actor_uses_new_id_without_moving_existing_actor(self):
+        original_actor = self.mission(self.base)['units'][0]
+        base = create_editor_group(self.base, self.MID, 'Patrouille',
+                                   cells=(tuple(original_actor['pos']),))
+        copied = duplicate_editor_groups(base, self.MID, ('group_1',), 2, -1)
+        members = self.groups(copied)[-1]['unit_ids']
+        self.assertEqual(len(members), 1)
+        self.assertNotEqual(members[0], original_actor['id'])
+        units = {u['id']: u for u in self.mission(copied)['units']}
+        self.assertEqual(units[members[0]]['pos'],
+                         [original_actor['pos'][0]+2, original_actor['pos'][1]-1])
+        self.assertEqual(units[original_actor['id']]['pos'],
+                         original_actor['pos'])
+
+    def test_clone_structures_preserves_custom_tiles_underlay_and_undo(self):
+        from sporebound.iso_structures import remove_structure
+        raw = place_structure(self.base, self.MID, 'Pont', (8, 8))
+        doc = Document(Content.from_dict(raw))
+        doc.paint_many(self.MID, ((8, 8),), 'feature:lantern')
+        cells = [(x, y) for y in range(8, 10) for x in range(8, 11)]
+        doc.replace(create_editor_group(doc.data, self.MID, 'Pont',
+                                         cells=cells))
+        before = deepcopy(doc.data)
+        doc.replace(duplicate_editor_groups(doc.data, self.MID, ('group_1',),
+                                             0, 6))
+        groups = self.groups(doc.data)
+        self.assertEqual(len(groups[-1]['structure_ids']), 1)
+        sid = groups[-1]['structure_ids'][0]
+        self.assertNotEqual(sid, groups[0]['structure_ids'][0])
+        new_structure = next(s for s in self.mission(doc.data)['structures']
+                             if s['id'] == sid)
+        self.assertEqual(new_structure['anchor'], [8, 14])
+        self.assertEqual(len(new_structure['underlay']), 6)
+        board = Content.from_dict(doc.data).missions[self.MID].board
+        self.assertEqual(board.tile((8, 14)).feature, 'lantern')
+        self.assertEqual(board.tile((8, 8)).feature, 'lantern')
+        removed = remove_structure(doc.data, self.MID, (8, 14))
+        self.assertEqual(Content.from_dict(removed).missions[self.MID]
+                         .board.tile((8, 14)).surface, 'grass')
+        doc.undo()
+        self.assertEqual(doc.data, before)
+
+    def test_multi_group_copy_rejects_collisions_and_invalid_offsets_atomically(self):
+        doc = Document(Content.from_dict(self.base))
+        doc.paint_many(self.MID, ((6, 6),), 'feature:tree')
+        doc.paint_many(self.MID, ((6, 8),), 'feature:boulder')
+        doc.replace(create_editor_group(doc.data, self.MID, 'Arbre',
+                                         cells=((6, 6),)))
+        snapshot = deepcopy(doc.data)
+        old_history = len(doc.undo_stack)
+        for offset in ((0, 0), (0, 2), (100, 0), (True, 1)):
+            with self.subTest(offset=offset), self.assertRaises(RuleError):
+                doc.replace(duplicate_editor_groups(
+                    doc.data, self.MID, ('group_1',), *offset))
+            self.assertEqual(doc.data, snapshot)
+            self.assertEqual(len(doc.undo_stack), old_history)
+
+    def test_deep_copy_uses_one_typed_preview_and_history_entry(self):
+        base = create_editor_group(self.base, self.MID, 'Maison',
+                                   cells=((3, 3),))
+        doc = Document(Content.from_dict(base))
+        ctx = EditingContext(doc, lambda: self.MID)
+        from sporebound.editor_architecture import EditorGroupBatchCommand
+        command = EditorGroupBatchCommand(('group_1',), 2, 2,
+                                           duplicate=True)
+        snapshot = deepcopy(doc.data)
+        count = len(doc.undo_stack)
+        prepared = ctx.preview(command)
+        self.assertEqual(doc.data, snapshot)
+        self.assertEqual(len(doc.undo_stack), count)
+        notice = ctx.apply(prepared)
+        self.assertEqual(notice.kind, 'editor-groups')
+        self.assertEqual(len(doc.undo_stack), count + 1)
+        self.assertEqual(self.groups(doc.data)[1]['cells'], [[5, 5]])
+        doc.undo()
+        self.assertEqual(doc.data, snapshot)
+        doc.redo()
+        self.assertEqual(self.groups(doc.data)[1]['cells'], [[5, 5]])
 
     def test_preview_is_side_effect_free_and_stale_preview_is_rejected(self):
         raw = create_editor_group(self.base, self.MID, 'Atelier',
