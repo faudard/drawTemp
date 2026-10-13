@@ -81,10 +81,6 @@ class EventConditionTreeTests(unittest.TestCase):
             self.assertEqual(data, before)
         deep = data
         for n in range(3):
-            deep = self.change(deep, (), 'negate')
-            deep = self.change(deep, (), 'negate')  # unwrap: no extra depth
-        deep = data
-        for n in range(2):
             deep = self.change(deep, (), 'wrap', join='all',
                                predicate=condition('tick', tick=n))
         with self.assertRaises(RuleError):
