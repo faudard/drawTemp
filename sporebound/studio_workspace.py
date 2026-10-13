@@ -157,19 +157,27 @@ class ProjectWorkspaceTab:
 
     @staticmethod
     def _populate_tree(tree, sections, shown):
+        # Painting a tile refreshes Studio. Rebuilding two complete Tk trees
+        # on every brush stroke causes visible flicker and wasted Tcl calls.
+        signature = tuple(
+            (kind, tuple((node.key, node.label) for node in sections[kind]
+                         if node.key in shown))
+            for kind, _title in GROUPS)
+        if getattr(tree, '_workspace_signature', None) == signature:
+            return
         current = tree.selection()
         selected = current[0] if current else ''
         expanded = {key for key in tree.get_children('')
                     if tree.item(key, 'open')}
         for key in tree.get_children(''):
             tree.delete(key)
-        for kind, title in GROUPS:
+        for (kind, title), (_, entries) in zip(GROUPS, signature):
             parent = 'group:' + kind
-            items = [node for node in sections[kind] if node.key in shown]
-            tree.insert('', 'end', iid=parent, text=f'{title} ({len(items)})',
+            tree.insert('', 'end', iid=parent, text=f'{title} ({len(entries)})',
                         open=parent in expanded or not expanded)
-            for node in items:
-                tree.insert(parent, 'end', iid=node.key, text=node.label)
+            for key, label in entries:
+                tree.insert(parent, 'end', iid=key, text=label)
+        tree._workspace_signature = signature
         if selected and tree.exists(selected):
             tree.selection_set(selected)
 
