@@ -25,8 +25,8 @@ EditingContext. Pas de nouveau renderer ni de modèle parallèle à Mission.
    persistantes complètes. Une case/entité ne peut appartenir directement
    qu'à un groupe ; dissocier l'ancien avant de réassigner.
 5. Régler ΔX/ΔY, cliquer **Aperçu** (vert = valide / rouge = refus), puis
-   **Déplacer**. Toute la hiérarchie bouge ensemble. Ctrl+Z / Ctrl+Y
-   conservent le comportement de l'historique transversal.
+   **Déplacer**. Toute la hiérarchie bouge ensemble. Les commandes
+   **Annuler / Rétablir** conservent l'historique transversal.
 6. **Renommer** change le titre ; **Dissocier** supprime le groupe mais
    conserve toutes les ressources et rattache ses enfants à son parent.
    **Retirer** dissocie uniquement les membres sélectionnés ; **Transférer**
