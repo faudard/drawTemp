@@ -125,11 +125,24 @@ class GameSession:
     def choose_tactical_story_option(self, choice_id):
         """Atomically apply canonical StoryBook choice and resume the Battle."""
         require(self.mode == "battle", "No standalone tactical dialogue")
-        previous = deepcopy((self.progress, self.tactical_story_pending,
+        require(self.battle is not None, 'Missing tactical battle')
+        previous = deepcopy((self.progress, self.battle,
+                             self.tactical_story_pending,
                              self.tactical_story_queue, self.finalized))
         try:
-            updated = self.story.choose(
-                self._tactical_story_progress(), choice_id)
+            projected = self._tactical_story_progress()
+            scene_id = projected.story_pending
+            selected = next((c for c in self.story.choices(projected)
+                             if c['id'] == choice_id), None)
+            require(selected is not None, 'Choice is unavailable')
+            updated = self.story.choose(projected, choice_id)
+            # Every tactical choice has a journal entry, including an empty
+            # tactical-effects list. This makes replay and story history agree.
+            self.battle.execute({
+                'kind': 'story_effects', 'scene': scene_id,
+                'choice': choice_id,
+                'effects': deepcopy(selected.get('tactical_effects', [])),
+            })
             next_scene = updated.story_pending
             updated.story_pending = ""
             self.progress = updated
@@ -140,7 +153,7 @@ class GameSession:
                 self._settle()
             return self.tactical_scene() if self.tactical_story_pending else None
         except Exception:
-            (self.progress, self.tactical_story_pending,
+            (self.progress, self.battle, self.tactical_story_pending,
              self.tactical_story_queue, self.finalized) = previous
             raise
 
@@ -304,6 +317,9 @@ class GameSession:
 
     def execute(self, command):
         require(self.active_battle is not None, "No tactical combat")
+        require(isinstance(command, dict)
+                and command.get('kind') != 'story_effects',
+                'Story effects must come from a validated narrative choice')
         require(not self.progress.story_pending and not self.tactical_story_pending,
                 "Resolve pending dialogue first")
         before_fired = set(self.active_battle.fired) if self.fronts is None else set()
@@ -559,6 +575,39 @@ class GameSession:
                             and ref.split("/", 1)[1] in session.battle.fired
                             for ref in session.story.during_tactical_event),
                         "Pending tactical dialogue has no fired origin")
+            # Recorded narrative actions must correspond to real authored
+            # choices, not arbitrary Battle commands injected into the journal.
+            # Every post-3.7.21F tactical choice writes one story_effects command.
+            decisions = [cmd for cmd in session.battle.commands
+                         if cmd.get('kind') == 'story_effects']
+            history = session.progress.story_history
+            require(len(decisions) <= len(history),
+                    'Battle story decisions exceed campaign history')
+            if decisions:
+                require(history[-len(decisions):] == [
+                    {'scene': cmd['scene'], 'choice': cmd['choice']}
+                    for cmd in decisions], 'Battle story decisions mismatch campaign history')
+                permitted = set()
+                def visit(scene_id):
+                    if scene_id in permitted:
+                        return
+                    permitted.add(scene_id)
+                    for choice in session.story.scenes[scene_id]['choices']:
+                        dest = choice.get('next_scene')
+                        if dest:
+                            visit(dest)
+                for reference, root in session.story.during_tactical_event.items():
+                    mid, trigger_id = reference.split('/', 1)
+                    if mid == session.battle.mission.id and trigger_id in session.battle.fired:
+                        visit(root)
+                for cmd in decisions:
+                    require(cmd['scene'] in permitted,
+                            'Story choice was not reached by a tactical event')
+                    authored = next((c for c in session.story.scenes[cmd['scene']]['choices']
+                                    if c['id'] == cmd['choice']), None)
+                    require(authored is not None and
+                            authored.get('tactical_effects', []) == cmd['effects'],
+                            'Replayed tactical effects differ from authored choice')
         else:
             require(isinstance(data["tactical"], dict) and not data["finalized"],
                     "Invalid multi-front state")
