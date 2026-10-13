@@ -71,7 +71,7 @@ class VisualBranchWizardGUITests(unittest.TestCase):
                     self.assertIn('CHOIX parley', report.get('1.0', 'end'))
                     buttons['Créer sur la carte'].invoke()
                     root.update()
-                    self.assertFalse(wizard.winfo_exists())
+                    self.assertFalse(wizard.winfo_exists(), errors.call_args_list)
                     all_buttons = {w.cget('text'): w for w in descendants(root)
                                    if isinstance(w, ttk.Button)}
                     all_buttons['Enregistrer tout'].invoke()
