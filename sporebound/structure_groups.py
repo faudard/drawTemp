@@ -28,7 +28,7 @@ def transform_structure_group(data, mission_id, cells, dx, dy, *,
                               duplicate=False):
     """Translate/copy all selected structures as one validated transaction.
 
-    Removing all original footprints up front allows adjacent buildings to
+    Restoring all saved original underlays first allows adjacent buildings to
     move together or partially overlap their previous positions. Validation
     covers all destinations before any new stamp is applied.
     """
@@ -44,14 +44,12 @@ def transform_structure_group(data, mission_id, cells, dx, dy, *,
     prepared = deepcopy(data)
     mission = _mission(prepared, mission_id)
     if not duplicate:
-        old_cells = set().union(*(item.cells for item in originals))
-        ids = {item.id for item in originals if item.id}
-        mission['structures'] = [
-            record for record in mission.get('structures', ())
-            if record['id'] not in ids]
-        mission['board']['tiles'] = [
-            tile for tile in mission['board']['tiles']
-            if tuple(tile['pos']) not in old_cells]
+        from .structure_underlay import restore_footprint
+        # Restore ALL source grounds before capturing any destination.
+        # This preserves river/road tiles during partially overlapping moves
+        # and avoids saving an adjacent building stamp as the new underlay.
+        for item in originals:
+            restore_footprint(mission, item)
     scene = Content.from_dict(prepared).missions[mission_id]
     occupied = set()
     for item in architecture_instances(scene.board, scene.structures):
