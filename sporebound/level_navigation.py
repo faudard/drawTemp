@@ -147,3 +147,60 @@ def navigate_level(battle, unit, *, level, cell):
     battle.emit('level_move', unit=unit.id, start=list(current),
                 end=list(destination), path=[list(p) for p in path], cost=cost)
     return cost
+
+
+def add_level_link(data, mission_id, source, destination, *, cost=1):
+    """Create a bidirectional stair connector without editing raw JSON."""
+    from copy import deepcopy
+    from .model import Content
+    require(type(source) in (list, tuple) and type(destination) in (list, tuple)
+            and all(type(v) is int for v in (*source, *destination))
+            and len(source) == len(destination) == 3,
+            'Expected endpoints [level, x, y]')
+    updated = deepcopy(data)
+    mission = next((m for m in updated['missions'] if m['id'] == mission_id), None)
+    require(mission is not None, 'Unknown mission')
+    rows = mission.setdefault('level_links', [])
+    existing = {row['id'] for row in rows}
+    index = 1
+    while 'stair_' + str(index) in existing:
+        index += 1
+    rows.append({'id': 'stair_' + str(index),
+                 'from': list(source), 'to': list(destination),
+                 'cost': cost})
+    return Content.from_dict(updated).to_dict()
+
+
+def remove_level_link(data, mission_id, connector_id):
+    from copy import deepcopy
+    from .model import Content
+    updated = deepcopy(data)
+    mission = next((m for m in updated['missions'] if m['id'] == mission_id), None)
+    require(mission is not None, 'Unknown mission')
+    links = mission.get('level_links', [])
+    require(any(x['id'] == connector_id for x in links),
+            'Unknown level connector')
+    mission['level_links'] = [row for row in links if row['id'] != connector_id]
+    return Content.from_dict(updated).to_dict()
+
+
+def place_unit_on_level(data, mission_id, unit_id, level, cell):
+    """Author an upper-floor spawn without changing any other unit's position."""
+    from copy import deepcopy
+    from .model import Content
+    require(type(level) is int and 0 <= level <= MAX_INTERIOR_LEVEL,
+            'Invalid unit spawn level')
+    require(type(cell) in (list, tuple) and len(cell) == 2
+            and all(type(v) is int for v in cell), 'Invalid spawn position')
+    updated = deepcopy(data)
+    mission = next((m for m in updated['missions'] if m['id'] == mission_id), None)
+    require(mission is not None, 'Unknown mission')
+    unit = next((u for u in mission['units'] if u['id'] == unit_id), None)
+    require(unit is not None, 'Unknown unit')
+    unit['pos'] = list(cell)
+    levels = mission.setdefault('unit_levels', {})
+    if level:
+        levels[unit_id] = level
+    else:
+        levels.pop(unit_id, None)
+    return Content.from_dict(updated).to_dict()
