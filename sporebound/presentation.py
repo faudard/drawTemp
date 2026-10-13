@@ -92,6 +92,7 @@ class BattleFrame:
     timeline: tuple[dict, ...] = ()
     casts: tuple[dict, ...] = ()
     charges: tuple[dict, ...] = ()
+    squads: tuple[dict, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -149,7 +150,8 @@ def battle_frame(battle, selected=None, skill=None):
         danger=tuple(deepcopy(intel["danger"])),
         timeline=tuple(deepcopy(intel["timeline"])),
         casts=tuple(deepcopy(intel["casts"])),
-        charges=tuple(deepcopy(intel["charges"])))
+        charges=tuple(deepcopy(intel["charges"])),
+        squads=tuple(deepcopy(intel["squads"])))
 
 
 def strategy_frame(fronts):

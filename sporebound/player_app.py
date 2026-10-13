@@ -850,6 +850,15 @@ class PlayerApplication:
                   ("cast", "Sort programmé"),
                   ("prepared", "Réaction armée"),
                   ("charge", "Charge possible (non garantie)"))
+        if frame.squads:
+            rows.extend(["", "Intentions d'escouade ennemie (possibles)"])
+            for squad in frame.squads:
+                stance = (squad["formation"] +
+                          (" active" if squad["formation_active"] else " non active"))
+                goal = (" / zone " + str(squad["goal_cells"])
+                        if squad["goal_cells"] else "")
+                rows.append(squad["unit"] + " : " + squad["role"] +
+                            " / " + squad["intent"] + " / " + stance + goal)
         rows.extend(["", "Menaces visibles"])
         rows.extend(f"{title} : {len(threats[kind])} cases"
                     for kind, title in labels if threats.get(kind))

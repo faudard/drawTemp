@@ -736,7 +736,7 @@
           "skills": []
         }
       ],
-      "objective": "eliminate",
+      "objective": "extract",
       "reward": 25,
       "next_missions": [],
       "triggers": [
@@ -751,6 +751,20 @@
             }
           ]
         }
+      ],
+      "goal": [
+        [
+          7,
+          2
+        ],
+        [
+          7,
+          3
+        ],
+        [
+          7,
+          4
+        ]
       ]
     },
     {
@@ -873,7 +887,10 @@
           "attack": 7,
           "speed": 8,
           "weapon_power": 2,
-          "skills": []
+          "skills": [],
+          "tags": [
+            "squad:vanguard"
+          ]
         },
         {
           "id": "arbaletrier_pont",
@@ -892,10 +909,13 @@
           "weapon": "ranged",
           "attack_range": 3,
           "min_range": 2,
-          "attack_range_mode": "los"
+          "attack_range_mode": "los",
+          "tags": [
+            "squad:archer"
+          ]
         }
       ],
-      "objective": "eliminate",
+      "objective": "hold",
       "reward": 25,
       "next_missions": [],
       "triggers": [
@@ -910,7 +930,18 @@
             }
           ]
         }
-      ]
+      ],
+      "goal": [
+        [
+          3,
+          3
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "target_ticks": 35
     },
     {
       "id": "a1_03_hospice",
