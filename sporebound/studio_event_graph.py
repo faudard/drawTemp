@@ -142,6 +142,10 @@ class EventGraphStudio:
             links, text='Ouvrir séquence',
             command=lambda: self.owner._run(self.open_linked_cinematic))
         self.cinematic_button.pack(side='left', padx=3)
+        self.create_cinematic_button = ttk.Button(
+            links, text='+ Cinématique tactique',
+            command=lambda: self.owner._run(self.create_tactical_cinematic))
+        self.create_cinematic_button.pack(side='left', padx=3)
         self.cinematic_box = ttk.Combobox(
             contextual, textvariable=self.cinematic_choice, width=37,
             state='readonly')
@@ -494,14 +498,21 @@ class EventGraphStudio:
         for index, action in enumerate(context['actions']):
             prefix = '→' if index == self.action_index else '·'
             lines.append(f" {prefix} {index + 1}. {action}")
+        lines.append('Dialogue déclenché pendant la bataille : ' +
+                     (context['tactical_scene_id'] or 'aucun'))
         lines.append('Scène après victoire (mission) : ' +
                      (context['scene_id'] or 'aucune'))
         clips = context['cinematics']
-        lines.append('Cinématiques associées à la mission / scène : ' +
-                     (', '.join(c['id'] + ' (' + c['stage'] + ')' for c in clips)
-                      if clips else 'aucune'))
-        lines.append('Attention : les liens sont des déclenchements de mission '
-                     'ou de scène, pas de cet événement tactique.')
+        direct = [c for c in clips if c['scope'] == 'event']
+        contextual = [c for c in clips if c['scope'] != 'event']
+        lines.append('Cinématiques jouées au déclenchement tactique : ' +
+                     (', '.join(c['id'] for c in direct) if direct else 'aucune'))
+        lines.append('Cinématiques de mission / scène (cycle séparé) : ' +
+                     (', '.join(c['id'] + ' (' + c['stage'] + ')' for c in contextual)
+                      if contextual else 'aucune'))
+        lines.append('Le Player joue les cinématiques tactiques au premier '
+                     'déclenchement réel. Les scènes narratives de victoire '
+                     'restent des transitions de campagne.')
         return lines
 
     def _set_context_text(self, lines, *, show_end=False):
@@ -523,8 +534,11 @@ class EventGraphStudio:
             self._set_context_text(self._context_lines(self.context))
         self.preview_button.config(state='normal' if self.context else 'disabled')
         self.scene_button.config(state='normal' if self.context else 'disabled')
+        self.create_cinematic_button.config(
+            state='normal' if self.context else 'disabled')
         self.story_button.config(
-            state='normal' if self.context and self.context['scene_id']
+            state='normal' if self.context and (
+                self.context['tactical_scene_id'] or self.context['scene_id'])
             else 'disabled')
         clips = self.context['cinematics'] if self.context else []
         labels = [c['id'] + ' — ' + c['stage'] for c in clips]
@@ -552,10 +566,37 @@ class EventGraphStudio:
         show_event_scene(self, scenario=self.scenario_labels[self.preview_scenario.get()],
                          tick=int(self.preview_tick.get()))
 
+    def create_tactical_cinematic(self):
+        """One-click authoring through the existing validated Cinematic Studio."""
+        require(self.context is not None and self.owner.project is not None,
+                'Choisir un événement et ouvrir un projet de jeu')
+        from .cinematics import cinematic_template, tactical_event_target
+        studio = self.owner.cinematic_studio
+        event_id = self.context['event_id']
+        target = tactical_event_target(self.owner.mission(), event_id)
+        known = {clip['id'] for clip in self.owner.project.cinematics}
+        stem = ('cin_' + event_id)[:52]
+        cid = stem
+        suffix = 2
+        while cid in known:
+            cid = f"{stem}_{suffix}"
+            suffix += 1
+        clip = cinematic_template(
+            cid, 'Cinématique tactique : ' + event_id,
+            'tactical_event', target)
+        studio._apply(lambda data: data.setdefault('cinematics', []).append(clip))
+        studio.clip_id = cid
+        studio.refresh()
+        self._refresh_context()
+        self.notebook.select(studio.tab)
+
     def open_linked_story(self):
-        require(self.context is not None and bool(self.context['scene_id']),
-                'Aucune scène narrative liée à cette mission')
-        self.owner.story_editor.select_graph_target(self.context['scene_id'])
+        require(self.context is not None and (
+            self.context['tactical_scene_id'] or self.context['scene_id']),
+            'Aucune scène narrative liée à cet événement ou mission')
+        target = (self.context['tactical_scene_id'] or
+                  self.context['scene_id'])
+        self.owner.story_editor.select_graph_target(target)
 
     def open_linked_cinematic(self):
         require(self.context is not None and bool(self.context['cinematics']),
