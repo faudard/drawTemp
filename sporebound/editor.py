@@ -678,6 +678,18 @@ def launch(path):
 
     def event_cell(event):
         px, py = canvas.canvasx(event.x), canvas.canvasy(event.y)
+        if (battle and iso_var.get() and iso_geometry is not None
+                and action_var.get() == 'level_move' and travel_level_var.get() > 0):
+            scene = battle.mission
+            for building in reversed(getattr(iso_geometry, 'architecture_instances', ())):
+                floor = next((row for row in scene.interior_floors
+                              if row['structure_id'] == building.id and
+                              row['level'] == travel_level_var.get()), None)
+                if floor is not None:
+                    found = floor_hit_test(iso_geometry, building, floor, px, py)
+                    if found is not None:
+                        return found
+            return None
         if (tool_var.get() == 'Étage intérieur' and iso_var.get()
                 and iso_geometry is not None):
             scene = Content.from_dict(doc.data).missions[mission_var.get()]
