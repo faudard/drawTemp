@@ -342,12 +342,35 @@ def place_group_prefab(data, mission_id, prefab, anchor):
         blocked.add(tuple(mission_before['relic']))
     require(not (local_tiles | planned_structures).intersection(blocked),
             'Prefab overlaps a mission objective or deployment zone')
+    occupied_actors = set()
+    for actor in mission_before['units']:
+        x, y = _point(actor['pos'])
+        w, h = actor.get('footprint', (1, 1))
+        floor = mission_before.get('unit_levels', {}).get(actor['id'], 0)
+        occupied_actors.update((floor, x+ix, y+iy)
+                               for ix in range(w) for iy in range(h))
+    copied_actors = set()
     for unit in prefab['units']:
-        world(unit['pos'])
+        x, y = world(unit['pos'])
+        w, h = unit.get('footprint', (1, 1))
+        floor = prefab['unit_levels'].get(unit['id'], 0)
+        footprint = {(floor, x+ix, y+iy)
+                     for ix in range(w) for iy in range(h)}
+        require(not footprint.intersection(occupied_actors | copied_actors),
+                'Prefab actor overlaps another actor on the same floor')
+        for _, tx, ty in footprint:
+            _cell(mission_before, (tx, ty))
+        copied_actors.update(footprint)
         for pos in unit.get('patrol_route', ()):
             world(pos)
+    occupied_objects = {tuple(item['pos']) for item in
+                        mission_before['objects']}
+    new_objects = set()
     for obj in prefab['objects']:
-        world(obj['pos'])
+        point = tuple(world(obj['pos']))
+        require(point not in occupied_objects and point not in new_objects,
+                'Prefab object overlaps another interactive object')
+        new_objects.add(point)
         if obj['kind'] == 'passage':
             world(obj['destination'])
         if obj['kind'] == 'defense':
