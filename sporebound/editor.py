@@ -57,6 +57,7 @@ from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
 from .studio_transaction import StudioTransactionStore
 from .performance_trace import begin_ui, finish_ui
+from .workspace_shell import inspect_map, LayoutStore, palette_source_for_tree
 
 
 class Document:
@@ -2381,7 +2382,14 @@ def launch(path):
                 heading = 'OBJET — ' + ', '.join(o['id'] for o in selected_objects)
             else:
                 heading = 'TERRAIN — case ' + str(selected_cell)
-            text = f'{heading}\n\n{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
+            # Switching to a smaller mission may invalidate the previous
+            # cursor position; keep the shared inspector on a valid tile.
+            if not board.contains(selected_cell):
+                selected_cell = (0, 0)
+            context = inspect_map(doc.data, mission_var.get(),
+                                  selected_cell, selected_tiles)
+            text = (context.title + '\n' + context.detail +
+                    f'\nObjectif : {mission.objective}\n')
             for actor in selected_units:
                 text += (f'Acteur {actor.id} • {actor.team} • '
                          f'PV {actor.hp}/{actor.max_hp} • CT {actor.ct}\n')
@@ -2494,6 +2502,11 @@ def launch(path):
             draw_minimap(board, mission, units)
         if studio is not None and (views is None or WORKSPACE in views):
             studio.refresh()
+            if studio.history is not None:
+                history_status.set(
+                    f'Historique Studio : {studio.history._cursor} modification(s) '
+                    f'· Annuler : {"oui" if studio.history.can_undo else "non"} '
+                    f'· Rétablir : {"oui" if studio.history.can_redo else "non"}')
         finish_ui("map.refresh", ui_started, canvas, counts={
             "map_cells": board.width * board.height,
             "cell_size": tile_size, "isometric": iso_var.get(),
@@ -2676,6 +2689,7 @@ def launch(path):
                 actors=actor_atlas, choose=choose_entity,
                 cell_size=lambda: tile_size, props=iso_props,
                 objects=object_atlas)
+            wire_drop(entity_palette.tree, 'entity')
         else:
             entity_palette.show()
 
@@ -2690,6 +2704,7 @@ def launch(path):
                 actors=actor_atlas, content=lambda: doc.data,
                 mission=mission_var.get,
                 entities=lambda: palette_entities(doc.data, mission_var.get()))
+            wire_drop(asset_palette.tree, 'asset')
         else:
             asset_palette.show()
 
@@ -3018,6 +3033,39 @@ def launch(path):
     canvas_region.add(bottom_panel, weight=1)
     journal = tk.Text(bottom_panel, wrap='word', height=7)
     bottom_panel.add(journal, text='Journal de combat')
+    history_panel = ttk.Frame(bottom_panel)
+    bottom_panel.add(history_panel, text='Historique')
+    history_status = tk.StringVar(value='Annuler / Rétablir : édition du contenu et du projet')
+    ttk.Label(history_panel, textvariable=history_status).pack(
+        anchor='w', padx=8, pady=5)
+    ttk.Button(history_panel, text='Annuler', command=undo_global).pack(
+        side='left', padx=8)
+    ttk.Button(history_panel, text='Rétablir', command=redo_global).pack(
+        side='left', padx=8)
+    console_panel = ttk.Frame(bottom_panel)
+    bottom_panel.add(console_panel, text='Console')
+    console_view = tk.Text(console_panel, height=6, wrap='word', state='disabled')
+    console_view.pack(fill='both', expand=True)
+    def append_console(*_args):
+        value = status_var.get().strip()
+        if not value:
+            return
+        console_view.configure(state='normal')
+        console_view.insert('end', value + '\n')
+        if int(console_view.index('end-1c').split('.')[0]) > 250:
+            console_view.delete('1.0', '40.0')
+        console_view.see('end')
+        console_view.configure(state='disabled')
+    status_var.trace_add('write', append_console)
+    simulation_panel = ttk.Frame(bottom_panel)
+    bottom_panel.add(simulation_panel, text='Simulation')
+    ttk.Label(simulation_panel,
+              text='Lancer le Player/Playtest existant ; aucune simulation parallèle.').pack(
+                  anchor='w', padx=8, pady=5)
+    ttk.Button(simulation_panel, text='Playtest', command=start).pack(
+        side='left', padx=8)
+    ttk.Button(simulation_panel, text='Retour à l’édition', command=stop).pack(
+        side='left', padx=8)
     help_panel = ttk.Frame(bottom_panel)
     bottom_panel.add(help_panel, text='Raccourcis et aide')
     ttk.Label(help_panel, text=(
@@ -3041,6 +3089,39 @@ def launch(path):
         mission_var.set(mid)
         stop()
 
+    def focus_workspace_map(mid, cell):
+        nonlocal selected_cell
+        select_workspace_mission(mid)
+        validate_selection(doc.data, mid, [tuple(cell)])
+        # Navigating a diagnostic must replace, not compound, an old
+        # multi-selection or hierarchical group brush selection.
+        selected_tiles.clear()
+        selected_cell = tuple(cell)
+        editing_context.selection.set(mid, selected_cell, publish=False)
+        notebook.select(work)
+        refresh()
+        # A diagnostic must reveal the object, not just update its ID.
+        # Use the same coordinate projection as the active map renderer.
+        if iso_var.get() and iso_geometry is not None:
+            cx, cy = iso_geometry.center(selected_cell)
+        else:
+            cx = (selected_cell[0] + 0.5) * tile_size
+            cy = (selected_cell[1] + 0.5) * tile_size
+        bounds = canvas.cget('scrollregion').split()
+        if len(bounds) == 4:
+            left, top, right, bottom = map(float, bounds)
+            width = max(canvas.winfo_width(), 1)
+            height = max(canvas.winfo_height(), 1)
+            if right - left > width:
+                canvas.xview_moveto(max(0.0, min(
+                    (cx - left - width/2) / (right-left),
+                    1 - width/(right-left))))
+            if bottom - top > height:
+                canvas.yview_moveto(max(0.0, min(
+                    (cy - top - height/2) / (bottom-top),
+                    1 - height/(bottom-top))))
+        canvas.focus_set()
+
     def on_project_saved(path):
         nonlocal disk_revisions
         canonical = current_path.with_suffix('.game.json').resolve()
@@ -3058,11 +3139,88 @@ def launch(path):
         design_change=design_change, play_campaign=start_campaign,
         status=status_var, mission_change=stop,
         select_mission=select_workspace_mission,
-        on_project_saved=on_project_saved, set_active_mission=mission_var.set)
+        on_project_saved=on_project_saved, set_active_mission=mission_var.set,
+        focus_map_cell=focus_workspace_map)
     studio.workspace.attach_navigator(sidebar)
+    studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
                command=lambda: notebook.select(studio.workspace.tab)).pack(
                    fill='x', padx=7, pady=(3, 8))
+    def wire_drop(tree, kind):
+        """Native Tk pointer gesture across Studio's existing Treeviews.
+
+        A drop invokes the same palette selection and canvas click as manual
+        placement, so validations, authoring history and undo are unchanged.
+        """
+        gesture = {}
+
+        def start(event):
+            gesture.clear()
+            row = tree.identify_row(event.y)
+            if row and not row.startswith('group:'):
+                gesture.update(row=row, x=event.x_root, y=event.y_root)
+
+        def finish(event):
+            row = gesture.get('row')
+            start_x, start_y = gesture.get('x'), gesture.get('y')
+            gesture.clear()
+            if not row or start_x is None:
+                return
+            if abs(event.x_root - start_x) + abs(event.y_root - start_y) < 12:
+                return
+            # Never interpret a release outside the visible tactical canvas.
+            x = event.x_root - canvas.winfo_rootx()
+            y = event.y_root - canvas.winfo_rooty()
+            if not (0 <= x < canvas.winfo_width() and
+                    0 <= y < canvas.winfo_height()):
+                return
+            if battle or source_pending():
+                messagebox.showerror('Placement indisponible',
+                                     'Quitter le playtest et valider le JSON.')
+                return
+            try:
+                if kind == 'asset':
+                    entry = asset_palette.entries.get(row)
+                    if entry is None or not choose_palette_asset(
+                            entry, asset_palette.turns):
+                        return
+                elif kind == 'entity':
+                    entry = entity_palette.entries.get(row)
+                    if entry is None or not choose_entity(
+                            entry, entity_palette.facing.get(),
+                            entity_palette.link.get(),
+                            entity_palette.destination.get(),
+                            entity_palette.team.get()):
+                        return
+                else:
+                    entry = palette_source_for_tree(
+                        row, doc.data, mission_var.get())
+                    link, destination = '', ''
+                    if row.startswith('map_object:'):
+                        mid, entity_id = row.partition(':')[2].split('/', 1)
+                        source_mission = next(
+                            m for m in doc.data['missions'] if m['id'] == mid)
+                        original = next(
+                            o for o in source_mission['objects']
+                            if o['id'] == entity_id)
+                        link = original.get('link', '')
+                        destination = original.get('destination', '')
+                    if not choose_entity(entry, 'south', link, destination,
+                                         entry.team or 'enemy'):
+                        return
+                from types import SimpleNamespace
+                gesture_event = SimpleNamespace(x=int(x), y=int(y), state=0)
+                click(gesture_event)
+                end_stroke(gesture_event)
+            except (RuleError, ValueError, KeyError, TypeError, StopIteration) as exc:
+                messagebox.showerror('Dépôt refusé', str(exc))
+
+        tree.bind('<ButtonPress-1>', start, add='+')
+        tree.bind('<ButtonRelease-1>', finish, add='+')
+
+    wire_drop(studio.workspace.tree, 'workspace')
+    wire_drop(studio.workspace.sidebar_tree, 'workspace')
+
     def focus_project_search(_event=None):
         notebook.select(work)
         entry = studio.workspace.sidebar_search
@@ -3080,11 +3238,54 @@ def launch(path):
             tool_var.get(), mission_var.get()))
 
     root.bind('<Control-f>', focus_project_search)
+    root.bind('<Control-Shift-p>',
+              lambda _e: studio.workspace.focus_problems())
+    root.bind('<Alt-KeyPress-3>',
+              lambda _e: studio.workspace.focus_problems())
     root.bind('<Alt-KeyPress-1>', lambda _event: notebook.select(work))
     root.bind('<Alt-KeyPress-2>',
               lambda _event: notebook.select(studio.workspace.tab))
     ttk.Label(root,textvariable=status_var).pack(fill='x')
-    root.protocol('WM_DELETE_WINDOW',lambda: root.destroy() if discard_ok() else None)
+
+    def layout_store():
+        return LayoutStore(current_path.with_suffix('.workspace.layout.json'))
+
+    def save_layout(_event=None):
+        try:
+            layout_store().save({
+                'outer_left': work.sashpos(0),
+                'outer_right': work.sashpos(1),
+                'vertical': canvas_region.sashpos(0),
+                'tab': notebook.tab(notebook.select(), 'text'),
+            })
+        except (OSError, ValueError, tk.TclError):
+            # UI preferences must never prevent authoring or saving gameplay.
+            pass
+
+    def restore_layout():
+        values = layout_store().load()
+        try:
+            if 'outer_left' in values and values['outer_left'] < work.winfo_width():
+                work.sashpos(0, values['outer_left'])
+            if 'outer_right' in values and values['outer_right'] < work.winfo_width():
+                work.sashpos(1, values['outer_right'])
+            if 'vertical' in values and values['vertical'] < canvas_region.winfo_height():
+                canvas_region.sashpos(0, values['vertical'])
+            for tab in notebook.tabs():
+                if notebook.tab(tab, 'text') == values.get('tab', 'Carte et combat'):
+                    notebook.select(tab)
+                    break
+        except tk.TclError:
+            pass
+
+    work.bind('<ButtonRelease-1>', save_layout, add='+')
+    canvas_region.bind('<ButtonRelease-1>', save_layout, add='+')
+    root.after_idle(restore_layout)
+    def close_editor():
+        if discard_ok():
+            save_layout()
+            root.destroy()
+    root.protocol('WM_DELETE_WINDOW', close_editor)
     refresh_source()
     refresh()
     root.mainloop()

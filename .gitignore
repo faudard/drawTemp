@@ -8,3 +8,7 @@ dist/
 saves/
 # Local editor state / temporary backups
 *_backup
+
+# UI-only Workspace splitter and tab preferences
+*.workspace.layout.json
+*.workspace.layout.json.tmp

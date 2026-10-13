@@ -17,6 +17,9 @@ GROUPS = (
     ('siege', 'Sièges multi-fronts'),
     ('strategic_event', 'Événements stratégiques'),
     ('mission', 'Cartes et missions'),
+    ('map_actor', 'Acteurs placés'),
+    ('map_object', 'Objets interactifs placés'),
+    ('editor_group', 'Groupes hiérarchiques'),
     ('scene', 'Scénarios et dialogues'),
     ('cinematic', 'Cinématiques'),
     ('actor', 'Personnages et monstres'),
@@ -86,6 +89,27 @@ class ProjectWorkspaceIndex:
                 f'{len(mission.units)} unités | {len(mission.objects)} objets'
                 f'\nObjectif : {mission.objective} | '
                 f'Suites : {", ".join(mission.next_missions) or "aucune"}'))
+        for mission in self.content.missions.values():
+            for actor in mission.units:
+                result['map_actor'].append(WorkspaceNode(
+                    'map_actor', mission.id + '/' + actor.id,
+                    actor.name + ' · ' + mission.name,
+                    f'Acteur {actor.id} | Camp : {actor.team} | Case : {actor.pos}'))
+            for obj in mission.objects:
+                result['map_object'].append(WorkspaceNode(
+                    'map_object', mission.id + '/' + obj['id'],
+                    obj['id'] + ' · ' + mission.name,
+                    f'Objet {obj["kind"]} | Case : {obj["pos"]} | '
+                    f'Référence : {obj.get("link", "") or "aucune"}'))
+        for mission in self.content.missions.values():
+            for group in mission.editor_groups:
+                members = (len(group['cells']) + len(group['unit_ids']) +
+                           len(group['object_ids']) + len(group['structure_ids']))
+                result['editor_group'].append(WorkspaceNode(
+                    'editor_group', mission.id + '/' + group['id'],
+                    group['name'] + ' · ' + mission.name,
+                    f'Groupe {group["id"]} | Parent : '
+                    f'{group["parent"] or "racine"} | Membres directs : {members}'))
         for scene in self.project.story.get('scenes', []):
             result['scene'].append(WorkspaceNode(
                 'scene', scene['id'], scene['title'],
