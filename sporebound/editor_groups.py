@@ -200,6 +200,77 @@ def transfer_selection_to_group(data, mission_id, group_id, cells):
     return _validate_document(updated)
 
 
+
+def check_tree_drop(mission, source_group_id, item_kind, *,
+                    member=None, target_group_id=None):
+    """Cheap drag-hover validation; never mutate a mission or an editor view.
+
+    Group changes parentage; cells transfers a batch of free tiles;
+    cell transfers one free tile; the *_ids kinds transfer one entity.
+    A None target means root: group -> unparent, member -> unlink.
+    """
+    groups = mission.get('editor_groups', [])
+    source = _group(groups, source_group_id)
+    require(item_kind in ('group', 'cells', 'cell', *_MEMBER_FIELDS),
+            'Unsupported group tree item')
+    if target_group_id is not None:
+        _group(groups, target_group_id)
+    if item_kind == 'group':
+        require(target_group_id != source_group_id, 'Cannot parent a group to itself')
+        require(source['parent'] != target_group_id,
+                'Group already has that parent')
+        parent_ids = {group['id'] for group in descendant_groups(
+            mission, source_group_id)}
+        require(target_group_id not in parent_ids,
+                'Cannot move a group into one of its descendants')
+    else:
+        require(target_group_id != source_group_id,
+                'Item already belongs to that group')
+        if item_kind == 'cells':
+            require(bool(source['cells']), 'The group has no free cells')
+        elif item_kind == 'cell':
+            require(isinstance(member, (list, tuple)) and len(member) == 2
+                    and all(type(n) is int for n in member)
+                    and list(member) in source['cells'],
+                    'Cell does not belong to source group')
+        else:
+            require(type(member) is str and member in source[item_kind],
+                    'Entity does not belong to source group')
+    return True
+
+
+def drop_group_tree_item(data, mission_id, source_group_id, item_kind, *,
+                         member=None, target_group_id=None):
+    """One validated ownership edit; never moves game entities or tiles.
+
+    Dragging a group keeps its descendants and their references intact.
+    Dragging an entity or a tile transfers membership, not map position.
+    """
+    current = _mission(data, mission_id)
+    check_tree_drop(current, source_group_id, item_kind, member=member,
+                    target_group_id=target_group_id)
+    updated = deepcopy(data)
+    groups = _groups(updated, mission_id)
+    source = _group(groups, source_group_id)
+    if item_kind == 'group':
+        source['parent'] = target_group_id
+    elif item_kind == 'cells':
+        payload = source['cells']
+        source['cells'] = []
+        if target_group_id is not None:
+            _group(groups, target_group_id)['cells'].extend(payload)
+    elif item_kind == 'cell':
+        payload = list(member)
+        source['cells'].remove(payload)
+        if target_group_id is not None:
+            _group(groups, target_group_id)['cells'].append(payload)
+    else:
+        source[item_kind].remove(member)
+        if target_group_id is not None:
+            _group(groups, target_group_id)[item_kind].append(member)
+    return _validate_document(updated)
+
+
 def rename_editor_group(data, mission_id, group_id, name):
     updated = deepcopy(data)
     _group(_groups(updated, mission_id), group_id)['name'] = name
