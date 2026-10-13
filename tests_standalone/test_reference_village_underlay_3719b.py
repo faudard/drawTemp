@@ -115,5 +115,26 @@ class ValcroixStructureUnderlayTests(unittest.TestCase):
         self.assertEqual(self.doc.data, self.source)
 
 
+    def test_editor_player_and_replay_agree_on_moved_bridge(self):
+        """A moved bridge changes the actual tactical board, not just its PNG."""
+        from sporebound.storage import save_battle, load_battle
+
+        self.doc.replace(move_structure(self.doc.data, MISSION_ID,
+                                        (13, 9), (12, 7)))
+        scene = village(self.doc.data)
+        battle = self.doc.playtest(MISSION_ID, seed=7)
+        self.assertEqual(scene.board.tile((13, 9)).surface, 'water')
+        self.assertEqual(scene.board.tile((13, 7)).surface, 'bridge')
+        self.assertTrue(battle.board.tile((13, 9)).blocked)
+        self.assertEqual(battle.board.tile((13, 9)).surface, 'water')
+        self.assertFalse(battle.board.tile((13, 7)).blocked)
+        self.assertEqual(battle.board.tile((13, 7)).surface, 'bridge')
+        self.assertEqual(battle.mission.structures, scene.structures)
+        with TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'replay.json'
+            save_battle(target, battle)
+            self.assertEqual(load_battle(target).digest(), battle.digest())
+
+
 if __name__ == '__main__':
     unittest.main()
