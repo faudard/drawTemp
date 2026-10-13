@@ -18,7 +18,7 @@ de format de sauvegarde, de règles de combat ni d'index persistant supplémenta
   Ces boutons sont inactifs en playtest ou sans entité sélectionnée. Le panneau
   d'inspection et le journal sont en lecture seule.
 - **Barre d'outils compacte** en quatre groupes : Carte & combat,
-  Terrain & couches, Architecture, Sélection & modèles. Les neuf couches sont
+  Terrain & couches, Architecture, Sélection & modèles. Huit couches sont
   dans un menu plutôt qu'une rangée de cases qui déborde à 1280 px.
 - **Recherche intégrée** partagée avec l'onglet Espace projet, compteur de
   résultats, synchronisation sur la mission active et restauration de la
