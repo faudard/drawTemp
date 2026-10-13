@@ -57,13 +57,23 @@ def entity_entries(data, mission_id):
                                'Copie de l’acteur de cette mission')
                    for actor in mission['units']
                    if actor.get('team') in ('player', 'enemy'))
+    # Templates created by Character/Bestiary Studio can be placed without
+    # first inserting a sacrificial copy into the current mission.
+    archetypes = tuple(EntityEntry(
+        'archetype:' + key, key.replace('_', ' ').capitalize(), 'archetype',
+        'enemy',
+        actor_style(SimpleNamespace(
+            id='', name='', team='enemy', archetype=key,
+            weapon=definition.get('weapon', ''))),
+        'Modèle installé dans Character/Bestiary Studio')
+        for key, definition in sorted(data.get('archetypes', {}).items()))
     objects = tuple(EntityEntry('object:' + kind, label, 'object',
                                 description=('Choisir une porte cible' if kind in
                                              ('switch', 'ram', 'catapult') else
                                              'Préciser une sortie x,y' if kind == 'passage'
                                              else 'Objet interactif'))
                     for kind, label in OBJECT_LABELS)
-    return actors + objects
+    return actors + archetypes + objects
 
 
 def _unique_id(mission, prefix):
@@ -76,7 +86,7 @@ def _unique_id(mission, prefix):
 
 
 def place_entity(data, mission_id, entry_id, cell, *,
-                 facing='south', link='', destination=None):
+                 facing='south', link='', destination=None, team=None):
     """Place a validated actor copy or interactive object, in one transaction.
 
     Linked objects continue to use authoring.add_object and the real gameplay
@@ -88,7 +98,7 @@ def place_entity(data, mission_id, entry_id, cell, *,
             'Choose an actor or object from the palette')
     kind, _, source_id = entry_id.partition(':')
     require(facing in FACING, 'Unknown actor orientation')
-    require(kind in ('actor', 'object'), 'Unknown entity kind')
+    require(kind in ('actor', 'archetype', 'object'), 'Unknown entity kind')
     require(bool(source_id), 'Invalid entity template')
 
     # Reject ambiguous stacking before triggering the full Content validator.
@@ -105,9 +115,13 @@ def place_entity(data, mission_id, entry_id, cell, *,
         return add_object(data, mission_id, identifier, source_id, pos,
                           link=link, destination=destination)
 
-    source = next((unit for unit in mission['units']
-                   if unit['id'] == source_id), None)
-    require(source is not None, 'Actor template no longer exists')
+    if kind == 'archetype':
+        source = data.get('archetypes', {}).get(source_id)
+        require(source is not None, 'Archetype template no longer exists')
+    else:
+        source = next((unit for unit in mission['units']
+                       if unit['id'] == source_id), None)
+        require(source is not None, 'Actor template no longer exists')
     w, h = source.get('footprint', (1, 1))
     destination_cells = {(pos[0]+dx, pos[1]+dy)
                          for dy in range(h) for dx in range(w)}
@@ -118,6 +132,19 @@ def place_entity(data, mission_id, entry_id, cell, *,
 
     new = deepcopy(data)
     target_mission = _mission(new, mission_id)
+    if kind == 'archetype':
+        # Spawn through the existing Content/ActorFactory template resolver.
+        # The archetype is never flattened or modified in the palette.
+        chosen_team = 'enemy' if team is None else team
+        require(chosen_team in ('player', 'enemy'), 'Choose an actor team')
+        target_mission['units'].append({
+            'id': _unique_id(target_mission, 'actor'),
+            'name': source_id.replace('_', ' ').capitalize(),
+            'team': chosen_team, 'pos': list(pos),
+            'archetype': source_id, 'facing': list(FACING[facing]),
+        })
+        return Content.from_dict(
+            new, rules=authored_rules_for_document(new)).to_dict()
     actor = deepcopy(source)
     actor['id'] = _unique_id(target_mission, 'actor')
     actor['pos'] = list(pos)
@@ -151,7 +178,7 @@ class EntityPlacementPreview:
 
 
 def preview_entity_placement(data, mission_id, entry_id, cell, *,
-                             facing='south', link='', destination=None):
+                             facing='south', link='', destination=None, team=None):
     """Authoritative WYSIWYG placement check; does not modify the document.
 
     For correctness the hover calls the same Content-validating operation as
@@ -160,17 +187,22 @@ def preview_entity_placement(data, mission_id, entry_id, cell, *,
     """
     mission = _mission(data, mission_id)
     cells = (tuple(cell),)
-    if isinstance(entry_id, str) and entry_id.startswith('actor:'):
-        source_id = entry_id.partition(':')[2]
-        source = next((actor for actor in mission['units']
-                       if actor['id'] == source_id), None)
+    if isinstance(entry_id, str) and (entry_id.startswith('actor:')
+                                      or entry_id.startswith('archetype:')):
+        kind, _, source_id = entry_id.partition(':')
+        if kind == 'archetype':
+            source = data.get('archetypes', {}).get(source_id)
+        else:
+            source = next((actor for actor in mission['units']
+                           if actor['id'] == source_id), None)
         if source:
             width, height = source.get('footprint', (1, 1))
             cells = tuple((cell[0] + dx, cell[1] + dy)
                           for dy in range(height) for dx in range(width))
     try:
         place_entity(data, mission_id, entry_id, cell,
-                     facing=facing, link=link, destination=destination)
+                     facing=facing, link=link, destination=destination,
+                     team=team)
     except (ValueError, TypeError) as exc:
         return EntityPlacementPreview(cells, False, str(exc))
     return EntityPlacementPreview(cells, True)
