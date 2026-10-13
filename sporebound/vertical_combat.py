@@ -65,3 +65,50 @@ def target_floor(battle, caster, requested):
     require(battle.mission.level_links or requested == current,
             'Cross-floor targeting requires authored level links')
     return requested
+
+
+def shot_forecast(battle, unit, target_level, cell):
+    """Pure, restricted tactical forecast for a shot across one floor opening."""
+    from .model import RuleError
+    require(unit is not None and unit.alive and not unit.acted
+            and not battle.status_blocks(unit, 'act'),
+            'Action already spent or disabled')
+    level = target_floor(battle, unit, target_level)
+    require(level != battle.unit_levels.get(unit.id, 0),
+            'Use ordinary attack on the same deck')
+    require(type(cell) in (tuple, list) and len(cell) == 2
+            and all(type(value) is int for value in cell),
+            'Invalid target cell')
+    pos = tuple(cell)
+    require(battle.board.contains(pos), 'Target outside map')
+    target = battle.at(pos, level=level)
+    require(target is not None and target.team != unit.team,
+            'No enemy on the selected floor')
+    skill = battle._basic(unit)
+    require(vertical_shot_allowed(battle, unit, target, skill),
+            'Projectile blocked by floor or out of range')
+    chance = max(0.0, min(1.0, battle.hit_chance(unit, target, skill) * .85))
+    damage = battle.damage(unit, target, skill, skill.effects[0])
+    return {'unit': target.id, 'level': level, 'cell': pos,
+            'chance': chance, 'amount': damage, 'kind': 'vertical_attack'}
+
+
+def execute_shot(battle, unit, target_level, cell):
+    """One Battle.execute-scoped action: no side effect on an invalid shot."""
+    row = shot_forecast(battle, unit, target_level, cell)
+    unit.acted = True
+    if unit.cast:
+        battle.emit('cast_cancelled', unit=unit.id)
+    unit.cast = None
+    battle.emit('vertical_shot', unit=unit.id, target=row['unit'],
+                origin_level=battle.unit_levels.get(unit.id, 0),
+                target_level=row['level'], cell=row['cell'])
+    target = battle.unit(row['unit'])
+    if battle.rng.random() < row['chance']:
+        # Counter/pursuit/interception still assume a shared plane. Do not
+        # dispatch those callbacks across floors until they are floor-aware.
+        battle._hurt(target, row['amount'], unit, reactions=False)
+    else:
+        battle.emit('miss', unit=unit.id, target=target.id)
+    battle._triggers()
+    battle._outcome()
