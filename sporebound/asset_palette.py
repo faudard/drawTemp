@@ -17,17 +17,23 @@ class PaletteEntry:
     category: str
     kind: str
     value: str
+    size: tuple = (1, 1)
 
     def footprint(self, turns=0):
         if self.kind == 'structure':
             clip = structure_template(self.value, turns)
             return clip.width, clip.height
-        return 1, 1
+        return self.size
 
     @property
     def effect(self):
         if self.kind == 'structure':
             return 'Tampon de terrain : remplace sols, décors, blocages et hauteurs.'
+        if self.kind == 'actor':
+            return 'Instance jouable : orientation initiale et modèle validés par Content.'
+        if self.kind == 'object':
+            return ('Objet tactique : porte, levier ou dispositif interactif. '
+                    'Les références sont validées avant la pose.')
         if self.kind == 'surface':
             return ('Pinceau existant : l’eau bloque ; pont ou remplacement d’eau '
                     'libère la case, sauf mur de pierre conservé.')
@@ -50,7 +56,8 @@ ENTRIES = tuple(
                     'feature', s) for s in PROP_NAMES]
     + [PaletteEntry('structure:'+s, s, 'Structures', 'structure', s)
        for s in STRUCTURE_NAMES])
-CATEGORIES = ('Tous', 'Sols', 'Végétation', 'Décors', 'Structures')
+CATEGORIES = ('Tous', 'Sols', 'Végétation', 'Décors', 'Structures',
+              'Acteurs', 'Interactions')
 
 
 def _normalized(text):
@@ -58,9 +65,9 @@ def _normalized(text):
                    if unicodedata.category(c) != 'Mn')
 
 
-def search_entries(query='', category='Tous'):
+def search_entries(query='', category='Tous', extra_entries=()):
     terms = _normalized(query).split()
-    return tuple(e for e in ENTRIES
+    return tuple(e for e in (*ENTRIES, *extra_entries)
                  if (category == 'Tous' or e.category == category)
                  and all(term in _normalized(' '.join((e.id, e.name, e.category)))
                          for term in terms))
