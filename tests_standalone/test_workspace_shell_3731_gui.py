@@ -47,7 +47,7 @@ class WorkspaceShellGUITests(TestCase):
                             if isinstance(w, ttk.Treeview)
                             and w.exists('map_object:garden/switch'))
                 tree.selection_set('map_object:garden/switch')
-                tree.event_generate('<Double-1>')
+                tree.event_generate('<Return>')
                 root.update()
                 self.assertEqual(main.tab(main.select(), 'text'), 'Carte et combat')
                 map_page = next(page for page in main.tabs()
