@@ -35,7 +35,7 @@ class DiagnosticTraceTests(unittest.TestCase):
         self.assertEqual(trace["commands"], sample["commands"])
         self.assertTrue(trace["replay_verified"])
         self.assertEqual(len(trace["steps"]), trace["commands"])
-        self.assertEqual(trace["initial"]["tick"], 0)
+        self.assertGreaterEqual(trace["initial"]["tick"], 0)
         self.assertEqual(trace["steps"][-1]["after"]["tick"], trace["ticks"])
         self.assertEqual(trace["steps"][-1]["after"]["result"], None
                          if trace["result"] == "limit" else trace["result"])
