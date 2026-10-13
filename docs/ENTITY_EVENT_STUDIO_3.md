@@ -8,7 +8,8 @@ sans interpréteur de triggers, sans contournement de GameSession.
 1. Dans **Personnages et événements → Objets interactifs**, sélectionner une
    porte existante et son levier (ou créer un levier lié).
 2. Choisir la case du levier, la case du danger, l'ID de l'événement,
-   la cinématique et éventuellement un **tick minimum**.
+   la cinématique, éventuellement un **tick minimum**, et sélectionner une
+   **scène narrative préexistante** du Story Studio.
 3. **Créer et simuler** conserve l'édition atomique Content + GameProject.
 4. Ouvrir le **Graphe des événements** préexistant : le type principal reste
    `interact(lever)`. Dans **Condition**, ajouter des contraintes par
@@ -20,6 +21,9 @@ sans interpréteur de triggers, sans contournement de GameSession.
    satisfait. Le moteur construit un Battle jetable, fournit les changements
    avant/après, l'ordre des effets et les événements effectivement produits.
    La cinématique ciblée par `tactical_event` reste celle du Player.
+   La scène optionnelle est liée par
+   `story_authoring.set_tactical_scene` / `during_tactical_event` et
+   s'ouvre par la file narrative authentifiée de `GameSession`.
 
 ## Contrat canonique
 
