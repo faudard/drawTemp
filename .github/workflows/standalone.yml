@@ -161,6 +161,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_interior_levels_3720b_gui.py -v
+      - name: Verify 3.7.25 moved upper floors, roof toggling and picking at three zooms
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_interior_building_lifecycle_3725_gui.py -v
       - name: Verify 3.7.20C tactical floor traversal and Player elevated picking
         env:
           SPOREBOUND_GUI_SMOKE: '1'
