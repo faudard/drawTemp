@@ -4,7 +4,8 @@ Adds no Canvas schema, game objects, or second navigator. Scene occurrences
 remain UI-only; targets resolve to canonical scene/event IDs.
 """
 from .visual_branch_graph import connect_visual_branch, visual_target_palette
-from .model import require
+from .model import Content, require
+from . import event_composer, story_authoring
 
 
 class VisualBranchInteractions:
@@ -24,7 +25,9 @@ class VisualBranchInteractions:
         self.ttk.Separator(details, orient='horizontal').pack(
             fill='x', padx=8, pady=(8, 5))
         self.ttk.Label(
-            details, text='Connexion : tirer le point turquoise vers la cible',
+            details, text='Tirer le point turquoise vers une cible. '
+                          'Maj + lâcher dans le vide : créer et relier '
+                          'un nouveau nœud.',
             wraplength=280).pack(anchor='w', padx=8)
         line = self.ttk.Frame(details)
         line.pack(fill='x', padx=8, pady=2)
@@ -251,19 +254,16 @@ class VisualBranchInteractions:
         x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
         target = self._visual_pick(x, y)
         if target is None:
-            self.status.set('Liaison annulée : aucune cible sous le curseur.')
+            if getattr(event, 'state', 0) & 0x0001:
+                self.owner._run(lambda: self._visual_create(source))
+            else:
+                self.status.set(
+                    'Liaison annulée : maintenir Maj pour créer un nouveau nœud.')
             return
         self.owner._run(
             lambda: self._visual_commit(source, target))
 
-    def _visual_commit(self, source, target):
-        mid = self._visual_mission_id()
-        data, project = connect_visual_branch(
-            self.owner.doc().data, self.owner.project, mid,
-            source_kind=source['kind'], source_id=source['id'],
-            target_kind=target['kind'], target_id=target['id'],
-            choice_id=source['choice'],
-            event_join='any' if self.event_join_var.get() == 'OU' else 'all')
+    def _visual_publish(self, data, project, source, target):
         if data != self.owner.doc().data:
             self.owner.design_change(lambda: self.owner.doc().replace(data))
             require(self.owner.doc().data == data,
@@ -276,6 +276,59 @@ class VisualBranchInteractions:
                         ('/' + source['choice'] if source['choice'] else '') +
                         ' → ' + target['id'] +
                         ' (Content + GameProject, historique global)')
+
+    def _visual_commit(self, source, target):
+        mid = self._visual_mission_id()
+        data, project = connect_visual_branch(
+            self.owner.doc().data, self.owner.project, mid,
+            source_kind=source['kind'], source_id=source['id'],
+            target_kind=target['kind'], target_id=target['id'],
+            choice_id=source['choice'],
+            event_join='any' if self.event_join_var.get() == 'OU' else 'all')
+        self._visual_publish(data, project, source, target)
+
+    def _visual_create(self, source):
+        """Shift-drop on empty canvas creates AND connects in one undo step."""
+        mid = self._visual_mission_id()
+        raw = self.owner.doc().data
+        project = self.owner.project
+        if source['kind'] == 'scene':
+            names = {row['id'] for row in project.story.get('scenes', [])}
+            number = 1
+            while 'visual_scene_' + str(number) in names:
+                number += 1
+            target_id = 'visual_scene_' + str(number)
+            content = Content.from_dict(raw)
+            linked = story_authoring.create_linked_scene(
+                project, content, source['id'], source['choice'],
+                target_id, 'Nouvelle scène',
+                'Dialogue à écrire.', speaker='')
+            data = raw
+            next_project = linked
+            target_kind = 'scene'
+        else:
+            events = next(m['triggers'] for m in raw['missions']
+                          if m['id'] == mid)
+            names = {row['id'] for row in events}
+            number = 1
+            while 'visual_event_' + str(number) in names:
+                number += 1
+            target_id = 'visual_event_' + str(number)
+            staged = event_composer.save_event(
+                raw, mid, target_id,
+                event_composer.condition('tick', tick=0),
+                [event_composer.action(
+                    'message', text='Nouvel événement : à éditer')])
+            data, next_project = connect_visual_branch(
+                staged, project, mid, source_kind='event',
+                source_id=source['id'], target_kind='event',
+                target_id=target_id,
+                event_join=('any' if self.event_join_var.get() == 'OU'
+                            else 'all'))
+            target_kind = 'event'
+        self._visual_publish(
+            data, next_project, source,
+            {'kind': target_kind, 'id': target_id})
 
     def _visual_recenter(self):
         self.canvas.xview_moveto(0)
