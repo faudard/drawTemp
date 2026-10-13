@@ -23,6 +23,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install .
+      - name: Verify 3.7.24A World Map model and legacy save compatibility
+        run: python -m unittest tests_standalone.test_world_map_3724a -v
       - run: python -m unittest discover -s tests_standalone -v
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
@@ -56,6 +58,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_editor_gui.py -v
+      - name: Verify 3.7.24A World Map drag, undo/save and shared Player renderer
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_map_3724a_gui.py -v
       - name: Verify 3.7.21B common undo/redo and Save All through real Tk
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -221,10 +227,6 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_player_26_gui.py -v
-      - name: Verify 3.7.24A World Map drag, undo/save and shared Player renderer
-        env:
-          SPOREBOUND_GUI_SMOKE: '1'
-        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_map_3724a_gui.py -v
       - name: Exercise Jeanne atlas PNG crop in Tk (3.7.5)
         env:
           SPOREBOUND_GUI_SMOKE: '1'
