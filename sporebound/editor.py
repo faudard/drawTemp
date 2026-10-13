@@ -301,6 +301,8 @@ def launch(path):
     editor_group_dy = tk.IntVar(value=0)
     group_prefab_var = tk.StringVar(value='')
     prefab_gallery = None
+    prefab_floating = None
+    prefab_window = None
     prefab_drag_hover = None
     selected_group_id = None
     group_tree_signature = None
@@ -1050,6 +1052,10 @@ def launch(path):
             prefab_gallery.update(rows)
             prefab_gallery.selected = group_prefab_var.get()
             prefab_gallery.render()
+            if prefab_floating is not None:
+                prefab_floating.update(rows)
+                prefab_floating.selected = group_prefab_var.get()
+                prefab_floating.render()
         return paths
 
     def _chosen_prefab():
@@ -1193,6 +1199,45 @@ def launch(path):
             raise RuleError('Déposer le préfab à l’intérieur de la carte.')
         prefab = load_group_prefab(_prefab_library() / filename)
         commit_prefab_at(prefab, anchor)
+
+    def open_visual_prefab_palette():
+        """Roomy nonmodal palette; the author can still drop onto the map."""
+        nonlocal prefab_window, prefab_floating
+        if prefab_window is not None and prefab_window.winfo_exists():
+            prefab_window.lift()
+            prefab_window.focus_set()
+            return
+        window = tk.Toplevel(root)
+        window.title('Palette visuelle — Préfabs')
+        window.geometry('390x540')
+        window.transient(root)
+        ttk.Label(window,
+                  text='Choisir un modèle puis glisser sa miniature sur la carte.',
+                  wraplength=355).pack(anchor='w', padx=8, pady=6)
+        floating = VisualPrefabPalette(
+            window, tk, ttk,
+            on_select=group_prefab_var.set,
+            on_preview=palette_prefab_hover,
+            on_drop=palette_prefab_drop,
+            on_cancel=clear_prefab_drag,
+            map_canvas=canvas,
+            status=status_var.set)
+        floating.frame.pack(fill='both', expand=True, padx=6, pady=4)
+        prefab_window, prefab_floating = window, floating
+
+        def close():
+            nonlocal prefab_window, prefab_floating
+            floating.cancel()
+            window.destroy()
+            prefab_window = None
+            prefab_floating = None
+
+        window.protocol('WM_DELETE_WINDOW', close)
+        window.bind('<Escape>', lambda _e: close())
+        ttk.Button(window, text='Actualiser les modèles',
+                   command=refresh_group_prefabs).pack(fill='x',
+                                                       padx=8, pady=(0, 6))
+        refresh_group_prefabs()
 
     def _group_tree_mission():
     def _group_tree_mission():
@@ -3085,6 +3130,9 @@ def launch(path):
     canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
     canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
     canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
+    ttk.Button(side_panel, text='Ouvrir la palette visuelle de préfabs',
+               command=open_visual_prefab_palette).pack(
+                   fill='x', padx=6, pady=(4, 0))
     ttk.Label(side_panel, text='INSPECTEUR', font=('TkDefaultFont', 11, 'bold')).pack(
         anchor='w', padx=6, pady=(8, 3))
     ttk.Label(side_panel, textvariable=mode_var).pack(anchor='w', padx=6)
