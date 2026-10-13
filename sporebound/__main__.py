@@ -16,7 +16,7 @@ DEFAULT_CONTENT = Path(__file__).parent / 'content' / 'core.json'
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Sporebound standalone gameplay workbench')
-    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','export'])
+    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','export'])
     parser.add_argument('--content', type=Path, default=DEFAULT_CONTENT)
     parser.add_argument('--project', type=Path, help='Game presentation manifest for player')
     parser.add_argument('--output', type=Path, help='Destination ZIP for export')
@@ -25,6 +25,11 @@ def main(argv=None):
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--limit', type=int, default=1000)
     parser.add_argument('--runs', type=int, default=20, help='Number of deterministic balance seeds')
+    parser.add_argument('--baseline', type=Path, help='Prior Battle Lab JSON for paired gate')
+    parser.add_argument('--report', type=Path, help='Write versioned Battle Lab JSON')
+    parser.add_argument('--max-victory-drop', type=float, default=0.25)
+    parser.add_argument('--max-p95-growth', type=float, default=0.30)
+    parser.add_argument('--max-new-limits', type=int, default=0)
     parser.add_argument('--save', type=Path)
     parser.add_argument('--load', type=Path)
     parser.add_argument('--campaign-file', type=Path, default=Path('saves/campaign.json'))
@@ -70,6 +75,31 @@ def main(argv=None):
                     return 1
             print(f'Valid: {len(content.missions)} missions, {len(content.skills)} skills, {len(content.jobs)} jobs')
             return 0
+        if args.command == 'battle-lab':
+            from .battle_lab import compare_reports, run_lab, save_report
+            from .tactical_rpg3 import authored_rules_for_document
+            if not 1 <= args.runs <= 1000 or not 1 <= args.limit <= 100000:
+                parser.error('battle-lab requires 1..1000 runs and 1..100000 commands')
+            if args.seed < 0 or args.seed + args.runs > 2**32:
+                parser.error('Battle Lab seeds must fit unsigned 32-bit integers')
+            rules = authored_rules_for_document(content.to_dict())
+            report = run_lab(content, args.mission,
+                             seeds=list(range(args.seed, args.seed + args.runs)),
+                             max_commands=args.limit, rules=rules)
+            if args.report:
+                save_report(args.report, report)
+            comparison = None
+            if args.baseline:
+                with args.baseline.open(encoding='utf-8') as stream:
+                    old_report = json.load(stream)
+                comparison = compare_reports(
+                    old_report, report,
+                    max_victory_drop=args.max_victory_drop,
+                    max_p95_growth=args.max_p95_growth,
+                    max_new_limits=args.max_new_limits)
+            print(json.dumps({'report': report, 'comparison': comparison},
+                             ensure_ascii=False, sort_keys=True))
+            return 2 if comparison is not None and not comparison['passed'] else 0
         if args.command == 'balance':
             if not 1 <= args.runs <= 1000 or args.limit < 1:
                 parser.error('balance requires 1..1000 runs and a positive command limit')
