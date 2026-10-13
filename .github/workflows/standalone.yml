@@ -177,6 +177,18 @@ jobs:
           name: iso-chibi-actors-3719a
           path: ${{ runner.temp }}/chibi-actors/
           if-no-files-found: warn
+      - name: Compare visual fidelity in Editor and Player (24/54/96, depth/cutaway)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+          SPOREBOUND_FIDELITY_SCREENSHOT_DIR: ${{ runner.temp }}/visual-fidelity
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m unittest discover -s tests_standalone -p test_visual_fidelity_art_372_gui.py -v
+      - name: Preserve Editor/Player parity screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-player-visual-fidelity
+          path: ${{ runner.temp }}/visual-fidelity/
+          if-no-files-found: warn
       - name: Exercise 2.5.3.2 visual synergy unlock and secret combinations
         env:
           SPOREBOUND_GUI_SMOKE: '1'

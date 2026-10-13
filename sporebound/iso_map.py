@@ -80,6 +80,24 @@ class IsoTerrainAtlas:
             self._unavailable = True
             return None
 
+class _TaggedFeatureCanvas:
+    """Attach a depth group to all vector prop primitives (also in retained mode)."""
+    def __init__(self, canvas, tag):
+        self.canvas = canvas
+        self.tag = tag
+
+    def __getattr__(self, name):
+        method = getattr(self.canvas, name)
+        if not name.startswith('create_'):
+            return method
+
+        def draw(*args, **options):
+            tags = options.get('tags', ())
+            tags = (tags,) if isinstance(tags, str) else tuple(tags)
+            return method(*args, **{**options, 'tags': tags + (self.tag,)})
+        return draw
+
+
 def _flatten(points):
     return tuple(coord for point in points for coord in point)
 
@@ -173,6 +191,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     actor_levels = (unit_levels if unit_levels is not None
                     else getattr(mission, 'unit_levels', {}))
     actors = {}
+    decor_cells = []
     for index, actor in enumerate(units):
         actors.setdefault(tuple(actor.pos), []).append((index, actor))
     objects = {}
@@ -283,13 +302,16 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                                   dash=(5, 3) if kind == 'charge' else (2, 3),
                                   tags=('iso_danger', 'iso_danger_' + kind))
         if layers.get('Décors', True) and tile.feature:
+            decor_cells.append(c)
+            decor_tag = 'iso_decor_cell_' + str(c[0]) + '_' + str(c[1])
             sprite = (prop_atlas.sprite(tile.feature, cell_size)
                       if prop_atlas is not None else None)
             if sprite is not None:
                 canvas.create_image(cx, cy + cell_size*18/54, image=sprite,
-                                    anchor='s', tags='decor_sprite')
+                                    anchor='s', tags=('decor_sprite', decor_tag))
             else:
-                _draw_feature(canvas, tile.feature, cx, cy, cell_size)
+                _draw_feature(_TaggedFeatureCanvas(canvas, decor_tag),
+                              tile.feature, cx, cy, cell_size)
         if layers.get('Objets', True):
             for obj in objects.get(c, ()):
                 photo = (object_atlas.sprite(obj['kind'], cell_size)
@@ -316,12 +338,16 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                     color = '#888d94'
                 active = actor.id == active_id
                 photo = None
-                if actor_atlas is not None and actor.alive:
-                    from .iso_actor_atlas import actor_direction, actor_frame, actor_style
+                if actor_atlas is not None:
+                    from .iso_actor_atlas import (actor_action, actor_direction,
+                                                  actor_frame, actor_style)
                     pose = (poses or {}).get(actor.id)
-                    photo = actor_atlas.sprite(actor_style(actor),
-                                              actor_direction(actor, pose),
-                                              actor_frame(pose), cell_size)
+                    style = actor_style(actor)
+                    if actor.alive or style == 'jeanne':
+                        photo = actor_atlas.sprite(
+                            style, actor_direction(actor, pose),
+                            actor_frame(pose), cell_size,
+                            actor_action(pose) if actor.alive else 'defeat')
                 if photo is not None:
                     # The avatar foot (lower image edge) follows the SAME
                     # interpolated cell projection as the legacy oval.
@@ -365,7 +391,9 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         atlas=building_atlas, scenery_atlas=fortification_atlas,
         poses=poses, structures=getattr(mission, 'structures', ()),
         interior_floors=getattr(mission, 'interior_floors', ()),
-        prop_atlas=prop_atlas, unit_levels=actor_levels)
+        prop_atlas=prop_atlas, unit_levels=actor_levels,
+        objects=mission.objects if layers.get('Objets', True) else (),
+        props=decor_cells)
     upper_actor_ids = [index for index, actor in enumerate(units)
                        if actor_levels.get(actor.id, 0) > 0]
     for index in upper_actor_ids:

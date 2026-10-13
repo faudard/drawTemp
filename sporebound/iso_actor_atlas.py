@@ -10,6 +10,9 @@ from .tk_images import crop_scaled
 ACTOR_STYLES = ('hero', 'guard', 'archer', 'jeanne')
 ACTOR_DIRECTIONS = ('south', 'north', 'east', 'west')
 ACTOR_FRAMES = 2
+ACTOR_ACTIONS = ('idle', 'move', 'attack', 'hit', 'defeat')
+# Jeanne's approved 8-row atlas carries the full cosmetic action cycle.
+JEANNE_ROWS = {'idle': 0, 'move': 2, 'attack': 4, 'hit': 6, 'defeat': 7}
 ACTOR_FRAME_SIZE = (64, 64)
 ACTOR_SOURCE_CELL_SIZE = 54
 DEFAULT_ACTOR_ATLAS = (Path(__file__).parent / 'content' / 'art'
@@ -53,6 +56,12 @@ def actor_frame(pose=None):
     return int(getattr(pose, 'action', '') == 'move')
 
 
+def actor_action(pose=None):
+    """Return the cosmetic action, or idle for unrecognized legacy poses."""
+    action = getattr(pose, 'action', 'idle')
+    return action if action in ACTOR_ACTIONS else 'idle'
+
+
 class IsoActorAtlas:
     """Cached nearest-neighbour Tk actor PNG; missing art never breaks play."""
     def __init__(self, canvas, path=DEFAULT_ACTOR_ATLAS,
@@ -66,13 +75,20 @@ class IsoActorAtlas:
         self._unavailable = False
         self._jeanne_unavailable = False
 
-    def sprite(self, style, direction, frame, cell_size):
+    def sprite(self, style, direction, frame, cell_size, action=None):
         if (style not in ACTOR_STYLES
                 or direction not in ACTOR_DIRECTIONS
                 or type(frame) is not int or frame not in range(ACTOR_FRAMES)
-                or type(cell_size) is not int or cell_size < 1):
+                or type(cell_size) is not int or cell_size < 1
+                or (action is not None and action not in ACTOR_ACTIONS)):
             return None
-        key = (style, direction, frame, cell_size)
+        # Keep established idle/move cache keys and rows; extra Jeanne actions
+        # receive disjoint keys and cannot replace a movement image.
+        baseline = (action is None or
+                    (action == 'idle' and frame == 0) or
+                    (action == 'move' and frame == 1))
+        key = ((style, direction, frame, cell_size) if baseline else
+               (style, direction, frame, cell_size, action))
         if key in self._cache:
             return self._cache[key]
         try:
@@ -91,10 +107,11 @@ class IsoActorAtlas:
                     if (source.width(), source.height()) != (256, 512):
                         raise ValueError('Invalid Jeanne atlas dimensions')
                     self._jeanne_source = source
-                # Existing approved Jeanne atlas: four direction columns and
-                # idle_0 / move_0 on rows 0 / 2, respectively.
+                # Full approved Jeanne atlas: idle/move/attack/hit/defeat
+                # rows 0/2/4/6/7. Generic chibi actors remain two-pose.
                 x = ACTOR_DIRECTIONS.index(direction) * width
-                y = (2 if frame else 0) * height
+                row = (2 if frame else 0) if action is None else JEANNE_ROWS[action]
+                y = row * height
                 photo = crop_scaled(self._jeanne_source, (x, y, width, height),
                                     size, master=self.canvas)
                 self._cache[key] = photo
