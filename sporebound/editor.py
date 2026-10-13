@@ -1164,6 +1164,8 @@ def launch(path):
         if selected_cell is None:
             return
         validate_selection(doc.data, mission_var.get(), [selected_cell])
+        editing_context.selection.set(mission_var.get(), selected_cell,
+                                      selected_tiles, publish=False)
         tool, brush = tool_var.get(), active_brush()
         canvas.delete('stroke_preview')
         if battle:
@@ -1564,6 +1566,8 @@ def launch(path):
         if object_var.get() not in object_box['values']:
             object_var.set(object_box['values'][0] if object_box['values'] else '')
         selected_tiles.intersection_update(set(board.cells()))
+        editing_context.selection.set(mission_var.get(), selected_cell,
+                                      selected_tiles, publish=False)
         if views is None or RENDERER in views:
             if iso_var.get():
                 # Editor and its actual Battle use the identical terrain/asset
@@ -2166,6 +2170,16 @@ def launch(path):
         entry = studio.workspace.sidebar_search
         entry.focus_set()
         entry.selection_range(0, 'end')
+
+    # Subscription order is intentionally renderer -> inspector -> minimap ->
+    # workspace. A typed edit publishes once; each view consumes only its
+    # topic and render caching remains owned by EditorRenderCache.
+    for topic in (RENDERER, INSPECTOR, MINIMAP, WORKSPACE):
+        editing_context.notifications.subscribe(
+            topic, lambda notice, view=topic: refresh(views=(view,)))
+    tool_var.trace_add(
+        'write', lambda *_: editing_context.tools.set(
+            tool_var.get(), mission_var.get()))
 
     root.bind('<Control-f>', focus_project_search)
     root.bind('<Alt-KeyPress-1>', lambda _event: notebook.select(work))
