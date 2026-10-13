@@ -153,6 +153,21 @@ class StructureGroupCommand:
 
 
 @dataclass(frozen=True)
+class EditorGroupMoveCommand:
+    """Move a persistent hierarchy with the normal validated edit protocol."""
+    group_id: str
+    dx: int
+    dy: int
+    kind: str = 'editor-group'
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+
+    def transform(self, data, mission_id):
+        from .editor_groups import move_editor_group
+        return move_editor_group(data, mission_id, self.group_id,
+                                 self.dx, self.dy)
+
+
+@dataclass(frozen=True)
 class EntityCommand:
     """Move, duplicate, edit or delete an existing unit or interactive object."""
     action: str
