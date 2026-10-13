@@ -240,6 +240,50 @@ def _state_changes(before, after):
     return changes
 
 
+def condition_trace(battle, event):
+    """Explain canonical rule results without implementing any new leaf rule.
+
+    The trace is a read-only observation at the pre-dispatch boundary;
+    composite groups combine the same boolean results as the dispatcher.
+    """
+    result = []
+
+    def visit(node, path):
+        if 'condition' in node:
+            passed = bool(battle.rules.trigger_conditions.get(
+                node['condition']).matches(battle, node))
+            label = event_graph.condition_title(node)
+            kind = 'leaf'
+            children = []
+        elif 'not' in node:
+            child_passed, child_rows = visit(node['not'], path + (0,))
+            passed = not child_passed
+            label = 'NON'
+            kind = 'not'
+            children = child_rows
+        else:
+            kind = 'all' if 'all' in node else 'any'
+            operands = [visit(child, path + (i,))
+                        for i, child in enumerate(node[kind])]
+            passed = (all(val for val, _ in operands) if kind == 'all'
+                      else any(val for val, _ in operands))
+            label = 'ET' if kind == 'all' else 'OU'
+            children = [row for _, rows in operands for row in rows]
+        row = {'path': path, 'label': label, 'kind': kind, 'passed': passed}
+        return passed, [row, *children]
+
+    primary = bool(battle.rules.trigger_conditions.get(
+        event['condition']).matches(battle, event))
+    result.append({'path': 'primary',
+                   'label': event_graph.condition_title(event),
+                   'kind': 'primary', 'passed': primary})
+    secondary = True
+    if 'when' in event:
+        secondary, rows = visit(event['when'], ())
+        result.extend(rows)
+    return primary and secondary, result
+
+
 def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial',
                   include_scene=False):
     """Probe one trigger with the real dispatcher in a disposable battle.
@@ -264,6 +308,22 @@ def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial',
     battle.mission.triggers = [deepcopy(event)]
     notes = _prepare_scenario(battle, event, scenario)
     scene_before = deepcopy(battle) if include_scene else None
+    # Evaluate all leaves BEFORE their actions change battle state. For a
+    # lever interaction, perform the actual command on a throwaway clone with
+    # only its triggers isolated, not a synthetic "interact" event.
+    diagnostic = deepcopy(battle)
+    diagnostic_error = ''
+    trace = []
+    condition_passed = False
+    try:
+        if event['condition'] == 'interact' and scenario == 'satisfied':
+            diagnostic.mission.triggers = []
+            diagnostic.execute({'kind': 'interact',
+                                'unit': diagnostic.active_id,
+                                'object': event['object']})
+        condition_passed, trace = condition_trace(diagnostic, event)
+    except (RuleError, ValueError, KeyError, IndexError) as exc:
+        diagnostic_error = str(exc)
     first_event = len(battle.events)
     hazard_cells = {tuple(a['pos']) for a in event['actions']
                     if a['kind'] == 'hazard'}
@@ -291,6 +351,9 @@ def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial',
         'outcome': 'error' if error else 'applied' if activated else 'inactive',
         'actions': [event_graph.action_title(a) for a in event['actions']],
         'condition': event_graph.condition_summary(event),
+        'condition_trace': trace,
+        'condition_passed': condition_passed,
+        'diagnostic_error': diagnostic_error,
         'events': deepcopy(battle.events[first_event:]),
         'changes': _state_changes(before, after),
         'spawned': sorted(after['units'].keys() - before['units'].keys()),
@@ -320,6 +383,15 @@ def format_preview_report(report):
         'Actions prévues : ' + ' → '.join(report['actions']),
     ]
     lines.extend('Préparation : ' + note for note in report['scenario_notes'])
+    if report.get('condition_trace'):
+        lines.append('DIAGNOSTIC DES CONDITIONS (moteur réel, avant effets) :')
+        for node in report['condition_trace']:
+            depth = (0 if node['path'] == 'primary' else
+                     len(node['path']) + 1)
+            lines.append('  ' * depth + ('✓ ' if node['passed'] else '✗ ')
+                         + node['label'])
+    if report.get('diagnostic_error'):
+        lines.append('Diagnostic indisponible : ' + report['diagnostic_error'])
     if report['changes']:
         lines.append('CONSÉQUENCES :')
         lines.extend('  ' + change for change in report['changes'])
