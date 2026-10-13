@@ -51,6 +51,26 @@ class WorldMapTests(TestCase):
             self.assertEqual(asdict(loaded), asdict(progress))
         self.assertEqual(self.content.to_dict(), content_before)
 
+    def test_legacy_session_checkpoint_accepts_a_new_world_layout(self):
+        cid = self.legacy.campaigns[0]["id"]
+        original = GameSession.new(self.content, self.legacy, cid)
+        checkpoint = original.recording()
+        with_world = GameProject.from_dict(
+            {**self.legacy.to_dict(), "world": self.world}, self.content)
+        restored = GameSession.from_recording(
+            checkpoint, self.content, with_world)
+        self.assertEqual(restored.progress.unlocked, original.progress.unlocked)
+        first = self.world["nodes"][0]["mission"]
+        rearranged = upsert_location(
+            self.world, self.content, self.legacy.campaigns,
+            first, (190, 250))
+        altered = GameProject.from_dict(
+            {**self.legacy.to_dict(), "world": rearranged}, self.content)
+        second = GameSession.from_recording(checkpoint, self.content, altered)
+        self.assertEqual(second.progress.unlocked, original.progress.unlocked)
+        self.assertEqual(second.recording()["project_digest"],
+                         checkpoint["project_digest"])
+
     def test_drag_region_and_removal_do_not_rewrite_tactical_links(self):
         before = deepcopy(self.content.to_dict())
         old_world = deepcopy(self.world)
