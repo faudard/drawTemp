@@ -8,7 +8,7 @@ from copy import deepcopy
 
 from . import event_graph
 from .engine import Battle
-from .model import Content, RuleError, require
+from .model import Content, RuleError, distance, require
 from .rules import triggers
 from .tactical_rpg3 import authored_rules_for_document
 
@@ -38,7 +38,7 @@ def inspect_event(data, mission_id, event_id, project=None):
                 clips.append({'id': clip['id'], 'stage': kind, 'scope': 'mission'})
             elif kind == 'scene' and scene_id and target == scene_id:
                 clips.append({'id': clip['id'], 'stage': 'scene', 'scope': 'scene'})
-    return {
+    report = {
         'mission_id': mission_id,
         'event_id': event_id,
         'condition': event_graph.condition_title(event),
@@ -111,6 +111,10 @@ def _prepare_scenario(battle, trigger, scenario):
             else:
                 unit.hp = unit.max_hp
         return [f'PV de test de {unit.id} fixés à {unit.hp}/{unit.max_hp}']
+    if kind == 'interact':
+        if not true_case:
+            return ['Aucune interaction ne sera effectuée dans ce scénario']
+        return _stage_interaction(battle, trigger['object'])
     if kind == 'wave_capacity':
         team = trigger.get('team', 'enemy')
         maximum = trigger['max_alive']
@@ -125,6 +129,42 @@ def _prepare_scenario(battle, trigger, scenario):
     raise RuleError(f'No scenario setup for condition {kind}')
 
 
+def _stage_interaction(battle, object_id):
+    """Stage a player near a real object; the command itself is NOT simulated."""
+    require(not battle.deploying,
+            'Finish deployment before testing an interaction')
+    obj = next((o for o in battle.mission.objects if o['id'] == object_id), None)
+    require(obj is not None, 'Unknown interaction object')
+    players = [u for u in battle.units if u.team == 'player' and u.alive]
+    require(bool(players), 'No living player for the interaction probe')
+    actor = next((u for u in players if
+                  min(distance(c, tuple(obj['pos']))
+                      for c in u.occupied_cells()) <= 1), None)
+    notes = []
+    if actor is None:
+        actor = players[0]
+        chosen = None
+        for cell in battle.board.neighbors(tuple(obj['pos'])):
+            footprint = actor.occupied_cells(origin=cell)
+            if not all(battle.board.contains(c) and
+                       not battle.board.tile(c).blocked for c in footprint):
+                continue
+            if any(other.alive and other.id != actor.id and
+                   footprint & other.occupied_cells() for other in battle.units):
+                continue
+            chosen = cell
+            break
+        require(chosen is not None, 'No valid adjacent cell for interaction preview')
+        actor.pos = chosen
+        notes.append(f'Placement de test de {actor.id} à {chosen} (non sauvegardé)')
+    actor.acted = False
+    actor.moved = False
+    actor.ct = max(100, actor.ct)
+    battle.active_id = actor.id
+    notes.append(f'Activation de test accordée à {actor.id}; commande moteur interact')
+    return notes
+
+
 def _snapshot(battle, hazard_cells):
     return {
         'units': {u.id: {
@@ -132,6 +172,11 @@ def _snapshot(battle, hazard_cells):
             'statuses': deepcopy(u.statuses),
         } for u in battle.units},
         'hazards': {cell: battle.board.tile(cell).hazard for cell in hazard_cells},
+        'objects': {obj['id']: {
+            key: deepcopy(obj.get(key))
+            for key in ('open', 'used', 'locked', 'hp', 'pos')
+            if key in obj
+        } for obj in battle.mission.objects},
     }
 
 
@@ -153,10 +198,17 @@ def _state_changes(before, after):
         changes.append(f'Unité apparue : {uid}')
     for uid in sorted(old_units.keys() - new_units.keys()):
         changes.append(f'Unité retirée : {uid}')
+    for oid in sorted(before['objects'].keys() & after['objects'].keys()):
+        old = before['objects'][oid]
+        new = after['objects'][oid]
+        for key in sorted(old.keys() | new.keys()):
+            if old.get(key) != new.get(key):
+                changes.append(f'Objet {oid} · {key} : {old.get(key)} → {new.get(key)}')
     return changes
 
 
-def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial'):
+def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial',
+                  include_scene=False):
     """Probe one trigger with the real dispatcher in a disposable battle.
 
     initial: actual authored roster at the specified tick, no intervening turns.
@@ -178,12 +230,17 @@ def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial'):
     battle.tick = tick
     battle.mission.triggers = [deepcopy(event)]
     notes = _prepare_scenario(battle, event, scenario)
+    scene_before = deepcopy(battle) if include_scene else None
     first_event = len(battle.events)
     hazard_cells = {tuple(a['pos']) for a in event['actions']
                     if a['kind'] == 'hazard'}
     before = _snapshot(battle, hazard_cells)
     error = ''
     try:
+        # A real command emits interact, which the real trigger registry reads.
+        if event['condition'] == 'interact' and scenario == 'satisfied':
+            battle.execute({'kind': 'interact', 'unit': battle.active_id,
+                            'object': event['object']})
         # The same condition rule and ordered actions used during gameplay.
         triggers.dispatch(battle)
     except (RuleError, ValueError, KeyError, IndexError) as exc:
@@ -207,6 +264,11 @@ def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial'):
         'error': error,
         'isolated': True,
     }
+    if include_scene:
+        # Returned for Tk painting only, never written to a Content document.
+        report['scene_before'] = scene_before
+        report['scene_after'] = battle
+    return report
 
 
 def format_preview_report(report):
