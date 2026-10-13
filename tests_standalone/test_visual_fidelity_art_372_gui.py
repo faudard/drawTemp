@@ -108,6 +108,22 @@ class VisualFidelityParityGuiTests(unittest.TestCase):
                         self.assertEqual(
                             signature(editor_canvas),
                             signature(player_canvas, shift=player.shift))
+                        # Compare actual occlusion, not only Editor/Player parity:
+                        # rear actor < façade < foreground actor on Canvas.
+                        if state == 'outside':
+                            stack = {item: idx for idx, item in
+                                     enumerate(editor_canvas.find_all())}
+                            rear = editor_canvas.find_withtag('iso_actor_unit_0')
+                            wall = editor_canvas.find_withtag('architecture_instance_0')
+                            front = editor_canvas.find_withtag('iso_actor_unit_1')
+                            self.assertTrue(rear and wall and front)
+                            self.assertLess(max(stack[i] for i in rear),
+                                            min(stack[i] for i in wall))
+                            self.assertLess(max(stack[i] for i in wall),
+                                            min(stack[i] for i in front))
+                        for canvas in (editor_canvas, player_canvas):
+                            for item in canvas.find_withtag('iso_actor_sprite'):
+                                self.assertEqual(canvas.itemcget(item, 'anchor'), 's')
                         self.assertEqual(bool(editor_canvas.find_withtag(
                             'architecture_sprite')), state == 'outside')
                         self.assertEqual(bool(player_canvas.find_withtag(
