@@ -55,7 +55,7 @@ class InteriorBuildingLifecycleTests(unittest.TestCase):
         self.assertEqual(mission['level_links'][0]['from'], [0, 7, 5])
         self.assertEqual(mission['level_links'][0]['to'], [1, 7, 5])
         foe = next(u for u in mission['units'] if u['id'] == self.foe)
-        self.assertEqual(foe['pos'], [7, 4])
+        self.assertEqual(tuple(foe['pos']), (7, 4))
         self.assertEqual(mission['unit_levels'][self.foe], 1)
         self.assertEqual(Content.from_dict(moved).to_dict(), moved)
         self.doc.undo()
@@ -101,8 +101,8 @@ class InteriorBuildingLifecycleTests(unittest.TestCase):
                          [([0, 7, 5], [1, 7, 5]),
                           ([1, 7, 5], [2, 7, 5])])
         self.assertEqual(mission['unit_levels'][self.foe], 2)
-        self.assertEqual(next(u['pos'] for u in mission['units']
-                              if u['id'] == self.foe), [7, 4])
+        self.assertEqual(tuple(next(u['pos'] for u in mission['units']
+                                    if u['id'] == self.foe)), (7, 4))
         self.assertEqual(Content.from_dict(moved).to_dict(), moved)
 
     def test_incompatible_geometry_change_fails_before_edit(self):
