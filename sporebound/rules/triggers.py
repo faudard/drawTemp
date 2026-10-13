@@ -215,7 +215,8 @@ def dispatch(battle):
             if not all(ref in battle.fired for ref in trigger.get('after', ())):
                 continue
             if any(key in trigger for key in (
-                    'cancel_after', 'delay_ticks', 'delay_activations')):
+                    'cancel_after', 'delay_ticks', 'delay_activations',
+                    'expire_after_ticks', 'expire_after_activations')):
                 if temporal_status(battle, trigger)['state'] != 'ready':
                     continue
             if not battle.rules.trigger_conditions.get(
