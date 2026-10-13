@@ -6,11 +6,13 @@ import unittest
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_object
 from sporebound.editor import Document
+from sporebound.editor_groups import create_editor_group
 from sporebound.game_project import GameProject
 from sporebound.model import Content, RuleError
 from sporebound.studio_index4 import StudioIndex
 from sporebound.workspace_shell import (
-    LayoutStore, inspect_map, inspect_resource, map_reference_problems,
+    LayoutStore, inspect_map, inspect_persistent_group, inspect_resource,
+    map_reference_problems,
     map_resource_target, palette_source_for_tree, problem_delta,
 )
 
@@ -62,6 +64,35 @@ class WorkspaceShellTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             inspect_map(self.data, self.mid, obj['pos'],
                         preferred_kind='actor', preferred_id='missing')
+
+    def test_persistent_group_hierarchy_inspection_and_resource_links(self):
+        first, second = self.free_cells(2)
+        with_object = add_object(self.data, self.mid, 'group_chest_3731',
+                                 'chest', second)
+        parent = create_editor_group(with_object, self.mid, 'Campement',
+                                     cells=(first,))
+        nested = create_editor_group(parent, self.mid, 'Réserves',
+                                     parent='group_1', cells=(second,))
+        snapshot = inspect_persistent_group(nested, self.mid, 'group_1')
+        self.assertEqual(snapshot.kind, 'editor_group')
+        self.assertIn('Campement', snapshot.title)
+        self.assertIn('Sous-groupes : 1', snapshot.detail)
+        self.assertIn('Objets : 1', snapshot.detail)
+        self.assertIn(snapshot.cell, (first, second))
+        index = StudioIndex(Content.from_dict(nested), self.project)
+        parent_key = f'editor_group:{self.mid}/group_1'
+        child_key = f'editor_group:{self.mid}/group_2'
+        obj_key = f'map_object:{self.mid}/group_chest_3731'
+        self.assertIn(parent_key, index.nodes)
+        self.assertIn(child_key, {r.target for r in index.outgoing(parent_key)})
+        self.assertIn(obj_key, {r.target for r in index.outgoing(child_key)})
+        self.assertIn(parent_key, {r.target for r in index.outgoing(
+            'mission:' + self.mid)})
+        empty = create_editor_group(nested, self.mid, 'Vide')
+        self.assertEqual(inspect_persistent_group(
+            empty, self.mid, 'group_3').cell, ())
+        with self.assertRaises(RuleError):
+            inspect_persistent_group(nested, self.mid, 'missing')
 
     def test_tile_and_multi_cell_group_share_the_same_inspector_contract(self):
         free = self.free_cells(3)
