@@ -176,3 +176,102 @@ def remove_structure(data, mission_id, cell):
     mission['board']['tiles'] = [tile for tile in mission['board']['tiles']
                                  if tuple(tile['pos']) not in instance.cells]
     return Content.from_dict(updated).to_dict()
+
+
+def structure_at(data, mission_id, cell):
+    """Find an authored or inferred legacy structure covering a clicked cell."""
+    from .iso_architecture import architecture_instances
+    target = _cell(_mission(data, mission_id), cell)
+    mission = Content.from_dict(data).missions[mission_id]
+    instance = next((item for item in architecture_instances(
+        mission.board, mission.structures) if target in item.cells), None)
+    require(instance is not None, 'No structure at selected cell')
+    return instance
+
+
+def _structure_edit_plan(data, mission_id, cell, *, anchor=None,
+                         name=None, quarter_turns=None, door_slot=None,
+                         duplicate=False):
+    """Prepare/validate a move or copy without mutating the input document.
+
+    A move removes the old visual identity and its tactical stamp *before*
+    checking the destination. This permits self-overlapping moves, while
+    keeping other buildings, units, objects and objectives protected.
+    """
+    require(type(duplicate) is bool, 'Invalid duplicate flag')
+    instance = structure_at(data, mission_id, cell)
+    name = instance.name if name is None else name
+    quarter_turns = instance.turns if quarter_turns is None else quarter_turns
+    door_slot = instance.door_slot if door_slot is None else door_slot
+    anchor = instance.anchor if anchor is None else anchor
+    clip = structure_template(name, quarter_turns, door_slot=door_slot)
+    # Do not silently reinterpret an invalid anchor as a placement pivot.
+    structure_footprint(clip, anchor)
+    original = (instance.name, instance.anchor, instance.turns, instance.door_slot)
+    requested = (name, tuple(anchor), quarter_turns, door_slot)
+    prepared = deepcopy(data)
+    mission = _mission(prepared, mission_id)
+    if not duplicate:
+        if instance.id:
+            mission['structures'] = [
+                row for row in mission.get('structures', ())
+                if row['id'] != instance.id]
+        mission['board']['tiles'] = [
+            tile for tile in mission['board']['tiles']
+            if tuple(tile['pos']) not in instance.cells]
+    if duplicate or requested != original:
+        validate_structure_placement(prepared, mission_id, clip, anchor)
+        # Legacy stamps also reserve real ground. Do not overwrite them
+        # merely because they have no authored identity record yet.
+        from .iso_architecture import architecture_instances
+        scene = Content.from_dict(prepared).missions[mission_id]
+        destination = set(structure_footprint(clip, anchor))
+        for other in architecture_instances(scene.board, scene.structures):
+            require(not destination.intersection(other.cells),
+                    'Structure overlaps an existing legacy structure')
+    return prepared, instance, requested, original
+
+
+def validate_structure_edit(data, mission_id, cell, *, anchor=None,
+                            name=None, quarter_turns=None, door_slot=None,
+                            duplicate=False):
+    """Headless placement check, also used for drag-preview colouring."""
+    _structure_edit_plan(data, mission_id, cell, anchor=anchor, name=name,
+                         quarter_turns=quarter_turns, door_slot=door_slot,
+                         duplicate=duplicate)
+
+
+def edit_structure(data, mission_id, cell, *, anchor=None, name=None,
+                   quarter_turns=None, door_slot=None, duplicate=False):
+    """Edit a whole structure atomically; legacy stamps gain an identity.
+
+    A changed structure is re-stamped from its canonical preset. Any
+    per-cell tactical repaint within the *old* footprint is intentionally
+    cleared, matching explicit remove/place; ordinary brushing remains
+    non-destructive to visual identities. The source ID survives a move
+    or property edit; copies receive a new unique ID.
+    """
+    prepared, instance, requested, original = _structure_edit_plan(
+        data, mission_id, cell, anchor=anchor, name=name,
+        quarter_turns=quarter_turns, door_slot=door_slot,
+        duplicate=duplicate)
+    if not duplicate and requested == original and instance.id:
+        return deepcopy(data)
+    chosen_name, chosen_anchor, chosen_turns, chosen_door = requested
+    result = place_structure(prepared, mission_id, chosen_name,
+                             chosen_anchor, chosen_turns, door_slot=chosen_door)
+    if not duplicate and instance.id:
+        # The new record is last; its automatically chosen ID is replaced
+        # with the old persistent ID without touching any other record.
+        _mission(result, mission_id)['structures'][-1]['id'] = instance.id
+    return Content.from_dict(result).to_dict()
+
+
+def move_structure(data, mission_id, cell, anchor):
+    """Move a structure by its clicked footprint cell, preserving its ID."""
+    return edit_structure(data, mission_id, cell, anchor=anchor)
+
+
+def duplicate_structure(data, mission_id, cell, anchor):
+    """Clone a preset at a new anchor with a distinct visual identity."""
+    return edit_structure(data, mission_id, cell, anchor=anchor, duplicate=True)
