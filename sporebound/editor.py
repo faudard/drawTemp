@@ -41,8 +41,10 @@ from .iso_architecture import (PIVOTS, ARCHITECTURE_NAMES, placement_origin,
                                preview_structure_sprite_position)
 from .structure_groups import selected_structures, transform_structure_group
 from .editor_groups import (create_editor_group, add_selection_to_group,
-                            rename_editor_group, delete_editor_group,
-                            descendant_groups, group_display_cells)
+                            remove_selection_from_group, transfer_selection_to_group,
+                            rename_editor_group, reparent_editor_group,
+                            delete_editor_group, descendant_groups,
+                            group_display_cells)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -831,6 +833,45 @@ def launch(path):
         design_change(lambda: doc.replace(add_selection_to_group(
             doc.data, mission_var.get(), selected_group_id, cells)))
         status_var.set('Cases et objets de la sélection liés au groupe.')
+
+    @guarded
+    def unlink_group_selection():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        _active_group()
+        cells = _selection_for_current_map()
+        design_change(lambda: doc.replace(remove_selection_from_group(
+            doc.data, mission_var.get(), selected_group_id, cells)))
+        status_var.set('Sélection retirée du groupe sans supprimer ses objets.')
+
+    @guarded
+    def transfer_group_selection():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        _active_group()
+        cells = _selection_for_current_map()
+        design_change(lambda: doc.replace(transfer_selection_to_group(
+            doc.data, mission_var.get(), selected_group_id, cells)))
+        status_var.set('Appartenance de la sélection transférée au groupe.')
+
+    @guarded
+    def change_group_parent():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        mission = _active_group()
+        groups = mission.get('editor_groups', [])
+        current = next(g for g in groups if g['id'] == selected_group_id)
+        available = ', '.join(g['id']+': '+g['name'] for g in groups
+                              if g['id'] != selected_group_id)
+        choice = simpledialog.askstring(
+            'Déplacer dans l’arbre',
+            'ID du nouveau parent (vide = racine) :\n'+available,
+            initialvalue=current['parent'] or '')
+        if choice is None:
+            return
+        parent = choice.strip() or None
+        design_change(lambda: doc.replace(reparent_editor_group(
+            doc.data, mission_var.get(), selected_group_id, parent)))
 
     @guarded
     def rename_map_group():
@@ -2511,7 +2552,10 @@ def launch(path):
          ('Grouper cases', create_map_group),
          ('Sous-groupe', lambda: create_map_group(child=True, empty=True))),
         (('Ajouter', assign_group_selection), ('Renommer', rename_map_group),
-         ('Dissocier', ungroup_map_group))):
+         ('Dissocier', ungroup_map_group)),
+        (('Retirer', unlink_group_selection),
+         ('Transférer', transfer_group_selection),
+         ('Parent…', change_group_parent))):
         group_row = ttk.Frame(group_controls)
         group_row.pack(fill='x')
         for text, action in actions:
