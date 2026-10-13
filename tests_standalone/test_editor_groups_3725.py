@@ -7,12 +7,14 @@ import unittest
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission, add_object
 from sporebound.editor import Document
-from sporebound.editor_architecture import EditingContext, EditorGroupMoveCommand
+from sporebound.editor_architecture import (EditingContext, EditorGroupMoveCommand,
+                                           EditorGroupTreeDropCommand)
 from sporebound.editor_groups import (
     add_selection_to_group, create_editor_group, delete_editor_group,
     descendant_groups, group_display_cells, group_selection,
     move_editor_group, rename_editor_group, reparent_editor_group,
-    remove_selection_from_group, transfer_selection_to_group)
+    remove_selection_from_group, transfer_selection_to_group,
+    check_tree_drop, drop_group_tree_item)
 from sporebound.iso_structures import place_structure
 from sporebound.model import Content, RuleError
 
@@ -180,6 +182,114 @@ class EditorHierarchyTests(unittest.TestCase):
         result = remove_entity(grouped, self.MID, 'object', 'supply')
         self.assertEqual(self.groups(result)[0]['object_ids'], [])
         self.assertEqual(self.groups(result)[0]['cells'], [[8, 8]])
+
+    def test_tree_drop_reparents_subtrees_and_rejects_cycles(self):
+        first = create_editor_group(self.base, self.MID, 'Cour',
+                                    cells=((3, 3),))
+        second = create_editor_group(first, self.MID, 'Maison',
+                                     parent='group_1', cells=((5, 5),))
+        third = create_editor_group(second, self.MID, 'Quartier')
+        doc = Document(Content.from_dict(third))
+        original = deepcopy(doc.data)
+        with self.assertRaisesRegex(RuleError, 'descendants'):
+            drop_group_tree_item(doc.data, self.MID, 'group_1', 'group',
+                                 target_group_id='group_2')
+        with self.assertRaisesRegex(RuleError, 'already'):
+            drop_group_tree_item(doc.data, self.MID, 'group_2', 'group',
+                                 target_group_id='group_1')
+        doc.replace(drop_group_tree_item(doc.data, self.MID,
+                                         'group_3', 'group',
+                                         target_group_id='group_2'))
+        self.assertEqual(self.groups(doc.data)[2]['parent'], 'group_2')
+        doc.replace(drop_group_tree_item(doc.data, self.MID,
+                                         'group_2', 'group',
+                                         target_group_id=None))
+        self.assertIsNone(self.groups(doc.data)[1]['parent'])
+        self.assertEqual(self.groups(doc.data)[2]['parent'], 'group_2')
+        doc.undo()
+        self.assertEqual(self.groups(doc.data)[1]['parent'], 'group_1')
+        doc.redo()
+        self.assertIsNone(self.groups(doc.data)[1]['parent'])
+        self.assertEqual(self.groups(original)[0]['parent'], None)
+
+    def test_tree_drag_cells_individually_and_as_bundle(self):
+        first = create_editor_group(self.base, self.MID, 'Forêt',
+                                    cells=((3, 3), (4, 3), (5, 3)))
+        second = create_editor_group(first, self.MID, 'Bosquet')
+        before = deepcopy(second)
+        self.assertTrue(check_tree_drop(self.mission(second), 'group_1',
+                                        'cell', member=(4, 3),
+                                        target_group_id='group_2'))
+        moved = drop_group_tree_item(second, self.MID, 'group_1', 'cell',
+                                     member=(4, 3), target_group_id='group_2')
+        self.assertEqual(self.groups(moved)[0]['cells'], [[3, 3], [5, 3]])
+        self.assertEqual(self.groups(moved)[1]['cells'], [[4, 3]])
+        all_moved = drop_group_tree_item(moved, self.MID, 'group_1',
+                                         'cells', target_group_id='group_2')
+        self.assertEqual(self.groups(all_moved)[0]['cells'], [])
+        self.assertEqual(self.groups(all_moved)[1]['cells'],
+                         [[4, 3], [3, 3], [5, 3]])
+        unlinked = drop_group_tree_item(all_moved, self.MID, 'group_2',
+                                        'cell', member=(4, 3),
+                                        target_group_id=None)
+        self.assertEqual(self.groups(unlinked)[1]['cells'], [[3, 3], [5, 3]])
+        self.assertEqual(self.groups(before)[0]['cells'],
+                         [[3, 3], [4, 3], [5, 3]])
+        with self.assertRaises(RuleError):
+            drop_group_tree_item(unlinked, self.MID, 'group_1', 'cell',
+                                 member=(4, 3), target_group_id='group_2')
+
+    def test_tree_drag_objects_and_structures_does_not_change_positions(self):
+        data = add_object(self.base, self.MID, 'supply', 'chest', (8, 8))
+        data = place_structure(data, self.MID, 'Pont', (12, 12))
+        selected = [(8, 8)] + [(x, y) for y in range(12, 14)
+                                for x in range(12, 15)]
+        first = create_editor_group(data, self.MID, 'Éléments',
+                                    cells=selected)
+        second = create_editor_group(first, self.MID, 'Décorations')
+        sid = self.groups(second)[0]['structure_ids'][0]
+        doc = Document(Content.from_dict(second))
+        baseline = deepcopy(doc.data)
+        for field, item in (('object_ids', 'supply'),
+                            ('structure_ids', sid)):
+            cmd = EditorGroupTreeDropCommand('group_1', field,
+                                             item, 'group_2')
+            preview = EditingContext(doc, lambda: self.MID).preview(cmd)
+            self.assertEqual(preview.mission_id, self.MID)
+            doc.replace(preview.candidate)
+        self.assertEqual(self.groups(doc.data)[0]['object_ids'], [])
+        self.assertEqual(self.groups(doc.data)[1]['object_ids'], ['supply'])
+        self.assertEqual(self.groups(doc.data)[1]['structure_ids'], [sid])
+        self.assertEqual(self.mission(doc.data)['objects'][0]['pos'], [8, 8])
+        self.assertEqual(self.mission(doc.data)['structures'][0]['anchor'], [12, 12])
+        unlinked = drop_group_tree_item(doc.data, self.MID, 'group_2',
+                                        'object_ids', member='supply')
+        self.assertEqual(self.groups(unlinked)[1]['object_ids'], [])
+        self.assertEqual(self.mission(unlinked)['objects'][0]['pos'], [8, 8])
+        doc.undo()
+        self.assertEqual(self.groups(doc.data)[0]['structure_ids'], [sid])
+        doc.undo()
+        self.assertEqual(doc.data, baseline)
+
+    def test_tree_drop_invalid_is_atomic_and_does_not_write_history(self):
+        doc = Document(Content.from_dict(
+            create_editor_group(self.base, self.MID, 'Vide')))
+        original = deepcopy(doc.data)
+        count = len(doc.undo_stack)
+        for args in (
+            ('group_1', 'group', None, 'group_1'),
+            ('group_1', 'cells', None, None),
+            ('group_1', 'object_ids', 'unknown', None),
+            ('group_1', 'cell', (200, 2), None),
+            ('missing', 'group', None, None),
+            ('group_1', 'group', None, 'missing'),
+        ):
+            with self.subTest(args=args), self.assertRaises(RuleError):
+                doc.replace(drop_group_tree_item(
+                    doc.data, self.MID, args[0], args[1], member=args[2],
+                    target_group_id=args[3]))
+            self.assertEqual(doc.data, original)
+            self.assertEqual(len(doc.undo_stack), count)
 
     def test_preview_is_side_effect_free_and_stale_preview_is_rejected(self):
         raw = create_editor_group(self.base, self.MID, 'Atelier',
