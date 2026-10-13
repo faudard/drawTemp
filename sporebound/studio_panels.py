@@ -244,6 +244,10 @@ class StudioPanels:
         self.gate_dialogue, _ = self._field(
             gate, 6, 'Dialogue cinématique', 'La porte s’ouvre !')
         self.gate_cinematic_id, _ = self._field(gate, 7, 'ID cinématique (facultatif)')
+        self.gate_min_tick, _ = self._field(
+            gate, 10, 'Tick minimum (optionnel)', '')
+        self.gate_scene, self.gate_scene_box = self._field(
+            gate, 11, 'Scène narrative (optionnelle)', choices=[])
         gate_buttons = ttk.Frame(gate)
         gate_buttons.grid(row=8, column=0, columnspan=3, sticky='ew', pady=6)
         ttk.Button(gate_buttons, text='Créer et simuler',
@@ -252,9 +256,10 @@ class StudioPanels:
         ttk.Button(gate_buttons, text='Simuler événement',
                    command=lambda: self._run(self.preview_gate_event)).pack(
                        side='left', padx=4)
-        ttk.Label(gate, text='Choisir les deux cases sur la carte, puis reprendre '
-                  'leur position ici. Le graphe et la cinématique restent éditables '
-                  'dans les onglets existants.', wraplength=620).grid(
+        ttk.Label(gate, text='Choisir les cases sur la carte. Après création, ajouter '
+                  'des conditions ET/OU/NON et plusieurs effets dans le Graphe '
+                  'existant, puis simuler, vérifier et rejouer.',
+                  wraplength=620).grid(
                       row=9, column=0, columnspan=3, sticky='w', padx=6, pady=4)
         gate.columnconfigure(1, weight=1)
 
@@ -339,7 +344,10 @@ class StudioPanels:
             danger_cell=self._gate_point(self.gate_danger_cell.get()),
             danger=int(self.gate_danger.get()),
             dialogue=self.gate_dialogue.get(),
-            cinematic_id=self.gate_cinematic_id.get().strip())
+            cinematic_id=self.gate_cinematic_id.get().strip(),
+            min_tick=(int(self.gate_min_tick.get())
+                      if self.gate_min_tick.get().strip() else None),
+            scene_id=self.gate_scene.get().strip())
         # If pending raw JSON made design_change abort, do NOT update the
         # manifest: otherwise the scene would reference an uncommitted trigger.
         self.design_change(lambda: self.doc().replace(updated))
@@ -368,6 +376,7 @@ class StudioPanels:
                                 else 'aucune modification'),
              'CINÉMATIQUE PLAYER : ' +
              (', '.join(context['cinematic_ids']) or 'aucune'),
+             'SCÈNE NARRATIVE : ' + (context['narrative_scene_id'] or 'aucune'),
              'GATE : ' + ('OK' if context['gate_scenario_ok'] else 'À CORRIGER'),
              '', *format_preview_report(context['event'])], show_end=True)
         self.notebook.select(graph.tab)
@@ -695,6 +704,11 @@ class StudioPanels:
         doors = [obj['id'] for obj in chosen.get('objects', ())
                  if obj['kind'] == 'door']
         self.gate_door_box['values'] = doors
+        scene_ids = [''] + [row['id'] for row in
+                            self.project.story.get('scenes', [])]
+        self.gate_scene_box['values'] = scene_ids
+        if self.gate_scene.get() not in scene_ids:
+            self.gate_scene.set('')
         if self.gate_door.get() not in doors:
             self.gate_door.set(doors[0] if doors else '')
         self.start_box['values']=[m['id'] for m in missions]
