@@ -56,6 +56,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_editor_gui.py -v
+      - name: Verify 3.7.21B common undo/redo and Save All through real Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_studio_history_gui_3721b.py -v
       - name: Exercise guided studio and title/campaign flows
         env:
           SPOREBOUND_GUI_SMOKE: '1'
