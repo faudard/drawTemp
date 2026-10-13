@@ -234,6 +234,7 @@ def launch(path):
     tile_size = 54
     iso_geometry = None
     iso_var = tk.BooleanVar(value=False)
+    interior_var = tk.BooleanVar(value=False)  # View-only, never saved as mission data.
     surface_var = tk.StringVar(value='grass')
     feature_var = tk.StringVar(value='tree')
     level_var = tk.IntVar(value=2)
@@ -950,7 +951,8 @@ def launch(path):
             live = battle_frame(battle, selected_cell) if battle else None
             iso_geometry = render_isometric(
                 canvas, board, mission, units, cell_size=tile_size,
-                layers={name: var.get() for name, var in layer_vars.items()},
+                layers={**{name: var.get() for name, var in layer_vars.items()},
+                        'Intérieurs': interior_var.get()},
                 selected_cell=selected_cell, selected_tiles=selected_tiles,
                 reachable=live.reachable if live else (),
                 danger=live.danger if live else (),
@@ -1023,6 +1025,19 @@ def launch(path):
         if inspected_tile is not None:
             text += (f'Surface : {inspected_tile.surface} | Décor : '
                      f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
+        if iso_var.get() and board.contains(selected_cell):
+            from .iso_architecture import architecture_instances
+            from .iso_interiors import interior_plan
+            building = next((instance for instance in architecture_instances(
+                board, getattr(mission, 'structures', ()))
+                if selected_cell in instance.cells), None)
+            if building is not None and building.name in ARCHITECTURE_NAMES:
+                room = interior_plan(board, building)
+                text += (f'Intérieur : {building.name} ({building.id or "hérité"})'
+                         f' | {len(room.floors)} cases accessibles'
+                         f' | {len(room.walls)} murs'
+                         f' | {len(room.furnishings)} décors'
+                         f' | entrée {"visible" if room.doors else "obstruée"}\n')
         for obj in mission.objects:
             if obj['kind'] == 'defense':
                 text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
@@ -1120,6 +1135,8 @@ def launch(path):
     scenery_controls.pack(fill='x', padx=5)
     ttk.Checkbutton(scenery_controls, text='Vue isométrique 2.5D',
                     variable=iso_var, command=refresh).pack(side='left', padx=4)
+    ttk.Checkbutton(scenery_controls, text='Intérieurs (coupe des toits)',
+                    variable=interior_var, command=refresh).pack(side='left', padx=4)
     ttk.Label(scenery_controls, text='Sol :').pack(side='left', padx=(10,2))
     surface_box = ttk.Combobox(scenery_controls, textvariable=surface_var,
                                state='readonly', width=12, values=sorted(SURFACES))
