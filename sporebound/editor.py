@@ -1613,7 +1613,9 @@ def launch(path):
                 board, mission, units, cell_size=tile_size,
                 layers={**{name: var.get() for name, var in layer_vars.items()},
                         'Intérieurs': interior_var.get(),
-                        'Étage actif': floor_var.get() if interior_var.get() and not battle else 0},
+                        'Étage actif': (battle.unit_levels.get(battle.active_id, 0)
+                                        if battle and battle.active_id else
+                                        floor_var.get() if interior_var.get() else 0)},
                 selected_cell=selected_cell, selected_tiles=selected_tiles,
                 reachable=live.reachable if live else (),
                 danger=live.danger if live else (),
@@ -1621,7 +1623,8 @@ def launch(path):
                 atlas=iso_atlas, prop_atlas=iso_props,
                 building_atlas=building_atlas,
                 fortification_atlas=fortification_atlas,
-                actor_atlas=actor_atlas, object_atlas=object_atlas)
+                actor_atlas=actor_atlas, object_atlas=object_atlas,
+                unit_levels=battle.unit_levels if battle else None)
         else:
             iso_geometry = None
             editor_renderer.invalidate()
@@ -2055,6 +2058,17 @@ def launch(path):
                  width=9, values=sorted(FLOOR_FEATURES)).pack(side='left')
     ttk.Button(floor_controls, text='Peindre étage',
                command=select_interior_paint).pack(side='left',padx=4)
+    tactical_floors = ttk.Frame(tools_selection)
+    tactical_floors.pack(fill='x', padx=5, pady=2)
+    ttk.Label(tactical_floors, text='Gameplay vertical :').pack(side='left',padx=3)
+    ttk.Label(tactical_floors, text='Destination N').pack(side='left',padx=3)
+    ttk.Combobox(tactical_floors, textvariable=travel_level_var,
+                 state='readonly', width=3,
+                 values=tuple(range(MAX_INTERIOR_LEVEL+1))).pack(side='left')
+    ttk.Button(tactical_floors, text='Escalier N-1 ↔ N',
+               command=create_level_stair).pack(side='left',padx=3)
+    ttk.Button(tactical_floors, text='Placer unité à N',
+               command=set_unit_floor).pack(side='left',padx=3)
     advanced_controls = ttk.Frame(tools_selection)
     advanced_controls.pack(fill='x', padx=5, pady=3)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
