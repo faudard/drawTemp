@@ -241,6 +241,7 @@ def launch(path):
     iso_var = tk.BooleanVar(value=False)
     interior_var = tk.BooleanVar(value=False)  # Editor visibility only.
     floor_var = tk.IntVar(value=1)  # Selected visual deck (ground always 0).
+    travel_level_var = tk.IntVar(value=0)  # Combat target includes ground floor.
     floor_surface_var = tk.StringVar(value='stone')
     floor_feature_var = tk.StringVar(value='crate')
     floor_action_var = tk.StringVar(value='Sol')
@@ -426,7 +427,7 @@ def launch(path):
         elif action == 'move':
             cmd = {'kind': 'move', 'cell': list(selected_cell)}
         elif action == 'level_move':
-            cmd = {'kind': 'level_move', 'level': floor_var.get(),
+            cmd = {'kind': 'level_move', 'level': travel_level_var.get(),
                    'cell': list(selected_cell)}
         elif action.startswith('item:'):
             cmd = {'kind': 'item', 'item': action[5:], 'cell': list(selected_cell)}
@@ -1380,6 +1381,10 @@ def launch(path):
     tactical_floors = ttk.Frame(root)
     tactical_floors.pack(fill='x', padx=5)
     ttk.Label(tactical_floors, text='Gameplay vertical :').pack(side='left',padx=3)
+    ttk.Label(tactical_floors, text='Destination N').pack(side='left',padx=3)
+    ttk.Combobox(tactical_floors, textvariable=travel_level_var,
+                 state='readonly', width=3,
+                 values=tuple(range(MAX_INTERIOR_LEVEL+1))).pack(side='left')
     ttk.Button(tactical_floors, text='Escalier N-1 ↔ N',
                command=create_level_stair).pack(side='left',padx=3)
     ttk.Button(tactical_floors, text='Placer unité à N',
