@@ -201,6 +201,8 @@ class CinematicStudio:
         self.owner.project = candidate
         self.owner.project_status.config(
             text="Cinématique modifiée — enregistrer le projet de jeu.")
+        if hasattr(self.owner, "capture_history"):
+            self.owner.capture_history()
         self.refresh()
 
     def undo(self):

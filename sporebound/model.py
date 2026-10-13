@@ -290,6 +290,7 @@ class Content:
             for c in m.goal:
                 cell(c, b)
                 require(not b.tile(c).blocked, "Goal is blocked")
+            from .iso_map import SURFACES, FEATURES
             for c, t in b.tiles.items():
                 cell(c, b)
                 integer(t.height, 0, 99, "tile.height")
@@ -308,7 +309,9 @@ class Content:
             structure_ids, structure_cells = set(), set()
             for structure in m.structures:
                 require(type(structure) is dict and
-                        set(structure) == {"id", "name", "anchor", "turns", "door_slot"},
+                        set(structure) in (
+                            {"id", "name", "anchor", "turns", "door_slot"},
+                            {"id", "name", "anchor", "turns", "door_slot", "underlay"}),
                         "Invalid structure metadata fields")
                 sid = structure["id"]
                 require(type(sid) is str and 1 <= len(sid) <= 64
@@ -324,6 +327,48 @@ class Content:
                         f"{sid}: structure outside map")
                 require(not footprint.intersection(structure_cells),
                         f"{sid}: overlapping structures")
+                # An optional record-local snapshot preserves the exact
+                # sparse ground underneath new structures. Historical
+                # records without underlay remain valid and unchanged.
+                if "underlay" in structure:
+                    underlay = structure["underlay"]
+                    require(type(underlay) is list and
+                            len(underlay) == len(footprint),
+                            f"{sid}: invalid underlay size")
+                    snapshot_cells = set()
+                    for entry in underlay:
+                        require(type(entry) is dict and
+                                set(entry) == {"pos", "tile"} and
+                                type(entry["pos"]) is list and
+                                len(entry["pos"]) == 2 and
+                                all(type(n) is int for n in entry["pos"]),
+                                f"{sid}: invalid underlay cell")
+                        position = tuple(entry["pos"])
+                        require(position in footprint and
+                                position not in snapshot_cells,
+                                f"{sid}: invalid underlay footprint")
+                        snapshot_cells.add(position)
+                        raw = entry["tile"]
+                        if raw is not None:
+                            require(type(raw) is dict and
+                                    set(raw) == set(asdict(Tile())),
+                                    f"{sid}: invalid underlay tile")
+                            require(type(raw["blocked"]) is bool and
+                                    type(raw["height"]) is int and
+                                    0 <= raw["height"] <= 99 and
+                                    type(raw["cost"]) is int and
+                                    1 <= raw["cost"] <= 99 and
+                                    type(raw["cover"]) is int and
+                                    0 <= raw["cover"] <= 100 and
+                                    type(raw["hazard"]) is int and
+                                    0 <= raw["hazard"] <= 10000 and
+                                    type(raw["surface"]) is str and
+                                    raw["surface"] in SURFACES and
+                                    type(raw["feature"]) is str and
+                                    raw["feature"] in FEATURES,
+                                    f"{sid}: invalid underlay terrain")
+                    require(snapshot_cells == footprint,
+                            f"{sid}: incomplete underlay footprint")
                 structure_cells.update(footprint)
             from .interior_levels import validate_interior_floors
             validate_interior_floors(m.interior_floors, m.structures)
@@ -384,7 +429,7 @@ class Content:
                 require(trigger["id"] not in trigger_ids, "Duplicate trigger")
                 trigger_ids.add(trigger["id"])
                 from .rules.triggers import ValidationContext
-                context = ValidationContext(b, ids, rules, self.archetypes)
+                context = ValidationContext(b, ids, rules, self.archetypes, object_ids)
                 rules.trigger_conditions.get(trigger['condition']).validate(context, trigger)
                 for action in trigger['actions']:
                     rules.trigger_actions.get(action['kind']).validate(context, action)
