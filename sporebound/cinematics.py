@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from .model import RuleError, require
 
 KINDS = ("background", "actor", "camera", "dialogue", "fade", "sound")
-TRIGGERS = ("campaign_start", "before_mission", "after_mission", "scene")
+TRIGGERS = ("campaign_start", "before_mission", "after_mission", "scene", "tactical_event")
 COLORS = ("#101a2b", "#243c56", "#f3dfbf", "#000000", "#ffffff")
 
 
@@ -35,6 +35,13 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
     campaign_ids = {c["id"] for c in campaigns}
     mission_ids = set(content.missions)
     scene_ids = {scene["id"] for scene in (scenes or [])}
+    # Exactly the existing mission trigger identities: never expose a second
+    # script/event namespace or refer to a trigger that cannot be executed.
+    tactical_ids = {
+        f"{mission.id}/{trigger['id']}"
+        for mission in content.missions.values()
+        for trigger in mission.triggers
+    }
     for clip in clips:
         require(isinstance(clip, dict) and set(clip) ==
                 {"id", "name", "trigger", "duration_ms", "events"},
@@ -49,7 +56,9 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
         require(isinstance(trigger, dict) and set(trigger) == {"kind", "target"}
                 and trigger["kind"] in TRIGGERS, "Invalid cinematic trigger")
         targets = (campaign_ids if trigger["kind"] == "campaign_start"
-                   else scene_ids if trigger["kind"] == "scene" else mission_ids)
+                   else scene_ids if trigger["kind"] == "scene"
+                   else tactical_ids if trigger["kind"] == "tactical_event"
+                   else mission_ids)
         require(isinstance(trigger["target"], str) and trigger["target"] in targets,
                 "Cinematic trigger refers to unknown campaign, mission or scene")
         events = clip["events"]
@@ -120,6 +129,29 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
 def matching_cinematics(project, kind, target):
     return [deepcopy(c) for c in project.cinematics
             if c["trigger"] == {"kind": kind, "target": target}]
+
+
+def tactical_event_target(mission_id, event_id):
+    """Stable fully-qualified tactical event identity in the project manifest."""
+    return f"{mission_id}/{event_id}"
+
+
+def triggered_tactical_cinematics(project, battle, acknowledged=()):
+    """Return newly fired clips in engine order, with a new acknowledgement set.
+
+    Pure projection: does not change the Battle, its replay/save, or GameProject.
+    The Player controls presentation and when to acknowledge a visible cue.
+    """
+    seen = set(acknowledged)
+    fresh = [eid for eid in battle.fired if eid not in seen]
+    clips = [
+        clip
+        for event_id in fresh
+        for clip in matching_cinematics(
+            project, 'tactical_event',
+            tactical_event_target(battle.mission.id, event_id))
+    ]
+    return clips, seen | set(battle.fired)
 
 
 def cinematic_template(cid, name, kind, target):
