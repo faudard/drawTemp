@@ -1021,7 +1021,7 @@ def launch(path):
             canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
         inspected_tile = board.tile(selected_cell) if board.contains(selected_cell) else None
         mode_var.set('MODE : PLAYTEST (édition verrouillée)' if battle else 'MODE : ÉDITION')
-        selected_units = [u for u in units if u.pos == selected_cell]
+        selected_units = [u for u in units if tuple(u.pos) == selected_cell]
         selected_objects = [o for o in mission.objects if tuple(o['pos']) == selected_cell]
         if selected_units:
             heading = 'PERSONNAGE — ' + ', '.join(u.name for u in selected_units)
