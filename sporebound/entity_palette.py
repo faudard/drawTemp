@@ -17,6 +17,14 @@ FACING = {
     'south': (0, 1), 'north': (0, -1),
     'east': (1, 0), 'west': (-1, 0),
 }
+# Presentation-only placeholders backed by the existing scenery atlas.
+# These are not new gameplay objects and do not claim to be final item art.
+OBJECT_PROP_HINTS = {
+    'door': 'arch', 'switch': 'lantern', 'chest': 'crate',
+    'ram': 'pillar', 'catapult': 'boulder', 'passage': 'stairs',
+    'defense': 'stone_wall',
+}
+
 OBJECT_LABELS = (
     ('door', 'Porte'),
     ('switch', 'Levier'),
@@ -132,3 +140,37 @@ def place_entity(data, mission_id, entry_id, cell, *,
     target_mission['units'].append(actor)
     return Content.from_dict(
         new, rules=authored_rules_for_document(new)).to_dict()
+
+
+@dataclass(frozen=True)
+class EntityPlacementPreview:
+    """Exact validation result plus affected cells for Canvas overlays."""
+    cells: tuple
+    allowed: bool
+    reason: str = ''
+
+
+def preview_entity_placement(data, mission_id, entry_id, cell, *,
+                             facing='south', link='', destination=None):
+    """Authoritative WYSIWYG placement check; does not modify the document.
+
+    For correctness the hover calls the same Content-validating operation as
+    committing a placement. The GUI caches this result per hovered cell to
+    avoid full Content validation on every mouse pixel.
+    """
+    mission = _mission(data, mission_id)
+    cells = (tuple(cell),)
+    if isinstance(entry_id, str) and entry_id.startswith('actor:'):
+        source_id = entry_id.partition(':')[2]
+        source = next((actor for actor in mission['units']
+                       if actor['id'] == source_id), None)
+        if source:
+            width, height = source.get('footprint', (1, 1))
+            cells = tuple((cell[0] + dx, cell[1] + dy)
+                          for dy in range(height) for dx in range(width))
+    try:
+        place_entity(data, mission_id, entry_id, cell,
+                     facing=facing, link=link, destination=destination)
+    except (ValueError, TypeError) as exc:
+        return EntityPlacementPreview(cells, False, str(exc))
+    return EntityPlacementPreview(cells, True)
