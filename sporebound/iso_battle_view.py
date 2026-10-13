@@ -83,6 +83,7 @@ class IsoBattleCanvas:
         self._architecture = ()
         self._cutaways = ()
         self._level_map = {}
+        self._floor_records = ()
         self._scene_rebuilds = 0
         self._actor_only_frames = 0
 
@@ -147,6 +148,7 @@ class IsoBattleCanvas:
         actor_state = (self._actor_state(units),
                        tuple(sorted(battle.unit_levels.items())))
         self._level_map = dict(battle.unit_levels)
+        self._floor_records = tuple(battle.mission.interior_floors)
         reusable = (
             self.geometry is not None
             and frame is self._frame
@@ -209,10 +211,20 @@ class IsoBattleCanvas:
         self._scene_rebuilds += 1
         return geo
 
-    def hit_test(self, x, y):
+    def hit_test(self, x, y, *, level=0):
         if self.geometry is None:
             return None
-        return self.geometry.hit_test(x-self.shift[0], y-self.shift[1])
+        px, py = x-self.shift[0], y-self.shift[1]
+        if level > 0:
+            from .interior_levels import floor_hit_test
+            for building in reversed(self._architecture):
+                for floor in self._floor_records:
+                    if floor['structure_id'] == building.id and floor['level'] == level:
+                        result = floor_hit_test(self.geometry, building, floor, px, py)
+                        if result is not None:
+                            return result
+            return None
+        return self.geometry.hit_test(px, py)
 
     def dispose(self):
         self.geometry = None
@@ -226,6 +238,8 @@ class IsoBattleCanvas:
         self._cutaways = ()
         self._positions = ()
         self._actor_sprite_states = ()
+        self._floor_records = ()
+        self._level_map = {}
         self.terrain._tiles.clear()
         self.props.clear_cache()
         self.buildings.clear_cache()
