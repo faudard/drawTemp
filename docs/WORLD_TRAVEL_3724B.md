@@ -242,3 +242,39 @@ SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_worl
 Il s'agit d'une comparaison d'effets narratifs et d'itinéraires :
 la résolution des batailles reste hors périmètre et doit passer par le
 Battle Lab / Player.
+
+## 3.7.24H — Preuves tactiques des itinéraires (Battle Lab)
+
+Le comparateur de parcours **World Studio** comporte une vue Battle Lab
+pour une mission commune, avec une sélection de seeds appariées et une
+limite de commandes par seed (défauts : 1,7 / 40 commandes).
+
+- Chaque variante n'est testée que si sa `GameSession.world_can_enter`
+  confirme que le groupe a atteint la mission, qu'elle est débloquée et
+  qu'aucun dialogue n'est en attente. Les autres variantes affichent
+  explicitement la raison de leur indisponibilité.
+- Pour chaque variante jouable, les rencontres IA utilisent
+  `Campaign.prepare` sur **une copie de sa progression propre** :
+  classes, niveaux, talents, recrutements, équipement et moral sont donc
+  ceux de la branche narrative testée, avec les effets de
+  `GameSession._battle_support` appliqués au `Battle.initial_state`.
+- `battle_lab.run_lab(..., progress=..., initial_state=...)` réutilise la
+  simulation IA canonique, la vérification du replay et les mesures
+  de victoires, commandes et ticks CT. Les rapports contextuels ont
+  un `setup_sha256` de comparaison, distinct de la référence au contenu :
+  deux campagnes différentes ne provoquent pas de fausse alerte
+  de déterminisme sur entrées supposées identiques.
+- La matrice indique disponibilité, potions initiales, victoires IA,
+  commandes p95, ticks CT p95, activations, blocages possibles et replay.
+  Le calcul s'exécute sur **un worker isolé du thread Tk**,
+  sur une copie des données de l'éditeur. Les résultats obsolètes sont
+  écartés si le Studio ou les variantes changent.
+- Aucun combat n'est intégré à la sauvegarde ni aux événements de campagne ;
+  une victoire statistique n'est pas une victoire réellement jouée. Les
+  ticks / commandes ne sont pas des minutes de jeu.
+
+Tests ciblés :
+```sh
+python -m unittest tests_standalone.test_world_tactical_comparison_3724h -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_world_tactical_comparison_3724h_gui -v
+```
