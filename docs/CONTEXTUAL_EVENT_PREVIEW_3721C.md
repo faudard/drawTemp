@@ -18,22 +18,41 @@ ouvre un panneau **Contexte et prévisualisation** sans quitter le graphe.
   déclencheur choisi dans `rules.triggers.dispatch`. Le prédicat et les
   actions sont donc exécutés par le **moteur existant**, jamais réinterprétés
   par l'interface.
-- Le résultat indique si la condition a été satisfaite, les événements
-  émis par le moteur, les unités ajoutées/retirées et les erreurs d'exécution.
-  L'ensemble est sans écriture ni modification du projet, de la mission ou
+- Un choix de scénario permet de sonder l'état **initial**, un état
+  **condition vraie** ou **condition fausse**. Les conditions `tick`, `enter`,
+  `hp_below`, `defeated` et `wave_capacity` s'appuient toutes sur les
+  prédicats du moteur. Les états testés sont synthétiques et annoncés.
+  Lorsque le contre-exemple est impossible (par exemple `tick >= 0`),
+  le Studio affiche une erreur explicite au lieu de fabriquer un résultat.
+- Le rapport indique condition, tick effectivement utilisé, événements moteur,
+  créations/suppressions d'unités et **diff d'état** : PV, PM, position, statuts
+  et dangers de terrain modifiés par les actions. Le rapport distingue les
+  règles non activées, exécutées et les échecs partiels du moteur.
+- Les cinématiques de type `scene` associées à la scène narrative
+  après-victoire sont aussi proposées. Le créateur choisit **quelle**
+  cinématique ouvrir si plusieurs ressources sont liées.
+- Le tout est sans écriture ni modification du projet, de la mission ou
   de l'historique undo/redo.
 
 ## Parcours de validation
 
 1. Ouvrir le Map Editor → onglet **Graphe des événements**.
 2. Créer un déclencheur `tick >= 5` avec action `message`.
-3. Sélectionner son nœud, tester au tick `4` : aucune activation.
+3. Sélectionner son nœud, scénario « État initial », tester au tick `4` :
+   aucune activation.
 4. Tester au tick `5` : événement `trigger` puis `message`.
-5. Revenir aux blocs, déplacer une action, revenir au graphe : l'ordre est
+   Répéter avec « Condition vraie » et « Condition fausse » : l'éditeur
+   prépare les ticks `5` et `4` sans simulation des tours intermédiaires.
+5. Ajouter une action `hazard` : vérifier la ligne « Case … · danger :
+   ancienne → nouvelle valeur » dans les conséquences.
+6. Revenir aux blocs, déplacer une action, revenir au graphe : l'ordre est
    identique. Enregistrer et rouvrir : aucune donnée d'aperçu n'est sérialisée.
-6. Configurer une scène après victoire et une cinématique de mission dans les
-   éditeurs existants ; vérifier l'ouverture des deux ressources depuis le
-   graphe. L'absence de lien désactive le bouton correspondant.
+7. Configurer une scène après victoire, une cinématique de mission et une
+   cinématique liée à cette scène. Vérifier leur présence et la sélection
+   explicite de la cinématique depuis le graphe. L'absence de lien
+   désactive le bouton correspondant.
+8. Choisir un boss `hp_below` et un point `enter` : comparer les scénarios
+   vrai/faux, sans modifier les PV ou coordonnées du fichier projet.
 
 Commandes de régression :
 
@@ -47,6 +66,9 @@ SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_even
 
 - Le tick fourni est une **sonde ponctuelle** du prédicat : les ticks
   intermédiaires ne sont pas simulés, aucune IA ni campagne n'est déroulée.
+  Les scénarios « vraie/fausse » utilisent des **états de test synthétiques** ;
+  les positions simulées ne garantissent pas un chemin praticable, et
+  `wave_capacity` n'invente pas des unités qui n'existent pas.
   Pour tester un enchaînement complet, utiliser le véritable playtest.
 - Les objets de carte (leviers, portes), conséquences stratégiques et scènes
   cinématiques n'ont pas encore de lien direct `trigger → scène` dans le
