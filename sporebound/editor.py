@@ -639,9 +639,9 @@ def launch(path):
             if cell is None:
                 clear_placement_preview()
                 return
-            entry, facing, link, destination = entity_choice
+            entry, facing, link, destination, team = entity_choice
             key = (id(doc.data), mission_var.get(), cell, entry.id, facing,
-                   link, destination, tile_size, iso_var.get())
+                   link, destination, team, tile_size, iso_var.get())
             if key == entity_hover_key:
                 return
             clear_placement_preview()
@@ -650,7 +650,7 @@ def launch(path):
             from .entity_palette import preview_entity_placement, OBJECT_PROP_HINTS
             feedback = preview_entity_placement(
                 doc.data, mission_var.get(), entry.id, cell, facing=facing,
-                link=link, destination=destination)
+                link=link, destination=destination, team=team)
             entity_hover_key = key
             color = '#36a16c' if feedback.allowed else '#e05252'
             inside = [c for c in feedback.cells
@@ -658,7 +658,7 @@ def launch(path):
                       and 0 <= c[1] < mission['board']['height']]
             if iso_var.get() and iso_geometry is not None and inside:
                 cx, cy = iso_geometry.center(cell)
-                if entry.kind == 'actor':
+                if entry.kind in ('actor', 'archetype'):
                     photo = actor_atlas.sprite(entry.style, facing, 0, tile_size)
                 else:
                     photo = iso_props.sprite(
@@ -802,10 +802,11 @@ def launch(path):
             if entity_choice is None:
                 raise RuleError('Choisir un acteur ou objet dans la palette.')
             from .entity_palette import place_entity
-            entry, facing, link, destination = entity_choice
+            entry, facing, link, destination, team = entity_choice
             design_change(lambda: doc.replace(place_entity(
                 doc.data, mission_var.get(), entry.id, selected_cell,
-                facing=facing, link=link, destination=destination)))
+                facing=facing, link=link, destination=destination,
+                team=team)))
             status_var.set(f'{entry.label} placé en {selected_cell} ; '
                            'Undo/Redo et sauvegarde disponibles.')
         elif tool == 'Structure':
@@ -1234,12 +1235,12 @@ def launch(path):
         canvas.focus_set()
         return True
 
-    def choose_entity(entry, facing, link, destination):
+    def choose_entity(entry, facing, link, destination, team):
         nonlocal entity_choice
         if battle is not None or source_pending():
             status_var.set('Terminer le playtest et appliquer le JSON avant édition.')
             return False
-        entity_choice = (entry, facing, link, destination)
+        entity_choice = (entry, facing, link, destination, team)
         tool_var.set('Entité')
         iso_var.set(True)
         notebook.select(work)
