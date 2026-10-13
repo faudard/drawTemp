@@ -1354,12 +1354,19 @@ def launch(path):
             try:
                 structure = structure_at(doc.data, mission_var.get(),
                                          structure_selection_cell)
+                record = next((row for row in mission.structures
+                               if row['id'] == structure.id), None)
+                ground_status = ('Sauvegardé (' + str(len(record['underlay'])) +
+                                 ' cases)' if record is not None and
+                                 'underlay' in record else
+                                 'Ancienne structure : sol non récupérable')
                 text += ('\n\nSTRUCTURE SÉLECTIONNÉE\n'
                          f'{structure.name} — {structure.id or "héritée (sans ID)"}\n'
                          f'Ancrage : {structure.anchor}\n'
                          f'Emprise : {structure.width}×{structure.height}\n'
                          f'Rotation : {structure.turns * 90}°\n'
                          f'Entrée : {structure.door_slot + 1}\n'
+                         f'Terrain sous le bâtiment : {ground_status}\n'
                          'Éditer les propriétés dans la barre Structure, '
                          'puis Appliquer ; déplacer ou dupliquer par clic.')
                 preview_cells(structure.cells, tag='structure_selection',
