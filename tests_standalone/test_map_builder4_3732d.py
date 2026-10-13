@@ -40,8 +40,7 @@ class ReusablePrefab4Tests(unittest.TestCase):
         self.assertEqual(rotated['size'], [1, 2])
         self.assertEqual({tuple(t['pos']) for t in rotated['tiles']},
                          {(0, 0), (0, 1)})
-        self.assertEqual(rotate_group_prefab(stamp, 4) if False else
-                         rotate_group_prefab(rotated, 3), stamp)
+        self.assertEqual(rotate_group_prefab(rotated, 3), stamp)
         self.assertEqual(stamp, original)
         canvas_cells = prefab_display_cells(rotated, (12, 12))
         self.assertEqual(canvas_cells, {(12, 12), (12, 13)})
