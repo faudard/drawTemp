@@ -134,6 +134,39 @@ class EntityEventStudio3Tests(unittest.TestCase):
         self.assertEqual(cleared, original)
         self.assertEqual(project.cinematics[0]['id'], 'cin_gate_alarm_3')
 
+    def test_existing_story_scene_links_to_real_player_event(self):
+        project_data = self.project.to_dict()
+        project_data['story'] = {
+            'scenes': [{
+                'id': 'lever_choice', 'title': 'Le choix de Jeanne',
+                'speaker': 'Jeanne', 'text': 'Ouvrir la porte ?',
+                'choices': [{'id': 'continue', 'label': 'Continuer'}],
+            }],
+            'entry_scenes': {}, 'after_mission': {},
+        }
+        self.project = GameProject.from_dict(
+            project_data, Content.from_dict(self.raw))
+        data, project = self.author(scene_id='lever_choice')
+        self.assertEqual(project.story['during_tactical_event'],
+                         {'garden/gate_alarm_3': 'lever_choice'})
+        content = Content.from_dict(data, rules=authored_rules_for_document(data))
+        session = GameSession.new(content, project, 'main')
+        session.start_mission(self.mid)
+        actor = session.active_battle.unit('momo')
+        session.active_battle.active_id = actor.id
+        actor.ct = 100
+        actor.acted = False
+        session.execute({'kind': 'interact', 'unit': 'momo', 'object': 'switch'})
+        self.assertEqual(session.tactical_story_pending, 'lever_choice')
+        self.assertEqual(session.tactical_scene()['id'], 'lever_choice')
+        self.assertIn('gate_alarm_3', session.active_battle.fired)
+
+        # A bad scene never leaks into the caller's Content or GameProject.
+        original_project = deepcopy(self.project.to_dict())
+        with self.assertRaises(RuleError):
+            self.author(scene_id='nonexistent_scene')
+        self.assertEqual(self.project.to_dict(), original_project)
+
     def test_serialized_session_replays_canonical_composite_content(self):
         # Verify GameSession's real authenticated recording is compatible with
         # composite-authored missions, without fabricating a battle activation.
