@@ -4,7 +4,8 @@ Only this module creates widgets; the index and game engine remain headless.
 """
 from .model import RuleError
 from .workspace_shell import (inspect_resource, inspect_map,
-                              map_resource_target, problem_delta)
+                              inspect_persistent_group, map_resource_target,
+                              problem_delta)
 from .studio_index4 import WorkspaceModelCache
 from .performance_trace import begin_ui, finish_ui
 from .game_export4 import export_game
@@ -247,6 +248,10 @@ class ProjectWorkspaceTab:
                     self.owner.doc().data, mid, cell,
                     preferred_kind='actor' if node.kind == 'map_actor' else 'object',
                     preferred_id=node.id.split('/', 1)[1])
+            elif node.kind == 'editor_group':
+                mid, gid = node.id.split('/', 1)
+                snapshot = inspect_persistent_group(
+                    self.owner.doc().data, mid, gid)
         self.heading.config(text=(snapshot.title + ' [' + node.kind + ']')
                             if snapshot else 'Sélectionner une ressource')
         self.summary.config(text=snapshot.detail if snapshot else
@@ -284,6 +289,14 @@ class ProjectWorkspaceTab:
             mid, cell, kind, identifier = map_resource_target(
                 node.key, self.owner.doc().data)
             self.owner.focus_map_cell(mid, cell)
+            self._show_tab('Carte et combat')
+        elif node.kind == 'editor_group':
+            mid, gid = node.id.split('/', 1)
+            snapshot = inspect_persistent_group(self.owner.doc().data, mid, gid)
+            if snapshot.cell:
+                self.owner.focus_map_cell(mid, snapshot.cell)
+            else:
+                self.owner.select_mission(mid)
             self._show_tab('Carte et combat')
         elif node.kind == 'mission':
             self.owner.select_mission(node.id)
