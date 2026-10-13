@@ -79,6 +79,9 @@ class ProjectWorkspaceTab:
         ttk.Button(controls, text='Assistant siège (3 missions)',
                    command=lambda: self.owner._run(self.open_siege_wizard)).pack(
                        fill='x', padx=8, pady=4)
+        ttk.Button(controls, text='Carte du monde',
+                   command=lambda: self.owner.world_studio.show()).pack(
+                       fill='x', padx=8, pady=4)
         ttk.Button(controls, text='Vérifier projet et assets',
                    command=lambda: self.owner._run(self.validate_all)).pack(
                        fill='x', padx=8, pady=4)

@@ -23,6 +23,18 @@ def digest(value):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def gameplay_project_digest(project):
+    """Fingerprint game-affecting project data, not decorative world positions.
+
+    Legacy projects without a world preserve their exact original digest.
+    Adding/moving map pins cannot invalidate a persisted Campaign checkpoint.
+    Other story, campaign, asset and gameplay fields remain strictly verified.
+    """
+    manifest = project.to_dict()
+    manifest.pop("world", None)
+    return digest(manifest)
+
+
 class IncompatibleSaveError(RuleError):
     """A verified save belongs to other content, project or gameplay rules.
 
@@ -472,7 +484,7 @@ class GameSession:
             "version": self.VERSION, "kind": "game_session",
             "campaign_id": self.campaign_id, "seed": self.seed,
             "content_digest": digest(self.content.to_dict()),
-            "project_digest": digest(self.project.to_dict()),
+            "project_digest": gameplay_project_digest(self.project),
             "rules": self.rules.manifest(),
             "progress": {"version": 1, **asdict(self.progress)},
             "mode": self.mode, "tactical": tactical,
@@ -513,7 +525,7 @@ class GameSession:
                                          if k != "digest"}), "Game session checksum mismatch")
         rules = rules if rules is not None else default_rules()
         current_content = digest(content.to_dict())
-        current_project = digest(project.to_dict())
+        current_project = gameplay_project_digest(project)
         current_rules = rules.manifest()
         if data["content_digest"] != current_content:
             raise IncompatibleSaveError("content", data["content_digest"], current_content)

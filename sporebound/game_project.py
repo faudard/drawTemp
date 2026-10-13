@@ -30,6 +30,7 @@ class GameProject:
     cinematics: list[dict] = field(default_factory=list)
     exploration: dict = field(default_factory=dict)
     battle_support: list[dict] = field(default_factory=list)
+    world: dict = field(default_factory=dict)
 
     @classmethod
     def default(cls, content):
@@ -60,6 +61,7 @@ class GameProject:
                 **({'sieges': deepcopy(self.sieges)} if self.sieges else {}),
                 **({'cinematics': deepcopy(self.cinematics)} if self.cinematics else {}),
                 **({'exploration': deepcopy(self.exploration)} if self.exploration else {}),
+                **({'world': deepcopy(self.world)} if self.world else {}),
                 **({'battle_support': deepcopy(self.battle_support)} if self.battle_support else {})}
 
     def asset_registry(self):
@@ -120,6 +122,8 @@ class GameProject:
                     'Unknown strategic narrative trigger: ' + reference)
         from .exploration import validate_exploration
         validate_exploration(self.exploration, self.story)
+        from .world_map import validate_world
+        validate_world(self.world, content, self.campaigns)
         require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
                 'Invalid battle support rules')
         for spec in self.battle_support:
