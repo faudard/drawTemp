@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import traceback
 from unittest.mock import patch
 
 from sporebound.__main__ import DEFAULT_CONTENT
@@ -63,7 +64,7 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     root.update()
                     # Show the authoring validation error at the failing step,
                     # instead of reporting an unhelpful empty graph.
-                    self.assertFalse(callback_errors, callback_errors)
+                    self.assertFalse(callback_errors, [''.join(traceback.format_exception(*err)) for err in callback_errors])
                     self.assertFalse(show_error.called, show_error.call_args_list)
                     self.assertTrue(any('event_node_' in tag
                                         for item in event_graph.find_all()
