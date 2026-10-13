@@ -114,6 +114,11 @@ def place_palette_entity(data, mission_id, entry, cell, *, entity_id='',
                          hp=original.max_hp, mp=original.max_mp,
                          ct=0, moved=False, acted=False, cast=None,
                          disengaging=False, statuses={})
+            # Patrol cells are authored absolute coordinates: translate with the clone.
+            if original.patrol_route:
+                dx, dy = cell[0] - original.pos[0], cell[1] - original.pos[1]
+                spawn['patrol_route'] = [[x+dx, y+dy]
+                                         for x, y in original.patrol_route]
         else:
             raise ValueError('Unknown palette actor source')
         current['units'].append(spawn)
