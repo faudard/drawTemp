@@ -1182,7 +1182,8 @@ def launch(path):
                     'structure_group_preview', 'structure_group_ghost',
                     'brush_preview', 'asset_ghost', 'entity_preview',
                     'entity_ghost', 'entity_route', 'entity_source',
-                    'entity_target_preview', 'floor_preview'):
+                    'entity_target_preview', 'floor_preview',
+                    'editor_group_preview'):
             canvas.delete(tag)
 
     def paste_preview(event):
@@ -2505,15 +2506,17 @@ def launch(path):
     group_tree.bind('<<TreeviewSelect>>', select_group_in_tree)
     group_controls = ttk.Frame(side_panel)
     group_controls.pack(fill='x', padx=5)
-    for text, action in (
-        ('Créer vide', lambda: create_map_group(empty=True)),
-        ('Grouper cases', create_map_group),
-        ('Sous-groupe', lambda: create_map_group(child=True, empty=True)),
-        ('Ajouter', assign_group_selection),
-        ('Renommer', rename_map_group),
-        ('Dissocier', ungroup_map_group)):
-        ttk.Button(group_controls, text=text, command=action).pack(
-            side='left', padx=1, pady=2)
+    for actions in (
+        (('Créer vide', lambda: create_map_group(empty=True)),
+         ('Grouper cases', create_map_group),
+         ('Sous-groupe', lambda: create_map_group(child=True, empty=True))),
+        (('Ajouter', assign_group_selection), ('Renommer', rename_map_group),
+         ('Dissocier', ungroup_map_group))):
+        group_row = ttk.Frame(group_controls)
+        group_row.pack(fill='x')
+        for text, action in actions:
+            ttk.Button(group_row, text=text, command=action).pack(
+                side='left', padx=1, pady=1)
     group_move_controls = ttk.Frame(side_panel)
     group_move_controls.pack(fill='x', padx=5, pady=(0, 5))
     ttk.Label(group_move_controls, text='ΔX').pack(side='left')
