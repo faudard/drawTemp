@@ -184,9 +184,9 @@ def floor_hit_test(geo, building, floor, px, py):
     """Find an upper-deck cell beneath the pointer, not the ground tile."""
     level = floor['level']
     shift = level * 3 * geo.step
-    for cell, _ in sorted(floor_absolute_cells(building, floor),
-                          key=lambda item: (sum(item[0]), item[0][0]),
-                          reverse=True):
+    # Include empty cells so a hole can be selected and filled again.
+    for cell in sorted(building.cells,
+                       key=lambda c: (sum(c), c[0]), reverse=True):
         cx, cy = geo.center(cell)
         if (abs(px-cx)/geo.half_width +
                 abs(py-(cy-shift))/geo.half_height <= 1):
