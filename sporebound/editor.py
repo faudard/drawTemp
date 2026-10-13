@@ -43,6 +43,7 @@ from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
 from .studio_transaction import StudioTransactionStore
+from .performance_trace import begin_ui, finish_ui
 
 
 class Document:
@@ -1666,6 +1667,7 @@ def launch(path):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
         nonlocal entity_hover_key, entity_passage_entry
+        ui_started = begin_ui()
         structure_preview_key = None
         entity_hover_key = None
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
@@ -1919,6 +1921,12 @@ def launch(path):
             draw_minimap(board, mission, units)
         if studio is not None and (views is None or WORKSPACE in views):
             studio.refresh()
+        finish_ui("map.refresh", ui_started, canvas, counts={
+            "map_cells": board.width * board.height,
+            "canvas_items": len(canvas.find_all()) if ui_started is not None else 0,
+            "selected_tiles": len(selected_tiles),
+            "renderer_enabled": views is None or RENDERER in views,
+        })
 
     bar = ttk.Frame(root)
     bar.pack(fill='x')
