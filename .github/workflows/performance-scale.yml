@@ -4,6 +4,7 @@ on:
     paths:
       - 'scripts/profile_scale_3732.py'
       - 'scripts/compare_profile_scale_3732.py'
+      - 'scripts/summarize_ui_trace_3732.py'
       - 'sporebound/performance_trace.py'
       - 'tests_standalone/test_performance_reporting_3732b.py'
       - 'sporebound/editor.py'
