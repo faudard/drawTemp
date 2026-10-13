@@ -168,6 +168,23 @@ class EditorGroupMoveCommand:
 
 
 @dataclass(frozen=True)
+class EditorGroupTreeDropCommand:
+    """Reorganize a mission hierarchy from Treeview without moving the map."""
+    source_group_id: str
+    item_kind: str
+    member: object = None
+    target_group_id: Optional[str] = None
+    kind: str = 'editor-group-tree'
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+
+    def transform(self, data, mission_id):
+        from .editor_groups import drop_group_tree_item
+        return drop_group_tree_item(
+            data, mission_id, self.source_group_id, self.item_kind,
+            member=self.member, target_group_id=self.target_group_id)
+
+
+@dataclass(frozen=True)
 class EntityCommand:
     """Move, duplicate, edit or delete an existing unit or interactive object."""
     action: str
