@@ -145,10 +145,7 @@ class IsoBattleCanvas:
         units = battle.units
         viewport = self.viewport()
         ids = tuple(actor.id for actor in units)
-        actor_state = (self._actor_state(units),
-                       tuple(sorted(battle.unit_levels.items())))
-        self._level_map = dict(battle.unit_levels)
-        self._floor_records = tuple(battle.mission.interior_floors)
+        actor_state = self._actor_state(units)
         reusable = (
             self.geometry is not None
             and frame is self._frame
@@ -157,6 +154,7 @@ class IsoBattleCanvas:
             and viewport == self._viewport
             and ids == self._unit_ids
             and actor_state == self._unit_state
+            and self._level_map == battle.unit_levels
             and self._cutaways == self._cutaway_flags(frame, units, poses)
         )
         if reusable:
@@ -206,6 +204,8 @@ class IsoBattleCanvas:
         self._viewport = viewport
         self._unit_ids = ids
         self._unit_state = actor_state
+        self._level_map = dict(battle.unit_levels)
+        self._floor_records = tuple(battle.mission.interior_floors)
         self._architecture = architecture_instances(
             battle.board, getattr(battle.mission, 'structures', ()))
         self._cutaways = self._cutaway_flags(frame, units, poses)
