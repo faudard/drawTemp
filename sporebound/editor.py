@@ -242,6 +242,8 @@ def launch(path):
     structure_door_var = tk.StringVar(value='Entrée A')
     structure_turns = 0
     asset_palette = None
+    entity_palette = None
+    entity_choice = None
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
@@ -620,12 +622,37 @@ def launch(path):
 
     def clear_placement_preview(_event=None):
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
-                    'brush_preview', 'asset_ghost'):
+                    'brush_preview', 'asset_ghost', 'entity_preview',
+                    'entity_ghost'):
             canvas.delete(tag)
 
     def paste_preview(event):
         clear_placement_preview()
         if battle:
+            return
+        if tool_var.get() == 'Entité' and entity_choice is not None:
+            cell = event_cell(event)
+            if cell is None:
+                return
+            mission = next(m for m in doc.data['missions']
+                           if m['id'] == mission_var.get())
+            if not (0 <= cell[0] < mission['board']['width'] and
+                    0 <= cell[1] < mission['board']['height']):
+                return
+            entry, facing, _link, _destination = entity_choice
+            if iso_var.get() and iso_geometry is not None:
+                cx, cy = iso_geometry.center(cell)
+                if entry.kind == 'actor':
+                    photo = actor_atlas.sprite(entry.style, facing, 0, tile_size)
+                    if photo is not None:
+                        canvas.create_image(cx, cy + tile_size * 18 / 54,
+                                            image=photo, anchor='s',
+                                            tags='entity_ghost')
+                else:
+                    canvas.create_oval(cx-9, cy-9, cx+9, cy+9,
+                                       fill='#9070b1', outline='#4b5261',
+                                       tags='entity_ghost')
+            preview_cells([cell], tag='entity_preview', color='#2361ff')
             return
         if tool_var.get() == 'Structure':
             cursor = event_cell(event)
@@ -745,6 +772,18 @@ def launch(path):
             refresh()
         elif tool == 'Collage':
             paste_at(selected_cell)
+        elif tool == 'Entité':
+            if battle or source_pending():
+                raise RuleError('Terminer le playtest et appliquer le JSON avant la pose.')
+            if entity_choice is None:
+                raise RuleError('Choisir un acteur ou objet dans la palette.')
+            from .entity_palette import place_entity
+            entry, facing, link, destination = entity_choice
+            design_change(lambda: doc.replace(place_entity(
+                doc.data, mission_var.get(), entry.id, selected_cell,
+                facing=facing, link=link, destination=destination)))
+            status_var.set(f'{entry.label} placé en {selected_cell} ; '
+                           'Undo/Redo et sauvegarde disponibles.')
         elif tool == 'Structure':
             if source_pending():
                 raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
@@ -1088,7 +1127,7 @@ def launch(path):
     ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=15,
                  values=['Pinceau','Rectangle','Sélection','Collage',
                          'Remplissage','Pipette sol','Pipette décor',
-                         'Structure']).pack(side='left')
+                         'Structure','Entité']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -1169,6 +1208,31 @@ def launch(path):
         canvas.focus_set()
         return True
 
+    def choose_entity(entry, facing, link, destination):
+        nonlocal entity_choice
+        if battle is not None or source_pending():
+            status_var.set('Terminer le playtest et appliquer le JSON avant édition.')
+            return False
+        entity_choice = (entry, facing, link, destination)
+        tool_var.set('Entité')
+        iso_var.set(True)
+        notebook.select(work)
+        refresh()
+        status_var.set(entry.label + ' : cliquer sur la carte pour placer une copie.')
+        canvas.focus_set()
+        return True
+
+    def open_entity_palette():
+        nonlocal entity_palette
+        if entity_palette is None:
+            from .studio_entity_palette import EntityPalette
+            entity_palette = EntityPalette(
+                root, snapshot=lambda: (doc.data, mission_var.get()),
+                actors=actor_atlas, choose=choose_entity,
+                cell_size=lambda: tile_size)
+        else:
+            entity_palette.show()
+
     def open_asset_palette():
         nonlocal asset_palette
         if asset_palette is None:
@@ -1184,6 +1248,8 @@ def launch(path):
     structure_controls.pack(fill='x', padx=5)
     ttk.Button(structure_controls, text='Bibliothèque d’assets',
                command=open_asset_palette).pack(side='left', padx=4)
+    ttk.Button(structure_controls, text='Acteurs et objets',
+               command=open_entity_palette).pack(side='left', padx=4)
     ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
     structure_box = ttk.Combobox(structure_controls, textvariable=structure_var,
                                  state='readonly', width=16, values=STRUCTURE_NAMES)
