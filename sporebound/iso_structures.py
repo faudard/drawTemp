@@ -180,8 +180,17 @@ def remove_structure(data, mission_id, cell):
 
 def structure_at(data, mission_id, cell):
     """Find an authored or inferred legacy structure covering a clicked cell."""
-    from .iso_architecture import architecture_instances
-    target = _cell(_mission(data, mission_id), cell)
+    from .iso_architecture import architecture_instances, _stored_instance
+    mission_row = _mission(data, mission_id)
+    target = _cell(mission_row, cell)
+    # Most structures now have persistent records. Avoid parsing the entire
+    # campaign on every hover/click just to resolve one stored footprint.
+    for record in mission_row.get('structures', ()):
+        clip = structure_template(record['name'], record['turns'],
+                                  door_slot=record['door_slot'])
+        if target in structure_footprint(clip, record['anchor']):
+            return _stored_instance(record)
+    # Older documents have only terrain stamps and require legacy inference.
     mission = Content.from_dict(data).missions[mission_id]
     instance = next((item for item in architecture_instances(
         mission.board, mission.structures) if target in item.cells), None)
