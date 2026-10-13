@@ -30,7 +30,8 @@ def validate_tactical_effects(effects, content, mission_id, rules):
     for effect in effects:
         require(isinstance(effect, dict), 'Tactical choice effect must be an object')
         kind = effect.get('kind')
-        require(kind in SCHEMAS, 'Unknown tactical choice effect')
+        require(isinstance(kind, str) and kind in SCHEMAS,
+                'Unknown tactical choice effect')
         required, allowed = SCHEMAS[kind]
         require(required <= set(effect) <= allowed,
                 'Unknown or missing tactical choice effect fields')
