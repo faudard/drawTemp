@@ -308,11 +308,14 @@ class ProjectWorkspaceTab:
             self.owner.focus_map_cell(mid, cell, show_map=False)
 
     def sync_map_selection(self, mission_id, cell, *, cells=(), group_id=None,
-                           record=True):
+                           record=True, key_override=None):
         """Map/group editor -> canonical Workspace tree and inspector."""
-        key = map_selection_key(
+        key = key_override or map_selection_key(
             self.owner.doc().data, mission_id, cell,
             group_id=group_id, cells=cells)
+        if key_override and navigation_target(self.owner.doc().data, key) != (
+                mission_id, tuple(cell)):
+            raise RuleError('Sélection historique différente de la carte')
         self._map_tile_key = key if key.startswith('map_tile:') else ''
         if record:
             self.navigation.record(key)
@@ -351,10 +354,17 @@ class ProjectWorkspaceTab:
         if key.startswith('map_tile:'):
             mid, cell = navigation_target(data, key)
             self.owner.focus_map_cell(mid, cell)
-            self.sync_map_selection(mid, cell, cells=(cell, cell), record=False)
+            self.sync_map_selection(mid, cell, record=False,
+                                    key_override=key)
         else:
             self.open_key(key, record=False)
         return True
+
+    def clear_navigation(self):
+        """Open a different project without retaining cross-project identity."""
+        self.navigation.reset()
+        self._map_tile_key = ''
+        self.breadcrumb.set('Projet')
 
     def open_reference(self):
         selected = self.refs.curselection()
