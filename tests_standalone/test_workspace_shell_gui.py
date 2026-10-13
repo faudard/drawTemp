@@ -51,7 +51,7 @@ class WorkspaceShellGUITests(TestCase):
                      'Architecture', 'Sélection & modèles'])
                 self.assertTrue(any(
                     isinstance(w, ttk.Menubutton) and
-                    'Couches visibles' in w.cget('text')
+                    'Autres couches' in w.cget('text')
                     for w in descendants(root)))
                 map_trees = [w for w in descendants(shell)
                              if isinstance(w, ttk.Treeview)]
