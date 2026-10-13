@@ -173,6 +173,21 @@ class UiSummaryTests(unittest.TestCase):
             self.assertFalse(group["sufficient_for_tail_exploration"])
             self.assertIn("p99_ms", group["timings"]["callback_to_idle_ms"])
 
+    def test_different_zoom_or_render_mode_never_mix(self):
+        rows = []
+        for cell_size, iso in ((24, False), (24, True), (96, True)):
+            rows.append(json.dumps({
+                "schema": "drawtemp-ui-trace-v1",
+                "operation": "map.refresh",
+                "counts": {"map_cells": 1024, "cell_size": cell_size,
+                           "isometric": iso, "renderer_enabled": True},
+                "callback_ms": 2, "callback_to_idle_ms": 3,
+                "queued_idle_ms": 1,
+            }))
+        result = summarize(rows)
+        self.assertEqual(len(result["groups"]), 3)
+        self.assertEqual(sum(row["samples"] for row in result["groups"]), 3)
+
     def test_invalid_trace_records_are_refused(self):
         with self.assertRaisesRegex(ValueError, "No valid"):
             summarize([])
