@@ -52,16 +52,22 @@ class StoryGUITests(unittest.TestCase):
                     buttons['Lier dialogue tactique'].invoke()
                     root.update()
                     # P0: author a replayable door opening without editing JSON.
-                    controls = [w for w in descendants(root)
+                    # Other Studio panels may expose the same action and
+                    # object IDs; address the dialogue editor specifically.
+                    tactical = next(w for w in descendants(root)
+                                    if isinstance(w, ttk.LabelFrame)
+                                    and w.cget('text') ==
+                                    'Effets tactiques rejouables (dialogue en combat)')
+                    controls = [w for w in descendants(tactical)
                                 if isinstance(w, ttk.Combobox)
                                 and 'open_door' in tuple(w['values'])]
                     self.assertEqual(len(controls), 1)
                     controls[0].set('open_door')
-                    doors = [w for w in descendants(root)
+                    doors = [w for w in descendants(tactical)
                              if isinstance(w, ttk.Combobox)
                              and 'gate' in tuple(w['values'])
                              and 'switch' in tuple(w['values'])]
-                    self.assertTrue(doors)
+                    self.assertEqual(len(doors), 1)
                     doors[0].set('gate')
                     buttons['Ajouter effet tactique'].invoke()
                     root.update()

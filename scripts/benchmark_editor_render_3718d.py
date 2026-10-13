@@ -107,6 +107,11 @@ def measure(size, frames, assets):
                     timings[operation]['cache_mode'] = changes[-1]['mode']
                     timings[operation]['max_created_items'] = max((c['created'] for c in changes if c['created'] is not None), default=None)
                     timings[operation]['max_updated_items'] = max(c['updated'] for c in changes)
+                    fast_paths = {}
+                    for sample in changes:
+                        key = sample.get('fast_path', 'retained')
+                        fast_paths[key] = fast_paths.get(key, 0) + 1
+                    timings[operation]['fast_paths'] = fast_paths
                     timings[operation]['fast_path_frames'] = {
                         name: sum(c.get('fast_path') == name for c in changes)
                         for name in ('unchanged', 'selection', 'full')

@@ -28,6 +28,7 @@ class EditorRenderCache:
         self._owns_canvas = False
         self._large_scene_state = None
         self._large_selection = None
+        self._large_item_count = None
 
     def invalidate(self):
         """Call when another renderer takes ownership of the Canvas."""
@@ -41,6 +42,7 @@ class EditorRenderCache:
         self._geometry_key = None
         self._large_scene_state = None
         self._large_selection = None
+        self._large_item_count = None
 
     def begin_group(self, group):
         self._group = group
@@ -140,6 +142,12 @@ class EditorRenderCache:
         atlases = tuple(id(options.get(name)) for name in _ATLAS_OPTIONS)
         return content, appearance, atlases
 
+    def _large_selection_safe(self, before, after):
+        """A roof-cutaway transition needs a full scene and depth repaint."""
+        return not any((before in building.cells) != (after in building.cells)
+                       for building in getattr(self.geometry,
+                                               'architecture_instances', ()))
+
     def _redraw_large_selection(self, selected_cell, selected_tiles):
         """Update the same foreground outlines as the full scene renderer."""
         deleted = len(self.canvas.find_withtag('selection'))
@@ -190,19 +198,28 @@ class EditorRenderCache:
             state = self._large_inputs(board, mission, units, options)
             selection = (options.get('selected_cell'),
                          frozenset(options.get('selected_tiles', ())))
-            if (not rebuilt and self.stats.get('mode') == 'geometry'
-                    and state == self._large_scene_state):
+            can_reuse = (not rebuilt and self.stats.get('mode') == 'geometry'
+                         and state == self._large_scene_state
+                         and (self._large_item_count is None
+                              or not hasattr(self.canvas, 'find_all')
+                              or self._large_item_count == len(self.canvas.find_all()))
+                         and (selection == self._large_selection
+                              or self._large_selection_safe(
+                                  self._large_selection[0], selection[0])))
+            if can_reuse:
                 if selection != self._large_selection:
                     created, deleted = self._redraw_large_selection(
                         selection[0], selection[1])
                     fast_path = 'selection'
+                    if hasattr(self.canvas, 'find_all'):
+                        self._large_item_count = len(self.canvas.find_all())
                 else:
                     created = deleted = 0
                     fast_path = 'unchanged'
                 self._large_selection = selection
                 self.stats = dict(mode='geometry', geometry_rebuilt=False,
                                   created=created, updated=0, deleted=deleted,
-                                  items=None, fast_path=fast_path,
+                                  items=self._large_item_count, fast_path=fast_path,
                                   render_ms=(perf_counter() - start) * 1000)
                 return self.geometry
             try:
@@ -213,6 +230,8 @@ class EditorRenderCache:
                 raise
             self._large_scene_state = state
             self._large_selection = selection
+            self._large_item_count = (len(self.canvas.find_all())
+                                      if hasattr(self.canvas, 'find_all') else None)
             self.stats = dict(mode='geometry', geometry_rebuilt=rebuilt,
                               created=None, updated=0, deleted=None, items=None,
                               fast_path='full',
@@ -220,6 +239,7 @@ class EditorRenderCache:
             return self.geometry
         self._large_scene_state = None
         self._large_selection = None
+        self._large_item_count = None
         if self.stats.get('mode') == 'geometry':
             self.canvas.delete('all')
         self._commands = {}

@@ -125,7 +125,8 @@ class EditorRenderCacheTests(unittest.TestCase):
 
         self.options['selected_cell'] = (4, 4)
         self.check_scene()
-        self.assertEqual(self.renderer.stats['fast_path'], 'selection')
+        # Entering a building changes the roof cutaway, requiring a full pass.
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
         self.options['selected_tiles'] = {(3, 3), (4, 4), (5, 4)}
         self.check_scene()
         self.assertEqual(self.renderer.stats['fast_path'], 'selection')
@@ -161,6 +162,66 @@ class EditorRenderCacheTests(unittest.TestCase):
         self.check_scene()
         self.assertEqual(self.renderer.stats['mode'], 'retained')
         self.renderer.max_retained_cells = 1
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+
+    def test_large_noop_and_selection_match_full_canvas(self):
+        # Force the exact large-map branch on a small, known scene so
+        # complete item/type/coordinate/configuration parity is practical.
+        self.renderer.max_retained_cells = 1
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        original_ids = self.canvas.find_all()
+
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'unchanged')
+        self.assertEqual(self.canvas.find_all(), original_ids)
+
+        # Pick an empty cell outside every structure so roof cutaway is
+        # unchanged; this is independent of future village layout changes.
+        buildings = self.renderer.geometry.architecture_instances
+        outside = next(cell for cell in self.renderer.geometry.draw_order
+                       if cell != (0, 0) and
+                       all(cell not in b.cells for b in buildings))
+        self.options['selected_cell'] = outside
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'selection')
+        self.options['selected_tiles'] = {(0, 0), (12, 10), (25, 19)}
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'selection')
+
+        # An edit in-place must invalidate the scene even when Content and
+        # the geometry dimensions remain exactly the same.
+        mission = next(m for m in self.doc.data['missions'] if m['id'] == MISSION_ID)
+        mission['units'][0]['name'] = 'Repainted unit'
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        self.doc.paint_many(MISSION_ID, [(10, 10)], 'surface:water')
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'unchanged')
+
+        # Canvas items drawn by other UI code must not survive an unexpected
+        # refresh as an undetected cached frame.
+        self.canvas.create_rectangle(0, 0, 5, 5, tags='external')
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+
+    def test_large_selection_crossing_roof_forces_repaint(self):
+        self.renderer.max_retained_cells = 1
+        self.check_scene()
+        buildings = [instance for instance in
+                     self.renderer.geometry.architecture_instances
+                     if instance.name in ('Maison', 'Tour', 'Ruines')]
+        self.assertTrue(buildings)
+        building = buildings[0]
+        outside = next(cell for cell in self.renderer.geometry.draw_order
+                       if cell not in building.cells)
+        inside = next(iter(building.cells))
+        self.options['selected_cell'] = outside
+        self.check_scene()
+        self.options['selected_cell'] = inside
         self.check_scene()
         self.assertEqual(self.renderer.stats['fast_path'], 'full')
 
