@@ -1807,6 +1807,10 @@ def launch(path):
                 heading = 'OBJET — ' + ', '.join(o['id'] for o in selected_objects)
             else:
                 heading = 'TERRAIN — case ' + str(selected_cell)
+            # Switching to a smaller mission may invalidate the previous
+            # cursor position; keep the shared inspector on a valid tile.
+            if not board.contains(selected_cell):
+                selected_cell = (0, 0)
             context = inspect_map(doc.data, mission_var.get(),
                                   selected_cell, selected_tiles)
             text = (context.title + '\n' + context.detail +
@@ -1923,6 +1927,11 @@ def launch(path):
             draw_minimap(board, mission, units)
         if studio is not None and (views is None or WORKSPACE in views):
             studio.refresh()
+            if studio.history is not None:
+                history_status.set(
+                    f'Historique Studio : {studio.history._cursor} modification(s) '
+                    f'· Annuler : {"oui" if studio.history.can_undo else "non"} '
+                    f'· Rétablir : {"oui" if studio.history.can_redo else "non"}')
 
     bar = ttk.Frame(root)
     bar.pack(fill='x')
