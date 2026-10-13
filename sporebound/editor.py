@@ -5,8 +5,8 @@ from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
 from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
-                                  EntityCommand, RENDERER, MINIMAP, INSPECTOR,
-                                  WORKSPACE)
+                                  StructureGroupCommand, EntityCommand,
+                                  RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
 from .ai import play_activation
 from .engine import Battle
 from .model import Content, RuleError
@@ -709,8 +709,9 @@ def launch(path):
             status_var.set('Décalage nul : aucune modification à enregistrer.')
             return
         # A single Document.replace is the whole Undo transaction.
-        design_change(lambda: doc.replace(transform_structure_group(
-            doc.data, mission_var.get(), cells, dx, dy, duplicate=duplicate)))
+        design_change(lambda: editing_context.execute(
+            StructureGroupCommand(tuple(cells), dx, dy, duplicate=duplicate),
+            publish=False))
         moved_cells = {(x + dx, y + dy) for item in group for x, y in item.cells}
         selected_tiles = moved_cells
         selected_cell = (group[0].anchor[0] + dx, group[0].anchor[1] + dy)
@@ -734,8 +735,8 @@ def launch(path):
         width, height = mission['board']['width'], mission['board']['height']
         footprint = [(x + dx, y + dy) for item in group for x, y in item.cells]
         try:
-            transform_structure_group(doc.data, mission_var.get(),
-                                      _selection_for_current_map(), dx, dy)
+            editing_context.preview(StructureGroupCommand(
+                tuple(_selection_for_current_map()), dx, dy))
             color, note = '#36a16c', 'valide'
         except RuleError as exc:
             color, note = '#e05252', str(exc)
