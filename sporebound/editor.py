@@ -16,6 +16,7 @@ from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, SURFACE_COLORS, IsoTerrainAtlas)
 from .iso_props import IsoPropAtlas
+from .iso_object_atlas import IsoObjectAtlas
 from .interior_levels import (FLOOR_SURFACES, FLOOR_FEATURES, MAX_INTERIOR_LEVEL,
                               add_interior_floor, delete_interior_floor,
                               edit_interior_tile, floor_hit_test,
@@ -289,6 +290,10 @@ def launch(path):
     structure_drag_hover = None
     structure_preview_key = None
     asset_palette = None
+    entity_palette = None
+    entity_choice = None
+    entity_hover_key = None
+    entity_passage_entry = None
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
@@ -301,6 +306,7 @@ def launch(path):
                   ('Terrain', 'Relief', 'Décors', 'Bâtiments', 'Toitures',
                    'Déploiement', 'Objectifs', 'Objets', 'Unités')}
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
+    mode_var = tk.StringVar(value='MODE : ÉDITION')
 
     def guarded(fn):
         def run(*args):
@@ -497,6 +503,8 @@ def launch(path):
             doc.replace(json.loads(source.get('1.0', 'end')))
             refresh_source()
         battle = doc.playtest(mission_var.get())
+        tool_tabs.select(tools_main)
+        notebook.select(work)
         refresh()
         status_var.set('Playtest isolé. Choisir une commande, cliquer une cible, puis Exécuter.')
 
@@ -518,6 +526,7 @@ def launch(path):
                                   mid, ruleset=rules)
         campaign_battle = True
         mission_var.set(mid)
+        tool_tabs.select(tools_main)
         notebook.select(work)
         refresh()
         status_var.set('Campagne : mission lancée. La progression sera validée à la fin du combat.')
@@ -936,13 +945,16 @@ def launch(path):
     def clear_placement_preview(_event=None):
         nonlocal structure_preview_key
         structure_preview_key = None
+        nonlocal entity_hover_key
+        entity_hover_key = None
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
                     'structure_group_preview', 'structure_group_ghost',
-                    'brush_preview', 'asset_ghost', 'floor_preview'):
+                    'brush_preview', 'asset_ghost', 'entity_preview',
+                    'entity_ghost', 'entity_route', 'entity_source', 'floor_preview'):
             canvas.delete(tag)
 
     def paste_preview(event):
-        nonlocal structure_preview_key
+        nonlocal structure_preview_key, entity_hover_key
         if structure_drag_from is not None:
             if tool_var.get() != 'Sélection structure':
                 cancel_structure_drag()  # Tool changed while dragging.
@@ -958,10 +970,79 @@ def launch(path):
                    id(doc.data))
             if key == structure_preview_key:
                 return
-        clear_placement_preview()
         structure_preview_key = key
         if battle:
+            clear_placement_preview()
             return
+        if tool_var.get() == 'Entité' and entity_choice is not None:
+            cell = event_cell(event)
+            if cell is None:
+                clear_placement_preview()
+                return
+            entry, facing, link, destination, team = entity_choice
+            key = (id(doc.data), mission_var.get(), cell, entry.id, facing,
+                   link, destination, team, entity_passage_entry,
+                   tile_size, iso_var.get())
+            if key == entity_hover_key:
+                return
+            clear_placement_preview()
+            mission = next(m for m in doc.data['missions']
+                           if m['id'] == mission_var.get())
+            from .entity_palette import (
+                preview_entity_placement, preview_passage_source)
+            is_passage = entry.id == 'object:passage' and destination is None
+            if is_passage and entity_passage_entry is None:
+                feedback = preview_passage_source(doc.data, mission_var.get(), cell)
+            elif is_passage:
+                feedback = preview_entity_placement(
+                    doc.data, mission_var.get(), entry.id, entity_passage_entry,
+                    facing=facing, link=link, destination=cell, team=team)
+            else:
+                feedback = preview_entity_placement(
+                    doc.data, mission_var.get(), entry.id, cell, facing=facing,
+                    link=link, destination=destination, team=team)
+            entity_hover_key = key
+            color = '#36a16c' if feedback.allowed else '#e05252'
+            indicated_cells = (cell,) if is_passage and entity_passage_entry is not None else feedback.cells
+            inside = [c for c in indicated_cells
+                      if 0 <= c[0] < mission['board']['width']
+                      and 0 <= c[1] < mission['board']['height']]
+            if is_passage and entity_passage_entry is not None:
+                if iso_var.get() and iso_geometry is not None:
+                    x1, y1 = iso_geometry.center(entity_passage_entry)
+                    x2, y2 = iso_geometry.center(cell)
+                else:
+                    x1, y1 = ((p + .5)*tile_size for p in entity_passage_entry)
+                    x2, y2 = ((p + .5)*tile_size for p in cell)
+                canvas.create_line(x1, y1, x2, y2, fill=color, width=3,
+                                   arrow='last', dash=(5, 3), tags='entity_route')
+                preview_cells((entity_passage_entry,), tag='entity_source',
+                              color='#2361ff')
+            if iso_var.get() and iso_geometry is not None and inside:
+                cx, cy = iso_geometry.center(cell)
+                if entry.kind in ('actor', 'archetype'):
+                    photo = actor_atlas.sprite(entry.style, facing, 0, tile_size)
+                else:
+                    photo = object_atlas.sprite(entry.id.partition(':')[2], tile_size)
+                if photo is not None:
+                    canvas.create_image(cx, cy + tile_size * 18 / 54,
+                                        image=photo, anchor='s',
+                                        tags='entity_ghost')
+                else:
+                    canvas.create_oval(cx-9, cy-9, cx+9, cy+9,
+                                       fill='#9070b1', outline='#4b5261',
+                                       tags='entity_ghost')
+            preview_cells(inside, tag='entity_preview', color=color)
+            if not feedback.allowed:
+                status_var.set('Placement refusé : ' + feedback.reason)
+            elif is_passage:
+                status_var.set('Passage : cliquer la ' +
+                               ('sortie' if entity_passage_entry is not None
+                                else 'case d’entrée') + '.')
+            else:
+                status_var.set(entry.label + ' : emplacement valide, cliquer pour poser.')
+            return
+        clear_placement_preview()
         if tool_var.get() == 'Étage intérieur':
             cursor = event_cell(event)
             if cursor is not None and iso_geometry is not None:
@@ -1085,6 +1166,7 @@ def launch(path):
         nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive
         nonlocal structure_turns, structure_selection_cell, structure_selection_id
         nonlocal structure_drag_from, structure_drag_anchor, structure_drag_duplicate
+        nonlocal entity_passage_entry
         cancel_structure_drag()
         canvas.focus_set()
         stroke_cells = []
@@ -1131,6 +1213,39 @@ def launch(path):
             status_var.set(('Structure dupliquée' if duplicate else 'Structure déplacée')
                            + f' en {anchor}. Annuler/Rétablir disponibles.')
             refresh()
+        elif tool == 'Entité':
+            if battle or source_pending():
+                raise RuleError('Terminer le playtest et appliquer le JSON avant la pose.')
+            if entity_choice is None:
+                raise RuleError('Choisir un acteur ou objet dans la palette.')
+            from .entity_palette import place_entity, preview_passage_source
+            entry, facing, link, destination, team = entity_choice
+            if entry.id == 'object:passage' and destination is None:
+                if entity_passage_entry is None:
+                    checked = preview_passage_source(
+                        doc.data, mission_var.get(), selected_cell)
+                    if not checked.allowed:
+                        raise RuleError(checked.reason)
+                    entity_passage_entry = selected_cell
+                    refresh()
+                    status_var.set('Entrée ' + str(selected_cell) +
+                                   ' sélectionnée. Cliquer la sortie ou Échap.')
+                    return
+                entrance = entity_passage_entry
+                design_change(lambda: doc.replace(place_entity(
+                    doc.data, mission_var.get(), entry.id, entrance,
+                    facing=facing, link=link, destination=selected_cell,
+                    team=team)))
+                entity_passage_entry = None
+                status_var.set('Passage ' + str(entrance) + ' → ' +
+                               str(selected_cell) + ' créé ; Undo/Redo disponible.')
+            else:
+                design_change(lambda: doc.replace(place_entity(
+                    doc.data, mission_var.get(), entry.id, selected_cell,
+                    facing=facing, link=link, destination=destination,
+                    team=team)))
+                status_var.set(f'{entry.label} placé en {selected_cell} ; '
+                               'Undo/Redo et sauvegarde disponibles.')
         elif tool == 'Étage intérieur':
             if source_pending():
                 raise RuleError('Appliquer le JSON avant de modifier l’étage.')
@@ -1382,10 +1497,26 @@ def launch(path):
         canvas.yview_moveto(max(0.0, min(1.0, event.y / 184 - 0.2)))
         refresh()
 
+    @guarded
+    def open_selected_entity(kind):
+        if battle is not None:
+            raise RuleError('Revenir en mode Éditer pour ouvrir la fiche.')
+        mission = next(m for m in doc.data['missions']
+                       if m['id'] == mission_var.get())
+        entries = (mission['units'] if kind == 'unit'
+                   else mission.get('objects', []))
+        chosen = next((item for item in entries
+                       if tuple(item['pos']) == selected_cell), None)
+        if chosen is None:
+            raise RuleError('Aucun élément de ce type sur la case.')
+        studio.focus_map_entity(kind, chosen['id'])
+
     def refresh(*args):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
+        nonlocal entity_hover_key, entity_passage_entry
         structure_preview_key = None
+        entity_hover_key = None
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
             from .narrative import StoryBook
             story = StoryBook(studio.project.story, Content.from_dict(doc.data),
@@ -1405,6 +1536,7 @@ def launch(path):
             structure_selection_cell = None
             structure_selection_id = None
             cancel_structure_drag()
+            entity_passage_entry = None
             selection_mission = mission_var.get()
         if structure_selection_id is not None:
             mission_row = next(m for m in doc.data['missions']
@@ -1446,7 +1578,7 @@ def launch(path):
                 atlas=iso_atlas, prop_atlas=iso_props,
                 building_atlas=building_atlas,
                 fortification_atlas=fortification_atlas,
-                actor_atlas=actor_atlas)
+                actor_atlas=actor_atlas, object_atlas=object_atlas)
         else:
             iso_geometry = None
             editor_renderer.invalidate()
@@ -1507,7 +1639,23 @@ def launch(path):
             x,y = (v*tile_size for v in selected_cell)
             canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
         inspected_tile = board.tile(selected_cell) if board.contains(selected_cell) else None
-        text = f'{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
+        mode_var.set('MODE : PLAYTEST (édition verrouillée)' if battle else 'MODE : ÉDITION')
+        selected_units = [u for u in units if tuple(u.pos) == selected_cell]
+        selected_objects = [o for o in mission.objects if tuple(o['pos']) == selected_cell]
+        if selected_units:
+            heading = 'PERSONNAGE — ' + ', '.join(u.name for u in selected_units)
+        elif selected_objects:
+            heading = 'OBJET — ' + ', '.join(o['id'] for o in selected_objects)
+        else:
+            heading = 'TERRAIN — case ' + str(selected_cell)
+        text = f'{heading}\n\n{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
+        for actor in selected_units:
+            text += (f'Acteur {actor.id} • {actor.team} • '
+                     f'PV {actor.hp}/{actor.max_hp} • CT {actor.ct}\n')
+        for obj in selected_objects:
+            text += f'Objet {obj["id"]} : {obj["kind"]}\n'
+        actor_focus.configure(state='normal' if selected_units and not battle else 'disabled')
+        object_focus.configure(state='normal' if selected_objects and not battle else 'disabled')
         if inspected_tile is not None:
             text += (f'Surface : {inspected_tile.surface} | Décor : '
                      f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
@@ -1530,7 +1678,7 @@ def launch(path):
                              + ', '.join(f'N{f["level"]} ({len(f["tiles"])} cases)'
                                          for f in sorted(floors, key=lambda f: f['level']))
                              + '\n')
-        for obj in mission.objects:
+        for obj in selected_objects:
             if obj['kind'] == 'defense':
                 text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
             if obj['kind'] == 'passage':
@@ -1556,25 +1704,23 @@ def launch(path):
                         text += '\n'.join(f'{r["unit"]}: {r["kind"]} {r["amount"]} {r["status"]} ({r["chance"]:.0%})' for r in forecast)
                     except RuleError as exc:
                         text += '\nCible : '+str(exc)
-            text += '\n\nUnités :\n'+'\n'.join(f'{u.name}: {u.hp} PV, {u.mp} MP, CT {u.ct}\n  {u.statuses}' for u in units)
+            if selected_units:
+                text += '\nÉtats sélectionnés :\n' + '\n'.join(
+                    f'{u.name}: {u.statuses}' for u in selected_units)
+            journal.configure(state='normal')
             journal.delete('1.0','end')
             journal.insert('1.0','\n'.join(json.dumps(e,ensure_ascii=False) for e in battle.events[-100:]))
             journal.see('end')
+            journal.configure(state='disabled')
         else:
-            text += ('\nCarte : sélectionner une zone, Ctrl+C, choisir le point '
-                     'd’ancrage, Ctrl+V ou l’outil Collage.'
-                     f'\nCases sélectionnées : {len(selected_tiles)}'
-                     f' | Presse-papiers : {len(terrain_clipboard.offsets) if terrain_clipboard else 0}'
-                     '\nRotation/symétrie : modifier le modèle puis coller.'
-                     '\nGroupe : sélectionner les unités/objets et utiliser les flèches.'
-                     '\nStructures : rotation, point d’ancrage Coin/Centre/Porte.'
-                     '\nEntrée B : deuxième porte possible sur Maison ou Ruines.'
-                     '\nToitures : visibles hors des intérieurs sélectionnés/occupés.'
-                     '\nAperçu vert : emplacement libre ; rouge : interdit/hors carte.'
-                     '\nRemplissage : choisir un sol puis remplir une zone contiguë.'
-                     '\nPipette sol/décor : cliquer une case pour reprendre son pinceau.'
-                     '\nCouches : visibilité d’édition seulement ; règles inchangées.'
-                     '\nDonnées tactiques avancées : onglet JSON.')
+            journal.configure(state='normal')
+            journal.delete('1.0', 'end')
+            journal.configure(state='disabled')
+            text += (f'\nSélection : {len(selected_tiles)} case(s)\n'
+                     f'Presse-papiers : '
+                     f'{len(terrain_clipboard.offsets) if terrain_clipboard else 0} case(s)\n'
+                     'Aide détaillée : panneau Raccourcis et aide.')
+        inspector.configure(state='normal')
         if not battle and structure_selection_cell is not None:
             try:
                 structure = structure_at(doc.data, mission_var.get(),
@@ -1601,6 +1747,7 @@ def launch(path):
                 structure_selection_id = None
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
+        inspector.configure(state='disabled')
         draw_minimap(board, mission, units)
         if studio is not None:
             studio.refresh()
@@ -1609,48 +1756,73 @@ def launch(path):
     bar.pack(fill='x')
     for label,cmd in [('Ouvrir',open_doc),('Enregistrer sous',save_doc),('Enregistrer tout',save_all),('Nouvelle mission',new_mission),('Carte vierge',blank_mission),('Annuler',undo_global),('Rétablir',redo_global),('Playtest',start),('Éditer',stop),('Sauver combat',save_game),('Charger combat',load_game)]:
         ttk.Button(bar,text=label,command=cmd).pack(side='left',padx=2,pady=4)
-    controls = ttk.Frame(root)
-    controls.pack(fill='x')
+    # A compact tool notebook replaces the seven permanent toolbar rows.
+    # Keep the existing action callbacks/variables; only presentation changes.
+    tool_tabs = ttk.Notebook(root)
+    tool_tabs.pack(fill='x', padx=6, pady=(0, 4))
+    tools_main = ttk.Frame(tool_tabs)
+    tools_terrain = ttk.Frame(tool_tabs)
+    tools_structure = ttk.Frame(tool_tabs)
+    tools_selection = ttk.Frame(tool_tabs)
+    for page, title in ((tools_main, 'Carte & combat'),
+                        (tools_terrain, 'Terrain & couches'),
+                        (tools_structure, 'Architecture'),
+                        (tools_selection, 'Sélection & modèles')):
+        tool_tabs.add(page, text=title)
+    controls = ttk.Frame(tools_main)
+    controls.pack(fill='x', padx=5, pady=2)
+    battle_controls = ttk.Frame(tools_main)
+    battle_controls.pack(fill='x', padx=5, pady=2)
     ttk.Label(controls,text='Mission').pack(side='left')
     mission_box = ttk.Combobox(controls,textvariable=mission_var,state='readonly',width=14)
     mission_box.pack(side='left')
     mission_box.bind('<<ComboboxSelected>>', lambda e: stop())
     ttk.Label(controls,text='Outil').pack(side='left')
     ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=15,
-                 values=['Pinceau','Rectangle','Sélection','Collage',
+                 values=['Pinceau','Rectangle','Sélection','Sélection structure','Collage',
                          'Remplissage','Pipette sol','Pipette décor',
                          'Structure','Sélection structure',
                          'Déplacer structure','Dupliquer structure',
-                         'Étage intérieur']).pack(side='left')
+                         'Entité','Étage intérieur']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
                          'cover','goal','unit','object','zone+','zone-']).pack(side='left')
-    unit_box = ttk.Combobox(controls,textvariable=unit_var,state='readonly',width=12)
+    ttk.Label(battle_controls, text='Unité').pack(side='left')
+    unit_box = ttk.Combobox(battle_controls,textvariable=unit_var,state='readonly',width=12)
     unit_box.pack(side='left')
-    ttk.Label(controls,text='Objet').pack(side='left')
-    object_box = ttk.Combobox(controls,textvariable=object_var,state='readonly',width=12)
+    ttk.Label(battle_controls,text='Objet').pack(side='left')
+    object_box = ttk.Combobox(battle_controls,textvariable=object_var,state='readonly',width=12)
     object_box.pack(side='left')
-    ttk.Label(controls,text='Commande').pack(side='left')
-    action_box = ttk.Combobox(controls,textvariable=action_var,state='readonly',width=18)
+    ttk.Label(battle_controls,text='Commande').pack(side='left')
+    action_box = ttk.Combobox(battle_controls,textvariable=action_var,state='readonly',width=18)
     action_box.pack(side='left')
     action_box.bind('<<ComboboxSelected>>', refresh)
-    ttk.Button(controls,text='Exécuter',command=execute).pack(side='left')
-    ttk.Combobox(controls,textvariable=facing_var,state='readonly',width=6,values=['north','south','east','west']).pack(side='left')
-    ttk.Button(controls,text='Fin',command=end_turn).pack(side='left')
-    ttk.Button(controls,text='IA : 1 tour',command=ai_turn).pack(side='left')
-    authoring_controls = ttk.Frame(root)
-    authoring_controls.pack(fill='x', padx=5)
+    ttk.Button(battle_controls,text='Exécuter',command=execute).pack(side='left')
+    ttk.Combobox(battle_controls,textvariable=facing_var,state='readonly',width=6,values=['north','south','east','west']).pack(side='left')
+    ttk.Button(battle_controls,text='Fin',command=end_turn).pack(side='left')
+    ttk.Button(battle_controls,text='IA : 1 tour',command=ai_turn).pack(side='left')
+    authoring_controls = ttk.Frame(tools_terrain)
+    authoring_controls.pack(fill='x', padx=5, pady=2)
     ttk.Button(authoring_controls, text='Copier cases', command=copy_selection).pack(side='left',padx=2)
     ttk.Button(authoring_controls, text='Coller terrain', command=paste_selection).pack(side='left',padx=2)
     ttk.Label(authoring_controls, text='Zone').pack(side='left',padx=(9,2))
     ttk.Entry(authoring_controls, textvariable=zone_var, width=14).pack(side='left')
-    ttk.Label(authoring_controls, text='Couche visible :').pack(side='left',padx=(8,2))
+    # Roof cutaway is used constantly when authoring interiors, so keep
+    # this high-frequency layer one click away even with the compact menu.
+    ttk.Checkbutton(authoring_controls, text='Toitures',
+                    variable=layer_vars['Toitures'],
+                    command=refresh).pack(side='left', padx=(12, 2))
+    layers_button = ttk.Menubutton(authoring_controls, text='Autres couches ▾')
+    layers_button.pack(side='left', padx=(6, 2))
+    layers_menu = tk.Menu(layers_button, tearoff=False)
     for name, var in layer_vars.items():
-        ttk.Checkbutton(authoring_controls, text=name, variable=var,
-                        command=refresh).pack(side='left',padx=2)
-    scenery_controls = ttk.Frame(root)
-    scenery_controls.pack(fill='x', padx=5)
+        if name == 'Toitures':
+            continue
+        layers_menu.add_checkbutton(label=name, variable=var, command=refresh)
+    layers_button.configure(menu=layers_menu)
+    scenery_controls = ttk.Frame(tools_terrain)
+    scenery_controls.pack(fill='x', padx=5, pady=2)
     ttk.Checkbutton(scenery_controls, text='Vue isométrique 2.5D',
                     variable=iso_var, command=refresh).pack(side='left', padx=4)
     ttk.Label(scenery_controls, text='Sol :').pack(side='left', padx=(10,2))
@@ -1687,11 +1859,13 @@ def launch(path):
             status_var.set('Revenir en mode Éditer avant de choisir un asset à placer.')
             return False
         if entry.kind == 'structure':
+            tool_tabs.select(tools_structure)
             structure_var.set(entry.value)
             structure_turns = turns
             structure_door_var.set('Entrée A')
             tool_var.set('Structure')
         else:
+            tool_tabs.select(tools_terrain)
             (surface_var if entry.kind == 'surface' else feature_var).set(entry.value)
             brush_var.set(entry.id)
             tool_var.set('Pinceau')
@@ -1701,6 +1875,41 @@ def launch(path):
         status_var.set(entry.name + ' : cliquer sur la carte. ' + entry.effect)
         canvas.focus_set()
         return True
+
+    def choose_entity(entry, facing, link, destination, team):
+        nonlocal entity_choice, entity_passage_entry
+        if battle is not None or source_pending():
+            status_var.set('Terminer le playtest et appliquer le JSON avant édition.')
+            return False
+        entity_choice = (entry, facing, link, destination, team)
+        entity_passage_entry = None
+        tool_var.set('Entité')
+        iso_var.set(True)
+        notebook.select(work)
+        refresh()
+        status_var.set(entry.label + ' : cliquer sur la carte pour placer une copie.')
+        canvas.focus_set()
+        return True
+
+    def cancel_passage_placement():
+        nonlocal entity_passage_entry
+        if entity_passage_entry is not None:
+            entity_passage_entry = None
+            clear_placement_preview()
+            status_var.set('Placement du passage annulé. Aucun objet créé.')
+            refresh()
+
+    def open_entity_palette():
+        nonlocal entity_palette
+        if entity_palette is None:
+            from .studio_entity_palette import EntityPalette
+            entity_palette = EntityPalette(
+                root, snapshot=lambda: (doc.data, mission_var.get()),
+                actors=actor_atlas, choose=choose_entity,
+                cell_size=lambda: tile_size, props=iso_props,
+                objects=object_atlas)
+        else:
+            entity_palette.show()
 
     def open_asset_palette():
         nonlocal asset_palette
@@ -1713,10 +1922,12 @@ def launch(path):
         else:
             asset_palette.show()
 
-    structure_controls = ttk.Frame(root)
-    structure_controls.pack(fill='x', padx=5)
+    structure_controls = ttk.Frame(tools_structure)
+    structure_controls.pack(fill='x', padx=5, pady=2)
     ttk.Button(structure_controls, text='Bibliothèque d’assets',
                command=open_asset_palette).pack(side='left', padx=4)
+    ttk.Button(structure_controls, text='Acteurs et objets',
+               command=open_entity_palette).pack(side='left', padx=4)
     ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
     structure_box = ttk.Combobox(structure_controls, textvariable=structure_var,
                                  state='readonly', width=16, values=STRUCTURE_NAMES)
@@ -1734,8 +1945,8 @@ def launch(path):
                command=lambda: rotate_structure(-1)).pack(side='left',padx=2)
     ttk.Button(structure_controls, text='↻ Bâtiment',
                command=lambda: rotate_structure(1)).pack(side='left',padx=2)
-    structure_options = ttk.Frame(root)
-    structure_options.pack(fill='x', padx=5)
+    structure_options = ttk.Frame(tools_structure)
+    structure_options.pack(fill='x', padx=5, pady=2)
     ttk.Checkbutton(structure_options, text='Intérieurs / coupe des toits',
                     variable=interior_var, command=refresh).pack(side='left', padx=4)
     ttk.Label(structure_options, text='Pivot :').pack(side='left',padx=(2, 4))
@@ -1747,7 +1958,7 @@ def launch(path):
                  values=('Entrée A','Entrée B')).pack(side='left',padx=2)
     ttk.Label(structure_options,
               text='Entrée B : Maison/Ruines seulement ; masquage automatique des toits en édition.').pack(side='left',padx=8)
-    structure_edit_controls = ttk.Frame(root)
+    structure_edit_controls = ttk.Frame(tools_structure)
     structure_edit_controls.pack(fill='x', padx=5)
     ttk.Button(structure_edit_controls, text='Sélectionner structure',
                command=lambda: tool_var.set('Sélection structure')).pack(side='left',padx=3)
@@ -1758,7 +1969,7 @@ def launch(path):
     ttk.Button(structure_edit_controls, text='Appliquer propriétés',
                command=apply_structure_properties).pack(side='left',padx=3)
     ttk.Label(structure_edit_controls, text='Glisser = déplacer · Maj+glisser = dupliquer · flèches = ajuster').pack(side='left',padx=8)
-    structure_group_controls = ttk.Frame(root)
+    structure_group_controls = ttk.Frame(tools_structure)
     structure_group_controls.pack(fill='x', padx=5)
     ttk.Label(structure_group_controls,
               text='Structures groupées (Sélection : inclure toutes les cases) :').pack(side='left',padx=(2,5))
@@ -1797,8 +2008,8 @@ def launch(path):
                  width=9, values=sorted(FLOOR_FEATURES)).pack(side='left')
     ttk.Button(floor_controls, text='Peindre étage',
                command=select_interior_paint).pack(side='left',padx=4)
-    advanced_controls = ttk.Frame(root)
-    advanced_controls.pack(fill='x', padx=5)
+    advanced_controls = ttk.Frame(tools_selection)
+    advanced_controls.pack(fill='x', padx=5, pady=3)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
                             ('⇄ Sym. H','mirror_x'), ('⇅ Sym. V','mirror_y')]:
         ttk.Button(advanced_controls,text=label,
@@ -1818,10 +2029,16 @@ def launch(path):
                command=lambda: set_zoom(6)).pack(side='left')
     notebook = ttk.Notebook(root)
     notebook.pack(fill='both',expand=True)
-    work = ttk.Frame(notebook)
+    work = ttk.Panedwindow(notebook, orient='horizontal')
     notebook.add(work,text='Carte et combat')
-    canvas_frame = ttk.Frame(work)
-    canvas_frame.pack(side='left',fill='both',expand=True)
+    sidebar = ttk.Frame(work, width=230)
+    canvas_region = ttk.Panedwindow(work, orient='vertical')
+    side_panel = ttk.Frame(work, width=315)
+    work.add(sidebar, weight=1)
+    work.add(canvas_region, weight=4)
+    work.add(side_panel, weight=2)
+    canvas_frame = ttk.Frame(canvas_region)
+    canvas_region.add(canvas_frame, weight=4)
     canvas = tk.Canvas(canvas_frame,background='#eeeeee',takefocus=1)
     editor_renderer = EditorRenderCache(canvas)
     iso_atlas = IsoTerrainAtlas(canvas)
@@ -1829,6 +2046,7 @@ def launch(path):
     building_atlas = IsoBuildingAtlas(canvas)
     fortification_atlas = IsoFortificationAtlas(canvas)
     actor_atlas = IsoActorAtlas(canvas)
+    object_atlas = IsoObjectAtlas(canvas)
     xs,ys = ttk.Scrollbar(canvas_frame,orient='horizontal',command=canvas.xview),ttk.Scrollbar(canvas_frame,orient='vertical',command=canvas.yview)
     canvas.configure(xscrollcommand=xs.set,yscrollcommand=ys.set)
     xs.pack(side='bottom',fill='x'); ys.pack(side='right',fill='y'); canvas.pack(fill='both',expand=True)
@@ -1838,11 +2056,13 @@ def launch(path):
     canvas.bind('<Motion>',paste_preview)
     canvas.bind('<Leave>', lambda e: (clear_placement_preview(e),
                                             cancel_structure_drag(e)))
-    canvas.bind('<Escape>', cancel_structure_drag)
+    canvas.bind('<Escape>', lambda event: (
+        cancel_structure_drag(event), cancel_passage_placement()))
     canvas.bind('<Left>', lambda _e: nudge_selected_structure(-1, 0))
     canvas.bind('<Right>', lambda _e: nudge_selected_structure(1, 0))
     canvas.bind('<Up>', lambda _e: nudge_selected_structure(0, -1))
     canvas.bind('<Down>', lambda _e: nudge_selected_structure(0, 1))
+    # Escape handles both drag cancellation and passage placement above.
     canvas.bind('<Control-c>',lambda _e: copy_selection())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
@@ -1853,22 +2073,47 @@ def launch(path):
     canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
     canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
     canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
-    side_panel = ttk.Frame(work)
-    side_panel.pack(side='right',fill='y')
-    ttk.Label(side_panel,text='Vue tactique').pack(anchor='w',padx=3,pady=(3,0))
+    ttk.Label(side_panel, text='INSPECTEUR', font=('TkDefaultFont', 11, 'bold')).pack(
+        anchor='w', padx=6, pady=(8, 3))
+    ttk.Label(side_panel, textvariable=mode_var).pack(anchor='w', padx=6)
+    ttk.Label(side_panel,text='Vue tactique').pack(anchor='w',padx=6,pady=(7,0))
     mini_canvas = tk.Canvas(side_panel,width=184,height=184,
                             background='#f5f5f5',highlightthickness=1)
     mini_canvas.pack(anchor='w',padx=3,pady=3)
     mini_canvas.bind('<Button-1>', minimap_navigate)
-    inspector = tk.Text(side_panel,width=43,wrap='word')
-    inspector.pack(side='top',fill='both',expand=True)
+    inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
+    inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
+    actor_focus = ttk.Button(side_panel, text='Modifier le personnage sélectionné',
+                             command=lambda: open_selected_entity('unit'))
+    actor_focus.pack(fill='x', padx=6, pady=2)
+    object_focus = ttk.Button(side_panel, text='Modifier l’objet sélectionné',
+                              command=lambda: open_selected_entity('object'))
+    object_focus.pack(fill='x', padx=6, pady=2)
+    ttk.Button(side_panel, text='Personnages et événements',
+               command=lambda: studio.workspace._show_tab(
+                   'Personnages et événements')).pack(fill='x', padx=6, pady=3)
+    ttk.Button(side_panel, text='Explorer dans le Workspace',
+               command=lambda: notebook.select(studio.workspace.tab)).pack(
+                   fill='x', padx=6, pady=(1, 7))
+
+    bottom_panel = ttk.Notebook(canvas_region, height=140)
+    canvas_region.add(bottom_panel, weight=1)
+    journal = tk.Text(bottom_panel, wrap='word', height=7)
+    bottom_panel.add(journal, text='Journal de combat')
+    help_panel = ttk.Frame(bottom_panel)
+    bottom_panel.add(help_panel, text='Raccourcis et aide')
+    ttk.Label(help_panel, text=(
+        'Alt+1 : carte  •  Alt+2 : espace projet  •  Ctrl+F : chercher\n'
+        'Ctrl+C/V : copier/coller la sélection sur la carte  •  '
+        'Échap : vider la recherche\n'
+        'Glisser les séparateurs pour adapter le navigateur, la carte, '
+        'le journal et l’inspecteur.'),
+        justify='left', wraplength=620).pack(anchor='nw', padx=12, pady=12)
     source_frame = ttk.Frame(notebook)
     notebook.add(source_frame,text='Données JSON')
     ttk.Button(source_frame,text='Valider et appliquer',command=apply_json).pack(anchor='w')
     source = tk.Text(source_frame,wrap='none',undo=True)
     source.pack(fill='both',expand=True)
-    journal = tk.Text(notebook,wrap='word')
-    notebook.add(journal,text='Journal de combat')
     from types import SimpleNamespace
     from .studio_panels import StudioPanels
 
@@ -1896,6 +2141,20 @@ def launch(path):
         status=status_var, mission_change=stop,
         select_mission=select_workspace_mission,
         on_project_saved=on_project_saved, set_active_mission=mission_var.set)
+    studio.workspace.attach_navigator(sidebar)
+    ttk.Button(sidebar, text='Espace projet complet',
+               command=lambda: notebook.select(studio.workspace.tab)).pack(
+                   fill='x', padx=7, pady=(3, 8))
+    def focus_project_search(_event=None):
+        notebook.select(work)
+        entry = studio.workspace.sidebar_search
+        entry.focus_set()
+        entry.selection_range(0, 'end')
+
+    root.bind('<Control-f>', focus_project_search)
+    root.bind('<Alt-KeyPress-1>', lambda _event: notebook.select(work))
+    root.bind('<Alt-KeyPress-2>',
+              lambda _event: notebook.select(studio.workspace.tab))
     ttk.Label(root,textvariable=status_var).pack(fill='x')
     root.protocol('WM_DELETE_WINDOW',lambda: root.destroy() if discard_ok() else None)
     refresh_source()
