@@ -90,8 +90,8 @@ class ReplayableTacticalChoiceTests(unittest.TestCase):
         project = self._author([
             {'kind': 'open_door', 'object': 'gate'},
             {'kind': 'wave', 'actors': [
-                {'id': 'ziggy', 'name': 'Collision', 'team': 'enemy',
-                 'pos': [0, 6]}]}])
+                {'id': 'collision_reinforcement', 'name': 'Collision',
+                 'team': 'enemy', 'pos': [1, 5]}]}])
         session = GameSession.new(self.content, project, 'main')
         session.start_mission('garden')
         before = session.recording()
