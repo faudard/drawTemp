@@ -49,11 +49,11 @@ def _name(value):
     return value.strip()
 
 
-def edit_entity(data, mission_id, kind, entity_id, **values):
+def edit_entity(data, mission_id, entity_kind, entity_id, **values):
     """Whitelist authored properties; immutable IDs and object kinds never change."""
-    require(kind in ('actor', 'object'), 'Unknown entity category')
-    original = get_entity(data, mission_id, kind, entity_id)
-    if kind == 'actor':
+    require(entity_kind in ('actor', 'object'), 'Unknown entity category')
+    original = get_entity(data, mission_id, entity_kind, entity_id)
+    if entity_kind == 'actor':
         allowed = {'name', 'team', 'facing'}
     else:
         allowed = {
@@ -87,7 +87,7 @@ def edit_entity(data, mission_id, kind, entity_id, **values):
         prepared[key] = value
 
     def change(_, mission):
-        field = 'units' if kind == 'actor' else 'objects'
+        field = 'units' if entity_kind == 'actor' else 'objects'
         record = next(e for e in mission[field] if e['id'] == entity_id)
         record.update(deepcopy(prepared))
     return _edit(data, mission_id, change)
