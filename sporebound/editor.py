@@ -19,6 +19,7 @@ from .interior_levels import (FLOOR_SURFACES, FLOOR_FEATURES, MAX_INTERIOR_LEVEL
                               add_interior_floor, delete_interior_floor,
                               edit_interior_tile, floor_hit_test,
                               projected_floor_polygon)
+from .level_navigation import add_level_link, place_unit_on_level
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import IsoActorAtlas
@@ -424,6 +425,9 @@ def launch(path):
                    'facing': directions[facing_var.get()]}
         elif action == 'move':
             cmd = {'kind': 'move', 'cell': list(selected_cell)}
+        elif action == 'level_move':
+            cmd = {'kind': 'level_move', 'level': floor_var.get(),
+                   'cell': list(selected_cell)}
         elif action.startswith('item:'):
             cmd = {'kind': 'item', 'item': action[5:], 'cell': list(selected_cell)}
         elif action.startswith('object:'):
@@ -624,6 +628,28 @@ def launch(path):
         design_change(lambda: doc.replace(delete_interior_floor(
             doc.data, mission_var.get(), sid, level)))
         status_var.set(f'Étage visuel {level} supprimé (Undo disponible).')
+
+    @guarded
+    def create_level_stair():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        destination = floor_var.get()
+        start = [destination-1, *selected_cell]
+        end = [destination, *selected_cell]
+        design_change(lambda: doc.replace(add_level_link(
+            doc.data, mission_var.get(), start, end)))
+        status_var.set(f'Escalier bidirectionnel N{destination-1} ↔ N{destination}'
+                       f' créé en {selected_cell}.')
+
+    @guarded
+    def set_unit_floor():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        level = floor_var.get()
+        design_change(lambda: doc.replace(place_unit_on_level(
+            doc.data, mission_var.get(), unit_var.get(), level,
+            selected_cell)))
+        status_var.set(f'{unit_var.get()} positionné à N{level} en {selected_cell}.')
 
     def select_interior_paint():
         interior_var.set(True)
@@ -1151,6 +1177,10 @@ def launch(path):
                 u = battle.active
                 text += f'Actif : {u.name} ({u.team})\nPV {u.hp}/{u.max_hp} | MP {u.mp}/{u.max_mp} | CT {u.ct}\nDéplacement : {"utilisé" if u.moved else "libre"}\nAction : {"utilisée" if u.acted else "libre"}\n'
                 actions = ['move','attack',*u.skills,'item:potion','item:ether','item:phoenix',*['object:'+o['id'] for o in mission.objects],*available_operations(battle,u)]
+                if mission.level_links:
+                    actions = (['level_move', 'attack']
+                               if battle.unit_levels.get(u.id, 0) else
+                               ['level_move', *actions])
                 action_box['values'] = actions
                 if action_var.get() not in actions: action_var.set('move')
                 if action_var.get() not in {'move'} and not action_var.get().startswith(('item:','object:','siege-attack:','repair-siege:')):
@@ -1347,6 +1377,15 @@ def launch(path):
                  width=9, values=sorted(FLOOR_FEATURES)).pack(side='left')
     ttk.Button(floor_controls, text='Peindre étage',
                command=select_interior_paint).pack(side='left',padx=4)
+    tactical_floors = ttk.Frame(root)
+    tactical_floors.pack(fill='x', padx=5)
+    ttk.Label(tactical_floors, text='Gameplay vertical :').pack(side='left',padx=3)
+    ttk.Button(tactical_floors, text='Escalier N-1 ↔ N',
+               command=create_level_stair).pack(side='left',padx=3)
+    ttk.Button(tactical_floors, text='Placer unité à N',
+               command=set_unit_floor).pack(side='left',padx=3)
+    ttk.Label(tactical_floors,
+              text='Sélectionner la case, le niveau et une unité ; un lien relie les étages voisins.').pack(side='left',padx=4)
     advanced_controls = ttk.Frame(root)
     advanced_controls.pack(fill='x', padx=5)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
