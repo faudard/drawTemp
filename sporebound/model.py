@@ -180,6 +180,8 @@ class Mission:
     deployment: list[dict] = field(default_factory=list)
     # Optional, presentation-only authoring identity (absent in legacy JSON).
     structures: list[dict] = field(default_factory=list)
+    # Optional visual upper decks; Battle remains strictly 2D in Content v1.
+    interior_floors: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -232,7 +234,7 @@ class Content:
         missions = []
         for mission in self.missions.values():
             row = {k: v for k, v in asdict(mission).items()
-                   if k != "board" and (k != "structures" or v)}
+                   if k != "board" and (k not in ("structures", "interior_floors") or v)}
             row["board"] = {"width": mission.board.width, "height": mission.board.height,
                             "tiles": [{"pos": list(c), **asdict(t)} for c, t in sorted(mission.board.tiles.items())]}
             missions.append(row)
@@ -323,6 +325,8 @@ class Content:
                 require(not footprint.intersection(structure_cells),
                         f"{sid}: overlapping structures")
                 structure_cells.update(footprint)
+            from .interior_levels import validate_interior_floors
+            validate_interior_floors(m.interior_floors, m.structures)
             ids, occupied = set(), set()
             for u in m.units:
                 require(u.id and u.id not in ids, f"Duplicate/empty unit: {u.id}")
