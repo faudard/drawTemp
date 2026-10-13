@@ -59,10 +59,12 @@ class PrefabCatalogTests(unittest.TestCase):
         inputs = [
             prefab_card('maison.json', self.source(
                 name='Maison villageoise',
-                structures=[{'name': 'Maison'}])),
+                structures=[{'name': 'Maison', 'turns': 0, 'door_slot': 0,
+                             'anchor': [0, 0]}])),
             prefab_card('pont.json', self.source(
                 name='Pont fortifié',
-                structures=[{'name': 'Pont'}])),
+                structures=[{'name': 'Pont', 'turns': 0, 'door_slot': 0,
+                             'anchor': [0, 0]}])),
             prefab_card('arbre.json', self.source(
                 name='Forêt',
                 tiles=[{'pos': [0, 0], 'tile': None}])),
