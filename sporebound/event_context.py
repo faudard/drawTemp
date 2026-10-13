@@ -38,7 +38,7 @@ def inspect_event(data, mission_id, event_id, project=None):
                 clips.append({'id': clip['id'], 'stage': kind, 'scope': 'mission'})
             elif kind == 'scene' and scene_id and target == scene_id:
                 clips.append({'id': clip['id'], 'stage': 'scene', 'scope': 'scene'})
-    report = {
+    return {
         'mission_id': mission_id,
         'event_id': event_id,
         'condition': event_graph.condition_title(event),
