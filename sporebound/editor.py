@@ -21,9 +21,11 @@ from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import IsoActorAtlas
 from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
                              structure_footprint, validate_structure_placement,
-                             place_structure, remove_structure)
+                             place_structure, remove_structure, structure_at,
+                             edit_structure, validate_structure_edit)
 from .iso_architecture import (PIVOTS, ARCHITECTURE_NAMES, placement_origin,
                                preview_structure_sprite_position)
+from .structure_groups import selected_structures, transform_structure_group
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -268,6 +270,15 @@ def launch(path):
     structure_pivot_var = tk.StringVar(value='Coin')
     structure_door_var = tk.StringVar(value='Entrée A')
     structure_turns = 0
+    structure_group_dx = tk.IntVar(value=1)
+    structure_group_dy = tk.IntVar(value=0)
+    structure_selection_cell = None
+    structure_selection_id = None
+    structure_drag_from = None
+    structure_drag_anchor = None
+    structure_drag_duplicate = False
+    structure_drag_hover = None
+    structure_preview_key = None
     asset_palette = None
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
@@ -658,6 +669,68 @@ def launch(path):
                        f'{len(object_ids)} objets ; Δ({dx}, {dy}).')
         refresh()
 
+    @guarded
+    def apply_structure_group(duplicate=False):
+        nonlocal selected_tiles, selected_cell
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        cells = _selection_for_current_map()
+        group = selected_structures(doc.data, mission_var.get(), cells)
+        if not group:
+            raise RuleError('Sélectionner la totalité des cases de chaque bâtiment (outil Sélection).')
+        dx, dy = structure_group_dx.get(), structure_group_dy.get()
+        if (dx, dy) == (0, 0) and not duplicate:
+            status_var.set('Décalage nul : aucune modification à enregistrer.')
+            return
+        # A single Document.replace is the whole Undo transaction.
+        design_change(lambda: doc.replace(transform_structure_group(
+            doc.data, mission_var.get(), cells, dx, dy, duplicate=duplicate)))
+        moved_cells = {(x + dx, y + dy) for item in group for x, y in item.cells}
+        selected_tiles = moved_cells
+        selected_cell = (group[0].anchor[0] + dx, group[0].anchor[1] + dy)
+        tool_var.set('Sélection')
+        refresh()
+        status_var.set(f'{len(group)} structure(s) ' +
+                       ('dupliquée(s)' if duplicate else 'déplacée(s)') +
+                       f' : Δ({dx}, {dy}) ; une seule annulation.')
+
+    @guarded
+    def preview_structure_group():
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        group = selected_structures(doc.data, mission_var.get(),
+                                     _selection_for_current_map())
+        if not group:
+            raise RuleError('Sélectionner au moins une empreinte de structure complète.')
+        dx, dy = structure_group_dx.get(), structure_group_dy.get()
+        mission = next(m for m in doc.data['missions']
+                       if m['id'] == mission_var.get())
+        width, height = mission['board']['width'], mission['board']['height']
+        footprint = [(x + dx, y + dy) for item in group for x, y in item.cells]
+        try:
+            transform_structure_group(doc.data, mission_var.get(),
+                                      _selection_for_current_map(), dx, dy)
+            color, note = '#36a16c', 'valide'
+        except RuleError as exc:
+            color, note = '#e05252', str(exc)
+        canvas.delete('structure_group_ghost')
+        if iso_var.get() and iso_geometry is not None:
+            for item in group:
+                moved_anchor = item.anchor[0] + dx, item.anchor[1] + dy
+                instance, origin = preview_structure_sprite_position(
+                    iso_geometry, item.name, moved_anchor, item.turns,
+                    door_slot=item.door_slot)
+                loader = (building_atlas if instance.name in ARCHITECTURE_NAMES
+                          else fortification_atlas)
+                photo = loader.sprite(instance.name, instance.turns, tile_size)
+                if photo is not None:
+                    canvas.create_image(*origin, image=photo, anchor='nw',
+                                        tags='structure_group_ghost')
+        preview_cells((c for c in footprint if 0 <= c[0] < width and
+                       0 <= c[1] < height), tag='structure_group_preview',
+                      color=color)
+        status_var.set(f'Aperçu {len(group)} structure(s) : {note}.')
+
     def set_zoom(delta):
         nonlocal tile_size
         next_size = max(24, min(96, tile_size + delta))
@@ -670,20 +743,84 @@ def launch(path):
     def rotate_structure(direction):
         nonlocal structure_turns
         structure_turns = (structure_turns + direction) % 4
-        tool_var.set('Structure')
+        if structure_selection_cell is None:
+            tool_var.set('Structure')
         canvas.delete('structure_preview')
         status_var.set(f'Structure {structure_var.get()} : rotation '
                        f'{structure_turns * 90} degrés ; cliquer pour poser.')
 
     @guarded
     def remove_selected_structure():
+        nonlocal structure_selection_cell, structure_selection_id
         if battle is not None:
             raise RuleError('Quitter le playtest avant de supprimer une structure.')
         if source_pending():
             raise RuleError('Appliquer ou abandonner le JSON avant la suppression.')
+        target = structure_selection_cell if structure_selection_cell is not None else selected_cell
         design_change(lambda: doc.replace(remove_structure(
-            doc.data, mission_var.get(), selected_cell)))
+            doc.data, mission_var.get(), target)))
+        structure_selection_cell = None
+        structure_selection_id = None
         status_var.set('Structure supprimée ; annulation possible.')
+
+
+    def selected_structure():
+        if structure_selection_cell is None:
+            raise RuleError('Sélectionner d’abord une structure sur la carte.')
+        current = structure_at(doc.data, mission_var.get(), structure_selection_cell)
+        if structure_selection_id and current.id != structure_selection_id:
+            raise RuleError('La structure sélectionnée a changé. La sélectionner à nouveau.')
+        return current
+
+    def cancel_structure_drag(_event=None):
+        nonlocal structure_drag_from, structure_drag_anchor, structure_drag_hover
+        structure_drag_from = None
+        structure_drag_anchor = None
+        structure_drag_hover = None
+        canvas.delete('structure_drag_preview')
+        canvas.delete('structure_drag_sprite')
+
+    @guarded
+    def nudge_selected_structure(dx, dy):
+        nonlocal structure_selection_cell, structure_selection_id
+        if tool_var.get() != 'Sélection structure':
+            return
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        current = selected_structure()
+        anchor = (current.anchor[0] + dx, current.anchor[1] + dy)
+        design_change(lambda: doc.replace(edit_structure(
+            doc.data, mission_var.get(), structure_selection_cell, anchor=anchor)))
+        structure_selection_cell = anchor
+        structure_selection_id = structure_at(doc.data, mission_var.get(), anchor).id
+        status_var.set(f'{current.name} déplacée en {anchor} (Undo disponible).')
+        refresh()
+
+    @guarded
+    def apply_structure_properties():
+        """Update the authored structure, not the next placement template."""
+        nonlocal structure_selection_cell
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        current = selected_structure()
+        chosen = (structure_var.get(), structure_turns, structure_door_slot())
+        if chosen == (current.name, current.turns, current.door_slot):
+            status_var.set('Structure inchangée.')
+            return
+        design_change(lambda: doc.replace(edit_structure(
+            doc.data, mission_var.get(), structure_selection_cell,
+            name=chosen[0], quarter_turns=chosen[1], door_slot=chosen[2])))
+        structure_selection_cell = current.anchor
+        status_var.set('Propriétés de structure appliquées (Undo disponible).')
+
+    @guarded
+    def begin_structure_edit(duplicate):
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        current = selected_structure()
+        tool_var.set('Dupliquer structure' if duplicate else 'Déplacer structure')
+        status_var.set(('Dupliquer' if duplicate else 'Déplacer') +
+                       f' {current.name} : choisir la destination sur la carte.')
 
     def structure_door_slot():
         return 0 if structure_door_var.get() == 'Entrée A' else 1
@@ -732,15 +869,35 @@ def launch(path):
                                         outline=color, width=3, tags=tag)
 
     def clear_placement_preview(_event=None):
+        nonlocal structure_preview_key
+        structure_preview_key = None
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
+                    'structure_group_preview', 'structure_group_ghost',
                     'brush_preview', 'asset_ghost'):
             canvas.delete(tag)
 
     def paste_preview(event):
+        nonlocal structure_preview_key
+        if structure_drag_from is not None:
+            if tool_var.get() != 'Sélection structure':
+                cancel_structure_drag()  # Tool changed while dragging.
+            else:
+                return  # The drag owns its own validated footprint and sprite.
+        tool = tool_var.get()
+        key = None
+        if tool in ('Structure', 'Déplacer structure', 'Dupliquer structure'):
+            cursor = event_cell(event)
+            key = (tool, cursor, mission_var.get(), structure_var.get(),
+                   structure_turns, structure_door_var.get(),
+                   structure_pivot_var.get(), structure_selection_cell,
+                   id(doc.data))
+            if key == structure_preview_key:
+                return
         clear_placement_preview()
+        structure_preview_key = key
         if battle:
             return
-        if tool_var.get() == 'Structure':
+        if tool_var.get() in ('Structure', 'Déplacer structure', 'Dupliquer structure'):
             cursor = event_cell(event)
             if cursor is None:
                 return
@@ -757,8 +914,16 @@ def launch(path):
             inside = [c for c in cells
                       if 0 <= c[0] < width and 0 <= c[1] < height]
             try:
-                validate_structure_placement(doc.data, mission_var.get(),
-                                             clip, anchor)
+                if tool_var.get() == 'Structure':
+                    validate_structure_placement(doc.data, mission_var.get(),
+                                                 clip, anchor)
+                else:
+                    validate_structure_edit(
+                        doc.data, mission_var.get(), structure_selection_cell,
+                        anchor=anchor, name=structure_var.get(),
+                        quarter_turns=structure_turns,
+                        door_slot=structure_door_slot(),
+                        duplicate=tool_var.get() == 'Dupliquer structure')
                 color = '#36a16c'
             except RuleError:
                 color = '#e05252'
@@ -846,6 +1011,9 @@ def launch(path):
     @guarded
     def click(event):
         nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive
+        nonlocal structure_turns, structure_selection_cell, structure_selection_id
+        nonlocal structure_drag_from, structure_drag_anchor, structure_drag_duplicate
+        cancel_structure_drag()
         canvas.focus_set()
         stroke_cells = []
         selected_cell = event_cell(event)
@@ -858,6 +1026,39 @@ def launch(path):
             refresh()
         elif tool == 'Collage':
             paste_at(selected_cell)
+        elif tool == 'Sélection structure':
+            if source_pending():
+                raise RuleError('Appliquer ou abandonner le JSON avant édition.')
+            current = structure_at(doc.data, mission_var.get(), selected_cell)
+            structure_selection_cell = current.anchor
+            structure_selection_id = current.id or None
+            structure_var.set(current.name)
+            structure_turns = current.turns
+            structure_door_var.set('Entrée B' if current.door_slot else 'Entrée A')
+            structure_drag_from = selected_cell
+            structure_drag_anchor = None
+            structure_drag_duplicate = bool(event.state & 0x0001)
+            status_var.set(f'{current.name} sélectionnée : {current.id or "ancienne structure"}'
+                           f' en {current.anchor}. Glisser pour déplacer, '
+                           'Maj+glisser pour dupliquer, flèches pour ajuster.')
+            refresh()
+        elif tool in ('Déplacer structure', 'Dupliquer structure'):
+            if source_pending():
+                raise RuleError('Appliquer ou abandonner le JSON avant édition.')
+            current = selected_structure()
+            anchor = structure_anchor(selected_cell)
+            duplicate = tool == 'Dupliquer structure'
+            design_change(lambda: doc.replace(edit_structure(
+                doc.data, mission_var.get(), structure_selection_cell,
+                anchor=anchor, name=structure_var.get(),
+                quarter_turns=structure_turns, door_slot=structure_door_slot(),
+                duplicate=duplicate)))
+            structure_selection_cell = anchor
+            structure_selection_id = structure_at(doc.data, mission_var.get(), anchor).id
+            tool_var.set('Sélection structure')
+            status_var.set(('Structure dupliquée' if duplicate else 'Structure déplacée')
+                           + f' en {anchor}. Annuler/Rétablir disponibles.')
+            refresh()
         elif tool == 'Structure':
             if source_pending():
                 raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
@@ -901,6 +1102,52 @@ def launch(path):
             paint_cells([selected_cell], brush)
 
     def drag(event):
+        nonlocal structure_drag_anchor, structure_drag_hover
+        if not battle and tool_var.get() == 'Sélection structure' and structure_drag_from is not None:
+            cell = event_cell(event)
+            if cell is None:
+                structure_drag_anchor = None
+                structure_drag_hover = None
+                canvas.delete('structure_drag_preview')
+                canvas.delete('structure_drag_sprite')
+                return
+            if cell == structure_drag_hover:
+                return
+            structure_drag_hover = cell
+            current = selected_structure()
+            anchor = (current.anchor[0] + cell[0] - structure_drag_from[0],
+                      current.anchor[1] + cell[1] - structure_drag_from[1])
+            structure_drag_anchor = anchor if cell != structure_drag_from else None
+            canvas.delete('structure_drag_preview')
+            canvas.delete('structure_drag_sprite')
+            if structure_drag_anchor is None:
+                return
+            clip = structure_template(current.name, current.turns,
+                                      door_slot=current.door_slot)
+            mission = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
+            width, height = mission['board']['width'], mission['board']['height']
+            footprint = structure_footprint(clip, anchor)
+            inside = [c for c in footprint
+                      if 0 <= c[0] < width and 0 <= c[1] < height]
+            try:
+                validate_structure_edit(
+                    doc.data, mission_var.get(), structure_selection_cell,
+                    anchor=anchor, duplicate=structure_drag_duplicate)
+                color = '#36a16c'
+            except RuleError:
+                color = '#e05252'
+            if iso_var.get() and iso_geometry is not None:
+                instance, origin = preview_structure_sprite_position(
+                    iso_geometry, current.name, anchor, current.turns,
+                    door_slot=current.door_slot)
+                loader = (building_atlas if instance.name in ARCHITECTURE_NAMES
+                          else fortification_atlas)
+                photo = loader.sprite(instance.name, instance.turns, tile_size)
+                if photo is not None:
+                    canvas.create_image(*origin, image=photo, anchor='nw',
+                                        tags='structure_drag_sprite')
+            preview_cells(inside, tag='structure_drag_preview', color=color)
+            return
         if battle or not stroke_cells or tool_var.get() == 'Collage':
             return
         if tool_var.get() not in ('Sélection', 'Rectangle') and brush_var.get() in ('unit', 'object'):
@@ -929,7 +1176,27 @@ def launch(path):
     @guarded
     def end_stroke(_event):
         nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selected_tiles
+        nonlocal structure_selection_cell, structure_selection_id
         tool, brush = tool_var.get(), active_brush()
+        if tool != 'Sélection structure' and structure_drag_from is not None:
+            cancel_structure_drag()
+        if not battle and tool == 'Sélection structure' and structure_drag_from is not None:
+            anchor = structure_drag_anchor
+            duplicate = structure_drag_duplicate
+            cancel_structure_drag()
+            if anchor is None:
+                return  # A click selects; only a real drag commits a change.
+            current = selected_structure()
+            design_change(lambda: doc.replace(edit_structure(
+                doc.data, mission_var.get(), structure_selection_cell,
+                anchor=anchor, duplicate=duplicate)))
+            structure_selection_cell = anchor
+            structure_selection_id = structure_at(doc.data, mission_var.get(), anchor).id
+            selected_cell = anchor
+            status_var.set(('Copie' if duplicate else 'Déplacement') +
+                           f' de {current.name} en {anchor} (Undo disponible).')
+            refresh()
+            return
         if not battle and tool == 'Sélection' and rectangle_anchor is not None and stroke_cells:
             cells = cells_in_rectangle(doc.data, mission_var.get(), rectangle_anchor,
                                        stroke_cells[-1])
@@ -1030,6 +1297,8 @@ def launch(path):
 
     def refresh(*args):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
+        nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
+        structure_preview_key = None
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
             from .narrative import StoryBook
             story = StoryBook(studio.project.story, Content.from_dict(doc.data),
@@ -1046,7 +1315,20 @@ def launch(path):
             mission_var.set(mids[0])
         if selection_mission != mission_var.get():
             selected_tiles.clear()
+            structure_selection_cell = None
+            structure_selection_id = None
+            cancel_structure_drag()
             selection_mission = mission_var.get()
+        if structure_selection_id is not None:
+            mission_row = next(m for m in doc.data['missions']
+                               if m['id'] == mission_var.get())
+            record = next((row for row in mission_row.get('structures', ())
+                           if row['id'] == structure_selection_id), None)
+            if record is None:
+                structure_selection_cell = None
+                structure_selection_id = None
+            else:
+                structure_selection_cell = tuple(record['anchor'])
         content = Content.from_dict(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
         board = battle.board if battle else mission.board
@@ -1185,6 +1467,30 @@ def launch(path):
                      '\nPipette sol/décor : cliquer une case pour reprendre son pinceau.'
                      '\nCouches : visibilité d’édition seulement ; règles inchangées.'
                      '\nDonnées tactiques avancées : onglet JSON.')
+        if not battle and structure_selection_cell is not None:
+            try:
+                structure = structure_at(doc.data, mission_var.get(),
+                                         structure_selection_cell)
+                record = next((row for row in mission.structures
+                               if row['id'] == structure.id), None)
+                ground_status = ('Sauvegardé (' + str(len(record['underlay'])) +
+                                 ' cases)' if record is not None and
+                                 'underlay' in record else
+                                 'Ancienne structure : sol non récupérable')
+                text += ('\n\nSTRUCTURE SÉLECTIONNÉE\n'
+                         f'{structure.name} — {structure.id or "héritée (sans ID)"}\n'
+                         f'Ancrage : {structure.anchor}\n'
+                         f'Emprise : {structure.width}×{structure.height}\n'
+                         f'Rotation : {structure.turns * 90}°\n'
+                         f'Entrée : {structure.door_slot + 1}\n'
+                         f'Terrain sous le bâtiment : {ground_status}\n'
+                         'Éditer les propriétés dans la barre Structure, '
+                         'puis Appliquer ; déplacer ou dupliquer par clic.')
+                preview_cells(structure.cells, tag='structure_selection',
+                              color='#2369ac')
+            except RuleError:
+                structure_selection_cell = None
+                structure_selection_id = None
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
         draw_minimap(board, mission, units)
@@ -1205,7 +1511,8 @@ def launch(path):
     ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=15,
                  values=['Pinceau','Rectangle','Sélection','Collage',
                          'Remplissage','Pipette sol','Pipette décor',
-                         'Structure']).pack(side='left')
+                         'Structure','Sélection structure',
+                         'Déplacer structure','Dupliquer structure']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -1307,7 +1614,8 @@ def launch(path):
     structure_box.pack(side='left', padx=2)
     def change_structure(_event):
         structure_door_var.set('Entrée A')
-        tool_var.set('Structure')
+        if structure_selection_cell is None:
+            tool_var.set('Structure')
     structure_box.bind('<<ComboboxSelected>>', change_structure)
     ttk.Button(structure_controls, text='Poser structure',
                command=lambda: tool_var.set('Structure')).pack(side='left',padx=3)
@@ -1328,6 +1636,33 @@ def launch(path):
                  values=('Entrée A','Entrée B')).pack(side='left',padx=2)
     ttk.Label(structure_options,
               text='Entrée B : Maison/Ruines seulement ; masquage automatique des toits en édition.').pack(side='left',padx=8)
+    structure_edit_controls = ttk.Frame(root)
+    structure_edit_controls.pack(fill='x', padx=5)
+    ttk.Button(structure_edit_controls, text='Sélectionner structure',
+               command=lambda: tool_var.set('Sélection structure')).pack(side='left',padx=3)
+    ttk.Button(structure_edit_controls, text='Déplacer sélection',
+               command=lambda: begin_structure_edit(False)).pack(side='left',padx=3)
+    ttk.Button(structure_edit_controls, text='Dupliquer sélection',
+               command=lambda: begin_structure_edit(True)).pack(side='left',padx=3)
+    ttk.Button(structure_edit_controls, text='Appliquer propriétés',
+               command=apply_structure_properties).pack(side='left',padx=3)
+    ttk.Label(structure_edit_controls, text='Glisser = déplacer · Maj+glisser = dupliquer · flèches = ajuster').pack(side='left',padx=8)
+    structure_group_controls = ttk.Frame(root)
+    structure_group_controls.pack(fill='x', padx=5)
+    ttk.Label(structure_group_controls,
+              text='Structures groupées (Sélection : inclure toutes les cases) :').pack(side='left',padx=(2,5))
+    ttk.Label(structure_group_controls,text='ΔX').pack(side='left')
+    ttk.Spinbox(structure_group_controls, from_=-128, to=128,
+                textvariable=structure_group_dx, width=4).pack(side='left',padx=2)
+    ttk.Label(structure_group_controls,text='ΔY').pack(side='left')
+    ttk.Spinbox(structure_group_controls, from_=-128, to=128,
+                textvariable=structure_group_dy, width=4).pack(side='left',padx=2)
+    ttk.Button(structure_group_controls, text='Aperçu groupe',
+               command=preview_structure_group).pack(side='left',padx=3)
+    ttk.Button(structure_group_controls, text='Déplacer groupe',
+               command=lambda: apply_structure_group(False)).pack(side='left',padx=3)
+    ttk.Button(structure_group_controls, text='Dupliquer groupe',
+               command=lambda: apply_structure_group(True)).pack(side='left',padx=3)
     advanced_controls = ttk.Frame(root)
     advanced_controls.pack(fill='x', padx=5)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
@@ -1367,7 +1702,13 @@ def launch(path):
     canvas.bind('<B1-Motion>',drag)
     canvas.bind('<ButtonRelease-1>',end_stroke)
     canvas.bind('<Motion>',paste_preview)
-    canvas.bind('<Leave>',clear_placement_preview)
+    canvas.bind('<Leave>', lambda e: (clear_placement_preview(e),
+                                            cancel_structure_drag(e)))
+    canvas.bind('<Escape>', cancel_structure_drag)
+    canvas.bind('<Left>', lambda _e: nudge_selected_structure(-1, 0))
+    canvas.bind('<Right>', lambda _e: nudge_selected_structure(1, 0))
+    canvas.bind('<Up>', lambda _e: nudge_selected_structure(0, -1))
+    canvas.bind('<Down>', lambda _e: nudge_selected_structure(0, 1))
     canvas.bind('<Control-c>',lambda _e: copy_selection())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
