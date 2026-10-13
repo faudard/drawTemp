@@ -25,6 +25,7 @@ class EventGraphStudio:
         self.cond_pos = self.tk.StringVar(value='0,0')
         self.cond_object = self.tk.StringVar()
         self.composite_summary = self.tk.StringVar(value='Aucune condition ajoutée')
+        self.prereq_choice = self.tk.StringVar()
         self.condition_path = None
         self.action_kind = self.tk.StringVar(value='message')
         self.action_text = self.tk.StringVar(value='Renforts !')
@@ -128,6 +129,10 @@ class EventGraphStudio:
             preview_controls, text='Vue isométrique avant/après',
             command=lambda: self.owner._run(self.preview_scene))
         self.scene_button.pack(side='left', padx=3)
+        self.chain_button = ttk.Button(
+            preview_controls, text='Simuler chaîne',
+            command=lambda: self.owner._run(self.preview_chain))
+        self.chain_button.pack(side='left', padx=3)
         scenario_controls = ttk.Frame(contextual)
         scenario_controls.pack(fill='x', pady=2)
         ttk.Label(scenario_controls, text='Scénario :').pack(side='left', padx=3)
@@ -172,6 +177,21 @@ class EventGraphStudio:
         ttk.Button(cond, text='Appliquer condition',
                    command=lambda: self.owner._run(self.save_condition)).grid(
                        row=6, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
+        dependencies = ttk.LabelFrame(cond, text='Événements précédents (chaîne)')
+        dependencies.grid(row=12, column=0, columnspan=2,
+                          sticky='ew', padx=4, pady=5)
+        ttk.Label(dependencies, text='APRÈS').pack(anchor='w', padx=4)
+        self.prereq_box = ttk.Combobox(
+            dependencies, textvariable=self.prereq_choice,
+            values=[], state='readonly', width=28)
+        self.prereq_box.pack(fill='x', padx=4)
+        dep_controls = ttk.Frame(dependencies)
+        dep_controls.pack(fill='x')
+        self._button(dep_controls, '+ Lier événement', self.link_predecessor)
+        self._button(dep_controls, '− Délier événement', self.unlink_predecessor)
+        self.prereq_text = ttk.Label(
+            dependencies, text='Aucune dépendance', wraplength=300)
+        self.prereq_text.pack(fill='x', padx=4, pady=3)
         composite = ttk.LabelFrame(cond, text='Conditions supplémentaires (ET / OU / NON)')
         composite.grid(row=11, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
         ttk.Label(composite, textvariable=self.composite_summary,
@@ -402,6 +422,19 @@ class EventGraphStudio:
         else:
             self.condition_path = None
 
+    def link_predecessor(self):
+        event, prior = self._event(), self.prereq_choice.get()
+        require(bool(prior), 'Choisir un événement précédent')
+        self._edit(lambda doc: event_graph.link_event(
+            doc, self.owner.mission(), event['id'], prior))
+        self.status.set('Dépendance enregistrée dans les triggers existants.')
+
+    def unlink_predecessor(self):
+        event, prior = self._event(), self.prereq_choice.get()
+        require(bool(prior), 'Choisir une dépendance à retirer')
+        self._edit(lambda doc: event_graph.unlink_event(
+            doc, self.owner.mission(), event['id'], prior))
+
     def clear_composite(self):
         event = self._event()
         self._edit(lambda doc: event_graph.clear_composite_condition(
@@ -498,6 +531,14 @@ class EventGraphStudio:
             event_graph.composite_title(event['when'])
             if 'when' in event else 'Aucune condition ajoutée')
         self._render_composite_tree(event)
+        options = [row['id'] for row in self._mission()['triggers']
+                   if row['id'] != event['id']]
+        self.prereq_box['values'] = options
+        if self.prereq_choice.get() not in options:
+            self.prereq_choice.set(options[0] if options else '')
+        self.prereq_text.config(
+            text='Attend : ' + ', '.join(event.get('after', []))
+            if event.get('after') else 'Aucune dépendance')
         self.action_list.delete(0, 'end')
         for i, action in enumerate(event['actions']):
             self.action_list.insert('end', f"{i+1}. {event_graph.action_title(action)}")
@@ -690,6 +731,23 @@ class EventGraphStudio:
         lines = self._context_lines(self.context)
         lines.extend(['', *event_context.format_preview_report(report)])
         self._set_context_text(lines, show_end=True)
+        self.draw()
+
+    def preview_chain(self):
+        require(self.context is not None, 'Choisir un événement tactique')
+        report = event_context.preview_event_chain(
+            self.owner.doc().data, self.owner.mission(),
+            self.context['event_id'], project=self.owner.project,
+            tick=int(self.preview_tick.get()),
+            scenario=self.scenario_labels[self.preview_scenario.get()])
+        self.last_preview = None
+        lines = self._context_lines(self.context)
+        lines.extend(['', *event_context.format_chain_report(report)])
+        self._set_context_text(lines, show_end=True)
+        self.status.set(
+            str(len(report['fired_ids'])) + '/' +
+            str(len(report['chain_ids'])) +
+            ' événements de la chaîne exécutés dans Battle.')
         self.draw()
 
     def preview_scene(self):
