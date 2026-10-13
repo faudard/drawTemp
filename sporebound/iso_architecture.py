@@ -229,7 +229,7 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
             draw_interior(canvas, geo, interior_plan(board, building),
                           instance_tag)
         upper_occupied = any(
-            (unit_levels or {}).get(actor.id, 0) > 0
+            (unit_levels or {}).get(getattr(actor, 'id', None), 0) > 0
             and tuple(actor.pos) in building.cells for actor in units)
         if ((active_level > 0 or upper_occupied) and building_floors
                 and layers.get('Bâtiments', True)):
