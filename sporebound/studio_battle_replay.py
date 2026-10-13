@@ -94,7 +94,7 @@ class BattleTraceWindow:
 
     def _on_step(self, _event=None):
         selection = self.steps.selection()
-        if selection:
+        if selection and int(selection[0]) != self.index:
             self.show(int(selection[0]))
 
     def _on_finding(self, _event=None):
