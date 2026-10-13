@@ -553,6 +553,9 @@ def launch(path):
         elif action == 'level_move':
             cmd = {'kind': 'level_move', 'level': travel_level_var.get(),
                    'cell': list(selected_cell)}
+        elif action == 'level_attack':
+            cmd = {'kind': 'level_attack', 'level': travel_level_var.get(),
+                   'cell': list(selected_cell)}
         elif action.startswith('item:'):
             cmd = {'kind': 'item', 'item': action[5:], 'cell': list(selected_cell)}
         elif action.startswith('object:'):
@@ -929,7 +932,8 @@ def launch(path):
     def event_cell(event):
         px, py = canvas.canvasx(event.x), canvas.canvasy(event.y)
         if (battle and iso_var.get() and iso_geometry is not None
-                and action_var.get() == 'level_move' and travel_level_var.get() > 0):
+                and action_var.get() in {'level_move', 'level_attack'}
+                and travel_level_var.get() > 0):
             scene = battle.mission
             for building in reversed(getattr(iso_geometry, 'architecture_instances', ())):
                 floor = next((row for row in scene.interior_floors
@@ -1590,9 +1594,9 @@ def launch(path):
                 text += f'Actif : {u.name} ({u.team})\nPV {u.hp}/{u.max_hp} | MP {u.mp}/{u.max_mp} | CT {u.ct}\nDéplacement : {"utilisé" if u.moved else "libre"}\nAction : {"utilisée" if u.acted else "libre"}\n'
                 actions = ['move','attack',*u.skills,'item:potion','item:ether','item:phoenix',*['object:'+o['id'] for o in mission.objects],*available_operations(battle,u)]
                 if mission.level_links:
-                    actions = (['level_move', 'attack']
+                    actions = (['level_move', 'level_attack', 'attack']
                                if battle.unit_levels.get(u.id, 0) else
-                               ['level_move', *actions])
+                               ['level_move', 'level_attack', *actions])
                 action_box['values'] = actions
                 if action_var.get() not in actions: action_var.set('move')
                 if action_var.get() not in {'move'} and not action_var.get().startswith(('item:','object:','siege-attack:','repair-siege:')):
