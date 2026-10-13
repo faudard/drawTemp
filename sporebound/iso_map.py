@@ -162,7 +162,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                      atlas=None, prop_atlas=None,
                      building_atlas=None, fortification_atlas=None,
                      actor_atlas=None, poses=None, object_atlas=None,
-                     geometry=None, retained=False):
+                     geometry=None, retained=False, unit_levels=None):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = geometry if geometry is not None else IsoGeometry(board, cell_size)
     if not retained:
@@ -170,6 +170,8 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     canvas.configure(scrollregion=(0, 0, geo.width, geo.height))
     goals = set(mission.goal)
     deploy = {tuple(c) for z in mission.deployment for c in z['cells']}
+    actor_levels = (unit_levels if unit_levels is not None
+                    else getattr(mission, 'unit_levels', {}))
     actors = {}
     for index, actor in enumerate(units):
         actors.setdefault(tuple(actor.pos), []).append((index, actor))
@@ -307,6 +309,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 # MotionDirector feeds fractional positions, not tactical
                 # moves. Do not change the board cell used for game logic.
                 ax, ay = visual_center(geo, actor, poses)
+                ay -= actor_levels.get(actor.id, 0) * 3 * geo.step
                 actor_tags = ('iso_actor', 'iso_actor_unit_' + str(actor_index))
                 color = '#3b82c6' if actor.team == 'player' else '#ca6654'
                 if not actor.alive:
@@ -355,9 +358,20 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     from .iso_architecture import draw_architecture
     if retained:
         canvas.begin_group('architecture')
-    draw_architecture(canvas, geo, board, units, selected_cell, layers,
-                      atlas=building_atlas, scenery_atlas=fortification_atlas,
-                      poses=poses, structures=getattr(mission, 'structures', ()))
+    # Reuse the exact scene instances for contextual inspection. Do not run
+    # costly legacy stamp recognition a second time in the editor refresh.
+    geo.architecture_instances = draw_architecture(
+        canvas, geo, board, units, selected_cell, layers,
+        atlas=building_atlas, scenery_atlas=fortification_atlas,
+        poses=poses, structures=getattr(mission, 'structures', ()),
+        interior_floors=getattr(mission, 'interior_floors', ()),
+        prop_atlas=prop_atlas, unit_levels=actor_levels)
+    upper_actor_ids = [index for index, actor in enumerate(units)
+                       if actor_levels.get(actor.id, 0) > 0]
+    for index in upper_actor_ids:
+        canvas.tag_raise('iso_actor_unit_' + str(index))
+    if upper_actor_ids:
+        canvas.tag_raise('selection')
     return geo
 
 

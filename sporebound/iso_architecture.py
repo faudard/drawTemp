@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from .iso_structures import structure_template, door_slots
 from .iso_depth import cutaway_intersects, depth_order
+from .iso_interiors import draw_interior, draw_stacked_floors, interior_plan
 from .model import RuleError, require
 
 
@@ -198,7 +199,8 @@ def architecture_outline(geo, instance, wall_level=2):
 
 
 def draw_architecture(canvas, geo, board, units, selected_cell, layers,
-                      atlas=None, scenery_atlas=None, poses=None, structures=()):
+                      atlas=None, scenery_atlas=None, poses=None, structures=(),
+                      interior_floors=(), prop_atlas=None, unit_levels=None):
     """Paint hand-authored sprite overlays with deterministic vector fallback.
 
     Cutaway remains a vector outline: opaque sprites may never hide occupants.
@@ -211,7 +213,28 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
         instance_tag = 'architecture_instance_' + str(index)
         outline, peak = architecture_outline(geo, building)
         north, east, south, west = outline
-        cutaway = roof_cutaway(building, selected_cell, units, poses)
+        building_floors = tuple(f for f in interior_floors
+                                if f['structure_id'] == building.id)
+        active_level = layers.get('Étage actif', 0)
+        # A designer may open all existing interiors without placing a unit.
+        # In the Player, roof_cutaway still follows selected/occupied cells.
+        cutaway = (roof_cutaway(building, selected_cell, units, poses)
+                   or (layers.get('Intérieurs', False)
+                       and building.name in ARCHITECTURE_NAMES)
+                   or (active_level > 0 and bool(building_floors)))
+        if (cutaway and building.name in ARCHITECTURE_NAMES
+                and layers.get('Bâtiments', True)):
+            # The overlay is non-opaque: tactical tiles, props and picking
+            # remain the source of truth in both Studio and Player.
+            draw_interior(canvas, geo, interior_plan(board, building),
+                          instance_tag)
+        upper_occupied = any(
+            (unit_levels or {}).get(getattr(actor, 'id', None), 0) > 0
+            and tuple(actor.pos) in building.cells for actor in units)
+        if ((active_level > 0 or upper_occupied) and building_floors
+                and layers.get('Bâtiments', True)):
+            draw_stacked_floors(canvas, geo, building, building_floors,
+                                active_level, instance_tag, prop_atlas=prop_atlas)
         if building.name in SCENERY_NAMES:
             # No opaque scenery may hide selected cells or tactical actors.
             # Without a PNG, the existing tile/prop renderer is the fallback.

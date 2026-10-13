@@ -174,6 +174,10 @@ def remove_structure(data, mission_id, cell):
     mission = _mission(updated, mission_id)
     from .structure_underlay import restore_footprint
     restore_footprint(mission, instance)
+    if instance.id and mission.get('interior_floors'):
+        mission['interior_floors'] = [
+            floor for floor in mission['interior_floors']
+            if floor['structure_id'] != instance.id]
     return Content.from_dict(updated).to_dict()
 
 
