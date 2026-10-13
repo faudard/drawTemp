@@ -47,9 +47,8 @@ class EditorArchitectureTests(TestCase):
         self.assertEqual(notice.kind, 'structure')
         self.assertEqual(len(self.doc.undo_stack), count + 1)
         self.assertEqual(tuple(self.mission()['structures'][-1]['anchor']), (10, 10))
-        for view in (RENDERER, MINIMAP, INSPECTOR):
+        for view in (RENDERER, MINIMAP, INSPECTOR, WORKSPACE):
             self.assertEqual(events[view], [notice])
-        self.assertFalse(events[WORKSPACE])
         self.doc.undo()
         self.assertEqual(self.doc.data, before)
         self.doc.redo()
