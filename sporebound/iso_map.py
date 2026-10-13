@@ -345,7 +345,8 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     geo.architecture_instances = draw_architecture(
         canvas, geo, board, units, selected_cell, layers,
         atlas=building_atlas, scenery_atlas=fortification_atlas,
-        poses=poses, structures=getattr(mission, 'structures', ()))
+        poses=poses, structures=getattr(mission, 'structures', ()),
+        interior_floors=getattr(mission, 'interior_floors', ()))
     return geo
 
 
