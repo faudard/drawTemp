@@ -22,6 +22,7 @@ class EntityPalette:
         self.query = tk.StringVar(self.window)
         self.category = tk.StringVar(self.window, value='Tous')
         self.facing = tk.StringVar(self.window, value='south')
+        self.team = tk.StringVar(self.window, value='enemy')
         self.moving = tk.BooleanVar(self.window, value=False)
         self.link = tk.StringVar(self.window)
         self.destination = tk.StringVar(self.window)
@@ -33,7 +34,7 @@ class EntityPalette:
         ttk.Label(top, text='Rechercher').pack(side='left')
         ttk.Entry(top, textvariable=self.query, width=24).pack(side='left', padx=6)
         ttk.Combobox(top, textvariable=self.category, state='readonly', width=13,
-                     values=('Tous', 'Acteurs', 'Objets')).pack(side='left', padx=6)
+                     values=('Tous', 'Acteurs', 'Archétypes', 'Objets')).pack(side='left', padx=6)
         ttk.Label(top, textvariable=self.counter).pack(side='right')
         body = ttk.Panedwindow(self.window, orient='horizontal')
         body.pack(fill='both', expand=True, padx=8)
@@ -60,6 +61,11 @@ class EntityPalette:
                                       state='readonly', width=8,
                                       values=('south', 'north', 'east', 'west'))
         self.facing_box.pack(side='left', padx=4)
+        ttk.Label(actor_controls, text='Camp').pack(side='left', padx=(8, 2))
+        self.team_box = ttk.Combobox(actor_controls, textvariable=self.team,
+                                     state='disabled', width=8,
+                                     values=('player', 'enemy'))
+        self.team_box.pack(side='left')
         self.pose_button = ttk.Checkbutton(right, text='Prévisualiser la marche',
                                            variable=self.moving)
         self.pose_button.pack(anchor='w', pady=4)
@@ -73,11 +79,12 @@ class EntityPalette:
         self.use_button.pack(fill='x', pady=12)
         ttk.Label(self.window, text='Utiliser → cliquer sur la carte ; '
                   'la pose est validée par les règles et annulable.').pack(pady=6)
-        self.tree.bind('<<TreeviewSelect>>', self.preview)
+        self.tree.bind('<<TreeviewSelect>>', self.on_selection)
         self.tree.bind('<Double-1>', lambda _e: self.use())
         self.query.trace_add('write', self.populate)
         self.category.trace_add('write', self.populate)
         self.facing.trace_add('write', self.preview)
+        self.team.trace_add('write', self.preview)
         self.moving.trace_add('write', self.preview)
         self.refresh()
 
@@ -106,10 +113,11 @@ class EntityPalette:
         visible = [entry for entry in self.entries.values()
                    if (category == 'Tous'
                        or category == 'Acteurs' and entry.kind == 'actor'
+                       or category == 'Archétypes' and entry.kind == 'archetype'
                        or category == 'Objets' and entry.kind == 'object')
                    and query in (entry.label + ' ' + entry.id).casefold()]
         for entry in visible:
-            if entry.kind == 'actor':
+            if entry.kind in ('actor', 'archetype'):
                 photo = self.actors.sprite(entry.style, 'south', 0, 42)
             else:
                 photo = (self.props.sprite(OBJECT_PROP_HINTS[entry.id.partition(':')[2]], 34)
@@ -120,13 +128,13 @@ class EntityPalette:
                 options['image'] = photo
             self.tree.insert('', 'end', iid=entry.id,
                              text=entry.label + (' · ' + entry.team
-                                                 if entry.kind == 'actor' else ''),
+                                                 if entry.kind in ('actor', 'archetype') else ''),
                              **options)
         self.counter.set(f'{len(visible)} / {len(self.entries)}')
         if visible:
             preferred = old[0] if old and old[0] in {v.id for v in visible} else visible[0].id
             self.tree.selection_set(preferred)
-            self.preview()
+            self.on_selection()
         else:
             self.canvas.delete('all')
             self.detail.set('Aucun élément trouvé.')
@@ -136,14 +144,22 @@ class EntityPalette:
         current = self.tree.selection()
         return self.entries.get(current[0]) if current else None
 
+    def on_selection(self, *_args):
+        entry = self.selected()
+        if entry is not None:
+            self.team.set(entry.team or 'enemy')
+        self.preview()
+
     def preview(self, *_args):
         entry = self.selected()
         if entry is None:
             return
         self.use_button.state(['!disabled'])
         self.canvas.delete('all')
-        is_actor = entry.kind == 'actor'
+        is_actor = entry.kind in ('actor', 'archetype')
         self.facing_box.configure(state='readonly' if is_actor else 'disabled')
+        self.team_box.configure(state='readonly' if entry.kind == 'archetype'
+                                else 'disabled')
         self.pose_button.configure(state='normal' if is_actor else 'disabled')
         is_linked = entry.id in ('object:switch', 'object:ram', 'object:catapult')
         self.link_box.configure(state='readonly' if is_linked else 'disabled')
@@ -164,7 +180,7 @@ class EntityPalette:
                                     else '#9070b1', outline='#4b5261', width=2)
             self.canvas.create_text(120, 137, text=entry.label)
         self.detail.set(f'{entry.label} — {entry.id}\n{entry.description}'
-                        + (f'\nÉquipe : {entry.team}' if is_actor
+                        + (f'\nÉquipe : {self.team.get()}' if is_actor
                            else '\nIcône de décor indicative : visuel définitif à créer.'))
 
     def use(self):
@@ -183,5 +199,6 @@ class EntityPalette:
         if entry.id in ('object:switch', 'object:ram', 'object:catapult') and not self.link.get():
             messagebox.showerror('Lien', 'Créer et sélectionner une porte cible.')
             return
-        if self.choose(entry, self.facing.get(), self.link.get(), destination):
+        if self.choose(entry, self.facing.get(), self.link.get(), destination,
+                       self.team.get()):
             self.window.withdraw()
