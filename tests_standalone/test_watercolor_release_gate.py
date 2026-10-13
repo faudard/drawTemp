@@ -1,4 +1,5 @@
 """Release-gate regression tests; no Pillow, Tk, OpenCV or artwork required."""
+from hashlib import sha256
 import json
 from pathlib import Path
 import struct
@@ -70,6 +71,53 @@ class WatercolorReleaseGateTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError,
                                                 'CRC' if defect == 'crc' else 'SHA-256'):
                         verify_archive(archive)
+
+    def test_strict_directory_rejects_valid_but_non_original_png(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index, registry = fixture()
+            (root / "index.json").write_text(json.dumps(index))
+            (root / "registry.json").write_text(json.dumps(registry))
+            original = png()
+            paths = [item["path"] for item in index["sprites"]]
+            for rel in paths:
+                dest = root / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(original)
+            hashes = {rel: sha256(original).hexdigest() for rel in paths}
+            (root / "provenance.json").write_text(json.dumps({
+                "schema_version": 1, "archive_sha256": "0" * 64,
+                "sprite_hashes": hashes,
+            }))
+            self.assertEqual(verify_directory(root)["provenance_sha256_verified"],
+                             88)
+            # Change a pixel, then rebuild IDAT and CRC: this remains a
+            # completely valid PNG and must nevertheless be rejected.
+            altered = (original[:33] + _chunk(b"IDAT",
+                       zlib.compress(b"\x00\x00\x00\xff\xff")) +
+                       _chunk(b"IEND", b""))
+            (root / paths[0]).write_bytes(altered)
+            with self.assertRaisesRegex(ValueError, "provenance SHA-256"):
+                verify_directory(root)
+
+    def test_provenance_must_name_every_sprite(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index, registry = fixture()
+            (root / "index.json").write_text(json.dumps(index))
+            (root / "registry.json").write_text(json.dumps(registry))
+            image = png()
+            for row in index["sprites"]:
+                dest = root / row["path"]
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(image)
+            (root / "provenance.json").write_text(json.dumps({
+                "schema_version": 1, "archive_sha256": "0" * 64,
+                "sprite_hashes": {index["sprites"][0]["path"]:
+                                  sha256(image).hexdigest()},
+            }))
+            with self.assertRaisesRegex(ValueError, "exactly 88"):
+                verify_directory(root)
 
     def test_absent_pngs_report_pending_only_when_explicitly_allowed(self):
         with TemporaryDirectory() as tmp:
