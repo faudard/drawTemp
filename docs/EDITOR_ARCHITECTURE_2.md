@@ -15,7 +15,7 @@ world model or a new rendering engine.**
 - `SelectionController` contains the selected mission, focus cell and
   selected cells. `ToolController` mirrors the existing Tk tool selector.
   States are non-persistent and notify only affected views.
-- Typed `StructureCommand`, `EntityCommand`, `TacticalEventCommand`
+- Typed `StructureCommand`, `StructureGroupCommand`, `EntityCommand`, `TacticalEventCommand`
   call the **existing** headless authoring functions: `edit_structure`,
   `entity_editing` and `event_graph.update_condition`.
 - `preview` computes a validated Content snapshot without mutation or
@@ -31,6 +31,7 @@ world model or a new rendering engine.**
 
 The Map Editor uses this protocol on:
 - Structure edits, moves, duplicates and nudges, including the `Pont`.
+- **Groupes multicases** : prévisualisation et translation/duplication atomique de ponts et bâtiments via `StructureGroupCommand`.
 - Existing actor and object move, duplicate, edit and remove.
 
 For these commands `design_change` still owns Studio history and JSON
