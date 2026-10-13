@@ -88,3 +88,61 @@ les queues de distribution.
   ni baseline multi-OS n'est affirmé tant que les runs de référence n'existent.
 - Le benchmark nettoie ses fichiers temporaires et ne modifie pas les
   documents de l'auteur.
+
+## 3.7.32B — Latence réelle de callbacks Tk et comparaison avant/après
+
+La suite active un traceur **opt-in**, sans enregistrer le contenu des jeux.
+
+Sous Linux/macOS :
+
+    SPOREBOUND_UI_TRACE=/tmp/drawtemp-ui-trace.jsonl \
+      python3 -m sporebound editor
+
+Sous Windows PowerShell :
+
+    $env:SPOREBOUND_UI_TRACE = "C:\temp\drawtemp-ui-trace.jsonl"
+    python -m sporebound editor
+
+La variable doit pointer vers un chemin **absolu**. Chaque ligne JSON contient
+le nom du parcours, les durées de callback et callback→prochain idle Tk,
+et des **compteurs numériques seulement** (cases, ressources, nœuds et items).
+Quatre chemins sont instrumentés : \`map.refresh\`, \`workspace.refresh\`,
+\`event_graph.draw\`, \`story_graph.draw\`. Le traceur est inactif si la
+variable est absente. Il n'écrit jamais les noms des missions, textes
+narratifs, IDs d'acteurs ou contenus JSON du projet.
+
+La mesure callback→idle est une approximation de l'attente dans la boucle
+événementielle Tk. Elle **n'est pas** une mesure matérielle clic→pixel,
+et peut être contaminée par des callbacks concurrents. Toute comparaison
+doit isoler le même parcours, le même contenu et des actions répétées ;
+il ne faut pas confondre temps du callback et temps de composition écran.
+Le coût de traçage lui-même est un biais, à estimer avec l'instrumentation
+désactivée.
+
+Comparer deux rapports structurés des mêmes scènes :
+
+    python scripts/compare_profile_scale_3732.py \
+      baseline.json candidate.json \
+      --output comparison.json --markdown comparison.md
+
+Ce comparateur exige le même Python/OS/Tk/CPU logique, les mêmes paramètres
+et le même jeu de scénarios. En cas de différence d'environnement, l'option
+\`--allow-host-mismatch\` sert uniquement à examiner les résultats : pas
+à certifier une régression. L'affichage comprend les deltas absolus/relatifs
+p50/p95/p99 et les compteurs mémoire/Canvas quand disponibles.
+
+Un seuil bloquant est **strictement optionnel**, après calibration locale :
+
+    python scripts/compare_profile_scale_3732.py \
+      baseline.json candidate.json \
+      --block-p95-pct 15 --block-min-ms 2
+
+Ceci n'est qu'un **exemple de syntaxe** et non un budget recommandé. En l'absence
+d'options \`--block-*\`, la comparaison n'échoue pas en raison des seules
+différences de vitesse. Des incompatibilités de schéma, scénarios et paramètres
+font échouer la comparaison afin d'empêcher des gains artificiels.
+
+À poursuivre après capture des données : diagnostic de la consommation
+native par plateforme (RSS seul insuffisant), instrumentation de l'entrée
+utilisateur, segmentation modèle→rendu→Tk idle, validation des graphes par les
+éditeurs réels et tests de vieillissement sur plusieurs heures.
