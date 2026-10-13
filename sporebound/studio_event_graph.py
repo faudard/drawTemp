@@ -24,6 +24,7 @@ class EventGraphStudio:
         self.cond_team = self.tk.StringVar(value='enemy')
         self.cond_pos = self.tk.StringVar(value='0,0')
         self.cond_object = self.tk.StringVar()
+        self.composite_summary = self.tk.StringVar(value='Aucune condition ajoutée')
         self.action_kind = self.tk.StringVar(value='message')
         self.action_text = self.tk.StringVar(value='Renforts !')
         self.action_amount = self.tk.StringVar(value='4')
@@ -170,6 +171,16 @@ class EventGraphStudio:
         ttk.Button(cond, text='Appliquer condition',
                    command=lambda: self.owner._run(self.save_condition)).grid(
                        row=6, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
+        composite = ttk.LabelFrame(cond, text='Conditions supplémentaires (ET / OU / NON)')
+        composite.grid(row=11, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
+        ttk.Label(composite, textvariable=self.composite_summary,
+                  wraplength=300).pack(fill='x', padx=4, pady=3)
+        combinators = ttk.Frame(composite)
+        combinators.pack(fill='x')
+        self._button(combinators, '+ ET', lambda: self.add_composite('all'))
+        self._button(combinators, '+ OU', lambda: self.add_composite('any'))
+        self._button(combinators, '+ NON', lambda: self.add_composite('all', True))
+        self._button(composite, 'Effacer les ajouts', self.clear_composite)
         ttk.Label(cond, text='Nouvel ID').grid(row=7, column=0, sticky='w', padx=5)
         ttk.Entry(cond, textvariable=self.new_id, width=24).grid(
             row=7, column=1, sticky='ew', padx=5)
@@ -275,6 +286,19 @@ class EventGraphStudio:
         self._edit(lambda doc: event_graph.update_condition(
             doc, self.owner.mission(), eid, spec))
 
+    def add_composite(self, join, negate=False):
+        event = self._event()
+        leaf = self._condition()
+        self._edit(lambda doc: event_graph.extend_condition(
+            doc, self.owner.mission(), event['id'], leaf,
+            join=join, negate=negate))
+        self.status.set('Condition secondaire ajoutée au trigger existant.')
+
+    def clear_composite(self):
+        event = self._event()
+        self._edit(lambda doc: event_graph.clear_composite_condition(
+            doc, self.owner.mission(), event['id']))
+
     def delete_event(self):
         eid = self._event()['id']
         self._edit(lambda doc: event_graph.delete_event(
@@ -360,6 +384,9 @@ class EventGraphStudio:
         except RuleError:
             return
         self.cond_kind.set(event['condition'])
+        self.composite_summary.set(
+            event_graph.composite_title(event['when'])
+            if 'when' in event else 'Aucune condition ajoutée')
         self.cond_value.set(str(event.get('value', event.get('percent',
                                event.get('max_alive', 10)))))
         self.cond_unit.set(event.get('unit', ''))
