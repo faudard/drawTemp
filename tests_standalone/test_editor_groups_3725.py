@@ -392,6 +392,25 @@ class EditorHierarchyTests(unittest.TestCase):
         doc.undo()
         self.assertEqual(doc.data, before)
 
+    def test_batch_move_structure_over_vacated_decor_cell(self):
+        raw = place_structure(self.base, self.MID, 'Maison', (5, 5))
+        doc = Document(Content.from_dict(raw))
+        doc.paint_many(self.MID, ((4, 5),), 'feature:tree')
+        region = [(x, y) for y in range(5, 8) for x in range(5, 9)]
+        doc.replace(create_editor_group(doc.data, self.MID, 'Maison + jardin',
+                                         cells=[(4, 5), *region]))
+        before = deepcopy(doc.data)
+        doc.replace(move_editor_groups(doc.data, self.MID,
+                                       ('group_1',), -1, 0))
+        group = self.groups(doc.data)[0]
+        self.assertEqual(group['cells'], [[3, 5]])
+        self.assertEqual(Content.from_dict(doc.data).missions[self.MID]
+                         .board.tile((3, 5)).feature, 'tree')
+        self.assertEqual(self.mission(doc.data)['structures'][-1]['anchor'],
+                         [4, 5])
+        doc.undo()
+        self.assertEqual(doc.data, before)
+
     def test_clone_upper_deck_and_connector_keeps_tactical_level(self):
         from sporebound.interior_levels import add_interior_floor
         from sporebound.level_navigation import (
