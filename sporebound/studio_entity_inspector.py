@@ -53,6 +53,7 @@ class EntityInspector:
         self.pose = tk.StringVar(self.window, value='idle')
         self.vars = {}
         self.rows = {}
+        self.baseline = {}
         top = ttk.Frame(self.window, padding=8)
         top.pack(fill='x')
         ttk.Label(top, text='Entité sélectionnée').pack(anchor='w')
@@ -131,6 +132,7 @@ class EntityInspector:
             fields = OBJECT_FIELDS[record['kind']]
             self.detail.set(f"Objet {record['id']} ({record['kind']}) · "
                             f"position {record['pos']}")
+        self.baseline = {}
         for key, row in self.rows.items():
             row.pack_forget()
             if key not in fields:
@@ -147,7 +149,13 @@ class EntityInspector:
             else:
                 defaults = {'hp': 1, 'amount': 1, 'power': 15,
                             'ammo': 0, 'charges': 2, 'cost': 2}
+                if key == 'team' and self.current.kind == 'object':
+                    defaults[key] = ('enemy' if record['kind'] == 'defense'
+                                     else 'player')
+                if key == 'power' and record.get('kind') in ('ram', 'catapult'):
+                    defaults[key] = 1
                 self.vars[key].set(str(record.get(key, defaults.get(key, ''))))
+            self.baseline[key] = self.vars[key].get()
             if key == 'link':
                 mission = next(m for m in data['missions'] if m['id'] == mid)
                 doors = [o['id'] for o in mission['objects'] if o['kind'] == 'door']
@@ -188,6 +196,8 @@ class EntityInspector:
         result = {}
         for key in keys:
             value = self.vars[key].get()
+            if value == self.baseline.get(key):
+                continue
             if key in INT_FIELDS:
                 value = int(value)
             result[key] = value
@@ -198,6 +208,9 @@ class EntityInspector:
             return
         try:
             payload = self.changes()
+            if not payload:
+                self.detail.set('Aucune propriété modifiée.')
+                return
             if self.commit('edit', self.current.kind, self.current.id, payload):
                 self.select()
         except (ValueError, KeyError) as exc:
