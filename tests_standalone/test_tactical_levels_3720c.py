@@ -120,6 +120,11 @@ class TacticalFloorTests(unittest.TestCase):
         self.assertEqual(self.doc.data, original)
 
     def test_connector_removal_and_legacy_content_serialization(self):
+        # A connector supporting an upper spawn cannot be silently removed.
+        with self.assertRaises(RuleError):
+            remove_level_link(self.doc.data, self.MID, 'stair_1')
+        self.doc.replace(place_unit_on_level(
+            self.doc.data, self.MID, self.enemy, 0, (9, 9)))
         self.doc.replace(remove_level_link(self.doc.data, self.MID, 'stair_1'))
         self.assertEqual(self.doc.data['version'], 1)
         self.doc.undo()
