@@ -46,6 +46,23 @@ class WorkspaceShellTests(unittest.TestCase):
             map_resource_target('map_actor:missing/bad', self.data)
         self.assertIsNone(map_resource_target('mission:' + self.mid, self.data))
 
+    def test_workspace_refs_and_exact_object_inspector(self):
+        index = StudioIndex(self.content, self.project)
+        mission = 'mission:' + self.mid
+        actor = self.content.missions[self.mid].units[0]
+        actor_key = 'map_actor:' + self.mid + '/' + actor.id
+        self.assertIn(actor_key, {r.target for r in index.outgoing(mission)})
+        obj = self.content.missions[self.mid].objects[0]
+        object_key = 'map_object:' + self.mid + '/' + obj['id']
+        self.assertIn(object_key, {r.target for r in index.outgoing(mission)})
+        snapshot = inspect_map(self.data, self.mid, obj['pos'],
+                               preferred_kind='object', preferred_id=obj['id'])
+        self.assertEqual(snapshot.kind, 'object')
+        self.assertEqual(snapshot.entity_id, obj['id'])
+        with self.assertRaises(RuleError):
+            inspect_map(self.data, self.mid, obj['pos'],
+                        preferred_kind='actor', preferred_id='missing')
+
     def test_tile_and_multi_cell_group_share_the_same_inspector_contract(self):
         free = self.free_cells(3)
         single = inspect_map(self.data, self.mid, free[0])
