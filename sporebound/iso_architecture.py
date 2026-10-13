@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from .iso_structures import structure_template, door_slots
 from .iso_depth import cutaway_intersects, depth_order
+from .iso_interiors import draw_interior, interior_plan
 from .model import RuleError, require
 
 
@@ -211,7 +212,17 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
         instance_tag = 'architecture_instance_' + str(index)
         outline, peak = architecture_outline(geo, building)
         north, east, south, west = outline
-        cutaway = roof_cutaway(building, selected_cell, units, poses)
+        # A designer may open all existing interiors without placing a unit.
+        # In the Player, roof_cutaway still follows selected/occupied cells.
+        cutaway = (roof_cutaway(building, selected_cell, units, poses)
+                   or (layers.get('Intérieurs', False)
+                       and building.name in ARCHITECTURE_NAMES))
+        if (cutaway and building.name in ARCHITECTURE_NAMES
+                and layers.get('Bâtiments', True)):
+            # The overlay is non-opaque: tactical tiles, props and picking
+            # remain the source of truth in both Studio and Player.
+            draw_interior(canvas, geo, interior_plan(board, building),
+                          instance_tag)
         if building.name in SCENERY_NAMES:
             # No opaque scenery may hide selected cells or tactical actors.
             # Without a PNG, the existing tile/prop renderer is the fallback.
