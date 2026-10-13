@@ -246,6 +246,8 @@ class StudioPanels:
         self.gate_cinematic_id, _ = self._field(gate, 7, 'ID cinématique (facultatif)')
         self.gate_min_tick, _ = self._field(
             gate, 10, 'Tick minimum (optionnel)', '')
+        self.gate_scene, self.gate_scene_box = self._field(
+            gate, 11, 'Scène narrative (optionnelle)', choices=[])
         gate_buttons = ttk.Frame(gate)
         gate_buttons.grid(row=8, column=0, columnspan=3, sticky='ew', pady=6)
         ttk.Button(gate_buttons, text='Créer et simuler',
@@ -344,7 +346,8 @@ class StudioPanels:
             dialogue=self.gate_dialogue.get(),
             cinematic_id=self.gate_cinematic_id.get().strip(),
             min_tick=(int(self.gate_min_tick.get())
-                      if self.gate_min_tick.get().strip() else None))
+                      if self.gate_min_tick.get().strip() else None),
+            scene_id=self.gate_scene.get().strip())
         # If pending raw JSON made design_change abort, do NOT update the
         # manifest: otherwise the scene would reference an uncommitted trigger.
         self.design_change(lambda: self.doc().replace(updated))
@@ -373,6 +376,7 @@ class StudioPanels:
                                 else 'aucune modification'),
              'CINÉMATIQUE PLAYER : ' +
              (', '.join(context['cinematic_ids']) or 'aucune'),
+             'SCÈNE NARRATIVE : ' + (context['narrative_scene_id'] or 'aucune'),
              'GATE : ' + ('OK' if context['gate_scenario_ok'] else 'À CORRIGER'),
              '', *format_preview_report(context['event'])], show_end=True)
         self.notebook.select(graph.tab)
@@ -700,6 +704,11 @@ class StudioPanels:
         doors = [obj['id'] for obj in chosen.get('objects', ())
                  if obj['kind'] == 'door']
         self.gate_door_box['values'] = doors
+        scene_ids = [''] + [row['id'] for row in
+                            self.project.story.get('scenes', [])]
+        self.gate_scene_box['values'] = scene_ids
+        if self.gate_scene.get() not in scene_ids:
+            self.gate_scene.set('')
         if self.gate_door.get() not in doors:
             self.gate_door.set(doors[0] if doors else '')
         self.start_box['values']=[m['id'] for m in missions]
