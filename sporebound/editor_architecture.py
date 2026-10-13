@@ -125,7 +125,7 @@ class StructureCommand:
     quarter_turns: Optional[int] = None
     door_slot: Optional[int] = None
     kind: str = 'structure'
-    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR)
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
 
     def transform(self, data, mission_id):
         from .iso_structures import edit_structure
@@ -144,7 +144,7 @@ class EntityCommand:
     cell: Optional[Tuple[int, int]] = None
     fields: Tuple[Tuple[str, object], ...] = ()
     kind: str = 'entity'
-    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR)
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
 
     def transform(self, data, mission_id):
         from .entity_editing import (relocate_entity, duplicate_entity,
