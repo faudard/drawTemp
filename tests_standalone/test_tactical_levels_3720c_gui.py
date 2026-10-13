@@ -33,7 +33,8 @@ class LayeredGameplayGUI(unittest.TestCase):
                 with self.subTest(zoom=zoom):
                     camera = Camera(zoom)
                     geo = renderer.draw(battle, battle_frame(battle), camera)
-                    self.assertEqual(len(canvas.find_withtag('architecture_floor_1')), 0)
+                    # Enemy starts upstairs, so its floor must already be visible.
+                    self.assertTrue(canvas.find_withtag('architecture_floor_1'))
                     battle.execute({'kind': 'level_move', 'level': 1, 'cell': [4, 5]})
                     geo = renderer.draw(battle, battle_frame(battle), camera)
                     self.assertTrue(canvas.find_withtag('architecture_floor_1'))
