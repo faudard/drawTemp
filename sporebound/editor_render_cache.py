@@ -182,7 +182,8 @@ class EditorRenderCache:
             self._owns_canvas = True
         key = ((board.width, board.height, options['cell_size'],
                 'validated', scene_revision)
-               if scene_revision is not None else
+               if scene_revision is not None and
+               board.width * board.height > self.max_retained_cells else
                (board.width, board.height, options['cell_size'],
                 tuple(sorted((pos, tile.height) for pos, tile in board.tiles.items()
                              if tile.height))))
