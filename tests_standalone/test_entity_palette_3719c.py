@@ -6,7 +6,8 @@ from unittest import TestCase, skipUnless
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
 from sporebound.editor import Document
-from sporebound.entity_palette import entity_entries, place_entity
+from sporebound.entity_palette import (entity_entries, place_entity,
+                                      preview_entity_placement, OBJECT_PROP_HINTS)
 from sporebound.model import Content, RuleError
 
 
@@ -63,6 +64,28 @@ class EntityPaletteTests(TestCase):
         self.assertEqual(next(m for m in reopened['missions']
                               if m['id'] == self.MID)['objects'], objects)
 
+    def test_hover_preview_is_authoritative_and_immutable(self):
+        original = deepcopy(self.doc.data)
+        source = self.row()['units'][0]
+        actor_id = 'actor:' + source['id']
+        good = preview_entity_placement(self.doc.data, self.MID, actor_id, (8, 8))
+        self.assertTrue(good.allowed)
+        self.assertEqual(good.cells, ((8, 8),))
+        self.assertFalse(preview_entity_placement(
+            self.doc.data, self.MID, actor_id, tuple(source['pos'])).allowed)
+        self.assertFalse(preview_entity_placement(
+            self.doc.data, self.MID, 'object:switch', (8, 8),
+            link='missing').allowed)
+        self.assertFalse(preview_entity_placement(
+            self.doc.data, self.MID, 'object:chest', (30, 30)).allowed)
+        self.assertEqual(self.doc.data, original)
+
+    def test_visual_object_hints_reuse_existing_prop_atlas(self):
+        from sporebound.iso_props import PROP_NAMES
+        self.assertEqual(set(OBJECT_PROP_HINTS), {
+            'door', 'switch', 'chest', 'ram', 'catapult', 'passage', 'defense'})
+        self.assertTrue(set(OBJECT_PROP_HINTS.values()) <= set(PROP_NAMES))
+
     def test_failed_placement_preserves_data_and_history(self):
         before = deepcopy(self.doc.data)
         undo_size = len(self.doc.undo_stack)
@@ -88,6 +111,7 @@ class EntityPaletteGUITests(TestCase):
     def test_actor_pose_preview_and_link_controls(self):
         import tkinter as tk
         from sporebound.iso_actor_atlas import IsoActorAtlas
+        from sporebound.iso_props import IsoPropAtlas
         from sporebound.studio_entity_palette import EntityPalette
 
         data = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
@@ -99,12 +123,14 @@ class EntityPaletteGUITests(TestCase):
             selected = []
             palette = EntityPalette(
                 root, snapshot=lambda: (data, 'palette_gui'),
-                actors=IsoActorAtlas(stage),
+                actors=IsoActorAtlas(stage), props=IsoPropAtlas(stage),
                 choose=lambda *values: selected.append(values) or True,
                 cell_size=lambda: 54)
             root.update()
             actor_entry = next(e.id for e in palette.entries.values()
                                if e.kind == 'actor')
+            self.assertTrue(palette.tree.item(actor_entry, 'image'))
+            self.assertTrue(palette.tree.item('object:chest', 'image'))
             palette.tree.selection_set(actor_entry)
             palette.preview()
             palette.facing.set('west')
