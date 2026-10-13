@@ -38,6 +38,13 @@ def transform_structure_group(data, mission_id, cells, dx, dy, *,
             'Duplicating onto the same structures is not allowed')
     originals = selected_structures(data, mission_id, cells)
     require(bool(originals), 'Select the complete footprint of a structure')
+    # Group transformation does not yet remap per-building tactical stair
+    # endpoints. Reject rather than silently keeping them at old positions.
+    moving_ids = {row.id for row in originals if row.id}
+    mission_raw = _mission(data, mission_id)
+    require(not any(f['structure_id'] in moving_ids
+                    for f in mission_raw.get('interior_floors', ())),
+            'Move buildings with authored floors individually until group floor remapping is supported')
     require(len(originals) <= 128, 'Select at most 128 structures per operation')
     if not duplicate and (dx, dy) == (0, 0):
         return deepcopy(data)
