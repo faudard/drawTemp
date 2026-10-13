@@ -78,7 +78,7 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     # disposable Battle states, without replacing the editor.
                     buttons['Vue isométrique avant/après'].invoke()
                     root.update()
-                    comparisons = [w for w in root.winfo_children()
+                    comparisons = [w for w in descendants(root)
                                    if isinstance(w, tk.Toplevel)
                                    and w.title().startswith('Aperçu isométrique')]
                     self.assertEqual(len(comparisons), 1)
