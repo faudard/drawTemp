@@ -13,14 +13,15 @@ modification des formats Content/Replay.
 2. Rechercher un acteur déjà présent dans la mission (Jeanne, bandit, loup,
    garde, etc.) ou choisir Porte, Levier, Coffre, Bélier, Catapulte, Passage ou
    Défense.
-3. Un acteur affiche sa silhouette réelle du renderer partagé. Les quatre
-   orientations et les deux poses idle/marche sont prévisualisables.
+3. La liste affiche des **miniatures PNG**, avec le même atlas que le renderer
+   pour les acteurs, et des icônes du décor existant pour les objets. Un acteur
+   permet de prévisualiser ses quatre orientations et ses deux poses idle/marche.
 4. Pour un levier, bélier ou une catapulte, sélectionner **une porte existante**
    comme cible. Pour un passage, saisir sa destination sous forme `x,y`.
-5. Cliquer **Placer sur la carte**, puis une case de l'éditeur. Un contour bleu
-   et, en mode isométrique, le sprite de l'acteur indiquent la cible. La
-   validation réelle a lieu au clic ; une case bleue n'est pas une promesse de
-   placement autorisé.
+5. Cliquer **Placer sur la carte**, puis survoler une case de l'éditeur.
+   L'empreinte complète s'affiche en **vert si la pose réelle est valide** ou
+   en **rouge si elle est refusée** ; la barre d'état détaille alors la raison.
+   Le sprite ou l'icône est visible à l'échelle de la carte. Cliquer pour poser.
 6. Répéter pour d'autres cases, utiliser **Annuler/Rétablir**, sauvegarder et
    relancer le playtest.
 
@@ -42,6 +43,10 @@ modification des formats Content/Replay.
   des objets utilise `authoring.add_object` et le modèle Content existants.
 - Les changements sont tous effectués par `Document.replace` et sont donc
   compatibles avec l'historique de l'éditeur.
+- Le retour de survol `preview_entity_placement` exécute la **même validation
+  que la pose** sur une copie non persistée. L'éditeur évite de recalculer
+  celle-ci à chaque pixel du pointeur grâce à une clé de cache par cellule,
+  choix, document, orientation, zoom et mode de rendu.
 
 ## Validation
 
@@ -54,8 +59,9 @@ modification des formats Content/Replay.
 
 Ce lot ne crée pas un éditeur avancé de statistiques depuis la palette ; les
 unités sont configurées dans Character/Bestiary Studio. Les objets n'ont pas
-encore de sprites PNG spécialisés ; une pastille neutre représente leur
-prévisualisation sur la carte. Le déplacement d'objets et d'unités existants
+encore de sprites PNG spécialisés : des illustrations provisoires réemploient
+l'atlas de décors existant, avec un marquage explicite de leur statut de
+placeholders. Leur vraie apparence finale reste à créer. Le déplacement d'objets et d'unités existants
 continue d'utiliser les outils de déplacement déjà présents.
 
 L'orientation choisie est un attribut de spawn persistant ; la prévisualisation
