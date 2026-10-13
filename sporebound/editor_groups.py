@@ -419,15 +419,19 @@ def move_editor_groups(data, mission_id, group_ids, dx, dy):
     require(not moved_structure_cells.intersection(cells),
             'A moved building overlaps grouped terrain')
     result = deepcopy(data)
+    staged = _mission(result, mission_id)
+    # Groups and selected free tiles are suspended for the WHOLE operation.
+    # Otherwise moving a building onto a just-vacated adjacent group tile
+    # would corrupt the new stamp or falsely invalidate an intermediate state.
+    held_groups = staged.pop('editor_groups', [])
+    if cells:
+        staged['board']['tiles'] = [
+            tile for tile in staged['board']['tiles']
+            if tuple(tile['pos']) not in cells]
     if moving_structure_cells:
         from .structure_groups import transform_structure_group
-        # The existing structure transaction validates intermediate states while
-        # the old records are detached. Suspend editor-only group references
-        # during that transaction, then restore them before final validation.
-        held_groups = _mission(result, mission_id).pop('editor_groups', [])
         result = transform_structure_group(result, mission_id,
                                            tuple(moving_structure_cells), dx, dy)
-        _mission(result, mission_id)['editor_groups'] = held_groups
     if members['unit_ids'] or members['object_ids']:
         from .map_transform import move_group
         result = move_group(result, mission_id,
@@ -437,14 +441,14 @@ def move_editor_groups(data, mission_id, group_ids, dx, dy):
     mission = _mission(result, mission_id)
     if cells:
         current = {tuple(t['pos']): t for t in mission['board']['tiles']}
-        for cell in cells:
-            current.pop(cell, None)
         for (x, y) in cells:
             tile = original_tiles.get((x, y))
             if tile is not None:
-                tile['pos'] = [x+dx, y+dy]
-                current[(x+dx, y+dy)] = tile
+                copied = deepcopy(tile)
+                copied['pos'] = [x+dx, y+dy]
+                current[(x+dx, y+dy)] = copied
         mission['board']['tiles'] = list(current.values())
+    mission['editor_groups'] = held_groups
     changed_ids = {g['id'] for g in groups}
     for group in mission['editor_groups']:
         if group['id'] in changed_ids:
