@@ -64,6 +64,17 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                                      and 'event_new' in tuple(w['values']))
                     self.assertEqual(event_box.get(), 'event_new')
 
+                    # 3.7.21C: the same graph exposes read-only contextual
+                    # inspection and a real-engine preview, without saving.
+                    self.assertIn('Tester avec le moteur', buttons)
+                    buttons['Tester avec le moteur'].invoke()
+                    root.update()
+                    context_text = next(w for w in widgets if isinstance(w, tk.Text))
+                    self.assertIn('APERÇU ISOLÉ', context_text.get('1.0', 'end'))
+                    self.assertIn('condition non satisfaite',
+                                  context_text.get('1.0', 'end'))
+                    self.assertEqual(context_text.cget('state'), 'disabled')
+
                     action_box = next(w for w in widgets if isinstance(w, ttk.Combobox)
                                       and 'queue_wave' in tuple(w['values']))
                     action_box.set('hazard')
