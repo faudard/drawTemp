@@ -54,8 +54,9 @@ against the existing `Exploration` and `GameSession` contracts.
 Add an optional `events` list to the existing `world` manifest.
 Each entry binds an existing road (two linked Mission IDs) to an existing
 `story.scenes` scene, with an optional StoryBook `when` condition.
-Only one authored encounter may occupy the same road. Events fire exactly
-once per campaign, halfway through the route in **either direction**.
+Several encounters may occupy the same road at distinct authored
+`step` positions. Every event is once-only per campaign. Legacy encounters
+without a `step` occur halfway through the road, in either direction.
 
 ```json
 {
@@ -73,8 +74,9 @@ existing validated narrative effects (gold, flags, unlocks, equipment, etc).
 Once the choice resolves, travel resumes from its saved position. Mid-event
 saves and recovery use the usual verified GameSession snapshot.
 
-- `world_evt_<id>` is the only new once-only flag; no bespoke event log
-  or dialogue/replay schema is introduced.
+- `world_evt_<id>` marks each once-only encounter; `world_walk_event`
+  tracks a paused root choice and `world_walk_reverse` the optional
+  backtracking leg. No bespoke event log or dialogue/replay schema is introduced.
 - Event specifications are gameplay content in the checkpoint fingerprint,
   while purely decorative world coordinates remain excluded.
 - Projects without world events retain their pre-existing digest and saves.
