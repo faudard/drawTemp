@@ -105,7 +105,7 @@ class EditorHierarchyTests(unittest.TestCase):
     def test_reject_external_tile_overwrite_and_out_of_bounds_atomically(self):
         doc = Document(Content.from_dict(self.base))
         doc.paint_many(self.MID, [(4, 4)], 'feature:tree')
-        doc.paint_many(self.MID, [(5, 4)], 'feature:rock')
+        doc.paint_many(self.MID, [(5, 4)], 'feature:boulder')
         doc.replace(create_editor_group(doc.data, self.MID, 'Tree',
                                         cells=((4, 4),)))
         snapshot = deepcopy(doc.data)
