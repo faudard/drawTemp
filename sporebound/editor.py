@@ -406,7 +406,7 @@ def launch(path):
         source.delete('1.0', 'end')
         source.insert('1.0', json.dumps(doc.data, indent=2, ensure_ascii=False))
 
-    def design_change(fn):
+    def design_change(fn, *, board_only=False):
         nonlocal battle
         if source_pending() and not messagebox.askyesno('JSON non appliqué', 'Abandonner les modifications JSON non appliquées ?'):
             return
@@ -419,7 +419,7 @@ def launch(path):
             # Commands publish only after JSON and Studio history are in sync.
             editing_context.notify(notice)
         else:
-            refresh()
+            refresh(board_only=board_only)
 
     @guarded
     def open_doc():
@@ -1550,7 +1550,11 @@ def launch(path):
                 doc.data, mission_var.get(), zone_var.get(), cells,
                 erase=brush == 'zone-')))
         else:
-            design_change(lambda: doc.paint_many(mission_var.get(), cells, brush))
+            # Erase and goal brushes also edit mission objectives and must
+            # refresh all Studio consumers synchronously.
+            design_change(
+                lambda: doc.paint_many(mission_var.get(), cells, brush),
+                board_only=brush not in ('erase', 'goal'))
 
     def event_cell(event):
         px, py = canvas.canvasx(event.x), canvas.canvasy(event.y)
@@ -2217,7 +2221,7 @@ def launch(path):
                 ensure_unlocked(stroke_before, temporary.data, map_view_data)
                 doc.data = temporary.data
                 refresh_source()
-                refresh()
+                refresh(board_only=brush not in ('erase', 'goal'))
         if stroke_before is not None and studio is not None:
             studio.capture_history()
         stroke_cells = []
@@ -2324,7 +2328,7 @@ def launch(path):
         studio.focus_gate_event(
             selected['id'] if selected['kind'] == 'door' else selected['link'])
 
-    def refresh(*args, views=None, selection_only=False):
+    def refresh(*args, views=None, selection_only=False, board_only=False):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal selected_group_id, group_tree_signature
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
@@ -2600,7 +2604,9 @@ def launch(path):
         if views is None or MINIMAP in views:
             draw_minimap(board, mission, units)
         if studio is not None and (views is None or WORKSPACE in views):
-            if selection_only and battle is None and views is None:
+            if board_only and battle is None and views is None:
+                studio.defer_map_refresh()
+            elif selection_only and battle is None and views is None:
                 studio.refresh_selection()
             else:
                 studio.refresh()
