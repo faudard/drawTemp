@@ -6,6 +6,7 @@ remain UI-only; targets resolve to canonical scene/event IDs.
 from .visual_branch_graph import connect_visual_branch, visual_target_palette
 from .model import Content, require
 from . import event_composer, story_authoring
+from .tactical_rpg3 import authored_rules_for_document
 
 
 class VisualBranchInteractions:
@@ -298,7 +299,8 @@ class VisualBranchInteractions:
             while 'visual_scene_' + str(number) in names:
                 number += 1
             target_id = 'visual_scene_' + str(number)
-            content = Content.from_dict(raw)
+            content = Content.from_dict(
+                raw, rules=authored_rules_for_document(raw))
             linked = story_authoring.create_linked_scene(
                 project, content, source['id'], source['choice'],
                 target_id, 'Nouvelle scène',
