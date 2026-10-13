@@ -384,6 +384,7 @@ def launch(path):
                 studio.reload_project()
             refresh_source()
             refresh()
+            refresh_group_prefabs()
 
     @guarded
     def save_doc():
@@ -406,6 +407,7 @@ def launch(path):
                               disk_revisions[1] if current_path.resolve() ==
                               original_path.resolve() else None)
             refresh_source()
+            refresh_group_prefabs()
             status_var.set(f'Projet enregistré : {name}')
 
     @guarded

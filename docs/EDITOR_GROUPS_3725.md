@@ -142,3 +142,30 @@ Exemple :
 Gate : créer un groupe, regrouper des décors et une structure, créer un
 sous-groupe d'objets, déplacer le parent, Undo/Redo et sauvegarder/recharger
 avec exactement la même hiérarchie.
+
+
+## Bibliothèque de préfabs (3.7.25D)
+
+Depuis **BIBLIOTHÈQUE DE PRÉFABS** dans le Map Editor :
+
+1. Sélectionner un ou plusieurs groupes et sous-groupes (Ctrl/Maj).
+2. **Enregistrer préfab** exporte un JSON sous le dossier prefabs/ voisin de la mission.
+3. Dans une autre mission, choisir le préfab, sélectionner la case d'ancrage
+   puis utiliser **Aperçu préfab** et **Placer préfab**.
+4. **Importer préfab** ajoute un fichier JSON provenant d'un autre projet.
+   **Actualiser** relit la bibliothèque locale.
+
+Le format drawtemp_editor_group_prefab version 1 conserve coordonnées locales,
+groupes hiérarchiques, tuiles, structures/underlays de destination, étages,
+connecteurs, acteurs, objets et liens porte–levier/engin. Les identifiants sont
+recréés sans collisions ; toutes les données produites sont modifiables avec
+les outils habituels. Un passage possède une destination relative au préfab.
+
+La prévisualisation est non destructive. L'insertion passe par une commande
+typée et une seule transaction Undo/Redo. Les collisions (bâtiments, terrain,
+limites de la carte, objectifs et déploiements) sont refusées.
+
+**Limitations v1 :** ni événements globaux, ni objectifs, ni groupes externes,
+ni zones de déploiement ne sont copiés. Export refusé si un levier ou engin
+référence une porte non sélectionnée. Fichiers JSON plafonnés à 2 MiB,
+version et schéma contrôlés avant import.
