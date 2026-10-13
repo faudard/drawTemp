@@ -184,7 +184,9 @@ def trace_seed(content, mission_id, *, seed=42, max_commands=500, rules=None,
                                            ensure_ascii=False,
                                            separators=(",", ":")).encode()).hexdigest()
     mission = battle.mission
-    return {
+    # Engine events may contain tuple cells; publish an ordinary JSON tree
+    # so exported reports round-trip identically across Python and OS builds.
+    payload = {
         "kind": "battle_diagnostics", "schema": TRACE_VERSION,
         "mission": mission_id, "seed": seed, "max_commands": max_commands,
         "content_sha256": source_hash, "rules_manifest": battle.rules.manifest(),
@@ -195,6 +197,7 @@ def trace_seed(content, mission_id, *, seed=42, max_commands=500, rules=None,
                   "goals": [list(c) for c in mission.goal]},
         "initial": initial, "steps": steps, "diagnostics": diagnostics,
     }
+    return json.loads(json.dumps(payload, sort_keys=True, ensure_ascii=False))
 
 
 def trace_report(path, report):
