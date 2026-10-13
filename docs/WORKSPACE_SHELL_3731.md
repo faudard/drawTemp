@@ -8,6 +8,9 @@ aucune modification de schéma ni de comportement moteur.
 - Les acteurs et objets **placés** apparaissent dans les deux arbres du
   Workspace, indexés par `map_actor:<mission>/<id>` et
   `map_object:<mission>/<id>`.
+- Les groupes persistants issus de 3.7.25 (#116 désormais fusionnée)
+  sont référencés par `editor_group:<mission>/<id>` sans duplication
+  de schéma, avec liens vers mission, sous-groupes, acteurs et objets.
 - Entrée ou double-clic sélectionne la mission, centre la sélection logique
   sur la case concernée et ouvre « Carte et combat ».
 - La navigation vers les éditeurs spécialisés (campagne, scène, cinématique,
@@ -19,9 +22,12 @@ même donnée que l'inspecteur sur la carte. Elle décrit cases, unités, objets
 interactifs et sélection multiple de cases (groupe de sélection).
 Les fiches détaillées d'entités restent dans le Studio.
 
-**Limite volontaire :** l'arbre persistant de groupes hiérarchiques est encore
-sur une PR distincte. Ce lot décrit les *groupes de cases sélectionnées*,
-sans inventer de second format de groupes.
+L'inspecteur décrit également les **groupes hiérarchiques persistants**
+de `Mission.editor_groups` (membres directs, descendants, emprise et
+parent). Sélectionner un groupe du Workspace ouvre sa mission et sa
+première case visible ; un groupe vide ouvre simplement sa mission.
+L'édition de l'arbre, le déplacement et l'annulation demeurent dans
+**Groupes et appartenances** de l'éditeur 3.7.25, leur source de vérité.
 
 ## 3.7.31C — Drag & drop
 Un vrai geste pointeur sur la palette d'assets, la palette d'entités ou le
@@ -60,6 +66,7 @@ disparition de l'avertissement. Annuler recrée l'alerte ; rétablir la résout.
 
 ## Validation
 - `python -m unittest tests_standalone.test_workspace_shell_3731`
+- `python -m unittest tests_standalone.test_editor_groups_3725`
 - `SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_workspace_shell_3731_gui`
 - Vérifier aussi `tests_standalone.test_workspace`,
   `tests_standalone.test_game_studio4` et
