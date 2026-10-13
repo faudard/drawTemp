@@ -198,10 +198,17 @@ def floor_hit_test(geo, building, floor, px, py):
     level = floor['level']
     shift = level * 3 * geo.step
     # Include empty cells so a hole can be selected and filled again.
+    # Elevated ground walls can project over a deck's diamond at particular
+    # zooms. Prefer the closest *deck* centre instead of whichever polygon
+    # happens to be first in reverse painter order; retain that order on ties.
+    best_cell = None
+    best_distance = None
     for cell in sorted(building.cells,
                        key=lambda c: (sum(c), c[0]), reverse=True):
         cx, cy = geo.center(cell)
-        if (abs(px-cx)/geo.half_width +
-                abs(py-(cy-shift))/geo.half_height <= 1):
-            return cell
-    return None
+        distance = (abs(px-cx)/geo.half_width +
+                    abs(py-(cy-shift))/geo.half_height)
+        if distance <= 1 and (best_distance is None or distance < best_distance):
+            best_cell = cell
+            best_distance = distance
+    return best_cell
