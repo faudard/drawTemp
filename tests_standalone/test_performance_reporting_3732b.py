@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts.compare_profile_scale_3732 import compare, markdown, measurements
+from scripts.summarize_ui_trace_3732 import summarize
 from sporebound import performance_trace
 
 
@@ -147,6 +148,39 @@ class UiTraceTests(unittest.TestCase):
             performance_trace.finish_ui(
                 "map.refresh", performance_trace.begin_ui(), widget)
             widget.callbacks.pop()()
+
+
+
+class UiSummaryTests(unittest.TestCase):
+    def test_bucket_by_scene_complexity_and_percentiles(self):
+        samples = []
+        for count in (32 * 32, 64 * 64):
+            for i in range(5):
+                samples.append(json.dumps({
+                    "schema": "drawtemp-ui-trace-v1",
+                    "operation": "map.refresh",
+                    "counts": {"map_cells": count, "canvas_items": 5 + i},
+                    "callback_ms": 1 + i,
+                    "callback_to_idle_ms": 2 + i,
+                    "queued_idle_ms": 1,
+                }))
+        report = summarize(samples)
+        self.assertEqual(len(report["groups"]), 2)
+        self.assertEqual([g["complexity_value"] for g in report["groups"]],
+                         [32 * 32, 64 * 64])
+        for group in report["groups"]:
+            self.assertEqual(group["samples"], 5)
+            self.assertFalse(group["sufficient_for_tail_exploration"])
+            self.assertIn("p99_ms", group["timings"]["callback_to_idle_ms"])
+
+    def test_invalid_trace_records_are_refused(self):
+        with self.assertRaisesRegex(ValueError, "No valid"):
+            summarize([])
+        with self.assertRaisesRegex(ValueError, "Unexpected trace schema"):
+            summarize([json.dumps({"schema": "bad"})])
+        with self.assertRaisesRegex(ValueError, "Missing scene complexity"):
+            summarize([json.dumps({"schema": "drawtemp-ui-trace-v1",
+                                   "operation": "map.refresh"})])
 
 
 if __name__ == "__main__":
