@@ -49,14 +49,26 @@ def architecture_depth(building):
     return max(x+y for x, y in building.cells)
 
 
-def depth_order(instances, units, poses=None):
-    """Return back-to-front Canvas groups, independently of widget ordering."""
+def depth_order(instances, units, poses=None, *, objects=(), props=()):
+    """Sort elevated scenery by its ground contact, back to front.
+
+    Props and interactive objects used to be drawn before *every* building,
+    hiding even when they stood in the foreground. Their stable Canvas tags
+    now participate in the same sort as actors and structures. At equal foot
+    depth, actors remain in front; no tactical coordinates are changed.
+    """
     groups = [(architecture_depth(building), 0, i,
                'architecture_instance_' + str(i))
               for i, building in enumerate(instances)]
     groups.extend((actor_depth(actor, poses), 1, i,
                    'iso_actor_unit_' + str(i))
                   for i, actor in enumerate(units))
+    groups.extend((sum(cell), -2, i,
+                   'iso_decor_cell_' + str(cell[0]) + '_' + str(cell[1]))
+                  for i, cell in enumerate(props))
+    groups.extend((sum(obj['pos']), -1, i,
+                   'iso_object_' + str(obj['id']))
+                  for i, obj in enumerate(objects))
     return tuple(tag for _, _, _, tag in sorted(groups))
 
 

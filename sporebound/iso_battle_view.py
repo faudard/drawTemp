@@ -12,7 +12,7 @@ from .iso_object_atlas import IsoObjectAtlas
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import (
-    IsoActorAtlas, actor_style, actor_direction, actor_frame)
+    IsoActorAtlas, actor_style, actor_direction, actor_frame, actor_action)
 
 
 def battle_layers(*, deploying=False, active_level=0):
@@ -83,6 +83,8 @@ class IsoBattleCanvas:
         self._positions = ()
         self._actor_sprite_states = ()
         self._architecture = ()
+        self._objects = ()
+        self._props = ()
         self._cutaways = ()
         self._level_map = {}
         self._floor_records = ()
@@ -113,7 +115,9 @@ class IsoBattleCanvas:
         return tuple((actor_style(actor),
                       actor_direction(actor, (poses or {}).get(actor.id)),
                       actor_frame((poses or {}).get(actor.id)),
-                      actor.alive)
+                      actor.alive,
+                      actor_action((poses or {}).get(actor.id))
+                      if actor.alive else 'defeat')
                      for actor in units)
 
     def _refresh_sprite_frames(self, units, poses, camera):
@@ -124,14 +128,14 @@ class IsoBattleCanvas:
         # Fake headless canvases intentionally lack find_withtag/itemconfigure.
         if hasattr(self.canvas, 'find_withtag') and hasattr(self.canvas, 'itemconfigure'):
             for i, (before, after) in enumerate(zip(self._actor_sprite_states, states)):
-                if before == after or not after[3]:
+                if before == after or (not after[3] and after[0] != 'jeanne'):
                     continue
                 images = [item for item in self.canvas.find_withtag(
                           'iso_actor_unit_' + str(i))
                           if self.canvas.type(item) == 'image']
                 if not images:
                     continue
-                image = self.actors.sprite(*after[:3], camera.cell_size)
+                image = self.actors.sprite(*after[:3], camera.cell_size, after[4])
                 if image is not None:
                     for item in images:
                         self.canvas.itemconfigure(item, image=image)
@@ -168,7 +172,8 @@ class IsoBattleCanvas:
                     self.canvas.move('iso_actor_unit_' + str(index), dx, dy)
                     moved = True
             if moved:
-                for tag in depth_order(self._architecture, units, poses):
+                for tag in depth_order(self._architecture, units, poses,
+                                       objects=self._objects, props=self._props):
                     self.canvas.tag_raise(tag)
                 for index, actor in enumerate(units):
                     if self._level_map.get(actor.id, 0) > 0:
@@ -211,6 +216,9 @@ class IsoBattleCanvas:
         self._floor_records = tuple(battle.mission.interior_floors)
         self._architecture = architecture_instances(
             battle.board, getattr(battle.mission, 'structures', ()))
+        self._objects = tuple(battle.mission.objects)
+        self._props = tuple(c for c in geo.draw_order
+                            if battle.board.tile(c).feature)
         self._cutaways = self._cutaway_flags(frame, units, poses)
         self._positions = self._pose_centers(units, poses)
         self._actor_sprite_states = self._sprite_states(units, poses)
@@ -241,6 +249,8 @@ class IsoBattleCanvas:
         self._unit_ids = ()
         self._unit_state = ()
         self._architecture = ()
+        self._objects = ()
+        self._props = ()
         self._cutaways = ()
         self._positions = ()
         self._actor_sprite_states = ()
