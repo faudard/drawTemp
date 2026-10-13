@@ -255,6 +255,7 @@ class StoryGraphEditor:
         self._details()
         finish_ui("story_graph.draw", ui_started, canvas, counts={
             "nodes": len(layout["nodes"]), "edges": len(layout["edges"]),
+            "zoom_pct": int(self.zoom_var.get().rstrip("%")),
             "canvas_items": len(canvas.find_all()) if ui_started is not None else 0,
             "truncated": layout["truncated"],
         })
