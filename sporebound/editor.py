@@ -302,6 +302,8 @@ def launch(path):
     group_prefab_var = tk.StringVar(value='')
     group_prefab_rotation_var = tk.StringVar(value='0°')
     group_prefab_preview_key = None
+    group_prefab_cache_key = None
+    group_prefab_cache_value = None
     selected_group_id = None
     group_tree_signature = None
     group_tree_items = {}
@@ -1043,6 +1045,7 @@ def launch(path):
         return paths
 
     def _chosen_prefab():
+        nonlocal group_prefab_cache_key, group_prefab_cache_value
         name = group_prefab_var.get()
         require_path = next((item for item in list_group_prefabs(
             _prefab_library()) if item.name == name), None)
@@ -1052,7 +1055,13 @@ def launch(path):
             group_prefab_rotation_var.get())
         if turns is None:
             raise RuleError('Rotation de préfab inconnue.')
-        return rotate_group_prefab(load_group_prefab(require_path), turns)
+        stat = require_path.stat()
+        key = (str(require_path), stat.st_mtime_ns, stat.st_size, turns)
+        if key != group_prefab_cache_key:
+            new = rotate_group_prefab(load_group_prefab(require_path), turns)
+            group_prefab_cache_value = new
+            group_prefab_cache_key = key
+        return group_prefab_cache_value
 
     @guarded
     def export_group_prefab():
@@ -1154,8 +1163,8 @@ def launch(path):
         # Preview performs the same complete validation as the commit. An
         # invalid placement is red, but never changes map data or undo state.
         nonlocal group_prefab_preview_key
-        key = (id(doc.data), mission_var.get(), group_prefab_var.get(),
-               group_prefab_rotation_var.get(), anchor)
+        key = (id(doc.data), mission_var.get(), group_prefab_cache_key,
+               anchor)
         if key == group_prefab_preview_key:
             return
         group_prefab_preview_key = key
