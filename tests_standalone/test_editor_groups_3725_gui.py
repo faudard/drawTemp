@@ -210,5 +210,81 @@ class EditorGroupGUITests(unittest.TestCase):
                 dialog.assert_not_called()
 
 
+    def test_multi_select_duplicate_preview_save_and_undo(self):
+        import tkinter as tk
+        from tkinter import ttk
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        with TemporaryDirectory() as folder:
+            mid = 'editor_group_multi_gui'
+            data = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
+                                     mid, 'Copie groupes', 20, 20)
+            data = create_editor_group(data, mid, 'Arbre', cells=((3, 3),))
+            data = create_editor_group(data, mid, 'Place', cells=((7, 7),))
+            source = Path(folder) / 'input.json'
+            output = Path(folder) / 'output.json'
+            source.write_text(json.dumps(data), encoding='utf-8')
+            errors = []
+
+            def read_groups():
+                mission = next(m for m in json.loads(
+                    output.read_text(encoding='utf-8'))['missions']
+                    if m['id'] == mid)
+                return mission['editor_groups']
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = lambda *exc: errors.append(exc)
+                    root.update()
+                    widgets = list(descendants(root))
+                    hierarchy = next(w for w in widgets
+                                     if isinstance(w, ttk.Treeview)
+                                     and w.exists('g:group_1'))
+                    self.assertEqual(hierarchy.cget('selectmode'), 'extended')
+                    buttons = {w.cget('text'): w for w in widgets
+                               if isinstance(w, ttk.Button)}
+                    missions = next(w for w in widgets
+                                    if isinstance(w, ttk.Combobox)
+                                    and mid in w.cget('values'))
+                    missions.set(mid)
+                    missions.event_generate('<<ComboboxSelected>>')
+                    root.update()
+
+                    hierarchy.selection_set(('g:group_1', 'g:group_2'))
+                    hierarchy.event_generate('<<TreeviewSelect>>')
+                    root.update()
+                    self.assertEqual(len(hierarchy.selection()), 2)
+                    buttons['Aperçu copie'].invoke()
+                    canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
+                    self.assertTrue(canvas.find_withtag('editor_group_preview'))
+                    buttons['Dupliquer groupes'].invoke()
+                    buttons['Enregistrer sous'].invoke()
+                    groups = read_groups()
+                    self.assertEqual(len(groups), 4)
+                    self.assertEqual([g['cells'] for g in groups[-2:]],
+                                     [[[4, 3]], [[8, 7]]])
+                    self.assertEqual(len({g['id'] for g in groups}), 4)
+                    buttons['Annuler'].invoke()
+                    buttons['Enregistrer sous'].invoke()
+                    self.assertEqual(len(read_groups()), 2)
+                    buttons['Rétablir'].invoke()
+                    buttons['Enregistrer sous'].invoke()
+                    self.assertEqual(len(read_groups()), 4)
+                    self.assertEqual(errors, [])
+                finally:
+                    root.destroy()
+
+            with patch.object(tk.Tk, 'mainloop', drive), \
+                 patch('tkinter.filedialog.asksaveasfilename',
+                       return_value=str(output)), \
+                 patch('tkinter.messagebox.showerror') as dialog:
+                launch(source)
+                dialog.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
