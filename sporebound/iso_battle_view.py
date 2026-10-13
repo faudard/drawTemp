@@ -182,13 +182,17 @@ class IsoBattleCanvas:
         geo = render_isometric(
             self.canvas, battle.board, battle.mission, units,
             cell_size=camera.cell_size,
-            layers=battle_layers(deploying=battle.deploying),
+            layers=battle_layers(
+                deploying=battle.deploying,
+                active_level=battle.unit_levels.get(battle.active_id, 0)
+                if battle.active_id else 0),
             selected_cell=frame.selected, selected_tiles=(),
             reachable=frame.reachable, danger=frame.danger,
             active_id=frame.active_id, atlas=self.terrain, prop_atlas=self.props,
             building_atlas=self.buildings, fortification_atlas=self.fortifications,
             actor_atlas=self.actors, poses=poses,
-            object_atlas=self.objects)
+            object_atlas=self.objects,
+            unit_levels=battle.unit_levels)
         self.geometry = geo
         self.shift = viewport_shift(geo, camera, viewport)
         self.canvas.move('all', *self.shift)
@@ -240,6 +244,8 @@ class IsoBattleCanvas:
         self._cutaways = ()
         self._positions = ()
         self._actor_sprite_states = ()
+        self._floor_records = ()
+        self._level_map = {}
         self.terrain._tiles.clear()
         self.props.clear_cache()
         self.objects.clear_cache()
