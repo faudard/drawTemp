@@ -451,17 +451,15 @@ def build_event_graph(data, mission_id, *, max_events=200, max_nodes=600):
     # Dependencies are navigable links between the existing condition/action
     # vertices. Their IDs are *not* new serialized graph nodes.
     available = {node['key'] for node in nodes}
+    last_action = {row['id']: (row['id'], 'action', len(row['actions']) - 1)
+                   for row in triggers if row.get('actions')}
     for event in triggers[:max_events]:
         target = (event['id'], 'condition')
         if target not in available:
             continue
         for predecessor in event.get('after', []):
-            source = next(((predecessor, 'action', index)
-                           for index in reversed(range(len(
-                               next((row['actions'] for row in triggers
-                                     if row['id'] == predecessor), []))))
-                           if (predecessor, 'action', index) in available), None)
-            if source:
+            source = last_action.get(predecessor)
+            if source in available:
                 edges.append(dict(source=source, target=target,
                                   event_id=event['id'],
                                   label='après événement'))
