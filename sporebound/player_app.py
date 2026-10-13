@@ -80,6 +80,9 @@ class PlayerApplication:
         self.iso_renderer = None
         self.info = None
         self.cinematic = None
+        # Presentation-only acknowledgements. Saved battles already contain
+        # the authoritative fired trigger IDs and replay command log.
+        self._seen_tactical_cinematics = {}
         self._typewriter_job = None
         self._stage_job = None
         self._explore_feedback = ""
@@ -150,7 +153,33 @@ class PlayerApplication:
 
     def _change(self, action):
         action()
-        self.show()
+        if not self._show_new_tactical_cinematics():
+            self.show()
+
+    def _show_new_tactical_cinematics(self):
+        """Play only newly fired authored cues, never replay on a plain redraw."""
+        from .cinematics import triggered_tactical_cinematics
+
+        session = self.player.session
+        battle = session.active_battle if session is not None else None
+        if battle is None:
+            return False
+        previous = self._seen_tactical_cinematics.get(battle.battle_id, ())
+        clips, observed = triggered_tactical_cinematics(
+            self.project, battle, previous)
+        self._seen_tactical_cinematics[battle.battle_id] = observed
+        if not clips:
+            return False
+        self._play_cinematic_clips(clips, self.show)
+        return True
+
+    def _acknowledge_loaded_tactical_cinematics(self):
+        """A reloaded save resumes combat, not already-fired movie sequences."""
+        self._seen_tactical_cinematics.clear()
+        session = self.player.session
+        battle = session.active_battle if session is not None else None
+        if battle is not None:
+            self._seen_tactical_cinematics[battle.battle_id] = set(battle.fired)
 
     def title_screen(self):
         self._audible_scene = None
@@ -235,10 +264,12 @@ class PlayerApplication:
                                                     "Recommencer cet emplacement ?"):
             return
         self.player.new_game(cid, slot, overwrite=exists)
+        self._seen_tactical_cinematics.clear()
         self._cinematic_sequence("campaign_start", cid, self.show)
 
     def _load_game(self):
         self.player.load_game(self.campaign_var.get(), int(self.slot_var.get()))
+        self._acknowledge_loaded_tactical_cinematics()
         status = self.player.last_load_status
         if status is not None and status.source == "backup":
             self.messagebox.showwarning(
@@ -299,6 +330,11 @@ class PlayerApplication:
         from .cinematic_player import CinematicPlayback
 
         clips = matching_cinematics(self.project, kind, target)
+        self._play_cinematic_clips(clips, finished)
+
+    def _play_cinematic_clips(self, clips, finished):
+        """Shared playback for campaign, mission, scene and tactical events."""
+        from .cinematic_player import CinematicPlayback
 
         def next_clip(index=0):
             self.cinematic = None
