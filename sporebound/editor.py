@@ -5,7 +5,8 @@ from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
 from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
-                                  StructureGroupCommand, EntityCommand,
+                                  StructureGroupCommand, EditorGroupMoveCommand,
+                                  EntityCommand,
                                   RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
 from .ai import play_activation
 from .engine import Battle
@@ -39,6 +40,9 @@ from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
 from .iso_architecture import (PIVOTS, ARCHITECTURE_NAMES, placement_origin,
                                preview_structure_sprite_position)
 from .structure_groups import selected_structures, transform_structure_group
+from .editor_groups import (create_editor_group, add_selection_to_group,
+                            rename_editor_group, delete_editor_group,
+                            descendant_groups, group_display_cells)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -291,6 +295,10 @@ def launch(path):
     structure_turns = 0
     structure_group_dx = tk.IntVar(value=1)
     structure_group_dy = tk.IntVar(value=0)
+    editor_group_dx = tk.IntVar(value=1)
+    editor_group_dy = tk.IntVar(value=0)
+    selected_group_id = None
+    group_tree_signature = None
     structure_selection_cell = None
     structure_selection_id = None
     structure_drag_from = None
@@ -774,6 +782,166 @@ def launch(path):
                        0 <= c[1] < height), tag='structure_group_preview',
                       color=color)
         status_var.set(f'Aperçu {len(group)} structure(s) : {note}.')
+
+    def _active_group():
+        if selected_group_id is None:
+            raise RuleError('Choisir un groupe dans l’arborescence.')
+        mission = next(m for m in doc.data['missions']
+                       if m['id'] == mission_var.get())
+        if not any(g['id'] == selected_group_id for g in
+                   mission.get('editor_groups', ())):
+            raise RuleError('Le groupe sélectionné n’existe plus.')
+        return mission
+
+    @guarded
+    def create_map_group(*, child=False, empty=False):
+        nonlocal selected_group_id
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        parent = selected_group_id if child else None
+        if child:
+            _active_group()
+        if not empty and not selected_tiles:
+            raise RuleError('Sélectionner des cases ou créer un groupe vide.')
+        name = simpledialog.askstring('Nouveau groupe',
+                                      'Nom du groupe (ex. Village, Tour, Jardin) :')
+        if name is None:
+            return
+        before = {g['id'] for g in next(m for m in doc.data['missions']
+                                       if m['id'] == mission_var.get())
+                  .get('editor_groups', ())}
+        design_change(lambda: doc.replace(create_editor_group(
+            doc.data, mission_var.get(), name, parent=parent,
+            cells=tuple(selected_tiles) if not empty else ())))
+        new_ids = {g['id'] for g in next(m for m in doc.data['missions']
+                                        if m['id'] == mission_var.get())
+                   .get('editor_groups', ())}
+        created = new_ids - before
+        if created:
+            selected_group_id = created.pop()
+        refresh()
+        status_var.set('Groupe créé : ' + name)
+
+    @guarded
+    def assign_group_selection():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        _active_group()
+        cells = _selection_for_current_map()
+        design_change(lambda: doc.replace(add_selection_to_group(
+            doc.data, mission_var.get(), selected_group_id, cells)))
+        status_var.set('Cases et objets de la sélection liés au groupe.')
+
+    @guarded
+    def rename_map_group():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        mission = _active_group()
+        current = next(g for g in mission['editor_groups']
+                       if g['id'] == selected_group_id)
+        name = simpledialog.askstring('Renommer le groupe', 'Nom :',
+                                      initialvalue=current['name'])
+        if name is not None:
+            design_change(lambda: doc.replace(rename_editor_group(
+                doc.data, mission_var.get(), selected_group_id, name)))
+
+    @guarded
+    def ungroup_map_group():
+        nonlocal selected_group_id
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        _active_group()
+        gid = selected_group_id
+        selected_group_id = None
+        design_change(lambda: doc.replace(delete_editor_group(
+            doc.data, mission_var.get(), gid)))
+        status_var.set('Groupe dissocié ; ses membres et sous-groupes sont conservés.')
+
+    @guarded
+    def shift_map_group(dx=None, dy=None, *, preview=False):
+        nonlocal selected_tiles, selected_cell
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        mission = _active_group()
+        dx = editor_group_dx.get() if dx is None else dx
+        dy = editor_group_dy.get() if dy is None else dy
+        cmd = EditorGroupMoveCommand(selected_group_id, dx, dy)
+        if preview:
+            cells = group_display_cells(mission, selected_group_id)
+            try:
+                editing_context.preview(cmd)
+                color, note = '#36a16c', 'valide'
+            except RuleError as exc:
+                color, note = '#e05252', str(exc)
+            board = mission['board']
+            preview_cells(((x+dx, y+dy) for x, y in cells
+                           if 0 <= x+dx < board['width'] and
+                              0 <= y+dy < board['height']),
+                          tag='editor_group_preview', color=color)
+            status_var.set('Aperçu groupe : ' + note)
+            return
+        design_change(lambda: editing_context.execute(cmd, publish=False))
+        moved = group_display_cells(next(m for m in doc.data['missions']
+                                         if m['id'] == mission_var.get()),
+                                    selected_group_id)
+        selected_tiles = set(moved)
+        if moved:
+            selected_cell = min(moved, key=lambda c: (c[1], c[0]))
+        refresh()
+        status_var.set(f'Groupe déplacé Δ({dx}, {dy}), une seule annulation.')
+
+    def select_group_in_tree(_event=None):
+        nonlocal selected_group_id, selected_tiles, selected_cell
+        chosen = group_tree.selection()
+        if not chosen:
+            return
+        item = chosen[0]
+        while item and not item.startswith('g:'):
+            item = group_tree.parent(item)
+        if not item:
+            return
+        gid = item[2:]
+        mission = next(m for m in doc.data['missions']
+                       if m['id'] == mission_var.get())
+        if not any(g['id'] == gid for g in mission.get('editor_groups', ())):
+            return
+        selected_group_id = gid
+        selected_tiles = group_display_cells(mission, gid)
+        if selected_tiles:
+            selected_cell = min(selected_tiles, key=lambda c: (c[1], c[0]))
+        tool_var.set('Sélection')
+        refresh()
+        status_var.set(f'Groupe sélectionné : {gid} — '
+                       f'{len(selected_tiles)} case(s) et emprises.')
+
+    def refresh_group_tree(mission):
+        nonlocal group_tree_signature, selected_group_id
+        rows = mission.editor_groups
+        signature = (mission.id, json.dumps(rows, sort_keys=True))
+        if signature == group_tree_signature:
+            return
+        group_tree_signature = signature
+        group_tree.delete(*group_tree.get_children())
+        for group in rows:
+            group_tree.insert('', 'end', iid='g:'+group['id'],
+                              text=group['name']+' ('+group['id']+')',
+                              open=True)
+        for group in rows:
+            parent = group['parent']
+            if parent:
+                group_tree.move('g:'+group['id'], 'g:'+parent, 'end')
+            key = 'g:'+group['id']
+            if group['cells']:
+                group_tree.insert(key, 'end', text='Cases / décors : '+
+                                  str(len(group['cells'])))
+            for field, title in (('unit_ids','Personnage'), ('object_ids','Objet'),
+                                 ('structure_ids','Bâtiment')):
+                for identifier in group[field]:
+                    group_tree.insert(key, 'end', text=title+ ' : '+identifier)
+        if selected_group_id and group_tree.exists('g:'+selected_group_id):
+            group_tree.selection_set('g:'+selected_group_id)
+        elif selected_group_id:
+            selected_group_id = None
 
     def set_zoom(delta):
         nonlocal tile_size
@@ -1664,6 +1832,7 @@ def launch(path):
 
     def refresh(*args, views=None):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
+        nonlocal selected_group_id, group_tree_signature
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
         nonlocal entity_hover_key, entity_passage_entry
         structure_preview_key = None
@@ -1684,6 +1853,8 @@ def launch(path):
             mission_var.set(mids[0])
         if selection_mission != mission_var.get():
             selected_tiles.clear()
+            selected_group_id = None
+            group_tree_signature = None
             structure_selection_cell = None
             structure_selection_id = None
             cancel_structure_drag()
@@ -1701,6 +1872,7 @@ def launch(path):
                 structure_selection_cell = tuple(record['anchor'])
         content = Content.from_dict(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
+        refresh_group_tree(content.missions[mission_var.get()])
         board = battle.board if battle else mission.board
         units = battle.units if battle else mission.units
         unit_box['values'] = [u.id for u in units if not battle or not battle.deploying
@@ -2302,6 +2474,7 @@ def launch(path):
     canvas.bind('<Down>', lambda _e: nudge_selected_structure(0, 1))
     # Escape handles both drag cancellation and passage placement above.
     canvas.bind('<Control-c>',lambda _e: copy_selection())
+    canvas.bind('<Control-g>',lambda _e: create_map_group())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
     def toggle_interiors(_event=None):
@@ -2319,6 +2492,40 @@ def launch(path):
                             background='#f5f5f5',highlightthickness=1)
     mini_canvas.pack(anchor='w',padx=3,pady=3)
     mini_canvas.bind('<Button-1>', minimap_navigate)
+    ttk.Label(side_panel, text='GROUPES ET APPARTENANCES',
+              font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=6)
+    tree_box = ttk.Frame(side_panel)
+    tree_box.pack(fill='x', padx=6, pady=3)
+    group_tree = ttk.Treeview(tree_box, show='tree', height=8, selectmode='browse')
+    group_scroll = ttk.Scrollbar(tree_box, orient='vertical',
+                                 command=group_tree.yview)
+    group_tree.configure(yscrollcommand=group_scroll.set)
+    group_tree.pack(side='left', fill='both', expand=True)
+    group_scroll.pack(side='right', fill='y')
+    group_tree.bind('<<TreeviewSelect>>', select_group_in_tree)
+    group_controls = ttk.Frame(side_panel)
+    group_controls.pack(fill='x', padx=5)
+    for text, action in (
+        ('Créer vide', lambda: create_map_group(empty=True)),
+        ('Grouper cases', create_map_group),
+        ('Sous-groupe', lambda: create_map_group(child=True, empty=True)),
+        ('Ajouter', assign_group_selection),
+        ('Renommer', rename_map_group),
+        ('Dissocier', ungroup_map_group)):
+        ttk.Button(group_controls, text=text, command=action).pack(
+            side='left', padx=1, pady=2)
+    group_move_controls = ttk.Frame(side_panel)
+    group_move_controls.pack(fill='x', padx=5, pady=(0, 5))
+    ttk.Label(group_move_controls, text='ΔX').pack(side='left')
+    ttk.Spinbox(group_move_controls, from_=-128, to=128,
+                textvariable=editor_group_dx, width=4).pack(side='left', padx=2)
+    ttk.Label(group_move_controls, text='ΔY').pack(side='left')
+    ttk.Spinbox(group_move_controls, from_=-128, to=128,
+                textvariable=editor_group_dy, width=4).pack(side='left', padx=2)
+    ttk.Button(group_move_controls, text='Aperçu',
+               command=lambda: shift_map_group(preview=True)).pack(side='left',padx=2)
+    ttk.Button(group_move_controls, text='Déplacer',
+               command=shift_map_group).pack(side='left',padx=2)
     inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
     inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
     actor_focus = ttk.Button(side_panel, text='Modifier le personnage sélectionné',
