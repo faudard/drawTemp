@@ -105,7 +105,7 @@ class ContextualEventPreviewTests(unittest.TestCase):
                 zero, self.mid, 'tick_zero', scenario='unsatisfied')
 
     def test_hp_and_defeat_cases_change_only_synthetic_actor_state(self):
-        unit_id = self.data['missions'][0]['units'][0]['id']
+        unit_id = next(m for m in self.data['missions'] if m['id'] == self.mid)['units'][0]['id']
         original = deepcopy(self.data)
         for condition in (
             event_composer.condition('hp_below', unit=unit_id, percent=50),
@@ -148,7 +148,7 @@ class ContextualEventPreviewTests(unittest.TestCase):
             wave, self.mid, 'capacity_probe', scenario='unsatisfied')['fired'])
 
     def test_status_and_hazard_are_visible_in_differences(self):
-        unit_id = next(u['id'] for u in self.data['missions'][0]['units']
+        unit_id = next(u['id'] for u in next(m for m in self.data['missions'] if m['id'] == self.mid)['units']
                        if u['team'] == 'player')
         data = event_composer.save_event(
             self.data, self.mid, 'state_diffs',
