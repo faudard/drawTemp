@@ -340,9 +340,12 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     # Prefer authored visual identities; infer legacy stamps as a fallback.
     # Board is always the tactical source of truth for height and collisions.
     from .iso_architecture import draw_architecture
-    draw_architecture(canvas, geo, board, units, selected_cell, layers,
-                      atlas=building_atlas, scenery_atlas=fortification_atlas,
-                      poses=poses, structures=getattr(mission, 'structures', ()))
+    # Reuse the exact scene instances for contextual inspection. Do not run
+    # costly legacy stamp recognition a second time in the editor refresh.
+    geo.architecture_instances = draw_architecture(
+        canvas, geo, board, units, selected_cell, layers,
+        atlas=building_atlas, scenery_atlas=fortification_atlas,
+        poses=poses, structures=getattr(mission, 'structures', ()))
     return geo
 
 
