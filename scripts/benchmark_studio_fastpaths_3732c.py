@@ -165,6 +165,9 @@ def main(argv=None):
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(raw, encoding="utf-8")
         print("Saved:", args.output)
+        print(json.dumps({"workspace": report.get("workspace"),
+                          "event_graph": report.get("event_graph")},
+                         ensure_ascii=False))
     else:
         print(raw, end="")
     return 0
