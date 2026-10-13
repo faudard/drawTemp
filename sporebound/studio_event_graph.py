@@ -23,6 +23,7 @@ class EventGraphStudio:
         self.cond_unit = self.tk.StringVar()
         self.cond_team = self.tk.StringVar(value='enemy')
         self.cond_pos = self.tk.StringVar(value='0,0')
+        self.cond_object = self.tk.StringVar()
         self.action_kind = self.tk.StringVar(value='message')
         self.action_text = self.tk.StringVar(value='Renforts !')
         self.action_amount = self.tk.StringVar(value='4')
@@ -121,6 +122,10 @@ class EventGraphStudio:
             preview_controls, text='Tester avec le moteur',
             command=lambda: self.owner._run(self.preview_selected))
         self.preview_button.pack(side='left', padx=3)
+        self.scene_button = ttk.Button(
+            preview_controls, text='Vue isométrique avant/après',
+            command=lambda: self.owner._run(self.preview_scene))
+        self.scene_button.pack(side='left', padx=3)
         scenario_controls = ttk.Frame(contextual)
         scenario_controls.pack(fill='x', pady=2)
         ttk.Label(scenario_controls, text='Scénario :').pack(side='left', padx=3)
@@ -144,13 +149,16 @@ class EventGraphStudio:
         cond = ttk.Frame(tabs)
         tabs.add(cond, text='Condition')
         self._field(cond, 0, 'Type', self.cond_kind,
-                    choices=['tick', 'enter', 'defeated', 'hp_below', 'wave_capacity'])
+                    choices=['tick', 'enter', 'defeated', 'hp_below', 'wave_capacity',
+                             'interact'])
         self._field(cond, 1, 'Tick / % PV / limite', self.cond_value)
         self.cond_unit_box = self._field(cond, 2, 'Unité surveillée', self.cond_unit,
                                          choices=[])
         self._field(cond, 3, 'Camp (capacité)', self.cond_team,
                     choices=['enemy', 'player', 'neutral'])
         self._field(cond, 4, 'Position x,y', self.cond_pos)
+        self.cond_object_box = self._field(cond, 10, 'Objet interactif', self.cond_object,
+                                          choices=[])
         ttk.Button(cond, text='Position sélectionnée dans la carte',
                    command=lambda: self.cond_pos.set(
                        ','.join(map(str, self.owner.selection())))).grid(
@@ -230,7 +238,8 @@ class EventGraphStudio:
         return event_composer.condition(kind, tick=n, percent=n,
                                         max_alive=n, unit=self.cond_unit.get(),
                                         team=self.cond_team.get(),
-                                        pos=self._pos(self.cond_pos.get()))
+                                        pos=self._pos(self.cond_pos.get()),
+                                        object_id=self.cond_object.get())
 
     def _action(self):
         kind = self.action_kind.get()
@@ -351,6 +360,7 @@ class EventGraphStudio:
                                event.get('max_alive', 10)))))
         self.cond_unit.set(event.get('unit', ''))
         self.cond_team.set(event.get('team', 'enemy'))
+        self.cond_object.set(event.get('object', ''))
         self.cond_pos.set(','.join(map(str, event.get('pos', self.owner.selection()))))
         self.action_list.delete(0, 'end')
         for i, action in enumerate(event['actions']):
@@ -406,6 +416,10 @@ class EventGraphStudio:
             self.action_index = None
         unit_ids = [u['id'] for u in self._mission()['units']]
         self.cond_unit_box['values'] = unit_ids
+        objects = [o['id'] for o in self._mission().get('objects', [])]
+        self.cond_object_box['values'] = objects
+        if self.cond_object.get() not in objects:
+            self.cond_object.set(objects[0] if objects else '')
         self.action_archetype_box['values'] = sorted(
             self.owner.doc().data.get('archetypes', {}))
         self._load_event()
@@ -508,6 +522,7 @@ class EventGraphStudio:
                 self.event_id.get(), self.owner.project)
             self._set_context_text(self._context_lines(self.context))
         self.preview_button.config(state='normal' if self.context else 'disabled')
+        self.scene_button.config(state='normal' if self.context else 'disabled')
         self.story_button.config(
             state='normal' if self.context and self.context['scene_id']
             else 'disabled')
@@ -530,6 +545,12 @@ class EventGraphStudio:
         lines.extend(['', *event_context.format_preview_report(report)])
         self._set_context_text(lines, show_end=True)
         self.draw()
+
+    def preview_scene(self):
+        require(self.context is not None, 'Choisir un événement tactique')
+        from .studio_event_scene import show_event_scene
+        show_event_scene(self, scenario=self.scenario_labels[self.preview_scenario.get()],
+                         tick=int(self.preview_tick.get()))
 
     def open_linked_story(self):
         require(self.context is not None and bool(self.context['scene_id']),
