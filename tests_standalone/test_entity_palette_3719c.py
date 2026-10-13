@@ -8,7 +8,8 @@ from sporebound.authoring import add_blank_mission
 from sporebound.actor_catalog import create_archetype
 from sporebound.editor import Document
 from sporebound.entity_palette import (entity_entries, place_entity,
-                                      preview_entity_placement, OBJECT_PROP_HINTS)
+                                      preview_entity_placement, preview_passage_source,
+                                      OBJECT_PROP_HINTS)
 from sporebound.model import Content, RuleError
 
 
@@ -110,6 +111,49 @@ class EntityPaletteTests(TestCase):
             'door', 'switch', 'chest', 'ram', 'catapult', 'passage', 'defense'})
         self.assertTrue(set(OBJECT_PROP_HINTS.values()) <= set(PROP_NAMES))
 
+    def test_passage_two_click_checks_and_atomic_commit(self):
+        unchanged = deepcopy(self.doc.data)
+        source = (8, 8)
+        self.assertTrue(preview_passage_source(
+            self.doc.data, self.MID, source).allowed)
+        self.assertFalse(preview_passage_source(
+            self.doc.data, self.MID, (1, 18)).allowed)
+        self.assertFalse(preview_passage_source(
+            self.doc.data, self.MID, (30, 0)).allowed)
+        self.assertEqual(self.doc.data, unchanged, 'First click is not an edit')
+        for destination in (source, (30, 0)):
+            rejected = preview_entity_placement(
+                self.doc.data, self.MID, 'object:passage', source,
+                destination=destination)
+            self.assertFalse(rejected.allowed)
+        checked = preview_entity_placement(
+            self.doc.data, self.MID, 'object:passage', source,
+            destination=(12, 8))
+        self.assertTrue(checked.allowed, checked.reason)
+        self.doc.replace(place_entity(
+            self.doc.data, self.MID, 'object:passage', source,
+            destination=(12, 8)))
+        self.assertEqual(self.row()['objects'][-1]['kind'], 'passage')
+        self.assertEqual(tuple(self.row()['objects'][-1]['destination']), (12, 8))
+        self.doc.undo()
+        self.assertEqual(self.doc.data, unchanged)
+        self.doc.redo()
+        self.assertEqual(self.row()['objects'][-1]['id'], 'passage_1')
+
+    def test_dedicated_png_atlas_metadata(self):
+        from struct import unpack
+        from sporebound.iso_object_atlas import (
+            OBJECT_SPRITE_NAMES, OBJECT_FRAME, DEFAULT_OBJECT_ATLAS)
+        self.assertEqual(len(OBJECT_SPRITE_NAMES), 7)
+        self.assertEqual(set(OBJECT_SPRITE_NAMES), set(OBJECT_PROP_HINTS))
+        data = DEFAULT_OBJECT_ATLAS.read_bytes()
+        self.assertEqual(data[:8], b'\\x89PNG\\r\\n\\x1a\\n')
+        width, height = unpack('>II', data[16:24])
+        self.assertEqual((width, height),
+                         (OBJECT_FRAME[0] * len(OBJECT_SPRITE_NAMES),
+                          OBJECT_FRAME[1]))
+        self.assertLess(len(data), 100_000)
+
     def test_failed_placement_preserves_data_and_history(self):
         before = deepcopy(self.doc.data)
         undo_size = len(self.doc.undo_stack)
@@ -136,6 +180,7 @@ class EntityPaletteGUITests(TestCase):
         import tkinter as tk
         from sporebound.iso_actor_atlas import IsoActorAtlas
         from sporebound.iso_props import IsoPropAtlas
+        from sporebound.iso_object_atlas import IsoObjectAtlas
         from sporebound.studio_entity_palette import EntityPalette
 
         data = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
@@ -149,6 +194,7 @@ class EntityPaletteGUITests(TestCase):
             palette = EntityPalette(
                 root, snapshot=lambda: (data, 'palette_gui'),
                 actors=IsoActorAtlas(stage), props=IsoPropAtlas(stage),
+                objects=IsoObjectAtlas(stage),
                 choose=lambda *values: selected.append(values) or True,
                 cell_size=lambda: 54)
             root.update()
@@ -177,6 +223,7 @@ class EntityPaletteGUITests(TestCase):
             palette.show()
             palette.tree.selection_set('object:door')
             palette.preview()
+            self.assertIsNotNone(palette.preview_image)
             self.assertEqual(palette.facing_box.cget('state'), 'disabled')
             self.assertEqual(palette.link_box.cget('state'), 'disabled')
         finally:
