@@ -24,6 +24,8 @@ class Battle:
         self.mission = deepcopy(content.missions[mission_id])
         self.units = self.mission.units
         self.board = self.mission.board
+        # No unit schema change: legacy actors remain at implicit level 0.
+        self.unit_levels = dict(self.mission.unit_levels)
         self.seed = seed
         self.battle_id = battle_id or str(uuid.uuid4())
         self.rng = random.Random(seed)
@@ -88,8 +90,10 @@ class Battle:
     def unit(self, uid: str) -> Unit:
         return next(u for u in self.units if u.id == uid)
 
-    def at(self, pos: Cell, alive: bool = True) -> Unit | None:
-        return next((u for u in self.units if pos in u.occupied_cells() and u.alive == alive), None)
+    def at(self, pos: Cell, alive: bool = True, *, level: int = 0) -> Unit | None:
+        return next((u for u in self.units if pos in u.occupied_cells()
+                     and u.alive == alive
+                     and self.unit_levels.get(u.id, 0) == level), None)
 
     def emit(self, kind: str, **data):
         self.events.append({"tick": self.tick, "kind": kind, **data})
@@ -108,7 +112,9 @@ class Battle:
             self.active_id = None
 
     def _collect(self, unit):
-        if unit.alive and unit.team == "player" and unit.pos == self.relic_pos:
+        if (unit.alive and unit.team == "player"
+                and self.unit_levels.get(unit.id, 0) == 0
+                and unit.pos == self.relic_pos):
             self.carrier, self.relic_pos = unit.id, None
             self.emit("relic_taken", unit=unit.id)
 
@@ -227,7 +233,19 @@ class Battle:
         self.emit("battle_end", result="draw", reason="no activation within 10000 ticks")
 
     def reachable(self, unit: Unit | None = None) -> dict[Cell, tuple[int, list[Cell]]]:
-        return movement.reachable(self, unit)
+        actor = unit or self.active
+        if actor and self.unit_levels.get(actor.id, 0):
+            # The legacy 2D API must never present fake upstairs destinations.
+            return {}
+        return movement.reachable(self, actor)
+
+    def level_reachable(self, unit: Unit | None = None):
+        from .level_navigation import available_level_moves
+        return available_level_moves(self, unit)
+
+    def vertical_forecast(self, target_level: int, cell: Cell, unit=None):
+        from .vertical_combat import shot_forecast
+        return shot_forecast(self, unit or self.active, target_level, cell)
 
     def line_of_sight(self, start: Cell, end: Cell) -> bool:
         return movement.line_of_sight(self, start, end)
@@ -269,8 +287,15 @@ class Battle:
     def _target(self, u: Unit, s: Skill, cell: Cell):
         require(self.board.contains(cell), "Target outside board")
         require(s.min_range <= min(distance(origin, cell) for origin in u.occupied_cells()) <= s.range, "Target outside range")
-        require(not s.los or self.line_of_sight(u.pos, cell), "Line of sight blocked")
-        target = self.at(cell, alive=s.target != "downed")
+        level = self.unit_levels.get(u.id, 0)
+        # Initial multilevel combat gate: adjacent attacks on a single deck.
+        # Ground-floor legacy LOS remains authoritative and unchanged.
+        require(level == 0 or (s.id == 'attack' and distance(u.pos, cell) == 1),
+                'Upper decks currently support adjacent basic attacks only')
+        require(not s.los or level > 0 or self.line_of_sight(u.pos, cell),
+                "Line of sight blocked")
+        target = self.at(cell, alive=s.target != "downed",
+                         level=self.unit_levels.get(u.id, 0))
         require(s.target == "ground" or target is not None, "No valid target")
         if s.target == "enemy":
             require(target.team != u.team, "Must target an enemy")
@@ -289,7 +314,8 @@ class Battle:
 
     def _affected(self, caster: Unit, skill: Skill, cell: Cell, effect: Effect):
         area = self._area(cell, skill)
-        return [t for t in self.units if not t.occupied_cells().isdisjoint(area) and (not t.alive if self.rules.effects.get(effect.kind).targets_downed else t.alive)
+        return [t for t in self.units if self.unit_levels.get(t.id, 0) == self.unit_levels.get(caster.id, 0)
+                and not t.occupied_cells().isdisjoint(area) and (not t.alive if self.rules.effects.get(effect.kind).targets_downed else t.alive)
                 and (effect.scope in {"all", "target"} or (t.team == caster.team) == (effect.scope == "allies"))]
 
     def hit_chance(self, caster: Unit, target: Unit, skill: Skill) -> float:
@@ -323,7 +349,7 @@ class Battle:
                 if protector is not None:
                     row["redirected_to"] = protector.id
         if skill_id == "attack":
-            target = self.at(cell)
+            target = self.at(cell, level=self.unit_levels.get(u.id, 0))
             direct = next((row for row in result if row["unit"] == target.id and row["kind"] == "damage"), None) if target else None
             if (target is not None and target.team != u.team and direct is not None
                     and direct["amount"] < target.hp):
@@ -390,7 +416,7 @@ class Battle:
                     continue
                 rule.apply(self, caster, target, skill, e, cell)
         if skill.id == "attack":
-            primary = self.at(cell)
+            primary = self.at(cell, level=self.unit_levels.get(caster.id, 0))
             if primary is not None and primary.alive and primary.team != caster.team and rolls.get(primary.id, False):
                 self._resolve_team_tactic(caster, primary)
         self._triggers()
@@ -406,6 +432,8 @@ class Battle:
         return reaction_rules._prepare(self, u, mode, target_id)
 
     def available_team_tactics(self, caster: Unit, target: Unit) -> list[dict]:
+        if self.unit_levels.get(caster.id, 0) or self.unit_levels.get(target.id, 0):
+            return []  # Tactic LOS/formation rules have not been ported to 3D.
         return tactics.available_team_tactics(self, caster, target)
 
     def _resolve_team_tactic(self, caster: Unit, target: Unit):
@@ -579,7 +607,10 @@ class Battle:
         u.ct = min(60, max(0, u.ct - cost))
         statuses.end_turn(self, u)
         for zone in self.zones:
-            if u.alive and u.pos in zone["cells"] and (zone["scope"] in {"all", "target"} or (u.team == zone["team"]) == (zone["scope"] == "allies")):
+            if (u.alive and self.unit_levels.get(u.id, 0) == 0
+                    and u.pos in zone["cells"] and
+                    (zone["scope"] in {"all", "target"} or
+                     (u.team == zone["team"]) == (zone["scope"] == "allies"))):
                 self._hurt(u, zone["power"])
         self.emit("end_turn", unit=u.id, cost=cost, ct=u.ct)
         self.active_id = None
@@ -598,7 +629,25 @@ class Battle:
                 return
             u = self.active
             require(command.get("unit", u.id) == u.id, "Not this unit's turn")
-            self.rules.commands.get(command.get("kind")).execute(self, u, command)
+            kind = command.get('kind')
+            level = self.unit_levels.get(u.id, 0)
+            if kind == 'level_move':
+                require(bool(self.mission.level_links),
+                        'No authored vertical connectors in this mission')
+                from .level_navigation import navigate_level
+                navigate_level(self, u, level=command.get('level'),
+                               cell=command.get('cell'))
+            elif kind == 'level_attack':
+                from .vertical_combat import execute_shot
+                execute_shot(self, u, command.get('level'), command.get('cell'))
+            else:
+                if level:
+                    require(kind in {'act', 'end'},
+                            'Upper-floor actions require the layered combat rules')
+                    if kind == 'act':
+                        require(command.get('skill') == 'attack',
+                                'Upper decks currently allow basic melee attacks only')
+                self.rules.commands.get(kind).execute(self, u, command)
             self.commands.append(deepcopy(command))
             self._outcome()
             if not self.result and self.active and not self.active.alive:
@@ -626,6 +675,8 @@ class Battle:
 
     def state(self) -> dict:
         return {**({"deploying": self.deploying} if self.mission.deployment else {}),
+                **({"unit_levels": dict(sorted(self.unit_levels.items()))}
+                   if self.mission.level_links or self.unit_levels else {}),
                 "tick": self.tick, "active": self.active_id, "result": self.result,
                 "units": [self._unit_state(u) for u in self.units], "inventory": self.inventory,
                 "zones": self.zones, "encounter": self.encounter.state(), "lifetimes": self.lifetimes, "summon_owners": self.summon_owners, "prepared_reactions": self.prepared_reactions,

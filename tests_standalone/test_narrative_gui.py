@@ -39,12 +39,26 @@ class StoryGUITests(unittest.TestCase):
                     buttons={w.cget('text'):w for w in widgets if isinstance(w,ttk.Button)}
                     buttons['Créer scène'].invoke()
                     buttons['Ajouter choix'].invoke()
+                    # Link the authored real garden trigger to the new scene.
+                    routes = next(w for w in descendants(root)
+                                  if isinstance(w, ttk.LabelFrame)
+                                  and w.cget('text').startswith('Déclenchement :'))
+                    routes_boxes = [w for w in descendants(routes)
+                                    if isinstance(w, ttk.Combobox)]
+                    self.assertIn('garden/spore_pulse',
+                                  tuple(routes_boxes[-2]['values']))
+                    routes_boxes[-2].set('garden/spore_pulse')
+                    routes_boxes[-1].set('new_scene')
+                    buttons['Lier dialogue tactique'].invoke()
+                    root.update()
                     buttons['Enregistrer projet de jeu…'].invoke()
                     result=GameProject.load(destination,Content.load(DEFAULT_CONTENT))
                     created=next(scene for scene in result.story['scenes']
                                  if scene['id']=='new_scene')
                     self.assertEqual([c['id'] for c in created['choices']],
                                      ['continue','choice'])
+                    self.assertEqual(result.story['during_tactical_event'],
+                                     {'garden/spore_pulse': 'new_scene'})
                     self.assertEqual(errors,[])
                 finally:
                     root.destroy()

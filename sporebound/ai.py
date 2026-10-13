@@ -43,6 +43,30 @@ def _choose_tactical_command(battle):
     opponents = [t for t in battle.units if t.alive and t.team != u.team]
     if u.cast:
         return {"kind": "end"}
+    if (battle.mission.level_links and not u.acted
+            and not battle.status_blocks(u, 'act')
+            and u.weapon in {'ranged', 'focus'}):
+        openings = []
+        for enemy in sorted(opponents, key=lambda t: t.id):
+            enemy_level = battle.unit_levels.get(enemy.id, 0)
+            if enemy_level == battle.unit_levels.get(u.id, 0):
+                continue
+            try:
+                shot = battle.vertical_forecast(enemy_level, enemy.pos, u)
+            except RuleError:
+                continue
+            expected = shot['chance'] * min(enemy.hp, shot['amount'])
+            if expected > 0:
+                openings.append((expected, enemy.id, enemy_level, enemy.pos))
+        if openings:
+            _, _, target_level, target_cell = max(openings)
+            return {'kind': 'level_attack', 'level': target_level,
+                    'cell': list(target_cell)}
+    if battle.mission.level_links:
+        from .level_navigation import ai_layered_move
+        stair_step = ai_layered_move(battle, u)
+        if stair_step is not None:
+            return stair_step
     if u.disengaging and 'move' in battle.rules.commands:
         reachable = battle.reachable(u)
         if reachable and opponents:

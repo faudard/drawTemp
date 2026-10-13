@@ -57,6 +57,7 @@ class PlayerApplication:
         self.campaign_var = tk.StringVar(value=project.campaigns[0]["id"])
         self.slot_var = tk.StringVar(value="1")
         self.action_var = tk.StringVar(value="move")
+        self.level_var = tk.IntVar(value=0)
         self.unit_var = tk.StringVar()
         self.facing_var = tk.StringVar(value="south")
         self.front_var = tk.StringVar()
@@ -317,6 +318,14 @@ class PlayerApplication:
         session = self.player.session
         if session is None:
             self.title_screen()
+        elif session.tactical_story_pending:
+            # Story UI is modal over the current Battle, not a campaign screen.
+            self._clear()
+            self._heading("Décision pendant la bataille")
+            self._narrative_scene(
+                session.tactical_scene(), choices=session.tactical_choices(),
+                on_choice=lambda cid: self._change(
+                    lambda: self.player.choose_tactical_story_option(cid)))
         elif session.mode == "fronts":
             self.battle_screen()
         elif session.mode == "battle":
@@ -533,7 +542,7 @@ class PlayerApplication:
             self.root.bind("e", lambda event: self._safe(
                 lambda: self._exploration_interact(nearest[0])))
 
-    def _narrative_scene(self, scene):
+    def _narrative_scene(self, scene, *, choices=None, on_choice=None):
         panel = self.ttk.LabelFrame(self.view, text=scene["title"], padding=20)
         panel.pack(fill="both", expand=True, padx=60, pady=16)
         if scene["id"].startswith("sc_p0_"):
@@ -569,11 +578,15 @@ class PlayerApplication:
             else:
                 self._typewriter_job = None
         reveal()
-        for choice in self.player.session.available_choices():
+        if choices is None:
+            choices = self.player.session.available_choices()
+        if on_choice is None:
+            on_choice = lambda cid: self._change(
+                lambda: self.player.choose_story_option(cid))
+        for choice in choices:
             self._button(panel, choice["label"],
-                         lambda cid=choice["id"]: self._change(
-                             lambda: self.player.choose_story_option(cid))).pack(
-                                 fill="x", padx=30, pady=4)
+                         lambda cid=choice["id"]: on_choice(cid)).pack(
+                             fill="x", padx=30, pady=4)
 
     def front_setup(self, available):
         self._clear()
@@ -643,12 +656,25 @@ class PlayerApplication:
                 self._button(actions, "Jouer l'activation IA",
                              lambda: self._change(self.player.ai_turn)).pack(side="left")
             else:
-                options = (["move", "attack", *battle.active.skills,
-                            "item:potion", "item:ether", "item:phoenix",
-                            *["object:" + obj["id"] for obj in battle.mission.objects],
-                            *available_operations(battle, battle.active)])
-                options += tactical_action_options(battle)
-                options += ["end"]
+                active_level = battle.unit_levels.get(battle.active.id, 0)
+                if battle.mission.level_links:
+                    if active_level:
+                        options = ["level_move", "level_attack", "attack", "end"]
+                    else:
+                        options = (["move", "level_move", "level_attack",
+                                    "attack", *battle.active.skills,
+                                    "item:potion", "item:ether", "item:phoenix",
+                                    *["object:" + obj["id"] for obj in battle.mission.objects],
+                                    *available_operations(battle, battle.active)])
+                        options += tactical_action_options(battle)
+                        options += ["end"]
+                else:
+                    options = (["move", "attack", *battle.active.skills,
+                                "item:potion", "item:ether", "item:phoenix",
+                                *["object:" + obj["id"] for obj in battle.mission.objects],
+                                *available_operations(battle, battle.active)])
+                    options += tactical_action_options(battle)
+                    options += ["end"]
             if options:
                 if self.action_var.get() not in options:
                     self.action_var.set(options[0])
@@ -656,6 +682,14 @@ class PlayerApplication:
                 self.ttk.Combobox(actions, textvariable=self.action_var,
                                   values=options, state="readonly", width=23).pack(
                                       side="left", padx=7)
+                if battle.mission.level_links:
+                    self.ttk.Label(actions, text="Étage cible").pack(side="left")
+                    self.ttk.Combobox(
+                        actions, textvariable=self.level_var, state="readonly",
+                        values=tuple(range(0, 1+max(
+                            max(row["from"][0], row["to"][0])
+                            for row in battle.mission.level_links))),
+                        width=3).pack(side="left")
                 self.ttk.Label(actions, text="Orientation").pack(side="left")
                 self.ttk.Combobox(actions, textvariable=self.facing_var, state="readonly",
                                   values=["north", "south", "east", "west"],
@@ -733,6 +767,15 @@ class PlayerApplication:
         self._render_motion(clock_ms)
         self.audio.observe(battle)
         rows = ["Case : " + str(self.selection), "", "Escouades"]
+        if self.action_var.get() == 'level_attack' and battle.active is not None:
+            try:
+                rows.append('Tir vertical : ' + str(battle.vertical_forecast(
+                    self.level_var.get(), self.selection)))
+            except RuleError as exc:
+                rows.append('Tir vertical indisponible : ' + str(exc))
+        if battle.mission.level_links:
+            rows.insert(1, "Étage actif : N" + str(
+                battle.unit_levels.get(battle.active_id, 0) if battle.active_id else 0))
         rows.extend(u.name + " (" + u.team + ") : PV " + str(u.hp) + "/" +
                     str(u.max_hp) + " / MP " + str(u.mp) + "/" + str(u.max_mp)
                     for u in frame.actors)
@@ -785,7 +828,10 @@ class PlayerApplication:
         self.canvas.focus_set()
         battle = self.player.session.active_battle
         if self.iso_view_var.get() and self.iso_renderer is not None:
-            cell = self.iso_renderer.hit_test(event.x, event.y)
+            floor = (self.level_var.get() if self.action_var.get() in {'level_move', 'level_attack'}
+                     else battle.unit_levels.get(battle.active_id, 0)
+                     if battle.active_id else 0)
+            cell = self.iso_renderer.hit_test(event.x, event.y, level=floor)
         else:
             cell = self.camera.screen_to_cell(event.x, event.y)
         if cell is not None and battle.board.contains(cell):
@@ -828,6 +874,12 @@ class PlayerApplication:
                        "cell": list(self.selection), "facing": self._facing()}
         elif kind == "move":
             command = {"kind": "move", "cell": list(self.selection)}
+        elif kind == "level_move":
+            command = {"kind": "level_move", "level": self.level_var.get(),
+                       "cell": list(self.selection)}
+        elif kind == "level_attack":
+            command = {"kind": "level_attack", "level": self.level_var.get(),
+                       "cell": list(self.selection)}
         elif kind == "end":
             command = {"kind": "end", "facing": self._facing()}
         elif kind.startswith("item:"):

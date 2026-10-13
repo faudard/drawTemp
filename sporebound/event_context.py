@@ -28,11 +28,14 @@ def inspect_event(data, mission_id, event_id, project=None):
     """Project only persisted references; do not invent trigger-level links."""
     _, event = _authored_event(data, mission_id, event_id)
     scene_id = ''
+    tactical_scene_id = ''
     clips = []
     if project is not None:
         from .cinematics import tactical_event_target
         scene_id = project.story.get('after_mission', {}).get(mission_id, '')
         tactical_target = tactical_event_target(mission_id, event_id)
+        tactical_scene_id = project.story.get(
+            'during_tactical_event', {}).get(tactical_target, '')
         for clip in project.cinematics:
             trigger = clip['trigger']
             kind, target = trigger['kind'], trigger['target']
@@ -50,6 +53,7 @@ def inspect_event(data, mission_id, event_id, project=None):
         'actions': [event_graph.action_title(action)
                     for action in event['actions']],
         'scene_id': scene_id,
+        'tactical_scene_id': tactical_scene_id,
         'cinematics': clips,
         # Tactical event cinematics are direct; mission/scene sequences
         # remain attached to their existing lifecycle hooks.

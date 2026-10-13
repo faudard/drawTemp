@@ -144,6 +144,24 @@ def set_strategic_scene(project, content, siege_id, node_id, scene_id=''):
     return _edit(project, content, change)
 
 
+def set_tactical_scene(project, content, mission_id, event_id, scene_id=''):
+    """Link an authored tactical trigger to an existing narrative scene."""
+    _id(mission_id, 'Mission id')
+    _id(event_id, 'Tactical event id')
+    reference = mission_id + '/' + event_id
+
+    def change(story):
+        mapping = story.setdefault('during_tactical_event', {})
+        if scene_id:
+            mapping[reference] = scene_id
+        else:
+            mapping.pop(reference, None)
+        if not mapping:
+            story.pop('during_tactical_event', None)
+
+    return _edit(project, content, change)
+
+
 def link_choice(project, content, scene_id, choice_id, target_id=''):
     """Connect/disconnect a choice to a reusable scene, preserving other edges."""
     def change(story):
