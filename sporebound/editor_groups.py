@@ -276,8 +276,13 @@ def move_editor_group(data, mission_id, group_id, dx, dy):
     result = deepcopy(data)
     if moving_structure_cells:
         from .structure_groups import transform_structure_group
+        # The existing structure transaction validates intermediate states while
+        # the old records are detached. Suspend editor-only group references
+        # during that transaction, then restore them before final validation.
+        held_groups = _mission(result, mission_id).pop('editor_groups', [])
         result = transform_structure_group(result, mission_id,
                                            tuple(moving_structure_cells), dx, dy)
+        _mission(result, mission_id)['editor_groups'] = held_groups
     if members['unit_ids'] or members['object_ids']:
         from .map_transform import move_group
         result = move_group(result, mission_id,
@@ -295,7 +300,8 @@ def move_editor_group(data, mission_id, group_id, dx, dy):
                 tile['pos'] = [x+dx, y+dy]
                 current[(x+dx, y+dy)] = tile
         mission['board']['tiles'] = list(current.values())
+    changed_ids = {g['id'] for g in groups}
     for group in mission['editor_groups']:
-        if group['id'] in {g['id'] for g in groups}:
+        if group['id'] in changed_ids:
             group['cells'] = [[x+dx, y+dy] for x, y in group['cells']]
     return _validate_document(result)
