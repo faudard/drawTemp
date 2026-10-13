@@ -88,6 +88,23 @@ class InteriorBuildingLifecycleTests(unittest.TestCase):
             self.assertEqual(restored.digest(), digest)
             self.assertEqual(restored.unit_levels, battle.unit_levels)
 
+    def test_three_levels_preserve_each_stair_and_upper_spawn(self):
+        data = add_interior_floor(self.doc.data, self.MID, self.sid, 2)
+        data = add_level_link(data, self.MID, [1, 4, 5], [2, 4, 5])
+        data = place_unit_on_level(data, self.MID, self.foe, 2, (4, 4))
+        moved = move_structure(data, self.MID, (4, 4), (6, 3))
+        mission = self.raw_mission(moved)
+        self.assertEqual(sorted(f['level'] for f in mission['interior_floors']),
+                         [1, 2])
+        self.assertEqual([(row['from'], row['to'])
+                          for row in mission['level_links']],
+                         [([0, 7, 5], [1, 7, 5]),
+                          ([1, 7, 5], [2, 7, 5])])
+        self.assertEqual(mission['unit_levels'][self.foe], 2)
+        self.assertEqual(next(u['pos'] for u in mission['units']
+                              if u['id'] == self.foe), [7, 4])
+        self.assertEqual(Content.from_dict(moved).to_dict(), moved)
+
     def test_incompatible_geometry_change_fails_before_edit(self):
         before = deepcopy(self.doc.data)
         for kwargs in ({'quarter_turns': 1}, {'name': 'Tour'},
