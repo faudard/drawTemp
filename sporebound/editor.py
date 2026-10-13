@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
+from .editor_refresh_scale import EditorContentProjection, MinimapBackgroundCache
 from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
                                   StructureGroupCommand, EditorGroupMoveCommand,
                                   EditorGroupTreeDropCommand, EditorGroupBatchCommand,
@@ -343,6 +344,8 @@ def launch(path):
         status_var.set('Préférences de carte ignorées : ' + str(exc))
     doc.edit_policy = lambda before, after: ensure_unlocked(before, after, map_view_data)
     editing_context = EditingContext(doc, mission_var.get)
+    editor_content_cache = EditorContentProjection()
+    minimap_background = MinimapBackgroundCache()
 
     def guarded(fn):
         def run(*args):
@@ -2179,7 +2182,7 @@ def launch(path):
                                        stroke_cells[-1])
             selected_tiles = selected_tiles | set(cells) if selection_additive else set(cells)
             selected_cell = stroke_cells[-1]
-            refresh()
+            refresh(selection_only=True)
         elif not battle and tool == 'Rectangle' and rectangle_anchor is not None and stroke_cells and brush not in ('unit', 'object'):
             end = stroke_cells[-1]
             selected_cell = end
@@ -2224,59 +2227,74 @@ def launch(path):
         canvas.delete('stroke_preview')
 
 
-    def draw_minimap(board, mission, units):
-        """Compact tactical overview; renders only sparse tiles and entities."""
-        mini_canvas.delete('all')
+    def refresh_minimap_viewport():
+        # Pan/scroll and selection-only refreshes never repaint static tiles.
+        mini_canvas.delete('viewport')
         size = 184
-        sx, sy = size / board.width, size / board.height
-        mini_canvas.create_rectangle(0, 0, size, size, fill='#e4e4e4',
-                                     outline='#999999')
-        if layer_vars['Terrain'].get() or layer_vars['Relief'].get():
-            for (x, y), tile in board.tiles.items():
-                color = None
-                if layer_vars['Terrain'].get():
-                    if tile.surface != 'grass': color = SURFACE_COLORS[tile.surface]
-                    if tile.blocked and tile.surface != 'water': color = '#515151'
-                    elif tile.hazard: color = '#e3a187'
-                    elif tile.cover: color = '#a4c599'
-                    elif tile.cost > 1: color = '#b8a37c'
-                if color is None and layer_vars['Relief'].get() and tile.height:
-                    color = '#b7b9d2'
-                if color:
+        left, right = canvas.xview()
+        top, bottom = canvas.yview()
+        mini_canvas.create_rectangle(
+            left*size, top*size, right*size, bottom*size,
+            outline='#2369ac', width=2, tags='viewport')
+
+    def draw_minimap(board, mission, units):
+        """Static minimap only changes with authored scene, layers or combat."""
+        # A combat frame is dynamic and must never be reused by authoring revision.
+        key = (editor_content_cache.generation, mission.id,
+               board.width, board.height,
+               tuple((name, layer_vars[name].get())
+                     for name in ('Terrain', 'Relief', 'Déploiement',
+                                  'Objectifs', 'Objets', 'Unités')),
+               object() if battle is not None else None)
+        redraw = minimap_background.needs_background(key, mini_canvas)
+        if redraw:
+            mini_canvas.delete('all')
+            size = 184
+            sx, sy = size / board.width, size / board.height
+            mini_canvas.create_rectangle(0, 0, size, size, fill='#e4e4e4',
+                                         outline='#999999')
+            if layer_vars['Terrain'].get() or layer_vars['Relief'].get():
+                for (x, y), tile in board.tiles.items():
+                    color = None
+                    if layer_vars['Terrain'].get():
+                        if tile.surface != 'grass': color = SURFACE_COLORS[tile.surface]
+                        if tile.blocked and tile.surface != 'water': color = '#515151'
+                        elif tile.hazard: color = '#e3a187'
+                        elif tile.cover: color = '#a4c599'
+                        elif tile.cost > 1: color = '#b8a37c'
+                    if color is None and layer_vars['Relief'].get() and tile.height:
+                        color = '#b7b9d2'
+                    if color:
+                        mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                                     fill=color,outline=color)
+            if layer_vars['Déploiement'].get():
+                for zone in mission.deployment:
+                    for x, y in zone['cells']:
+                        mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                                     fill='#a5dbe6',outline='')
+            if layer_vars['Objectifs'].get():
+                for x, y in mission.goal:
                     mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
-                                                 fill=color,outline=color)
-        if layer_vars['Déploiement'].get():
-            for zone in mission.deployment:
-                for x, y in zone['cells']:
-                    mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
-                                                 fill='#a5dbe6',outline='')
-        if layer_vars['Objectifs'].get():
-            for x, y in mission.goal:
-                mini_canvas.create_rectangle(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
-                                             fill='#d8c86e',outline='')
-        if layer_vars['Objets'].get():
-            for obj in mission.objects:
-                x,y = obj['pos']
-                mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
-                                        fill='#7047ad',outline='')
-        if layer_vars['Unités'].get():
-            for actor in units:
-                x,y = actor.pos
-                color = '#27649c' if actor.team == 'player' else '#bb503b'
-                mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
-                                        fill=color,outline='')
-        # Current map viewport, useful for navigating large boards.
-        left,right = canvas.xview()
-        top,bottom = canvas.yview()
-        mini_canvas.create_rectangle(left*size,top*size,right*size,bottom*size,
-                                     outline='#2369ac',width=2,tags='viewport')
+                                                 fill='#d8c86e',outline='')
+            if layer_vars['Objets'].get():
+                for obj in mission.objects:
+                    x,y = obj['pos']
+                    mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                            fill='#7047ad',outline='')
+            if layer_vars['Unités'].get():
+                for actor in units:
+                    x,y = actor.pos
+                    color = '#27649c' if actor.team == 'player' else '#bb503b'
+                    mini_canvas.create_oval(x*sx,y*sy,(x+1)*sx,(y+1)*sy,
+                                            fill=color,outline='')
+        refresh_minimap_viewport()
+        minimap_background.complete(key, mini_canvas, background_redrawn=redraw)
 
     def minimap_navigate(event):
-        # Jump to a map area without altering the selected tactical cell.
-        # Fractions are interpreted by the scrollable map's x/y views.
+        # Navigating changes only the main canvas view and its viewport overlay.
         canvas.xview_moveto(max(0.0, min(1.0, event.x / 184 - 0.2)))
         canvas.yview_moveto(max(0.0, min(1.0, event.y / 184 - 0.2)))
-        refresh()
+        refresh_minimap_viewport()
 
     @guarded
     def open_selected_entity(kind):
@@ -2306,7 +2324,7 @@ def launch(path):
         studio.focus_gate_event(
             selected['id'] if selected['kind'] == 'door' else selected['link'])
 
-    def refresh(*args, views=None):
+    def refresh(*args, views=None, selection_only=False):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal selected_group_id, group_tree_signature
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
@@ -2349,7 +2367,7 @@ def launch(path):
                 structure_selection_id = None
             else:
                 structure_selection_cell = tuple(record['anchor'])
-        content = Content.from_dict(doc.data)
+        content = editor_content_cache.get(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
         refresh_group_tree(content.missions[mission_var.get()])
         board = battle.board if battle else mission.board
@@ -2361,7 +2379,8 @@ def launch(path):
         object_box['values'] = [o['id'] for o in mission.objects]
         if object_var.get() not in object_box['values']:
             object_var.set(object_box['values'][0] if object_box['values'] else '')
-        selected_tiles.intersection_update(set(board.cells()))
+        selected_tiles.intersection_update(
+            c for c in selected_tiles if board.contains(c))
         editing_context.selection.set(mission_var.get(), selected_cell,
                                       selected_tiles, publish=False)
         if views is None or RENDERER in views:
@@ -2388,7 +2407,9 @@ def launch(path):
                     building_atlas=building_atlas,
                     fortification_atlas=fortification_atlas,
                     actor_atlas=actor_atlas, object_atlas=object_atlas,
-                    unit_levels=battle.unit_levels if battle else None)
+                    unit_levels=battle.unit_levels if battle else None,
+                    scene_revision=None if battle else
+                    (editor_content_cache.generation, mission.id))
             else:
                 iso_geometry = None
                 editor_renderer.invalidate()
@@ -2578,7 +2599,10 @@ def launch(path):
         if views is None or MINIMAP in views:
             draw_minimap(board, mission, units)
         if studio is not None and (views is None or WORKSPACE in views):
-            studio.refresh()
+            if selection_only and battle is None and views is None:
+                studio.refresh_selection()
+            else:
+                studio.refresh()
             if studio.history is not None:
                 history_status.set(
                     f'Historique Studio : {studio.history._cursor} modification(s) '
