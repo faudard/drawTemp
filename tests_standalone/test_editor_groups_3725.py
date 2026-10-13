@@ -11,7 +11,8 @@ from sporebound.editor_architecture import EditingContext, EditorGroupMoveComman
 from sporebound.editor_groups import (
     add_selection_to_group, create_editor_group, delete_editor_group,
     descendant_groups, group_display_cells, group_selection,
-    move_editor_group, rename_editor_group, reparent_editor_group)
+    move_editor_group, rename_editor_group, reparent_editor_group,
+    remove_selection_from_group, transfer_selection_to_group)
 from sporebound.iso_structures import place_structure
 from sporebound.model import Content, RuleError
 
@@ -101,6 +102,26 @@ class EditorHierarchyTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             Content.from_dict(corrupt)
         self.assertEqual(self.groups(child)[0]['cells'], [[3, 3]])
+
+    def test_transfer_unlink_and_change_parent(self):
+        first = create_editor_group(self.base, self.MID, 'A',
+                                    cells=((3, 3),))
+        second = create_editor_group(first, self.MID, 'B',
+                                     cells=((5, 5),))
+        reassigned = transfer_selection_to_group(
+            second, self.MID, 'group_2', ((3, 3),))
+        self.assertEqual(self.groups(reassigned)[0]['cells'], [])
+        self.assertEqual(self.groups(reassigned)[1]['cells'],
+                         [[5, 5], [3, 3]])
+        after_unlink = remove_selection_from_group(
+            reassigned, self.MID, 'group_2', ((3, 3),))
+        self.assertEqual(self.groups(after_unlink)[1]['cells'], [[5, 5]])
+        reparented = reparent_editor_group(after_unlink, self.MID,
+                                           'group_2', 'group_1')
+        self.assertEqual(self.groups(reparented)[1]['parent'], 'group_1')
+        root_again = reparent_editor_group(reparented, self.MID,
+                                            'group_2', None)
+        self.assertIsNone(self.groups(root_again)[1]['parent'])
 
     def test_reject_external_tile_overwrite_and_out_of_bounds_atomically(self):
         doc = Document(Content.from_dict(self.base))
