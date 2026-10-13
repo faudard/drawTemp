@@ -47,6 +47,8 @@ class MotionTests(unittest.TestCase):
         director.observe(frame(events=({"kind": "activation"},
                                        {"kind": "skill", "unit": "jeanne"})), 200)
         self.assertEqual(director.poses(200)["jeanne"].action, "attack")
+        self.assertEqual(director.poses(200)["jeanne"].frame, 0)
+        self.assertEqual(director.poses(341)["jeanne"].frame, 1)
         director.observe(frame(hp=5), 300)
         self.assertEqual(director.poses(300)["jeanne"].action, "hit")
         director.observe(frame(hp=0, alive=False), 400)
