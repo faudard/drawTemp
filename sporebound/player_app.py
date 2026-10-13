@@ -773,7 +773,10 @@ class PlayerApplication:
         self.canvas.focus_set()
         battle = self.player.session.active_battle
         if self.iso_view_var.get() and self.iso_renderer is not None:
-            cell = self.iso_renderer.hit_test(event.x, event.y)
+            floor = (self.level_var.get() if self.action_var.get() == 'level_move'
+                     else battle.unit_levels.get(battle.active_id, 0)
+                     if battle.active_id else 0)
+            cell = self.iso_renderer.hit_test(event.x, event.y, level=floor)
         else:
             cell = self.camera.screen_to_cell(event.x, event.y)
         if cell is not None and battle.board.contains(cell):
