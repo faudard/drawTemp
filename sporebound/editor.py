@@ -15,6 +15,10 @@ from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, render_isometric, SURFACE_COLORS, IsoTerrainAtlas)
 from .iso_props import IsoPropAtlas
+from .interior_levels import (FLOOR_SURFACES, FLOOR_FEATURES, MAX_INTERIOR_LEVEL,
+                              add_interior_floor, delete_interior_floor,
+                              edit_interior_tile, floor_hit_test,
+                              projected_floor_polygon)
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import IsoActorAtlas
@@ -234,7 +238,11 @@ def launch(path):
     tile_size = 54
     iso_geometry = None
     iso_var = tk.BooleanVar(value=False)
-    interior_var = tk.BooleanVar(value=False)  # View-only, never saved as mission data.
+    interior_var = tk.BooleanVar(value=False)  # Editor visibility only.
+    floor_var = tk.IntVar(value=1)  # Selected visual deck (ground always 0).
+    floor_surface_var = tk.StringVar(value='stone')
+    floor_feature_var = tk.StringVar(value='crate')
+    floor_action_var = tk.StringVar(value='Sol')
     surface_var = tk.StringVar(value='grass')
     feature_var = tk.StringVar(value='tree')
     level_var = tk.IntVar(value=2)
@@ -583,6 +591,47 @@ def launch(path):
     def structure_anchor(cursor):
         return placement_origin(structure_clip(), cursor, structure_pivot_var.get())
 
+    def authored_building_at(cell):
+        scene = Content.from_dict(doc.data).missions[mission_var.get()]
+        from .iso_architecture import architecture_instances
+        instance = next((b for b in architecture_instances(
+            scene.board, scene.structures) if cell in b.cells), None)
+        if instance is None or not instance.id:
+            raise RuleError('Sélectionner une maison/tour/ruine placée avec identité.')
+        if instance.name not in ARCHITECTURE_NAMES:
+            raise RuleError('Les étages nécessitent un bâtiment habitable.')
+        return instance.id
+
+    @guarded
+    def create_interior_level():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        sid = authored_building_at(selected_cell)
+        level = floor_var.get()
+        design_change(lambda: doc.replace(add_interior_floor(
+            doc.data, mission_var.get(), sid, level)))
+        interior_var.set(True)
+        iso_var.set(True)
+        refresh()
+        status_var.set(f'Étage visuel {level} créé pour {sid} (non jouable).')
+
+    @guarded
+    def remove_interior_level():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        sid = authored_building_at(selected_cell)
+        level = floor_var.get()
+        design_change(lambda: doc.replace(delete_interior_floor(
+            doc.data, mission_var.get(), sid, level)))
+        status_var.set(f'Étage visuel {level} supprimé (Undo disponible).')
+
+    def select_interior_paint():
+        interior_var.set(True)
+        iso_var.set(True)
+        tool_var.set('Étage intérieur')
+        refresh()
+        status_var.set('Étage : cliquer sur un plateau surélevé pour éditer le plan visuel.')
+
     def active_brush():
         return f'height:{level_var.get()}' if brush_var.get() == 'height_set' else brush_var.get()
 
@@ -602,6 +651,21 @@ def launch(path):
 
     def event_cell(event):
         px, py = canvas.canvasx(event.x), canvas.canvasy(event.y)
+        if (tool_var.get() == 'Étage intérieur' and iso_var.get()
+                and iso_geometry is not None):
+            scene = Content.from_dict(doc.data).missions[mission_var.get()]
+            for building in reversed(getattr(iso_geometry, 'architecture_instances', ())):
+                if any(f['structure_id'] == building.id and
+                       f['level'] == floor_var.get()
+                       for f in scene.interior_floors):
+                    # Only the elevated plane is interactive in this tool.
+                    floor = next(f for f in scene.interior_floors
+                                 if f['structure_id'] == building.id and
+                                 f['level'] == floor_var.get())
+                    cell = floor_hit_test(iso_geometry, building, floor, px, py)
+                    if cell is not None:
+                        return cell
+            return None
         if iso_var.get() and iso_geometry is not None:
             return iso_geometry.hit_test(px, py)
         return int(px // tile_size), int(py // tile_size)
@@ -621,12 +685,19 @@ def launch(path):
 
     def clear_placement_preview(_event=None):
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
-                    'brush_preview', 'asset_ghost'):
+                    'brush_preview', 'asset_ghost', 'floor_preview'):
             canvas.delete(tag)
 
     def paste_preview(event):
         clear_placement_preview()
         if battle:
+            return
+        if tool_var.get() == 'Étage intérieur':
+            cursor = event_cell(event)
+            if cursor is not None and iso_geometry is not None:
+                canvas.create_polygon(*_flatten(projected_floor_polygon(
+                    iso_geometry, cursor, floor_var.get())),
+                    fill='', outline='#2361ff', width=3, tags='floor_preview')
             return
         if tool_var.get() == 'Structure':
             cursor = event_cell(event)
@@ -746,6 +817,21 @@ def launch(path):
             refresh()
         elif tool == 'Collage':
             paste_at(selected_cell)
+        elif tool == 'Étage intérieur':
+            if source_pending():
+                raise RuleError('Appliquer le JSON avant de modifier l’étage.')
+            sid = authored_building_at(selected_cell)
+            action = floor_action_var.get()
+            options = ({'surface': floor_surface_var.get()} if action == 'Sol' else
+                       {'feature': floor_feature_var.get()} if action == 'Mobilier' else
+                       {'present': False} if action == 'Trou' else
+                       {'present': True} if action == 'Restaurer' else None)
+            if options is None:
+                raise RuleError('Outil étage invalide')
+            design_change(lambda: doc.replace(edit_interior_tile(
+                doc.data, mission_var.get(), sid, floor_var.get(),
+                selected_cell, **options)))
+            status_var.set(f'Étage {floor_var.get()} : {action} en {selected_cell}.')
         elif tool == 'Structure':
             if source_pending():
                 raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
@@ -952,7 +1038,8 @@ def launch(path):
             iso_geometry = render_isometric(
                 canvas, board, mission, units, cell_size=tile_size,
                 layers={**{name: var.get() for name, var in layer_vars.items()},
-                        'Intérieurs': interior_var.get()},
+                        'Intérieurs': interior_var.get(),
+                        'Étage actif': floor_var.get() if interior_var.get() and not battle else 0},
                 selected_cell=selected_cell, selected_tiles=selected_tiles,
                 reachable=live.reachable if live else (),
                 danger=live.danger if live else (),
