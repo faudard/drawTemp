@@ -24,7 +24,7 @@ def inspect_resource(node):
     return ContextSnapshot(node.kind, node.label, node.summary)
 
 
-def inspect_map(data, mission_id, cell, cells=()):
+def inspect_map(data, mission_id, cell, cells=(), *, preferred_kind='', preferred_id=''):
     """One inspector projection for tiles, actors, objects and selected groups."""
     mission = next((m for m in data['missions'] if m['id'] == mission_id), None)
     if mission is None:
@@ -42,9 +42,15 @@ def inspect_map(data, mission_id, cell, cells=()):
                                'Déplacer/copier via les outils de sélection existants.',
                                mission_id, cell)
     actor = next((a for a in mission['units']
-                  if tuple(a['pos']) == cell), None)
+                  if tuple(a['pos']) == cell and
+                  (not preferred_id or
+                   preferred_kind == 'actor' and a['id'] == preferred_id)), None)
     obj = next((o for o in mission.get('objects', [])
-                if tuple(o['pos']) == cell), None)
+                if tuple(o['pos']) == cell and
+                (not preferred_id or
+                 preferred_kind == 'object' and o['id'] == preferred_id)), None)
+    if preferred_id and not (actor or obj):
+        raise RuleError('Ressource déplacée ou supprimée : ' + preferred_id)
     tile = next((t for t in mission['board'].get('tiles', [])
                  if tuple(t['pos']) == cell), {})
     terrain = ('Sol : ' + str(tile.get('surface', 'grass')) +
