@@ -1093,6 +1093,62 @@ def launch(path):
         group_prefab_var.set(target.name)
         status_var.set('Préfab ajouté à la bibliothèque : '+target.name)
 
+    def draw_prefab_thumbnail(_event=None):
+        # A lightweight visual catalogue uses the *same* local prefab cells,
+        # not a second tile/structure representation or an art atlas.
+        prefab_thumbnail.delete('all')
+        try:
+            prefab = _chosen_prefab()
+        except (RuleError, OSError, ValueError) as exc:
+            prefab_thumbnail.create_text(
+                8, 55, text=str(exc)[:40], anchor='w', fill='#a33c33')
+            return
+        width, height = prefab['size']
+        pitch = min(14., 246. / width, 104. / height)
+        ox = (254. - width * pitch) / 2
+        oy = (114. - height * pitch) / 2
+        tones = {'water': '#6196c0', 'cobble': '#a49c86',
+                 'stone': '#999b98', 'dirt': '#af9474',
+                 'bridge': '#ad9272', 'grass': '#83b48a'}
+        for tile in prefab['tiles'][:2048]:
+            x, y = tile['pos']
+            raw = tile['tile'] or {}
+            color = tones.get(raw.get('surface', 'grass'), '#83b48a')
+            if raw.get('blocked'):
+                color = '#665c55'
+            prefab_thumbnail.create_rectangle(
+                ox + x*pitch, oy + y*pitch,
+                ox + (x+1)*pitch, oy + (y+1)*pitch,
+                fill=color, outline='', tags='prefab_thumbnail_tile')
+            if raw.get('feature') and pitch >= 7:
+                prefab_thumbnail.create_oval(
+                    ox + (x+.3)*pitch, oy + (y+.3)*pitch,
+                    ox + (x+.7)*pitch, oy + (y+.7)*pitch,
+                    fill='#416a47', outline='')
+        for building in prefab['structures']:
+            plan = structure_template(building['name'], building['turns'],
+                                      door_slot=building['door_slot'])
+            x, y = building['anchor']
+            prefab_thumbnail.create_rectangle(
+                ox+x*pitch, oy+y*pitch,
+                ox+(x+plan.width)*pitch, oy+(y+plan.height)*pitch,
+                outline='#583925', width=2)
+        for item in prefab['objects']:
+            x, y = item['pos']
+            prefab_thumbnail.create_rectangle(
+                ox+(x+.2)*pitch, oy+(y+.2)*pitch,
+                ox+(x+.8)*pitch, oy+(y+.8)*pitch,
+                fill='#8653a5', outline='')
+        for item in prefab['units']:
+            x, y = item['pos']
+            prefab_thumbnail.create_oval(
+                ox+(x+.15)*pitch, oy+(y+.15)*pitch,
+                ox+(x+.85)*pitch, oy+(y+.85)*pitch,
+                fill='#e4bb72', outline='#6f533a')
+        prefab_thumbnail.create_text(5, 5, anchor='nw',
+                                    text=f'{width} × {height} cases',
+                                    fill='#374151')
+
     def preview_group_prefab_at(prefab, anchor):
         # Preview performs the same complete validation as the commit. An
         # invalid placement is red, but never changes map data or undo state.
@@ -3132,6 +3188,11 @@ def launch(path):
                                    textvariable=group_prefab_var,
                                    state='readonly')
     group_prefab_box.pack(fill='x', padx=6, pady=2)
+    prefab_thumbnail = tk.Canvas(side_panel, width=254, height=114,
+                                 background='#eef0ea', highlightthickness=1,
+                                 highlightbackground='#adb2ad')
+    prefab_thumbnail.pack(anchor='w', padx=6, pady=(1, 5))
+    group_prefab_box.bind('<<ComboboxSelected>>', draw_prefab_thumbnail)
     group_prefab_row = ttk.Frame(side_panel)
     group_prefab_row.pack(fill='x', padx=5)
     for text, action in (
@@ -3148,6 +3209,7 @@ def launch(path):
         group_prefab_row_2, textvariable=group_prefab_rotation_var,
         values=('0°', '90°', '180°', '270°'), state='readonly', width=5)
     group_prefab_rotation_box.pack(side='left', padx=2)
+    group_prefab_rotation_box.bind('<<ComboboxSelected>>', draw_prefab_thumbnail)
     ttk.Button(group_prefab_row_2, text='Aperçu préfab',
                command=lambda: place_chosen_prefab(preview=True)
                ).pack(side='left', padx=2)
@@ -3161,6 +3223,7 @@ def launch(path):
               text='Survol validé vert/rouge · 1 clic = 1 Undo'
               ).pack(side='left', padx=3)
     refresh_group_prefabs()
+    draw_prefab_thumbnail()
     inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
     inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
     actor_focus = ttk.Button(side_panel, text='Modifier le personnage sélectionné',
