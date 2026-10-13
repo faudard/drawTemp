@@ -1057,7 +1057,7 @@ def launch(path):
         if inspected_tile is not None:
             text += (f'Surface : {inspected_tile.surface} | Décor : '
                      f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
-        for obj in mission.objects:
+        for obj in selected_objects:
             if obj['kind'] == 'defense':
                 text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
             if obj['kind'] == 'passage':
@@ -1083,7 +1083,9 @@ def launch(path):
                         text += '\n'.join(f'{r["unit"]}: {r["kind"]} {r["amount"]} {r["status"]} ({r["chance"]:.0%})' for r in forecast)
                     except RuleError as exc:
                         text += '\nCible : '+str(exc)
-            text += '\n\nUnités :\n'+'\n'.join(f'{u.name}: {u.hp} PV, {u.mp} MP, CT {u.ct}\n  {u.statuses}' for u in units)
+            if selected_units:
+                text += '\nÉtats sélectionnés :\n' + '\n'.join(
+                    f'{u.name}: {u.statuses}' for u in selected_units)
             journal.configure(state='normal')
             journal.delete('1.0','end')
             journal.insert('1.0','\n'.join(json.dumps(e,ensure_ascii=False) for e in battle.events[-100:]))
@@ -1093,20 +1095,10 @@ def launch(path):
             journal.configure(state='normal')
             journal.delete('1.0', 'end')
             journal.configure(state='disabled')
-            text += ('\nCarte : sélectionner une zone, Ctrl+C, choisir le point '
-                     'd’ancrage, Ctrl+V ou l’outil Collage.'
-                     f'\nCases sélectionnées : {len(selected_tiles)}'
-                     f' | Presse-papiers : {len(terrain_clipboard.offsets) if terrain_clipboard else 0}'
-                     '\nRotation/symétrie : modifier le modèle puis coller.'
-                     '\nGroupe : sélectionner les unités/objets et utiliser les flèches.'
-                     '\nStructures : rotation, point d’ancrage Coin/Centre/Porte.'
-                     '\nEntrée B : deuxième porte possible sur Maison ou Ruines.'
-                     '\nToitures : visibles hors des intérieurs sélectionnés/occupés.'
-                     '\nAperçu vert : emplacement libre ; rouge : interdit/hors carte.'
-                     '\nRemplissage : choisir un sol puis remplir une zone contiguë.'
-                     '\nPipette sol/décor : cliquer une case pour reprendre son pinceau.'
-                     '\nCouches : visibilité d’édition seulement ; règles inchangées.'
-                     '\nDonnées tactiques avancées : onglet JSON.')
+            text += (f'\nSélection : {len(selected_tiles)} case(s)\n'
+                     f'Presse-papiers : '
+                     f'{len(terrain_clipboard.offsets) if terrain_clipboard else 0} case(s)\n'
+                     'Aide détaillée : panneau Raccourcis et aide.')
         inspector.configure(state='normal')
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
