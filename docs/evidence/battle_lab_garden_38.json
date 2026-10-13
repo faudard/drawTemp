@@ -1,0 +1,930 @@
+{
+  "activations_ct": 409,
+  "class_decisions": {
+    "enemy/weapon:melee:act": 129,
+    "enemy/weapon:melee:end": 127,
+    "enemy/weapon:melee:item": 1,
+    "enemy/weapon:melee:move": 38,
+    "enemy/weapon:ranged:act": 79,
+    "enemy/weapon:ranged:disengage": 8,
+    "enemy/weapon:ranged:end": 82,
+    "enemy/weapon:ranged:move": 54,
+    "player/weapon:focus:act": 26,
+    "player/weapon:focus:end": 27,
+    "player/weapon:focus:item": 1,
+    "player/weapon:focus:move": 10,
+    "player/weapon:melee:act": 157,
+    "player/weapon:melee:end": 163,
+    "player/weapon:melee:item": 7,
+    "player/weapon:melee:move": 38
+  },
+  "class_survival": {
+    "enemy/weapon:melee": {
+      "alive": 5,
+      "rate": 0.3125,
+      "total": 16
+    },
+    "enemy/weapon:ranged": {
+      "alive": 6,
+      "rate": 0.75,
+      "total": 8
+    },
+    "player/weapon:focus": {
+      "alive": 1,
+      "rate": 0.125,
+      "total": 8
+    },
+    "player/weapon:melee": {
+      "alive": 2,
+      "rate": 0.125,
+      "total": 16
+    }
+  },
+  "commands_p50": 120,
+  "commands_p95": 132,
+  "commands_p99": 132,
+  "content_sha256": "7071731e91423eaf872cedfddbb0bc1ec7ebbd8224e98fcf6ee6c512353892fc",
+  "damage": {
+    "dealt:enemy": 2245,
+    "dealt:player": 1696,
+    "received:enemy": 1748,
+    "received:player": 2249
+  },
+  "decisions": {
+    "enemy:act": 208,
+    "enemy:disengage": 8,
+    "enemy:end": 209,
+    "enemy:item": 1,
+    "enemy:move": 92,
+    "player:act": 183,
+    "player:end": 190,
+    "player:item": 8,
+    "player:move": 48
+  },
+  "design_targets": {
+    "active_enemies": [
+      5,
+      10
+    ],
+    "measured_in_playtests": false,
+    "player_units": [
+      4,
+      6
+    ],
+    "standard_minutes": [
+      15,
+      30
+    ]
+  },
+  "events": {
+    "activation": 409,
+    "battle_end": 8,
+    "cast_failed": 2,
+    "charging": 14,
+    "counter": 16,
+    "damage": 278,
+    "disengage_ready": 8,
+    "disengaged": 8,
+    "downed": 45,
+    "end_turn": 399,
+    "engagement_entered": 48,
+    "engagement_left": 27,
+    "heal": 112,
+    "item": 9,
+    "message": 8,
+    "miss": 1,
+    "move": 140,
+    "mp_switch": 10,
+    "revive": 11,
+    "skill": 383,
+    "status": 117,
+    "status_expired": 99,
+    "trigger": 8
+  },
+  "healing_received": {
+    "enemy": 798,
+    "player": 868
+  },
+  "kind": "battle_lab",
+  "max_commands": 500,
+  "mission": "garden",
+  "outcomes": {
+    "defeat": 6,
+    "draw": 0,
+    "limit": 0,
+    "victory": 2
+  },
+  "possible_stalls": 0,
+  "reactions": {
+    "counter": 16
+  },
+  "rules_manifest": {
+    "behaviors": {
+      "tactical": "1"
+    },
+    "commands": {
+      "act": "1",
+      "charge": "1",
+      "disengage": "1",
+      "end": "1",
+      "interact": "1",
+      "item": "1",
+      "move": "1",
+      "prepare": "1",
+      "relay": "1",
+      "repair_siege": "1",
+      "siege_attack": "1"
+    },
+    "effects": {
+      "cleanse": "1",
+      "damage": "1",
+      "heal": "1",
+      "mp": "1",
+      "pull": "1",
+      "push": "1",
+      "revive": "1",
+      "status": "1",
+      "zone": "1"
+    },
+    "formulas": {
+      "damage": "1",
+      "hit_chance": "1",
+      "mitigation": "1"
+    },
+    "movements": {
+      "ignore_height": "1",
+      "move_mp_up": "1",
+      "move_plus_1": "1",
+      "move_plus_2": "1",
+      "none": "1",
+      "teleport": "1"
+    },
+    "objectives": {
+      "crown": "1",
+      "eliminate": "1",
+      "extract": "1",
+      "hold": "1",
+      "survive": "1"
+    },
+    "preparations": {
+      "brace": "1",
+      "guard": "1",
+      "intercept": "1",
+      "overwatch": "1"
+    },
+    "reactions": {
+      "auto_potion": "1",
+      "blade_grasp": "1",
+      "counter": "1",
+      "mp_switch": "1",
+      "none": "1",
+      "opportunity": "1",
+      "pursuit": "1"
+    },
+    "statuses": {
+      "dont_act": "1",
+      "dont_move": "1",
+      "guard": "1",
+      "haste": "1",
+      "poison": "1",
+      "protect": "1",
+      "regen": "1",
+      "shell": "1",
+      "silence": "1",
+      "sleep": "1",
+      "slow": "1",
+      "stop": "1"
+    },
+    "tactics": {
+      "crossfire": "1",
+      "encirclement": "1",
+      "pincer": "1",
+      "relay": "1"
+    },
+    "trigger_actions": {
+      "despawn": "1",
+      "hazard": "1",
+      "message": "1",
+      "queue_wave": "1",
+      "spawn": "1",
+      "status": "1",
+      "wave": "1"
+    },
+    "trigger_conditions": {
+      "defeated": "1",
+      "enter": "1",
+      "hp_below": "1",
+      "interact": "1",
+      "tick": "1",
+      "wave_capacity": "1"
+    },
+    "version": "1"
+  },
+  "runs": 8,
+  "samples": [
+    {
+      "activations_ct": 45,
+      "class_decisions": {
+        "enemy/weapon:melee:act": 12,
+        "enemy/weapon:melee:end": 12,
+        "enemy/weapon:melee:move": 2,
+        "enemy/weapon:ranged:act": 8,
+        "enemy/weapon:ranged:disengage": 3,
+        "enemy/weapon:ranged:end": 11,
+        "enemy/weapon:ranged:move": 6,
+        "player/weapon:focus:act": 7,
+        "player/weapon:focus:end": 8,
+        "player/weapon:focus:item": 1,
+        "player/weapon:focus:move": 1,
+        "player/weapon:melee:act": 13,
+        "player/weapon:melee:end": 13,
+        "player/weapon:melee:item": 1,
+        "player/weapon:melee:move": 9
+      },
+      "commands": 107,
+      "damage": {
+        "dealt:enemy": 257,
+        "dealt:player": 231,
+        "received:enemy": 247,
+        "received:player": 257
+      },
+      "decisions": {
+        "enemy:act": 20,
+        "enemy:disengage": 3,
+        "enemy:end": 23,
+        "enemy:move": 8,
+        "player:act": 20,
+        "player:end": 21,
+        "player:item": 2,
+        "player:move": 10
+      },
+      "digest": "f2aeec098534fd181a278c9a7950daa6cef7b723cf8ce72e97488580a1bc2741",
+      "events": {
+        "activation": 45,
+        "battle_end": 1,
+        "cast_failed": 1,
+        "charging": 1,
+        "counter": 1,
+        "damage": 33,
+        "disengage_ready": 3,
+        "disengaged": 3,
+        "downed": 5,
+        "end_turn": 44,
+        "engagement_entered": 5,
+        "engagement_left": 5,
+        "heal": 11,
+        "item": 2,
+        "message": 1,
+        "move": 18,
+        "mp_switch": 2,
+        "skill": 39,
+        "status": 10,
+        "status_expired": 8,
+        "trigger": 1
+      },
+      "healing_received": {
+        "enemy": 96,
+        "player": 136
+      },
+      "longest_no_progress_commands": 3,
+      "objective": {
+        "achieved": true,
+        "goal_occupied": false,
+        "hold_ticks": 0,
+        "kind": "eliminate",
+        "target_ticks": 100
+      },
+      "possible_stall": false,
+      "reactions": {
+        "counter": 1
+      },
+      "replay_verified": true,
+      "result": "victory",
+      "seed": 1,
+      "survival": {
+        "enemy/weapon:melee/baveux": false,
+        "enemy/weapon:melee/grincheux": false,
+        "enemy/weapon:ranged/comptable": false,
+        "player/weapon:focus/ziggy": false,
+        "player/weapon:melee/luma": false,
+        "player/weapon:melee/momo": true
+      },
+      "ticks": 96
+    },
+    {
+      "activations_ct": 52,
+      "class_decisions": {
+        "enemy/weapon:melee:act": 17,
+        "enemy/weapon:melee:end": 17,
+        "enemy/weapon:melee:move": 6,
+        "enemy/weapon:ranged:act": 11,
+        "enemy/weapon:ranged:end": 10,
+        "enemy/weapon:ranged:move": 7,
+        "player/weapon:focus:act": 1,
+        "player/weapon:focus:end": 1,
+        "player/weapon:focus:move": 1,
+        "player/weapon:melee:act": 22,
+        "player/weapon:melee:end": 23,
+        "player/weapon:melee:item": 1,
+        "player/weapon:melee:move": 3
+      },
+      "commands": 120,
+      "damage": {
+        "dealt:enemy": 300,
+        "dealt:player": 193,
+        "received:enemy": 199,
+        "received:player": 300
+      },
+      "decisions": {
+        "enemy:act": 28,
+        "enemy:end": 27,
+        "enemy:move": 13,
+        "player:act": 23,
+        "player:end": 24,
+        "player:item": 1,
+        "player:move": 4
+      },
+      "digest": "02bfa9b1a18c41b305cb04e977e9478da0894dd0593fc66888362b52a8b94494",
+      "events": {
+        "activation": 52,
+        "battle_end": 1,
+        "charging": 2,
+        "counter": 2,
+        "damage": 35,
+        "downed": 6,
+        "end_turn": 51,
+        "engagement_entered": 7,
+        "engagement_left": 3,
+        "heal": 15,
+        "item": 1,
+        "message": 1,
+        "move": 17,
+        "mp_switch": 1,
+        "revive": 2,
+        "skill": 50,
+        "status": 16,
+        "status_expired": 14,
+        "trigger": 1
+      },
+      "healing_received": {
+        "enemy": 97,
+        "player": 108
+      },
+      "longest_no_progress_commands": 7,
+      "objective": {
+        "achieved": false,
+        "goal_occupied": false,
+        "hold_ticks": 0,
+        "kind": "eliminate",
+        "target_ticks": 100
+      },
+      "possible_stall": false,
+      "reactions": {
+        "counter": 2
+      },
+      "replay_verified": true,
+      "result": "defeat",
+      "seed": 2,
+      "survival": {
+        "enemy/weapon:melee/baveux": false,
+        "enemy/weapon:melee/grincheux": true,
+        "enemy/weapon:ranged/comptable": true,
+        "player/weapon:focus/ziggy": false,
+        "player/weapon:melee/luma": false,
+        "player/weapon:melee/momo": false
+      },
+      "ticks": 95
+    },
+    {
+      "activations_ct": 52,
+      "class_decisions": {
+        "enemy/weapon:melee:act": 17,
+        "enemy/weapon:melee:end": 17,
+        "enemy/weapon:melee:move": 6,
+        "enemy/weapon:ranged:act": 11,
+        "enemy/weapon:ranged:end": 10,
+        "enemy/weapon:ranged:move": 7,
+        "player/weapon:focus:act": 1,
+        "player/weapon:focus:end": 1,
+        "player/weapon:focus:move": 1,
+        "player/weapon:melee:act": 22,
+        "player/weapon:melee:end": 23,
+        "player/weapon:melee:item": 1,
+        "player/weapon:melee:move": 3
+      },
+      "commands": 120,
+      "damage": {
+        "dealt:enemy": 300,
+        "dealt:player": 193,
+        "received:enemy": 199,
+        "received:player": 300
+      },
+      "decisions": {
+        "enemy:act": 28,
+        "enemy:end": 27,
+        "enemy:move": 13,
+        "player:act": 23,
+        "player:end": 24,
+        "player:item": 1,
+        "player:move": 4
+      },
+      "digest": "c397f7ef4e5c7628194ea10aa08799b01c5e82e940f5c9734f2fb381f030ac2f",
+      "events": {
+        "activation": 52,
+        "battle_end": 1,
+        "charging": 2,
+        "counter": 2,
+        "damage": 35,
+        "downed": 6,
+        "end_turn": 51,
+        "engagement_entered": 7,
+        "engagement_left": 3,
+        "heal": 15,
+        "item": 1,
+        "message": 1,
+        "move": 17,
+        "mp_switch": 1,
+        "revive": 2,
+        "skill": 50,
+        "status": 16,
+        "status_expired": 14,
+        "trigger": 1
+      },
+      "healing_received": {
+        "enemy": 97,
+        "player": 108
+      },
+      "longest_no_progress_commands": 5,
+      "objective": {
+        "achieved": false,
+        "goal_occupied": false,
+        "hold_ticks": 0,
+        "kind": "eliminate",
+        "target_ticks": 100
+      },
+      "possible_stall": false,
+      "reactions": {
+        "counter": 2
+      },
+      "replay_verified": true,
+      "result": "defeat",
+      "seed": 3,
+      "survival": {
+        "enemy/weapon:melee/baveux": false,
+        "enemy/weapon:melee/grincheux": true,
+        "enemy/weapon:ranged/comptable": true,
+        "player/weapon:focus/ziggy": false,
+        "player/weapon:melee/luma": false,
+        "player/weapon:melee/momo": false
+      },
+      "ticks": 95
+    },
+    {
+      "activations_ct": 52,
+      "class_decisions": {
+        "enemy/weapon:melee:act": 17,
+        "enemy/weapon:melee:end": 17,
+        "enemy/weapon:melee:move": 6,
+        "enemy/weapon:ranged:act": 11,
+        "enemy/weapon:ranged:end": 10,
+        "enemy/weapon:ranged:move": 7,
+        "player/weapon:focus:act": 1,
+        "player/weapon:focus:end": 1,
+        "player/weapon:focus:move": 1,
+        "player/weapon:melee:act": 22,
+        "player/weapon:melee:end": 23,
+        "player/weapon:melee:item": 1,
+        "player/weapon:melee:move": 3
+      },
+      "commands": 120,
+      "damage": {
+        "dealt:enemy": 300,
+        "dealt:player": 172,
+        "received:enemy": 178,
+        "received:player": 300
+      },
+      "decisions": {
+        "enemy:act": 28,
+        "enemy:end": 27,
+        "enemy:move": 13,
+        "player:act": 23,
+        "player:end": 24,
+        "player:item": 1,
+        "player:move": 4
+      },
+      "digest": "43ff653fa190532184cd9c9d8f6d1172906183ace1ea6db83ad4ef35ab6c19f8",
+      "events": {
+        "activation": 52,
+        "battle_end": 1,
+        "charging": 2,
+        "counter": 1,
+        "damage": 34,
+        "downed": 6,
+        "end_turn": 51,
+        "engagement_entered": 7,
+        "engagement_left": 3,
+        "heal": 15,
+        "item": 1,
+        "message": 1,
+        "move": 17,
+        "mp_switch": 1,
+        "revive": 2,
+        "skill": 50,
+        "status": 16,
+        "status_expired": 14,
+        "trigger": 1
+      },
+      "healing_received": {
+        "enemy": 97,
+        "player": 108
+      },
+      "longest_no_progress_commands": 7,
+      "objective": {
+        "achieved": false,
+        "goal_occupied": false,
+        "hold_ticks": 0,
+        "kind": "eliminate",
+        "target_ticks": 100
+      },
+      "possible_stall": false,
+      "reactions": {
+        "counter": 1
+      },
+      "replay_verified": true,
+      "result": "defeat",
+      "seed": 4,
+      "survival": {
+        "enemy/weapon:melee/baveux": false,
+        "enemy/weapon:melee/grincheux": true,
+        "enemy/weapon:ranged/comptable": true,
+        "player/weapon:focus/ziggy": false,
+        "player/weapon:melee/luma": false,
+        "player/weapon:melee/momo": false
+      },
+      "ticks": 95
+    },
+    {
+      "activations_ct": 50,
+      "class_decisions": {
+        "enemy/weapon:melee:act": 16,
+        "enemy/weapon:melee:end": 15,
+        "enemy/weapon:melee:move": 4,
+        "enemy/weapon:ranged:act": 8,
+        "enemy/weapon:ranged:disengage": 1,
+        "enemy/weapon:ranged:end": 9,
+        "enemy/weapon:ranged:move": 5,
+        "player/weapon:focus:act": 11,
+        "player/weapon:focus:end": 11,
+        "player/weapon:focus:move": 1,
+        "player/weapon:melee:act": 14,
+        "player/weapon:melee:end": 14,
+        "player/weapon:melee:move": 7
+      },
+      "commands": 116,
+      "damage": {
+        "dealt:enemy": 310,
+        "dealt:player": 270,
+        "received:enemy": 276,
+        "received:player": 310
+      },
+      "decisions": {
+        "enemy:act": 24,
+        "enemy:disengage": 1,
+        "enemy:end": 24,
+        "enemy:move": 9,
+        "player:act": 25,
+        "player:end": 25,
+        "player:move": 8
+      },
+      "digest": "5d946d06c78a34888618114db489ab579e591bb69ad7ce3ec50e4f502477b68f",
+      "events": {
+        "activation": 50,
+        "battle_end": 1,
+        "cast_failed": 1,
+        "charging": 1,
+        "counter": 1,
+        "damage": 37,
+        "disengage_ready": 1,
+        "disengaged": 1,
+        "downed": 4,
+        "end_turn": 49,
+        "engagement_entered": 8,
+        "engagement_left": 6,
+        "heal": 14,
+        "message": 1,
+        "miss": 1,
+        "move": 17,
+        "mp_switch": 1,
+        "skill": 48,
+        "status": 13,
+        "status_expired": 10,
+        "trigger": 1
+      },
+      "healing_received": {
+        "enemy": 128,
+        "player": 150
+      },
+      "longest_no_progress_commands": 4,
+      "objective": {
+        "achieved": false,
+        "goal_occupied": false,
+        "hold_ticks": 0,
+        "kind": "eliminate",
+        "target_ticks": 100
+      },
+      "possible_stall": false,
+      "reactions": {
+        "counter": 1
+      },
+      "replay_verified": true,
+      "result": "defeat",
+      "seed": 5,
+      "survival": {
+        "enemy/weapon:melee/baveux": false,
+        "enemy/weapon:melee/grincheux": true,
+        "enemy/weapon:ranged/comptable": true,
+        "player/weapon:focus/ziggy": false,
+        "player/weapon:melee/luma": false,
+        "player/weapon:melee/momo": false
+      },
+      "ticks": 80
+    },
+    {
+      "activations_ct": 56,
+      "class_decisions": {
+        "enemy/weapon:melee:act": 16,
+        "enemy/weapon:melee:end": 15,
+        "enemy/weapon:melee:move": 4,
+        "enemy/weapon:ranged:act": 9,
+        "enemy/weapon:ranged:disengage": 3,
+        "enemy/weapon:ranged:end": 12,
+        "enemy/weapon:ranged:move": 10,
+        "player/weapon:focus:act": 3,
+        "player/weapon:focus:end": 3,
+        "player/weapon:focus:move": 3,
+        "player/weapon:melee:act": 23,
+        "player/weapon:melee:end": 24,
+        "player/weapon:melee:item": 1,
+        "player/weapon:melee:move": 6
+      },
+      "commands": 132,
+      "damage": {
+        "dealt:enemy": 256,
+        "dealt:player": 235,
+        "received:enemy": 238,
+        "received:player": 260
+      },
+      "decisions": {
+        "enemy:act": 25,
+        "enemy:disengage": 3,
+        "enemy:end": 27,
+        "enemy:move": 14,
+        "player:act": 26,
+        "player:end": 27,
+        "player:item": 1,
+        "player:move": 9
+      },
+      "digest": "04a74e37ff6835b23ef9e4c001ca3e647f72b8469cfb4dcce440d1b72806cb4e",
+      "events": {
+        "activation": 56,
+        "battle_end": 1,
+        "charging": 2,
+        "counter": 2,
+        "damage": 36,
+        "disengage_ready": 3,
+        "disengaged": 3,
+        "downed": 6,
+        "end_turn": 54,
+        "engagement_entered": 4,
+        "engagement_left": 3,
+        "heal": 15,
+        "item": 1,
+        "message": 1,
+        "move": 23,
+        "mp_switch": 1,
+        "revive": 2,
+        "skill": 50,
+        "status": 15,
+        "status_expired": 14,
+        "trigger": 1
+      },
+      "healing_received": {
+        "enemy": 87,
+        "player": 108
+      },
+      "longest_no_progress_commands": 5,
+      "objective": {
+        "achieved": true,
+        "goal_occupied": false,
+        "hold_ticks": 0,
+        "kind": "eliminate",
+        "target_ticks": 100
+      },
+      "possible_stall": false,
+      "reactions": {
+        "counter": 2
+      },
+      "replay_verified": true,
+      "result": "victory",
+      "seed": 6,
+      "survival": {
+        "enemy/weapon:melee/baveux": false,
+        "enemy/weapon:melee/grincheux": false,
+        "enemy/weapon:ranged/comptable": false,
+        "player/weapon:focus/ziggy": true,
+        "player/weapon:melee/luma": true,
+        "player/weapon:melee/momo": false
+      },
+      "ticks": 108
+    },
+    {
+      "activations_ct": 50,
+      "class_decisions": {
+        "enemy/weapon:melee:act": 17,
+        "enemy/weapon:melee:end": 17,
+        "enemy/weapon:melee:item": 1,
+        "enemy/weapon:melee:move": 4,
+        "enemy/weapon:ranged:act": 10,
+        "enemy/weapon:ranged:disengage": 1,
+        "enemy/weapon:ranged:end": 10,
+        "enemy/weapon:ranged:move": 5,
+        "player/weapon:focus:act": 1,
+        "player/weapon:focus:end": 1,
+        "player/weapon:focus:move": 1,
+        "player/weapon:melee:act": 19,
+        "player/weapon:melee:end": 20,
+        "player/weapon:melee:item": 1,
+        "player/weapon:melee:move": 4
+      },
+      "commands": 112,
+      "damage": {
+        "dealt:enemy": 222,
+        "dealt:player": 209,
+        "received:enemy": 212,
+        "received:player": 222
+      },
+      "decisions": {
+        "enemy:act": 27,
+        "enemy:disengage": 1,
+        "enemy:end": 27,
+        "enemy:item": 1,
+        "enemy:move": 9,
+        "player:act": 20,
+        "player:end": 21,
+        "player:item": 1,
+        "player:move": 5
+      },
+      "digest": "feb881cb3b0fcbdb590a68c2aea6bf687a9faa36b955b4fca7dca8d341f49188",
+      "events": {
+        "activation": 50,
+        "battle_end": 1,
+        "charging": 2,
+        "counter": 5,
+        "damage": 33,
+        "disengage_ready": 1,
+        "disengaged": 1,
+        "downed": 6,
+        "end_turn": 48,
+        "engagement_entered": 3,
+        "engagement_left": 1,
+        "heal": 12,
+        "item": 2,
+        "message": 1,
+        "move": 14,
+        "mp_switch": 2,
+        "revive": 1,
+        "skill": 46,
+        "status": 15,
+        "status_expired": 11,
+        "trigger": 1
+      },
+      "healing_received": {
+        "enemy": 99,
+        "player": 42
+      },
+      "longest_no_progress_commands": 9,
+      "objective": {
+        "achieved": false,
+        "goal_occupied": false,
+        "hold_ticks": 0,
+        "kind": "eliminate",
+        "target_ticks": 100
+      },
+      "possible_stall": false,
+      "reactions": {
+        "counter": 5
+      },
+      "replay_verified": true,
+      "result": "defeat",
+      "seed": 7,
+      "survival": {
+        "enemy/weapon:melee/baveux": false,
+        "enemy/weapon:melee/grincheux": false,
+        "enemy/weapon:ranged/comptable": true,
+        "player/weapon:focus/ziggy": false,
+        "player/weapon:melee/luma": false,
+        "player/weapon:melee/momo": false
+      },
+      "ticks": 90
+    },
+    {
+      "activations_ct": 52,
+      "class_decisions": {
+        "enemy/weapon:melee:act": 17,
+        "enemy/weapon:melee:end": 17,
+        "enemy/weapon:melee:move": 6,
+        "enemy/weapon:ranged:act": 11,
+        "enemy/weapon:ranged:end": 10,
+        "enemy/weapon:ranged:move": 7,
+        "player/weapon:focus:act": 1,
+        "player/weapon:focus:end": 1,
+        "player/weapon:focus:move": 1,
+        "player/weapon:melee:act": 22,
+        "player/weapon:melee:end": 23,
+        "player/weapon:melee:item": 1,
+        "player/weapon:melee:move": 3
+      },
+      "commands": 120,
+      "damage": {
+        "dealt:enemy": 300,
+        "dealt:player": 193,
+        "received:enemy": 199,
+        "received:player": 300
+      },
+      "decisions": {
+        "enemy:act": 28,
+        "enemy:end": 27,
+        "enemy:move": 13,
+        "player:act": 23,
+        "player:end": 24,
+        "player:item": 1,
+        "player:move": 4
+      },
+      "digest": "fef750822ef291e87d1413d02e78242d68dfc0372d1daa8bc7d0f35bc908819d",
+      "events": {
+        "activation": 52,
+        "battle_end": 1,
+        "charging": 2,
+        "counter": 2,
+        "damage": 35,
+        "downed": 6,
+        "end_turn": 51,
+        "engagement_entered": 7,
+        "engagement_left": 3,
+        "heal": 15,
+        "item": 1,
+        "message": 1,
+        "move": 17,
+        "mp_switch": 1,
+        "revive": 2,
+        "skill": 50,
+        "status": 16,
+        "status_expired": 14,
+        "trigger": 1
+      },
+      "healing_received": {
+        "enemy": 97,
+        "player": 108
+      },
+      "longest_no_progress_commands": 7,
+      "objective": {
+        "achieved": false,
+        "goal_occupied": false,
+        "hold_ticks": 0,
+        "kind": "eliminate",
+        "target_ticks": 100
+      },
+      "possible_stall": false,
+      "reactions": {
+        "counter": 2
+      },
+      "replay_verified": true,
+      "result": "defeat",
+      "seed": 8,
+      "survival": {
+        "enemy/weapon:melee/baveux": false,
+        "enemy/weapon:melee/grincheux": true,
+        "enemy/weapon:ranged/comptable": true,
+        "player/weapon:focus/ziggy": false,
+        "player/weapon:melee/luma": false,
+        "player/weapon:melee/momo": false
+      },
+      "ticks": 95
+    }
+  ],
+  "schema": 1,
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "ticks_p50": 95,
+  "ticks_p95": 108,
+  "ticks_p99": 108,
+  "victory_rate": 0.25
+}

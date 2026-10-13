@@ -54,6 +54,8 @@ class StudioPanels:
         self.cinematic_studio = CinematicStudio(self, notebook)
         from .studio_audio import AudioStudio
         self.audio_studio = AudioStudio(self, notebook)
+        from .studio_battle_lab import BattleLabStudio
+        self.battle_lab = BattleLabStudio(self, notebook)
         self._last_mission_signature=None
         self.reload_project()
         self.refresh()
@@ -724,3 +726,4 @@ class StudioPanels:
         self.audio_studio.refresh()
         self.workspace.refresh()
         self.world_studio.refresh()
+        self.battle_lab.refresh()

@@ -38,6 +38,10 @@ jobs:
           python -m examples.world_map_3724a --output "${{ runner.temp }}/world-3724a.json"
           python -m sporebound validate --content "${{ runner.temp }}/world-3724a.json" --project "${{ runner.temp }}/world-3724a.game.json"
       - run: python -m unittest discover -s tests_standalone -v
+      - name: Battle Lab 3.8 CLI report and paired deterministic replay gate
+        run: |
+          python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --report battle_lab_ci.json
+          python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --baseline battle_lab_ci.json
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
         run: python -m examples.tactical_rpg3_castle
@@ -86,6 +90,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_studio_gui.py -v
+      - name: Battle Lab 3.8 Tk tab and seeded worker gate
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_battle_lab_38_gui.py -v
       - name: Exercise 2.6 Audio Studio import and sound cues
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -394,4 +402,20 @@ jobs:
         with:
           name: player-canvas-379-ubuntu
           path: ${{ runner.temp }}/player-canvas-379-stress.json
+          if-no-files-found: error
+
+  balance-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Gate 3.8 difficulty, duration and determinism against pinned garden baseline
+        run: python -m sporebound battle-lab --mission garden --seed 1 --runs 8 --limit 500 --baseline docs/evidence/battle_lab_garden_38.json --max-victory-drop 0.20 --max-p95-growth 0.30 --max-new-limits 0 --report battle_lab_garden_38.json
+      - name: Preserve balance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: battle-lab-garden-38
+          path: battle_lab_garden_38.json
           if-no-files-found: error

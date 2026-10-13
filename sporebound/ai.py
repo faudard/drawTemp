@@ -218,11 +218,19 @@ def play_activation(battle):
         battle.execute(choose_command(battle))
 
 
-def simulate(battle, max_commands=1000):
+def simulate(battle, max_commands=1000, *, observer=None):
+    """Canonical simulation loop; an optional read-only hook captures AI choices.
+
+    The hook receives the pre-command Battle and the chosen command. It does
+    not modify the replay log, engine events, RNG or outcome semantics.
+    """
     for _ in range(max_commands):
         if battle.result:
             break
-        battle.execute(choose_command(battle))
+        command = choose_command(battle)
+        if observer is not None:
+            observer(battle, command)
+        battle.execute(command)
     return {"result": battle.result or "limit", "ticks": battle.tick,
             "commands": len(battle.commands), "digest": battle.digest()}
 
