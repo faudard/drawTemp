@@ -1039,7 +1039,9 @@ def launch(path):
                 canvas, board, mission, units, cell_size=tile_size,
                 layers={**{name: var.get() for name, var in layer_vars.items()},
                         'Intérieurs': interior_var.get(),
-                        'Étage actif': floor_var.get() if interior_var.get() and not battle else 0},
+                        'Étage actif': (battle.unit_levels.get(battle.active_id, 0)
+                                        if battle and battle.active_id else
+                                        floor_var.get() if interior_var.get() else 0)},
                 selected_cell=selected_cell, selected_tiles=selected_tiles,
                 reachable=live.reachable if live else (),
                 danger=live.danger if live else (),
@@ -1047,7 +1049,8 @@ def launch(path):
                 atlas=iso_atlas, prop_atlas=iso_props,
                 building_atlas=building_atlas,
                 fortification_atlas=fortification_atlas,
-                actor_atlas=actor_atlas)
+                actor_atlas=actor_atlas,
+                unit_levels=battle.unit_levels if battle else None)
         else:
             iso_geometry = None
             canvas.delete('all')
