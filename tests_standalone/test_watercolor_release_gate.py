@@ -50,6 +50,27 @@ class WatercolorReleaseGateTests(unittest.TestCase):
             self.assertEqual(result["animations"], 15)
             self.assertEqual(sum(result["groups"].values()), 88)
 
+    def test_rejects_corrupt_crc_and_false_provenance_hash(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index, registry = fixture()
+            for defect in ('crc', 'hash'):
+                with self.subTest(defect=defect):
+                    archive = root / (defect + '.zip')
+                    if defect == 'hash':
+                        index['sprites'][0]['sha256'] = '0' * 64
+                    with ZipFile(archive, 'w') as out:
+                        out.writestr(PREFIX + 'index.json', json.dumps(index))
+                        out.writestr(PREFIX + 'registry.json', json.dumps(registry))
+                        for i, sprite in enumerate(index['sprites']):
+                            data = bytearray(png())
+                            if defect == 'crc' and i == 0:
+                                data[-1] ^= 1
+                            out.writestr(PREFIX + sprite['path'], bytes(data))
+                    with self.assertRaisesRegex(ValueError,
+                                                'CRC' if defect == 'crc' else 'SHA-256'):
+                        verify_archive(archive)
+
     def test_absent_pngs_report_pending_only_when_explicitly_allowed(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
