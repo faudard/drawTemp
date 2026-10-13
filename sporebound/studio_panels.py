@@ -97,7 +97,6 @@ class StudioPanels:
         self._show_campaign()
         self._last_mission_signature = None
         self.project_status.config(text='Historique Studio restauré (contenu + projet).')
-        self.refresh()
 
     def undo_global(self):
         self._restore_history()
