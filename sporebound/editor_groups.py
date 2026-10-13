@@ -162,6 +162,44 @@ def add_selection_to_group(data, mission_id, group_id, cells):
     return _validate_document(updated)
 
 
+
+def remove_selection_from_group(data, mission_id, group_id, cells):
+    """Unlink selected items without deleting the underlying map content."""
+    updated = deepcopy(data)
+    group = _group(_groups(updated, mission_id), group_id)
+    selected = group_selection(updated, mission_id, cells)
+    for field, values in selected.items():
+        discard = {tuple(c) for c in values} if field == 'cells' else set(values)
+        group[field] = [value for value in group[field]
+                        if (tuple(value) if field == 'cells' else value)
+                        not in discard]
+    return _validate_document(updated)
+
+
+def transfer_selection_to_group(data, mission_id, group_id, cells):
+    """Move direct ownership to the chosen group (one transaction)."""
+    updated = deepcopy(data)
+    groups = _groups(updated, mission_id)
+    target = _group(groups, group_id)
+    selected = group_selection(updated, mission_id, cells)
+    for group in groups:
+        if group is target:
+            continue
+        for field, values in selected.items():
+            discard = ({tuple(c) for c in values} if field == 'cells'
+                       else set(values))
+            group[field] = [value for value in group[field]
+                            if (tuple(value) if field == 'cells' else value)
+                            not in discard]
+    for field, values in selected.items():
+        present = ({tuple(c) for c in target[field]} if field == 'cells'
+                   else set(target[field]))
+        target[field].extend(value for value in values
+                             if (tuple(value) if field == 'cells' else value)
+                             not in present)
+    return _validate_document(updated)
+
+
 def rename_editor_group(data, mission_id, group_id, name):
     updated = deepcopy(data)
     _group(_groups(updated, mission_id), group_id)['name'] = name
