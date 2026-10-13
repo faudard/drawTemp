@@ -1124,6 +1124,13 @@ def launch(path):
                          f' | {len(room.walls)} murs'
                          f' | {len(room.furnishings)} décors'
                          f' | entrée {"visible" if room.doors else "obstruée"}\n')
+                floors = [f for f in mission.interior_floors
+                          if f['structure_id'] == building.id]
+                if floors:
+                    text += ('Plateaux visuels (non jouables) : '
+                             + ', '.join(f'N{f["level"]} ({len(f["tiles"])} cases)'
+                                         for f in sorted(floors, key=lambda f: f['level']))
+                             + '\n')
         for obj in mission.objects:
             if obj['kind'] == 'defense':
                 text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
@@ -1189,7 +1196,7 @@ def launch(path):
     ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=15,
                  values=['Pinceau','Rectangle','Sélection','Collage',
                          'Remplissage','Pipette sol','Pipette décor',
-                         'Structure']).pack(side='left')
+                         'Structure','Étage intérieur']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -1314,6 +1321,29 @@ def launch(path):
                  values=('Entrée A','Entrée B')).pack(side='left',padx=2)
     ttk.Label(structure_options,
               text='Entrée B : Maison/Ruines seulement ; masquage automatique des toits en édition.').pack(side='left',padx=8)
+    floor_controls = ttk.Frame(root)
+    floor_controls.pack(fill='x', padx=5)
+    ttk.Label(floor_controls, text='Étage supérieur (visuel) :').pack(side='left',padx=3)
+    floor_combo = ttk.Combobox(floor_controls, textvariable=floor_var,
+                               state='readonly', width=3,
+                               values=tuple(range(1, MAX_INTERIOR_LEVEL+1)))
+    floor_combo.pack(side='left')
+    floor_combo.bind('<<ComboboxSelected>>', lambda _e: refresh())
+    ttk.Button(floor_controls, text='Créer',
+               command=create_interior_level).pack(side='left',padx=2)
+    ttk.Button(floor_controls, text='Supprimer',
+               command=remove_interior_level).pack(side='left',padx=2)
+    ttk.Label(floor_controls, text='Opération').pack(side='left',padx=3)
+    ttk.Combobox(floor_controls, textvariable=floor_action_var, state='readonly',
+                 width=10, values=('Sol','Mobilier','Trou','Restaurer')).pack(side='left')
+    ttk.Label(floor_controls, text='Sol').pack(side='left',padx=3)
+    ttk.Combobox(floor_controls, textvariable=floor_surface_var, state='readonly',
+                 width=8, values=sorted(FLOOR_SURFACES)).pack(side='left')
+    ttk.Label(floor_controls, text='Objet').pack(side='left',padx=3)
+    ttk.Combobox(floor_controls, textvariable=floor_feature_var, state='readonly',
+                 width=9, values=sorted(FLOOR_FEATURES)).pack(side='left')
+    ttk.Button(floor_controls, text='Peindre étage',
+               command=select_interior_paint).pack(side='left',padx=4)
     advanced_controls = ttk.Frame(root)
     advanced_controls.pack(fill='x', padx=5)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
