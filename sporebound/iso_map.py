@@ -355,9 +355,10 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     from .iso_architecture import draw_architecture
     if retained:
         canvas.begin_group('architecture')
-    draw_architecture(canvas, geo, board, units, selected_cell, layers,
-                      atlas=building_atlas, scenery_atlas=fortification_atlas,
-                      poses=poses, structures=getattr(mission, 'structures', ()))
+    geo.architecture_instances = draw_architecture(
+        canvas, geo, board, units, selected_cell, layers,
+        atlas=building_atlas, scenery_atlas=fortification_atlas,
+        poses=poses, structures=getattr(mission, 'structures', ()))
     return geo
 
 
