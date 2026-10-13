@@ -29,6 +29,10 @@ class IsoObjectAtlas:
         key = kind, cell_size
         if key in self._cache:
             return self._cache[key]
+        # Headless renderer tests use a fake Canvas without a Tk interpreter.
+        # Keep vector fallback instead of creating a PhotoImage on that mock.
+        if not callable(getattr(getattr(self.canvas, 'tk', None), 'call', None)):
+            return None
         try:
             import tkinter as tk
         except ImportError:
