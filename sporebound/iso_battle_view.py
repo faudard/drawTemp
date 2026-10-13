@@ -222,6 +222,7 @@ class IsoBattleCanvas:
         self._actor_sprite_states = ()
         self.terrain._tiles.clear()
         self.props.clear_cache()
+        self.objects.clear_cache()
         self.buildings.clear_cache()
         self.fortifications.clear_cache()
         self.actors.clear_cache()
