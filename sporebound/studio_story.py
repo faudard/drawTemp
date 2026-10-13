@@ -107,6 +107,15 @@ class StoryEditor:
             rf,4,'Siège / événement',choices=[])
         self.strategic_scene,self.strategic_scene_box=self._field(
             rf,5,'Scène après activation',choices=[])
+        self.tactical_key,self.tactical_key_box=self._field(
+            rf,6,'Mission / trigger',choices=[])
+        self.tactical_scene,self.tactical_scene_box=self._field(
+            rf,7,'Dialogue pendant combat',choices=[])
+        self.tactical_key_box.bind(
+            '<<ComboboxSelected>>',
+            lambda _event: self.tactical_scene.set(
+                self.owner.project.story.get('during_tactical_event', {}).get(
+                    self.tactical_key.get(), '')))
         self.strategic_key_box.bind(
             '<<ComboboxSelected>>',
             lambda _event: self.strategic_scene.set(
@@ -120,6 +129,9 @@ class StoryEditor:
         self._button(line,'Cinématique de cette scène…',self.open_scene_cinematic)
         self._button(line,'Lier événement stratégique',self.set_strategic_scene)
         self._button(line,'Délier événement',lambda:self.set_strategic_scene(clear=True))
+        self._button(line,'Lier dialogue tactique',self.set_tactical_scene)
+        self._button(line,'Délier dialogue tactique',
+                     lambda:self.set_tactical_scene(clear=True))
         ttk.Label(routes,text='Sur une mission avec dialogue de victoire, seul le choix narratif débloque la suite (et non tous les liens classiques).',
                   wraplength=950).pack(anchor='w',padx=5,pady=3)
 
@@ -342,6 +354,14 @@ class StoryEditor:
             project, content, siege, node,
             '' if clear else self.strategic_scene.get()))
 
+    def set_tactical_scene(self, clear=False):
+        key = self.tactical_key.get()
+        require(key.count('/') == 1, 'Choisir un événement tactique.')
+        mission, event = key.split('/', 1)
+        self._apply(lambda project, content: edit.set_tactical_scene(
+            project, content, mission, event,
+            '' if clear else self.tactical_scene.get()))
+
     def open_scene_cinematic(self):
         """Navigate to the authoring timeline of the selected narrative scene."""
         scene_id = self.scene_id
@@ -403,6 +423,7 @@ class StoryEditor:
         self.entry_scene_box['values']=['',*scene_ids]
         self.after_scene_box['values']=['',*scene_ids]
         self.strategic_scene_box['values']=['',*scene_ids]
+        self.tactical_scene_box['values']=['',*scene_ids]
         strategic_keys = [
             siege['id'] + '/' + event['id']
             for siege in self.owner.project.sieges
@@ -413,6 +434,16 @@ class StoryEditor:
             self.strategic_key.set(strategic_keys[0] if strategic_keys else '')
         linked = self.owner.project.story.get('after_strategic_event', {})
         self.strategic_scene.set(linked.get(self.strategic_key.get(), ''))
+        tactical_keys = [
+            mission['id'] + '/' + event['id']
+            for mission in self.owner.doc().data['missions']
+            for event in mission.get('triggers', [])
+        ]
+        self.tactical_key_box['values'] = tactical_keys
+        if self.tactical_key.get() not in tactical_keys:
+            self.tactical_key.set(tactical_keys[0] if tactical_keys else '')
+        tactical = self.owner.project.story.get('during_tactical_event', {})
+        self.tactical_scene.set(tactical.get(self.tactical_key.get(), ''))
         self.entry_campaign_box['values']=[row['id'] for row in self.owner.project.campaigns]
         self.after_mission_box['values']=[row['id'] for row in self.owner.doc().data['missions']]
         self.effect_mission_box['values']=[row['id'] for row in self.owner.doc().data['missions']]
