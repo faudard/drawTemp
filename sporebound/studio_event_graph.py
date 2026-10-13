@@ -498,6 +498,8 @@ class EventGraphStudio:
         for index, action in enumerate(context['actions']):
             prefix = '→' if index == self.action_index else '·'
             lines.append(f" {prefix} {index + 1}. {action}")
+        lines.append('Dialogue déclenché pendant la bataille : ' +
+                     (context['tactical_scene_id'] or 'aucun'))
         lines.append('Scène après victoire (mission) : ' +
                      (context['scene_id'] or 'aucune'))
         clips = context['cinematics']
@@ -535,7 +537,8 @@ class EventGraphStudio:
         self.create_cinematic_button.config(
             state='normal' if self.context else 'disabled')
         self.story_button.config(
-            state='normal' if self.context and self.context['scene_id']
+            state='normal' if self.context and (
+                self.context['tactical_scene_id'] or self.context['scene_id'])
             else 'disabled')
         clips = self.context['cinematics'] if self.context else []
         labels = [c['id'] + ' — ' + c['stage'] for c in clips]
@@ -588,9 +591,12 @@ class EventGraphStudio:
         self.notebook.select(studio.tab)
 
     def open_linked_story(self):
-        require(self.context is not None and bool(self.context['scene_id']),
-                'Aucune scène narrative liée à cette mission')
-        self.owner.story_editor.select_graph_target(self.context['scene_id'])
+        require(self.context is not None and (
+            self.context['tactical_scene_id'] or self.context['scene_id']),
+            'Aucune scène narrative liée à cet événement ou mission')
+        target = (self.context['tactical_scene_id'] or
+                  self.context['scene_id'])
+        self.owner.story_editor.select_graph_target(target)
 
     def open_linked_cinematic(self):
         require(self.context is not None and bool(self.context['cinematics']),

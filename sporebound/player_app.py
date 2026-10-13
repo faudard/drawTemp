@@ -317,6 +317,14 @@ class PlayerApplication:
         session = self.player.session
         if session is None:
             self.title_screen()
+        elif session.tactical_story_pending:
+            # Story UI is modal over the current Battle, not a campaign screen.
+            self._clear()
+            self._heading("Décision pendant la bataille")
+            self._narrative_scene(
+                session.tactical_scene(), choices=session.tactical_choices(),
+                on_choice=lambda cid: self._change(
+                    lambda: self.player.choose_tactical_story_option(cid)))
         elif session.mode == "fronts":
             self.battle_screen()
         elif session.mode == "battle":
@@ -533,7 +541,7 @@ class PlayerApplication:
             self.root.bind("e", lambda event: self._safe(
                 lambda: self._exploration_interact(nearest[0])))
 
-    def _narrative_scene(self, scene):
+    def _narrative_scene(self, scene, *, choices=None, on_choice=None):
         panel = self.ttk.LabelFrame(self.view, text=scene["title"], padding=20)
         panel.pack(fill="both", expand=True, padx=60, pady=16)
         if scene["id"].startswith("sc_p0_"):
@@ -569,11 +577,15 @@ class PlayerApplication:
             else:
                 self._typewriter_job = None
         reveal()
-        for choice in self.player.session.available_choices():
+        if choices is None:
+            choices = self.player.session.available_choices()
+        if on_choice is None:
+            on_choice = lambda cid: self._change(
+                lambda: self.player.choose_story_option(cid))
+        for choice in choices:
             self._button(panel, choice["label"],
-                         lambda cid=choice["id"]: self._change(
-                             lambda: self.player.choose_story_option(cid))).pack(
-                                 fill="x", padx=30, pady=4)
+                         lambda cid=choice["id"]: on_choice(cid)).pack(
+                             fill="x", padx=30, pady=4)
 
     def front_setup(self, available):
         self._clear()

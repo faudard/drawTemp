@@ -101,7 +101,7 @@ def validate_story(raw, content, campaigns):
     if not raw:
         return
     require(set(raw) <= {'scenes', 'entry_scenes', 'after_mission',
-                         'after_strategic_event'}, 'Unknown story field')
+                         'after_strategic_event', 'during_tactical_event'}, 'Unknown story field')
     scenes = raw.get('scenes')
     require(isinstance(scenes, list) and bool(scenes), 'Story requires scenes')
     ids, edges = set(), {}
@@ -148,9 +148,17 @@ def validate_story(raw, content, campaigns):
     entries = raw.get('entry_scenes', {})
     outcomes = raw.get('after_mission', {})
     strategic = raw.get('after_strategic_event', {})
+    tactical = raw.get('during_tactical_event', {})
     require(isinstance(entries, dict) and isinstance(outcomes, dict)
-            and isinstance(strategic, dict) and len(strategic) <= 128,
+            and isinstance(strategic, dict) and len(strategic) <= 128
+            and isinstance(tactical, dict) and len(tactical) <= 128,
             'Story links must be bounded objects')
+    # Only authored and validated tactical triggers can interrupt combat.
+    tactical_refs = {f"{mission.id}/{event['id']}"
+                     for mission in content.missions.values()
+                     for event in mission.triggers}
+    require(set(tactical) <= tactical_refs,
+            'Unknown tactical narrative trigger')
     for key in strategic:
         require(isinstance(key, str) and key.count('/') == 1,
                 'Strategic story link requires siege/node id')
@@ -160,6 +168,7 @@ def validate_story(raw, content, campaigns):
     require(set(entries) <= campaign_ids, 'Unknown narrative campaign')
     require(set(outcomes) <= set(content.missions), 'Unknown narrative mission')
     for ref in [*entries.values(), *outcomes.values(), *strategic.values(),
+                *tactical.values(),
                 *(dest for links in edges.values() for dest in links)]:
         require(ref in ids, f'Unknown narrative scene: {ref}')
     # No scene can cause unbounded automatic/interactive narrative loops.
@@ -205,6 +214,7 @@ class StoryBook:
         self.entry = dict(raw.get('entry_scenes', {}))
         self.after = dict(raw.get('after_mission', {}))
         self.after_strategic_event = dict(raw.get('after_strategic_event', {}))
+        self.during_tactical_event = dict(raw.get('during_tactical_event', {}))
         self.digest = (hashlib.sha256(json.dumps(raw, sort_keys=True,
                        ensure_ascii=False).encode('utf-8')).hexdigest() if raw else '')
 
