@@ -216,23 +216,30 @@ def launch(path):
     root = tk.Tk()
     root.title('Sporebound — Atelier gameplay autonome')
     root.geometry('1280x850')
-    recovery = StudioTransactionStore(path)
-    if recovery.pending:
+    def recover_if_pending(store):
+        if not store.pending:
+            return True
         decision = messagebox.askyesnocancel(
             'Sauvegarde Studio interrompue',
-            'Une écriture Content + GameProject a été interrompue.\n'
+            f'Une écriture Content + GameProject a été interrompue pour\n'
+            f'{store.content_path.name}.\n'
             'Oui : terminer la sauvegarde.\n'
             'Non : revenir aux fichiers précédents.\n'
-            'Annuler : quitter sans modifier les fichiers.')
+            'Annuler : garder les fichiers intacts.')
         if decision is None:
+            return False
+        store.recover('complete' if decision else 'rollback')
+        return True
+
+    recovery = StudioTransactionStore(path)
+    try:
+        if not recover_if_pending(recovery):
             root.destroy()
             return
-        try:
-            recovery.recover('complete' if decision else 'rollback')
-        except (RuleError, OSError, ValueError) as exc:
-            messagebox.showerror('Récupération refusée', str(exc))
-            root.destroy()
-            return
+    except (RuleError, OSError, ValueError) as exc:
+        messagebox.showerror('Récupération refusée', str(exc))
+        root.destroy()
+        return
     raw = json.loads(Path(path).read_text(encoding='utf-8'))
     doc = Document(Content.from_dict(raw, rules=authored_rules_for_document(raw)))
     current_path = Path(path)
@@ -310,9 +317,8 @@ def launch(path):
             return
         name = filedialog.askopenfilename(filetypes=[('Projet Sporebound', '*.json')])
         if name:
-            if StudioTransactionStore(name).pending:
-                raise RuleError('Sauvegarde Studio interrompue : rouvrir le fichier '
-                                'au lancement pour choisir sa récupération.')
+            if not recover_if_pending(StudioTransactionStore(name)):
+                return
             raw = json.loads(Path(name).read_text(encoding='utf-8'))
             candidate = Document(Content.from_dict(
                 raw, rules=authored_rules_for_document(raw)))
