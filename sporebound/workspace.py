@@ -19,6 +19,7 @@ GROUPS = (
     ('mission', 'Cartes et missions'),
     ('map_actor', 'Acteurs placés'),
     ('map_object', 'Objets interactifs placés'),
+    ('editor_group', 'Groupes hiérarchiques'),
     ('scene', 'Scénarios et dialogues'),
     ('cinematic', 'Cinématiques'),
     ('actor', 'Personnages et monstres'),
@@ -100,6 +101,15 @@ class ProjectWorkspaceIndex:
                     obj['id'] + ' · ' + mission.name,
                     f'Objet {obj["kind"]} | Case : {obj["pos"]} | '
                     f'Référence : {obj.get("link", "") or "aucune"}'))
+        for mission in self.content.missions.values():
+            for group in mission.editor_groups:
+                members = (len(group['cells']) + len(group['unit_ids']) +
+                           len(group['object_ids']) + len(group['structure_ids']))
+                result['editor_group'].append(WorkspaceNode(
+                    'editor_group', mission.id + '/' + group['id'],
+                    group['name'] + ' · ' + mission.name,
+                    f'Groupe {group["id"]} | Parent : '
+                    f'{group["parent"] or "racine"} | Membres directs : {members}'))
         for scene in self.project.story.get('scenes', []):
             result['scene'].append(WorkspaceNode(
                 'scene', scene['id'], scene['title'],
