@@ -45,7 +45,7 @@ class StructureUnderlayTests(unittest.TestCase):
 
     def structures(self):
         return next(m for m in self.doc.data['missions']
-                    if m['id'] == self.MID)['structures']
+                    if m['id'] == self.MID).get('structures', [])
 
     def test_remove_restores_exact_sparse_background(self):
         self.doc.replace(place_structure(self.doc.data, self.MID,
