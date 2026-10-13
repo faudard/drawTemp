@@ -164,10 +164,15 @@ class StudioTransactionStore:
         # Check again before each replacement: concurrent modifications must
         # remain untouched, with the journal available for manual inspection.
         for index, path in enumerate(self.paths):
-            require(self.revisions()[index] == previous_revisions[index],
-                    f"{path.name} a été modifié pendant la sauvegarde; "
-                    "récupération manuelle requise")
+            expected = tuple(manifest["next"][i] if i < index
+                             else previous_revisions[i] for i in range(2))
+            require(self.revisions() == expected,
+                    f"{path.name} ou l'autre document a été modifié pendant "
+                    "la sauvegarde; récupération manuelle requise")
             self._publish_one(path)
+        require(self.revisions() == tuple(manifest["next"]),
+                "Un document a changé après sa publication : "
+                "journal conservé pour inspection et récupération.")
         self.journal.unlink()
         for path in self.paths:
             self._stage(path).unlink(missing_ok=True)
