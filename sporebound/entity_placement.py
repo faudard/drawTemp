@@ -3,7 +3,6 @@
 The catalog is a view of the live project, not a second actor/object registry.
 Placement edits are validated transactions; no runtime or replay code lives here.
 """
-from copy import deepcopy
 from dataclasses import asdict
 
 from .asset_palette import PaletteEntry
