@@ -1512,7 +1512,7 @@ def launch(path):
             raise RuleError('Aucun élément de ce type sur la case.')
         studio.focus_map_entity(kind, chosen['id'])
 
-    def refresh(*args):
+    def refresh(*args, views=None):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
         nonlocal entity_hover_key, entity_passage_entry
@@ -1561,177 +1561,180 @@ def launch(path):
         if object_var.get() not in object_box['values']:
             object_var.set(object_box['values'][0] if object_box['values'] else '')
         selected_tiles.intersection_update(set(board.cells()))
-        if iso_var.get():
-            # Editor and its actual Battle use the identical terrain/asset
-            # scene. Intents come from battle_frame: no game-rule duplication.
-            clear_placement_preview()
-            canvas.delete('stroke_preview')
-            live = battle_frame(battle, selected_cell) if battle else None
-            iso_geometry = editor_renderer.draw(
-                board, mission, units, cell_size=tile_size,
-                layers={name: var.get() for name, var in layer_vars.items()},
-                selected_cell=selected_cell, selected_tiles=selected_tiles,
-                reachable=live.reachable if live else (),
-                danger=live.danger if live else (),
-                active_id=live.active_id if live else None,
-                atlas=iso_atlas, prop_atlas=iso_props,
-                building_atlas=building_atlas,
-                fortification_atlas=fortification_atlas,
-                actor_atlas=actor_atlas, object_atlas=object_atlas)
-        else:
-            iso_geometry = None
-            editor_renderer.invalidate()
-            canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
-            reachable = battle.reachable() if battle else {}
-            deployment_cells = ({tuple(c) for z in mission.deployment for c in z['cells']}
-                                if layer_vars['Déploiement'].get() else set())
-            danger_cells = ({tuple(c) for o in mission.objects if o['kind'] == 'defense'
-                             and not o.get('disabled') and o.get('charges', 2) > 0
-                             for c in o['cells']} if layer_vars['Objets'].get() else set())
-            for c in board.cells():
-                t = board.tile(c)
-                color = '#dddddd'
-                if layer_vars['Terrain'].get():
-                    color = SURFACE_COLORS[t.surface]
-                    if t.cost > 1: color = '#b29f78'
-                    if t.cover: color = '#b0c9a8'
-                    if t.hazard: color = '#eead93'
-                    if t.blocked and t.surface != 'water': color = '#555555'
-                if layer_vars['Relief'].get() and t.height: color = '#c3c3df'
-                if c in deployment_cells and (not battle or battle.deploying): color = '#a8dce8'
-                if c in mission.goal and layer_vars['Objectifs'].get(): color = '#d7c469'
-                if c in danger_cells: color = '#f0a181'
-                x, y = c[0] * tile_size, c[1] * tile_size
-                canvas.create_rectangle(x, y, x+tile_size, y+tile_size, fill=color,
-                                        outline='#288949' if c in reachable else '#999999', width=3 if c in reachable else 1)
-                if t.height and layer_vars['Relief'].get():
-                    canvas.create_text(x+8, y+8, text=str(t.height), anchor='nw')
-                if t.hazard and layer_vars['Terrain'].get():
-                    canvas.create_text(x+tile_size-3, y+tile_size-3, text=f'!{t.hazard}', anchor='se')
-                if t.feature and layer_vars['Décors'].get():
-                    canvas.create_text(x+tile_size//2, y+tile_size//2,
-                                       text=t.feature[:5], fill='#293e30',
-                                       font=('TkDefaultFont', 8, 'bold'))
-            for obj in mission.objects if layer_vars['Objets'].get() else ():
-                x,y = obj['pos']
-                if obj['kind'] == 'passage':
-                    dx,dy = obj['destination']
-                    canvas.create_line((x+.5)*tile_size,(y+.5)*tile_size,
-                                       (dx+.5)*tile_size,(dy+.5)*tile_size,
-                                       fill='#6e42a1', width=2, arrow='last',
-                                       dash=() if obj.get('enabled', True) else (4, 3))
-                canvas.create_text(x*tile_size+tile_size//2,y*tile_size+8,text=obj['kind'][:2], fill='#5b3294')
-            relic = battle.relic_pos if battle else mission.relic
-            if relic is not None and layer_vars['Objectifs'].get():
-                canvas.create_text(relic[0]*tile_size+tile_size//2,relic[1]*tile_size+tile_size//2,text='R',fill='#a06c00',font=('TkDefaultFont',16))
-            for u in units if layer_vars['Unités'].get() else ():
-                x,y = (v*tile_size for v in u.pos)
-                color = '#cce2ff' if u.team == 'player' else '#ffc8bc'
-                if not u.alive: color = '#aaaaaa'
-                canvas.create_oval(x+6,y+10,x+tile_size-6,y+tile_size-4,fill=color,outline='#111111',width=3 if battle and u.id==battle.active_id else 1)
-                canvas.create_text(x+tile_size//2,y+tile_size//2,text=u.name[:3])
-                canvas.create_text(x+tile_size//2,y+tile_size-10,text=str(u.hp),font=('TkDefaultFont',8))
-            for sx, sy in sorted(selected_tiles):
-                canvas.create_rectangle(sx*tile_size+4, sy*tile_size+4,
-                                        (sx+1)*tile_size-4, (sy+1)*tile_size-4,
-                                        outline='#1f6e9a', width=3, tags='selection')
-            x,y = (v*tile_size for v in selected_cell)
-            canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
-        inspected_tile = board.tile(selected_cell) if board.contains(selected_cell) else None
-        mode_var.set('MODE : PLAYTEST (édition verrouillée)' if battle else 'MODE : ÉDITION')
-        selected_units = [u for u in units if tuple(u.pos) == selected_cell]
-        selected_objects = [o for o in mission.objects if tuple(o['pos']) == selected_cell]
-        if selected_units:
-            heading = 'PERSONNAGE — ' + ', '.join(u.name for u in selected_units)
-        elif selected_objects:
-            heading = 'OBJET — ' + ', '.join(o['id'] for o in selected_objects)
-        else:
-            heading = 'TERRAIN — case ' + str(selected_cell)
-        text = f'{heading}\n\n{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
-        for actor in selected_units:
-            text += (f'Acteur {actor.id} • {actor.team} • '
-                     f'PV {actor.hp}/{actor.max_hp} • CT {actor.ct}\n')
-        for obj in selected_objects:
-            text += f'Objet {obj["id"]} : {obj["kind"]}\n'
-        actor_focus.configure(state='normal' if selected_units and not battle else 'disabled')
-        object_focus.configure(state='normal' if selected_objects and not battle else 'disabled')
-        if inspected_tile is not None:
-            text += (f'Surface : {inspected_tile.surface} | Décor : '
-                     f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
-        for obj in selected_objects:
-            if obj['kind'] == 'defense':
-                text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
-            if obj['kind'] == 'passage':
-                text += f"Passage {obj['id']} : {obj['pos']} → {obj['destination']} ({'installé' if obj.get('enabled',True) else 'à installer'})\n"
-        if battle:
-            text += f'Tick : {battle.tick} | Résultat : {battle.result or "en cours"}\nTenue : {battle.hold_ticks}/{mission.target_ticks}\n'
-            if mission.objective == 'crown':
-                text += f'Couronne : {battle.carrier or battle.relic_pos}\n'
-            if battle.deploying:
-                text += 'DÉPLOIEMENT — horloge arrêtée.\nChoisir une unité, une case bleue et son orientation, puis deploy / Exécuter.\nChoisir start_battle / Exécuter pour lancer l’assaut.\n'
-                action_box['values'] = ['deploy', 'start_battle']
-                if action_var.get() not in action_box['values']: action_var.set('deploy')
-            if battle.active:
-                u = battle.active
-                text += f'Actif : {u.name} ({u.team})\nPV {u.hp}/{u.max_hp} | MP {u.mp}/{u.max_mp} | CT {u.ct}\nDéplacement : {"utilisé" if u.moved else "libre"}\nAction : {"utilisée" if u.acted else "libre"}\n'
-                actions = ['move','attack',*u.skills,'item:potion','item:ether','item:phoenix',*['object:'+o['id'] for o in mission.objects],*available_operations(battle,u)]
-                action_box['values'] = actions
-                if action_var.get() not in actions: action_var.set('move')
-                if action_var.get() not in {'move'} and not action_var.get().startswith(('item:','object:','siege-attack:','repair-siege:')):
-                    try:
-                        forecast = battle.forecast(action_var.get(), selected_cell)
-                        text += '\nPrévision immédiate (avant réactions) :\n'
-                        text += '\n'.join(f'{r["unit"]}: {r["kind"]} {r["amount"]} {r["status"]} ({r["chance"]:.0%})' for r in forecast)
-                    except RuleError as exc:
-                        text += '\nCible : '+str(exc)
+        if views is None or RENDERER in views:
+            if iso_var.get():
+                # Editor and its actual Battle use the identical terrain/asset
+                # scene. Intents come from battle_frame: no game-rule duplication.
+                clear_placement_preview()
+                canvas.delete('stroke_preview')
+                live = battle_frame(battle, selected_cell) if battle else None
+                iso_geometry = editor_renderer.draw(
+                    board, mission, units, cell_size=tile_size,
+                    layers={name: var.get() for name, var in layer_vars.items()},
+                    selected_cell=selected_cell, selected_tiles=selected_tiles,
+                    reachable=live.reachable if live else (),
+                    danger=live.danger if live else (),
+                    active_id=live.active_id if live else None,
+                    atlas=iso_atlas, prop_atlas=iso_props,
+                    building_atlas=building_atlas,
+                    fortification_atlas=fortification_atlas,
+                    actor_atlas=actor_atlas, object_atlas=object_atlas)
+            else:
+                iso_geometry = None
+                editor_renderer.invalidate()
+                canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
+                reachable = battle.reachable() if battle else {}
+                deployment_cells = ({tuple(c) for z in mission.deployment for c in z['cells']}
+                                    if layer_vars['Déploiement'].get() else set())
+                danger_cells = ({tuple(c) for o in mission.objects if o['kind'] == 'defense'
+                                 and not o.get('disabled') and o.get('charges', 2) > 0
+                                 for c in o['cells']} if layer_vars['Objets'].get() else set())
+                for c in board.cells():
+                    t = board.tile(c)
+                    color = '#dddddd'
+                    if layer_vars['Terrain'].get():
+                        color = SURFACE_COLORS[t.surface]
+                        if t.cost > 1: color = '#b29f78'
+                        if t.cover: color = '#b0c9a8'
+                        if t.hazard: color = '#eead93'
+                        if t.blocked and t.surface != 'water': color = '#555555'
+                    if layer_vars['Relief'].get() and t.height: color = '#c3c3df'
+                    if c in deployment_cells and (not battle or battle.deploying): color = '#a8dce8'
+                    if c in mission.goal and layer_vars['Objectifs'].get(): color = '#d7c469'
+                    if c in danger_cells: color = '#f0a181'
+                    x, y = c[0] * tile_size, c[1] * tile_size
+                    canvas.create_rectangle(x, y, x+tile_size, y+tile_size, fill=color,
+                                            outline='#288949' if c in reachable else '#999999', width=3 if c in reachable else 1)
+                    if t.height and layer_vars['Relief'].get():
+                        canvas.create_text(x+8, y+8, text=str(t.height), anchor='nw')
+                    if t.hazard and layer_vars['Terrain'].get():
+                        canvas.create_text(x+tile_size-3, y+tile_size-3, text=f'!{t.hazard}', anchor='se')
+                    if t.feature and layer_vars['Décors'].get():
+                        canvas.create_text(x+tile_size//2, y+tile_size//2,
+                                           text=t.feature[:5], fill='#293e30',
+                                           font=('TkDefaultFont', 8, 'bold'))
+                for obj in mission.objects if layer_vars['Objets'].get() else ():
+                    x,y = obj['pos']
+                    if obj['kind'] == 'passage':
+                        dx,dy = obj['destination']
+                        canvas.create_line((x+.5)*tile_size,(y+.5)*tile_size,
+                                           (dx+.5)*tile_size,(dy+.5)*tile_size,
+                                           fill='#6e42a1', width=2, arrow='last',
+                                           dash=() if obj.get('enabled', True) else (4, 3))
+                    canvas.create_text(x*tile_size+tile_size//2,y*tile_size+8,text=obj['kind'][:2], fill='#5b3294')
+                relic = battle.relic_pos if battle else mission.relic
+                if relic is not None and layer_vars['Objectifs'].get():
+                    canvas.create_text(relic[0]*tile_size+tile_size//2,relic[1]*tile_size+tile_size//2,text='R',fill='#a06c00',font=('TkDefaultFont',16))
+                for u in units if layer_vars['Unités'].get() else ():
+                    x,y = (v*tile_size for v in u.pos)
+                    color = '#cce2ff' if u.team == 'player' else '#ffc8bc'
+                    if not u.alive: color = '#aaaaaa'
+                    canvas.create_oval(x+6,y+10,x+tile_size-6,y+tile_size-4,fill=color,outline='#111111',width=3 if battle and u.id==battle.active_id else 1)
+                    canvas.create_text(x+tile_size//2,y+tile_size//2,text=u.name[:3])
+                    canvas.create_text(x+tile_size//2,y+tile_size-10,text=str(u.hp),font=('TkDefaultFont',8))
+                for sx, sy in sorted(selected_tiles):
+                    canvas.create_rectangle(sx*tile_size+4, sy*tile_size+4,
+                                            (sx+1)*tile_size-4, (sy+1)*tile_size-4,
+                                            outline='#1f6e9a', width=3, tags='selection')
+                x,y = (v*tile_size for v in selected_cell)
+                canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
+        if views is None or INSPECTOR in views:
+            inspected_tile = board.tile(selected_cell) if board.contains(selected_cell) else None
+            mode_var.set('MODE : PLAYTEST (édition verrouillée)' if battle else 'MODE : ÉDITION')
+            selected_units = [u for u in units if tuple(u.pos) == selected_cell]
+            selected_objects = [o for o in mission.objects if tuple(o['pos']) == selected_cell]
             if selected_units:
-                text += '\nÉtats sélectionnés :\n' + '\n'.join(
-                    f'{u.name}: {u.statuses}' for u in selected_units)
-            journal.configure(state='normal')
-            journal.delete('1.0','end')
-            journal.insert('1.0','\n'.join(json.dumps(e,ensure_ascii=False) for e in battle.events[-100:]))
-            journal.see('end')
-            journal.configure(state='disabled')
-        else:
-            journal.configure(state='normal')
-            journal.delete('1.0', 'end')
-            journal.configure(state='disabled')
-            text += (f'\nSélection : {len(selected_tiles)} case(s)\n'
-                     f'Presse-papiers : '
-                     f'{len(terrain_clipboard.offsets) if terrain_clipboard else 0} case(s)\n'
-                     'Aide détaillée : panneau Raccourcis et aide.'
-                     '\nActeurs/objets : palette pour placer, inspecteur pour modifier.'
-                     '\nInspecter entité : cliquer un acteur/objet; déplacer, dupliquer ou supprimer.')
-        inspector.configure(state='normal')
-        if not battle and structure_selection_cell is not None:
-            try:
-                structure = structure_at(doc.data, mission_var.get(),
-                                         structure_selection_cell)
-                record = next((row for row in mission.structures
-                               if row['id'] == structure.id), None)
-                ground_status = ('Sauvegardé (' + str(len(record['underlay'])) +
-                                 ' cases)' if record is not None and
-                                 'underlay' in record else
-                                 'Ancienne structure : sol non récupérable')
-                text += ('\n\nSTRUCTURE SÉLECTIONNÉE\n'
-                         f'{structure.name} — {structure.id or "héritée (sans ID)"}\n'
-                         f'Ancrage : {structure.anchor}\n'
-                         f'Emprise : {structure.width}×{structure.height}\n'
-                         f'Rotation : {structure.turns * 90}°\n'
-                         f'Entrée : {structure.door_slot + 1}\n'
-                         f'Terrain sous le bâtiment : {ground_status}\n'
-                         'Éditer les propriétés dans la barre Structure, '
-                         'puis Appliquer ; déplacer ou dupliquer par clic.')
-                preview_cells(structure.cells, tag='structure_selection',
-                              color='#2369ac')
-            except RuleError:
-                structure_selection_cell = None
-                structure_selection_id = None
-        inspector.delete('1.0','end')
-        inspector.insert('1.0', text)
-        inspector.configure(state='disabled')
-        draw_minimap(board, mission, units)
-        if studio is not None:
+                heading = 'PERSONNAGE — ' + ', '.join(u.name for u in selected_units)
+            elif selected_objects:
+                heading = 'OBJET — ' + ', '.join(o['id'] for o in selected_objects)
+            else:
+                heading = 'TERRAIN — case ' + str(selected_cell)
+            text = f'{heading}\n\n{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
+            for actor in selected_units:
+                text += (f'Acteur {actor.id} • {actor.team} • '
+                         f'PV {actor.hp}/{actor.max_hp} • CT {actor.ct}\n')
+            for obj in selected_objects:
+                text += f'Objet {obj["id"]} : {obj["kind"]}\n'
+            actor_focus.configure(state='normal' if selected_units and not battle else 'disabled')
+            object_focus.configure(state='normal' if selected_objects and not battle else 'disabled')
+            if inspected_tile is not None:
+                text += (f'Surface : {inspected_tile.surface} | Décor : '
+                         f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
+            for obj in selected_objects:
+                if obj['kind'] == 'defense':
+                    text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
+                if obj['kind'] == 'passage':
+                    text += f"Passage {obj['id']} : {obj['pos']} → {obj['destination']} ({'installé' if obj.get('enabled',True) else 'à installer'})\n"
+            if battle:
+                text += f'Tick : {battle.tick} | Résultat : {battle.result or "en cours"}\nTenue : {battle.hold_ticks}/{mission.target_ticks}\n'
+                if mission.objective == 'crown':
+                    text += f'Couronne : {battle.carrier or battle.relic_pos}\n'
+                if battle.deploying:
+                    text += 'DÉPLOIEMENT — horloge arrêtée.\nChoisir une unité, une case bleue et son orientation, puis deploy / Exécuter.\nChoisir start_battle / Exécuter pour lancer l’assaut.\n'
+                    action_box['values'] = ['deploy', 'start_battle']
+                    if action_var.get() not in action_box['values']: action_var.set('deploy')
+                if battle.active:
+                    u = battle.active
+                    text += f'Actif : {u.name} ({u.team})\nPV {u.hp}/{u.max_hp} | MP {u.mp}/{u.max_mp} | CT {u.ct}\nDéplacement : {"utilisé" if u.moved else "libre"}\nAction : {"utilisée" if u.acted else "libre"}\n'
+                    actions = ['move','attack',*u.skills,'item:potion','item:ether','item:phoenix',*['object:'+o['id'] for o in mission.objects],*available_operations(battle,u)]
+                    action_box['values'] = actions
+                    if action_var.get() not in actions: action_var.set('move')
+                    if action_var.get() not in {'move'} and not action_var.get().startswith(('item:','object:','siege-attack:','repair-siege:')):
+                        try:
+                            forecast = battle.forecast(action_var.get(), selected_cell)
+                            text += '\nPrévision immédiate (avant réactions) :\n'
+                            text += '\n'.join(f'{r["unit"]}: {r["kind"]} {r["amount"]} {r["status"]} ({r["chance"]:.0%})' for r in forecast)
+                        except RuleError as exc:
+                            text += '\nCible : '+str(exc)
+                if selected_units:
+                    text += '\nÉtats sélectionnés :\n' + '\n'.join(
+                        f'{u.name}: {u.statuses}' for u in selected_units)
+                journal.configure(state='normal')
+                journal.delete('1.0','end')
+                journal.insert('1.0','\n'.join(json.dumps(e,ensure_ascii=False) for e in battle.events[-100:]))
+                journal.see('end')
+                journal.configure(state='disabled')
+            else:
+                journal.configure(state='normal')
+                journal.delete('1.0', 'end')
+                journal.configure(state='disabled')
+                text += (f'\nSélection : {len(selected_tiles)} case(s)\n'
+                         f'Presse-papiers : '
+                         f'{len(terrain_clipboard.offsets) if terrain_clipboard else 0} case(s)\n'
+                         'Aide détaillée : panneau Raccourcis et aide.'
+                         '\nActeurs/objets : palette pour placer, inspecteur pour modifier.'
+                         '\nInspecter entité : cliquer un acteur/objet; déplacer, dupliquer ou supprimer.')
+            inspector.configure(state='normal')
+            if not battle and structure_selection_cell is not None:
+                try:
+                    structure = structure_at(doc.data, mission_var.get(),
+                                             structure_selection_cell)
+                    record = next((row for row in mission.structures
+                                   if row['id'] == structure.id), None)
+                    ground_status = ('Sauvegardé (' + str(len(record['underlay'])) +
+                                     ' cases)' if record is not None and
+                                     'underlay' in record else
+                                     'Ancienne structure : sol non récupérable')
+                    text += ('\n\nSTRUCTURE SÉLECTIONNÉE\n'
+                             f'{structure.name} — {structure.id or "héritée (sans ID)"}\n'
+                             f'Ancrage : {structure.anchor}\n'
+                             f'Emprise : {structure.width}×{structure.height}\n'
+                             f'Rotation : {structure.turns * 90}°\n'
+                             f'Entrée : {structure.door_slot + 1}\n'
+                             f'Terrain sous le bâtiment : {ground_status}\n'
+                             'Éditer les propriétés dans la barre Structure, '
+                             'puis Appliquer ; déplacer ou dupliquer par clic.')
+                    preview_cells(structure.cells, tag='structure_selection',
+                                  color='#2369ac')
+                except RuleError:
+                    structure_selection_cell = None
+                    structure_selection_id = None
+            inspector.delete('1.0','end')
+            inspector.insert('1.0', text)
+            inspector.configure(state='disabled')
+        if views is None or MINIMAP in views:
+            draw_minimap(board, mission, units)
+        if studio is not None and (views is None or WORKSPACE in views):
             studio.refresh()
 
     bar = ttk.Frame(root)
