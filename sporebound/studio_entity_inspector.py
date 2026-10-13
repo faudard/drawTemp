@@ -30,13 +30,14 @@ INT_FIELDS = {'hp', 'amount', 'power', 'ammo', 'cost', 'charges'}
 
 
 class EntityInspector:
-    def __init__(self, parent, *, snapshot, actors, commit, begin_target, cell_size):
+    def __init__(self, parent, *, snapshot, actors, commit, begin_target, cell_size, open_event=None):
         import tkinter as tk
         from tkinter import ttk, messagebox
         self.tk = tk
         self.messagebox = messagebox
         self.snapshot, self.actors = snapshot, actors
         self.commit, self.begin_target = commit, begin_target
+        self.open_event = open_event
         self.cell_size = cell_size
         self.window = tk.Toplevel(parent)
         self.window.title('Inspecteur — Acteurs et objets')
@@ -99,9 +100,26 @@ class EntityInspector:
             ('Appliquer', self.apply), ('Déplacer au clic', lambda: self.target('move')),
             ('Dupliquer au clic', lambda: self.target('duplicate')),
             ('Supprimer', self.remove),
+            ('Événement lié', self.edit_event),
         ):
             ttk.Button(actions, text=label, command=command).pack(
                 side='left', padx=3)
+
+    def edit_event(self):
+        """Focus the same Studio tab rather than spawning another inspector."""
+        if self.current is None or self.current.kind != 'object':
+            self.messagebox.showerror('Événement', 'Sélectionner une porte ou un levier.')
+            return
+        data, mid = self.snapshot()
+        obj = get_entity(data, mid, 'object', self.current.id)
+        door_id = (obj['id'] if obj['kind'] == 'door'
+                   else obj.get('link', '') if obj['kind'] == 'switch'
+                   else '')
+        if not door_id or self.open_event is None:
+            self.messagebox.showerror('Événement', 'Sélectionner une porte ou un levier.')
+            return
+        self.open_event(door_id)
+        self.window.withdraw()
 
     def show_at(self, cell):
         data, mid = self.snapshot()
