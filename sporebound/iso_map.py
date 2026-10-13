@@ -161,7 +161,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                      selected_cell, selected_tiles, reachable=(), danger=(), active_id=None,
                      atlas=None, prop_atlas=None,
                      building_atlas=None, fortification_atlas=None,
-                     actor_atlas=None, poses=None):
+                     actor_atlas=None, poses=None, object_atlas=None):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = IsoGeometry(board, cell_size)
     canvas.delete('all')
@@ -286,9 +286,18 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 _draw_feature(canvas, tile.feature, cx, cy, cell_size)
         if layers.get('Objets', True):
             for obj in objects.get(c, ()):
-                canvas.create_rectangle(cx-9,cy-18,cx+9,cy-4,
-                                        fill='#9264ab',outline='#3d2554')
-                canvas.create_text(cx,cy-22,text=obj['kind'][:4],font=('TkDefaultFont',8))
+                photo = (object_atlas.sprite(obj['kind'], cell_size)
+                         if object_atlas is not None else None)
+                tags = ('iso_object', 'iso_object_' + str(obj['id']))
+                if photo is not None:
+                    canvas.create_image(cx, cy + cell_size*5/54, image=photo,
+                                        anchor='s', tags=tags + ('iso_object_sprite',))
+                else:
+                    canvas.create_rectangle(cx-9,cy-18,cx+9,cy-4,
+                                            fill='#9264ab',outline='#3d2554',
+                                            tags=tags)
+                    canvas.create_text(cx,cy-22,text=obj['kind'][:4],
+                                       font=('TkDefaultFont',8),tags=tags)
         if layers.get('Unités', True):
             for actor_index, actor in actors.get(c, ()):
                 # MotionDirector feeds fractional positions, not tactical
