@@ -24,6 +24,7 @@ from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
                              edit_structure, validate_structure_edit)
 from .iso_architecture import (PIVOTS, ARCHITECTURE_NAMES, placement_origin,
                                preview_structure_sprite_position)
+from .structure_groups import selected_structures, transform_structure_group
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -242,6 +243,8 @@ def launch(path):
     structure_pivot_var = tk.StringVar(value='Coin')
     structure_door_var = tk.StringVar(value='Entrée A')
     structure_turns = 0
+    structure_group_dx = tk.IntVar(value=1)
+    structure_group_dy = tk.IntVar(value=0)
     structure_selection_cell = None
     structure_selection_id = None
     structure_drag_from = None
@@ -553,6 +556,52 @@ def launch(path):
                        f'{len(object_ids)} objets ; Δ({dx}, {dy}).')
         refresh()
 
+    @guarded
+    def apply_structure_group(duplicate=False):
+        nonlocal selected_tiles, selected_cell
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        cells = _selection_for_current_map()
+        group = selected_structures(doc.data, mission_var.get(), cells)
+        if not group:
+            raise RuleError('Sélectionner la totalité des cases de chaque bâtiment (outil Sélection).')
+        dx, dy = structure_group_dx.get(), structure_group_dy.get()
+        # A single Document.replace is the whole Undo transaction.
+        design_change(lambda: doc.replace(transform_structure_group(
+            doc.data, mission_var.get(), cells, dx, dy, duplicate=duplicate)))
+        moved_cells = {(x + dx, y + dy) for item in group for x, y in item.cells}
+        selected_tiles = moved_cells
+        selected_cell = (group[0].anchor[0] + dx, group[0].anchor[1] + dy)
+        tool_var.set('Sélection')
+        refresh()
+        status_var.set(f'{len(group)} structure(s) ' +
+                       ('dupliquée(s)' if duplicate else 'déplacée(s)') +
+                       f' : Δ({dx}, {dy}) ; une seule annulation.')
+
+    @guarded
+    def preview_structure_group():
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        group = selected_structures(doc.data, mission_var.get(),
+                                     _selection_for_current_map())
+        if not group:
+            raise RuleError('Sélectionner au moins une empreinte de structure complète.')
+        dx, dy = structure_group_dx.get(), structure_group_dy.get()
+        mission = next(m for m in doc.data['missions']
+                       if m['id'] == mission_var.get())
+        width, height = mission['board']['width'], mission['board']['height']
+        footprint = [(x + dx, y + dy) for item in group for x, y in item.cells]
+        try:
+            transform_structure_group(doc.data, mission_var.get(),
+                                      _selection_for_current_map(), dx, dy)
+            color, note = '#36a16c', 'valide'
+        except RuleError as exc:
+            color, note = '#e05252', str(exc)
+        preview_cells((c for c in footprint if 0 <= c[0] < width and
+                       0 <= c[1] < height), tag='structure_group_preview',
+                      color=color)
+        status_var.set(f'Aperçu {len(group)} structure(s) : {note}.')
+
     def set_zoom(delta):
         nonlocal tile_size
         next_size = max(24, min(96, tile_size + delta))
@@ -694,7 +743,7 @@ def launch(path):
         nonlocal structure_preview_key
         structure_preview_key = None
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
-                    'brush_preview', 'asset_ghost'):
+                    'structure_group_preview', 'brush_preview', 'asset_ghost'):
             canvas.delete(tag)
 
     def paste_preview(event):
@@ -1457,6 +1506,22 @@ def launch(path):
     ttk.Button(structure_edit_controls, text='Appliquer propriétés',
                command=apply_structure_properties).pack(side='left',padx=3)
     ttk.Label(structure_edit_controls, text='Glisser = déplacer · Maj+glisser = dupliquer · flèches = ajuster').pack(side='left',padx=8)
+    structure_group_controls = ttk.Frame(root)
+    structure_group_controls.pack(fill='x', padx=5)
+    ttk.Label(structure_group_controls,
+              text='Structures groupées (Sélection : inclure toutes les cases) :').pack(side='left',padx=(2,5))
+    ttk.Label(structure_group_controls,text='ΔX').pack(side='left')
+    ttk.Spinbox(structure_group_controls, from_=-128, to=128,
+                textvariable=structure_group_dx, width=4).pack(side='left',padx=2)
+    ttk.Label(structure_group_controls,text='ΔY').pack(side='left')
+    ttk.Spinbox(structure_group_controls, from_=-128, to=128,
+                textvariable=structure_group_dy, width=4).pack(side='left',padx=2)
+    ttk.Button(structure_group_controls, text='Aperçu groupe',
+               command=preview_structure_group).pack(side='left',padx=3)
+    ttk.Button(structure_group_controls, text='Déplacer groupe',
+               command=lambda: apply_structure_group(False)).pack(side='left',padx=3)
+    ttk.Button(structure_group_controls, text='Dupliquer groupe',
+               command=lambda: apply_structure_group(True)).pack(side='left',padx=3)
     advanced_controls = ttk.Frame(root)
     advanced_controls.pack(fill='x', padx=5)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
