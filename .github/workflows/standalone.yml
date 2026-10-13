@@ -395,8 +395,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Capture reproducible garden balance evidence
-        run: python -m sporebound battle-lab --mission garden --seed 1 --runs 8 --limit 500 --report battle_lab_garden_38.json
+      - name: Gate 3.8 difficulty, duration and determinism against pinned garden baseline
+        run: python -m sporebound battle-lab --mission garden --seed 1 --runs 8 --limit 500 --baseline docs/evidence/battle_lab_garden_38.json --max-victory-drop 0.20 --max-p95-growth 0.30 --max-new-limits 0 --report battle_lab_garden_38.json
       - name: Preserve balance evidence
         uses: actions/upload-artifact@v4
         with:
