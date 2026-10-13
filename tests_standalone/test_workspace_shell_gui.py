@@ -40,6 +40,19 @@ class WorkspaceShellGUITests(TestCase):
                 self.assertEqual(str(middle.cget('orient')), 'vertical')
                 self.assertEqual(len(middle.panes()), 2)
 
+                toolbars = [w for w in descendants(root)
+                            if isinstance(w, ttk.Notebook)
+                            and 'Terrain & couches' in
+                            [w.tab(t, 'text') for t in w.tabs()]]
+                self.assertEqual(len(toolbars), 1)
+                self.assertEqual(
+                    [toolbars[0].tab(t, 'text') for t in toolbars[0].tabs()],
+                    ['Carte & combat', 'Terrain & couches',
+                     'Architecture', 'Sélection & modèles'])
+                self.assertTrue(any(
+                    isinstance(w, ttk.Menubutton) and
+                    'Couches visibles' in w.cget('text')
+                    for w in descendants(root)))
                 map_trees = [w for w in descendants(shell)
                              if isinstance(w, ttk.Treeview)]
                 navigator = next(w for w in map_trees
@@ -57,7 +70,14 @@ class WorkspaceShellGUITests(TestCase):
                 buttons = {w.cget('text'): w for w in descendants(root)
                            if isinstance(w, ttk.Button)}
                 self.assertIn('Espace projet complet', buttons)
-                self.assertIn('Éditer personnages et objets', buttons)
+                self.assertIn('Modifier le personnage sélectionné', buttons)
+                self.assertIn('Modifier l’objet sélectionné', buttons)
+                self.assertEqual(str(buttons[
+                    'Modifier le personnage sélectionné'].cget('state')),
+                    'disabled')
+                self.assertEqual(str(buttons[
+                    'Modifier l’objet sélectionné'].cget('state')),
+                    'disabled')
                 mode_labels = [
                     w for w in descendants(shell)
                     if isinstance(w, ttk.Label)
@@ -70,6 +90,9 @@ class WorkspaceShellGUITests(TestCase):
                 buttons['Playtest'].invoke()
                 root.update()
                 self.assertIn('PLAYTEST', mode())
+                self.assertEqual(
+                    toolbars[0].tab(toolbars[0].select(), 'text'),
+                    'Carte & combat')
                 buttons['Éditer'].invoke()
                 root.update()
                 self.assertIn('ÉDITION', mode())
