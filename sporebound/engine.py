@@ -112,7 +112,9 @@ class Battle:
             self.active_id = None
 
     def _collect(self, unit):
-        if unit.alive and unit.team == "player" and unit.pos == self.relic_pos:
+        if (unit.alive and unit.team == "player"
+                and self.unit_levels.get(unit.id, 0) == 0
+                and unit.pos == self.relic_pos):
             self.carrier, self.relic_pos = unit.id, None
             self.emit("relic_taken", unit=unit.id)
 
