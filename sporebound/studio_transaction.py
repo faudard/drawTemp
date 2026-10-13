@@ -114,6 +114,9 @@ class StudioTransactionStore:
     def pending(self):
         return self.journal.exists()
 
+    def _publish_one(self, path):
+        os.replace(self._stage(path), path)
+
     def save(self, content_data, project_data):
         require(not self.pending,
                 "Enregistrement interrompu : récupérer le projet avant de réenregistrer")
@@ -136,7 +139,7 @@ class StudioTransactionStore:
         write_json(self.journal, manifest)
         # Once the journal exists, retain it on ANY failure for explicit repair.
         for path in self.paths:
-            os.replace(self._stage(path), path)
+            self._publish_one(path)
         self.journal.unlink()
         for path in self.paths:
             self._stage(path).unlink(missing_ok=True)
