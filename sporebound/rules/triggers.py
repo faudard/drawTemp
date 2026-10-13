@@ -204,6 +204,7 @@ def dispatch(battle):
     serialized trigger order. The number of passes is bounded by the number
     of one-shot events; Content validation rejects reference cycles.
     """
+    from ..temporal_events import temporal_status
     events = battle.mission.triggers
     cascades = any('after' in row for row in events)
     for _ in range(len(events) if cascades else 1):
@@ -213,6 +214,10 @@ def dispatch(battle):
                 continue
             if not all(ref in battle.fired for ref in trigger.get('after', ())):
                 continue
+            if any(key in trigger for key in (
+                    'cancel_after', 'delay_ticks', 'delay_activations')):
+                if temporal_status(battle, trigger)['state'] != 'ready':
+                    continue
             if not battle.rules.trigger_conditions.get(
                     trigger['condition']).matches(battle, trigger):
                 continue
