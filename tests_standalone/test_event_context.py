@@ -190,5 +190,70 @@ class ContextualEventPreviewTests(unittest.TestCase):
         self.assertEqual(data, original)
 
 
+    def test_switch_opens_real_gate_and_dispatches_reinforcement_wave(self):
+        from sporebound.engine import Battle
+        raw = deepcopy(self.data)
+        raw.setdefault('archetypes', {})['light_foe'] = {'max_hp': 24}
+        trigger = event_composer.condition('interact', object_id='switch')
+        reinforcement = event_composer.action(
+            'wave', pos=[0, 0], actor_id='extra_guard',
+            archetype='light_foe', team='enemy', max_active=14)
+        raw = event_composer.save_event(
+            raw, self.mid, 'switch_reinforcement', trigger,
+            [event_composer.action('message', text='La porte est ouverte'),
+             reinforcement])
+        original = deepcopy(raw)
+        report = event_context.preview_event(
+            raw, self.mid, 'switch_reinforcement',
+            scenario='satisfied', include_scene=True)
+        self.assertTrue(report['fired'])
+        self.assertEqual(report['error'], '')
+        self.assertEqual(report['outcome'], 'applied')
+        self.assertIn('extra_guard', report['spawned'])
+        self.assertEqual(
+            [e['kind'] for e in report['events']],
+            ['interact', 'trigger', 'message', 'actor_spawned',
+             'reinforcement_wave'])
+        before, after = report['scene_before'], report['scene_after']
+        gate_before = next(o for o in before.mission.objects if o['id'] == 'gate')
+        gate_after = next(o for o in after.mission.objects if o['id'] == 'gate')
+        switch_after = next(o for o in after.mission.objects if o['id'] == 'switch')
+        self.assertFalse(gate_before.get('open', False))
+        self.assertTrue(gate_after['open'])
+        self.assertTrue(switch_after['used'])
+        self.assertTrue(before.board.tile((4, 1)).blocked)
+        self.assertFalse(after.board.tile((4, 1)).blocked)
+        self.assertTrue(any('Objet gate · open' in line for line in report['changes']))
+        self.assertEqual(raw, original)
+        self.assertIsInstance(after, Battle)
+
+    def test_interaction_initial_and_false_do_not_force_switch(self):
+        raw = event_composer.save_event(
+            self.data, self.mid, 'switch_only',
+            event_composer.condition('interact', object_id='switch'),
+            [event_composer.action('message', text='switch changed')])
+        for mode in ('initial', 'unsatisfied'):
+            with self.subTest(mode=mode):
+                report = event_context.preview_event(
+                    raw, self.mid, 'switch_only', scenario=mode,
+                    include_scene=True)
+                self.assertFalse(report['fired'])
+                self.assertFalse(any(e['kind'] == 'interact'
+                                     for e in report['events']))
+                gate = next(o for o in report['scene_after'].mission.objects
+                            if o['id'] == 'gate')
+                self.assertFalse(gate.get('open', False))
+
+    def test_interaction_trigger_rejects_unknown_objects(self):
+        before = deepcopy(self.data)
+        with self.assertRaises(RuleError):
+            event_composer.save_event(
+                self.data, self.mid, 'unknown_switch',
+                event_composer.condition('interact', object_id='not_an_object'),
+                [event_composer.action('message', text='nope')])
+        self.assertEqual(self.data, before)
+
+
+
 if __name__ == '__main__':
     unittest.main()
