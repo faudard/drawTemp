@@ -396,15 +396,20 @@ class GameSession:
 
     def ai_turn(self):
         require(self.mode == "battle" and not self.finalized and
-                not self.battle.deploying, "No standalone AI combat")
+                not self.battle.deploying and not self.tactical_story_pending,
+                "No standalone AI combat or pending tactical dialogue")
         require(self.battle.active is not None and self.battle.active.team == "enemy",
                 "Not an enemy activation")
-        before = deepcopy((self.progress, self.battle, self.finalized))
+        old_fired = set(self.battle.fired)
+        before = deepcopy((self.progress, self.battle, self.finalized,
+                           self.tactical_story_pending, self.tactical_story_queue))
         try:
             play_activation(self.battle)
+            self._queue_tactical_story(self.battle, old_fired)
             self._settle()
         except Exception:
-            self.progress, self.battle, self.finalized = before
+            (self.progress, self.battle, self.finalized,
+             self.tactical_story_pending, self.tactical_story_queue) = before
             raise
 
     def return_to_campaign(self):
