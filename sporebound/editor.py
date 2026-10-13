@@ -43,6 +43,9 @@ from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
 from .iso_architecture import (PIVOTS, ARCHITECTURE_NAMES, placement_origin,
                                preview_structure_sprite_position)
 from .structure_groups import selected_structures, transform_structure_group
+from .map_layer_workspace import (LAYERS as EDITOR_LAYERS, empty_views,
+                                  load_views, save_views, view_for, update_view,
+                                  ensure_unlocked)
 from .editor_groups import (create_editor_group, add_selection_to_group,
                             remove_selection_from_group, transfer_selection_to_group,
                             rename_editor_group, reparent_editor_group,
@@ -66,6 +69,7 @@ class Document:
         self.data = content.to_dict()
         self.undo_stack = []
         self.redo_stack = []
+        self.edit_policy = None  # Optional editor-only validation before commit.
         self.saved = json.dumps(self.data, sort_keys=True)
 
     @property
@@ -75,6 +79,8 @@ class Document:
     def replace(self, data):
         validated = Content.from_dict(
             data, rules=authored_rules_for_document(data)).to_dict()
+        if self.edit_policy is not None:
+            self.edit_policy(self.data, validated)
         self.undo_stack.append(deepcopy(self.data))
         self.undo_stack = self.undo_stack[-50:]
         self.redo_stack.clear()
@@ -324,11 +330,18 @@ def launch(path):
     facing_var = tk.StringVar(value='south')
     object_var = tk.StringVar()
     zone_var = tk.StringVar(value='attackers')
-    layer_vars = {name: tk.BooleanVar(value=True) for name in
-                  ('Terrain', 'Relief', 'Décors', 'Bâtiments', 'Toitures',
-                   'Déploiement', 'Objectifs', 'Objets', 'Unités')}
+    layer_vars = {name: tk.BooleanVar(value=True) for name in EDITOR_LAYERS}
+    layer_lock_vars = {name: tk.BooleanVar(value=False) for name in EDITOR_LAYERS}
+    active_layer_level = tk.IntVar(value=0)
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
     mode_var = tk.StringVar(value='MODE : ÉDITION')
+    try:
+        map_view_data = load_views(current_path)
+    except RuleError as exc:
+        # A damaged editor sidecar must never make a valid game unopenable.
+        map_view_data = empty_views()
+        status_var.set('Préférences de carte ignorées : ' + str(exc))
+    doc.edit_policy = lambda before, after: ensure_unlocked(before, after, map_view_data)
     editing_context = EditingContext(doc, mission_var.get)
 
     def guarded(fn):
@@ -338,6 +351,47 @@ def launch(path):
             except (RuleError, OSError, ValueError, KeyError, StopIteration) as exc:
                 messagebox.showerror('Opération refusée', str(exc))
         return run
+
+    def apply_saved_map_view():
+        current = view_for(map_view_data, mission_var.get())
+        for name in EDITOR_LAYERS:
+            layer_vars[name].set(current['visible'][name])
+            layer_lock_vars[name].set(current['locked'][name])
+        active_layer_level.set(current['active_level'])
+        interior_var.set(current['interiors'])
+
+    def persist_map_view():
+        nonlocal map_view_data
+        mid = mission_var.get()
+        updated = update_view(
+            map_view_data, mid,
+            visible={name: var.get() for name, var in layer_vars.items()},
+            locked={name: var.get() for name, var in layer_lock_vars.items()},
+            active_level=active_layer_level.get(), interiors=interior_var.get())
+        save_views(current_path, updated)
+        map_view_data = updated
+        status_var.set('Vue de carte enregistrée (préférences du Studio).')
+
+    @guarded
+    def view_options_changed():
+        persist_map_view()
+        refresh()
+
+    @guarded
+    def active_level_changed(_event=None):
+        level = active_layer_level.get()
+        scene = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
+        if level and not any(row['level'] == level
+                             for row in scene.get('interior_floors', ())):
+            active_layer_level.set(view_for(
+                map_view_data, mission_var.get())['active_level'])
+            raise RuleError('Créer un étage N' + str(level) + ' avant de le sélectionner.')
+        if level:
+            floor_var.set(level)
+            interior_var.set(True)
+            iso_var.set(True)
+        persist_map_view()
+        refresh()
 
     def source_pending():
         return source.get('1.0', 'end-1c').strip() != json.dumps(doc.data, indent=2, ensure_ascii=False)
@@ -366,7 +420,8 @@ def launch(path):
 
     @guarded
     def open_doc():
-        nonlocal doc, current_path, battle, disk_revisions
+        nonlocal doc, current_path, battle, disk_revisions, map_view_data
+        nonlocal selection_mission
         if not discard_ok():
             return
         name = filedialog.askopenfilename(filetypes=[('Projet Sporebound', '*.json')])
@@ -376,7 +431,11 @@ def launch(path):
             raw = json.loads(Path(name).read_text(encoding='utf-8'))
             candidate = Document(Content.from_dict(
                 raw, rules=authored_rules_for_document(raw)))
+            restored_views = load_views(name)
             doc, current_path, battle = candidate, Path(name), None
+            map_view_data = restored_views
+            doc.edit_policy = lambda before, after: ensure_unlocked(before, after, map_view_data)
+            selection_mission = ''  # A different file may reuse the mission ID.
             editing_context.document = doc
             disk_revisions = StudioTransactionStore(current_path).revisions()
             mission_var.set(doc.data['missions'][0]['id'])
@@ -406,6 +465,8 @@ def launch(path):
             disk_revisions = (saved_content,
                               disk_revisions[1] if current_path.resolve() ==
                               original_path.resolve() else None)
+            if current_path.resolve() != original_path.resolve():
+                save_views(current_path, map_view_data)
             refresh_source()
             refresh_group_prefabs()
             status_var.set(f'Projet enregistré : {name}')
@@ -422,8 +483,10 @@ def launch(path):
         original = doc.data
         original_project = studio.project
         try:
-            doc.data = Content.from_dict(
+            new_data = Content.from_dict(
                 edited, rules=authored_rules_for_document(edited)).to_dict()
+            ensure_unlocked(doc.data, new_data, map_view_data)
+            doc.data = new_data
             studio.apply_project()
             store.save(doc.data, studio.project.to_dict(),
                        expected_previous=disk_revisions)
@@ -1419,8 +1482,10 @@ def launch(path):
             doc.data, mission_var.get(), sid, level)))
         interior_var.set(True)
         iso_var.set(True)
+        active_layer_level.set(level)
+        persist_map_view()
         refresh()
-        status_var.set(f'Étage visuel {level} créé pour {sid} (non jouable).')
+        status_var.set(f'Étage N{level} créé pour {sid} (Undo disponible).')
 
     @guarded
     def remove_interior_level():
@@ -1430,7 +1495,12 @@ def launch(path):
         level = floor_var.get()
         design_change(lambda: doc.replace(delete_interior_floor(
             doc.data, mission_var.get(), sid, level)))
-        status_var.set(f'Étage visuel {level} supprimé (Undo disponible).')
+        scene = next(m for m in doc.data['missions'] if m['id'] == mission_var.get())
+        if (active_layer_level.get() == level and not any(
+                floor['level'] == level for floor in scene.get('interior_floors', ()))):
+            active_layer_level.set(0)
+            persist_map_view()
+        status_var.set(f'Étage N{level} supprimé (Undo disponible).')
 
     @guarded
     def create_level_stair():
@@ -1457,8 +1527,9 @@ def launch(path):
     def select_interior_paint():
         interior_var.set(True)
         iso_var.set(True)
+        active_layer_level.set(floor_var.get())
         tool_var.set('Étage intérieur')
-        refresh()
+        view_options_changed()
         status_var.set('Étage : cliquer sur un plateau surélevé pour éditer le plan visuel.')
 
     def active_brush():
@@ -2140,6 +2211,7 @@ def launch(path):
                 refresh()
                 raise
             else:
+                ensure_unlocked(stroke_before, temporary.data, map_view_data)
                 doc.data = temporary.data
                 refresh_source()
                 refresh()
@@ -2257,6 +2329,7 @@ def launch(path):
         if mission_var.get() not in mids:
             mission_var.set(mids[0])
         if selection_mission != mission_var.get():
+            apply_saved_map_view()
             selected_tiles.clear()
             tree_drag_cancel()
             selected_group_id = None
@@ -2304,7 +2377,9 @@ def launch(path):
                             'Intérieurs': interior_var.get(),
                             'Étage actif': (battle.unit_levels.get(battle.active_id, 0)
                                             if battle and battle.active_id else
-                                            floor_var.get() if interior_var.get() else 0)},
+                                            active_layer_level.get()
+                                            if interior_var.get()
+                                            and layer_vars['Étages'].get() else 0)},
                     selected_cell=selected_cell, selected_tiles=selected_tiles,
                     reachable=live.reachable if live else (),
                     danger=live.danger if live else (),
@@ -2578,15 +2653,29 @@ def launch(path):
     # this high-frequency layer one click away even with the compact menu.
     ttk.Checkbutton(authoring_controls, text='Toitures',
                     variable=layer_vars['Toitures'],
-                    command=refresh).pack(side='left', padx=(12, 2))
+                    command=view_options_changed).pack(side='left', padx=(12, 2))
     layers_button = ttk.Menubutton(authoring_controls, text='Autres couches ▾')
     layers_button.pack(side='left', padx=(6, 2))
     layers_menu = tk.Menu(layers_button, tearoff=False)
     for name, var in layer_vars.items():
         if name == 'Toitures':
             continue
-        layers_menu.add_checkbutton(label=name, variable=var, command=refresh)
+        layers_menu.add_checkbutton(label=name, variable=var,
+                                    command=view_options_changed)
     layers_button.configure(menu=layers_menu)
+    lock_button = ttk.Menubutton(authoring_controls, text='Verrouiller couches ▾')
+    lock_button.pack(side='left', padx=(6, 2))
+    lock_menu = tk.Menu(lock_button, tearoff=False)
+    for name, var in layer_lock_vars.items():
+        lock_menu.add_checkbutton(label=name, variable=var,
+                                  command=view_options_changed)
+    lock_button.configure(menu=lock_menu)
+    ttk.Label(authoring_controls, text='Niveau actif :').pack(side='left', padx=(8, 2))
+    active_combo = ttk.Combobox(authoring_controls, state='readonly',
+                                textvariable=active_layer_level, width=3,
+                                values=(0, 1, 2, 3))
+    active_combo.pack(side='left', padx=2)
+    active_combo.bind('<<ComboboxSelected>>', active_level_changed)
     scenery_controls = ttk.Frame(tools_terrain)
     scenery_controls.pack(fill='x', padx=5, pady=2)
     ttk.Checkbutton(scenery_controls, text='Vue isométrique 2.5D',
@@ -2785,7 +2874,7 @@ def launch(path):
     structure_options = ttk.Frame(tools_structure)
     structure_options.pack(fill='x', padx=5, pady=2)
     ttk.Checkbutton(structure_options, text='Intérieurs / coupe des toits',
-                    variable=interior_var, command=refresh).pack(side='left', padx=4)
+                    variable=interior_var, command=view_options_changed).pack(side='left', padx=4)
     ttk.Label(structure_options, text='Pivot :').pack(side='left',padx=(2, 4))
     ttk.Combobox(structure_options, textvariable=structure_pivot_var,
                  state='readonly', width=8, values=PIVOTS).pack(side='left',padx=2)
@@ -2917,7 +3006,7 @@ def launch(path):
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
     def toggle_interiors(_event=None):
         interior_var.set(not interior_var.get())
-        refresh()
+        view_options_changed()
     canvas.bind('<Control-i>', toggle_interiors)
     canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
     canvas.bind('<Control-plus>',lambda _e: set_zoom(6))

@@ -39,6 +39,8 @@ jobs:
         run: |
           python -m examples.world_map_3724a --output "${{ runner.temp }}/world-3724a.json"
           python -m sporebound validate --content "${{ runner.temp }}/world-3724a.json" --project "${{ runner.temp }}/world-3724a.game.json"
+      - name: Verify 3.7.32C Map Builder layer locking and sidecar state
+        run: python -m unittest discover -s tests_standalone -p test_map_layer_workspace_3732c.py -v
       - run: python -m unittest discover -s tests_standalone -v
       - name: Battle Lab 3.8 CLI report and paired deterministic replay gate
         run: |
@@ -183,6 +185,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_structure_groups_3719b_gui.py -v
+      - name: Exercise Map Builder 4.0C visibility, locks and active floors in Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_map_layer_workspace_3732c_gui.py -v
       - name: Verify 3.7.20A interior roof cutaway and picking at three zoom levels
         env:
           SPOREBOUND_GUI_SMOKE: '1'
