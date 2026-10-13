@@ -43,6 +43,11 @@ def _choose_tactical_command(battle):
     opponents = [t for t in battle.units if t.alive and t.team != u.team]
     if u.cast:
         return {"kind": "end"}
+    if battle.mission.level_links:
+        from .level_navigation import ai_layered_move
+        stair_step = ai_layered_move(battle, u)
+        if stair_step is not None:
+            return stair_step
     if u.disengaging and 'move' in battle.rules.commands:
         reachable = battle.reachable(u)
         if reachable and opponents:
