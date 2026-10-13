@@ -1240,7 +1240,6 @@ def launch(path):
         refresh_group_prefabs()
 
     def _group_tree_mission():
-    def _group_tree_mission():
         return next(m for m in doc.data['missions']
                     if m['id'] == mission_var.get())
 
