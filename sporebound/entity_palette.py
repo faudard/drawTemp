@@ -206,3 +206,25 @@ def preview_entity_placement(data, mission_id, entry_id, cell, *,
     except (ValueError, TypeError) as exc:
         return EntityPlacementPreview(cells, False, str(exc))
     return EntityPlacementPreview(cells, True)
+
+
+def preview_passage_source(data, mission_id, cell):
+    """Validate the first click of a graphical passage placement.
+
+    No half-created passage ever enters the document. The complete passage
+    remains subject to place_entity / Content validation at the second click.
+    """
+    from .model import RuleError
+    try:
+        mission = Content.from_dict(
+            data, rules=authored_rules_for_document(data)).missions[mission_id]
+        source = _cell(_mission(data, mission_id), cell)
+        require(not mission.board.tile(source).blocked,
+                'Blocked passage entrance')
+        require(not any(source in unit.occupied_cells() for unit in mission.units),
+                'Passage entrance overlaps an actor')
+        require(not any(tuple(obj['pos']) == source for obj in mission.objects),
+                'Passage entrance overlaps an object')
+    except (RuleError, ValueError, KeyError, TypeError) as exc:
+        return EntityPlacementPreview((tuple(cell),), False, str(exc))
+    return EntityPlacementPreview((source,), True)
