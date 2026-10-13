@@ -1026,10 +1026,9 @@ def launch(path):
             text += (f'Surface : {inspected_tile.surface} | Décor : '
                      f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
         if iso_var.get() and board.contains(selected_cell):
-            from .iso_architecture import architecture_instances
             from .iso_interiors import interior_plan
-            building = next((instance for instance in architecture_instances(
-                board, getattr(mission, 'structures', ()))
+            building = next((instance for instance in getattr(
+                iso_geometry, 'architecture_instances', ())
                 if selected_cell in instance.cells), None)
             if building is not None and building.name in ARCHITECTURE_NAMES:
                 room = interior_plan(board, building)
@@ -1135,8 +1134,6 @@ def launch(path):
     scenery_controls.pack(fill='x', padx=5)
     ttk.Checkbutton(scenery_controls, text='Vue isométrique 2.5D',
                     variable=iso_var, command=refresh).pack(side='left', padx=4)
-    ttk.Checkbutton(scenery_controls, text='Intérieurs (coupe des toits)',
-                    variable=interior_var, command=refresh).pack(side='left', padx=4)
     ttk.Label(scenery_controls, text='Sol :').pack(side='left', padx=(10,2))
     surface_box = ttk.Combobox(scenery_controls, textvariable=surface_var,
                                state='readonly', width=12, values=sorted(SURFACES))
@@ -1219,6 +1216,8 @@ def launch(path):
                command=lambda: rotate_structure(1)).pack(side='left',padx=2)
     structure_options = ttk.Frame(root)
     structure_options.pack(fill='x', padx=5)
+    ttk.Checkbutton(structure_options, text='Intérieurs / coupe des toits',
+                    variable=interior_var, command=refresh).pack(side='left', padx=4)
     ttk.Label(structure_options, text='Pivot :').pack(side='left',padx=(2, 4))
     ttk.Combobox(structure_options, textvariable=structure_pivot_var,
                  state='readonly', width=8, values=PIVOTS).pack(side='left',padx=2)
