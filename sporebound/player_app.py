@@ -57,6 +57,7 @@ class PlayerApplication:
         self.campaign_var = tk.StringVar(value=project.campaigns[0]["id"])
         self.slot_var = tk.StringVar(value="1")
         self.action_var = tk.StringVar(value="move")
+        self.level_var = tk.IntVar(value=0)
         self.unit_var = tk.StringVar()
         self.facing_var = tk.StringVar(value="south")
         self.front_var = tk.StringVar()
@@ -607,12 +608,24 @@ class PlayerApplication:
                 self._button(actions, "Jouer l'activation IA",
                              lambda: self._change(self.player.ai_turn)).pack(side="left")
             else:
-                options = (["move", "attack", *battle.active.skills,
-                            "item:potion", "item:ether", "item:phoenix",
-                            *["object:" + obj["id"] for obj in battle.mission.objects],
-                            *available_operations(battle, battle.active)])
-                options += tactical_action_options(battle)
-                options += ["end"]
+                active_level = battle.unit_levels.get(battle.active.id, 0)
+                if battle.mission.level_links:
+                    if active_level:
+                        options = ["level_move", "attack", "end"]
+                    else:
+                        options = (["move", "level_move", "attack", *battle.active.skills,
+                                    "item:potion", "item:ether", "item:phoenix",
+                                    *["object:" + obj["id"] for obj in battle.mission.objects],
+                                    *available_operations(battle, battle.active)])
+                        options += tactical_action_options(battle)
+                        options += ["end"]
+                else:
+                    options = (["move", "attack", *battle.active.skills,
+                                "item:potion", "item:ether", "item:phoenix",
+                                *["object:" + obj["id"] for obj in battle.mission.objects],
+                                *available_operations(battle, battle.active)])
+                    options += tactical_action_options(battle)
+                    options += ["end"]
             if options:
                 if self.action_var.get() not in options:
                     self.action_var.set(options[0])
@@ -620,6 +633,14 @@ class PlayerApplication:
                 self.ttk.Combobox(actions, textvariable=self.action_var,
                                   values=options, state="readonly", width=23).pack(
                                       side="left", padx=7)
+                if battle.mission.level_links:
+                    self.ttk.Label(actions, text="Étage cible").pack(side="left")
+                    self.ttk.Combobox(
+                        actions, textvariable=self.level_var, state="readonly",
+                        values=tuple(range(0, 1+max(
+                            max(row["from"][0], row["to"][0])
+                            for row in battle.mission.level_links))),
+                        width=3).pack(side="left")
                 self.ttk.Label(actions, text="Orientation").pack(side="left")
                 self.ttk.Combobox(actions, textvariable=self.facing_var, state="readonly",
                                   values=["north", "south", "east", "west"],
@@ -697,6 +718,9 @@ class PlayerApplication:
         self._render_motion(clock_ms)
         self.audio.observe(battle)
         rows = ["Case : " + str(self.selection), "", "Escouades"]
+        if battle.mission.level_links:
+            rows.insert(1, "Étage actif : N" + str(
+                battle.unit_levels.get(battle.active_id, 0) if battle.active_id else 0))
         rows.extend(u.name + " (" + u.team + ") : PV " + str(u.hp) + "/" +
                     str(u.max_hp) + " / MP " + str(u.mp) + "/" + str(u.max_mp)
                     for u in frame.actors)
@@ -792,6 +816,9 @@ class PlayerApplication:
                        "cell": list(self.selection), "facing": self._facing()}
         elif kind == "move":
             command = {"kind": "move", "cell": list(self.selection)}
+        elif kind == "level_move":
+            command = {"kind": "level_move", "level": self.level_var.get(),
+                       "cell": list(self.selection)}
         elif kind == "end":
             command = {"kind": "end", "facing": self._facing()}
         elif kind.startswith("item:"):
