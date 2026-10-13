@@ -1161,10 +1161,17 @@ def launch(path):
     ttk.Button(authoring_controls, text='Coller terrain', command=paste_selection).pack(side='left',padx=2)
     ttk.Label(authoring_controls, text='Zone').pack(side='left',padx=(9,2))
     ttk.Entry(authoring_controls, textvariable=zone_var, width=14).pack(side='left')
-    layers_button = ttk.Menubutton(authoring_controls, text='Couches visibles ▾')
-    layers_button.pack(side='left', padx=(12, 2))
+    # Roof cutaway is used constantly when authoring interiors, so keep
+    # this high-frequency layer one click away even with the compact menu.
+    ttk.Checkbutton(authoring_controls, text='Toitures',
+                    variable=layer_vars['Toitures'],
+                    command=refresh).pack(side='left', padx=(12, 2))
+    layers_button = ttk.Menubutton(authoring_controls, text='Autres couches ▾')
+    layers_button.pack(side='left', padx=(6, 2))
     layers_menu = tk.Menu(layers_button, tearoff=False)
     for name, var in layer_vars.items():
+        if name == 'Toitures':
+            continue
         layers_menu.add_checkbutton(label=name, variable=var, command=refresh)
     layers_button.configure(menu=layers_menu)
     scenery_controls = ttk.Frame(tools_terrain)
