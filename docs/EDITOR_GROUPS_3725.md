@@ -34,6 +34,28 @@ EditingContext. Pas de nouveau renderer ni de modèle parallèle à Mission.
    **Parent…** réorganise l'arbre (ID du parent, vide = racine), en refusant
    les cycles. Raccourci Ctrl+G : créer depuis la sélection actuelle.
 
+
+## Glisser-déposer directement dans l'arbre
+
+- **Groupe → groupe** : change le parent du groupe et conserve tous ses
+  descendants. La racine virtuelle sert à retirer un parent.
+- **Objet / personnage / bâtiment → groupe** : transfère son appartenance,
+  sans déplacement sur la carte ni changement d'ID ou de lien.
+- **Case de terrain / décor → groupe** : transfère uniquement cette case.
+  Les cases d'un groupe sont développées à la demande (128 à la fois).
+  La ligne « Cases / décors » transfère **l'ensemble** des cases libres.
+- **Élément → Racine / sans groupe** : détache l'élément du groupe sans
+  supprimer son contenu. Un groupe glissé sur Racine devient racine.
+- Glisser depuis le texte d'une ligne (pas depuis sa flèche d'expansion).
+  Après le seuil de déplacement, la destination devient verte si valide,
+  rouge si refusée (cycle, auto-déplacement, source manquante). Échap annule.
+- Le survol ne modifie pas le document ; le dépôt validé utilise la commande
+  typée EditorGroupTreeDropCommand et une entrée d'historique réversible.
+- Le déplacement dans l'arbre est **organisationnel** : pour déplacer
+  physiquement un groupe et son terrain, utiliser **Aperçu / Déplacer**
+  avec ΔX/ΔY.
+
+
 ## Contrat des données
 
 Métadonnée **optionnelle** missions[].editor_groups (Content v1 inchangé),
