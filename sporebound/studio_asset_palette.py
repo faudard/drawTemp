@@ -18,7 +18,7 @@ class AssetPalette:
         self.window.geometry('860x660')
         self.window.minsize(700, 540)
         self.window.transient(parent)
-        self.window.protocol('WM_DELETE_WINDOW', self.window.withdraw)
+        self.window.protocol('WM_DELETE_WINDOW', self.hide)
         self.loaders = terrain, props, buildings, fortifications
         self.choose, self.cell_size = choose, cell_size
         self.actors, self.entities = actors, entities
@@ -42,6 +42,7 @@ class AssetPalette:
         self.entity_facing = tk.StringVar(self.window, value='south')
         self.entity_pose = tk.StringVar(self.window, value='idle')
         self.watercolor_frame = tk.StringVar(self.window, value='0')
+        self._watercolor_timer = None
         self.entity_link = tk.StringVar(self.window)
         self.entity_destination = tk.StringVar(self.window)
         controls = ttk.Frame(self.window, padding=8)
@@ -95,6 +96,10 @@ class AssetPalette:
             textvariable=self.watercolor_frame)
         self.watercolor_frame_selector.pack(side='left', padx=5)
         self.watercolor_frame_selector.bind('<<ComboboxSelected>>', self.preview)
+        ttk.Button(self.watercolor_animation_controls, text='▶', width=3,
+                   command=self.play_watercolor).pack(side='left')
+        ttk.Button(self.watercolor_animation_controls, text='■', width=3,
+                   command=self.stop_watercolor).pack(side='left')
         ttk.Button(preview, text='Échelle de la carte', command=self.map_scale).pack(
             anchor='w', padx=8, pady=4)
         self.entity_frame = ttk.LabelFrame(preview, text='Placement — acteurs / objets')
@@ -129,6 +134,10 @@ class AssetPalette:
         self.category.trace_add('write', self.populate)
         self.populate()
         entry.focus_set()
+
+    def hide(self):
+        self.stop_watercolor()
+        self.window.withdraw()
 
     def show(self):
         self.populate()
@@ -234,12 +243,57 @@ class AssetPalette:
             self.use_button.state(['disabled'])
             self.rotate_button.state(['disabled'])
 
+    def stop_watercolor(self):
+        if self._watercolor_timer is not None:
+            self.window.after_cancel(self._watercolor_timer)
+            self._watercolor_timer = None
+
+    def _queue_watercolor_frame(self):
+        entry = self.selected()
+        if entry is None or entry.kind != 'watercolor':
+            return
+        item = self.watercolor.lookup(entry.value)
+        if item.kind != 'animation':
+            return
+        idx = int(self.watercolor_frame.get())
+        _id, duration = self.watercolor.frame(entry.value, idx)
+        animation = self.watercolor.registry.require_reference(
+            entry.value, 'animation')
+        if idx + 1 == item.frame_count and not animation['loop']:
+            return  # Hold the actual final frame of this one-shot animation.
+        self._watercolor_timer = self.window.after(
+            duration, self._advance_watercolor_frame)
+
+    def _advance_watercolor_frame(self):
+        self._watercolor_timer = None
+        entry = self.selected()
+        if entry is None or entry.kind != 'watercolor':
+            return
+        item = self.watercolor.lookup(entry.value)
+        if item.kind != 'animation':
+            return
+        self.watercolor_frame.set(str(
+            (int(self.watercolor_frame.get()) + 1) % item.frame_count))
+        self.preview()
+        self._queue_watercolor_frame()
+
+    def play_watercolor(self):
+        self.stop_watercolor()
+        entry = self.selected()
+        if entry is None or entry.kind != 'watercolor' or \
+                self.watercolor.lookup(entry.value).kind != 'animation':
+            return
+        self.watercolor_frame.set('0')
+        self.preview()
+        self._queue_watercolor_frame()
+
     def selected(self):
         selected = self.tree.selection()
         return self.entries[selected[0]] if selected else None
 
     def select(self, _event=None):
         self.turns = 0
+        self.stop_watercolor()
         entry = self.selected()
         self.watercolor_animation_controls.pack_forget()
         if entry is not None:
@@ -346,4 +400,4 @@ class AssetPalette:
                     self.detail.set(str(exc))
                     return
         if self.choose(entry, self.turns):
-            self.window.withdraw()
+            self.hide()
