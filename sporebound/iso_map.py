@@ -307,6 +307,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 # MotionDirector feeds fractional positions, not tactical
                 # moves. Do not change the board cell used for game logic.
                 ax, ay = visual_center(geo, actor, poses)
+                ay -= actor_levels.get(actor.id, 0) * 3 * geo.step
                 actor_tags = ('iso_actor', 'iso_actor_unit_' + str(actor_index))
                 color = '#3b82c6' if actor.team == 'player' else '#ca6654'
                 if not actor.alive:
@@ -362,7 +363,13 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         atlas=building_atlas, scenery_atlas=fortification_atlas,
         poses=poses, structures=getattr(mission, 'structures', ()),
         interior_floors=getattr(mission, 'interior_floors', ()),
-        prop_atlas=prop_atlas)
+        prop_atlas=prop_atlas, unit_levels=actor_levels)
+    upper_actor_ids = [index for index, actor in enumerate(units)
+                       if actor_levels.get(actor.id, 0) > 0]
+    for index in upper_actor_ids:
+        canvas.tag_raise('iso_actor_unit_' + str(index))
+    if upper_actor_ids:
+        canvas.tag_raise('selection')
     return geo
 
 
