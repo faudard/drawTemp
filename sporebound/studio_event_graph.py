@@ -46,6 +46,11 @@ class EventGraphStudio:
         self.cinematic_choice = self.tk.StringVar()
         self.last_preview = None
         self.context = None
+        self._rendered_graph = None
+        self._rendered_scale = None
+        self._node_items = {}
+        self._node_styles = {}
+        self._rendered_item_count = 0
         self._build(notebook)
 
     def _button(self, parent, label, callback):
@@ -431,53 +436,85 @@ class EventGraphStudio:
         self._refresh_context()
         self.draw()
 
+    @staticmethod
+    def _node_style(node, selected_id, selected_action, preview):
+        selected = node['event_id'] == selected_id
+        if node['kind'] == 'action':
+            selected = selected and node['index'] == selected_action
+        if node['kind'] == 'condition':
+            if selected and preview and preview['event_id'] == node['event_id']:
+                fill = ('#fecaca' if preview['error'] else
+                        '#bbf7d0' if preview['fired'] else '#fef3c7')
+            else:
+                fill = '#f1f5f9'
+        else:
+            fill = '#dbeafe' if selected else '#f1f5f9'
+        return (fill, '#2563eb' if selected else '#94a3b8',
+                3 if selected else 1)
+
     def draw(self):
         ui_started = begin_ui()
         graph = event_graph.build_event_graph(
             self.owner.doc().data, self.owner.mission(),
             max_nodes=750, max_events=200)
         canvas = self.canvas
-        canvas.delete('all')
-        scale = int(self.zoom.get().rstrip('%'))/100
-        width, height = int(200*scale), int(70*scale)
-        nodes = {n['key']: n for n in graph['nodes']}
-        for edge in graph['edges']:
-            a, b = nodes[edge['source']], nodes[edge['target']]
-            x1,y1 = int(a['x']*scale), int(a['y']*scale)
-            x2,y2 = int(b['x']*scale), int(b['y']*scale)
-            canvas.create_line(x1+width,y1,x2,y2,arrow='last',
-                               fill='#64748b',width=2)
+        scale = int(self.zoom.get().rstrip('%')) / 100
+        width, height = int(200 * scale), int(70 * scale)
+        # The projection is compared by VALUES, never by dictionary identity.
+        # A selection-only refresh can reuse all lines and labels while
+        # changing exactly the affected rectangles' appearance.
+        cache_hit = (
+            self._rendered_graph == graph and self._rendered_scale == scale
+            and len(canvas.find_all()) == self._rendered_item_count
+            and len(self._node_items) == len(graph['nodes'])
+        )
+        nodes = {node['key']: node for node in graph['nodes']}
+        if not cache_hit:
+            canvas.delete('all')
+            self._node_items = {}
+            self._node_styles = {}
+            for edge in graph['edges']:
+                a, b = nodes[edge['source']], nodes[edge['target']]
+                x1, y1 = int(a['x'] * scale), int(a['y'] * scale)
+                x2, y2 = int(b['x'] * scale), int(b['y'] * scale)
+                canvas.create_line(x1 + width, y1, x2, y2, arrow='last',
+                                   fill='#64748b', width=2)
+        updates = 0
         for index, node in enumerate(graph['nodes']):
-            x,y = int(node['x']*scale), int(node['y']*scale)
-            selected = node['event_id'] == self.event_id.get()
-            if node['kind'] == 'action':
-                selected = selected and node['index'] == self.action_index
-            if node['kind'] == 'condition':
-                report = self.last_preview
-                if selected and report and report['event_id'] == node['event_id']:
-                    fill = ('#fecaca' if report['error'] else
-                            '#bbf7d0' if report['fired'] else '#fef3c7')
-                else:
-                    fill = '#f1f5f9'
-            else:
-                fill = '#dbeafe' if selected else '#f1f5f9'
-            tag = 'event_node_'+str(index)
-            canvas.create_rectangle(x,y-height//2,x+width,y+height//2,
-                                    fill=fill,outline='#2563eb' if selected else '#94a3b8',
-                                    width=3 if selected else 1,tags=(tag,))
+            style = self._node_style(
+                node, self.event_id.get(), self.action_index, self.last_preview)
+            key = node['key']
+            if cache_hit:
+                if style != self._node_styles.get(key):
+                    canvas.itemconfigure(self._node_items[key],
+                                         fill=style[0], outline=style[1],
+                                         width=style[2])
+                    self._node_styles[key] = style
+                    updates += 1
+                continue
+            x, y = int(node['x'] * scale), int(node['y'] * scale)
+            tag = 'event_node_' + str(index)
+            rectangle = canvas.create_rectangle(
+                x, y-height//2, x+width, y+height//2,
+                fill=style[0], outline=style[1], width=style[2], tags=(tag,))
             label = node['label']
             if node['kind'] == 'condition':
                 label = f"{node['order']+1}. {node['event_id']}\nSI {label}"
             else:
                 label = f"{node['index']+1}. {label}"
-            canvas.create_text(x+width//2,y,text=label,
-                               width=width-12,justify='center',
-                               fill='#0f172a',tags=(tag,))
+            canvas.create_text(x + width//2, y, text=label,
+                               width=width-12, justify='center',
+                               fill='#0f172a', tags=(tag,))
             canvas.tag_bind(tag, '<Button-1>',
-                            lambda e,k=node['key']: self.select_node(k))
+                            lambda e, k=key: self.select_node(k))
+            self._node_items[key] = rectangle
+            self._node_styles[key] = style
         canvas.configure(scrollregion=(
-            0,0,max(600,int(graph['width']*scale)),
-            max(250,int(graph['height']*scale))))
+            0, 0, max(600, int(graph['width']*scale)),
+            max(250, int(graph['height']*scale))))
+        self._rendered_graph = graph
+        self._rendered_scale = scale
+        self._rendered_item_count = len(canvas.find_all())
         self.status.set(
             f"Mission {self.owner.mission()} : {graph['drawn_events']}/"
             f"{graph['total_events']} événements, {len(graph['nodes'])} nœuds."
@@ -487,8 +524,10 @@ class EventGraphStudio:
         finish_ui('event_graph.draw', ui_started, canvas, counts={
             'nodes': len(graph['nodes']), 'edges': len(graph['edges']),
             'zoom_pct': int(self.zoom.get().rstrip('%')),
-            'canvas_items': len(canvas.find_all()) if ui_started is not None else 0,
+            'canvas_items': self._rendered_item_count if ui_started is not None else 0,
             'truncated': graph['truncated'],
+            'retained': cache_hit,
+            'changed_rectangles': updates,
         })
 
     def select_node(self, key):
