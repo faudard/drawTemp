@@ -148,6 +148,7 @@ class EditorHierarchyTests(unittest.TestCase):
         self.assertEqual(self.groups(doc.data)[0]['cells'], [[10, 9]])
         doc.undo()
         self.assertEqual(doc.data, before)
+        doc.replace(create_editor_group(doc.data, self.MID, 'Autre groupe'))
         with self.assertRaises(RuleError):
             ctx.apply(preview)
 
