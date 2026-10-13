@@ -23,6 +23,12 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install .
+      - name: Verify 3.7.24A World Map model and legacy save compatibility
+        run: python -m unittest tests_standalone.test_world_map_3724a -v
+      - name: Generate and validate a playable 3.7.24A World Map campaign
+        run: |
+          python -m examples.world_map_3724a --output "${{ runner.temp }}/world-3724a.json"
+          python -m sporebound validate --content "${{ runner.temp }}/world-3724a.json" --project "${{ runner.temp }}/world-3724a.game.json"
       - run: python -m unittest discover -s tests_standalone -v
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
@@ -56,6 +62,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_editor_gui.py -v
+      - name: Verify 3.7.24A World Map drag, undo/save and shared Player renderer
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_map_3724a_gui.py -v
       - name: Verify 3.7.21B common undo/redo and Save All through real Tk
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -137,6 +147,20 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_structure_groups_3719b_gui.py -v
+      - name: Verify 3.7.20A interior roof cutaway and picking at three zoom levels
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_iso_interiors_3720a_gui.py -v
+      - name: Exercise 3.7.20B editable upper-deck presentation in Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_interior_levels_3720b_gui.py -v
+      - name: Verify 3.7.20C tactical floor traversal and Player elevated picking
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_tactical_levels_3720c_gui.py -v
+      - name: Generate 3.7.20C layered-house example via public authoring APIs
+        run: python3 -m examples.layered_house_3720c --output "${{ runner.temp }}/layered_house_3720c.json"
       - name: Build playable fortified village with existing authoring commands (3.7.17A)
         run: python3 -m examples.fortified_village_3717a --output "${{ runner.temp }}/reference-village/fortified_village.json"
       - name: Check reference village sprites and hit testing at three zooms (3.7.17A)
@@ -162,6 +186,18 @@ jobs:
         with:
           name: iso-chibi-actors-3719a
           path: ${{ runner.temp }}/chibi-actors/
+          if-no-files-found: warn
+      - name: Compare visual fidelity in Editor and Player (24/54/96, depth/cutaway)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+          SPOREBOUND_FIDELITY_SCREENSHOT_DIR: ${{ runner.temp }}/visual-fidelity
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m unittest discover -s tests_standalone -p test_visual_fidelity_art_372_gui.py -v
+      - name: Preserve Editor/Player parity screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-player-visual-fidelity
+          path: ${{ runner.temp }}/visual-fidelity/
           if-no-files-found: warn
       - name: Exercise 2.5.3.2 visual synergy unlock and secret combinations
         env:

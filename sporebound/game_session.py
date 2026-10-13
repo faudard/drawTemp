@@ -23,6 +23,18 @@ def digest(value):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def gameplay_project_digest(project):
+    """Fingerprint game-affecting project data, not decorative world positions.
+
+    Legacy projects without a world preserve their exact original digest.
+    Adding/moving map pins cannot invalidate a persisted Campaign checkpoint.
+    Other story, campaign, asset and gameplay fields remain strictly verified.
+    """
+    manifest = project.to_dict()
+    manifest.pop("world", None)
+    return digest(manifest)
+
+
 class IncompatibleSaveError(RuleError):
     """A verified save belongs to other content, project or gameplay rules.
 
@@ -68,6 +80,9 @@ class GameSession:
         self.finalized = False
         self.settled_fronts = set()
         self.siege_id = None  # Optional authored siege identity; old slots omit it.
+        # Project-owned narrative choices; no mutation of Battle's replay log.
+        self.tactical_story_pending = ""
+        self.tactical_story_queue = []
 
     @classmethod
     def new(cls, content, project, campaign_id, **kwargs):
@@ -89,6 +104,70 @@ class GameSession:
 
     def active_scene(self):
         return self.story.active_scene(self.progress)
+
+    def _tactical_story_progress(self):
+        require(bool(self.tactical_story_pending), "No tactical dialogue pending")
+        require(not self.progress.story_pending,
+                "Cannot overlap campaign and tactical dialogue")
+        projected = deepcopy(self.progress)
+        projected.story_pending = self.tactical_story_pending
+        return projected
+
+    def tactical_scene(self):
+        return self.story.active_scene(self._tactical_story_progress())
+
+    def tactical_choices(self):
+        return self.story.choices(self._tactical_story_progress())
+
+    def _queue_tactical_story(self, battle, old_fired=()):
+        """Consume newly fired canonical triggers, in their engine order."""
+        if battle is None or self.fronts is not None:
+            return
+        seen = set(old_fired)
+        for event_id in battle.fired:
+            if event_id in seen:
+                continue
+            target = f"{battle.mission.id}/{event_id}"
+            scene = self.story.during_tactical_event.get(target)
+            if scene:
+                self.tactical_story_queue.append(scene)
+        if not self.tactical_story_pending and self.tactical_story_queue:
+            self.tactical_story_pending = self.tactical_story_queue.pop(0)
+
+    def choose_tactical_story_option(self, choice_id):
+        """Atomically apply canonical StoryBook choice and resume the Battle."""
+        require(self.mode == "battle", "No standalone tactical dialogue")
+        require(self.battle is not None, 'Missing tactical battle')
+        previous = deepcopy((self.progress, self.battle,
+                             self.tactical_story_pending,
+                             self.tactical_story_queue, self.finalized))
+        try:
+            projected = self._tactical_story_progress()
+            scene_id = projected.story_pending
+            selected = next((c for c in self.story.choices(projected)
+                             if c['id'] == choice_id), None)
+            require(selected is not None, 'Choice is unavailable')
+            updated = self.story.choose(projected, choice_id)
+            # Every tactical choice has a journal entry, including an empty
+            # tactical-effects list. This makes replay and story history agree.
+            self.battle.execute({
+                'kind': 'story_effects', 'scene': scene_id,
+                'choice': choice_id,
+                'effects': deepcopy(selected.get('tactical_effects', [])),
+            })
+            next_scene = updated.story_pending
+            updated.story_pending = ""
+            self.progress = updated
+            self.tactical_story_pending = (next_scene or
+                                           (self.tactical_story_queue.pop(0)
+                                            if self.tactical_story_queue else ""))
+            if not self.tactical_story_pending:
+                self._settle()
+            return self.tactical_scene() if self.tactical_story_pending else None
+        except Exception:
+            (self.progress, self.battle, self.tactical_story_pending,
+             self.tactical_story_queue, self.finalized) = previous
+            raise
 
     def exploration_state(self):
         scene = self.active_scene()
@@ -194,7 +273,9 @@ class GameSession:
             self.content, mission_id, seed=self.seed, ruleset=self.rules,
             initial_state=self._battle_support(mission_id))
         self.battle, self.finalized = battle, False
-        self._settle()
+        self._queue_tactical_story(battle)
+        if not self.tactical_story_pending:
+            self._settle()
         return battle
 
     def start_fronts(self, missions, focused, *, specs=None, links=None,
@@ -220,6 +301,8 @@ class GameSession:
             event_graph=event_graph)
         self.settled_fronts.clear()
         self.siege_id = None
+        self.tactical_story_pending = ""
+        self.tactical_story_queue.clear()
         return self.fronts
 
     def _commit(self, battle):
@@ -231,6 +314,10 @@ class GameSession:
         self.progress = updated
 
     def _settle(self):
+        # A battle may reach victory on the same tick as a dialogue trigger:
+        # defer settlement/reward and any after-victory scene until selection.
+        if self.tactical_story_pending:
+            return
         if self.fronts is not None:
             for front, battle in self.fronts.battles.items():
                 if front not in self.settled_fronts and battle.result in ("victory", "defeat"):
@@ -242,9 +329,15 @@ class GameSession:
 
     def execute(self, command):
         require(self.active_battle is not None, "No tactical combat")
-        require(not self.progress.story_pending, "Resolve pending dialogue first")
+        require(isinstance(command, dict)
+                and command.get('kind') != 'story_effects',
+                'Story effects must come from a validated narrative choice')
+        require(not self.progress.story_pending and not self.tactical_story_pending,
+                "Resolve pending dialogue first")
+        before_fired = set(self.active_battle.fired) if self.fronts is None else set()
         before = deepcopy((self.progress, self.battle, self.fronts,
-                           self.finalized, self.settled_fronts))
+                           self.finalized, self.settled_fronts,
+                           self.tactical_story_pending, self.tactical_story_queue))
         try:
             if self.fronts is not None:
                 if self.fronts.recovery_battles:
@@ -255,10 +348,12 @@ class GameSession:
             else:
                 require(not self.finalized, "Combat already completed")
                 self.battle.execute(command)
+                self._queue_tactical_story(self.battle, before_fired)
             self._settle()
         except Exception:
             (self.progress, self.battle, self.fronts,
-             self.finalized, self.settled_fronts) = before
+             self.finalized, self.settled_fronts,
+             self.tactical_story_pending, self.tactical_story_queue) = before
             raise
         return self.active_battle
 
@@ -337,15 +432,20 @@ class GameSession:
 
     def ai_turn(self):
         require(self.mode == "battle" and not self.finalized and
-                not self.battle.deploying, "No standalone AI combat")
+                not self.battle.deploying and not self.tactical_story_pending,
+                "No standalone AI combat or pending tactical dialogue")
         require(self.battle.active is not None and self.battle.active.team == "enemy",
                 "Not an enemy activation")
-        before = deepcopy((self.progress, self.battle, self.finalized))
+        old_fired = set(self.battle.fired)
+        before = deepcopy((self.progress, self.battle, self.finalized,
+                           self.tactical_story_pending, self.tactical_story_queue))
         try:
             play_activation(self.battle)
+            self._queue_tactical_story(self.battle, old_fired)
             self._settle()
         except Exception:
-            self.progress, self.battle, self.finalized = before
+            (self.progress, self.battle, self.finalized,
+             self.tactical_story_pending, self.tactical_story_queue) = before
             raise
 
     def return_to_campaign(self):
@@ -368,6 +468,8 @@ class GameSession:
         self.finalized = False
         self.settled_fronts = set()
         self.siege_id = None
+        self.tactical_story_pending = ""
+        self.tactical_story_queue.clear()
 
     def recording(self):
         """Portable v1 checkpoint; embedded tactical journals verify by replay."""
@@ -382,7 +484,7 @@ class GameSession:
             "version": self.VERSION, "kind": "game_session",
             "campaign_id": self.campaign_id, "seed": self.seed,
             "content_digest": digest(self.content.to_dict()),
-            "project_digest": digest(self.project.to_dict()),
+            "project_digest": gameplay_project_digest(self.project),
             "rules": self.rules.manifest(),
             "progress": {"version": 1, **asdict(self.progress)},
             "mode": self.mode, "tactical": tactical,
@@ -391,6 +493,10 @@ class GameSession:
         }
         if self.siege_id is not None:
             data["siege_id"] = self.siege_id
+        if self.tactical_story_pending:
+            data["tactical_story_pending"] = self.tactical_story_pending
+        if self.tactical_story_queue:
+            data["tactical_story_queue"] = list(self.tactical_story_queue)
         if self.fronts is not None:
             # MultiFront journals verify rules/state, but historically recreate
             # Battle UUIDs. Preserve identities used by Campaign.record_bonds.
@@ -409,7 +515,9 @@ class GameSession:
         require(isinstance(data, dict) and type(data.get("version")) is int
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
-        require(set(data) - {"front_battle_ids", "siege_id"} == {"version", "kind", "campaign_id", "seed",
+        require(set(data) - {"front_battle_ids", "siege_id",
+                             "tactical_story_pending", "tactical_story_queue"} ==
+                {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
                 "mode", "tactical", "finalized", "settled_fronts", "digest"},
                 "Malformed game session")
@@ -417,7 +525,7 @@ class GameSession:
                                          if k != "digest"}), "Game session checksum mismatch")
         rules = rules if rules is not None else default_rules()
         current_content = digest(content.to_dict())
-        current_project = digest(project.to_dict())
+        current_project = gameplay_project_digest(project)
         current_rules = rules.manifest()
         if data["content_digest"] != current_content:
             raise IncompatibleSaveError("content", data["content_digest"], current_content)
@@ -433,6 +541,23 @@ class GameSession:
                 <= set(session.content.missions), "Unknown campaign mission")
         mode = data["mode"]
         require(mode in {"campaign", "battle", "fronts"}, "Invalid session mode")
+        pending = data.get("tactical_story_pending", "")
+        queue = data.get("tactical_story_queue", [])
+        require(isinstance(pending, str) and
+                isinstance(queue, list) and len(queue) <= 128 and
+                all(isinstance(sid, str) for sid in queue),
+                "Invalid tactical dialogue checkpoint")
+        require(not pending or pending in session.story.scenes,
+                "Unknown pending tactical scene")
+        require(all(scene in session.story.during_tactical_event.values()
+                    for scene in queue), "Unknown queued tactical scene")
+        require(not queue or bool(pending),
+                "Queued tactical scenes require a pending dialogue")
+        require((not pending and not queue) or
+                (mode == "battle" and not session.progress.story_pending),
+                "Tactical dialogue belongs to a standalone battle")
+        session.tactical_story_pending = pending
+        session.tactical_story_queue = list(queue)
         require("siege_id" not in data or (mode == "fronts"
                 and isinstance(data["siege_id"], str) and bool(data["siege_id"])),
                 "Invalid authored siege identity")
@@ -453,8 +578,48 @@ class GameSession:
                     session.progress.unlocked + session.progress.completed,
                     "Unknown or locked tactical mission")
             session.finalized = data["finalized"]
-            require(session.finalized == (session.battle.result in ("victory", "defeat")),
+            require(session.finalized ==
+                    (session.battle.result in ("victory", "defeat")
+                     and not pending),
                     "Battle finalization mismatch")
+            if pending:
+                require(any(ref.split("/", 1)[0] == session.battle.mission.id
+                            and ref.split("/", 1)[1] in session.battle.fired
+                            for ref in session.story.during_tactical_event),
+                        "Pending tactical dialogue has no fired origin")
+            # Recorded narrative actions must correspond to real authored
+            # choices, not arbitrary Battle commands injected into the journal.
+            # Every post-3.7.21F tactical choice writes one story_effects command.
+            decisions = [cmd for cmd in session.battle.commands
+                         if cmd.get('kind') == 'story_effects']
+            history = session.progress.story_history
+            require(len(decisions) <= len(history),
+                    'Battle story decisions exceed campaign history')
+            if decisions:
+                require(history[-len(decisions):] == [
+                    {'scene': cmd['scene'], 'choice': cmd['choice']}
+                    for cmd in decisions], 'Battle story decisions mismatch campaign history')
+                permitted = set()
+                def visit(scene_id):
+                    if scene_id in permitted:
+                        return
+                    permitted.add(scene_id)
+                    for choice in session.story.scenes[scene_id]['choices']:
+                        dest = choice.get('next_scene')
+                        if dest:
+                            visit(dest)
+                for reference, root in session.story.during_tactical_event.items():
+                    mid, trigger_id = reference.split('/', 1)
+                    if mid == session.battle.mission.id and trigger_id in session.battle.fired:
+                        visit(root)
+                for cmd in decisions:
+                    require(cmd['scene'] in permitted,
+                            'Story choice was not reached by a tactical event')
+                    authored = next((c for c in session.story.scenes[cmd['scene']]['choices']
+                                    if c['id'] == cmd['choice']), None)
+                    require(authored is not None and
+                            authored.get('tactical_effects', []) == cmd['effects'],
+                            'Replayed tactical effects differ from authored choice')
         else:
             require(isinstance(data["tactical"], dict) and not data["finalized"],
                     "Invalid multi-front state")

@@ -20,6 +20,11 @@ from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, SURFACE_COLORS, IsoTerrainAtlas)
 from .iso_props import IsoPropAtlas
 from .iso_object_atlas import IsoObjectAtlas
+from .interior_levels import (FLOOR_SURFACES, FLOOR_FEATURES, MAX_INTERIOR_LEVEL,
+                              add_interior_floor, delete_interior_floor,
+                              edit_interior_tile, floor_hit_test,
+                              projected_floor_polygon)
+from .level_navigation import add_level_link, place_unit_on_level
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import IsoActorAtlas
@@ -271,6 +276,12 @@ def launch(path):
     tile_size = 54
     iso_geometry = None
     iso_var = tk.BooleanVar(value=False)
+    interior_var = tk.BooleanVar(value=False)  # Editor visibility only.
+    floor_var = tk.IntVar(value=1)  # Selected visual deck (ground always 0).
+    travel_level_var = tk.IntVar(value=0)  # Combat target includes ground floor.
+    floor_surface_var = tk.StringVar(value='stone')
+    floor_feature_var = tk.StringVar(value='crate')
+    floor_action_var = tk.StringVar(value='Sol')
     surface_var = tk.StringVar(value='grass')
     feature_var = tk.StringVar(value='tree')
     level_var = tk.IntVar(value=2)
@@ -565,6 +576,12 @@ def launch(path):
                    'facing': directions[facing_var.get()]}
         elif action == 'move':
             cmd = {'kind': 'move', 'cell': list(selected_cell)}
+        elif action == 'level_move':
+            cmd = {'kind': 'level_move', 'level': travel_level_var.get(),
+                   'cell': list(selected_cell)}
+        elif action == 'level_attack':
+            cmd = {'kind': 'level_attack', 'level': travel_level_var.get(),
+                   'cell': list(selected_cell)}
         elif action.startswith('item:'):
             cmd = {'kind': 'item', 'item': action[5:], 'cell': list(selected_cell)}
         elif action.startswith('object:'):
@@ -861,6 +878,69 @@ def launch(path):
     def structure_anchor(cursor):
         return placement_origin(structure_clip(), cursor, structure_pivot_var.get())
 
+    def authored_building_at(cell):
+        scene = Content.from_dict(doc.data).missions[mission_var.get()]
+        from .iso_architecture import architecture_instances
+        instance = next((b for b in architecture_instances(
+            scene.board, scene.structures) if cell in b.cells), None)
+        if instance is None or not instance.id:
+            raise RuleError('Sélectionner une maison/tour/ruine placée avec identité.')
+        if instance.name not in ARCHITECTURE_NAMES:
+            raise RuleError('Les étages nécessitent un bâtiment habitable.')
+        return instance.id
+
+    @guarded
+    def create_interior_level():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        sid = authored_building_at(selected_cell)
+        level = floor_var.get()
+        design_change(lambda: doc.replace(add_interior_floor(
+            doc.data, mission_var.get(), sid, level)))
+        interior_var.set(True)
+        iso_var.set(True)
+        refresh()
+        status_var.set(f'Étage visuel {level} créé pour {sid} (non jouable).')
+
+    @guarded
+    def remove_interior_level():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        sid = authored_building_at(selected_cell)
+        level = floor_var.get()
+        design_change(lambda: doc.replace(delete_interior_floor(
+            doc.data, mission_var.get(), sid, level)))
+        status_var.set(f'Étage visuel {level} supprimé (Undo disponible).')
+
+    @guarded
+    def create_level_stair():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        destination = floor_var.get()
+        start = [destination-1, *selected_cell]
+        end = [destination, *selected_cell]
+        design_change(lambda: doc.replace(add_level_link(
+            doc.data, mission_var.get(), start, end)))
+        status_var.set(f'Escalier bidirectionnel N{destination-1} ↔ N{destination}'
+                       f' créé en {selected_cell}.')
+
+    @guarded
+    def set_unit_floor():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        level = floor_var.get()
+        design_change(lambda: doc.replace(place_unit_on_level(
+            doc.data, mission_var.get(), unit_var.get(), level,
+            selected_cell)))
+        status_var.set(f'{unit_var.get()} positionné à N{level} en {selected_cell}.')
+
+    def select_interior_paint():
+        interior_var.set(True)
+        iso_var.set(True)
+        tool_var.set('Étage intérieur')
+        refresh()
+        status_var.set('Étage : cliquer sur un plateau surélevé pour éditer le plan visuel.')
+
     def active_brush():
         return f'height:{level_var.get()}' if brush_var.get() == 'height_set' else brush_var.get()
 
@@ -880,6 +960,34 @@ def launch(path):
 
     def event_cell(event):
         px, py = canvas.canvasx(event.x), canvas.canvasy(event.y)
+        if (battle and iso_var.get() and iso_geometry is not None
+                and action_var.get() in {'level_move', 'level_attack'}
+                and travel_level_var.get() > 0):
+            scene = battle.mission
+            for building in reversed(getattr(iso_geometry, 'architecture_instances', ())):
+                floor = next((row for row in scene.interior_floors
+                              if row['structure_id'] == building.id and
+                              row['level'] == travel_level_var.get()), None)
+                if floor is not None:
+                    found = floor_hit_test(iso_geometry, building, floor, px, py)
+                    if found is not None:
+                        return found
+            return None
+        if (tool_var.get() == 'Étage intérieur' and iso_var.get()
+                and iso_geometry is not None):
+            scene = Content.from_dict(doc.data).missions[mission_var.get()]
+            for building in reversed(getattr(iso_geometry, 'architecture_instances', ())):
+                if any(f['structure_id'] == building.id and
+                       f['level'] == floor_var.get()
+                       for f in scene.interior_floors):
+                    # Only the elevated plane is interactive in this tool.
+                    floor = next(f for f in scene.interior_floors
+                                 if f['structure_id'] == building.id and
+                                 f['level'] == floor_var.get())
+                    cell = floor_hit_test(iso_geometry, building, floor, px, py)
+                    if cell is not None:
+                        return cell
+            return None
         if iso_var.get() and iso_geometry is not None:
             return iso_geometry.hit_test(px, py)
         return int(px // tile_size), int(py // tile_size)
@@ -906,7 +1014,7 @@ def launch(path):
                     'structure_group_preview', 'structure_group_ghost',
                     'brush_preview', 'asset_ghost', 'entity_preview',
                     'entity_ghost', 'entity_route', 'entity_source',
-                    'entity_target_preview'):
+                    'entity_target_preview', 'floor_preview'):
             canvas.delete(tag)
 
     def paste_preview(event):
@@ -1041,6 +1149,13 @@ def launch(path):
                 status_var.set(entry.label + ' : emplacement valide, cliquer pour poser.')
             return
         clear_placement_preview()
+        if tool_var.get() == 'Étage intérieur':
+            cursor = event_cell(event)
+            if cursor is not None and iso_geometry is not None:
+                canvas.create_polygon(*_flatten(projected_floor_polygon(
+                    iso_geometry, cursor, floor_var.get())),
+                    fill='', outline='#2361ff', width=3, tags='floor_preview')
+            return
         if tool_var.get() in ('Structure', 'Déplacer structure', 'Dupliquer structure'):
             cursor = event_cell(event)
             if cursor is None:
@@ -1268,6 +1383,21 @@ def launch(path):
                     team=team)))
                 status_var.set(f'{entry.label} placé en {selected_cell} ; '
                                'Undo/Redo et sauvegarde disponibles.')
+        elif tool == 'Étage intérieur':
+            if source_pending():
+                raise RuleError('Appliquer le JSON avant de modifier l’étage.')
+            sid = authored_building_at(selected_cell)
+            action = floor_action_var.get()
+            options = ({'surface': floor_surface_var.get()} if action == 'Sol' else
+                       {'feature': floor_feature_var.get()} if action == 'Mobilier' else
+                       {'present': False} if action == 'Trou' else
+                       {'present': True} if action == 'Restaurer' else None)
+            if options is None:
+                raise RuleError('Outil étage invalide')
+            design_change(lambda: doc.replace(edit_interior_tile(
+                doc.data, mission_var.get(), sid, floor_var.get(),
+                selected_cell, **options)))
+            status_var.set(f'Étage {floor_var.get()} : {action} en {selected_cell}.')
         elif tool == 'Structure':
             if source_pending():
                 raise RuleError('Appliquer ou abandonner le JSON avant la pose.')
@@ -1518,6 +1648,20 @@ def launch(path):
             raise RuleError('Aucun élément de ce type sur la case.')
         studio.focus_map_entity(kind, chosen['id'])
 
+    @guarded
+    def open_selected_gate_event():
+        if battle is not None:
+            raise RuleError('Revenir en mode Éditer pour lier un événement.')
+        mission = next(m for m in doc.data['missions']
+                       if m['id'] == mission_var.get())
+        selected = next((item for item in mission.get('objects', ())
+                         if tuple(item['pos']) == selected_cell
+                         and item['kind'] in ('door', 'switch')), None)
+        if selected is None:
+            raise RuleError('Sélectionner une porte ou un levier sur la carte.')
+        studio.focus_gate_event(
+            selected['id'] if selected['kind'] == 'door' else selected['link'])
+
     def refresh(*args, views=None):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
@@ -1578,7 +1722,11 @@ def launch(path):
                 live = battle_frame(battle, selected_cell) if battle else None
                 iso_geometry = editor_renderer.draw(
                     board, mission, units, cell_size=tile_size,
-                    layers={name: var.get() for name, var in layer_vars.items()},
+                    layers={**{name: var.get() for name, var in layer_vars.items()},
+                            'Intérieurs': interior_var.get(),
+                            'Étage actif': (battle.unit_levels.get(battle.active_id, 0)
+                                            if battle and battle.active_id else
+                                            floor_var.get() if interior_var.get() else 0)},
                     selected_cell=selected_cell, selected_tiles=selected_tiles,
                     reachable=live.reachable if live else (),
                     danger=live.danger if live else (),
@@ -1586,7 +1734,8 @@ def launch(path):
                     atlas=iso_atlas, prop_atlas=iso_props,
                     building_atlas=building_atlas,
                     fortification_atlas=fortification_atlas,
-                    actor_atlas=actor_atlas, object_atlas=object_atlas)
+                    actor_atlas=actor_atlas, object_atlas=object_atlas,
+                    unit_levels=battle.unit_levels if battle else None)
             else:
                 iso_geometry = None
                 editor_renderer.invalidate()
@@ -1665,9 +1814,31 @@ def launch(path):
                 text += f'Objet {obj["id"]} : {obj["kind"]}\n'
             actor_focus.configure(state='normal' if selected_units and not battle else 'disabled')
             object_focus.configure(state='normal' if selected_objects and not battle else 'disabled')
+            event_focus.configure(state='normal' if not battle and
+                                  any(o['kind'] in ('door', 'switch')
+                                      for o in selected_objects) else 'disabled')
             if inspected_tile is not None:
                 text += (f'Surface : {inspected_tile.surface} | Décor : '
                          f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
+            if iso_var.get() and board.contains(selected_cell):
+                from .iso_interiors import interior_plan
+                building = next((instance for instance in getattr(
+                    iso_geometry, 'architecture_instances', ())
+                    if selected_cell in instance.cells), None)
+                if building is not None and building.name in ARCHITECTURE_NAMES:
+                    room = interior_plan(board, building)
+                    text += (f'Intérieur : {building.name} ({building.id or "hérité"})'
+                             f' | {len(room.floors)} cases accessibles'
+                             f' | {len(room.walls)} murs'
+                             f' | {len(room.furnishings)} décors'
+                             f' | entrée {"visible" if room.doors else "obstruée"}\n')
+                    floors = [f for f in mission.interior_floors
+                              if f['structure_id'] == building.id]
+                    if floors:
+                        text += ('Plateaux visuels (non jouables) : '
+                                 + ', '.join(f'N{f["level"]} ({len(f["tiles"])} cases)'
+                                             for f in sorted(floors, key=lambda f: f['level']))
+                                 + '\n')
             for obj in selected_objects:
                 if obj['kind'] == 'defense':
                     text += f"Défense {obj['id']} ({obj['team']}) : {obj.get('charges',2)} charges, dégâts {obj.get('power',15)}, {'sabotée' if obj.get('disabled') else 'active'}\n"
@@ -1685,6 +1856,10 @@ def launch(path):
                     u = battle.active
                     text += f'Actif : {u.name} ({u.team})\nPV {u.hp}/{u.max_hp} | MP {u.mp}/{u.max_mp} | CT {u.ct}\nDéplacement : {"utilisé" if u.moved else "libre"}\nAction : {"utilisée" if u.acted else "libre"}\n'
                     actions = ['move','attack',*u.skills,'item:potion','item:ether','item:phoenix',*['object:'+o['id'] for o in mission.objects],*available_operations(battle,u)]
+                    if mission.level_links:
+                        actions = (['level_move', 'level_attack', 'attack']
+                                   if battle.unit_levels.get(u.id, 0) else
+                                   ['level_move', 'level_attack', *actions])
                     action_box['values'] = actions
                     if action_var.get() not in actions: action_var.set('move')
                     if action_var.get() not in {'move'} and not action_var.get().startswith(('item:','object:','siege-attack:','repair-siege:')):
@@ -1776,7 +1951,8 @@ def launch(path):
                          'Remplissage','Pipette sol','Pipette décor',
                          'Structure','Sélection structure',
                          'Déplacer structure','Dupliquer structure',
-                         'Entité','Inspecter entité','Déplacer entité','Dupliquer entité']).pack(side='left')
+                         'Entité','Inspecter entité','Déplacer entité',
+                         'Dupliquer entité','Étage intérieur']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -1962,7 +2138,8 @@ def launch(path):
                 root, snapshot=lambda: (doc.data, mission_var.get()),
                 actors=actor_atlas, commit=commit_entity_edit,
                 begin_target=begin_entity_target,
-                cell_size=lambda: tile_size)
+                cell_size=lambda: tile_size,
+                open_event=lambda door_id: studio.focus_gate_event(door_id))
         entity_inspector.show_at(cell)
 
     @guarded
@@ -1997,6 +2174,8 @@ def launch(path):
                command=lambda: rotate_structure(1)).pack(side='left',padx=2)
     structure_options = ttk.Frame(tools_structure)
     structure_options.pack(fill='x', padx=5, pady=2)
+    ttk.Checkbutton(structure_options, text='Intérieurs / coupe des toits',
+                    variable=interior_var, command=refresh).pack(side='left', padx=4)
     ttk.Label(structure_options, text='Pivot :').pack(side='left',padx=(2, 4))
     ttk.Combobox(structure_options, textvariable=structure_pivot_var,
                  state='readonly', width=8, values=PIVOTS).pack(side='left',padx=2)
@@ -2033,6 +2212,40 @@ def launch(path):
                command=lambda: apply_structure_group(False)).pack(side='left',padx=3)
     ttk.Button(structure_group_controls, text='Dupliquer groupe',
                command=lambda: apply_structure_group(True)).pack(side='left',padx=3)
+    floor_controls = ttk.Frame(root)
+    floor_controls.pack(fill='x', padx=5)
+    ttk.Label(floor_controls, text='Étage supérieur (visuel) :').pack(side='left',padx=3)
+    floor_combo = ttk.Combobox(floor_controls, textvariable=floor_var,
+                               state='readonly', width=3,
+                               values=tuple(range(1, MAX_INTERIOR_LEVEL+1)))
+    floor_combo.pack(side='left')
+    floor_combo.bind('<<ComboboxSelected>>', lambda _e: refresh())
+    ttk.Button(floor_controls, text='Créer',
+               command=create_interior_level).pack(side='left',padx=2)
+    ttk.Button(floor_controls, text='Supprimer',
+               command=remove_interior_level).pack(side='left',padx=2)
+    ttk.Label(floor_controls, text='Opération').pack(side='left',padx=3)
+    ttk.Combobox(floor_controls, textvariable=floor_action_var, state='readonly',
+                 width=10, values=('Sol','Mobilier','Trou','Restaurer')).pack(side='left')
+    ttk.Label(floor_controls, text='Sol').pack(side='left',padx=3)
+    ttk.Combobox(floor_controls, textvariable=floor_surface_var, state='readonly',
+                 width=8, values=sorted(FLOOR_SURFACES)).pack(side='left')
+    ttk.Label(floor_controls, text='Objet').pack(side='left',padx=3)
+    ttk.Combobox(floor_controls, textvariable=floor_feature_var, state='readonly',
+                 width=9, values=sorted(FLOOR_FEATURES)).pack(side='left')
+    ttk.Button(floor_controls, text='Peindre étage',
+               command=select_interior_paint).pack(side='left',padx=4)
+    tactical_floors = ttk.Frame(tools_selection)
+    tactical_floors.pack(fill='x', padx=5, pady=2)
+    ttk.Label(tactical_floors, text='Gameplay vertical :').pack(side='left',padx=3)
+    ttk.Label(tactical_floors, text='Destination N').pack(side='left',padx=3)
+    ttk.Combobox(tactical_floors, textvariable=travel_level_var,
+                 state='readonly', width=3,
+                 values=tuple(range(MAX_INTERIOR_LEVEL+1))).pack(side='left')
+    ttk.Button(tactical_floors, text='Escalier N-1 ↔ N',
+               command=create_level_stair).pack(side='left',padx=3)
+    ttk.Button(tactical_floors, text='Placer unité à N',
+               command=set_unit_floor).pack(side='left',padx=3)
     advanced_controls = ttk.Frame(tools_selection)
     advanced_controls.pack(fill='x', padx=5, pady=3)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
@@ -2091,6 +2304,10 @@ def launch(path):
     canvas.bind('<Control-c>',lambda _e: copy_selection())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
+    def toggle_interiors(_event=None):
+        interior_var.set(not interior_var.get())
+        refresh()
+    canvas.bind('<Control-i>', toggle_interiors)
     canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
     canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
     canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
@@ -2110,6 +2327,10 @@ def launch(path):
     object_focus = ttk.Button(side_panel, text='Modifier l’objet sélectionné',
                               command=lambda: open_selected_entity('object'))
     object_focus.pack(fill='x', padx=6, pady=2)
+    event_focus = ttk.Button(
+        side_panel, text='Créer événement lié à la porte',
+        command=open_selected_gate_event)
+    event_focus.pack(fill='x', padx=6, pady=2)
     ttk.Button(side_panel, text='Personnages et événements',
                command=lambda: studio.workspace._show_tab(
                    'Personnages et événements')).pack(fill='x', padx=6, pady=3)

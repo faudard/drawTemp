@@ -101,7 +101,7 @@ def validate_story(raw, content, campaigns):
     if not raw:
         return
     require(set(raw) <= {'scenes', 'entry_scenes', 'after_mission',
-                         'after_strategic_event'}, 'Unknown story field')
+                         'after_strategic_event', 'during_tactical_event'}, 'Unknown story field')
     scenes = raw.get('scenes')
     require(isinstance(scenes, list) and bool(scenes), 'Story requires scenes')
     ids, edges = set(), {}
@@ -124,7 +124,7 @@ def validate_story(raw, content, campaigns):
         for choice in choices:
             require(isinstance(choice, dict) and
                     {'id', 'label'} <= set(choice) <=
-                    {'id', 'label', 'when', 'effects', 'next_scene'},
+                    {'id', 'label', 'when', 'effects', 'tactical_effects', 'next_scene'},
                     'Invalid choice')
             _id(choice['id'], 'Choice id')
             require(choice['id'] not in choice_ids, 'Duplicate choice id')
@@ -137,6 +137,9 @@ def validate_story(raw, content, campaigns):
                 has_default = True
             effects = choice.get('effects', [])
             require(isinstance(effects, list) and len(effects) <= 20, 'Invalid effects list')
+            require(isinstance(choice.get('tactical_effects', []), list) and
+                    len(choice.get('tactical_effects', [])) <= 12,
+                    'Invalid tactical effects list')
             for effect in effects:
                 _effect(effect, content)
             if 'next_scene' in choice:
@@ -148,9 +151,17 @@ def validate_story(raw, content, campaigns):
     entries = raw.get('entry_scenes', {})
     outcomes = raw.get('after_mission', {})
     strategic = raw.get('after_strategic_event', {})
+    tactical = raw.get('during_tactical_event', {})
     require(isinstance(entries, dict) and isinstance(outcomes, dict)
-            and isinstance(strategic, dict) and len(strategic) <= 128,
+            and isinstance(strategic, dict) and len(strategic) <= 128
+            and isinstance(tactical, dict) and len(tactical) <= 128,
             'Story links must be bounded objects')
+    # Only authored and validated tactical triggers can interrupt combat.
+    tactical_refs = {f"{mission.id}/{event['id']}"
+                     for mission in content.missions.values()
+                     for event in mission.triggers}
+    require(set(tactical) <= tactical_refs,
+            'Unknown tactical narrative trigger')
     for key in strategic:
         require(isinstance(key, str) and key.count('/') == 1,
                 'Strategic story link requires siege/node id')
@@ -160,6 +171,7 @@ def validate_story(raw, content, campaigns):
     require(set(entries) <= campaign_ids, 'Unknown narrative campaign')
     require(set(outcomes) <= set(content.missions), 'Unknown narrative mission')
     for ref in [*entries.values(), *outcomes.values(), *strategic.values(),
+                *tactical.values(),
                 *(dest for links in edges.values() for dest in links)]:
         require(ref in ids, f'Unknown narrative scene: {ref}')
     # No scene can cause unbounded automatic/interactive narrative loops.
@@ -174,6 +186,30 @@ def validate_story(raw, content, campaigns):
         colors[node] = 2
     for sid in ids:
         visit(sid)
+
+    # Validate every tactical consequence in the context of every mission
+    # which can reach the scene, including shared next_scene branches.
+    from .rules import default_rules
+    from .tactical_story_effects import validate_tactical_effects
+    reachable = {}
+    def walk_tactical(scene_id, mission_id):
+        if mission_id in reachable.setdefault(scene_id, set()):
+            return
+        reachable[scene_id].add(mission_id)
+        for child in edges[scene_id]:
+            walk_tactical(child, mission_id)
+
+    for reference, scene_id in tactical.items():
+        walk_tactical(scene_id, reference.split('/', 1)[0])
+    for scene in scenes:
+        for choice in scene['choices']:
+            if 'tactical_effects' not in choice:
+                continue
+            missions = reachable.get(scene['id'], set())
+            require(bool(missions), 'Tactical effects require a linked tactical scene')
+            for mission_id in missions:
+                validate_tactical_effects(choice['tactical_effects'], content,
+                                          mission_id, default_rules())
 
 
 def matches(expression, progress):
@@ -205,6 +241,7 @@ class StoryBook:
         self.entry = dict(raw.get('entry_scenes', {}))
         self.after = dict(raw.get('after_mission', {}))
         self.after_strategic_event = dict(raw.get('after_strategic_event', {}))
+        self.during_tactical_event = dict(raw.get('during_tactical_event', {}))
         self.digest = (hashlib.sha256(json.dumps(raw, sort_keys=True,
                        ensure_ascii=False).encode('utf-8')).hexdigest() if raw else '')
 

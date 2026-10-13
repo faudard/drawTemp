@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 
 from . import authoring
+from .entity_event_studio import author_gate_sequence, gate_context, probe_gate_sequence
+from .event_context import format_preview_report
 from .game_project import GameProject, load_slot, save_slot
 from .model import Content, RuleError
 from .tactical_rpg3 import authored_rules_for_document
@@ -38,6 +40,8 @@ class StudioPanels:
         self.workspace = ProjectWorkspaceTab(self, notebook)
         self._entities_tab(notebook)
         self._project_tab(notebook)
+        from .studio_world_map import WorldMapStudio
+        self.world_studio = WorldMapStudio(self, notebook)
         from .studio_advanced import AdvancedStudio
         self.advanced=AdvancedStudio(self, notebook)
         from .studio_character_rules import CharacterRulesStudio
@@ -218,6 +222,41 @@ class StudioPanels:
         ttk.Button(objects,text='Supprimer l’objet sélectionné',command=lambda: self._run(
             lambda: self._change(lambda d,m: authoring.remove_object(d,m,self._selected(self.object_list))))).grid(row=6,column=0,columnspan=2,pady=4)
         objects.columnconfigure(1,weight=1); objects.rowconfigure(5,weight=1)
+        # One contextual path inside the existing entity tab, not another modal
+        # palette or an independent trigger/scene schema.
+        gate = ttk.LabelFrame(objects, text='Entity & Event Studio · porte → levier → événement')
+        gate.grid(row=7, column=0, columnspan=2, sticky='ew', padx=6, pady=8)
+        self.gate_door, self.gate_door_box = self._field(
+            gate, 0, 'Porte sélectionnée', choices=[])
+        self.gate_lever, _ = self._field(gate, 1, 'Levier (ID nouveau/existant)', 'lever_gate')
+        self.gate_lever_cell, _ = self._field(gate, 2, 'Case levier (x,y)')
+        ttk.Button(gate, text='Depuis la carte',
+                   command=lambda: self.gate_lever_cell.set(
+                       ','.join(map(str, self.selection())))).grid(
+                           row=2, column=2, padx=4)
+        self.gate_event_id, _ = self._field(gate, 3, 'Identifiant événement', 'gate_interact')
+        self.gate_danger_cell, _ = self._field(gate, 4, 'Case danger (x,y)')
+        ttk.Button(gate, text='Depuis la carte',
+                   command=lambda: self.gate_danger_cell.set(
+                       ','.join(map(str, self.selection())))).grid(
+                           row=4, column=2, padx=4)
+        self.gate_danger, _ = self._field(gate, 5, 'Danger tactique', '4')
+        self.gate_dialogue, _ = self._field(
+            gate, 6, 'Dialogue cinématique', 'La porte s’ouvre !')
+        self.gate_cinematic_id, _ = self._field(gate, 7, 'ID cinématique (facultatif)')
+        gate_buttons = ttk.Frame(gate)
+        gate_buttons.grid(row=8, column=0, columnspan=3, sticky='ew', pady=6)
+        ttk.Button(gate_buttons, text='Créer et simuler',
+                   command=lambda: self._run(self.create_gate_event)).pack(
+                       side='left', padx=4)
+        ttk.Button(gate_buttons, text='Simuler événement',
+                   command=lambda: self._run(self.preview_gate_event)).pack(
+                       side='left', padx=4)
+        ttk.Label(gate, text='Choisir les deux cases sur la carte, puis reprendre '
+                  'leur position ici. Le graphe et la cinématique restent éditables '
+                  'dans les onglets existants.', wraplength=620).grid(
+                      row=9, column=0, columnspan=3, sticky='w', padx=6, pady=4)
+        gate.columnconfigure(1, weight=1)
 
         events = ttk.Frame(groups)
         groups.add(events,text='Événements / triggers')
@@ -263,6 +302,75 @@ class StudioPanels:
                 next_missions=[s.strip() for s in self.next_missions.get().split(',') if s.strip()])))).grid(
                     row=4,column=0,columnspan=2,pady=5)
         mission_form.columnconfigure(1,weight=1)
+
+    @staticmethod
+    def _gate_point(raw):
+        parts = [part.strip() for part in raw.split(',')]
+        if len(parts) != 2 or any(not part or not part.lstrip('-').isdigit()
+                                  for part in parts):
+            raise RuleError('Position attendue au format x,y')
+        return [int(value) for value in parts]
+
+    def focus_gate_event(self, door_id):
+        """Open the existing contextual inspector for the selected map gate."""
+        door, levers = gate_context(self.doc().data, self.mission(), door_id)
+        self.focus_map_entity('object', door['id'])
+        self.gate_door.set(door['id'])
+        if levers:
+            self.gate_lever.set(levers[0]['id'])
+            self.gate_lever_cell.set(','.join(map(str, levers[0]['pos'])))
+        else:
+            self.gate_lever.set('lever_' + door_id)
+            self.gate_lever_cell.set('')
+        self.gate_event_id.set('open_' + door_id)
+        self.gate_danger_cell.set('')
+        self.entities_groups.select(self.objects_page)
+
+    def create_gate_event(self):
+        """Single coordinated Studio history entry for Content + GameProject."""
+        mid, eid = self.mission(), self.gate_event_id.get().strip()
+        initial = self.doc().data
+        updated, project = author_gate_sequence(
+            initial, self.project, mid,
+            door_id=self.gate_door.get(),
+            lever_id=self.gate_lever.get().strip(),
+            lever_cell=self._gate_point(self.gate_lever_cell.get()),
+            event_id=eid,
+            danger_cell=self._gate_point(self.gate_danger_cell.get()),
+            danger=int(self.gate_danger.get()),
+            dialogue=self.gate_dialogue.get(),
+            cinematic_id=self.gate_cinematic_id.get().strip())
+        # If pending raw JSON made design_change abort, do NOT update the
+        # manifest: otherwise the scene would reference an uncommitted trigger.
+        self.design_change(lambda: self.doc().replace(updated))
+        if self.doc().data != updated:
+            raise RuleError('Enregistrement du contenu annulé ; projet inchangé.')
+        self.project = project
+        self.refresh()
+        self.gate_event_id.set(eid)
+        self.preview_gate_event()
+
+    def preview_gate_event(self):
+        """Reuse the existing graph/scene preview; no separate simulator."""
+        graph = self.advanced.event_graph
+        eid = self.gate_event_id.get().strip()
+        context = probe_gate_sequence(
+            self.doc().data, self.project, self.mission(),
+            eid, self.gate_door.get())
+        graph.event_id.set(eid)
+        graph.preview_scenario.set('Condition vraie')
+        graph.refresh()
+        graph.preview_selected()
+        graph._set_context_text(
+            ['PORTE : ' + ('ouverte, traversable' if context['gate_opened']
+                           else 'inchangée'),
+             'CONSÉQUENCE : ' + ('terrain modifié' if context['tactical_effect']
+                                else 'aucune modification'),
+             'CINÉMATIQUE PLAYER : ' +
+             (', '.join(context['cinematic_ids']) or 'aucune'),
+             'GATE : ' + ('OK' if context['gate_scenario_ok'] else 'À CORRIGER'),
+             '', *format_preview_report(context['event'])], show_end=True)
+        self.notebook.select(graph.tab)
 
     def focus_map_entity(self, kind, entity_id):
         """Navigate to the selected map entity in the existing editing form."""
@@ -584,6 +692,11 @@ class StudioPanels:
                 listing.insert('end',f"{item['id']}  —  {item.get('name',item.get('kind',item.get('condition','')))}")
                 if item['id'] in selected:
                     listing.selection_set(index)
+        doors = [obj['id'] for obj in chosen.get('objects', ())
+                 if obj['kind'] == 'door']
+        self.gate_door_box['values'] = doors
+        if self.gate_door.get() not in doors:
+            self.gate_door.set(doors[0] if doors else '')
         self.start_box['values']=[m['id'] for m in missions]
         self.campaign_box['values']=[c['id'] for c in self.project.campaigns]
         if self.session is not None:
@@ -596,3 +709,4 @@ class StudioPanels:
         self.cinematic_studio.refresh()
         self.audio_studio.refresh()
         self.workspace.refresh()
+        self.world_studio.refresh()

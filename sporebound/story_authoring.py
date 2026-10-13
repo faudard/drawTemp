@@ -106,6 +106,28 @@ def add_effect(project, content, scene_id, choice_id, effect):
     return _edit(project, content, change)
 
 
+def add_tactical_effect(project, content, scene_id, choice_id, effect):
+    """Transactionally append a replayable Battle consequence to one choice."""
+    def change(story):
+        choice = next((c for c in _scene(story, scene_id)['choices']
+                       if c['id'] == choice_id), None)
+        require(choice is not None, 'Unknown narrative choice')
+        choice.setdefault('tactical_effects', []).append(deepcopy(effect))
+    return _edit(project, content, change)
+
+
+def remove_tactical_effect(project, content, scene_id, choice_id):
+    def change(story):
+        choice = next((c for c in _scene(story, scene_id)['choices']
+                       if c['id'] == choice_id), None)
+        require(choice is not None and choice.get('tactical_effects'),
+                'No tactical choice effect to remove')
+        choice['tactical_effects'].pop()
+        if not choice['tactical_effects']:
+            choice.pop('tactical_effects')
+    return _edit(project, content, change)
+
+
 def set_scene_entry(project, content, campaign_id, scene_id=''):
     def change(story):
         mapping = story.setdefault('entry_scenes', {})
@@ -140,6 +162,24 @@ def set_strategic_scene(project, content, siege_id, node_id, scene_id=''):
             mapping.pop(reference, None)
         if not mapping:
             story.pop('after_strategic_event', None)
+
+    return _edit(project, content, change)
+
+
+def set_tactical_scene(project, content, mission_id, event_id, scene_id=''):
+    """Link an authored tactical trigger to an existing narrative scene."""
+    _id(mission_id, 'Mission id')
+    _id(event_id, 'Tactical event id')
+    reference = mission_id + '/' + event_id
+
+    def change(story):
+        mapping = story.setdefault('during_tactical_event', {})
+        if scene_id:
+            mapping[reference] = scene_id
+        else:
+            mapping.pop(reference, None)
+        if not mapping:
+            story.pop('during_tactical_event', None)
 
     return _edit(project, content, change)
 

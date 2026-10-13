@@ -4,9 +4,14 @@ The normal renderer remains the source of drawing/occlusion rules. Replaying its
 commands through this adapter avoids Tcl calls for unchanged items; no document
 revision assumptions are required (Studio panels can edit dictionaries in place).
 """
+from copy import deepcopy
 from time import perf_counter
 
 from .iso_map import IsoGeometry, render_isometric
+
+
+_ATLAS_OPTIONS = ('atlas', 'prop_atlas', 'building_atlas',
+                  'fortification_atlas', 'actor_atlas', 'object_atlas')
 
 
 class EditorRenderCache:
@@ -21,6 +26,8 @@ class EditorRenderCache:
         self._region = None
         self.stats = {}
         self._owns_canvas = False
+        self._large_scene_state = None
+        self._large_selection = None
 
     def invalidate(self):
         """Call when another renderer takes ownership of the Canvas."""
@@ -32,6 +39,8 @@ class EditorRenderCache:
         self._region = None
         self.geometry = None
         self._geometry_key = None
+        self._large_scene_state = None
+        self._large_selection = None
 
     def begin_group(self, group):
         self._group = group
@@ -115,6 +124,47 @@ class EditorRenderCache:
         self.stats.update(created=created, updated=updated, deleted=deleted,
                           items=len(self._items))
 
+    @staticmethod
+    def _large_inputs(board, mission, units, options):
+        """Conservative copy: detect in-place Studio changes, not just new IDs.
+
+        The atlases are Tk-backed caches. Track their identity, never deepcopy
+        a Tcl interpreter. Selected cells are handled by a separate overlay.
+        """
+        content = deepcopy((board, mission, tuple(units)))
+        appearance = deepcopy({
+            key: value for key, value in options.items()
+            if key not in _ATLAS_OPTIONS
+            and key not in ('selected_cell', 'selected_tiles')
+        })
+        atlases = tuple(id(options.get(name)) for name in _ATLAS_OPTIONS)
+        return content, appearance, atlases
+
+    def _redraw_large_selection(self, selected_cell, selected_tiles):
+        """Update the same foreground outlines as the full scene renderer."""
+        deleted = len(self.canvas.find_withtag('selection'))
+        self.canvas.delete('selection')
+        selected_tiles = set(selected_tiles)
+        created = 0
+        for cell in self.geometry.draw_order:
+            if cell not in selected_tiles and cell != selected_cell:
+                continue
+            corners = tuple(value for point in self.geometry.polygon(cell)
+                            for value in point)
+            if cell in selected_tiles:
+                self.canvas.create_polygon(
+                    *corners, outline='#23689e', fill='', width=3,
+                    tags='selection')
+                created += 1
+            if cell == selected_cell:
+                self.canvas.create_polygon(
+                    *corners, outline='#2361ff', fill='', width=3,
+                    tags='selection')
+                created += 1
+        # draw_architecture raises selection above roofs in the full renderer.
+        self.canvas.tag_raise('selection')
+        return created, deleted
+
     def draw(self, board, mission, units, **options):
         start = perf_counter()
         if not self._owns_canvas:
@@ -131,22 +181,45 @@ class EditorRenderCache:
             # Content.from_dict produces fresh models on every Studio refresh.
             self.geometry.board = board
         if board.width * board.height > self.max_retained_cells:
-            # Measurements at 128² show command diffing costs more than Tcl
-            # rebuilding. Keep the cheap geometry cache, bound display-list
-            # memory, and use the established full renderer for large scenes.
+            # At 128², keeping every Canvas command costs too much memory.
+            # Keep the geometry-only fallback, but avoid rebuilding thousands
+            # of Canvas items for unchanged scenes and selection-only edits.
             self._items.clear()
             self._order = self._raises = ()
             self._region = None
+            state = self._large_inputs(board, mission, units, options)
+            selection = (options.get('selected_cell'),
+                         frozenset(options.get('selected_tiles', ())))
+            if (not rebuilt and self.stats.get('mode') == 'geometry'
+                    and state == self._large_scene_state):
+                if selection != self._large_selection:
+                    created, deleted = self._redraw_large_selection(
+                        selection[0], selection[1])
+                    fast_path = 'selection'
+                else:
+                    created = deleted = 0
+                    fast_path = 'unchanged'
+                self._large_selection = selection
+                self.stats = dict(mode='geometry', geometry_rebuilt=False,
+                                  created=created, updated=0, deleted=deleted,
+                                  items=None, fast_path=fast_path,
+                                  render_ms=(perf_counter() - start) * 1000)
+                return self.geometry
             try:
                 render_isometric(self.canvas, board, mission, units,
                                  geometry=self.geometry, **options)
             except Exception:
                 self.invalidate()
                 raise
+            self._large_scene_state = state
+            self._large_selection = selection
             self.stats = dict(mode='geometry', geometry_rebuilt=rebuilt,
                               created=None, updated=0, deleted=None, items=None,
+                              fast_path='full',
                               render_ms=(perf_counter() - start) * 1000)
             return self.geometry
+        self._large_scene_state = None
+        self._large_selection = None
         if self.stats.get('mode') == 'geometry':
             self.canvas.delete('all')
         self._commands = {}

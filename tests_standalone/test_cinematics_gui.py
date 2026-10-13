@@ -62,7 +62,9 @@ class CinematicGUITests(unittest.TestCase):
                     event_targets = [w for w in all_widgets(root)
                                      if isinstance(w, ttk.Combobox)
                                      and "garden/spore_pulse" in tuple(w["values"])]
-                    self.assertEqual(len(event_targets), 1)
+                    # Story Studio also exposes these same canonical
+                    # mission/event IDs as narrative-link targets.
+                    self.assertTrue(event_targets)
                     trigger.set("campaign_start")
                     trigger.event_generate("<<ComboboxSelected>>")
                     root.update()
