@@ -6,7 +6,7 @@ from pathlib import Path
 from .editor_render_cache import EditorRenderCache
 from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
                                   StructureGroupCommand, EditorGroupMoveCommand,
-                                  EntityCommand,
+                                  EditorGroupTreeDropCommand, EntityCommand,
                                   RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
 from .ai import play_activation
 from .engine import Battle
@@ -44,7 +44,7 @@ from .editor_groups import (create_editor_group, add_selection_to_group,
                             remove_selection_from_group, transfer_selection_to_group,
                             rename_editor_group, reparent_editor_group,
                             delete_editor_group, descendant_groups,
-                            group_display_cells)
+                            group_display_cells, check_tree_drop)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -301,6 +301,10 @@ def launch(path):
     editor_group_dy = tk.IntVar(value=0)
     selected_group_id = None
     group_tree_signature = None
+    group_tree_items = {}
+    group_tree_cell_counts = {}
+    group_tree_drag = None
+    group_tree_updating = False
     structure_selection_cell = None
     structure_selection_id = None
     structure_drag_from = None
@@ -931,58 +935,232 @@ def launch(path):
         refresh()
         status_var.set(f'Groupe déplacé Δ({dx}, {dy}), une seule annulation.')
 
+    def _group_tree_mission():
+        return next(m for m in doc.data['missions']
+                    if m['id'] == mission_var.get())
+
+    def _load_group_cells(gid):
+        """Populate one page on expansion, including draggable individual tiles."""
+        folder = 'cells:' + gid
+        if not group_tree.exists(folder):
+            return
+        group = next((g for g in _group_tree_mission().get('editor_groups', ())
+                      if g['id'] == gid), None)
+        if group is None:
+            return
+        points = group['cells']
+        offset = group_tree_cell_counts.get(gid, 0)
+        more = 'more:' + gid
+        if group_tree.exists(more):
+            group_tree.delete(more)
+        if offset >= len(points):
+            return
+        tiles = {tuple(t['pos']): t for t in _group_tree_mission()['board']['tiles']}
+        limit = min(offset + 128, len(points))
+        for x, y in points[offset:limit]:
+            iid = f't:{gid}:{x}:{y}'
+            tile = tiles.get((x, y), {})
+            detail = tile.get('feature') or tile.get('surface', 'grass')
+            group_tree.insert(folder, 'end', iid=iid,
+                              text=f'Case ({x},{y}) · {detail}')
+            group_tree_items[iid] = ('cell', gid, (x, y))
+        group_tree_cell_counts[gid] = limit
+        if limit < len(points):
+            group_tree.insert(folder, 'end', iid=more,
+                              text='Afficher 128 cases supplémentaires…')
+            group_tree_items[more] = ('more', gid, None)
+
+    def expand_group_cells(_event=None):
+        info = group_tree_items.get(group_tree.focus())
+        if info is not None and info[0] == 'cells':
+            _load_group_cells(info[1])
+
     def select_group_in_tree(_event=None):
         nonlocal selected_group_id, selected_tiles, selected_cell
-        chosen = group_tree.selection()
-        if not chosen:
+        if group_tree_updating:
             return
-        item = chosen[0]
-        while item and not item.startswith('g:'):
-            item = group_tree.parent(item)
-        if not item:
+        selected = group_tree.selection()
+        if not selected:
             return
-        gid = item[2:]
-        mission = next(m for m in doc.data['missions']
-                       if m['id'] == mission_var.get())
+        iid = selected[0]
+        info = group_tree_items.get(iid)
+        if info and info[0] == 'more':
+            _load_group_cells(info[1])
+            return
+        while iid and not iid.startswith('g:'):
+            iid = group_tree.parent(iid)
+        if not iid:
+            return
+        gid = iid[2:]
+        mission = _group_tree_mission()
         if not any(g['id'] == gid for g in mission.get('editor_groups', ())):
             return
         selected_group_id = gid
         selected_tiles = group_display_cells(mission, gid)
         if selected_tiles:
-            selected_cell = min(selected_tiles, key=lambda c: (c[1], c[0]))
+            selected_cell = min(selected_tiles, key=lambda p: (p[1], p[0]))
         tool_var.set('Sélection')
         refresh()
-        status_var.set(f'Groupe sélectionné : {gid} — '
-                       f'{len(selected_tiles)} case(s) et emprises.')
+        status_var.set(f'Groupe {gid} : {len(selected_tiles)} case(s) / emprises.')
 
     def refresh_group_tree(mission):
-        nonlocal group_tree_signature, selected_group_id
+        nonlocal group_tree_signature, selected_group_id, group_tree_updating
         rows = mission.editor_groups
-        signature = (mission.id, json.dumps(rows, sort_keys=True))
+        signature = mission.id, json.dumps(rows, sort_keys=True)
         if signature == group_tree_signature:
             return
+        expanded = {iid for iid in group_tree_items
+                    if group_tree.exists(iid) and group_tree.item(iid, 'open')}
+        old_groups = {iid for iid in group_tree_items if iid.startswith('g:')}
         group_tree_signature = signature
-        group_tree.delete(*group_tree.get_children())
-        for group in rows:
-            group_tree.insert('', 'end', iid='g:'+group['id'],
-                              text=group['name']+' ('+group['id']+')',
-                              open=True)
-        for group in rows:
-            parent = group['parent']
-            if parent:
-                group_tree.move('g:'+group['id'], 'g:'+parent, 'end')
-            key = 'g:'+group['id']
-            if group['cells']:
-                group_tree.insert(key, 'end', text='Cases / décors : '+
-                                  str(len(group['cells'])))
-            for field, title in (('unit_ids','Personnage'), ('object_ids','Objet'),
-                                 ('structure_ids','Bâtiment')):
-                for identifier in group[field]:
-                    group_tree.insert(key, 'end', text=title+ ' : '+identifier)
-        if selected_group_id and group_tree.exists('g:'+selected_group_id):
-            group_tree.selection_set('g:'+selected_group_id)
-        elif selected_group_id:
-            selected_group_id = None
+        group_tree_updating = True
+        try:
+            group_tree.delete(*group_tree.get_children())
+            group_tree_items.clear()
+            group_tree_cell_counts.clear()
+            group_tree.insert('', 'end', iid='root:groups',
+                              text='Racine / sans groupe — déposer ici', open=True)
+            group_tree_items['root:groups'] = ('root', None, None)
+            for group in rows:
+                gid = group['id']
+                iid = 'g:' + gid
+                group_tree.insert('root:groups', 'end', iid=iid,
+                                  text=group['name']+' ('+gid+')',
+                                  open=iid not in old_groups or iid in expanded)
+                group_tree_items[iid] = ('group', gid, None)
+            for group in rows:
+                gid, parent = group['id'], group['parent']
+                key = 'g:' + gid
+                if parent:
+                    group_tree.move(key, 'g:'+parent, 'end')
+                if group['cells']:
+                    folder = 'cells:' + gid
+                    group_tree.insert(key, 'end', iid=folder,
+                                      text='Cases / décors : '+str(len(group['cells'])),
+                                      open=folder in expanded)
+                    group_tree_items[folder] = ('cells', gid, None)
+                    if folder in expanded:
+                        _load_group_cells(gid)
+                    else:
+                        group_tree.insert(folder, 'end', iid='more:'+gid,
+                                          text='Développer pour voir les cases')
+                        group_tree_items['more:'+gid] = ('more', gid, None)
+                for field, title in (('unit_ids', 'Personnage'),
+                                     ('object_ids', 'Objet'),
+                                     ('structure_ids', 'Bâtiment')):
+                    for identifier in group[field]:
+                        iid = 'm:' + gid + ':' + field + ':' + identifier
+                        group_tree.insert(key, 'end', iid=iid,
+                                          text=title + ' : ' + identifier)
+                        group_tree_items[iid] = (field, gid, identifier)
+            if selected_group_id and group_tree.exists('g:'+selected_group_id):
+                group_tree.selection_set('g:'+selected_group_id)
+            elif selected_group_id:
+                selected_group_id = None
+        finally:
+            group_tree_updating = False
+
+    def _tree_drop_target(iid):
+        if iid == 'root:groups':
+            return iid, None
+        while iid and iid != 'root:groups' and not iid.startswith('g:'):
+            iid = group_tree.parent(iid)
+        if iid.startswith('g:'):
+            return iid, iid[2:]
+        if iid == 'root:groups':
+            return iid, None
+        return None, None
+
+    def tree_drag_cancel(_event=None):
+        nonlocal group_tree_drag
+        if group_tree_drag:
+            previous = group_tree_drag.get('hover')
+            if previous and group_tree.exists(previous):
+                group_tree.item(previous, tags=())
+        was_active = bool(group_tree_drag and group_tree_drag['active'])
+        group_tree_drag = None
+        group_tree.configure(cursor='')
+        if _event is not None and was_active:
+            status_var.set('Glisser-déposer annulé.')
+            return 'break'
+
+    def tree_drag_press(event):
+        nonlocal group_tree_drag
+        tree_drag_cancel()
+        iid = group_tree.identify_row(event.y)
+        info = group_tree_items.get(iid)
+        if info and info[0] == 'more':
+            _load_group_cells(info[1])
+            return 'break'
+        if (not info or info[0] == 'root' or
+                group_tree.identify_element(event.x, event.y).endswith('indicator')):
+            return
+        group_tree_drag = {'source': info, 'x': event.x, 'y': event.y,
+                           'active': False, 'hover': None, 'target': None,
+                           'valid': False}
+
+    def tree_drag_motion(event):
+        drag = group_tree_drag
+        if not drag:
+            return
+        if not drag['active']:
+            if max(abs(event.x-drag['x']), abs(event.y-drag['y'])) < 6:
+                return
+            drag['active'] = True
+        if event.y < 12:
+            group_tree.yview_scroll(-1, 'units')
+        elif event.y > group_tree.winfo_height()-12:
+            group_tree.yview_scroll(1, 'units')
+        hover, target = _tree_drop_target(group_tree.identify_row(event.y))
+        if hover == drag['hover']:
+            return
+        if drag['hover'] and group_tree.exists(drag['hover']):
+            group_tree.item(drag['hover'], tags=())
+        drag.update(hover=hover, target=target, valid=False)
+        if hover is None:
+            group_tree.configure(cursor='arrow')
+            status_var.set('Déposer sur un groupe ou sur Racine.')
+            return
+        kind, owner, member = drag['source']
+        try:
+            if battle or source_pending():
+                raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+            check_tree_drop(_group_tree_mission(), owner, kind,
+                            member=member, target_group_id=target)
+        except RuleError as exc:
+            group_tree.item(hover, tags=('group-drop-invalid',))
+            group_tree.configure(cursor='arrow')
+            status_var.set('Dépôt refusé : ' + str(exc))
+        else:
+            drag['valid'] = True
+            group_tree.item(hover, tags=('group-drop-valid',))
+            group_tree.configure(cursor='hand2')
+            status_var.set('Déposer pour réorganiser les groupes (Annuler possible).')
+
+    def tree_drag_release(_event):
+        nonlocal selected_group_id
+        drag = group_tree_drag
+        if not drag:
+            return
+        active, valid, source, target = (drag['active'], drag['valid'],
+                                         drag['source'], drag['target'])
+        tree_drag_cancel()
+        if not active or not valid:
+            return
+        kind, owner, member = source
+        command = EditorGroupTreeDropCommand(
+            owner, kind, member, target_group_id=target)
+        try:
+            if battle or source_pending():
+                raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+            design_change(lambda: editing_context.execute(command, publish=False))
+        except (RuleError, ValueError) as exc:
+            status_var.set('Dépôt refusé : ' + str(exc))
+            return
+        selected_group_id = target if target is not None else owner
+        refresh()
+        status_var.set('Arbre réorganisé vers '+(target or 'racine')+
+                       ' ; Annuler / Rétablir disponibles.')
 
     def set_zoom(delta):
         nonlocal tile_size
@@ -1895,6 +2073,7 @@ def launch(path):
             mission_var.set(mids[0])
         if selection_mission != mission_var.get():
             selected_tiles.clear()
+            tree_drag_cancel()
             selected_group_id = None
             group_tree_signature = None
             structure_selection_cell = None
@@ -2544,7 +2723,15 @@ def launch(path):
     group_tree.configure(yscrollcommand=group_scroll.set)
     group_tree.pack(side='left', fill='both', expand=True)
     group_scroll.pack(side='right', fill='y')
+    group_tree.tag_configure('group-drop-valid', background='#d3f2d7')
+    group_tree.tag_configure('group-drop-invalid', background='#ffd8d5')
     group_tree.bind('<<TreeviewSelect>>', select_group_in_tree)
+    group_tree.bind('<<TreeviewOpen>>', expand_group_cells)
+    group_tree.bind('<ButtonPress-1>', tree_drag_press)
+    group_tree.bind('<B1-Motion>', tree_drag_motion)
+    group_tree.bind('<ButtonRelease-1>', tree_drag_release)
+    group_tree.bind('<Escape>', tree_drag_cancel)
+    group_tree.bind('<FocusOut>', tree_drag_cancel)
     group_controls = ttk.Frame(side_panel)
     group_controls.pack(fill='x', padx=5)
     for actions in (
