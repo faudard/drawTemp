@@ -232,3 +232,46 @@ def place_unit_on_level(data, mission_id, unit_id, level, cell):
     else:
         levels.pop(unit_id, None)
     return Content.from_dict(updated).to_dict()
+
+
+def ai_layered_move(battle, unit):
+    """Deterministic local staircase policy, without simulating a second AI.
+
+    If an enemy is reachable on a different floor or along the current deck,
+    select the reachable destination that most reduces a floor-aware distance.
+    Ground-to-ground legs continue using the legacy move command.
+    """
+    from .model import distance
+    if unit.moved or battle.status_blocks(unit, 'move'):
+        return None
+    enemies = [other for other in battle.units
+               if other.alive and other.team != unit.team]
+    if not enemies:
+        return None
+    level = battle.unit_levels.get(unit.id, 0)
+    same_level = [other for other in enemies
+                  if battle.unit_levels.get(other.id, 0) == level]
+    if level == 0 and same_level:
+        return None
+    # Preserve the regular action/forecast when already able to strike.
+    if any(distance(unit.pos, enemy.pos) == 1 for enemy in same_level):
+        return None
+    options = available_level_moves(battle, unit)
+    origin = (level, *unit.pos)
+    if not options:
+        return None
+    def heuristic(cell):
+        lvl, x, y = cell
+        return min(100 * abs(lvl - battle.unit_levels.get(enemy.id, 0))
+                   + distance((x, y), enemy.pos)
+                   for enemy in enemies)
+    baseline = heuristic(origin)
+    best = min(options, key=lambda node: (heuristic(node),
+                                         options[node][0], node))
+    if best == origin or heuristic(best) >= baseline:
+        return None
+    if best[0] == 0 and level == 0:
+        if best[1:] not in battle.reachable(unit):
+            return None
+        return {'kind': 'move', 'cell': list(best[1:])}
+    return {'kind': 'level_move', 'level': best[0], 'cell': list(best[1:])}
