@@ -50,6 +50,9 @@ def transform_structure_group(data, mission_id, cells, dx, dy, *,
         return deepcopy(data)
     prepared = deepcopy(data)
     mission = _mission(prepared, mission_id)
+    # The move's intermediate Content snapshots omit detached structures;
+    # group references must be restored after all identity IDs are preserved.
+    held_groups = mission.pop('editor_groups', None)
     if not duplicate:
         from .structure_underlay import restore_footprint
         # Restore ALL source grounds before capturing any destination.
@@ -79,4 +82,6 @@ def transform_structure_group(data, mission_id, cells, dx, dy, *,
                                  item.turns, door_slot=item.door_slot)
         if not duplicate and item.id:
             _mission(result, mission_id)['structures'][-1]['id'] = item.id
+    if held_groups is not None:
+        _mission(result, mission_id)['editor_groups'] = held_groups
     return Content.from_dict(result).to_dict()

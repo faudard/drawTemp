@@ -71,6 +71,8 @@ def remove_unit(data, mid, uid):
     def change(_, m):
         require(any(u['id'] == uid for u in m['units']), 'Unknown unit')
         m['units'] = [u for u in m['units'] if u['id'] != uid]
+        for group in m.get('editor_groups', ()):
+            group['unit_ids'] = [ref for ref in group['unit_ids'] if ref != uid]
     return _edit(data, mid, change)
 
 

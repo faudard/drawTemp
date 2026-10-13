@@ -5,7 +5,10 @@ from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
 from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
-                                  StructureGroupCommand, EntityCommand,
+                                  StructureGroupCommand, EditorGroupMoveCommand,
+                                  EditorGroupTreeDropCommand, EditorGroupBatchCommand,
+                                  GroupPrefabPlaceCommand,
+                                  EntityCommand,
                                   RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
 from .ai import play_activation
 from .engine import Battle
@@ -39,6 +42,15 @@ from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
 from .iso_architecture import (PIVOTS, ARCHITECTURE_NAMES, placement_origin,
                                preview_structure_sprite_position)
 from .structure_groups import selected_structures, transform_structure_group
+from .editor_groups import (create_editor_group, add_selection_to_group,
+                            remove_selection_from_group, transfer_selection_to_group,
+                            rename_editor_group, reparent_editor_group,
+                            delete_editor_group, descendant_groups,
+                            group_display_cells, selected_group_roots,
+                            check_tree_drop)
+from .group_prefabs import (capture_group_prefab, load_group_prefab,
+                            save_group_prefab, list_group_prefabs,
+                            prefab_file_slug, prefab_display_cells)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -291,6 +303,15 @@ def launch(path):
     structure_turns = 0
     structure_group_dx = tk.IntVar(value=1)
     structure_group_dy = tk.IntVar(value=0)
+    editor_group_dx = tk.IntVar(value=1)
+    editor_group_dy = tk.IntVar(value=0)
+    group_prefab_var = tk.StringVar(value='')
+    selected_group_id = None
+    group_tree_signature = None
+    group_tree_items = {}
+    group_tree_cell_counts = {}
+    group_tree_drag = None
+    group_tree_updating = False
     structure_selection_cell = None
     structure_selection_id = None
     structure_drag_from = None
@@ -775,6 +796,515 @@ def launch(path):
                       color=color)
         status_var.set(f'Aperçu {len(group)} structure(s) : {note}.')
 
+    def _active_group():
+        if selected_group_id is None:
+            raise RuleError('Choisir un groupe dans l’arborescence.')
+        mission = next(m for m in doc.data['missions']
+                       if m['id'] == mission_var.get())
+        if not any(g['id'] == selected_group_id for g in
+                   mission.get('editor_groups', ())):
+            raise RuleError('Le groupe sélectionné n’existe plus.')
+        return mission
+
+    @guarded
+    def create_map_group(*, child=False, empty=False):
+        nonlocal selected_group_id
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        parent = selected_group_id if child else None
+        if child:
+            _active_group()
+        if not empty and not selected_tiles:
+            raise RuleError('Sélectionner des cases ou créer un groupe vide.')
+        name = simpledialog.askstring('Nouveau groupe',
+                                      'Nom du groupe (ex. Village, Tour, Jardin) :')
+        if name is None:
+            return
+        before = {g['id'] for g in next(m for m in doc.data['missions']
+                                       if m['id'] == mission_var.get())
+                  .get('editor_groups', ())}
+        design_change(lambda: doc.replace(create_editor_group(
+            doc.data, mission_var.get(), name, parent=parent,
+            cells=tuple(selected_tiles) if not empty else ())))
+        new_ids = {g['id'] for g in next(m for m in doc.data['missions']
+                                        if m['id'] == mission_var.get())
+                   .get('editor_groups', ())}
+        created = new_ids - before
+        if created:
+            selected_group_id = created.pop()
+        refresh()
+        status_var.set('Groupe créé : ' + name)
+
+    @guarded
+    def assign_group_selection():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        _active_group()
+        cells = _selection_for_current_map()
+        design_change(lambda: doc.replace(add_selection_to_group(
+            doc.data, mission_var.get(), selected_group_id, cells)))
+        status_var.set('Cases et objets de la sélection liés au groupe.')
+
+    @guarded
+    def unlink_group_selection():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        _active_group()
+        cells = _selection_for_current_map()
+        design_change(lambda: doc.replace(remove_selection_from_group(
+            doc.data, mission_var.get(), selected_group_id, cells)))
+        status_var.set('Sélection retirée du groupe sans supprimer ses objets.')
+
+    @guarded
+    def transfer_group_selection():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        _active_group()
+        cells = _selection_for_current_map()
+        design_change(lambda: doc.replace(transfer_selection_to_group(
+            doc.data, mission_var.get(), selected_group_id, cells)))
+        status_var.set('Appartenance de la sélection transférée au groupe.')
+
+    @guarded
+    def change_group_parent():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        mission = _active_group()
+        groups = mission.get('editor_groups', [])
+        current = next(g for g in groups if g['id'] == selected_group_id)
+        available = ', '.join(g['id']+': '+g['name'] for g in groups
+                              if g['id'] != selected_group_id)
+        choice = simpledialog.askstring(
+            'Déplacer dans l’arbre',
+            'ID du nouveau parent (vide = racine) :\n'+available,
+            initialvalue=current['parent'] or '')
+        if choice is None:
+            return
+        parent = choice.strip() or None
+        design_change(lambda: doc.replace(reparent_editor_group(
+            doc.data, mission_var.get(), selected_group_id, parent)))
+
+    @guarded
+    def rename_map_group():
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        mission = _active_group()
+        current = next(g for g in mission['editor_groups']
+                       if g['id'] == selected_group_id)
+        name = simpledialog.askstring('Renommer le groupe', 'Nom :',
+                                      initialvalue=current['name'])
+        if name is not None:
+            design_change(lambda: doc.replace(rename_editor_group(
+                doc.data, mission_var.get(), selected_group_id, name)))
+
+    @guarded
+    def ungroup_map_group():
+        nonlocal selected_group_id
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        _active_group()
+        gid = selected_group_id
+        selected_group_id = None
+        design_change(lambda: doc.replace(delete_editor_group(
+            doc.data, mission_var.get(), gid)))
+        status_var.set('Groupe dissocié ; ses membres et sous-groupes sont conservés.')
+
+    def _selected_groups_from_tree():
+        """Only explicit group rows are batch targets; children are deduped."""
+        chosen = tuple(iid[2:] for iid in group_tree.selection()
+                       if iid.startswith('g:'))
+        if not chosen and selected_group_id is not None:
+            chosen = (selected_group_id,)
+        return selected_group_roots(_group_tree_mission(), chosen)
+
+    @guarded
+    def shift_map_group(dx=None, dy=None, *, preview=False, duplicate=False):
+        nonlocal selected_tiles, selected_cell, selected_group_id
+        if battle or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+        mission = _group_tree_mission()
+        roots = _selected_groups_from_tree()
+        dx = editor_group_dx.get() if dx is None else dx
+        dy = editor_group_dy.get() if dy is None else dy
+        cmd = EditorGroupBatchCommand(roots, dx, dy, duplicate=duplicate)
+        footprint = set()
+        for gid in roots:
+            footprint.update(group_display_cells(mission, gid))
+        if preview:
+            try:
+                editing_context.preview(cmd)
+                color, note = '#36a16c', 'valide'
+            except RuleError as exc:
+                color, note = '#e05252', str(exc)
+            board = mission['board']
+            ghost = ((x+dx, y+dy) for x, y in sorted(footprint)
+                     if 0 <= x+dx < board['width'] and
+                        0 <= y+dy < board['height'])
+            from itertools import islice
+            preview_cells(islice(ghost, 512), tag='editor_group_preview',
+                          color=color)
+            status_var.set(('Copie' if duplicate else 'Déplacement') +
+                           f' de {len(roots)} groupe(s) : {note}')
+            return
+        existing_ids = {g['id'] for g in mission.get('editor_groups', ())}
+        design_change(lambda: editing_context.execute(cmd, publish=False))
+        next_mission = _group_tree_mission()
+        if duplicate:
+            copied = {g['id'] for g in next_mission['editor_groups']} - existing_ids
+            copied_roots = tuple(g['id'] for g in next_mission['editor_groups']
+                                 if g['id'] in copied and g['parent'] not in copied)
+            selected_group_id = copied_roots[0] if copied_roots else None
+            selected_tiles = set().union(
+                *(group_display_cells(next_mission, gid) for gid in copied_roots))
+            chosen = copied_roots
+        else:
+            selected_tiles = set().union(
+                *(group_display_cells(next_mission, gid) for gid in roots))
+            chosen = roots
+        if selected_tiles:
+            selected_cell = min(selected_tiles, key=lambda p: (p[1], p[0]))
+        refresh()
+        chosen_items = tuple('g:'+gid for gid in chosen
+                             if group_tree.exists('g:'+gid))
+        if chosen_items:
+            group_tree.selection_set(chosen_items)
+            group_tree.focus(chosen_items[0])
+        status_var.set(
+            f'{len(chosen)} groupe(s) ' +
+            ('dupliqués' if duplicate else 'déplacés') +
+            f' Δ({dx}, {dy}) ; une seule annulation.')
+
+    def _prefab_library():
+        return current_path.parent / 'prefabs'
+
+    def refresh_group_prefabs():
+        paths = list_group_prefabs(_prefab_library())
+        options = [item.name for item in paths]
+        group_prefab_box.configure(values=options)
+        if group_prefab_var.get() not in options:
+            group_prefab_var.set(options[0] if options else '')
+        return paths
+
+    def _chosen_prefab():
+        name = group_prefab_var.get()
+        require_path = next((item for item in list_group_prefabs(
+            _prefab_library()) if item.name == name), None)
+        if require_path is None:
+            raise RuleError('Sélectionner un préfab dans la bibliothèque.')
+        return load_group_prefab(require_path)
+
+    @guarded
+    def export_group_prefab():
+        if battle is not None or source_pending():
+            raise RuleError('Terminer le playtest et appliquer le JSON.')
+        roots = _selected_groups_from_tree()
+        name = simpledialog.askstring(
+            'Créer un préfab', 'Nom du modèle réutilisable :',
+            initialvalue='Ensemble de groupes')
+        if name is None:
+            return
+        prefab = capture_group_prefab(
+            doc.data, mission_var.get(), roots, name)
+        output = _prefab_library() / prefab_file_slug(name)
+        overwrite = output.exists() and messagebox.askyesno(
+            'Remplacer un préfab', 'Remplacer '+output.name+' ?')
+        if output.exists() and not overwrite:
+            return
+        save_group_prefab(prefab, output, overwrite=overwrite)
+        refresh_group_prefabs()
+        group_prefab_var.set(output.name)
+        status_var.set('Préfab sauvegardé : '+str(output))
+
+    @guarded
+    def import_group_prefab():
+        name = filedialog.askopenfilename(
+            title='Importer un préfab',
+            filetypes=[('Préfab de groupes', '*.json')])
+        if not name:
+            return
+        prefab = load_group_prefab(name)
+        target = _prefab_library() / prefab_file_slug(prefab['name'])
+        overwrite = target.exists() and messagebox.askyesno(
+            'Remplacer un préfab', 'Remplacer '+target.name+' ?')
+        if target.exists() and not overwrite:
+            return
+        save_group_prefab(prefab, target, overwrite=overwrite)
+        refresh_group_prefabs()
+        group_prefab_var.set(target.name)
+        status_var.set('Préfab ajouté à la bibliothèque : '+target.name)
+
+    @guarded
+    def place_chosen_prefab(*, preview=False):
+        nonlocal selected_group_id, selected_tiles, selected_cell
+        if battle is not None or source_pending():
+            raise RuleError('Terminer le playtest et appliquer le JSON.')
+        prefab = _chosen_prefab()
+        anchor = tuple(selected_cell)
+        command = GroupPrefabPlaceCommand(prefab, anchor)
+        if preview:
+            try:
+                editing_context.preview(command)
+                color, note = '#36a16c', 'valide'
+            except RuleError as exc:
+                color, note = '#e05252', str(exc)
+            preview_cells(
+                tuple(sorted(prefab_display_cells(prefab, anchor)))[:512],
+                tag='editor_group_preview', color=color)
+            status_var.set(f'Prévisualisation préfab {prefab["name"]} : {note}')
+            return
+        old = {g['id'] for g in _group_tree_mission().get('editor_groups', ())}
+        design_change(lambda: editing_context.execute(command, publish=False))
+        mission = _group_tree_mission()
+        inserted = {g['id'] for g in mission.get('editor_groups', ())} - old
+        parents = [g['id'] for g in mission['editor_groups']
+                   if g['id'] in inserted and g['parent'] not in inserted]
+        selected_group_id = parents[0] if parents else None
+        if parents:
+            selected_tiles = set().union(
+                *(group_display_cells(mission, gid) for gid in parents))
+        refresh()
+        if selected_group_id and group_tree.exists('g:'+selected_group_id):
+            group_tree.selection_set('g:'+selected_group_id)
+        status_var.set(f'Préfab {prefab["name"]} inséré sur la carte ; '
+                       'annulation disponible.')
+
+    def _group_tree_mission():
+        return next(m for m in doc.data['missions']
+                    if m['id'] == mission_var.get())
+
+    def _load_group_cells(gid):
+        """Populate one page on expansion, including draggable individual tiles."""
+        folder = 'cells:' + gid
+        if not group_tree.exists(folder):
+            return
+        group = next((g for g in _group_tree_mission().get('editor_groups', ())
+                      if g['id'] == gid), None)
+        if group is None:
+            return
+        points = group['cells']
+        offset = group_tree_cell_counts.get(gid, 0)
+        more = 'more:' + gid
+        if group_tree.exists(more):
+            group_tree.delete(more)
+        if offset >= len(points):
+            return
+        tiles = {tuple(t['pos']): t for t in _group_tree_mission()['board']['tiles']}
+        limit = min(offset + 128, len(points))
+        for x, y in points[offset:limit]:
+            iid = f't:{gid}:{x}:{y}'
+            tile = tiles.get((x, y), {})
+            detail = tile.get('feature') or tile.get('surface', 'grass')
+            group_tree.insert(folder, 'end', iid=iid,
+                              text=f'Case ({x},{y}) · {detail}')
+            group_tree_items[iid] = ('cell', gid, (x, y))
+        group_tree_cell_counts[gid] = limit
+        if limit < len(points):
+            group_tree.insert(folder, 'end', iid=more,
+                              text='Afficher 128 cases supplémentaires…')
+            group_tree_items[more] = ('more', gid, None)
+
+    def expand_group_cells(_event=None):
+        info = group_tree_items.get(group_tree.focus())
+        if info is not None and info[0] == 'cells':
+            _load_group_cells(info[1])
+
+    def select_group_in_tree(_event=None):
+        nonlocal selected_group_id, selected_tiles, selected_cell
+        if group_tree_updating:
+            return
+        selections = group_tree.selection()
+        if not selections:
+            return
+        focus = selections[-1]
+        info = group_tree_items.get(focus)
+        if info and info[0] == 'more':
+            _load_group_cells(info[1])
+            return
+        mission = _group_tree_mission()
+        groups = [iid[2:] for iid in selections if iid.startswith('g:')]
+        if not groups:
+            iid = focus
+            while iid and not iid.startswith('g:'):
+                iid = group_tree.parent(iid)
+            if not iid:
+                return
+            groups = [iid[2:]]
+        selected_group_id = groups[-1]
+        selected_tiles = set()
+        for gid in selected_group_roots(mission, tuple(groups)):
+            selected_tiles.update(group_display_cells(mission, gid))
+        if selected_tiles:
+            selected_cell = min(selected_tiles, key=lambda p: (p[1], p[0]))
+        tool_var.set('Sélection')
+        refresh()
+        status_var.set(f'{len(groups)} groupe(s) sélectionné(s) : '
+                       f'{len(selected_tiles)} case(s) et emprises.')
+
+    def refresh_group_tree(mission):
+        nonlocal group_tree_signature, selected_group_id, group_tree_updating
+        rows = mission.editor_groups
+        signature = mission.id, json.dumps(rows, sort_keys=True)
+        if signature == group_tree_signature:
+            return
+        expanded = {iid for iid in group_tree_items
+                    if group_tree.exists(iid) and group_tree.item(iid, 'open')}
+        old_groups = {iid for iid in group_tree_items if iid.startswith('g:')}
+        group_tree_signature = signature
+        group_tree_updating = True
+        try:
+            group_tree.delete(*group_tree.get_children())
+            group_tree_items.clear()
+            group_tree_cell_counts.clear()
+            group_tree.insert('', 'end', iid='root:groups',
+                              text='Racine / sans groupe — déposer ici', open=True)
+            group_tree_items['root:groups'] = ('root', None, None)
+            for group in rows:
+                gid = group['id']
+                iid = 'g:' + gid
+                group_tree.insert('root:groups', 'end', iid=iid,
+                                  text=group['name']+' ('+gid+')',
+                                  open=iid not in old_groups or iid in expanded)
+                group_tree_items[iid] = ('group', gid, None)
+            for group in rows:
+                gid, parent = group['id'], group['parent']
+                key = 'g:' + gid
+                if parent:
+                    group_tree.move(key, 'g:'+parent, 'end')
+                if group['cells']:
+                    folder = 'cells:' + gid
+                    group_tree.insert(key, 'end', iid=folder,
+                                      text='Cases / décors : '+str(len(group['cells'])),
+                                      open=folder in expanded)
+                    group_tree_items[folder] = ('cells', gid, None)
+                    if folder in expanded:
+                        _load_group_cells(gid)
+                    else:
+                        group_tree.insert(folder, 'end', iid='more:'+gid,
+                                          text='Développer pour voir les cases')
+                        group_tree_items['more:'+gid] = ('more', gid, None)
+                for field, title in (('unit_ids', 'Personnage'),
+                                     ('object_ids', 'Objet'),
+                                     ('structure_ids', 'Bâtiment')):
+                    for identifier in group[field]:
+                        iid = 'm:' + gid + ':' + field + ':' + identifier
+                        group_tree.insert(key, 'end', iid=iid,
+                                          text=title + ' : ' + identifier)
+                        group_tree_items[iid] = (field, gid, identifier)
+            if selected_group_id and group_tree.exists('g:'+selected_group_id):
+                group_tree.selection_set('g:'+selected_group_id)
+            elif selected_group_id:
+                selected_group_id = None
+        finally:
+            group_tree_updating = False
+
+    def _tree_drop_target(iid):
+        if iid == 'root:groups':
+            return iid, None
+        while iid and iid != 'root:groups' and not iid.startswith('g:'):
+            iid = group_tree.parent(iid)
+        if iid.startswith('g:'):
+            return iid, iid[2:]
+        if iid == 'root:groups':
+            return iid, None
+        return None, None
+
+    def tree_drag_cancel(_event=None):
+        nonlocal group_tree_drag
+        if group_tree_drag:
+            previous = group_tree_drag.get('hover')
+            if previous and group_tree.exists(previous):
+                group_tree.item(previous, tags=())
+        was_active = bool(group_tree_drag and group_tree_drag['active'])
+        group_tree_drag = None
+        group_tree.configure(cursor='')
+        if _event is not None and was_active:
+            status_var.set('Glisser-déposer annulé.')
+            return 'break'
+
+    def tree_drag_press(event):
+        nonlocal group_tree_drag
+        tree_drag_cancel()
+        iid = group_tree.identify_row(event.y)
+        info = group_tree_items.get(iid)
+        if info and info[0] == 'more':
+            _load_group_cells(info[1])
+            return 'break'
+        if (not info or info[0] == 'root' or
+                group_tree.identify_element(event.x, event.y).endswith('indicator')):
+            return
+        group_tree_drag = {'source': info, 'x': event.x, 'y': event.y,
+                           'active': False, 'hover': None, 'target': None,
+                           'valid': False}
+
+    def tree_drag_motion(event):
+        drag = group_tree_drag
+        if not drag:
+            return
+        if not drag['active']:
+            if max(abs(event.x-drag['x']), abs(event.y-drag['y'])) < 6:
+                return
+            drag['active'] = True
+        if event.y < 12:
+            group_tree.yview_scroll(-1, 'units')
+        elif event.y > group_tree.winfo_height()-12:
+            group_tree.yview_scroll(1, 'units')
+        hover, target = _tree_drop_target(group_tree.identify_row(event.y))
+        if hover == drag['hover']:
+            return
+        if drag['hover'] and group_tree.exists(drag['hover']):
+            group_tree.item(drag['hover'], tags=())
+        drag.update(hover=hover, target=target, valid=False)
+        if hover is None:
+            group_tree.configure(cursor='arrow')
+            status_var.set('Déposer sur un groupe ou sur Racine.')
+            return
+        kind, owner, member = drag['source']
+        try:
+            if battle or source_pending():
+                raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+            check_tree_drop(_group_tree_mission(), owner, kind,
+                            member=member, target_group_id=target)
+        except RuleError as exc:
+            group_tree.item(hover, tags=('group-drop-invalid',))
+            group_tree.configure(cursor='arrow')
+            status_var.set('Dépôt refusé : ' + str(exc))
+        else:
+            drag['valid'] = True
+            group_tree.item(hover, tags=('group-drop-valid',))
+            group_tree.configure(cursor='hand2')
+            status_var.set('Déposer pour réorganiser les groupes (Annuler possible).')
+
+    def tree_drag_release(event):
+        nonlocal selected_group_id
+        drag = group_tree_drag
+        if not drag:
+            return
+        active, valid, source, target = (drag['active'], drag['valid'],
+                                         drag['source'], drag['target'])
+        # The release may occur on a different row than the last motion event.
+        actual_hover, _ = _tree_drop_target(group_tree.identify_row(event.y))
+        valid = valid and actual_hover == drag['hover']
+        tree_drag_cancel()
+        if not active or not valid:
+            return
+        kind, owner, member = source
+        command = EditorGroupTreeDropCommand(
+            owner, kind, member, target_group_id=target)
+        try:
+            if battle or source_pending():
+                raise RuleError('Quitter le combat et appliquer le JSON avant édition.')
+            design_change(lambda: editing_context.execute(command, publish=False))
+        except (RuleError, ValueError) as exc:
+            status_var.set('Dépôt refusé : ' + str(exc))
+            return
+        selected_group_id = target if target is not None else owner
+        row_id = 'g:' + selected_group_id
+        if group_tree.exists(row_id):
+            group_tree.selection_set(row_id)
+        refresh()
+        status_var.set('Arbre réorganisé vers '+(target or 'racine')+
+                       ' ; Annuler / Rétablir disponibles.')
+
     def set_zoom(delta):
         nonlocal tile_size
         next_size = max(24, min(96, tile_size + delta))
@@ -1014,7 +1544,8 @@ def launch(path):
                     'structure_group_preview', 'structure_group_ghost',
                     'brush_preview', 'asset_ghost', 'entity_preview',
                     'entity_ghost', 'entity_route', 'entity_source',
-                    'entity_target_preview', 'floor_preview'):
+                    'entity_target_preview', 'floor_preview',
+                    'editor_group_preview'):
             canvas.delete(tag)
 
     def paste_preview(event):
@@ -1664,6 +2195,7 @@ def launch(path):
 
     def refresh(*args, views=None):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
+        nonlocal selected_group_id, group_tree_signature
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
         nonlocal entity_hover_key, entity_passage_entry
         structure_preview_key = None
@@ -1684,6 +2216,9 @@ def launch(path):
             mission_var.set(mids[0])
         if selection_mission != mission_var.get():
             selected_tiles.clear()
+            tree_drag_cancel()
+            selected_group_id = None
+            group_tree_signature = None
             structure_selection_cell = None
             structure_selection_id = None
             cancel_structure_drag()
@@ -1701,6 +2236,7 @@ def launch(path):
                 structure_selection_cell = tuple(record['anchor'])
         content = Content.from_dict(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
+        refresh_group_tree(content.missions[mission_var.get()])
         board = battle.board if battle else mission.board
         units = battle.units if battle else mission.units
         unit_box['values'] = [u.id for u in units if not battle or not battle.deploying
@@ -2302,6 +2838,7 @@ def launch(path):
     canvas.bind('<Down>', lambda _e: nudge_selected_structure(0, 1))
     # Escape handles both drag cancellation and passage placement above.
     canvas.bind('<Control-c>',lambda _e: copy_selection())
+    canvas.bind('<Control-g>',lambda _e: create_map_group())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
     def toggle_interiors(_event=None):
@@ -2319,6 +2856,88 @@ def launch(path):
                             background='#f5f5f5',highlightthickness=1)
     mini_canvas.pack(anchor='w',padx=3,pady=3)
     mini_canvas.bind('<Button-1>', minimap_navigate)
+    ttk.Label(side_panel, text='GROUPES ET APPARTENANCES',
+              font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=6)
+    tree_box = ttk.Frame(side_panel)
+    tree_box.pack(fill='x', padx=6, pady=3)
+    group_tree = ttk.Treeview(tree_box, show='tree', height=8, selectmode='extended')
+    group_scroll = ttk.Scrollbar(tree_box, orient='vertical',
+                                 command=group_tree.yview)
+    group_tree.configure(yscrollcommand=group_scroll.set)
+    group_tree.pack(side='left', fill='both', expand=True)
+    group_scroll.pack(side='right', fill='y')
+    group_tree.tag_configure('group-drop-valid', background='#d3f2d7')
+    group_tree.tag_configure('group-drop-invalid', background='#ffd8d5')
+    group_tree.bind('<<TreeviewSelect>>', select_group_in_tree)
+    group_tree.bind('<<TreeviewOpen>>', expand_group_cells)
+    group_tree.bind('<ButtonPress-1>', tree_drag_press)
+    group_tree.bind('<B1-Motion>', tree_drag_motion)
+    group_tree.bind('<ButtonRelease-1>', tree_drag_release)
+    group_tree.bind('<Escape>', tree_drag_cancel)
+    group_tree.bind('<FocusOut>', tree_drag_cancel)
+    group_controls = ttk.Frame(side_panel)
+    group_controls.pack(fill='x', padx=5)
+    for actions in (
+        (('Créer vide', lambda: create_map_group(empty=True)),
+         ('Grouper cases', create_map_group),
+         ('Sous-groupe', lambda: create_map_group(child=True, empty=True))),
+        (('Ajouter', assign_group_selection), ('Renommer', rename_map_group),
+         ('Dissocier', ungroup_map_group)),
+        (('Retirer', unlink_group_selection),
+         ('Transférer', transfer_group_selection),
+         ('Parent…', change_group_parent))):
+        group_row = ttk.Frame(group_controls)
+        group_row.pack(fill='x')
+        for text, action in actions:
+            ttk.Button(group_row, text=text, command=action).pack(
+                side='left', padx=1, pady=1)
+    group_move_controls = ttk.Frame(side_panel)
+    group_move_controls.pack(fill='x', padx=5, pady=(0, 5))
+    ttk.Label(group_move_controls, text='ΔX').pack(side='left')
+    ttk.Spinbox(group_move_controls, from_=-128, to=128,
+                textvariable=editor_group_dx, width=4).pack(side='left', padx=2)
+    ttk.Label(group_move_controls, text='ΔY').pack(side='left')
+    ttk.Spinbox(group_move_controls, from_=-128, to=128,
+                textvariable=editor_group_dy, width=4).pack(side='left', padx=2)
+    ttk.Button(group_move_controls, text='Aperçu',
+               command=lambda: shift_map_group(preview=True)).pack(side='left',padx=2)
+    ttk.Button(group_move_controls, text='Déplacer',
+               command=shift_map_group).pack(side='left',padx=2)
+    group_clone_controls = ttk.Frame(side_panel)
+    group_clone_controls.pack(fill='x', padx=5, pady=(0, 5))
+    ttk.Button(group_clone_controls, text='Aperçu copie',
+               command=lambda: shift_map_group(
+                   preview=True, duplicate=True)).pack(side='left',padx=2)
+    ttk.Button(group_clone_controls, text='Dupliquer groupes',
+               command=lambda: shift_map_group(
+                   duplicate=True)).pack(side='left',padx=2)
+    ttk.Label(group_clone_controls, text='Ctrl/Maj : sélection multiple'
+              ).pack(side='left',padx=3)
+    ttk.Label(side_panel, text='BIBLIOTHÈQUE DE PRÉFABS',
+              font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=6)
+    group_prefab_box = ttk.Combobox(side_panel,
+                                   textvariable=group_prefab_var,
+                                   state='readonly')
+    group_prefab_box.pack(fill='x', padx=6, pady=2)
+    group_prefab_row = ttk.Frame(side_panel)
+    group_prefab_row.pack(fill='x', padx=5)
+    for text, action in (
+        ('Enregistrer préfab', export_group_prefab),
+        ('Importer préfab', import_group_prefab),
+        ('Actualiser', refresh_group_prefabs),
+    ):
+        ttk.Button(group_prefab_row, text=text, command=action).pack(
+            side='left', padx=1, pady=1)
+    group_prefab_row_2 = ttk.Frame(side_panel)
+    group_prefab_row_2.pack(fill='x', padx=5, pady=(0, 5))
+    ttk.Button(group_prefab_row_2, text='Aperçu préfab',
+               command=lambda: place_chosen_prefab(preview=True)
+               ).pack(side='left', padx=2)
+    ttk.Button(group_prefab_row_2, text='Placer préfab',
+               command=place_chosen_prefab).pack(side='left', padx=2)
+    ttk.Label(group_prefab_row_2, text='À la case sélectionnée'
+              ).pack(side='left', padx=3)
+    refresh_group_prefabs()
     inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
     inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
     actor_focus = ttk.Button(side_panel, text='Modifier le personnage sélectionné',
