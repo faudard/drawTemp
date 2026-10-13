@@ -98,6 +98,34 @@ class DurableTemporalLifecycleTests(unittest.TestCase):
         self.assertEqual(temporal_status(
             battle, self.row(doc, 'reinforce'))['state'], 'expired')
 
+    def test_activation_expiry_and_no_firing_after_deadline(self):
+        doc = configure_schedule(
+            self.raw, self.MID, 'reinforce',
+            expire_after_activations=1)
+        battle = Battle(Content.from_dict(doc), self.MID, seed=3)
+        # Real initial activation counts toward the duration.
+        self.assertEqual(temporal_status(
+            battle, self.row(doc, 'reinforce'))['state'], 'expired')
+        self.assertNotIn('reinforce', battle.fired)
+        self.assertEqual(Battle.replay(battle.recording()).digest(),
+                         battle.digest())
+
+    def test_fired_remains_fired_if_cancellation_arrives_later(self):
+        doc = save_event(self.raw, self.MID, 'disable_alarm',
+                         condition('tick', tick=100000),
+                         [action('message', text='Disabled')])
+        from sporebound.event_graph import update_condition
+        doc = update_condition(doc, self.MID, 'reinforce',
+                               condition('tick', tick=0))
+        doc = configure_schedule(doc, self.MID, 'reinforce',
+                                 cancel_after=['disable_alarm'])
+        battle = Battle(Content.from_dict(doc), self.MID, seed=3)
+        self.assertIn('reinforce', battle.fired)
+        battle.emit('trigger', id='disable_alarm')
+        battle.fired.append('disable_alarm')
+        self.assertEqual(temporal_status(
+            battle, self.row(doc, 'reinforce'))['state'], 'fired')
+
     def test_session_reload_restores_schedule_without_extra_queue(self):
         doc = configure_schedule(self.raw, self.MID, 'reinforce',
                                  delay_ticks=2, expire_after_ticks=4)
