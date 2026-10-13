@@ -95,9 +95,15 @@ class EventGraphStudio:
         tabs.pack(fill='both', expand=True)
         contextual = ttk.LabelFrame(inspector, text='Contexte et prévisualisation')
         contextual.pack(side='bottom', fill='x', pady=(6, 0))
-        self.context_text = tk.Text(contextual, height=7, wrap='word',
+        report_view = ttk.Frame(contextual)
+        report_view.pack(fill='x', padx=3, pady=3)
+        self.context_text = tk.Text(report_view, height=7, wrap='word',
                                     font=('TkDefaultFont', 9), state='disabled')
-        self.context_text.pack(fill='x', padx=3, pady=3)
+        report_scroll = ttk.Scrollbar(report_view, orient='vertical',
+                                      command=self.context_text.yview)
+        self.context_text.configure(yscrollcommand=report_scroll.set)
+        report_scroll.pack(side='right', fill='y')
+        self.context_text.pack(side='left', fill='both', expand=True)
         preview_controls = ttk.Frame(contextual)
         preview_controls.pack(fill='x')
         ttk.Label(preview_controls, text='Tick :').pack(side='left')
@@ -458,11 +464,12 @@ class EventGraphStudio:
                      'par cet événement tactique.')
         return lines
 
-    def _set_context_text(self, lines):
+    def _set_context_text(self, lines, *, show_end=False):
         self.context_text.config(state='normal')
         self.context_text.delete('1.0', 'end')
         self.context_text.insert('1.0', '\n'.join(lines))
         self.context_text.config(state='disabled')
+        self.context_text.see('end' if show_end else '1.0')
 
     def _refresh_context(self):
         self.context = None
@@ -502,7 +509,7 @@ class EventGraphStudio:
             lines.append('Unités retirées : ' + ', '.join(report['despawned']))
         if report['error']:
             lines.append('Erreur du moteur : ' + report['error'])
-        self._set_context_text(lines)
+        self._set_context_text(lines, show_end=True)
 
     def open_linked_story(self):
         require(self.context is not None and bool(self.context['scene_id']),
