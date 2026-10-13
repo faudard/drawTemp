@@ -175,12 +175,17 @@ class EditorRenderCache:
 
     def draw(self, board, mission, units, **options):
         start = perf_counter()
+        # Validated document revision; Battle/external callers retain snapshots.
+        scene_revision = options.pop('scene_revision', None)
         if not self._owns_canvas:
             self.canvas.delete('all')
             self._owns_canvas = True
-        key = (board.width, board.height, options['cell_size'],
-               tuple(sorted((pos, tile.height) for pos, tile in board.tiles.items()
-                            if tile.height)))
+        key = ((board.width, board.height, options['cell_size'],
+                'validated', scene_revision)
+               if scene_revision is not None else
+               (board.width, board.height, options['cell_size'],
+                tuple(sorted((pos, tile.height) for pos, tile in board.tiles.items()
+                             if tile.height))))
         rebuilt = key != self._geometry_key
         if rebuilt:
             self.geometry = IsoGeometry(board, options['cell_size'])
@@ -195,7 +200,15 @@ class EditorRenderCache:
             self._items.clear()
             self._order = self._raises = ()
             self._region = None
-            state = self._large_inputs(board, mission, units, options)
+            if scene_revision is not None:
+                # Any authored modification changes the generation.
+                state = (scene_revision,
+                         {name: value for name, value in options.items()
+                          if name not in _ATLAS_OPTIONS and
+                          name not in ('selected_cell', 'selected_tiles')},
+                         tuple(id(options.get(name)) for name in _ATLAS_OPTIONS))
+            else:
+                state = self._large_inputs(board, mission, units, options)
             selection = (options.get('selected_cell'),
                          frozenset(options.get('selected_tiles', ())))
             can_reuse = (not rebuilt and self.stats.get('mode') == 'geometry'
