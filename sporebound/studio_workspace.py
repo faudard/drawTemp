@@ -3,6 +3,8 @@
 Only this module creates widgets; the index and game engine remain headless.
 """
 from .model import RuleError
+from .workspace_shell import (inspect_resource, inspect_map,
+                              map_resource_target, problem_delta)
 from .studio_index4 import StudioIndex
 from .game_export4 import export_game
 from .studio_release_gate import verify_game_bundle
@@ -18,6 +20,10 @@ class ProjectWorkspaceTab:
         self.sidebar_tree = None
         self.sidebar_search = None
         self._sidebar_mission = None
+        self.problem_tree = None
+        self.problem_targets = {}
+        self.problem_snapshot = ()
+        self.problem_count = None
         ttk = owner.ttk
         root = ttk.Frame(notebook)
         notebook.add(root, text='Espace projet')
@@ -177,6 +183,8 @@ class ProjectWorkspaceTab:
                     self.sidebar_tree.selection_set(mission)
                     self.sidebar_tree.see(mission)
         self._select()
+        if self.problem_tree is not None:
+            self._refresh_problems(model)
         self.status.config(text=f'{sum(len(items) for items in sections.values())} '
                                 'ressources indexées — modifications non sauvegardées : '
                                 f'{"oui" if self.owner.doc().dirty or self.owner.dirty() else "non"}')
@@ -216,9 +224,15 @@ class ProjectWorkspaceTab:
 
     def _select(self, _event=None):
         node = self._selected_node()
-        self.heading.config(text=f'{node.label}  [{node.kind} / {node.id}]'
-                            if node else 'Sélectionner une ressource')
-        self.summary.config(text=node.summary if node else
+        snapshot = inspect_resource(node) if node else None
+        if node is not None:
+            target = map_resource_target(node.key, self.owner.doc().data)
+            if target is not None:
+                mid, cell, _kind, _eid = target
+                snapshot = inspect_map(self.owner.doc().data, mid, cell)
+        self.heading.config(text=(snapshot.title + ' [' + node.kind + ']')
+                            if snapshot else 'Sélectionner une ressource')
+        self.summary.config(text=snapshot.detail if snapshot else
                             'Explorer campagnes, missions, scénarios et bibliothèques.')
         self.refs.delete(0, 'end')
         self.ref_keys = []
@@ -249,7 +263,12 @@ class ProjectWorkspaceTab:
         node = self._selected_node()
         if node is None:
             raise RuleError('Sélectionnez une ressource, pas une catégorie.')
-        if node.kind == 'mission':
+        if node.kind in ('map_actor', 'map_object'):
+            mid, cell, kind, identifier = map_resource_target(
+                node.key, self.owner.doc().data)
+            self.owner.focus_map_cell(mid, cell)
+            self._show_tab('Carte et combat')
+        elif node.kind == 'mission':
             self.owner.select_mission(node.id)
             self._show_tab('Carte et combat')
         elif node.kind == 'campaign':
@@ -287,6 +306,84 @@ class ProjectWorkspaceTab:
         else:
             self.status.config(text='Ressource inspectable ici. Édition guidée prévue '
                                'dans les chantiers 2.5.2 et 2.5.3.')
+
+    def attach_problems(self, notebook):
+        """Diagnostics on the live model; no duplicated document or refresh button."""
+        ttk = self.owner.ttk
+        area = ttk.Frame(notebook)
+        notebook.add(area, text='Problèmes')
+        top = ttk.Frame(area)
+        top.pack(fill='x', padx=6, pady=3)
+        self.problem_count = ttk.Label(top, text='Diagnostics')
+        self.problem_count.pack(side='left')
+        ttk.Button(top, text='Aller à la ressource',
+                   command=lambda: self.owner._run(self.open_problem)).pack(
+                       side='right', padx=5)
+        self.problem_tree = ttk.Treeview(
+            area, columns=('severity', 'resource', 'message'),
+            show='headings', selectmode='browse', height=6)
+        for column, label, width in (
+                ('severity', 'Niveau', 80),
+                ('resource', 'Ressource', 190),
+                ('message', 'Problème et correction', 490)):
+            self.problem_tree.heading(column, text=label)
+            self.problem_tree.column(column, width=width, stretch=column == 'message')
+        scroll = ttk.Scrollbar(area, orient='vertical',
+                               command=self.problem_tree.yview)
+        self.problem_tree.configure(yscrollcommand=scroll.set)
+        self.problem_tree.pack(side='left', fill='both', expand=True)
+        scroll.pack(side='right', fill='y')
+        self.problem_tree.bind(
+            '<Double-1>', lambda _e: self.owner._run(self.open_problem))
+        self.problem_tree.bind(
+            '<Return>', lambda _e: self.owner._run(self.open_problem))
+        self.problem_tab = area
+        self.problem_notebook = notebook
+        self.refresh()
+        return area
+
+    def _refresh_problems(self, model):
+        root = self.owner.project_path.parent
+        current = model.diagnostics(root, map_warnings=True)
+        added, resolved = problem_delta(self.problem_snapshot, current)
+        if not added and not resolved and self.problem_targets:
+            return
+        self.problem_snapshot = current
+        selected = self.problem_tree.selection()
+        selected_key = self.problem_targets.get(selected[0]) if selected else None
+        for item in self.problem_tree.get_children(''):
+            self.problem_tree.delete(item)
+        self.problem_targets.clear()
+        for number, (level, key, message) in enumerate(current):
+            iid = 'diagnostic:' + str(number)
+            self.problem_targets[iid] = key
+            self.problem_tree.insert('', 'end', iid=iid,
+                                     values=('Erreur' if level == 'error'
+                                             else 'Avertissement', key, message))
+            if key == selected_key:
+                self.problem_tree.selection_set(iid)
+        errors = sum(level == 'error' for level, _, _ in current)
+        self.problem_count.config(
+            text=f'{errors} erreur(s) · {len(current)-errors} avertissement(s)'
+                 + (f' · {len(resolved)} corrigé(s)' if resolved else ''))
+
+    def focus_problems(self):
+        if self.problem_tree is not None:
+            self.problem_notebook.select(self.problem_tab)
+            self.problem_tree.focus_set()
+
+    def open_problem(self):
+        selected = self.problem_tree.selection() if self.problem_tree else ()
+        if not selected:
+            raise RuleError('Choisir un diagnostic dans la liste.')
+        key = self.problem_targets[selected[0]]
+        target = map_resource_target(key, self.owner.doc().data)
+        if target is not None:
+            mid, cell, _kind, _identifier = target
+            self.owner.focus_map_cell(mid, cell)
+            self._show_tab('Carte et combat')
+        else:
+            self.open_key(key)
 
     def new_mission(self):
         dialogs = self.owner.dialogs
@@ -370,15 +467,11 @@ class ProjectWorkspaceTab:
         siege.pages.select(siege.flow_page)
 
     def validate_all(self):
-        issues = self.model().diagnostics(self.owner.project_path.parent)
+        issues = self.model().diagnostics(
+            self.owner.project_path.parent, map_warnings=True)
         errors = [i for i in issues if i[0] == 'error']
         warnings = [i for i in issues if i[0] != 'error']
-        if errors:
-            self.owner.dialogs.showerror('Diagnostics Game Studio',
-                '\n'.join(f'{key}: {message}' for _, key, message in errors[:15]))
-        elif warnings:
-            self.owner.dialogs.showwarning('Diagnostics Game Studio',
-                '\n'.join(f'{key}: {message}' for _, key, message in warnings[:15]))
+        self.focus_problems()
         self.status.config(text=f'Diagnostics : {len(errors)} erreur(s), '
                                 f'{len(warnings)} avertissement(s).')
 
