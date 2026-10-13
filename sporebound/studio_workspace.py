@@ -251,7 +251,9 @@ class ProjectWorkspaceTab:
         return node
 
     def _select(self, _event=None):
-        if _event is not None:
+        # Clearing the Treeview selection for a tile also emits a Tk event.
+        # Preserve the explicit tile until the user actually picks a resource.
+        if _event is not None and self.tree.selection():
             self._explicit_tile = ''
         node = self._selected_node()
         snapshot = inspect_resource(node) if node else None
