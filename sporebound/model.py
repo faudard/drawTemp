@@ -178,6 +178,8 @@ class Mission:
     next_missions: list[str] = field(default_factory=list)
     relic: Cell | None = None
     deployment: list[dict] = field(default_factory=list)
+    # Optional, presentation-only authoring identity (absent in legacy JSON).
+    structures: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -229,7 +231,8 @@ class Content:
     def to_dict(self) -> dict:
         missions = []
         for mission in self.missions.values():
-            row = {k: v for k, v in asdict(mission).items() if k != "board"}
+            row = {k: v for k, v in asdict(mission).items()
+                   if k != "board" and (k != "structures" or v)}
             row["board"] = {"width": mission.board.width, "height": mission.board.height,
                             "tiles": [{"pos": list(c), **asdict(t)} for c, t in sorted(mission.board.tiles.items())]}
             missions.append(row)
@@ -296,6 +299,30 @@ class Content:
                         "Invalid tile surface")
                 require(type(t.feature) is str and t.feature in FEATURES,
                         "Invalid tile feature")
+            # Stored architecture is visual metadata; it never overrides tiles
+            # or their tactical collision/height. A repainted wall is valid.
+            from .iso_structures import structure_template, structure_footprint
+            require(type(m.structures) is list, "Mission structures must be a list")
+            structure_ids, structure_cells = set(), set()
+            for structure in m.structures:
+                require(type(structure) is dict and
+                        set(structure) == {"id", "name", "anchor", "turns", "door_slot"},
+                        "Invalid structure metadata fields")
+                sid = structure["id"]
+                require(type(sid) is str and 1 <= len(sid) <= 64
+                        and sid.isascii() and sid[0].isalpha()
+                        and all(ch.isalnum() or ch in "_-" for ch in sid)
+                        and sid not in structure_ids,
+                        "Duplicate or invalid structure id")
+                structure_ids.add(sid)
+                clip = structure_template(structure["name"], structure["turns"],
+                                          door_slot=structure["door_slot"])
+                footprint = set(structure_footprint(clip, structure["anchor"]))
+                require(all(b.contains(c) for c in footprint),
+                        f"{sid}: structure outside map")
+                require(not footprint.intersection(structure_cells),
+                        f"{sid}: overlapping structures")
+                structure_cells.update(footprint)
             ids, occupied = set(), set()
             for u in m.units:
                 require(u.id and u.id not in ids, f"Duplicate/empty unit: {u.id}")

@@ -1,5 +1,17 @@
 # Éditeur drawTemp — audit et roadmap 3.7.16–3.7.22
 
+## 3.7.17B — proposition : identité visuelle durable
+
+Les nouvelles structures enregistrent une identité visuelle optionnelle,
+indépendante des tuiles tactiques, et ne disparaissent plus lors d'une
+retouche locale. Les cartes antérieures restent sans nouveau champ et
+conservent la détection des tampons intacte. Voir
+[PERSISTENT_STRUCTURES_3717B.md](PERSISTENT_STRUCTURES_3717B.md).
+
+Le gate attend la CI Python/Tk, un round-trip, un replay validé et un contrôle
+visuel Studio/Player. La fusion du code ne ferme pas le gate artistique.
+
+
 ## Suivi de livraison — 12 octobre 2026, après audit historique
 
 Les statuts du tableau initial plus bas datent de la base `1af3b41` ;
