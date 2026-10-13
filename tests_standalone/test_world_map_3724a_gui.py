@@ -26,7 +26,7 @@ class WorldMapGUITests(TestCase):
             source = Path(tmp) / "world_content.json"
             source.write_text(json.dumps(Content.load(DEFAULT_CONTENT).to_dict()),
                               encoding="utf-8")
-            original_content = json.loads(source.read_text(encoding="utf-8"))
+            original_content = Content.load(source).to_dict()
             worlds, errors = [], []
             original_init = WorldMapStudio.__init__
 
