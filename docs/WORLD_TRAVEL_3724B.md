@@ -84,3 +84,50 @@ saves and recovery use the usual verified GameSession snapshot.
 
 Deferred: random event tables, encounter combat on routes, cooldowns/repeatable
 events, branching physical roads and a dedicated event inspector in Studio.
+
+## 3.7.24D — plusieurs événements et embranchements de voyage
+
+Le même trajet peut contenir plusieurs événements ordonnés par la distance
+`step` (1 à 7), sans superposition physique. Les anciennes définitions sans
+`step` restent positionnées au milieu du segment (4/8).
+
+Les choix de la **scène StoryBook existante** peuvent définir un `routes`
+sur l'événement de voyage (clé = identifiant de choix de la scène) :
+
+```json
+{
+  "id": "caravane",
+  "from": "garden",
+  "to": "escape",
+  "scene": "scene_road_caravan",
+  "step": 2,
+  "routes": {
+    "back": {"kind": "return"},
+    "north": {"kind": "destination", "mission": "hold"},
+    "south": {"kind": "destination", "mission": "crown"},
+    "avoid": {"kind": "continue"}
+  }
+}
+```
+
+- **continue** (également valeur implicite) : reprendre le parcours prévu.
+- **return** : parcourir les pas déjà franchis en sens inverse jusqu'au
+  carrefour de départ, puis s'y arrêter.
+- **destination** : parcourir les pas en sens inverse vers le carrefour,
+  puis calculer le chemin canonique vers la destination choisie. La scène
+  peut débloquer cette mission avec un effet narratif normal, sans que le
+  voyage ne contourne les règles de déblocage.
+
+L'événement est déclenché à un point géographique constant, même lorsque le
+sens du trajet est inversé. Chaque événement est rencontré au plus une fois
+par campagne. Un choix de détour erroné laisse le dialogue et la sauvegarde
+inchangés. Le jeu conserve `world_walk_reverse` pendant le demi-tour et
+`world_walk_event` tant que la scène initiale attend sa première décision.
+La reprise après sauvegarde valide ces deux états comme le trajet aller.
+
+La démo `world_route_events_3724c` présente désormais deux événements
+sur la même route et deux embranchements authorés (`hold` et `crown`) ;
+les nouvelles connexions sont ajoutées seulement à la copie du contenu
+générée pour cette démonstration.
+
+Gate : `python -m unittest tests_standalone.test_world_forks_3724d -v`.

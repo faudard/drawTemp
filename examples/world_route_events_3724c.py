@@ -17,13 +17,26 @@ from sporebound.world_map import default_world
 def build(output):
     content = Content.load(DEFAULT_CONTENT)
     project = GameProject.default(content)
+    # Demo-only authored fork: no new runtime mission graph or tactical rules.
+    content.missions["garden"].next_missions.extend(["hold", "crown"])
     world = default_world(content, project.campaigns, theme="kingdom")
     project.world = world
-    world["events"] = [{
-        "id": "road_caravan", "from": "garden", "to": "escape",
-        "scene": "scene_road_caravan",
-        "when": {"completed_mission": "garden"},
-    }]
+    world["events"] = [
+        {
+            "id": "road_caravan", "from": "garden", "to": "escape",
+            "scene": "scene_road_caravan", "step": 2,
+            "when": {"completed_mission": "garden"},
+            "routes": {
+                "back": {"kind": "return"},
+                "north": {"kind": "destination", "mission": "hold"},
+                "south": {"kind": "destination", "mission": "crown"},
+            },
+        },
+        {
+            "id": "road_toll", "from": "garden", "to": "escape",
+            "scene": "scene_road_toll", "step": 6,
+        },
+    ]
     project.story = {
         "scenes": [{
             "id": "scene_road_caravan",
@@ -40,6 +53,22 @@ def build(output):
                              {"kind": "set_flag", "flag": "road_bribe", "value": True}]},
                 {"id": "avoid", "label": "Contourner les brigands.",
                  "effects": [{"kind": "set_flag", "flag": "road_avoided", "value": True}]},
+                {"id": "back", "label": "Faire demi-tour vers le village."},
+                {"id": "north", "label": "Revenir et prendre la route des collines.",
+                 "effects": [{"kind": "unlock_mission", "mission": "hold"}]},
+                {"id": "south", "label": "Revenir et prendre la route de la citadelle.",
+                 "effects": [{"kind": "unlock_mission", "mission": "crown"}]},
+            ],
+        }, {
+            "id": "scene_road_toll",
+            "title": "Le peage des mercenaires",
+            "speaker": "Capitaine",
+            "text": "Un peage barre la derniere portion de la route.",
+            "choices": [
+                {"id": "pay", "label": "Payer le passage (10 pieces).",
+                 "when": {"gold_gte": 10},
+                 "effects": [{"kind": "gold", "amount": -10}]},
+                {"id": "pass", "label": "Poursuivre sans payer."},
             ],
         }],
     }

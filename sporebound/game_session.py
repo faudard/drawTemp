@@ -11,7 +11,7 @@ from .ai import play_activation
 from .campaign import Campaign
 from .engine import Battle
 from .exploration import Exploration
-from .world_travel import WorldJourney
+from .world_travel import PENDING, WorldJourney
 from .fronts import MultiFrontSession
 from .model import RuleError, require
 from .narrative import StoryBook
@@ -228,6 +228,7 @@ class GameSession:
             require(event["scene"] in self.story.scenes,
                     "Unresolved world story scene")
             self.progress.story_flags["world_evt_" + event["id"]] = True
+            self.progress.story_flags[PENDING] = event["id"]
             self.progress.story_pending = event["scene"]
         return state
 
@@ -254,7 +255,25 @@ class GameSession:
                 "Finish combat before choosing dialogue")
         stage = self.exploration_state()
         require(stage is None or stage["completed"], "Explore the area first")
+        active = self.active_scene()
+        event_id = self.progress.story_flags.get(PENDING, "")
+        event = None
+        if event_id:
+            event = next((item for item in self.project.world.get("events", [])
+                          if item["id"] == event_id), None)
+            require(event is not None and active is not None and
+                    active["id"] == event["scene"],
+                    "Pending world event does not match narrative scene")
         updated = self.story.choose(self.progress, choice_id)
+        if event is not None:
+            next_scene = updated.story_pending
+            # Validate the pending road checkpoint while choosing a route;
+            # StoryBook may already have switched to a chained next_scene.
+            updated.story_pending = active["id"]
+            WorldJourney(self.project.world, self.content,
+                         self.project.campaign(self.campaign_id)).redirect(
+                             updated, event, choice_id)
+            updated.story_pending = next_scene
         self.progress = updated
         return self.active_scene()
 
