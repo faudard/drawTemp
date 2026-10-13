@@ -98,6 +98,64 @@ class WorkspaceNavigationGuiTests(TestCase):
             errors.assert_not_called()
 
 
+    def test_persistent_group_selection_reaches_actual_group_tree(self):
+        import json
+        import tkinter as tk
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from tkinter import ttk
+        from sporebound.editor_groups import create_editor_group
+        from sporebound.model import Content
+
+        def descendants(node):
+            for child in node.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        with TemporaryDirectory() as directory:
+            content_path = Path(directory) / 'navigation_group.json'
+            data = create_editor_group(
+                Content.load(DEFAULT_CONTENT).to_dict(), 'garden',
+                'Campement 3.7.33B')
+            content_path.write_text(json.dumps(data), encoding='utf-8')
+            callback_errors = []
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = (
+                        lambda *args: callback_errors.append(args))
+                    root.update()
+                    main = next(w for w in descendants(root)
+                                if isinstance(w, ttk.Notebook) and
+                                'Espace projet' in
+                                [w.tab(t, 'text') for t in w.tabs()])
+                    page_id = next(t for t in main.tabs()
+                                   if main.tab(t, 'text') == 'Espace projet')
+                    page = main.nametowidget(page_id)
+                    main.select(page_id)
+                    root.update()
+                    project_tree = next(w for w in descendants(page)
+                                        if isinstance(w, ttk.Treeview) and
+                                        w.exists('editor_group:garden/group_1'))
+                    map_tree = next(w for w in descendants(root)
+                                    if isinstance(w, ttk.Treeview) and
+                                    w.exists('g:group_1'))
+                    project_tree.selection_set('editor_group:garden/group_1')
+                    project_tree.event_generate('<<TreeviewSelect>>')
+                    root.update()
+                    self.assertEqual(map_tree.selection(), ('g:group_1',))
+                    self.assertEqual(main.tab(main.select(), 'text'),
+                                     'Espace projet')
+                    self.assertEqual(callback_errors, [])
+                finally:
+                    root.destroy()
+
+            with patch.object(tk.Tk, 'mainloop', drive), \\
+                 patch('tkinter.messagebox.showerror') as errors:
+                launch(content_path)
+                errors.assert_not_called()
+
+
 if __name__ == '__main__':
     import unittest
     unittest.main()
