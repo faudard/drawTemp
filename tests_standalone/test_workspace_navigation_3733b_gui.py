@@ -44,17 +44,16 @@ class WorkspaceNavigationGuiTests(TestCase):
                 following = next(w for w in descendants(workspace)
                                  if isinstance(w, ttk.Button)
                                  and w.cget('text') == 'Suivant →')
-                breadcrumb = next(w for w in descendants(workspace)
-                                  if isinstance(w, ttk.Label)
-                                  and w.cget('textvariable') and
-                                  str(root.getvar(w.cget('textvariable'))).startswith(
-                                      'Projet / '))
-
                 tree.selection_set('map_actor:garden/ziggy')
                 tree.event_generate('<<TreeviewSelect>>')
                 root.update()
                 self.assertEqual(main.tab(main.select(), 'text'),
                                  'Espace projet')
+                breadcrumb = next(w for w in descendants(workspace)
+                                  if isinstance(w, ttk.Label)
+                                  and w.cget('textvariable') and
+                                  str(root.getvar(w.cget('textvariable'))).startswith(
+                                      'Projet / '))
                 self.assertIn('ziggy', root.getvar(breadcrumb.cget('textvariable')).lower())
 
                 tree.selection_set('map_object:garden/switch')
