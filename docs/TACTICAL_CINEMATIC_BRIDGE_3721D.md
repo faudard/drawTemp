@@ -17,6 +17,9 @@ machine à événements ni un système parallèle de cinématiques.
 - L'onglet **Cinématiques** propose le nouveau type et une liste
   de cibles construites à partir des missions et de leurs vrais
   déclencheurs. Il n'est pas nécessaire de modifier le JSON à la main.
+- Le bouton **+ Cinématique tactique** du Graphe des événements crée
+  directement une séquence liée au déclencheur sélectionné via la
+  transaction validée de Cinematic Studio, puis ouvre son édition.
 - L'inspecteur du **Graphe des événements** montre séparément les séquences
   tactiques (déclenchement direct) et les cinématiques attachées aux missions
   ou aux scènes (déclenchement distinct).
@@ -40,8 +43,9 @@ ne relance pas le clip déjà déclenché.
 
 1. Dans **Graphe des événements**, sélectionner `garden/spore_pulse`
    (ou créer un événement `interact` sur le levier `switch`).
-2. Dans **Cinématiques**, créer une séquence avec le déclenchement
-   `tactical_event` et la cible `garden/spore_pulse`.
+2. Cliquer sur **+ Cinématique tactique** ou, depuis **Cinématiques**,
+   créer une séquence avec le déclenchement `tactical_event` et la cible
+   `garden/spore_pulse`.
 3. Ajouter un dialogue, un mouvement de caméra ou un son ; sauvegarder
    le projet et le rouvrir.
 4. Lancer la mission dans le Player. Quand le vrai moteur déclenche
