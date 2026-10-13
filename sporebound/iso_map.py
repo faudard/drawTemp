@@ -351,10 +351,12 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         poses=poses, structures=getattr(mission, 'structures', ()),
         interior_floors=getattr(mission, 'interior_floors', ()),
         prop_atlas=prop_atlas, unit_levels=actor_levels)
-    for index, actor in enumerate(units):
-        if actor_levels.get(actor.id, 0) > 0:
-            canvas.tag_raise('iso_actor_unit_' + str(index))
-    canvas.tag_raise('selection')
+    upper_actor_ids = [index for index, actor in enumerate(units)
+                       if actor_levels.get(actor.id, 0) > 0]
+    for index in upper_actor_ids:
+        canvas.tag_raise('iso_actor_unit_' + str(index))
+    if upper_actor_ids:
+        canvas.tag_raise('selection')
     return geo
 
 
