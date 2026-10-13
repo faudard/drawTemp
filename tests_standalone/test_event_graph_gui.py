@@ -74,6 +74,18 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     self.assertIn('condition non satisfaite',
                                   context_text.get('1.0', 'end'))
                     self.assertEqual(context_text.cget('state'), 'disabled')
+                    scenario = next(w for w in widgets if isinstance(w, ttk.Combobox)
+                                    and 'Condition vraie' in tuple(w['values']))
+                    scenario.set('Condition vraie')
+                    buttons['Tester avec le moteur'].invoke()
+                    root.update()
+                    self.assertIn('Condition satisfaite',
+                                  context_text.get('1.0', 'end'))
+                    scenario.set('Condition fausse')
+                    buttons['Tester avec le moteur'].invoke()
+                    root.update()
+                    self.assertIn('Condition non satisfaite',
+                                  context_text.get('1.0', 'end'))
 
                     action_box = next(w for w in widgets if isinstance(w, ttk.Combobox)
                                       and 'queue_wave' in tuple(w['values']))
