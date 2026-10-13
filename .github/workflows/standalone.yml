@@ -110,6 +110,12 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_interior_levels_3720b_gui.py -v
+      - name: Verify 3.7.20C tactical floor traversal and Player elevated picking
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_tactical_levels_3720c_gui.py -v
+      - name: Generate 3.7.20C layered-house example via public authoring APIs
+        run: python3 -m examples.layered_house_3720c --output "${{ runner.temp }}/layered_house_3720c.json"
       - name: Build playable fortified village with existing authoring commands (3.7.17A)
         run: python3 -m examples.fortified_village_3717a --output "${{ runner.temp }}/reference-village/fortified_village.json"
       - name: Check reference village sprites and hit testing at three zooms (3.7.17A)
