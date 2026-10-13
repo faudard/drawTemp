@@ -350,7 +350,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         atlas=building_atlas, scenery_atlas=fortification_atlas,
         poses=poses, structures=getattr(mission, 'structures', ()),
         interior_floors=getattr(mission, 'interior_floors', ()),
-        prop_atlas=prop_atlas)
+        prop_atlas=prop_atlas, unit_levels=actor_levels)
     for index, actor in enumerate(units):
         if actor_levels.get(actor.id, 0) > 0:
             canvas.tag_raise('iso_actor_unit_' + str(index))
