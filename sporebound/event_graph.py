@@ -92,6 +92,129 @@ def composite_title(node):
         composite_title(child) for child in node[kind]) + ')'
 
 
+def _composite_child(node, index):
+    """Resolve a node by an authoring-only path; no serialized node IDs."""
+    require(type(index) is int and index >= 0, 'Invalid condition path')
+    if 'not' in node:
+        require(index == 0, 'NOT has one operand')
+        return node['not']
+    kind = 'all' if 'all' in node else 'any' if 'any' in node else ''
+    require(bool(kind) and index < len(node[kind]), 'Unknown condition child')
+    return node[kind][index]
+
+
+def composite_at(event, path=()):
+    """Read a detached secondary predicate with a stable tuple path."""
+    require(isinstance(path, (tuple, list)) and len(path) <= 8,
+            'Invalid condition path')
+    require('when' in event, 'No secondary condition')
+    node = event['when']
+    for index in path:
+        node = _composite_child(node, index)
+    return deepcopy(node)
+
+
+def composite_nodes(event):
+    """Tree projection for Tk and tests; paths never enter Mission.triggers."""
+    if 'when' not in event:
+        return []
+    nodes = []
+
+    def visit(node, path):
+        if 'condition' in node:
+            kind = 'leaf'
+        else:
+            kind = next(iter(node))
+        nodes.append({'path': path, 'kind': kind,
+                      'label': composite_title(node), 'depth': len(path)})
+        if kind == 'not':
+            visit(node['not'], path + (0,))
+        elif kind in ('all', 'any'):
+            for i, child in enumerate(node[kind]):
+                visit(child, path + (i,))
+
+    visit(event['when'], ())
+    return nodes
+
+
+def _replace_subtree(root, path, value):
+    if not path:
+        return deepcopy(value)
+    result = deepcopy(root)
+    parent = result
+    for index in path[:-1]:
+        parent = _composite_child(parent, index)
+    last = path[-1]
+    _composite_child(parent, last)  # bounds and operator validation
+    if 'not' in parent:
+        parent['not'] = deepcopy(value)
+    else:
+        kind = 'all' if 'all' in parent else 'any'
+        parent[kind][last] = deepcopy(value)
+    return result
+
+
+def edit_composite_node(data, mission_id, event_id, path, *,
+                        operation, predicate=None, join='all', direction=0):
+    """One atomic, validated tree edit. No new predicate execution path.
+
+    Operations: replace selected leaf; wrap selected subtree in AND/OR with
+    a leaf; toggle NOT; remove; move among its siblings. Group arity is kept
+    legal by collapsing a group with only one remaining child.
+    """
+    event = deepcopy(_find_event(data, mission_id, event_id))
+    selected = composite_at(event, path)
+    path = tuple(path)
+    require(operation in ('replace', 'wrap', 'negate', 'remove', 'move'),
+            'Unknown condition edit')
+    if operation in ('replace', 'wrap'):
+        require(isinstance(predicate, dict) and
+                isinstance(predicate.get('condition'), str),
+                'Choose an atomic predicate from the existing rule registry')
+    if operation == 'replace':
+        require('condition' in selected, 'Select an atomic condition to replace')
+        event['when'] = _replace_subtree(event['when'], path, predicate)
+    elif operation == 'wrap':
+        require(join in ('all', 'any'), 'Choose AND or OR')
+        event['when'] = _replace_subtree(
+            event['when'], path, {join: [selected, deepcopy(predicate)]})
+    elif operation == 'negate':
+        result = (selected['not'] if set(selected) == {'not'}
+                  else {'not': selected})
+        event['when'] = _replace_subtree(event['when'], path, result)
+    elif operation == 'remove':
+        if not path:
+            event.pop('when')
+        else:
+            parent_path = path[:-1]
+            parent = composite_at(event, parent_path)
+            if 'not' in parent:
+                # Delete the entire NOT clause rather than retaining an empty op.
+                return edit_composite_node(data, mission_id, event_id,
+                                           parent_path, operation='remove')
+            kind = 'all' if 'all' in parent else 'any'
+            del parent[kind][path[-1]]
+            replacement = (parent[kind][0] if len(parent[kind]) == 1
+                           else parent)
+            event['when'] = _replace_subtree(
+                event['when'], parent_path, replacement)
+    elif operation == 'move':
+        require(path and type(direction) is int and direction in (-1, 1),
+                'Choose a sibling direction')
+        parent_path, index = path[:-1], path[-1]
+        parent = composite_at(event, parent_path)
+        require('all' in parent or 'any' in parent,
+                'Only AND/OR operands can be moved')
+        kind = 'all' if 'all' in parent else 'any'
+        other = index + direction
+        require(0 <= other < len(parent[kind]), 'No condition sibling there')
+        parent[kind][index], parent[kind][other] = (
+            parent[kind][other], parent[kind][index])
+        event['when'] = _replace_subtree(
+            event['when'], parent_path, parent)
+    return _save(data, mission_id, event_id, event)
+
+
 def condition_summary(event):
     root = condition_title(event)
     return root + (' ET ' + composite_title(event['when']) if 'when' in event else '')
