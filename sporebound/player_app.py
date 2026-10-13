@@ -89,6 +89,7 @@ class PlayerApplication:
         self._typewriter_job = None
         self._stage_job = None
         self._world_job = None
+        self._resume_world_after_scene = False
         self._explore_feedback = ""
         self._explore_scene_id = None
         self._audible_scene = None
@@ -190,6 +191,7 @@ class PlayerApplication:
 
     def title_screen(self):
         self._audible_scene = None
+        self._resume_world_after_scene = False
         self.audio.music_for("title")
         self._clear()
         self._heading(self.project.title, self.project.subtitle)
@@ -336,6 +338,10 @@ class PlayerApplication:
             self.battle_screen()
         elif session.mode == "battle":
             self.battle_screen()
+        elif (self._resume_world_after_scene and self.project.world
+              and session.active_scene() is None):
+            self._resume_world_after_scene = False
+            self.world_screen()
         else:
             self.campaign_screen()
 
@@ -518,7 +524,12 @@ class PlayerApplication:
                 return
             state = self.player.world_advance()
             paint(state)
-            if state["traveling"]:
+            if self.player.session.active_scene() is not None:
+                # Canonical StoryBook choices interrupt travel at the road
+                # midpoint, then the Player returns here on completion.
+                self._resume_world_after_scene = True
+                self.show()
+            elif state["traveling"]:
                 self._world_job = self.root.after(125, lambda: self._safe(tick))
 
         def choose(event):

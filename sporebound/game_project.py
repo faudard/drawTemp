@@ -123,7 +123,7 @@ class GameProject:
         from .exploration import validate_exploration
         validate_exploration(self.exploration, self.story)
         from .world_map import validate_world
-        validate_world(self.world, content, self.campaigns)
+        validate_world(self.world, content, self.campaigns, self.story)
         require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
                 'Invalid battle support rules')
         for spec in self.battle_support:

@@ -7,6 +7,7 @@ One journey's position is saved in the existing Campaign.story_flags.
 from collections import deque
 
 from .model import require
+from .narrative import matches
 
 STEPS_PER_EDGE = 8
 AT, GOAL, VIA, STEP = ("world_walk_at", "world_walk_goal",
@@ -65,6 +66,10 @@ class WorldJourney:
         allowed = (set(progress.unlocked) | set(progress.completed)) & set(self.positions)
         roads = _roads(self.content, self.positions, allowed)
         flags = progress.story_flags
+        for event in self.world.get("events", []):
+            key = "world_evt_" + event["id"]
+            require(key not in flags or type(flags[key]) is bool,
+                    "Invalid saved world event state")
         at = flags.get(AT, self.start)
         goal = flags.get(GOAL, "")
         via = flags.get(VIA, "")
@@ -121,6 +126,24 @@ class WorldJourney:
             progress.story_flags[VIA] = via
             progress.story_flags[STEP] = step
         return self.state(progress)
+
+    def event_at(self, progress):
+        """Inspect only the midpoint of the current road, once per campaign.
+
+        A pending scene is set by GameSession (the story authority), not here.
+        """
+        state = self.state(progress)
+        if state is None or not state["via"] or state["step"] != STEPS_PER_EDGE // 2:
+            return None
+        for event in self.world.get("events", []):
+            if {event["from"], event["to"]} != {state["at"], state["via"]}:
+                continue
+            if progress.story_flags.get("world_evt_" + event["id"], False):
+                continue
+            if "when" in event and not matches(event["when"], progress):
+                continue
+            return event
+        return None
 
     def can_enter(self, progress, mission_id):
         state = self.state(progress)

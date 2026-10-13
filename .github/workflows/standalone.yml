@@ -27,6 +27,8 @@ jobs:
         run: python -m unittest tests_standalone.test_world_map_3724a -v
       - name: Verify 3.7.24B continuous world travel and resume
         run: python -m unittest tests_standalone.test_world_travel_3724b -v
+      - name: Verify 3.7.24C authored road events and StoryBook choices
+        run: python -m unittest tests_standalone.test_world_events_3724c -v
       - name: Generate and validate a playable 3.7.24A World Map campaign
         run: |
           python -m examples.world_map_3724a --output "${{ runner.temp }}/world-3724a.json"

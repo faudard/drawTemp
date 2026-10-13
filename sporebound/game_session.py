@@ -32,7 +32,11 @@ def gameplay_project_digest(project):
     Other story, campaign, asset and gameplay fields remain strictly verified.
     """
     manifest = project.to_dict()
-    manifest.pop("world", None)
+    world = manifest.pop("world", {})
+    # Decorative positions remain save-compatible, but authored encounters
+    # affect gameplay and must invalidate incompatible checkpoints.
+    if world.get("events"):
+        manifest["world_events"] = world["events"]
     return digest(manifest)
 
 
@@ -216,8 +220,16 @@ class GameSession:
         require(self.mode == "campaign" and not self.progress.story_pending
                 and self.active_scene() is None,
                 "Resolve combat and narrative scenes before traveling")
-        return WorldJourney(self.project.world, self.content,
-                            self.project.campaign(self.campaign_id)).advance(self.progress)
+        journey = WorldJourney(self.project.world, self.content,
+                               self.project.campaign(self.campaign_id))
+        state = journey.advance(self.progress)
+        event = journey.event_at(self.progress)
+        if event is not None:
+            require(event["scene"] in self.story.scenes,
+                    "Unresolved world story scene")
+            self.progress.story_flags["world_evt_" + event["id"]] = True
+            self.progress.story_pending = event["scene"]
+        return state
 
     def world_can_enter(self, mission_id):
         return (self.mode == "campaign" and

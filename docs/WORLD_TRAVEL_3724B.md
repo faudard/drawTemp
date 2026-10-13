@@ -48,3 +48,39 @@ free movement across a landscape. Off-road travel, authored waypoints,
 contextual encounters, seamless entrance into existing exploration stages,
 camera zoom/pan and geography-based region transitions remain to be designed
 against the existing `Exploration` and `GameSession` contracts.
+
+## 3.7.24C — Pathfinder-inspired events on canonical roads
+
+Add an optional `events` list to the existing `world` manifest.
+Each entry binds an existing road (two linked Mission IDs) to an existing
+`story.scenes` scene, with an optional StoryBook `when` condition.
+Only one authored encounter may occupy the same road. Events fire exactly
+once per campaign, halfway through the route in **either direction**.
+
+```json
+{
+  "id": "caravane",
+  "from": "garden",
+  "to": "escape",
+  "scene": "road_caravane",
+  "when": {"completed_mission": "garden"}
+}
+```
+
+The normal StoryBook choice UI takes over the Player; the party remains
+positioned halfway along the route. The selected choice can apply any
+existing validated narrative effects (gold, flags, unlocks, equipment, etc).
+Once the choice resolves, travel resumes from its saved position. Mid-event
+saves and recovery use the usual verified GameSession snapshot.
+
+- `world_evt_<id>` is the only new once-only flag; no bespoke event log
+  or dialogue/replay schema is introduced.
+- Event specifications are gameplay content in the checkpoint fingerprint,
+  while purely decorative world coordinates remain excluded.
+- Projects without world events retain their pre-existing digest and saves.
+- Use `python -m examples.world_route_events_3724c --output /tmp/roads.json`
+  to generate a playable, choice-driven world journey with tactical consequences.
+- Gate: `python -m unittest tests_standalone.test_world_events_3724c -v`.
+
+Deferred: random event tables, encounter combat on routes, cooldowns/repeatable
+events, branching physical roads and a dedicated event inspector in Studio.
