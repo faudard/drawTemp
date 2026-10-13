@@ -113,18 +113,18 @@ def map_resource_target(key, data):
 
 def palette_source_for_tree(key, data, mission_id):
     """Resolve a drag originating in Workspace into the existing palette."""
-    from .entity_placement import palette_entities
+    from .entity_palette import entity_entries
     if key.startswith('actor:'):
         source = 'archetype:' + key.split(':', 1)[1]
     elif key.startswith('map_actor:'):
         mid, entity_id = key.partition(':')[2].split('/', 1)
         if mid != mission_id:
             raise RuleError('Changer de mission avant de dupliquer cet acteur.')
-        source = 'unit:' + entity_id
+        source = 'actor:' + entity_id
     else:
         raise RuleError('Déposer un acteur depuis la bibliothèque ou la carte.')
-    return next((entry for entry in palette_entities(data, mission_id)
-                 if entry.kind == 'actor' and entry.value == source),
+    return next((entry for entry in entity_entries(data, mission_id)
+                 if entry.id == source),
                 None) or _missing_entry(key)
 
 
