@@ -22,6 +22,7 @@ class EntityInspectorGuiTests(unittest.TestCase):
                 Content.load(DEFAULT_CONTENT).to_dict(), mid, 'Village', 12, 12)
             data = add_object(data, mid, 'gate', 'door', (5, 5))
             data = add_object(data, mid, 'lever', 'switch', (4, 5), link='gate')
+            data = add_object(data, mid, 'ram', 'ram', (6, 5), link='gate')
             state = {'data': data, 'target': None}
             canvas = tk.Canvas(root)
             def commit(operation, kind, identifier, values):
@@ -58,6 +59,12 @@ class EntityInspectorGuiTests(unittest.TestCase):
             inspector.apply()
             self.assertEqual(get_entity(state['data'], mid, 'object', 'lever')['link'],
                              'gate')
+            inspector.show_at((6, 5))
+            self.assertEqual(inspector.vars['team'].get(), 'player')
+            self.assertEqual(inspector.vars['power'].get(), '1')
+            self.assertEqual(inspector.changes(), {})
+            inspector.apply()  # No-op must not materialize default fields.
+            self.assertNotIn('team', get_entity(state['data'], mid, 'object', 'ram'))
         finally:
             root.destroy()
 
