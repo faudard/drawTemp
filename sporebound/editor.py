@@ -254,6 +254,7 @@ def launch(path):
                   ('Terrain', 'Relief', 'Décors', 'Bâtiments', 'Toitures',
                    'Déploiement', 'Objectifs', 'Objets', 'Unités')}
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
+    mode_var = tk.StringVar(value='MODE : ÉDITION')
 
     def guarded(fn):
         def run(*args):
@@ -1019,7 +1020,21 @@ def launch(path):
             x,y = (v*tile_size for v in selected_cell)
             canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
         inspected_tile = board.tile(selected_cell) if board.contains(selected_cell) else None
-        text = f'{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
+        mode_var.set('MODE : PLAYTEST (édition verrouillée)' if battle else 'MODE : ÉDITION')
+        selected_units = [u for u in units if u.pos == selected_cell]
+        selected_objects = [o for o in mission.objects if tuple(o['pos']) == selected_cell]
+        if selected_units:
+            heading = 'PERSONNAGE — ' + ', '.join(u.name for u in selected_units)
+        elif selected_objects:
+            heading = 'OBJET — ' + ', '.join(o['id'] for o in selected_objects)
+        else:
+            heading = 'TERRAIN — case ' + str(selected_cell)
+        text = f'{heading}\n\n{mission.name}\nObjectif : {mission.objective}\nCase : {selected_cell}\n'
+        for actor in selected_units:
+            text += (f'Acteur {actor.id} • {actor.team} • '
+                     f'PV {actor.hp}/{actor.max_hp} • CT {actor.ct}\n')
+        for obj in selected_objects:
+            text += f'Objet {obj["id"]} : {obj["kind"]}\n'
         if inspected_tile is not None:
             text += (f'Surface : {inspected_tile.surface} | Décor : '
                      f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
@@ -1232,10 +1247,16 @@ def launch(path):
                command=lambda: set_zoom(6)).pack(side='left')
     notebook = ttk.Notebook(root)
     notebook.pack(fill='both',expand=True)
-    work = ttk.Frame(notebook)
+    work = ttk.Panedwindow(notebook, orient='horizontal')
     notebook.add(work,text='Carte et combat')
-    canvas_frame = ttk.Frame(work)
-    canvas_frame.pack(side='left',fill='both',expand=True)
+    sidebar = ttk.Frame(work, width=230)
+    canvas_region = ttk.Panedwindow(work, orient='vertical')
+    side_panel = ttk.Frame(work, width=315)
+    work.add(sidebar, weight=1)
+    work.add(canvas_region, weight=4)
+    work.add(side_panel, weight=2)
+    canvas_frame = ttk.Frame(canvas_region)
+    canvas_region.add(canvas_frame, weight=4)
     canvas = tk.Canvas(canvas_frame,background='#eeeeee',takefocus=1)
     iso_atlas = IsoTerrainAtlas(canvas)
     iso_props = IsoPropAtlas(canvas)
@@ -1256,22 +1277,40 @@ def launch(path):
     canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
     canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
     canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
-    side_panel = ttk.Frame(work)
-    side_panel.pack(side='right',fill='y')
-    ttk.Label(side_panel,text='Vue tactique').pack(anchor='w',padx=3,pady=(3,0))
+    ttk.Label(side_panel, text='INSPECTEUR', font=('TkDefaultFont', 11, 'bold')).pack(
+        anchor='w', padx=6, pady=(8, 3))
+    ttk.Label(side_panel, textvariable=mode_var).pack(anchor='w', padx=6)
+    ttk.Label(side_panel,text='Vue tactique').pack(anchor='w',padx=6,pady=(7,0))
     mini_canvas = tk.Canvas(side_panel,width=184,height=184,
                             background='#f5f5f5',highlightthickness=1)
     mini_canvas.pack(anchor='w',padx=3,pady=3)
     mini_canvas.bind('<Button-1>', minimap_navigate)
-    inspector = tk.Text(side_panel,width=43,wrap='word')
-    inspector.pack(side='top',fill='both',expand=True)
+    inspector = tk.Text(side_panel,width=37,wrap='word')
+    inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
+    ttk.Button(side_panel, text='Éditer personnages et objets',
+               command=lambda: studio.workspace._show_tab(
+                   'Personnages et événements')).pack(fill='x', padx=6, pady=3)
+    ttk.Button(side_panel, text='Explorer dans le Workspace',
+               command=lambda: notebook.select(studio.workspace.tab)).pack(
+                   fill='x', padx=6, pady=(1, 7))
+
+    bottom_panel = ttk.Notebook(canvas_region, height=140)
+    canvas_region.add(bottom_panel, weight=1)
+    journal = tk.Text(bottom_panel, wrap='word', height=7)
+    bottom_panel.add(journal, text='Journal de combat')
+    help_panel = ttk.Frame(bottom_panel)
+    bottom_panel.add(help_panel, text='Raccourcis et aide')
+    ttk.Label(help_panel, text=(
+        'Alt+1 : carte  •  Alt+2 : espace projet  •  '
+        'Ctrl+C/V : copier/coller la sélection sur la carte\n'
+        'Glisser les séparateurs pour adapter le navigateur, la carte, '
+        'le journal et l’inspecteur.'),
+        justify='left', wraplength=620).pack(anchor='nw', padx=12, pady=12)
     source_frame = ttk.Frame(notebook)
     notebook.add(source_frame,text='Données JSON')
     ttk.Button(source_frame,text='Valider et appliquer',command=apply_json).pack(anchor='w')
     source = tk.Text(source_frame,wrap='none',undo=True)
     source.pack(fill='both',expand=True)
-    journal = tk.Text(notebook,wrap='word')
-    notebook.add(journal,text='Journal de combat')
     from types import SimpleNamespace
     from .studio_panels import StudioPanels
 
@@ -1291,6 +1330,13 @@ def launch(path):
         design_change=design_change, play_campaign=start_campaign,
         status=status_var, mission_change=stop,
         select_mission=select_workspace_mission)
+    studio.workspace.attach_navigator(sidebar)
+    ttk.Button(sidebar, text='Espace projet complet',
+               command=lambda: notebook.select(studio.workspace.tab)).pack(
+                   fill='x', padx=7, pady=(3, 8))
+    root.bind('<Alt-KeyPress-1>', lambda _event: notebook.select(work))
+    root.bind('<Alt-KeyPress-2>',
+              lambda _event: notebook.select(studio.workspace.tab))
     ttk.Label(root,textvariable=status_var).pack(fill='x')
     root.protocol('WM_DELETE_WINDOW',lambda: root.destroy() if discard_ok() else None)
     refresh_source()
