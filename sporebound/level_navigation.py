@@ -30,6 +30,8 @@ def validate_levels(mission):
     ids = {u.id for u in mission.units}
     require(type(mission.unit_levels) is dict, 'Unit levels must be an object')
     require(set(mission.unit_levels) <= ids, 'Unknown unit in level placement')
+    require(not mission.unit_levels or bool(mission.level_links),
+            'Upper-floor spawns require an authored connector')
     for uid, level in mission.unit_levels.items():
         require(type(level) is int and 1 <= level <= MAX_INTERIOR_LEVEL,
                 'Unit spawn level must be 1..3')
@@ -38,6 +40,8 @@ def validate_levels(mission):
                 'Upper-floor units currently require a 1x1 footprint')
         require(tuple(actor.pos) in levels.get(level, set()),
                 'Unit spawn is not on an authored upper-floor tile')
+        require(not (actor.team == 'player' and mission.deployment),
+                'Upper-floor player spawns cannot use ground-only deployment')
 
     require(type(mission.level_links) is list, 'Level links must be a list')
     link_ids, pairs = set(), set()
