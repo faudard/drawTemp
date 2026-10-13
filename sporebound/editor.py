@@ -2048,14 +2048,16 @@ def launch(path):
                                 tool_var.set('Pinceau')))
     ttk.Button(scenery_controls, text='Effacer décor',
                command=lambda: brush_var.set('feature-erase')).pack(side='left',padx=4)
-    ttk.Button(scenery_controls, text='Pinceau intelligent',
+    smart_controls = ttk.Frame(tools_terrain)
+    smart_controls.pack(fill='x', padx=5, pady=2)
+    ttk.Button(smart_controls, text='Pinceau intelligent',
                command=lambda: tool_var.set('Pinceau intelligent')).pack(side='left', padx=2)
-    ttk.Label(scenery_controls, text='Rayon :').pack(side='left', padx=(6, 2))
-    ttk.Spinbox(scenery_controls, from_=0, to=3, width=3,
-                textvariable=brush_radius_var).pack(side='left')
-    ttk.Combobox(scenery_controls, textvariable=brush_shape_var,
+    ttk.Label(smart_controls, text='Rayon :').pack(side='left', padx=(6, 2))
+    ttk.Combobox(smart_controls, state='readonly', width=3,
+                 textvariable=brush_radius_var, values=(0, 1, 2, 3)).pack(side='left')
+    ttk.Combobox(smart_controls, textvariable=brush_shape_var,
                  state='readonly', width=8, values=('diamond', 'square')).pack(side='left')
-    ttk.Button(scenery_controls, text='Remplir sélection',
+    ttk.Button(smart_controls, text='Remplir sélection',
                command=fill_selection).pack(side='left', padx=2)
     for label, tool in [('Remplir sol', 'Remplissage'),
                         ('Pipette sol', 'Pipette sol'),
