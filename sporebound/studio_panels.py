@@ -90,9 +90,12 @@ class StudioPanels:
         current.undo_stack.clear()
         current.redo_stack.clear()
         self.project = project
-        for panel in (self.story_editor, self.cinematic_studio):
-            panel.undo_stack.clear()
-            panel.redo_stack.clear()
+        # Rebuild project-dependent models and preview registries. Simply
+        # changing the owner.project pointer leaves stale storyboard/asset
+        # caches visible after a global undo.
+        self.story_editor.reset_project()
+        self.cinematic_studio.reset_project()
+        self.audio_studio.stop()
         self.title.set(project.title)
         self.subtitle.set(project.subtitle)
         self.language.set(project.options['language'])
