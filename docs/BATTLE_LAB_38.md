@@ -49,9 +49,18 @@ current run must also pass actual `Battle.replay()` digest verification;
 the old version of the CLI `balance` and the existing `balance3.evaluate`
 remain available unchanged.
 
-For useful CI coverage, commit a known-good `before.json` as an intentional
-baseline and compare the updated code against it. Do not silently regenerate
-the baseline inside the same test and claim it guards balance changes.
+The CI now pins `docs/evidence/battle_lab_garden_38.json`: 8 seeds
+(1–8), 500 commands/seed, default garden rules; the first baseline measured
+2 automated victories, 6 defeats, 0 unresolved runs, p95 108 CT ticks and
+132 commands. The CI **re-evaluates** those seeds and compares against the
+committed JSON with a maximum 20-percentage-point victory-rate drop, 30%
+growth of p95 CT ticks/commands and zero new unresolved seeds. Identical
+input hashes additionally require identical final replay digests. It never
+regenerates and silently accepts its reference on a changed ruleset.
+
+**Important:** this is a regression reference, not a declaration that a 25%
+AI-vs-AI victory rate is good human-player balance. Establish human playtest
+objectives before approving any intentional changes to the pinned baseline.
 
 ## Telemetry meaning and limitations
 
