@@ -11,6 +11,7 @@ from sporebound.entity_editing import (entities_at, get_entity, edit_entity,
                                        relocate_entity, duplicate_entity,
                                        remove_entity)
 from sporebound.model import Content, RuleError
+from sporebound.tactical_rpg3 import authored_rules_for_document
 
 
 class EntityEditingTests(unittest.TestCase):
@@ -92,7 +93,7 @@ class EntityEditingTests(unittest.TestCase):
         actor['pos'] = [9, 3]
         actor['patrol_route'] = [[9, 2], [8, 2]]
         actor['behavior'] = 'patrol'
-        Content.from_dict(data)
+        Content.from_dict(data, rules=authored_rules_for_document(data))
         moved = relocate_entity(data, self.mid, 'actor', actor['id'], (7, 5))
         shifted = get_entity(moved, self.mid, 'actor', actor['id'])
         self.assertEqual(tuple(map(tuple, shifted['patrol_route'])), ((7, 4), (6, 4)))
