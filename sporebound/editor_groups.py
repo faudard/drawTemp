@@ -397,11 +397,6 @@ def move_editor_groups(data, mission_id, group_ids, dx, dy):
     from .model import Tile
     from dataclasses import asdict
     default = asdict(Tile())
-    for pos in targets - cells:
-        existing = original_tiles.get(pos)
-        require(existing is None or
-                {k: v for k, v in existing.items() if k != 'pos'} == default,
-                'Group movement would overwrite external terrain at ' + str(pos))
     moving_structure_cells = set()
     fixed_structure_cells = set()
     for item in original.get('structures', []):
@@ -413,11 +408,15 @@ def move_editor_groups(data, mission_id, group_ids, dx, dy):
         else:
             fixed_structure_cells.update(footprint)
     moved_structure_cells = {(x+dx, y+dy) for x, y in moving_structure_cells}
-    require(not targets.intersection(moving_structure_cells | fixed_structure_cells |
+    require(not targets.intersection(fixed_structure_cells |
                                      moved_structure_cells),
-            'Grouped terrain overlaps a building footprint')
-    require(not moved_structure_cells.intersection(cells),
-            'A moved building overlaps grouped terrain')
+            'Grouped terrain overlaps a destination building')
+    for pos in ((targets | moved_structure_cells) -
+                (cells | moving_structure_cells)):
+        existing = original_tiles.get(pos)
+        require(existing is None or
+                {k: v for k, v in existing.items() if k != 'pos'} == default,
+                'Group movement would overwrite external terrain at ' + str(pos))
     result = deepcopy(data)
     staged = _mission(result, mission_id)
     # Groups and selected free tiles are suspended for the WHOLE operation.
