@@ -51,6 +51,21 @@ class CinematicGUITests(unittest.TestCase):
                         any("jeanne_prologue" in w.get(i)
                             for i in range(w.size()))
                         for w in widgets), "Sample cinematic missing from Studio list")
+                    # The cinematic editor offers canonical mission/event
+                    # targets and switches back without mutating its project.
+                    trigger = next(w for w in all_widgets(root)
+                                   if isinstance(w, ttk.Combobox)
+                                   and "tactical_event" in tuple(w["values"]))
+                    trigger.set("tactical_event")
+                    trigger.event_generate("<<ComboboxSelected>>")
+                    root.update()
+                    event_targets = [w for w in all_widgets(root)
+                                     if isinstance(w, ttk.Combobox)
+                                     and "garden/spore_pulse" in tuple(w["values"])]
+                    self.assertEqual(len(event_targets), 1)
+                    trigger.set("campaign_start")
+                    trigger.event_generate("<<ComboboxSelected>>")
+                    root.update()
                     buttons["Bande-son Jeanne"].invoke()
                     root.update()
                     self.assertEqual(showerror.call_args_list, [],

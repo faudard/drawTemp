@@ -131,6 +131,19 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     buttons['Éditeur par blocs'].invoke()
                     self.assertEqual(studio.tab(studio.select(), 'text'),
                                      'Événements par blocs')
+                    studio.select(index)
+                    root.update()
+                    buttons['+ Cinématique tactique'].invoke()
+                    root.update()
+                    self.assertEqual(studio.tab(studio.select(), 'text'),
+                                     'Cinématiques')
+                    self.assertTrue(any(
+                        isinstance(w, tk.Listbox)
+                        and any('cin_event_new' in w.get(i)
+                                for i in range(w.size()))
+                        for w in descendants(root)))
+                    self.assertFalse(callback_errors)
+                    show_error.assert_not_called()
                 finally:
                     root.destroy()
 

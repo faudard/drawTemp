@@ -30,11 +30,15 @@ def inspect_event(data, mission_id, event_id, project=None):
     scene_id = ''
     clips = []
     if project is not None:
+        from .cinematics import tactical_event_target
         scene_id = project.story.get('after_mission', {}).get(mission_id, '')
+        tactical_target = tactical_event_target(mission_id, event_id)
         for clip in project.cinematics:
             trigger = clip['trigger']
             kind, target = trigger['kind'], trigger['target']
-            if kind in ('before_mission', 'after_mission') and target == mission_id:
+            if kind == 'tactical_event' and target == tactical_target:
+                clips.append({'id': clip['id'], 'stage': kind, 'scope': 'event'})
+            elif kind in ('before_mission', 'after_mission') and target == mission_id:
                 clips.append({'id': clip['id'], 'stage': kind, 'scope': 'mission'})
             elif kind == 'scene' and scene_id and target == scene_id:
                 clips.append({'id': clip['id'], 'stage': 'scene', 'scope': 'scene'})
@@ -47,9 +51,10 @@ def inspect_event(data, mission_id, event_id, project=None):
                     for action in event['actions']],
         'scene_id': scene_id,
         'cinematics': clips,
-        # These are associated with the mission or its after-victory scene.
-        # No cinematic starts when the selected tactical trigger itself fires.
-        'links_scope': 'mission',
+        # Tactical event cinematics are direct; mission/scene sequences
+        # remain attached to their existing lifecycle hooks.
+        'links_scope': ('event-and-mission' if any(
+            clip['scope'] == 'event' for clip in clips) else 'mission'),
     }
 
 

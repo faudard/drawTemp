@@ -77,7 +77,7 @@ class CinematicStudio:
         clip_form.pack(fill="x", padx=4, pady=4)
         for row, label, key in ((0, "ID", "cid"), (1, "Nom", "name"),
                                 (2, "Déclenchement", "trigger"),
-                                (3, "Campagne / mission", "target"),
+                                (3, "Cible (campagne / mission / événement)", "target"),
                                 (4, "Durée (ms)", "length")):
             if key == "trigger":
                 self.trigger_box = self._field(clip_form, row, label, key, TRIGGERS)
@@ -240,6 +240,10 @@ class CinematicStudio:
                    if kind == "campaign_start" else
                    [s["id"] for s in self._project().story.get("scenes", [])]
                    if kind == "scene" else
+                   [f"{mission['id']}/{event['id']}"
+                    for mission in self.owner.doc().data["missions"]
+                    for event in mission.get("triggers", [])]
+                   if kind == "tactical_event" else
                    [m["id"] for m in self.owner.doc().data["missions"]])
         self.target_box["values"] = targets
         if self.vars["target"].get() not in targets:
