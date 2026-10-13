@@ -695,7 +695,12 @@ class Battle:
         return row
 
     def state(self) -> dict:
-        return {**({"deploying": self.deploying} if self.mission.deployment else {}),
+        # Read-only projection authenticated by the existing replay checksum.
+        # Untimed historical recordings keep their exact legacy state shape.
+        from .temporal_events import temporal_snapshot
+        scheduled = temporal_snapshot(self)
+        return {**({"scheduled_events": scheduled} if scheduled else {}),
+                **({"deploying": self.deploying} if self.mission.deployment else {}),
                 **({"unit_levels": dict(sorted(self.unit_levels.items()))}
                    if self.mission.level_links or self.unit_levels else {}),
                 "tick": self.tick, "active": self.active_id, "result": self.result,
