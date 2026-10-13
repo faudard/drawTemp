@@ -69,6 +69,30 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                                      and 'event_new' in tuple(w['values']))
                     self.assertEqual(event_box.get(), 'event_new')
 
+                    # 3.1: edit secondary condition through the same graph tab.
+                    buttons['+ ET'].invoke()
+                    root.update()
+                    condition_tree = next(w for w in widgets
+                                          if isinstance(w, ttk.Treeview)
+                                          and w.exists('when'))
+                    self.assertEqual(condition_tree.item('when', 'text'),
+                                     'Tick ≥ 10')
+                    condition_tree.selection_set('when')
+                    condition_tree.event_generate('<<TreeviewSelect>>')
+                    root.update()
+                    buttons['+ OU'].invoke()
+                    root.update()
+                    self.assertEqual(condition_tree.item('when', 'text'), 'OU')
+                    self.assertTrue(condition_tree.exists('when.0'))
+                    self.assertTrue(condition_tree.exists('when.1'))
+                    condition_tree.selection_set('when.1')
+                    condition_tree.event_generate('<<TreeviewSelect>>')
+                    root.update()
+                    buttons['↑ Nœud'].invoke()
+                    root.update()
+                    self.assertTrue(condition_tree.exists('when.0'))
+                    self.assertFalse(callback_errors)
+
                     # 3.7.21C: the same graph exposes read-only contextual
                     # inspection and a real-engine preview, without saving.
                     self.assertIn('Tester avec le moteur', buttons)
@@ -127,6 +151,7 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     self.assertEqual([a['kind'] for a in trigger['actions']],
                                      ['hazard', 'message'])
                     self.assertEqual(trigger['actions'][0]['pos'], [0, 0])
+                    self.assertEqual(trigger['when']['any'][0]['condition'], 'tick')
                     self.assertFalse(callback_errors)
                     buttons['Éditeur par blocs'].invoke()
                     self.assertEqual(studio.tab(studio.select(), 'text'),
