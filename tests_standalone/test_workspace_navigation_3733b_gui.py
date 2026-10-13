@@ -150,7 +150,7 @@ class WorkspaceNavigationGuiTests(TestCase):
                 finally:
                     root.destroy()
 
-            with patch.object(tk.Tk, 'mainloop', drive), \\
+            with patch.object(tk.Tk, 'mainloop', drive), \
                  patch('tkinter.messagebox.showerror') as errors:
                 launch(content_path)
                 errors.assert_not_called()
