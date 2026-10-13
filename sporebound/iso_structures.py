@@ -174,6 +174,10 @@ def remove_structure(data, mission_id, cell):
     mission = _mission(updated, mission_id)
     from .structure_underlay import restore_footprint
     restore_footprint(mission, instance)
+    if instance.id:
+        for group in mission.get('editor_groups', ()):
+            group['structure_ids'] = [sid for sid in group['structure_ids']
+                                      if sid != instance.id]
     if instance.id and mission.get('interior_floors'):
         mission['interior_floors'] = [
             floor for floor in mission['interior_floors']
@@ -223,6 +227,9 @@ def _structure_edit_plan(data, mission_id, cell, *, anchor=None,
     requested = (name, tuple(anchor), quarter_turns, door_slot)
     prepared = deepcopy(data)
     mission = _mission(prepared, mission_id)
+    # Intermediate validation occurs without the removed structure. The
+    # caller restores the editor hierarchy after stamping the final ID.
+    mission.pop('editor_groups', None)
     if not duplicate:
         from .structure_underlay import restore_footprint
         restore_footprint(mission, instance)
@@ -271,6 +278,9 @@ def edit_structure(data, mission_id, cell, *, anchor=None, name=None,
         # The new record is last; its automatically chosen ID is replaced
         # with the old persistent ID without touching any other record.
         _mission(result, mission_id)['structures'][-1]['id'] = instance.id
+    prior_groups = _mission(data, mission_id).get('editor_groups')
+    if prior_groups is not None:
+        _mission(result, mission_id)['editor_groups'] = deepcopy(prior_groups)
     return Content.from_dict(result).to_dict()
 
 
