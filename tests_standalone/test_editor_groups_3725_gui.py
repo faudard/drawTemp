@@ -92,5 +92,123 @@ class EditorGroupGUITests(unittest.TestCase):
                 error.assert_not_called()
 
 
+    def test_drag_drop_reparents_groups_and_transfers_objects_and_cells(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.authoring import add_object
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        with TemporaryDirectory() as folder:
+            mid = 'editor_groups_dnd'
+            data = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
+                                     mid, 'Arbre', 20, 20)
+            data = add_object(data, mid, 'crate1', 'chest', (8, 8))
+            data = create_editor_group(data, mid, 'A',
+                                       cells=((4, 4), (5, 4), (8, 8)))
+            data = create_editor_group(data, mid, 'B')
+            data = create_editor_group(data, mid, 'Enfant', parent='group_1')
+            source = Path(folder) / 'in.json'
+            output = Path(folder) / 'out.json'
+            source.write_text(json.dumps(data), encoding='utf-8')
+            errors = []
+
+            def mission():
+                return next(m for m in json.loads(
+                    output.read_text(encoding='utf-8'))['missions']
+                    if m['id'] == mid)
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = lambda *error: errors.append(error)
+                    root.update()
+                    widgets = list(descendants(root))
+                    hierarchy = next(w for w in widgets if
+                                     isinstance(w, ttk.Treeview) and
+                                     w.exists('g:group_1'))
+                    buttons = {w.cget('text'): w for w in widgets
+                               if isinstance(w, ttk.Button)}
+                    missions = next(w for w in widgets
+                                    if isinstance(w, ttk.Combobox)
+                                    and mid in w.cget('values'))
+                    missions.set(mid)
+                    missions.event_generate('<<ComboboxSelected>>')
+                    root.update()
+
+                    def center(iid):
+                        hierarchy.see(iid)
+                        root.update()
+                        x, y, w, h = hierarchy.bbox(iid)
+                        self.assertGreater(w, 0)
+                        return x + max(14, w // 2), y + h // 2
+
+                    def drop(start, destination):
+                        ax, ay = center(start)
+                        bx, by = center(destination)
+                        hierarchy.event_generate('<ButtonPress-1>', x=ax, y=ay)
+                        root.update()
+                        hierarchy.event_generate('<B1-Motion>', x=bx, y=by,
+                                                 state=0x100)
+                        hierarchy.event_generate('<ButtonRelease-1>', x=bx,
+                                                 y=by)
+                        root.update()
+
+                    # Reparent group_3 from A to B, without moving terrain.
+                    drop('g:group_3', 'g:group_2')
+                    buttons['Enregistrer sous'].invoke()
+                    self.assertEqual(mission()['editor_groups'][2]['parent'],
+                                     'group_2')
+                    # A cycle must not modify the document or emit a popup.
+                    drop('g:group_2', 'g:group_3')
+                    buttons['Enregistrer sous'].invoke()
+                    self.assertEqual(mission()['editor_groups'][1]['parent'], None)
+
+                    # Transfer the exact object leaf to B.
+                    drop('m:group_1:object_ids:crate1', 'g:group_2')
+                    buttons['Enregistrer sous'].invoke()
+                    self.assertEqual(mission()['editor_groups'][1]['object_ids'],
+                                     ['crate1'])
+                    self.assertEqual(mission()['objects'][0]['pos'], [8, 8])
+
+                    # Unlink that object by dropping it onto the virtual root.
+                    drop('m:group_2:object_ids:crate1', 'root:groups')
+                    buttons['Enregistrer sous'].invoke()
+                    self.assertEqual(mission()['editor_groups'][1]['object_ids'],
+                                     [])
+                    buttons['Annuler'].invoke()
+                    buttons['Enregistrer sous'].invoke()
+                    self.assertEqual(mission()['editor_groups'][1]['object_ids'],
+                                     ['crate1'])
+                    buttons['Rétablir'].invoke()
+                    buttons['Enregistrer sous'].invoke()
+                    self.assertEqual(mission()['editor_groups'][1]['object_ids'],
+                                     [])
+
+                    # Expand the lazy decorative tile nodes; drag one tile only.
+                    hierarchy.focus('cells:group_1')
+                    hierarchy.item('cells:group_1', open=True)
+                    hierarchy.event_generate('<<TreeviewOpen>>')
+                    root.update()
+                    self.assertTrue(hierarchy.exists('t:group_1:4:4'))
+                    drop('t:group_1:4:4', 'g:group_2')
+                    buttons['Enregistrer sous'].invoke()
+                    groups = mission()['editor_groups']
+                    self.assertIn([4, 4], groups[1]['cells'])
+                    self.assertNotIn([4, 4], groups[0]['cells'])
+                    self.assertEqual(errors, [])
+                finally:
+                    root.destroy()
+
+            with patch.object(tk.Tk, 'mainloop', drive), \
+                 patch('tkinter.filedialog.asksaveasfilename',
+                       return_value=str(output)), \
+                 patch('tkinter.messagebox.showerror') as dialog:
+                launch(source)
+                dialog.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
