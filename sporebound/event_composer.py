@@ -10,11 +10,16 @@ from .model import Content, require
 
 
 def condition(kind, *, pos=None, tick=10, unit='', percent=50,
-              max_alive=4, team='enemy'):
-    require(kind in {'tick', 'enter', 'defeated', 'hp_below', 'wave_capacity'},
+              max_alive=4, team='enemy', object_id=''):
+    require(kind in {'tick', 'enter', 'defeated', 'hp_below', 'wave_capacity',
+                     'interact'},
             'Unknown event condition')
     if kind == 'tick':
         return {'condition': kind, 'value': tick}
+    if kind == 'interact':
+        require(isinstance(object_id, str) and bool(object_id),
+                'Choose an interactive object')
+        return {'condition': kind, 'object': object_id}
     if kind == 'enter':
         return {'condition': kind, 'pos': list(pos)}
     if kind == 'hp_below':
