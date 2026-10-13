@@ -74,6 +74,19 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     self.assertIn('Condition non satisfaite',
                                   context_text.get('1.0', 'end'))
                     self.assertEqual(context_text.cget('state'), 'disabled')
+                    # The scene uses the shared isometric renderer on two
+                    # disposable Battle states, without replacing the editor.
+                    buttons['Vue isométrique avant/après'].invoke()
+                    root.update()
+                    comparisons = [w for w in root.winfo_children()
+                                   if isinstance(w, tk.Toplevel)
+                                   and w.title().startswith('Aperçu isométrique')]
+                    self.assertEqual(len(comparisons), 1)
+                    canvases = [w for w in descendants(comparisons[0])
+                                if isinstance(w, tk.Canvas)]
+                    self.assertEqual(len(canvases), 2)
+                    self.assertTrue(all(w.find_all() for w in canvases))
+                    comparisons[0].destroy()
                     scenario = next(w for w in widgets if isinstance(w, ttk.Combobox)
                                     and 'Condition vraie' in tuple(w['values']))
                     scenario.set('Condition vraie')
