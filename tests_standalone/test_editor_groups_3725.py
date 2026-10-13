@@ -392,6 +392,37 @@ class EditorHierarchyTests(unittest.TestCase):
         doc.undo()
         self.assertEqual(doc.data, before)
 
+    def test_clone_upper_deck_and_connector_keeps_tactical_level(self):
+        from sporebound.interior_levels import add_interior_floor
+        from sporebound.level_navigation import (
+            add_level_link, place_unit_on_level)
+        raw = place_structure(self.base, self.MID, 'Tour', (7, 7))
+        sid = self.mission(raw)['structures'][-1]['id']
+        raw = add_interior_floor(raw, self.MID, sid, 1)
+        raw = add_level_link(raw, self.MID, (0, 8, 9), (1, 8, 8))
+        original_actor = self.mission(raw)['units'][0]['id']
+        raw = place_unit_on_level(raw, self.MID, original_actor, 1, (8, 8))
+        cells = [(x, y) for y in range(7, 10) for x in range(7, 10)]
+        raw = create_editor_group(raw, self.MID, 'Tour gardée', cells=cells)
+        copied = duplicate_editor_groups(raw, self.MID, ('group_1',), 5, 0)
+        mission = self.mission(copied)
+        group = mission['editor_groups'][-1]
+        copy_sid = group['structure_ids'][0]
+        copy_actor = group['unit_ids'][0]
+        self.assertNotEqual(copy_sid, sid)
+        self.assertNotEqual(copy_actor, original_actor)
+        self.assertEqual(mission['unit_levels'][copy_actor], 1)
+        self.assertEqual(next(x for x in mission['units']
+                              if x['id'] == copy_actor)['pos'], [13, 8])
+        self.assertEqual(next(x for x in mission['structures']
+                              if x['id'] == copy_sid)['anchor'], [12, 7])
+        self.assertTrue(any(x['structure_id'] == copy_sid
+                            for x in mission['interior_floors']))
+        self.assertTrue(any(x['from'] == [0, 13, 9] and
+                            x['to'] == [1, 13, 8]
+                            for x in mission['level_links']))
+        Content.from_dict(copied)
+
     def test_multi_group_copy_rejects_collisions_and_invalid_offsets_atomically(self):
         doc = Document(Content.from_dict(self.base))
         doc.paint_many(self.MID, ((6, 6),), 'feature:tree')
