@@ -49,7 +49,7 @@ class EntityEditingTests(unittest.TestCase):
                                 name='Garde de Jeanne', facing='west', team='player'))
         result = get_entity(doc.data, self.mid, 'actor', actor['id'])
         self.assertEqual(result['name'], 'Garde de Jeanne')
-        self.assertEqual(result['facing'], [-1, 0])
+        self.assertEqual(result['facing'], (-1, 0))
         with self.assertRaises(RuleError):
             edit_entity(doc.data, self.mid, 'actor', actor['id'], facing='up')
         with self.assertRaises(RuleError):
@@ -95,17 +95,17 @@ class EntityEditingTests(unittest.TestCase):
         Content.from_dict(data)
         moved = relocate_entity(data, self.mid, 'actor', actor['id'], (7, 5))
         shifted = get_entity(moved, self.mid, 'actor', actor['id'])
-        self.assertEqual(shifted['patrol_route'], [[7, 4], [6, 4]])
+        self.assertEqual(tuple(map(tuple, shifted['patrol_route'])), ((7, 4), (6, 4)))
         original = deepcopy(data)
         duplicate = duplicate_entity(data, self.mid, 'actor', actor['id'], (5, 7))
         new = next(u for u in self.mission(duplicate)['units'] if u['id'] != actor['id']
                    and u['team'] == 'enemy')
-        self.assertEqual(new['patrol_route'], [[5, 6], [4, 6]])
+        self.assertEqual(tuple(map(tuple, new['patrol_route'])), ((5, 6), (4, 6)))
         self.assertEqual(new['ct'], 0)
         self.assertEqual(new['facing'], actor.get('facing', [0, 1]))
         self.assertEqual(data, original)
         with self.assertRaises(RuleError):
-            relocate_entity(data, self.mid, 'actor', actor['id'], (13, 13))
+            relocate_entity(data, self.mid, 'actor', actor['id'], (13, 0))
         self.assertEqual(data, original)
 
     def test_defense_move_duplicate_and_passage_exit_absolute(self):
