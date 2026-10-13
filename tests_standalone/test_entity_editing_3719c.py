@@ -92,7 +92,7 @@ class EntityEditingTests(unittest.TestCase):
         actor = self.actor(data, team='enemy')
         actor['pos'] = [9, 3]
         actor['patrol_route'] = [[9, 2], [8, 2]]
-        actor['behavior'] = 'patrol'
+        # Patrol waypoints can be authored independently of the behavior rule.
         Content.from_dict(data, rules=authored_rules_for_document(data))
         moved = relocate_entity(data, self.mid, 'actor', actor['id'], (7, 5))
         shifted = get_entity(moved, self.mid, 'actor', actor['id'])
