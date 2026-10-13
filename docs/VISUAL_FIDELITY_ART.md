@@ -83,3 +83,27 @@ metadata). The older 88 PNG archive cannot be recreated from the index.
   pose timing, VFX layering and dynamic objects beyond the existing atlas.
 
 No changes to Content/JSON, save/replay format, battle actions or RNG.
+
+## October 2026 follow-up — frame sampling and release certification
+
+- The shared `IsoActorAtlas` used by the Editor and isometric Player exposes
+  `packaged_actor_catalog()`, with the real action coverage and a
+  bottom-center foot pivot. Generic hero/guard/archer artwork still **lacks**
+  attack/hit/defeat images: the fallback is not advertised as delivered art.
+  Project-specific art remains in the existing `AssetRegistry`.
+- `MotionDirector` supplies cosmetic 0/1 sub-frames for walking and attacks.
+  Jeanne's second `move` (row 3) and `attack` (row 5) frames are now selected
+  from her existing atlas instead of being skipped. Tactical timing, save,
+  replay and existing four-argument `ActorPose` consumers remain unchanged.
+- `actor_foot_point()` is shared at 24/54/96px zoom. The Tk regression also
+  checks actor→façade→foreground stacking plus roof cutaway, beyond mere
+  renderer-to-renderer agreement.
+- The watercolor validator checks PNG chunk CRCs, completeness, dimensions,
+  and SHA-256 hashes when supplied in metadata. The `standalone` workflow
+  checks optional developer packs; **version-tag distribution** performs the
+  strict 88-PNG check without `--allow-missing` and will fail until published.
+
+**Still blocked:** the original 88 watercolor PNG files have not been
+committed. This PR does not reconstruct them from metadata or certify final
+art direction. QA on final art, all actor combat frames and actual Windows,
+macOS and Linux visuals must be completed after delivery.
