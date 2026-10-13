@@ -247,7 +247,7 @@ def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial',
         error = str(exc)
     after = _snapshot(battle, hazard_cells)
     activated = event_id in battle.fired
-    return {
+    report = {
         'mission_id': mission_id,
         'event_id': event_id,
         'tick': battle.tick,
