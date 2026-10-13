@@ -103,8 +103,10 @@ class StructureUnderlayTests(unittest.TestCase):
     def test_group_move_restores_all_sources_before_destination_capture(self):
         self.doc.replace(place_structure(self.doc.data, self.MID,
                                          'Maison', (3, 3)))
+        # Buildings touch along x=7, so translating right by one makes
+        # the first building occupy a former cell of the second.
         self.doc.replace(place_structure(self.doc.data, self.MID,
-                                         'Maison', (8, 3)))
+                                         'Maison', (7, 3)))
         before = deepcopy(self.doc.data)
         scene = Content.from_dict(self.doc.data).missions[self.MID]
         from sporebound.iso_architecture import architecture_instances
@@ -113,8 +115,8 @@ class StructureUnderlayTests(unittest.TestCase):
         self.doc.replace(transform_structure_group(self.doc.data, self.MID,
                                                      cells, 1, 0))
         self.assertEqual({tuple(r['anchor']) for r in self.structures()},
-                         {(4, 3), (9, 3)})
-        for cell in ((5, 4), (10, 4)):
+                         {(4, 3), (8, 3)})
+        for cell in ((5, 4), (9, 4)):
             self.doc.replace(remove_structure(self.doc.data, self.MID, cell))
         self.assertEqual(board_tiles(self.doc.data, self.MID), self.ground)
         for _ in range(3):
