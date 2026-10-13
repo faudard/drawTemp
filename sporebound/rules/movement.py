@@ -186,7 +186,9 @@ def _move(battle, u: Unit, cell: Cell):
         pursuers = []
         for enemy in battle.units:
             radius = battle.engagement_range(enemy)
-            leaving = (enemy.team != u.team and battle._can_react(enemy) and radius > 0
+            leaving = (enemy.team != u.team
+                       and battle.unit_levels.get(enemy.id, 0) == battle.unit_levels.get(u.id, 0)
+                       and battle._can_react(enemy) and radius > 0
                        and distance(previous, enemy.pos) <= radius
                        and distance(nxt, enemy.pos) > radius)
             if not leaving:
