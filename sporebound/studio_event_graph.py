@@ -486,6 +486,7 @@ class EventGraphStudio:
                ' Clic sur une condition ou une action pour modifier le bloc.'))
         finish_ui('event_graph.draw', ui_started, canvas, counts={
             'nodes': len(graph['nodes']), 'edges': len(graph['edges']),
+            'zoom_pct': int(self.zoom.get().rstrip('%')),
             'canvas_items': len(canvas.find_all()) if ui_started is not None else 0,
             'truncated': graph['truncated'],
         })
