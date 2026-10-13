@@ -236,6 +236,7 @@ def launch(path):
     raw = json.loads(Path(path).read_text(encoding='utf-8'))
     doc = Document(Content.from_dict(raw, rules=authored_rules_for_document(raw)))
     current_path = Path(path)
+    disk_revisions = StudioTransactionStore(current_path).revisions()
     battle = None
     studio = None
     campaign_session = None
@@ -304,7 +305,7 @@ def launch(path):
 
     @guarded
     def open_doc():
-        nonlocal doc, current_path, battle
+        nonlocal doc, current_path, battle, disk_revisions
         if not discard_ok():
             return
         name = filedialog.askopenfilename(filetypes=[('Projet Sporebound', '*.json')])
@@ -316,6 +317,7 @@ def launch(path):
             candidate = Document(Content.from_dict(
                 raw, rules=authored_rules_for_document(raw)))
             doc, current_path, battle = candidate, Path(name), None
+            disk_revisions = StudioTransactionStore(current_path).revisions()
             mission_var.set(doc.data['missions'][0]['id'])
             if studio is not None:
                 studio.reload_project()
@@ -324,22 +326,31 @@ def launch(path):
 
     @guarded
     def save_doc():
-        nonlocal current_path
+        nonlocal current_path, disk_revisions
         if StudioTransactionStore(current_path).pending:
             raise RuleError('Récupérer la sauvegarde Studio interrompue avant toute écriture')
         if source_pending():
             doc.replace(json.loads(source.get('1.0', 'end')))
         name = filedialog.asksaveasfilename(initialfile=current_path.name, defaultextension='.json', filetypes=[('JSON', '*.json')])
         if name:
+            destination = Path(name)
+            if destination.resolve() == current_path.resolve():
+                if StudioTransactionStore(current_path).revisions()[0] != disk_revisions[0]:
+                    raise RuleError('Le contenu a changé sur disque : recharger avant écrasement.')
             doc.save(name)
-            current_path = Path(name)
+            original_path = current_path
+            current_path = destination
+            saved_content = StudioTransactionStore(current_path).revisions()[0]
+            disk_revisions = (saved_content,
+                              disk_revisions[1] if current_path.resolve() ==
+                              original_path.resolve() else None)
             refresh_source()
             status_var.set(f'Projet enregistré : {name}')
 
     @guarded
     def save_all():
         """Validate and publish both Studio documents with recovery support."""
-        nonlocal current_path
+        nonlocal current_path, disk_revisions
         if studio is None:
             raise RuleError('Studio non initialisé')
         store = StudioTransactionStore(current_path)
@@ -350,12 +361,14 @@ def launch(path):
             doc.data = Content.from_dict(
                 edited, rules=authored_rules_for_document(edited)).to_dict()
             studio.apply_project()
-            store.save(doc.data, studio.project.to_dict())
+            store.save(doc.data, studio.project.to_dict(),
+                       expected_previous=disk_revisions)
         except Exception:
             doc.data = original
             raise
         doc.saved = json.dumps(doc.data, sort_keys=True)
         current_path = store.content_path
+        disk_revisions = store.revisions()
         studio.project_path = store.project_path
         studio.project_saved = json.dumps(studio.project.to_dict(), sort_keys=True)
         studio.capture_history()
@@ -1371,6 +1384,13 @@ def launch(path):
         mission_var.set(mid)
         stop()
 
+    def on_project_saved(path):
+        nonlocal disk_revisions
+        canonical = current_path.with_suffix('.game.json').resolve()
+        if Path(path).resolve() == canonical:
+            disk_revisions = (disk_revisions[0],
+                              StudioTransactionStore(current_path).revisions()[1])
+
     studio = StudioPanels(
         notebook, tk, ttk,
         SimpleNamespace(showerror=messagebox.showerror,
@@ -1380,7 +1400,8 @@ def launch(path):
         mission=mission_var.get, selection=lambda: selected_cell,
         design_change=design_change, play_campaign=start_campaign,
         status=status_var, mission_change=stop,
-        select_mission=select_workspace_mission)
+        select_mission=select_workspace_mission,
+        on_project_saved=on_project_saved)
     ttk.Label(root,textvariable=status_var).pack(fill='x')
     root.protocol('WM_DELETE_WINDOW',lambda: root.destroy() if discard_ok() else None)
     refresh_source()
