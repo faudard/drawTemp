@@ -2,14 +2,16 @@
 
 This is a presentation layer only; placement is handled by entity_palette.
 """
-from .entity_palette import entity_entries, OBJECT_LABELS
+from .entity_palette import entity_entries, OBJECT_PROP_HINTS
 
 
 class EntityPalette:
-    def __init__(self, parent, *, snapshot, actors, choose, cell_size):
+    def __init__(self, parent, *, snapshot, actors, choose, cell_size, props=None):
         import tkinter as tk
         from tkinter import ttk
         self.snapshot, self.actors = snapshot, actors
+        self.props = props
+        self.tree_images = {}
         self.choose, self.cell_size = choose, cell_size
         self.window = tk.Toplevel(parent)
         self.window.title('Acteurs et objets — palette de mission')
@@ -38,7 +40,10 @@ class EntityPalette:
         left, right = ttk.Frame(body), ttk.Frame(body)
         body.add(left, weight=2)
         body.add(right, weight=3)
-        self.tree = ttk.Treeview(left, show='tree', selectmode='browse')
+        style = ttk.Style(self.window)
+        style.configure('EntityPalette.Treeview', rowheight=70)
+        self.tree = ttk.Treeview(left, show='tree', selectmode='browse',
+                                 style='EntityPalette.Treeview')
         scrollbar = ttk.Scrollbar(left, command=self.tree.yview, orient='vertical')
         self.tree.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side='right', fill='y')
@@ -95,6 +100,7 @@ class EntityPalette:
     def populate(self, *_args):
         old = self.tree.selection()
         self.tree.delete(*self.tree.get_children())
+        self.tree_images.clear()
         query = self.query.get().casefold().strip()
         category = self.category.get()
         visible = [entry for entry in self.entries.values()
@@ -103,9 +109,19 @@ class EntityPalette:
                        or category == 'Objets' and entry.kind == 'object')
                    and query in (entry.label + ' ' + entry.id).casefold()]
         for entry in visible:
+            if entry.kind == 'actor':
+                photo = self.actors.sprite(entry.style, 'south', 0, 42)
+            else:
+                photo = (self.props.sprite(OBJECT_PROP_HINTS[entry.id.partition(':')[2]], 34)
+                         if self.props is not None else None)
+            options = {}
+            if photo is not None:
+                self.tree_images[entry.id] = photo
+                options['image'] = photo
             self.tree.insert('', 'end', iid=entry.id,
                              text=entry.label + (' · ' + entry.team
-                                                 if entry.kind == 'actor' else ''))
+                                                 if entry.kind == 'actor' else ''),
+                             **options)
         self.counter.set(f'{len(visible)} / {len(self.entries)}')
         if visible:
             preferred = old[0] if old and old[0] in {v.id for v in visible} else visible[0].id
@@ -138,6 +154,9 @@ class EntityPalette:
             self.preview_image = self.actors.sprite(
                 entry.style, self.facing.get(), int(self.moving.get()),
                 self.cell_size())
+        elif self.props is not None:
+            self.preview_image = self.props.sprite(
+                OBJECT_PROP_HINTS[entry.id.partition(':')[2]], 52)
         if self.preview_image is not None:
             self.canvas.create_image(120, 152, image=self.preview_image, anchor='s')
         else:
@@ -145,7 +164,8 @@ class EntityPalette:
                                     else '#9070b1', outline='#4b5261', width=2)
             self.canvas.create_text(120, 137, text=entry.label)
         self.detail.set(f'{entry.label} — {entry.id}\n{entry.description}'
-                        + (f'\nÉquipe : {entry.team}' if is_actor else ''))
+                        + (f'\nÉquipe : {entry.team}' if is_actor
+                           else '\nIcône de décor indicative : visuel définitif à créer.'))
 
     def use(self):
         from tkinter import messagebox
