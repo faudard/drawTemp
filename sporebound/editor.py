@@ -371,6 +371,10 @@ def launch(path):
         if studio._pending_fields() and not messagebox.askyesno(
                 'Champs non appliqués', 'Abandonner les champs non appliqués ?'):
             return
+        if stroke_before is not None:
+            end_stroke(None)
+        if not studio.history.can_undo:
+            return
         studio.undo_global()
         battle = None
         refresh_source()
@@ -383,6 +387,10 @@ def launch(path):
             raise RuleError('Appliquer ou abandonner les modifications JSON avant rétablissement.')
         if studio._pending_fields() and not messagebox.askyesno(
                 'Champs non appliqués', 'Abandonner les champs non appliqués ?'):
+            return
+        if stroke_before is not None:
+            end_stroke(None)
+        if not studio.history.can_redo:
             return
         studio.redo_global()
         battle = None
