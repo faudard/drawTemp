@@ -149,11 +149,60 @@ def default_trigger_actions():
     ))
 
 
+# Opt-in tactical composite predicates stay in the canonical trigger dispatcher.
+# Leaves delegate to the registered rule set (including authored rule overrides),
+# not an editor-only evaluator. Legacy rules/manifests remain unchanged.
+COMPOSITE_MAX_DEPTH = 4
+COMPOSITE_MAX_NODES = 32
+
+
+def validate_composite(context, node, *, _depth=0, _count=None):
+    if _count is None:
+        _count = [0]
+    _count[0] += 1
+    require(_count[0] <= COMPOSITE_MAX_NODES and _depth < COMPOSITE_MAX_DEPTH,
+            'Composite condition exceeds depth/node limits')
+    require(isinstance(node, dict), 'Composite condition must be an object')
+    if 'condition' in node:
+        require(node['condition'] not in ('all', 'any', 'not') and
+                'when' not in node and 'actions' not in node,
+                'Composite leaf must use an existing atomic predicate')
+        context.rules.trigger_conditions.get(node['condition']).validate(context, node)
+        return
+    require(len(node) == 1, 'Composite condition needs one operator')
+    operator = next(iter(node))
+    require(operator in ('all', 'any', 'not'), 'Unknown composite operator')
+    if operator == 'not':
+        validate_composite(context, node['not'], _depth=_depth + 1,
+                           _count=_count)
+    else:
+        children = node[operator]
+        require(isinstance(children, list) and 2 <= len(children) <= 8,
+                'AND/OR needs between 2 and 8 conditions')
+        for child in children:
+            validate_composite(context, child, _depth=_depth + 1,
+                               _count=_count)
+
+
+def matches_composite(battle, node):
+    """Use the registered gameplay rules, never duplicate leaf logic."""
+    if 'condition' in node:
+        return battle.rules.trigger_conditions.get(node['condition']).matches(
+            battle, node)
+    if 'all' in node:
+        return all(matches_composite(battle, part) for part in node['all'])
+    if 'any' in node:
+        return any(matches_composite(battle, part) for part in node['any'])
+    return not matches_composite(battle, node['not'])
+
+
 def dispatch(battle):
     for trigger in battle.mission.triggers:
         if trigger['id'] in battle.fired:
             continue
         if not battle.rules.trigger_conditions.get(trigger['condition']).matches(battle, trigger):
+            continue
+        if 'when' in trigger and not matches_composite(battle, trigger['when']):
             continue
         battle.fired.append(trigger['id'])
         battle.emit('trigger', id=trigger['id'])
