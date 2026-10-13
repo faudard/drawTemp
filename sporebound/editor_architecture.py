@@ -72,7 +72,7 @@ class SelectionController:
         self.notifications = notifications
         self.state = SelectionState(mission_id, tuple(cell))
 
-    def set(self, mission_id, cell, cells=()):
+    def set(self, mission_id, cell, cells=(), *, publish=True):
         require(isinstance(mission_id, str) and bool(mission_id),
                 'Selection requires a mission')
         require(len(cell) == 2 and all(type(v) is int for v in cell),
@@ -81,9 +81,10 @@ class SelectionController:
         updated = SelectionState(mission_id, tuple(cell), selected)
         if updated != self.state:
             self.state = updated
-            self.notifications.publish(EditorChange(
-                'selection', mission_id, (RENDERER, INSPECTOR), 0,
-                (tuple(cell),) + selected))
+            if publish:
+                self.notifications.publish(EditorChange(
+                    'selection', mission_id, (RENDERER, INSPECTOR), 0,
+                    (tuple(cell),) + selected))
         return self.state
 
 
