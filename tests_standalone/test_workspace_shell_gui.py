@@ -151,7 +151,7 @@ class WorkspaceShellGUITests(TestCase):
                     canvas.event_generate('<ButtonRelease-1>',
                                           x=x * 54 + 12, y=y * 54 + 12)
                     root.update()
-                    self.assertEqual(buttons[title].cget('state'), 'normal')
+                    self.assertEqual(str(buttons[title].cget('state')), 'normal')
                     buttons[title].invoke()
                     root.update()
                     self.assertEqual(top.tab(top.select(), 'text'),
