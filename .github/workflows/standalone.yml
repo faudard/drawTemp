@@ -54,6 +54,8 @@ jobs:
         run: |
           python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --report matrix_382_ci.json > matrix_382_console.json
           python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --baseline matrix_382_ci.json > matrix_382_compare.json
+      - name: Visual Battle Lab 3.8.3 deterministic figures and CT replay
+        run: python -m unittest tests_standalone.test_battle_visual_383 -v
       - name: Combat Diagnostics 3.8.1 canonical trace and CLI replay evidence
         run: python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 40 --report battle_diagnostics_ci.json
       - run: python -m sporebound validate
@@ -124,6 +126,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_balance_matrix_382_gui.py -v
+      - name: Visual Battle Lab 3.8.3 GUI charts and seed replay
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_battle_visual_383_gui.py -v
       - name: Combat Diagnostics 3.8.1 selected-seed replay GUI
         env:
           SPOREBOUND_GUI_SMOKE: '1'
