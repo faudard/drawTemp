@@ -2,15 +2,16 @@
 
 This is a presentation layer only; placement is handled by entity_palette.
 """
-from .entity_palette import entity_entries, OBJECT_PROP_HINTS
+from .entity_palette import entity_entries
 
 
 class EntityPalette:
-    def __init__(self, parent, *, snapshot, actors, choose, cell_size, props=None):
+    def __init__(self, parent, *, snapshot, actors, choose, cell_size, props=None, objects=None):
         import tkinter as tk
         from tkinter import ttk
         self.snapshot, self.actors = snapshot, actors
         self.props = props
+        self.objects = objects
         self.tree_images = {}
         self.choose, self.cell_size = choose, cell_size
         self.window = tk.Toplevel(parent)
@@ -72,9 +73,9 @@ class EntityPalette:
         ttk.Label(right, text='Porte liée (levier, bélier, catapulte)').pack(anchor='w')
         self.link_box = ttk.Combobox(right, textvariable=self.link, state='readonly')
         self.link_box.pack(fill='x')
-        ttk.Label(right, text='Destination du passage (x,y)').pack(anchor='w', pady=(6, 0))
-        self.destination_entry = ttk.Entry(right, textvariable=self.destination)
-        self.destination_entry.pack(fill='x')
+        ttk.Label(right, text='Passage : cliquer l’entrée puis la sortie '
+                  'directement sur la carte. Échap pour annuler.',
+                  wraplength=275).pack(anchor='w', pady=(6, 0))
         self.use_button = ttk.Button(right, text='Placer sur la carte', command=self.use)
         self.use_button.pack(fill='x', pady=12)
         ttk.Label(self.window, text='Utiliser → cliquer sur la carte ; '
@@ -120,8 +121,8 @@ class EntityPalette:
             if entry.kind in ('actor', 'archetype'):
                 photo = self.actors.sprite(entry.style, 'south', 0, 42)
             else:
-                photo = (self.props.sprite(OBJECT_PROP_HINTS[entry.id.partition(':')[2]], 28)
-                         if self.props is not None else None)
+                photo = (self.objects.sprite(entry.id.partition(':')[2], 42)
+                         if self.objects is not None else None)
             options = {}
             if photo is not None:
                 self.tree_images[entry.id] = photo
@@ -163,16 +164,14 @@ class EntityPalette:
         self.pose_button.configure(state='normal' if is_actor else 'disabled')
         is_linked = entry.id in ('object:switch', 'object:ram', 'object:catapult')
         self.link_box.configure(state='readonly' if is_linked else 'disabled')
-        self.destination_entry.configure(state='normal' if entry.id == 'object:passage'
-                                         else 'disabled')
         self.preview_image = None
         if is_actor:
             self.preview_image = self.actors.sprite(
                 entry.style, self.facing.get(), int(self.moving.get()),
                 self.cell_size())
-        elif self.props is not None:
-            self.preview_image = self.props.sprite(
-                OBJECT_PROP_HINTS[entry.id.partition(':')[2]], 52)
+        elif self.objects is not None:
+            self.preview_image = self.objects.sprite(
+                entry.id.partition(':')[2], 72)
         if self.preview_image is not None:
             self.canvas.create_image(120, 152, image=self.preview_image, anchor='s')
         else:
@@ -181,21 +180,14 @@ class EntityPalette:
             self.canvas.create_text(120, 137, text=entry.label)
         self.detail.set(f'{entry.label} — {entry.id}\n{entry.description}'
                         + (f'\nÉquipe : {self.team.get()}' if is_actor
-                           else '\nIcône de décor indicative : visuel définitif à créer.'))
+                           else '\nIllustration dédiée de l’objet interactif.'))
 
     def use(self):
         from tkinter import messagebox
         entry = self.selected()
         if entry is None:
             return
-        destination = None
-        if entry.id == 'object:passage':
-            try:
-                x, y = (int(part.strip()) for part in self.destination.get().split(','))
-                destination = (x, y)
-            except (ValueError, TypeError):
-                messagebox.showerror('Passage', 'Saisir une destination x,y.')
-                return
+        destination = None  # Passage: select entrance and exit on the map.
         if entry.id in ('object:switch', 'object:ram', 'object:catapult') and not self.link.get():
             messagebox.showerror('Lien', 'Créer et sélectionner une porte cible.')
             return
