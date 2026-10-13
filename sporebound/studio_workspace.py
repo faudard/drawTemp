@@ -3,7 +3,7 @@
 Only this module creates widgets; the index and game engine remain headless.
 """
 from .model import RuleError
-from .studio_index4 import StudioIndex
+from .studio_index4 import WorkspaceModelCache
 from .performance_trace import begin_ui, finish_ui
 from .game_export4 import export_game
 from .studio_release_gate import verify_game_bundle
@@ -19,6 +19,7 @@ class ProjectWorkspaceTab:
         self.sidebar_tree = None
         self.sidebar_search = None
         self._sidebar_mission = None
+        self._model_cache = WorkspaceModelCache()
         ttk = owner.ttk
         root = ttk.Frame(notebook)
         notebook.add(root, text='Espace projet')
@@ -155,10 +156,10 @@ class ProjectWorkspaceTab:
         self.open_selected()
 
     def index(self):
-        return ProjectWorkspaceIndex(self.owner._content(), self.owner.project)
+        return self.model().workspace
 
     def model(self):
-        return StudioIndex(self.owner._content(), self.owner.project)
+        return self._model_cache.get(self.owner.doc().data, self.owner.project)
 
     def refresh(self):
         if self.owner.project is None:
@@ -218,7 +219,10 @@ class ProjectWorkspaceTab:
         selected = self.tree.selection()
         if not selected or selected[0].startswith('group:'):
             return None
-        return self.index().node(selected[0])
+        node = self.model().nodes.get(selected[0])
+        if node is None:
+            raise RuleError('Workspace item no longer exists: ' + selected[0])
+        return node
 
     def _select(self, _event=None):
         node = self._selected_node()
