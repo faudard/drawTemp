@@ -700,7 +700,10 @@ def launch(path):
     def paste_preview(event):
         nonlocal structure_preview_key
         if structure_drag_from is not None:
-            return  # The drag owns its own validated footprint and sprite.
+            if tool_var.get() != 'Sélection structure':
+                cancel_structure_drag()  # Tool changed while dragging.
+            else:
+                return  # The drag owns its own validated footprint and sprite.
         tool = tool_var.get()
         key = None
         if tool in ('Structure', 'Déplacer structure', 'Dupliquer structure'):
@@ -996,6 +999,8 @@ def launch(path):
         nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selected_tiles
         nonlocal structure_selection_cell, structure_selection_id
         tool, brush = tool_var.get(), active_brush()
+        if tool != 'Sélection structure' and structure_drag_from is not None:
+            cancel_structure_drag()
         if not battle and tool == 'Sélection structure' and structure_drag_from is not None:
             anchor = structure_drag_anchor
             duplicate = structure_drag_duplicate
@@ -1490,7 +1495,8 @@ def launch(path):
     canvas.bind('<B1-Motion>',drag)
     canvas.bind('<ButtonRelease-1>',end_stroke)
     canvas.bind('<Motion>',paste_preview)
-    canvas.bind('<Leave>',clear_placement_preview)
+    canvas.bind('<Leave>', lambda e: (clear_placement_preview(e),
+                                            cancel_structure_drag(e)))
     canvas.bind('<Escape>', cancel_structure_drag)
     canvas.bind('<Left>', lambda _e: nudge_selected_structure(-1, 0))
     canvas.bind('<Right>', lambda _e: nudge_selected_structure(1, 0))
