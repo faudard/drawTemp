@@ -170,6 +170,9 @@ class IsoBattleCanvas:
             if moved:
                 for tag in depth_order(self._architecture, units, poses):
                     self.canvas.tag_raise(tag)
+                for index, actor in enumerate(units):
+                    if self._level_map.get(actor.id, 0) > 0:
+                        self.canvas.tag_raise('iso_actor_unit_' + str(index))
                 self.canvas.tag_raise('selection')
             self._refresh_sprite_frames(units, poses, camera)
             self._positions = positions
