@@ -77,7 +77,7 @@ def _free_cell(battle, unit, *, avoid=None):
     raise RuleError('No free cell to prepare a false entry condition')
 
 
-def _prepare_scenario(battle, trigger, scenario):
+def _prepare_leaf_scenario(battle, trigger, scenario):
     """Arrange a test state, NEVER implement an event predicate here."""
     if scenario == 'initial':
         return []
@@ -136,6 +136,30 @@ def _prepare_scenario(battle, trigger, scenario):
                 'Not enough authored living units for a false capacity case')
         return [f'{len(alive)} unités vivantes {team} dépassent {maximum}']
     raise RuleError(f'No scenario setup for condition {kind}')
+
+
+
+def _stage_composite(battle, node, satisfied):
+    """Arrange supported test states; registered runtime rules decide truth."""
+    if 'condition' in node:
+        return _prepare_leaf_scenario(
+            battle, node, 'satisfied' if satisfied else 'unsatisfied')
+    if 'not' in node:
+        return _stage_composite(battle, node['not'], not satisfied)
+    if 'all' in node:
+        parts = node['all'] if satisfied else node['all'][:1]
+        return [note for part in parts
+                for note in _stage_composite(battle, part, satisfied)]
+    parts = node['any'][:1] if satisfied else node['any']
+    return [note for part in parts
+            for note in _stage_composite(battle, part, satisfied)]
+
+
+def _prepare_scenario(battle, trigger, scenario):
+    notes = _prepare_leaf_scenario(battle, trigger, scenario)
+    if scenario == 'satisfied' and 'when' in trigger:
+        notes.extend(_stage_composite(battle, trigger['when'], True))
+    return notes
 
 
 def _stage_interaction(battle, object_id):
@@ -266,6 +290,7 @@ def preview_event(data, mission_id, event_id, *, tick=0, scenario='initial',
         'fired': activated,
         'outcome': 'error' if error else 'applied' if activated else 'inactive',
         'actions': [event_graph.action_title(a) for a in event['actions']],
+        'condition': event_graph.condition_summary(event),
         'events': deepcopy(battle.events[first_event:]),
         'changes': _state_changes(before, after),
         'spawned': sorted(after['units'].keys() - before['units'].keys()),
@@ -291,6 +316,8 @@ def format_preview_report(report):
         'APERÇU ISOLÉ — aucun enregistrement, aucun tour intermédiaire simulé',
         f"Scénario : {report['scenario']} | Tick : {report['tick']}",
         status,
+        'Condition : ' + report.get('condition', ''),
+        'Actions prévues : ' + ' → '.join(report['actions']),
     ]
     lines.extend('Préparation : ' + note for note in report['scenario_notes'])
     if report['changes']:
