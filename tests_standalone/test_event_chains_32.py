@@ -4,6 +4,7 @@ import unittest
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.cinematics import cinematic_template, tactical_event_target
+from sporebound.entity_event_studio import author_gate_sequence
 from sporebound.event_composer import action, condition, save_event
 from sporebound.event_context import (
     preview_event_chain, format_chain_report, preview_event)
@@ -150,6 +151,39 @@ class ChainedTacticalEventTests(unittest.TestCase):
         triggers.dispatch(battle)
         self.assertEqual(battle.events, before)
         self.assertEqual(sum(x == 'chain_final' for x in battle.fired), 1)
+
+    def test_real_gate_interaction_activates_immediate_downstream_effect(self):
+        project = GameProject.default(Content.from_dict(self.raw))
+        data, project = author_gate_sequence(
+            self.raw, project, self.mid,
+            door_id='gate', lever_id='switch', lever_cell=[2, 4],
+            event_id='open_gate_chain', danger_cell=[5, 5],
+            danger=4, dialogue='Le signal est donné')
+        data = save_event(
+            data, self.mid, 'reinforcements_alert',
+            condition('tick', tick=0),
+            [action('hazard', pos=[3, 5], amount=11),
+             action('message', text='Les gardes sont alertés')])
+        data = link_event(data, self.mid,
+                          'reinforcements_alert', 'open_gate_chain')
+        rules = authored_rules_for_document(data)
+        content = Content.from_dict(data, rules=rules)
+        session = GameSession.new(content, project, 'main', rules=rules)
+        session.start_mission(self.mid)
+        battle = session.active_battle
+        self.assertNotIn('reinforcements_alert', battle.fired)
+        actor = battle.unit('momo')
+        battle.active_id = actor.id
+        actor.ct = 100
+        actor.acted = False
+        # Same public command boundary as the Player, not a forged trigger.
+        session.execute({'kind': 'interact', 'unit': actor.id,
+                         'object': 'switch'})
+        self.assertEqual([x for x in battle.fired if x in (
+            'open_gate_chain', 'reinforcements_alert')],
+                         ['open_gate_chain', 'reinforcements_alert'])
+        self.assertFalse(battle.board.tile((4, 1)).blocked)
+        self.assertEqual(battle.board.tile((3, 5)).hazard, 11)
 
     def test_scene_and_cinematic_tied_to_real_cascade_event(self):
         content = Content.from_dict(self.data, rules=self.rules)
