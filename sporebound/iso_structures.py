@@ -173,6 +173,11 @@ def remove_structure(data, mission_id, cell):
     if instance.id:
         mission['structures'] = [record for record in mission.get('structures', ())
                                  if record['id'] != instance.id]
+        # Upper-deck annotations cannot outlive their parent building.
+        if mission.get('interior_floors'):
+            mission['interior_floors'] = [
+                floor for floor in mission['interior_floors']
+                if floor['structure_id'] != instance.id]
     mission['board']['tiles'] = [tile for tile in mission['board']['tiles']
                                  if tuple(tile['pos']) not in instance.cells]
     return Content.from_dict(updated).to_dict()
