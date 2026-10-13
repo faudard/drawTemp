@@ -158,6 +158,31 @@ class GroupPrefabsTests(unittest.TestCase):
         self.assertEqual(tuple(obj['pos']), (11, 11))
         self.assertEqual(tuple(obj['destination']), (12, 12))
 
+    def test_existing_interactive_object_blocks_import(self):
+        data = add_object(self.data, self.SRC, 'chest_src', 'chest', (5, 5))
+        data = create_editor_group(data, self.SRC, 'Coffre',
+                                   cells=((5, 5),))
+        prefab = capture_group_prefab(data, self.SRC,
+                                      ('group_1',), 'Coffre')
+        target = add_object(data, self.DST, 'chest_dst', 'chest',
+                            (12, 12))
+        snapshot = deepcopy(target)
+        with self.assertRaisesRegex(RuleError, 'interactive object'):
+            place_group_prefab(target, self.DST, prefab, (12, 12))
+        self.assertEqual(target, snapshot)
+
+    def test_existing_actor_blocks_import_on_same_floor(self):
+        src_actor = self.mission(self.data, self.SRC)['units'][0]
+        dst_actor = self.mission(self.data, self.DST)['units'][0]
+        data = create_editor_group(
+            self.data, self.SRC, 'Personnage',
+            cells=(tuple(src_actor['pos']),))
+        prefab = capture_group_prefab(data, self.SRC,
+                                      ('group_1',), 'Personnage')
+        with self.assertRaisesRegex(RuleError, 'actor overlaps'):
+            place_group_prefab(data, self.DST, prefab,
+                               tuple(dst_actor['pos']))
+
     def test_untrusted_prefab_schema_and_size_rejected(self):
         src = create_editor_group(self.data, self.SRC, 'Source',
                                   cells=((4, 4),))
