@@ -106,3 +106,71 @@ class WorkspaceShellGUITests(TestCase):
              patch('tkinter.messagebox.showerror') as errors:
             launch(DEFAULT_CONTENT)
             errors.assert_not_called()
+
+    def test_map_selection_opens_exact_actor_and_object_form(self):
+        import tkinter as tk
+        from tkinter import ttk
+
+        def descendants(parent):
+            for widget in parent.winfo_children():
+                yield widget
+                yield from descendants(widget)
+
+        def drive(root):
+            try:
+                root.update()
+                top = next(w for w in descendants(root)
+                           if isinstance(w, ttk.Notebook)
+                           and 'Carte et combat' in
+                           [w.tab(t, 'text') for t in w.tabs()])
+                page = next(t for t in top.tabs()
+                            if top.tab(t, 'text') == 'Carte et combat')
+                shell = top.nametowidget(page)
+                middle = shell.nametowidget(shell.panes()[1])
+                map_frame = middle.nametowidget(middle.panes()[0])
+                canvas = next(w for w in descendants(map_frame)
+                              if isinstance(w, tk.Canvas))
+                tool_box = next(w for w in descendants(root)
+                                if isinstance(w, ttk.Combobox) and
+                                'Sélection' in w.cget('values'))
+                tool_box.set('Sélection')
+                buttons = {w.cget('text'): w for w in descendants(root)
+                           if isinstance(w, ttk.Button)}
+
+                # garden's Ziggy starts on (1, 5) and switch on (2, 4).
+                for x, y, title, editor_page, entity_id in (
+                    (1, 5, 'Modifier le personnage sélectionné',
+                     'Personnages / monstres', 'ziggy'),
+                    (2, 4, 'Modifier l’objet sélectionné',
+                     'Objets interactifs', 'switch')
+                ):
+                    top.select(page)
+                    root.update()
+                    canvas.event_generate('<Button-1>',
+                                          x=x * 54 + 12, y=y * 54 + 12)
+                    canvas.event_generate('<ButtonRelease-1>',
+                                          x=x * 54 + 12, y=y * 54 + 12)
+                    root.update()
+                    self.assertEqual(buttons[title].cget('state'), 'normal')
+                    buttons[title].invoke()
+                    root.update()
+                    self.assertEqual(top.tab(top.select(), 'text'),
+                                     'Personnages et événements')
+                    subtab = next(w for w in descendants(root)
+                                  if isinstance(w, ttk.Notebook)
+                                  and editor_page in
+                                  [w.tab(t, 'text') for t in w.tabs()])
+                    self.assertEqual(subtab.tab(subtab.select(), 'text'),
+                                     editor_page)
+                    selected = [w.get(i) for w in descendants(subtab)
+                                if isinstance(w, tk.Listbox)
+                                for i in w.curselection()]
+                    self.assertTrue(any(v.startswith(entity_id + '  —  ')
+                                        for v in selected))
+            finally:
+                root.destroy()
+
+        with patch.object(tk.Tk, 'mainloop', drive), \
+             patch('tkinter.messagebox.showerror') as errors:
+            launch(DEFAULT_CONTENT)
+            errors.assert_not_called()
