@@ -145,13 +145,13 @@ class LayoutStore:
         if not isinstance(data, dict):
             return {}
         return {k: v for k, v in data.items()
-                if k in ('outer', 'vertical', 'tab') and
+                if k in ('outer_left', 'outer_right', 'vertical', 'tab') and
                 (type(v) is int and v >= 0 if k != 'tab'
                  else isinstance(v, str) and len(v) <= 100)}
 
     def save(self, layout):
         cleaned = {k: v for k, v in dict(layout).items()
-                   if k in ('outer', 'vertical', 'tab') and
+                   if k in ('outer_left', 'outer_right', 'vertical', 'tab') and
                    (type(v) is int and v >= 0 if k != 'tab'
                     else isinstance(v, str) and len(v) <= 100)}
         self.path.parent.mkdir(parents=True, exist_ok=True)
