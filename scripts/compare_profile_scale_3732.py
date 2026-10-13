@@ -84,6 +84,8 @@ def compare(baseline, candidate, *, allow_host_mismatch=False,
             block_p95_pct=None, block_p99_pct=None, block_min_ms=0.0):
     mismatch = check_compatible(
         baseline, candidate, allow_host_mismatch=allow_host_mismatch)
+    if mismatch and (block_p95_pct is not None or block_p99_pct is not None):
+        raise ValueError("Blocking regression gates require matching environments")
     before = measurements(baseline)
     after = measurements(candidate)
     missing = sorted(set(before) - set(after))
@@ -151,7 +153,7 @@ def markdown(result, limit=25):
     text = [
         "# Performance & Scale — avant/après",
         "",
-        "Baseline: \`%s\` → Candidate: \`%s\`" %
+        "Baseline: %s → Candidate: %s" %
         (result.get("baseline_sha") or "unknown",
          result.get("candidate_sha") or "unknown"),
         "",
