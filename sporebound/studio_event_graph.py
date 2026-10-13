@@ -6,6 +6,7 @@ event model. Clicking a node selects the canonical authored condition/action.
 from copy import deepcopy
 
 from . import event_composer, event_graph, event_context
+from .event_debugger import EventDebugger, format_debug_report
 from .model import RuleError, require
 from .performance_trace import begin_ui, finish_ui
 
@@ -49,6 +50,9 @@ class EventGraphStudio:
         self.cinematic_choice = self.tk.StringVar()
         self.last_preview = None
         self.context = None
+        self.debugger = None
+        self.debug_data = None
+        self.debug_project_data = None
         self._rendered_graph = None
         self._rendered_scale = None
         self._node_items = {}
@@ -131,12 +135,14 @@ class EventGraphStudio:
             preview_controls, text='Tester avec le moteur',
             command=lambda: self.owner._run(self.preview_selected))
         self.preview_button.pack(side='left', padx=3)
+        chain_controls = ttk.Frame(contextual)
+        chain_controls.pack(fill='x', pady=2)
         self.scene_button = ttk.Button(
-            preview_controls, text='Vue isométrique avant/après',
+            chain_controls, text='Vue isométrique avant/après',
             command=lambda: self.owner._run(self.preview_scene))
         self.scene_button.pack(side='left', padx=3)
         self.chain_button = ttk.Button(
-            preview_controls, text='Simuler chaîne',
+            chain_controls, text='Simuler chaîne',
             command=lambda: self.owner._run(self.preview_chain))
         self.chain_button.pack(side='left', padx=3)
         scenario_controls = ttk.Frame(contextual)
@@ -146,6 +152,21 @@ class EventGraphStudio:
             scenario_controls, textvariable=self.preview_scenario,
             state='readonly', width=21, values=list(self.scenario_labels))
         self.scenario_box.pack(side='left', padx=3)
+        debug_controls = ttk.LabelFrame(contextual, text='Débogueur')
+        debug_controls.pack(fill='x', pady=2)
+        for column in (0, 1):
+            debug_controls.columnconfigure(column, weight=1)
+        for index, (label, callback) in enumerate((
+                ('Démarrer debug', self.start_debug),
+                ('Pas suivant', self.debug_step),
+                ('Continuer debug', self.debug_continue),
+                ('Point d’arrêt', self.debug_breakpoint),
+                ('Inspecter condition', self.debug_inspect),
+                ('Arrêter debug', self.stop_debug))):
+            self.ttk.Button(debug_controls, text=label,
+                            command=lambda fn=callback: self.owner._run(fn)).grid(
+                                row=index // 2, column=index % 2,
+                                sticky='ew', padx=2, pady=1)
         links = ttk.Frame(contextual)
         links.pack(fill='x', pady=2)
         self.story_button = ttk.Button(
@@ -286,6 +307,9 @@ class EventGraphStudio:
 
     def _edit(self, transform):
         self.advanced._edit(transform)
+        self.debugger = None  # Live debug state must not outlive a document edit.
+        self.debug_data = None
+        self.debug_project_data = None
         self.last_preview = None  # No stale green status after a graph edit.
         self.refresh()
 
@@ -591,6 +615,13 @@ class EventGraphStudio:
     def refresh(self):
         if self.owner.project is None:
             return
+        if self.debugger is not None and (
+                self.debugger.mission_id != self.owner.mission()
+                or self.debug_data != self.owner.doc().data
+                or self.debug_project_data != self.owner.project.to_dict()):
+            self.debugger = None  # Cancel stale state after external edits/undo.
+            self.debug_data = None
+            self.debug_project_data = None
         events = self._mission().get('triggers', [])
         choices = [event['id'] for event in events]
         self.event_box['values'] = choices
@@ -610,12 +641,19 @@ class EventGraphStudio:
         self.draw()
 
     @staticmethod
-    def _node_style(node, selected_id, selected_action, preview):
+    def _node_style(node, selected_id, selected_action, preview, debug_report=None):
         selected = node['event_id'] == selected_id
         if node['kind'] == 'action':
             selected = selected and node['index'] == selected_action
         if node['kind'] == 'condition':
-            if selected and preview and preview['event_id'] == node['event_id']:
+            if debug_report is not None:
+                if node['event_id'] == debug_report['paused_on']:
+                    fill = '#fed7aa'
+                elif node['event_id'] in debug_report['fired_ids']:
+                    fill = '#bbf7d0'
+                else:
+                    fill = '#f1f5f9'
+            elif selected and preview and preview['event_id'] == node['event_id']:
                 fill = ('#fecaca' if preview['error'] else
                         '#bbf7d0' if preview['fired'] else '#fef3c7')
             else:
@@ -652,10 +690,13 @@ class EventGraphStudio:
                 x2, y2 = int(b['x'] * scale), int(b['y'] * scale)
                 canvas.create_line(x1 + width, y1, x2, y2, arrow='last',
                                    fill='#64748b', width=2)
+        debug_report = (self.debugger.report()
+                        if self.debugger is not None else None)
         updates = 0
         for index, node in enumerate(graph['nodes']):
             style = self._node_style(
-                node, self.event_id.get(), self.action_index, self.last_preview)
+                node, self.event_id.get(), self.action_index, self.last_preview,
+                debug_report)
             key = node['key']
             if cache_hit:
                 if style != self._node_styles.get(key):
@@ -767,6 +808,64 @@ class EventGraphStudio:
             self.cinematic_choice.set(labels[0] if labels else '')
         self.cinematic_box.config(state='readonly' if clips else 'disabled')
         self.cinematic_button.config(state='normal' if clips else 'disabled')
+
+    def start_debug(self):
+        require(self.context is not None, 'Choisir un événement tactique')
+        self.debugger = EventDebugger(
+            self.owner.doc().data, self.owner.mission(),
+            self.context['event_id'], project=self.owner.project,
+            tick=int(self.preview_tick.get()),
+            scenario=self.scenario_labels[self.preview_scenario.get()])
+        self.debug_data = deepcopy(self.owner.doc().data)
+        self.debug_project_data = deepcopy(self.owner.project.to_dict())
+        self._render_debug(self.debugger.report())
+
+    def _require_debug(self):
+        require(self.debugger is not None,
+                'Démarrer un nouveau diagnostic événementiel.')
+        require(self.debugger.mission_id == self.owner.mission()
+                and self.debug_data == self.owner.doc().data
+                and self.debug_project_data == self.owner.project.to_dict(),
+                'Contenu ou projet modifié : redémarrer le diagnostic.')
+        return self.debugger
+
+    def _render_debug(self, report):
+        lines = format_debug_report(report)
+        self._set_context_text(lines, show_end=True)
+        self.draw()
+
+    def debug_step(self):
+        debugger = self._require_debug()
+        self._render_debug(debugger.step())
+
+    def debug_continue(self):
+        debugger = self._require_debug()
+        self._render_debug(debugger.continue_to_breakpoint())
+
+    def debug_breakpoint(self):
+        debugger = self._require_debug()
+        eid = self.event_id.get()
+        require(eid in debugger.by_id,
+                'Choisir un événement appartenant à la chaîne déboguée.')
+        debugger.set_breakpoint(eid, eid not in debugger.breakpoint_ids)
+        self._render_debug(debugger.report())
+
+    def debug_inspect(self):
+        debugger = self._require_debug()
+        details = debugger.inspect(self.event_id.get())
+        lines = format_debug_report(debugger.report())
+        lines.append('DIAGNOSTIC : ' + details['event_id'])
+        for item in details['conditions']:
+            lines.append(('✓ ' if item['passed'] else '✗ ') + item['label'])
+        self._set_context_text(lines, show_end=True)
+        self.draw()
+
+    def stop_debug(self):
+        self.debugger = None
+        self.debug_data = None
+        self.debug_project_data = None
+        self._refresh_context()
+        self.draw()
 
     def preview_selected(self):
         require(self.context is not None, 'Choisir un événement tactique')
