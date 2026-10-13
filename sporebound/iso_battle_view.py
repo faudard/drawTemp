@@ -8,6 +8,7 @@ from .iso_depth import depth_order, visual_center
 
 from .iso_map import IsoGeometry, IsoTerrainAtlas, render_isometric
 from .iso_props import IsoPropAtlas
+from .iso_object_atlas import IsoObjectAtlas
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import (
@@ -64,6 +65,7 @@ class IsoBattleCanvas:
         self.canvas = canvas
         self.terrain = IsoTerrainAtlas(canvas)
         self.props = IsoPropAtlas(canvas)
+        self.objects = IsoObjectAtlas(canvas)
         self.buildings = IsoBuildingAtlas(canvas)
         self.fortifications = IsoFortificationAtlas(canvas)
         self.actors = IsoActorAtlas(canvas)
@@ -177,7 +179,8 @@ class IsoBattleCanvas:
             reachable=frame.reachable, danger=frame.danger,
             active_id=frame.active_id, atlas=self.terrain, prop_atlas=self.props,
             building_atlas=self.buildings, fortification_atlas=self.fortifications,
-            actor_atlas=self.actors, poses=poses)
+            actor_atlas=self.actors, poses=poses,
+            object_atlas=self.objects)
         self.geometry = geo
         self.shift = viewport_shift(geo, camera, viewport)
         self.canvas.move('all', *self.shift)
