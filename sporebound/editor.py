@@ -15,6 +15,7 @@ from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
                             selected_cells as validate_selection)
 from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
                             transform_terrain)
+from .map_builder4 import smart_brush_cells, surface_region
 from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, SURFACE_COLORS, IsoTerrainAtlas)
@@ -168,40 +169,23 @@ class Document:
         cells = [(x, y) for y in range(y1, y2 + 1) for x in range(x1, x2 + 1)]
         self.paint_many(mid, cells, brush)
 
-    def flood_surface(self, mid, start, surface):
-        """Fill four-connected cells of the same surface in one atomic edit.
+    def smart_paint(self, mid, anchors, brush, *, radius=0, shape='diamond'):
+        """Paint a continuous footprint as one validated, undoable operation."""
+        if brush in ('unit', 'object', 'zone+', 'zone-'):
+            raise RuleError('Smart terrain brushes cannot place linked entities or zones')
+        cells = smart_brush_cells(self.data, mid, anchors, radius=radius, shape=shape)
+        self.paint_many(mid, cells, brush)
+        return len(cells)
 
-        Empty sparse tiles are grass. The existing paint_many path owns surface
-        collisions, Content validation and undo; no runtime Battle is changed.
-        """
+    def flood_surface(self, mid, start, surface, *, allowed_cells=None):
+        """Existing four-neighbour fill, optionally restricted to a selection."""
         if surface not in SURFACES:
             raise RuleError('Surface inconnue')
-        mission = next((m for m in self.data['missions'] if m['id'] == mid), None)
-        if mission is None:
-            raise RuleError(f'Unknown mission: {mid}')
-        width, height = mission['board']['width'], mission['board']['height']
-        if (not isinstance(start, (list, tuple)) or len(start) != 2 or
-                any(type(v) is not int for v in start) or
-                not (0 <= start[0] < width and 0 <= start[1] < height)):
-            raise RuleError('Choisir une case dans la carte.')
+        region = surface_region(self.data, mid, start, allowed_cells=allowed_cells)
+        mission = next(m for m in self.data['missions'] if m['id'] == mid)
         tiles = {tuple(tile['pos']): tile for tile in mission['board']['tiles']}
-        start = tuple(start)
-        original = tiles.get(start, {}).get('surface', 'grass')
-        if original == surface:
+        if tiles.get(tuple(start), {}).get('surface', 'grass') == surface:
             return 0
-        region, visited, pending = [], set(), [start]
-        while pending:
-            x, y = pending.pop()
-            if (not (0 <= x < width and 0 <= y < height) or
-                    (x, y) in visited):
-                continue
-            visited.add((x, y))
-            if tiles.get((x, y), {}).get('surface', 'grass') != original:
-                continue
-            region.append((x, y))
-            pending.extend(((x-1, y), (x+1, y), (x, y-1), (x, y+1)))
-        # Validation is performed before replace(), so an illegal blocked
-        # spawn or objective leaves the map and both undo stacks unchanged.
         self.paint_many(mid, region, 'surface:' + surface)
         return len(region)
 
@@ -310,6 +294,8 @@ def launch(path):
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
+    brush_radius_var = tk.IntVar(value=1)
+    brush_shape_var = tk.StringVar(value='diamond')
     unit_var = tk.StringVar()
     action_var = tk.StringVar(value='move')
     facing_var = tk.StringVar(value='south')
@@ -1200,6 +1186,18 @@ def launch(path):
                                         tags='asset_ghost')
             preview_cells(inside, tag='structure_preview', color=color)
             return
+        if tool == 'Pinceau intelligent':
+            anchor = event_cell(event)
+            if anchor is None:
+                return
+            try:
+                footprint = smart_brush_cells(
+                    doc.data, mission_var.get(), [anchor],
+                    radius=brush_radius_var.get(), shape=brush_shape_var.get())
+            except RuleError:
+                return
+            preview_cells(footprint, tag='brush_preview', color='#2361ff')
+            return
         if tool_var.get() == 'Pinceau' and iso_var.get() and iso_geometry is not None:
             cell = event_cell(event)
             if cell is None or not iso_geometry.board.contains(cell):
@@ -1247,6 +1245,26 @@ def launch(path):
             return
         preview_cells([c for c in cells if inside(c)], tag='paste_preview',
                       color='#36a16c' if all(map(inside,cells)) else '#e05252')
+
+    @guarded
+    def fill_selection():
+        if battle or source_pending():
+            raise RuleError('Terminer le combat et appliquer le JSON avant édition.')
+        if not selected_tiles:
+            raise RuleError('Sélectionner une zone de la carte à remplir.')
+        brush = active_brush()
+        if not brush.startswith('surface:'):
+            raise RuleError('Choisir un sol avant de remplir la sélection.')
+        seed = (selected_cell if selected_cell in selected_tiles
+                else min(selected_tiles, key=lambda p: (p[1], p[0])))
+        count = 0
+        def apply():
+            nonlocal count
+            count = doc.flood_surface(
+                mission_var.get(), seed, brush.partition(':')[2],
+                allowed_cells=selected_tiles)
+        design_change(apply)
+        status_var.set(f'Remplissage sélection : {count} case(s) modifiée(s).')
 
     def sample_appearance(cell, *, decor=False):
         if source_pending():
@@ -1438,7 +1456,12 @@ def launch(path):
             stroke_before = deepcopy(doc.data)
             stroke_redo = list(doc.redo_stack)
             # Click immediately applies the first cell (legacy Tk interaction).
-            paint_cells([selected_cell], brush)
+            if tool == 'Pinceau intelligent':
+                design_change(lambda: doc.smart_paint(
+                    mission_var.get(), [selected_cell], brush,
+                    radius=brush_radius_var.get(), shape=brush_shape_var.get()))
+            else:
+                paint_cells([selected_cell], brush)
 
     def drag(event):
         nonlocal structure_drag_anchor, structure_drag_hover
@@ -1510,7 +1533,16 @@ def launch(path):
             for point in list(_line_cells(stroke_cells[-1],cell))[1:]:
                 if point not in stroke_cells:
                     stroke_cells.append(point)
-            preview_cells(stroke_cells,tag='stroke_preview',color='#2a61ff')
+            if tool_var.get() == 'Pinceau intelligent':
+                footprint = smart_brush_cells(
+                    doc.data, mission_var.get(), stroke_cells,
+                    radius=brush_radius_var.get(), shape=brush_shape_var.get())
+                if len(footprint) <= 512:
+                    preview_cells(footprint, tag='stroke_preview', color='#2a61ff')
+                else:
+                    preview_cells([cell], tag='stroke_preview', color='#2a61ff')
+            else:
+                preview_cells(stroke_cells,tag='stroke_preview',color='#2a61ff')
 
     @guarded
     def end_stroke(_event):
@@ -1551,14 +1583,19 @@ def launch(path):
             else:
                 design_change(lambda: doc.paint_rectangle(mission_var.get(),
                                                           rectangle_anchor, end, brush))
-        elif not battle and tool == 'Pinceau' and brush not in ('unit', 'object') and len(stroke_cells) > 1:
+        elif not battle and tool in ('Pinceau', 'Pinceau intelligent') and brush not in ('unit', 'object') and len(stroke_cells) > 1:
             selected_cell = stroke_cells[-1]
             # Validate the complete stroke from the unmodified snapshot. An
             # invalid destination rolls back the first-click preview too.
             try:
                 temporary = Document(Content.from_dict(
                     stroke_before, rules=authored_rules_for_document(stroke_before)))
-                temporary.paint_many(mission_var.get(), stroke_cells, brush)
+                if tool == 'Pinceau intelligent':
+                    temporary.smart_paint(
+                        mission_var.get(), stroke_cells, brush,
+                        radius=brush_radius_var.get(), shape=brush_shape_var.get())
+                else:
+                    temporary.paint_many(mission_var.get(), stroke_cells, brush)
             except (RuleError, ValueError, KeyError):
                 doc.data = stroke_before
                 if doc.undo_stack:
@@ -1947,7 +1984,7 @@ def launch(path):
     mission_box.bind('<<ComboboxSelected>>', lambda e: stop())
     ttk.Label(controls,text='Outil').pack(side='left')
     ttk.Combobox(controls,textvariable=tool_var,state='readonly',width=15,
-                 values=['Pinceau','Rectangle','Sélection','Sélection structure','Collage',
+                 values=['Pinceau','Pinceau intelligent','Rectangle','Sélection','Sélection structure','Collage',
                          'Remplissage','Pipette sol','Pipette décor',
                          'Structure','Sélection structure',
                          'Déplacer structure','Dupliquer structure',
@@ -2011,6 +2048,15 @@ def launch(path):
                                 tool_var.set('Pinceau')))
     ttk.Button(scenery_controls, text='Effacer décor',
                command=lambda: brush_var.set('feature-erase')).pack(side='left',padx=4)
+    ttk.Button(scenery_controls, text='Pinceau intelligent',
+               command=lambda: tool_var.set('Pinceau intelligent')).pack(side='left', padx=2)
+    ttk.Label(scenery_controls, text='Rayon :').pack(side='left', padx=(6, 2))
+    ttk.Spinbox(scenery_controls, from_=0, to=3, width=3,
+                textvariable=brush_radius_var).pack(side='left')
+    ttk.Combobox(scenery_controls, textvariable=brush_shape_var,
+                 state='readonly', width=8, values=('diamond', 'square')).pack(side='left')
+    ttk.Button(scenery_controls, text='Remplir sélection',
+               command=fill_selection).pack(side='left', padx=2)
     for label, tool in [('Remplir sol', 'Remplissage'),
                         ('Pipette sol', 'Pipette sol'),
                         ('Pipette décor', 'Pipette décor')]:
