@@ -244,6 +244,7 @@ def launch(path):
     asset_palette = None
     entity_palette = None
     entity_choice = None
+    entity_hover_key = None
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
@@ -621,39 +622,62 @@ def launch(path):
                                         outline=color, width=3, tags=tag)
 
     def clear_placement_preview(_event=None):
+        nonlocal entity_hover_key
+        entity_hover_key = None
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
                     'brush_preview', 'asset_ghost', 'entity_preview',
                     'entity_ghost'):
             canvas.delete(tag)
 
     def paste_preview(event):
-        clear_placement_preview()
+        nonlocal entity_hover_key
         if battle:
+            clear_placement_preview()
             return
         if tool_var.get() == 'Entité' and entity_choice is not None:
             cell = event_cell(event)
             if cell is None:
+                clear_placement_preview()
                 return
+            entry, facing, link, destination = entity_choice
+            key = (id(doc.data), mission_var.get(), cell, entry.id, facing,
+                   link, destination, tile_size, iso_var.get())
+            if key == entity_hover_key:
+                return
+            clear_placement_preview()
             mission = next(m for m in doc.data['missions']
                            if m['id'] == mission_var.get())
-            if not (0 <= cell[0] < mission['board']['width'] and
-                    0 <= cell[1] < mission['board']['height']):
-                return
-            entry, facing, _link, _destination = entity_choice
-            if iso_var.get() and iso_geometry is not None:
+            from .entity_palette import preview_entity_placement, OBJECT_PROP_HINTS
+            feedback = preview_entity_placement(
+                doc.data, mission_var.get(), entry.id, cell, facing=facing,
+                link=link, destination=destination)
+            entity_hover_key = key
+            color = '#36a16c' if feedback.allowed else '#e05252'
+            inside = [c for c in feedback.cells
+                      if 0 <= c[0] < mission['board']['width']
+                      and 0 <= c[1] < mission['board']['height']]
+            if iso_var.get() and iso_geometry is not None and inside:
                 cx, cy = iso_geometry.center(cell)
                 if entry.kind == 'actor':
                     photo = actor_atlas.sprite(entry.style, facing, 0, tile_size)
-                    if photo is not None:
-                        canvas.create_image(cx, cy + tile_size * 18 / 54,
-                                            image=photo, anchor='s',
-                                            tags='entity_ghost')
+                else:
+                    photo = iso_props.sprite(
+                        OBJECT_PROP_HINTS[entry.id.partition(':')[2]], tile_size)
+                if photo is not None:
+                    canvas.create_image(cx, cy + tile_size * 18 / 54,
+                                        image=photo, anchor='s',
+                                        tags='entity_ghost')
                 else:
                     canvas.create_oval(cx-9, cy-9, cx+9, cy+9,
                                        fill='#9070b1', outline='#4b5261',
                                        tags='entity_ghost')
-            preview_cells([cell], tag='entity_preview', color='#2361ff')
+            preview_cells(inside, tag='entity_preview', color=color)
+            if not feedback.allowed:
+                status_var.set('Placement refusé : ' + feedback.reason)
+            else:
+                status_var.set(entry.label + ' : emplacement valide, cliquer pour poser.')
             return
+        clear_placement_preview()
         if tool_var.get() == 'Structure':
             cursor = event_cell(event)
             if cursor is None:
@@ -954,6 +978,8 @@ def launch(path):
 
     def refresh(*args):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
+        nonlocal entity_hover_key
+        entity_hover_key = None
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
             from .narrative import StoryBook
             story = StoryBook(studio.project.story, Content.from_dict(doc.data),
@@ -1229,7 +1255,7 @@ def launch(path):
             entity_palette = EntityPalette(
                 root, snapshot=lambda: (doc.data, mission_var.get()),
                 actors=actor_atlas, choose=choose_entity,
-                cell_size=lambda: tile_size)
+                cell_size=lambda: tile_size, props=iso_props)
         else:
             entity_palette.show()
 
