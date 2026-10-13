@@ -27,8 +27,15 @@ class WorkspaceGUITests(TestCase):
             try:
                 root.update()
                 children = list(descendants(root))
-                tree = next(w for w in children if isinstance(w, ttk.Treeview) and
-                            w.exists('group:mission'))
+                studio = next(w for w in children if isinstance(w, ttk.Notebook)
+                              and 'Espace projet' in
+                              [w.tab(tab, 'text') for tab in w.tabs()])
+                workspace = studio.nametowidget(next(
+                    tab for tab in studio.tabs()
+                    if studio.tab(tab, 'text') == 'Espace projet'))
+                tree = next(w for w in descendants(workspace)
+                            if isinstance(w, ttk.Treeview)
+                            and w.exists('group:mission'))
                 buttons = {w.cget('text'): w for w in children
                            if isinstance(w, ttk.Button)}
                 self.assertTrue(tree.exists('mission:garden'))
