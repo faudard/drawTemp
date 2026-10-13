@@ -94,6 +94,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_workspace_shell_gui.py -v
+      - name: Verify 3.7.31 Workspace diagnostic navigation and docked shell
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_workspace_shell_3731_gui.py -v
       - name: Exercise 2.5.1 map selection and deployment UI
         env:
           SPOREBOUND_GUI_SMOKE: '1'
