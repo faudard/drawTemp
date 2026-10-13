@@ -161,7 +161,8 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                      selected_cell, selected_tiles, reachable=(), danger=(), active_id=None,
                      atlas=None, prop_atlas=None,
                      building_atlas=None, fortification_atlas=None,
-                     actor_atlas=None, poses=None, geometry=None, retained=False):
+                     actor_atlas=None, poses=None, geometry=None, retained=False,
+                     unit_levels=None):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = geometry if geometry is not None else IsoGeometry(board, cell_size)
     if not retained:
@@ -169,6 +170,8 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     canvas.configure(scrollregion=(0, 0, geo.width, geo.height))
     goals = set(mission.goal)
     deploy = {tuple(c) for z in mission.deployment for c in z['cells']}
+    actor_levels = (unit_levels if unit_levels is not None
+                    else getattr(mission, 'unit_levels', {}))
     actors = {}
     for index, actor in enumerate(units):
         actors.setdefault(tuple(actor.pos), []).append((index, actor))
