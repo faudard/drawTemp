@@ -95,6 +95,20 @@ class StudioIndex:
                 if obj.get('kind') in ('switch', 'ram', 'catapult') and obj.get('link'):
                     add(key, 'map_object:' + mission.id + '/' + obj['link'],
                         'Porte associée')
+        for mission in self.content.missions.values():
+            source = 'mission:' + mission.id
+            for group in mission.editor_groups:
+                key = 'editor_group:' + mission.id + '/' + group['id']
+                add(source, key, 'Groupe d’édition')
+                if group['parent']:
+                    add('editor_group:' + mission.id + '/' + group['parent'],
+                        key, 'Sous-groupe')
+                for actor_id in group['unit_ids']:
+                    add(key, 'map_actor:' + mission.id + '/' + actor_id,
+                        'Acteur du groupe')
+                for object_id in group['object_ids']:
+                    add(key, 'map_object:' + mission.id + '/' + object_id,
+                        'Objet du groupe')
         story = self.project.story
         for reference, scene_id in story.get('after_strategic_event', {}).items():
             add('strategic_event:' + reference,
