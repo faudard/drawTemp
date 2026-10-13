@@ -48,6 +48,8 @@ class WorldRoadEventTests(TestCase):
 
     def test_route_event_interrupts_midway_and_choice_changes_campaign(self):
         session = self.new_session()
+        with self.assertRaises(RuleError):
+            session.start_mission(self.destination)
         session.world_destination(self.destination)
         for _ in range(STEPS_PER_EDGE // 2):
             session.world_advance()
@@ -60,6 +62,8 @@ class WorldRoadEventTests(TestCase):
         restored = GameSession.from_recording(checkpoint, self.content, self.project)
         self.assertEqual(restored.world_state(), midpoint)
         self.assertEqual(restored.active_scene()["id"], "road_merchants")
+        with self.assertRaises(RuleError):
+            restored.start_mission(self.destination)
         before = deepcopy(restored.recording())
         with self.assertRaises(RuleError):
             restored.world_advance()
@@ -76,6 +80,9 @@ class WorldRoadEventTests(TestCase):
         self.assertEqual(restored.world_state()["at"], self.destination)
         self.assertFalse(restored.world_state()["traveling"])
         self.assertTrue(restored.world_can_enter(self.destination))
+        self.assertEqual(restored.start_mission(self.destination).mission.id,
+                         self.destination)
+        restored.abandon_encounter()
         # Road encounters happen once, even on the return journey.
         restored.world_destination(self.start)
         for _ in range(STEPS_PER_EDGE):

@@ -308,6 +308,14 @@ class GameSession:
     def start_mission(self, mission_id):
         require(self.mode == "campaign", "End the current encounter first")
         require(mission_id in self.available_missions(), "Mission is locked")
+        # Enforce arrival at a visible world location at the headless boundary:
+        # UI controls alone must not bypass an interrupted route event.
+        state = self.world_state()
+        if state is not None and any(
+                node["mission"] == mission_id
+                for node in self.project.world["nodes"]):
+            require(self.world_can_enter(mission_id),
+                    "Travel to the mission location before starting combat")
         # Campaign.prepare can materialize heroes: use a throwaway roster.
         battle = deepcopy(self.progress).prepare(
             self.content, mission_id, seed=self.seed, ruleset=self.rules,
