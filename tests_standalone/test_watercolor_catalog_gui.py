@@ -51,6 +51,12 @@ class WatercolorCatalogGuiTests(unittest.TestCase):
             palette.watercolor_frame.set("1")
             palette.preview()
             self.assertIn("jeanne_walk_b", palette.detail.get())
+            palette.play_watercolor()
+            self.assertIsNotNone(palette._watercolor_timer)
+            palette.stop_watercolor()
+            self.assertIsNone(palette._watercolor_timer)
+            palette.watercolor_frame.set("1")
+            palette.preview()
 
             # Publish one matching preview sprite in an isolated temp gallery.
             # The normal 88 files remain optional and untouched on disk.
