@@ -53,8 +53,10 @@ def inspect_event(data, mission_id, event_id, project=None):
     }
 
 
-def _free_cell(battle, unit):
+def _free_cell(battle, unit, *, avoid=None):
     for cell in battle.board.cells():
+        if cell == avoid:
+            continue
         footprint = unit.occupied_cells(origin=cell)
         if not all(battle.board.contains(pos) and
                    not battle.board.tile(pos).blocked for pos in footprint):
@@ -93,7 +95,7 @@ def _prepare_scenario(battle, trigger, scenario):
             return ['Un joueur occupe déjà la case testée']
         for unit in at_destination:
             origin = unit.pos
-            unit.pos = _free_cell(battle, unit)
+            unit.pos = _free_cell(battle, unit, avoid=origin)
             require(unit.pos != origin,
                     'No alternative free cell for entry scenario')
         return ['Joueurs éloignés de la case testée, si nécessaire']
