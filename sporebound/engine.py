@@ -243,6 +243,10 @@ class Battle:
         from .level_navigation import available_level_moves
         return available_level_moves(self, unit)
 
+    def vertical_forecast(self, target_level: int, cell: Cell, unit=None):
+        from .vertical_combat import shot_forecast
+        return shot_forecast(self, unit or self.active, target_level, cell)
+
     def line_of_sight(self, start: Cell, end: Cell) -> bool:
         return movement.line_of_sight(self, start, end)
 
@@ -633,6 +637,9 @@ class Battle:
                 from .level_navigation import navigate_level
                 navigate_level(self, u, level=command.get('level'),
                                cell=command.get('cell'))
+            elif kind == 'level_attack':
+                from .vertical_combat import execute_shot
+                execute_shot(self, u, command.get('level'), command.get('cell'))
             else:
                 if level:
                     require(kind in {'act', 'end'},
