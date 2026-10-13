@@ -2087,6 +2087,7 @@ def launch(path):
                 actors=actor_atlas, choose=choose_entity,
                 cell_size=lambda: tile_size, props=iso_props,
                 objects=object_atlas)
+            wire_drop(entity_palette.tree, 'entity')
         else:
             entity_palette.show()
 
@@ -2101,6 +2102,7 @@ def launch(path):
                 actors=actor_atlas, content=lambda: doc.data,
                 mission=mission_var.get,
                 entities=lambda: palette_entities(doc.data, mission_var.get()))
+            wire_drop(asset_palette.tree, 'asset')
         else:
             asset_palette.show()
 
@@ -2436,6 +2438,81 @@ def launch(path):
     ttk.Button(sidebar, text='Espace projet complet',
                command=lambda: notebook.select(studio.workspace.tab)).pack(
                    fill='x', padx=7, pady=(3, 8))
+    def wire_drop(tree, kind):
+        """Native Tk pointer gesture across Studio's existing Treeviews.
+
+        A drop invokes the same palette selection and canvas click as manual
+        placement, so validations, authoring history and undo are unchanged.
+        """
+        gesture = {}
+
+        def start(event):
+            gesture.clear()
+            row = tree.identify_row(event.y)
+            if row and not row.startswith('group:'):
+                gesture.update(row=row, x=event.x_root, y=event.y_root)
+
+        def finish(event):
+            row = gesture.get('row')
+            start_x, start_y = gesture.get('x'), gesture.get('y')
+            gesture.clear()
+            if not row or start_x is None:
+                return
+            if abs(event.x_root - start_x) + abs(event.y_root - start_y) < 12:
+                return
+            # Never interpret a release outside the visible tactical canvas.
+            x = event.x_root - canvas.winfo_rootx()
+            y = event.y_root - canvas.winfo_rooty()
+            if not (0 <= x < canvas.winfo_width() and
+                    0 <= y < canvas.winfo_height()):
+                return
+            if battle or source_pending():
+                messagebox.showerror('Placement indisponible',
+                                     'Quitter le playtest et valider le JSON.')
+                return
+            try:
+                if kind == 'asset':
+                    entry = asset_palette.entries.get(row)
+                    if entry is None or not choose_palette_asset(
+                            entry, asset_palette.turns):
+                        return
+                elif kind == 'entity':
+                    entry = entity_palette.entries.get(row)
+                    if entry is None or not choose_entity(
+                            entry, entity_palette.facing.get(),
+                            entity_palette.link.get(),
+                            entity_palette.destination.get(),
+                            entity_palette.team.get()):
+                        return
+                else:
+                    entry = palette_source_for_tree(
+                        row, doc.data, mission_var.get())
+                    link, destination = '', ''
+                    if row.startswith('map_object:'):
+                        mid, entity_id = row.partition(':')[2].split('/', 1)
+                        source_mission = next(
+                            m for m in doc.data['missions'] if m['id'] == mid)
+                        original = next(
+                            o for o in source_mission['objects']
+                            if o['id'] == entity_id)
+                        link = original.get('link', '')
+                        destination = original.get('destination', '')
+                    if not choose_entity(entry, 'south', link, destination,
+                                         entry.team or 'enemy'):
+                        return
+                from types import SimpleNamespace
+                gesture_event = SimpleNamespace(x=int(x), y=int(y), state=0)
+                click(gesture_event)
+                end_stroke(gesture_event)
+            except (RuleError, ValueError, KeyError, TypeError, StopIteration) as exc:
+                messagebox.showerror('Dépôt refusé', str(exc))
+
+        tree.bind('<ButtonPress-1>', start, add='+')
+        tree.bind('<ButtonRelease-1>', finish, add='+')
+
+    wire_drop(studio.workspace.tree, 'workspace')
+    wire_drop(studio.workspace.sidebar_tree, 'workspace')
+
     def focus_project_search(_event=None):
         notebook.select(work)
         entry = studio.workspace.sidebar_search
