@@ -32,6 +32,7 @@ class BalanceMatrixStudio:
         self.notebook = notebook
         self.cases = []
         self.current = None
+        self._run_snapshot = None
         self.baseline = None
         self.comparison = None
         self.busy = False
