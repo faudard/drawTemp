@@ -136,6 +136,23 @@ class StructureCommand:
 
 
 @dataclass(frozen=True)
+class StructureGroupCommand:
+    """Atomic group relocation with original footprint and underlays intact."""
+    cells: Tuple[Tuple[int, int], ...]
+    dx: int
+    dy: int
+    duplicate: bool = False
+    kind: str = 'structure-group'
+    views: Tuple[str, ...] = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+
+    def transform(self, data, mission_id):
+        from .structure_groups import transform_structure_group
+        return transform_structure_group(
+            data, mission_id, self.cells, self.dx, self.dy,
+            duplicate=self.duplicate)
+
+
+@dataclass(frozen=True)
 class EntityCommand:
     """Move, duplicate, edit or delete an existing unit or interactive object."""
     action: str
