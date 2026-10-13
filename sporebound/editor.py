@@ -2421,6 +2421,26 @@ def launch(path):
         editing_context.selection.set(mid, selected_cell, publish=False)
         notebook.select(work)
         refresh()
+        # A diagnostic must reveal the object, not just update its ID.
+        # Use the same coordinate projection as the active map renderer.
+        if iso_var.get() and iso_geometry is not None:
+            cx, cy = iso_geometry.center(selected_cell)
+        else:
+            cx = (selected_cell[0] + 0.5) * tile_size
+            cy = (selected_cell[1] + 0.5) * tile_size
+        bounds = canvas.cget('scrollregion').split()
+        if len(bounds) == 4:
+            left, top, right, bottom = map(float, bounds)
+            width = max(canvas.winfo_width(), 1)
+            height = max(canvas.winfo_height(), 1)
+            if right - left > width:
+                canvas.xview_moveto(max(0.0, min(
+                    (cx - left - width/2) / (right-left),
+                    1 - width/(right-left))))
+            if bottom - top > height:
+                canvas.yview_moveto(max(0.0, min(
+                    (cy - top - height/2) / (bottom-top),
+                    1 - height/(bottom-top))))
         canvas.focus_set()
 
     def on_project_saved(path):
