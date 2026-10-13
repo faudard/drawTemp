@@ -26,6 +26,7 @@ from sporebound.iso_fortification_atlas import IsoFortificationAtlas
 from sporebound.iso_actor_atlas import IsoActorAtlas
 from sporebound.model import Content
 from examples.fortified_village_3717a import build_village_document, MISSION_ID
+from scripts.profile_scale_3732 import resident_set
 
 
 def summary(values):
@@ -123,7 +124,8 @@ def measure(size, frames, assets, cell_size=32):
             draw()
             current, peak = tracemalloc.get_traced_memory()
             tracemalloc.stop()
-            result['modes'][mode] = dict(cold_ms=round(cold, 3), operations=timings,
+            rss, rss_kind = resident_set()
+            result['modes'][mode] = dict(process_rss_bytes=rss, rss_kind=rss_kind,cold_ms=round(cold, 3), operations=timings,
                                        model_parse=summary(parse_times),
                                        python_current_bytes=current, python_peak_bytes=peak,
                                        canvas_items=len(canvas.find_all()))
