@@ -611,9 +611,10 @@ class PlayerApplication:
                 active_level = battle.unit_levels.get(battle.active.id, 0)
                 if battle.mission.level_links:
                     if active_level:
-                        options = ["level_move", "attack", "end"]
+                        options = ["level_move", "level_attack", "attack", "end"]
                     else:
-                        options = (["move", "level_move", "attack", *battle.active.skills,
+                        options = (["move", "level_move", "level_attack",
+                                    "attack", *battle.active.skills,
                                     "item:potion", "item:ether", "item:phoenix",
                                     *["object:" + obj["id"] for obj in battle.mission.objects],
                                     *available_operations(battle, battle.active)])
@@ -718,6 +719,12 @@ class PlayerApplication:
         self._render_motion(clock_ms)
         self.audio.observe(battle)
         rows = ["Case : " + str(self.selection), "", "Escouades"]
+        if self.action_var.get() == 'level_attack' and battle.active is not None:
+            try:
+                rows.append('Tir vertical : ' + str(battle.vertical_forecast(
+                    self.level_var.get(), self.selection)))
+            except RuleError as exc:
+                rows.append('Tir vertical indisponible : ' + str(exc))
         if battle.mission.level_links:
             rows.insert(1, "Étage actif : N" + str(
                 battle.unit_levels.get(battle.active_id, 0) if battle.active_id else 0))
@@ -773,7 +780,7 @@ class PlayerApplication:
         self.canvas.focus_set()
         battle = self.player.session.active_battle
         if self.iso_view_var.get() and self.iso_renderer is not None:
-            floor = (self.level_var.get() if self.action_var.get() == 'level_move'
+            floor = (self.level_var.get() if self.action_var.get() in {'level_move', 'level_attack'}
                      else battle.unit_levels.get(battle.active_id, 0)
                      if battle.active_id else 0)
             cell = self.iso_renderer.hit_test(event.x, event.y, level=floor)
@@ -821,6 +828,9 @@ class PlayerApplication:
             command = {"kind": "move", "cell": list(self.selection)}
         elif kind == "level_move":
             command = {"kind": "level_move", "level": self.level_var.get(),
+                       "cell": list(self.selection)}
+        elif kind == "level_attack":
+            command = {"kind": "level_attack", "level": self.level_var.get(),
                        "cell": list(self.selection)}
         elif kind == "end":
             command = {"kind": "end", "facing": self._facing()}
