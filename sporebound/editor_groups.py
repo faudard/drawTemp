@@ -333,7 +333,43 @@ def group_display_cells(mission, group_id):
     return result
 
 
+def selected_group_roots(mission, group_ids):
+    """Canonicalize multi-selection: an included ancestor absorbs descendants."""
+    require(isinstance(group_ids, (tuple, list)) and bool(group_ids)
+            and all(type(gid) is str for gid in group_ids),
+            'Select at least one editor group')
+    require(len(group_ids) == len(set(group_ids)),
+            'Duplicate editor group in selection')
+    groups = mission.get('editor_groups', [])
+    for gid in group_ids:
+        _group(groups, gid)
+    included = set(group_ids)
+    parents = {g['id']: g['parent'] for g in groups}
+    result = []
+    for gid in group_ids:
+        ancestor = parents[gid]
+        while ancestor is not None and ancestor not in included:
+            ancestor = parents[ancestor]
+        if ancestor is None:
+            result.append(gid)
+    return tuple(result)
+
+
+def selected_group_closure(mission, group_ids):
+    roots = selected_group_roots(mission, group_ids)
+    wanted = set()
+    for gid in roots:
+        wanted.update(g['id'] for g in descendant_groups(mission, gid))
+    return roots, tuple(g for g in mission.get('editor_groups', ())
+                        if g['id'] in wanted)
+
+
 def move_editor_group(data, mission_id, group_id, dx, dy):
+    """Backward-compatible one-group entry point."""
+    return move_editor_groups(data, mission_id, (group_id,), dx, dy)
+
+
+def move_editor_groups(data, mission_id, group_ids, dx, dy):
     """Translate a complete hierarchy with one Content validation/undo entry.
 
     Move the canonical structures and entities through their existing
@@ -343,7 +379,7 @@ def move_editor_group(data, mission_id, group_id, dx, dy):
     require(type(dx) is int and type(dy) is int and (dx or dy),
             'Group movement needs a nonzero integer offset')
     original = _mission(data, mission_id)
-    groups = descendant_groups(original, group_id)
+    _, groups = selected_group_closure(original, group_ids)
     members = {key: set() for key in ('unit_ids', 'object_ids', 'structure_ids')}
     cells = set()
     for group in groups:
