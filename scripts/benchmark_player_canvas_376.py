@@ -106,6 +106,7 @@ def measure(frame, registry, *, cell_size=52, frames=120, pan=False):
         return {
             "p50_ms": round(quantile(samples, 0.5), 3),
             "p95_ms": round(quantile(samples, 0.95), 3),
+            "p99_ms": round(quantile(samples, 0.99), 3),
             "max_ms": round(max(samples), 3),
             "mean_ms": round(statistics.mean(samples), 3),
             "peak_python_mb": round(peak / (1024 * 1024), 3),
