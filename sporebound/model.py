@@ -306,7 +306,9 @@ class Content:
             structure_ids, structure_cells = set(), set()
             for structure in m.structures:
                 require(type(structure) is dict and
-                        set(structure) == {"id", "name", "anchor", "turns", "door_slot"},
+                        set(structure) in (
+                            {"id", "name", "anchor", "turns", "door_slot"},
+                            {"id", "name", "anchor", "turns", "door_slot", "underlay"}),
                         "Invalid structure metadata fields")
                 sid = structure["id"]
                 require(type(sid) is str and 1 <= len(sid) <= 64
@@ -322,6 +324,48 @@ class Content:
                         f"{sid}: structure outside map")
                 require(not footprint.intersection(structure_cells),
                         f"{sid}: overlapping structures")
+                # An optional record-local snapshot preserves the exact
+                # sparse ground underneath new structures. Historical
+                # records without underlay remain valid and unchanged.
+                if "underlay" in structure:
+                    underlay = structure["underlay"]
+                    require(type(underlay) is list and
+                            len(underlay) == len(footprint),
+                            f"{sid}: invalid underlay size")
+                    snapshot_cells = set()
+                    for entry in underlay:
+                        require(type(entry) is dict and
+                                set(entry) == {"pos", "tile"} and
+                                type(entry["pos"]) is list and
+                                len(entry["pos"]) == 2 and
+                                all(type(n) is int for n in entry["pos"]),
+                                f"{sid}: invalid underlay cell")
+                        position = tuple(entry["pos"])
+                        require(position in footprint and
+                                position not in snapshot_cells,
+                                f"{sid}: invalid underlay footprint")
+                        snapshot_cells.add(position)
+                        raw = entry["tile"]
+                        if raw is not None:
+                            require(type(raw) is dict and
+                                    set(raw) == set(asdict(Tile())),
+                                    f"{sid}: invalid underlay tile")
+                            require(type(raw["blocked"]) is bool and
+                                    type(raw["height"]) is int and
+                                    0 <= raw["height"] <= 99 and
+                                    type(raw["cost"]) is int and
+                                    1 <= raw["cost"] <= 99 and
+                                    type(raw["cover"]) is int and
+                                    0 <= raw["cover"] <= 100 and
+                                    type(raw["hazard"]) is int and
+                                    0 <= raw["hazard"] <= 10000 and
+                                    type(raw["surface"]) is str and
+                                    raw["surface"] in SURFACES and
+                                    type(raw["feature"]) is str and
+                                    raw["feature"] in FEATURES,
+                                    f"{sid}: invalid underlay terrain")
+                    require(snapshot_cells == footprint,
+                            f"{sid}: incomplete underlay footprint")
                 structure_cells.update(footprint)
             ids, occupied = set(), set()
             for u in m.units:
