@@ -173,16 +173,21 @@ class WorldMapStudio:
         project = self.owner.project
         if project is None:
             return
-        content = self.owner._content()
-        self.mission_box["values"] = list(content.missions)
+        # Most Map Editor selection/paint notifications do not change the
+        # world. Derive a cheap signature from raw mission metadata *before*
+        # constructing/validating an expensive complete Content snapshot.
+        raw_missions = self.owner.doc().data["missions"]
         world = project.world
-        if world:
-            self.theme.set(world["theme"])
-        sig = json.dumps((world, [(mid, m.name, m.next_missions)
-                                 for mid, m in content.missions.items()],
+        sig = json.dumps((world, [(m["id"], m["name"],
+                                   m.get("next_missions", []))
+                                  for m in raw_missions],
                           self.selected.get()), sort_keys=True)
         if sig == self._signature:
             return
+        content = self.owner._content()
+        self.mission_box["values"] = list(content.missions)
+        if world:
+            self.theme.set(world["theme"])
         self._projection = world_projection(world, content,
                                             available=tuple(content.missions))
         draw_world_map(self.canvas, self._projection, selected=self.selected.get())
