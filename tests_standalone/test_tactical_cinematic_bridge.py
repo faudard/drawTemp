@@ -3,6 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from types import SimpleNamespace
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.cinematics import (
@@ -13,6 +14,7 @@ from sporebound.engine import Battle
 from sporebound.event_context import inspect_event
 from sporebound.game_project import GameProject
 from sporebound.model import Content, RuleError
+from sporebound.player_app import PlayerApplication
 from sporebound.rules import triggers
 
 
@@ -99,6 +101,34 @@ class TacticalCinematicBridgeTests(unittest.TestCase):
         ])
         self.assertEqual(self.content.to_dict()["missions"][0]["triggers"][0]["id"],
                          "spore_pulse")
+
+
+    def test_player_displays_once_and_seeds_seen_events_after_loading(self):
+        project = self.project_with_clips(self.first, self.second)
+        battle = Battle(self.content, "garden")
+        ui = object.__new__(PlayerApplication)
+        ui.project = project
+        ui.player = SimpleNamespace(
+            session=SimpleNamespace(active_battle=battle))
+        ui._seen_tactical_cinematics = {}
+        played, redraws = [], []
+        ui._play_cinematic_clips = lambda clips, finish: played.append(
+            [clip["id"] for clip in clips])
+        ui.show = lambda: redraws.append("draw")
+        ui._change(lambda: None)
+        self.assertEqual(redraws, ["draw"])
+        battle.tick = 20
+        triggers.dispatch(battle)
+        ui._change(lambda: None)
+        self.assertEqual(played, [["spore_cut", "spore_voice"]])
+        self.assertEqual(redraws, ["draw"])
+        ui._change(lambda: None)
+        self.assertEqual(len(played), 1)
+        self.assertEqual(len(redraws), 2)
+        ui._acknowledge_loaded_tactical_cinematics()
+        ui._change(lambda: None)
+        self.assertEqual(len(played), 1)
+        self.assertEqual(len(redraws), 3)
 
 
 if __name__ == "__main__":
