@@ -56,6 +56,10 @@ class TacticalEventGraphGUITests(unittest.TestCase):
 
                     buttons['Créer événement'].invoke()
                     root.update()
+                    # Show the authoring validation error at the failing step,
+                    # instead of reporting an unhelpful empty graph.
+                    self.assertFalse(callback_errors, callback_errors)
+                    self.assertFalse(show_error.called, show_error.call_args_list)
                     self.assertTrue(any('event_node_' in tag
                                         for item in event_graph.find_all()
                                         for tag in event_graph.gettags(item)))
