@@ -55,6 +55,7 @@ from .editor_groups import (create_editor_group, add_selection_to_group,
 from .group_prefabs import (capture_group_prefab, load_group_prefab,
                             save_group_prefab, list_group_prefabs,
                             prefab_file_slug, prefab_display_cells)
+from .group_prefab_transform import rotate_group_prefab
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -298,6 +299,8 @@ def launch(path):
     editor_group_dx = tk.IntVar(value=1)
     editor_group_dy = tk.IntVar(value=0)
     group_prefab_var = tk.StringVar(value='')
+    group_prefab_rotation_var = tk.StringVar(value='0°')
+    group_prefab_preview_key = None
     selected_group_id = None
     group_tree_signature = None
     group_tree_items = {}
@@ -1044,7 +1047,11 @@ def launch(path):
             _prefab_library()) if item.name == name), None)
         if require_path is None:
             raise RuleError('Sélectionner un préfab dans la bibliothèque.')
-        return load_group_prefab(require_path)
+        turns = {'0°': 0, '90°': 1, '180°': 2, '270°': 3}.get(
+            group_prefab_rotation_var.get())
+        if turns is None:
+            raise RuleError('Rotation de préfab inconnue.')
+        return rotate_group_prefab(load_group_prefab(require_path), turns)
 
     @guarded
     def export_group_prefab():
@@ -1086,24 +1093,40 @@ def launch(path):
         group_prefab_var.set(target.name)
         status_var.set('Préfab ajouté à la bibliothèque : '+target.name)
 
+    def preview_group_prefab_at(prefab, anchor):
+        # Preview performs the same complete validation as the commit. An
+        # invalid placement is red, but never changes map data or undo state.
+        nonlocal group_prefab_preview_key
+        key = (id(doc.data), mission_var.get(), group_prefab_var.get(),
+               group_prefab_rotation_var.get(), anchor)
+        if key == group_prefab_preview_key:
+            return
+        group_prefab_preview_key = key
+        canvas.delete('editor_group_preview')
+        try:
+            editing_context.preview(GroupPrefabPlaceCommand(prefab, anchor))
+            color, note = '#36a16c', 'valide'
+        except RuleError as exc:
+            color, note = '#e05252', str(exc)
+        mission = _group_tree_mission()
+        width, height = mission['board']['width'], mission['board']['height']
+        visible = (cell for cell in sorted(prefab_display_cells(prefab, anchor))
+                   if 0 <= cell[0] < width and 0 <= cell[1] < height)
+        preview_cells(tuple(islice(visible, 512)),
+                      tag='editor_group_preview', color=color)
+        status_var.set(f'Préfab {prefab["name"]} ({group_prefab_rotation_var.get()})'
+                       f' : {note} ; cliquer pour insérer.')
+
     @guarded
-    def place_chosen_prefab(*, preview=False):
+    def place_chosen_prefab(*, preview=False, anchor=None):
         nonlocal selected_group_id, selected_tiles, selected_cell
         if battle is not None or source_pending():
             raise RuleError('Terminer le playtest et appliquer le JSON.')
         prefab = _chosen_prefab()
-        anchor = tuple(selected_cell)
+        anchor = tuple(selected_cell if anchor is None else anchor)
         command = GroupPrefabPlaceCommand(prefab, anchor)
         if preview:
-            try:
-                editing_context.preview(command)
-                color, note = '#36a16c', 'valide'
-            except RuleError as exc:
-                color, note = '#e05252', str(exc)
-            preview_cells(
-                tuple(sorted(prefab_display_cells(prefab, anchor)))[:512],
-                tag='editor_group_preview', color=color)
-            status_var.set(f'Prévisualisation préfab {prefab["name"]} : {note}')
+            preview_group_prefab_at(prefab, anchor)
             return
         old = {g['id'] for g in _group_tree_mission().get('editor_groups', ())}
         design_change(lambda: editing_context.execute(command, publish=False))
@@ -1120,6 +1143,14 @@ def launch(path):
             group_tree.selection_set('g:'+selected_group_id)
         status_var.set(f'Préfab {prefab["name"]} inséré sur la carte ; '
                        'annulation disponible.')
+
+    def enable_prefab_stamping():
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON.')
+        _chosen_prefab()  # Check the library item before switching tools.
+        tool_var.set('Préfab')
+        status_var.set('Préfab actif : survoler la carte, clic pour insérer ; '
+                       'choisir la rotation 0/90/180/270°.')
 
     def _group_tree_mission():
         return next(m for m in doc.data['missions']
@@ -1597,7 +1628,8 @@ def launch(path):
                                         outline=color, width=3, tags=tag)
 
     def clear_placement_preview(_event=None):
-        nonlocal structure_preview_key
+        nonlocal structure_preview_key, group_prefab_preview_key
+        group_prefab_preview_key = None
         structure_preview_key = None
         nonlocal entity_hover_key
         entity_hover_key = None
@@ -1611,6 +1643,22 @@ def launch(path):
 
     def paste_preview(event):
         nonlocal structure_preview_key, entity_hover_key
+        if tool_var.get() == 'Préfab':
+            if battle is not None or source_pending():
+                clear_placement_preview()
+                return
+            cell = event_cell(event)
+            if cell is None:
+                clear_placement_preview()
+                return
+            try:
+                prefab = _chosen_prefab()
+            except RuleError as exc:
+                clear_placement_preview()
+                status_var.set(str(exc))
+                return
+            preview_group_prefab_at(prefab, cell)
+            return
         if structure_drag_from is not None:
             if tool_var.get() != 'Sélection structure':
                 cancel_structure_drag()  # Tool changed while dragging.
@@ -1912,6 +1960,8 @@ def launch(path):
             refresh()
         elif tool == 'Collage':
             paste_at(selected_cell)
+        elif tool == 'Préfab':
+            place_chosen_prefab(anchor=selected_cell)
         elif tool == 'Sélection structure':
             if source_pending():
                 raise RuleError('Appliquer ou abandonner le JSON avant édition.')
@@ -3093,12 +3143,22 @@ def launch(path):
             side='left', padx=1, pady=1)
     group_prefab_row_2 = ttk.Frame(side_panel)
     group_prefab_row_2.pack(fill='x', padx=5, pady=(0, 5))
+    ttk.Label(group_prefab_row_2, text='Rotation').pack(side='left', padx=2)
+    group_prefab_rotation_box = ttk.Combobox(
+        group_prefab_row_2, textvariable=group_prefab_rotation_var,
+        values=('0°', '90°', '180°', '270°'), state='readonly', width=5)
+    group_prefab_rotation_box.pack(side='left', padx=2)
     ttk.Button(group_prefab_row_2, text='Aperçu préfab',
                command=lambda: place_chosen_prefab(preview=True)
                ).pack(side='left', padx=2)
     ttk.Button(group_prefab_row_2, text='Placer préfab',
                command=place_chosen_prefab).pack(side='left', padx=2)
-    ttk.Label(group_prefab_row_2, text='À la case sélectionnée'
+    group_prefab_stamp_row = ttk.Frame(side_panel)
+    group_prefab_stamp_row.pack(fill='x', padx=5, pady=(0, 5))
+    ttk.Button(group_prefab_stamp_row, text='Poser à la souris',
+               command=enable_prefab_stamping).pack(side='left', padx=2)
+    ttk.Label(group_prefab_stamp_row,
+              text='Survol validé vert/rouge · 1 clic = 1 Undo'
               ).pack(side='left', padx=3)
     refresh_group_prefabs()
     inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
