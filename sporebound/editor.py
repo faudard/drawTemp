@@ -1093,8 +1093,23 @@ def launch(path):
     bar.pack(fill='x')
     for label,cmd in [('Ouvrir',open_doc),('Enregistrer sous',save_doc),('Nouvelle mission',new_mission),('Carte vierge',blank_mission),('Annuler',guarded(lambda: design_change(doc.undo))),('Rétablir',guarded(lambda: design_change(doc.redo))),('Playtest',start),('Éditer',stop),('Sauver combat',save_game),('Charger combat',load_game)]:
         ttk.Button(bar,text=label,command=cmd).pack(side='left',padx=2,pady=4)
-    controls = ttk.Frame(root)
-    controls.pack(fill='x')
+    # A compact tool notebook replaces the seven permanent toolbar rows.
+    # Keep the existing action callbacks/variables; only presentation changes.
+    tool_tabs = ttk.Notebook(root)
+    tool_tabs.pack(fill='x', padx=6, pady=(0, 4))
+    tools_main = ttk.Frame(tool_tabs)
+    tools_terrain = ttk.Frame(tool_tabs)
+    tools_structure = ttk.Frame(tool_tabs)
+    tools_selection = ttk.Frame(tool_tabs)
+    for page, title in ((tools_main, 'Carte & combat'),
+                        (tools_terrain, 'Terrain & couches'),
+                        (tools_structure, 'Architecture'),
+                        (tools_selection, 'Sélection & modèles')):
+        tool_tabs.add(page, text=title)
+    controls = ttk.Frame(tools_main)
+    controls.pack(fill='x', padx=5, pady=2)
+    battle_controls = ttk.Frame(tools_main)
+    battle_controls.pack(fill='x', padx=5, pady=2)
     ttk.Label(controls,text='Mission').pack(side='left')
     mission_box = ttk.Combobox(controls,textvariable=mission_var,state='readonly',width=14)
     mission_box.pack(side='left')
@@ -1108,31 +1123,34 @@ def launch(path):
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
                          'cover','goal','unit','object','zone+','zone-']).pack(side='left')
-    unit_box = ttk.Combobox(controls,textvariable=unit_var,state='readonly',width=12)
+    ttk.Label(battle_controls, text='Unité').pack(side='left')
+    unit_box = ttk.Combobox(battle_controls,textvariable=unit_var,state='readonly',width=12)
     unit_box.pack(side='left')
-    ttk.Label(controls,text='Objet').pack(side='left')
-    object_box = ttk.Combobox(controls,textvariable=object_var,state='readonly',width=12)
+    ttk.Label(battle_controls,text='Objet').pack(side='left')
+    object_box = ttk.Combobox(battle_controls,textvariable=object_var,state='readonly',width=12)
     object_box.pack(side='left')
-    ttk.Label(controls,text='Commande').pack(side='left')
-    action_box = ttk.Combobox(controls,textvariable=action_var,state='readonly',width=18)
+    ttk.Label(battle_controls,text='Commande').pack(side='left')
+    action_box = ttk.Combobox(battle_controls,textvariable=action_var,state='readonly',width=18)
     action_box.pack(side='left')
     action_box.bind('<<ComboboxSelected>>', refresh)
-    ttk.Button(controls,text='Exécuter',command=execute).pack(side='left')
-    ttk.Combobox(controls,textvariable=facing_var,state='readonly',width=6,values=['north','south','east','west']).pack(side='left')
-    ttk.Button(controls,text='Fin',command=end_turn).pack(side='left')
-    ttk.Button(controls,text='IA : 1 tour',command=ai_turn).pack(side='left')
-    authoring_controls = ttk.Frame(root)
-    authoring_controls.pack(fill='x', padx=5)
+    ttk.Button(battle_controls,text='Exécuter',command=execute).pack(side='left')
+    ttk.Combobox(battle_controls,textvariable=facing_var,state='readonly',width=6,values=['north','south','east','west']).pack(side='left')
+    ttk.Button(battle_controls,text='Fin',command=end_turn).pack(side='left')
+    ttk.Button(battle_controls,text='IA : 1 tour',command=ai_turn).pack(side='left')
+    authoring_controls = ttk.Frame(tools_terrain)
+    authoring_controls.pack(fill='x', padx=5, pady=2)
     ttk.Button(authoring_controls, text='Copier cases', command=copy_selection).pack(side='left',padx=2)
     ttk.Button(authoring_controls, text='Coller terrain', command=paste_selection).pack(side='left',padx=2)
     ttk.Label(authoring_controls, text='Zone').pack(side='left',padx=(9,2))
     ttk.Entry(authoring_controls, textvariable=zone_var, width=14).pack(side='left')
-    ttk.Label(authoring_controls, text='Couche visible :').pack(side='left',padx=(8,2))
+    layers_button = ttk.Menubutton(authoring_controls, text='Couches visibles ▾')
+    layers_button.pack(side='left', padx=(12, 2))
+    layers_menu = tk.Menu(layers_button, tearoff=False)
     for name, var in layer_vars.items():
-        ttk.Checkbutton(authoring_controls, text=name, variable=var,
-                        command=refresh).pack(side='left',padx=2)
-    scenery_controls = ttk.Frame(root)
-    scenery_controls.pack(fill='x', padx=5)
+        layers_menu.add_checkbutton(label=name, variable=var, command=refresh)
+    layers_button.configure(menu=layers_menu)
+    scenery_controls = ttk.Frame(tools_terrain)
+    scenery_controls.pack(fill='x', padx=5, pady=2)
     ttk.Checkbutton(scenery_controls, text='Vue isométrique 2.5D',
                     variable=iso_var, command=refresh).pack(side='left', padx=4)
     ttk.Label(scenery_controls, text='Sol :').pack(side='left', padx=(10,2))
@@ -1169,11 +1187,13 @@ def launch(path):
             status_var.set('Revenir en mode Éditer avant de choisir un asset à placer.')
             return False
         if entry.kind == 'structure':
+            tool_tabs.select(tools_structure)
             structure_var.set(entry.value)
             structure_turns = turns
             structure_door_var.set('Entrée A')
             tool_var.set('Structure')
         else:
+            tool_tabs.select(tools_terrain)
             (surface_var if entry.kind == 'surface' else feature_var).set(entry.value)
             brush_var.set(entry.id)
             tool_var.set('Pinceau')
@@ -1195,8 +1215,8 @@ def launch(path):
         else:
             asset_palette.show()
 
-    structure_controls = ttk.Frame(root)
-    structure_controls.pack(fill='x', padx=5)
+    structure_controls = ttk.Frame(tools_structure)
+    structure_controls.pack(fill='x', padx=5, pady=2)
     ttk.Button(structure_controls, text='Bibliothèque d’assets',
                command=open_asset_palette).pack(side='left', padx=4)
     ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
@@ -1215,8 +1235,8 @@ def launch(path):
                command=lambda: rotate_structure(-1)).pack(side='left',padx=2)
     ttk.Button(structure_controls, text='↻ Bâtiment',
                command=lambda: rotate_structure(1)).pack(side='left',padx=2)
-    structure_options = ttk.Frame(root)
-    structure_options.pack(fill='x', padx=5)
+    structure_options = ttk.Frame(tools_structure)
+    structure_options.pack(fill='x', padx=5, pady=2)
     ttk.Label(structure_options, text='Pivot :').pack(side='left',padx=(2, 4))
     ttk.Combobox(structure_options, textvariable=structure_pivot_var,
                  state='readonly', width=8, values=PIVOTS).pack(side='left',padx=2)
@@ -1226,8 +1246,8 @@ def launch(path):
                  values=('Entrée A','Entrée B')).pack(side='left',padx=2)
     ttk.Label(structure_options,
               text='Entrée B : Maison/Ruines seulement ; masquage automatique des toits en édition.').pack(side='left',padx=8)
-    advanced_controls = ttk.Frame(root)
-    advanced_controls.pack(fill='x', padx=5)
+    advanced_controls = ttk.Frame(tools_selection)
+    advanced_controls.pack(fill='x', padx=5, pady=3)
     for label,operation in [('↻ 90°','rotate_cw'), ('↺ 90°','rotate_ccw'),
                             ('⇄ Sym. H','mirror_x'), ('⇅ Sym. V','mirror_y')]:
         ttk.Button(advanced_controls,text=label,
