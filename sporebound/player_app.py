@@ -18,6 +18,8 @@ from .tactical_actions import tactical_action_options, tactical_command
 from .tactical_rpg3 import authored_rules_for_document
 from .tk_renderer import CanvasRenderer
 from .iso_battle_view import IsoBattleCanvas, anchored_iso_zoom
+from .world_map import world_projection
+from .world_map_view import draw_world_map, pick_world_mission
 from .visual_motion import MotionDirector
 
 
@@ -405,6 +407,9 @@ class PlayerApplication:
             self._audible_scene = None
             self.audio.music_for("campaign")
             available = session.available_missions()
+            if self.project.world:
+                self._button(self.view, "Carte du monde",
+                             self.world_screen).pack(fill="x", padx=80, pady=(3, 9))
             self.ttk.Label(self.view, text="Choisir une mission :").pack(anchor="w", pady=8)
             for mission_id in available:
                 mission = self.player.content.missions[mission_id]
@@ -442,6 +447,60 @@ class PlayerApplication:
         footer.pack(side="bottom", fill="x", pady=12)
         self._button(footer, "Sauvegarder", self.player.save).pack(side="left", padx=6)
         self._button(footer, "Menu principal", self.title_screen).pack(side="left", padx=6)
+
+    def world_screen(self):
+        """Travel through the authored mission map; no alternate unlock rules."""
+        session = self.player.session
+        if session is None or not self.project.world:
+            self.campaign_screen() if session is not None else self.title_screen()
+            return
+        # Active narrative decisions cannot be bypassed through world travel.
+        if session.active_scene():
+            self.campaign_screen()
+            return
+        projection = world_projection(
+            self.project.world, self.player.content,
+            available=session.available_missions(),
+            completed=session.progress.completed)
+        self._clear()
+        self._heading("Carte du monde", "Destinations accessibles : vert • "
+                      "terminées : bleu • verrouillées : gris")
+        surface = self.ttk.Frame(self.view)
+        surface.pack(fill="both", expand=True, padx=24, pady=8)
+        surface.columnconfigure(0, weight=1)
+        surface.rowconfigure(0, weight=1)
+        canvas = self.tk.Canvas(surface, width=900, height=490,
+                                highlightthickness=0)
+        scrollbar_y = self.ttk.Scrollbar(surface, orient="vertical",
+                                          command=canvas.yview)
+        scrollbar_x = self.ttk.Scrollbar(surface, orient="horizontal",
+                                          command=canvas.xview)
+        canvas.configure(xscrollcommand=scrollbar_x.set,
+                         yscrollcommand=scrollbar_y.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar_y.grid(row=0, column=1, sticky="ns")
+        scrollbar_x.grid(row=1, column=0, sticky="ew")
+        draw_world_map(canvas, projection)
+        label = self.tk.StringVar(value="Choisir un lieu sur la carte.")
+        self.ttk.Label(self.view, textvariable=label).pack(anchor="w", padx=26)
+
+        def choose(event):
+            mid = pick_world_mission(canvas, projection, event)
+            if mid is None:
+                return
+            location = next(node for node in projection["nodes"]
+                            if node["mission"] == mid)
+            label.set(location["label"] + " — " + location["status"])
+            if location["status"] == "available":
+                self._start_mission_with_cinematic(mid)
+
+        canvas.bind("<Button-1>", lambda e: self._safe(lambda: choose(e)))
+        footer = self.ttk.Frame(self.view)
+        footer.pack(fill="x", pady=12)
+        self._button(footer, "Retour à la campagne",
+                     self.campaign_screen).pack(side="left", padx=12)
+        self._button(footer, "Sauvegarder",
+                     self.player.save).pack(side="left", padx=12)
 
     def _exploration_step(self, dx, dy):
         self._explore_feedback = ""

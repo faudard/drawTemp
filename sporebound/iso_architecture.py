@@ -200,7 +200,8 @@ def architecture_outline(geo, instance, wall_level=2):
 
 def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                       atlas=None, scenery_atlas=None, poses=None, structures=(),
-                      interior_floors=(), prop_atlas=None, unit_levels=None):
+                      interior_floors=(), prop_atlas=None, unit_levels=None,
+                      objects=(), props=()):
     """Paint hand-authored sprite overlays with deterministic vector fallback.
 
     Cutaway remains a vector outline: opaque sprites may never hide occupants.
@@ -327,7 +328,7 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
     # Sort whole actor and architecture groups by ground depth. Actors behind
     # a façade stay behind it; foreground actors rise above its silhouette.
     # Individual tag groups prevent an "all actors on top" regression.
-    for tag in depth_order(instances, units, poses):
+    for tag in depth_order(instances, units, poses, objects=objects, props=props):
         canvas.tag_raise(tag)
     canvas.tag_raise('selection')
     return instances

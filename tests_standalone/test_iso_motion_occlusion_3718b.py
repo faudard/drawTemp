@@ -125,9 +125,16 @@ class IsoMotionAndDepthTests(unittest.TestCase):
             selected_cell=(0, 0), selected_tiles=(),
             building_atlas=SpriteStub(), poses=poses)
         self.assertTrue(canvas.tagged('architecture_instance_0', 'create_image'))
-        self.assertEqual(canvas.raised[-4:],
-                         ['iso_actor_unit_0', 'architecture_instance_0',
-                          'iso_actor_unit_1', 'selection'])
+        # Decorations now occupy independent depth slots, so assert the
+        # original actor/building ordering without assuming only four tags.
+        indices = {tag: canvas.raised.index(tag) for tag in (
+            'iso_actor_unit_0', 'architecture_instance_0',
+            'iso_actor_unit_1', 'selection')}
+        self.assertLess(indices['iso_actor_unit_0'],
+                        indices['architecture_instance_0'])
+        self.assertLess(indices['architecture_instance_0'],
+                        indices['iso_actor_unit_1'])
+        self.assertEqual(canvas.raised[-1], 'selection')
         oval = canvas.tagged('iso_actor_unit_1', 'create_oval')[0]
         point = visual_center(geo, actors[1], poses)
         self.assertAlmostEqual((oval[1][0]+oval[1][2])/2, point[0])

@@ -113,6 +113,58 @@ class EditorRenderCacheTests(unittest.TestCase):
         self.check_scene()
         self.assertEqual(self.renderer.stats['mode'], 'retained')
 
+    def test_large_noop_and_selection_only_match_full_scene(self):
+        # Force the large-map path on Valcroix to keep GUI tests inexpensive.
+        self.renderer.max_retained_cells = 1
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        stable_items = self.canvas.find_all()
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'unchanged')
+        self.assertEqual(self.canvas.find_all(), stable_items)
+
+        self.options['selected_cell'] = (4, 4)
+        self.check_scene()
+        # Entering a building changes the roof cutaway, requiring a full pass.
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        self.options['selected_tiles'] = {(3, 3), (4, 4), (5, 4)}
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'selection')
+        self.options['selected_tiles'] = set()
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'selection')
+
+        # Studio edits may mutate dictionaries in place: detect them too.
+        mission = next(m for m in self.doc.data['missions'] if m['id'] == MISSION_ID)
+        mission['units'][0]['name'] = 'Changed'
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        self.doc.paint_many(MISSION_ID, [(10, 10)], 'surface:water')
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        self.options['layers']['Décors'] = False
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        self.options['cell_size'] = 54
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        self.assertTrue(self.renderer.stats['geometry_rebuilt'])
+
+    def test_large_scene_switch_and_invalidate_repaint(self):
+        self.renderer.max_retained_cells = 1
+        self.check_scene()
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'unchanged')
+        self.renderer.invalidate()
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+        self.renderer.max_retained_cells = 4096
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['mode'], 'retained')
+        self.renderer.max_retained_cells = 1
+        self.check_scene()
+        self.assertEqual(self.renderer.stats['fast_path'], 'full')
+
     def test_large_noop_and_selection_match_full_canvas(self):
         # Force the exact large-map branch on a small, known scene so
         # complete item/type/coordinate/configuration parity is practical.
@@ -122,7 +174,7 @@ class EditorRenderCacheTests(unittest.TestCase):
         original_ids = self.canvas.find_all()
 
         self.check_scene()
-        self.assertEqual(self.renderer.stats['fast_path'], 'noop')
+        self.assertEqual(self.renderer.stats['fast_path'], 'unchanged')
         self.assertEqual(self.canvas.find_all(), original_ids)
 
         # Pick an empty cell outside every structure so roof cutaway is
@@ -148,7 +200,7 @@ class EditorRenderCacheTests(unittest.TestCase):
         self.check_scene()
         self.assertEqual(self.renderer.stats['fast_path'], 'full')
         self.check_scene()
-        self.assertEqual(self.renderer.stats['fast_path'], 'noop')
+        self.assertEqual(self.renderer.stats['fast_path'], 'unchanged')
 
         # Canvas items drawn by other UI code must not survive an unexpected
         # refresh as an undetected cached frame.

@@ -1633,6 +1633,20 @@ def launch(path):
             raise RuleError('Aucun élément de ce type sur la case.')
         studio.focus_map_entity(kind, chosen['id'])
 
+    @guarded
+    def open_selected_gate_event():
+        if battle is not None:
+            raise RuleError('Revenir en mode Éditer pour lier un événement.')
+        mission = next(m for m in doc.data['missions']
+                       if m['id'] == mission_var.get())
+        selected = next((item for item in mission.get('objects', ())
+                         if tuple(item['pos']) == selected_cell
+                         and item['kind'] in ('door', 'switch')), None)
+        if selected is None:
+            raise RuleError('Sélectionner une porte ou un levier sur la carte.')
+        studio.focus_gate_event(
+            selected['id'] if selected['kind'] == 'door' else selected['link'])
+
     def refresh(*args):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
@@ -1781,6 +1795,9 @@ def launch(path):
             text += f'Objet {obj["id"]} : {obj["kind"]}\n'
         actor_focus.configure(state='normal' if selected_units and not battle else 'disabled')
         object_focus.configure(state='normal' if selected_objects and not battle else 'disabled')
+        event_focus.configure(state='normal' if not battle and
+                              any(o['kind'] in ('door', 'switch')
+                                  for o in selected_objects) else 'disabled')
         if inspected_tile is not None:
             text += (f'Surface : {inspected_tile.surface} | Décor : '
                      f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
@@ -2103,7 +2120,8 @@ def launch(path):
                 root, snapshot=lambda: (doc.data, mission_var.get()),
                 actors=actor_atlas, commit=commit_entity_edit,
                 begin_target=begin_entity_target,
-                cell_size=lambda: tile_size)
+                cell_size=lambda: tile_size,
+                open_event=lambda door_id: studio.focus_gate_event(door_id))
         entity_inspector.show_at(cell)
 
     @guarded
@@ -2291,6 +2309,10 @@ def launch(path):
     object_focus = ttk.Button(side_panel, text='Modifier l’objet sélectionné',
                               command=lambda: open_selected_entity('object'))
     object_focus.pack(fill='x', padx=6, pady=2)
+    event_focus = ttk.Button(
+        side_panel, text='Créer événement lié à la porte',
+        command=open_selected_gate_event)
+    event_focus.pack(fill='x', padx=6, pady=2)
     ttk.Button(side_panel, text='Personnages et événements',
                command=lambda: studio.workspace._show_tab(
                    'Personnages et événements')).pack(fill='x', padx=6, pady=3)

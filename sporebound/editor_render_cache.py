@@ -4,10 +4,14 @@ The normal renderer remains the source of drawing/occlusion rules. Replaying its
 commands through this adapter avoids Tcl calls for unchanged items; no document
 revision assumptions are required (Studio panels can edit dictionaries in place).
 """
-from hashlib import blake2b
+from copy import deepcopy
 from time import perf_counter
 
 from .iso_map import IsoGeometry, render_isometric
+
+
+_ATLAS_OPTIONS = ('atlas', 'prop_atlas', 'building_atlas',
+                  'fortification_atlas', 'actor_atlas', 'object_atlas')
 
 
 class EditorRenderCache:
@@ -22,9 +26,8 @@ class EditorRenderCache:
         self._region = None
         self.stats = {}
         self._owns_canvas = False
-        self._large_signature = None
+        self._large_scene_state = None
         self._large_selection = None
-        self._large_selected_tiles = frozenset()
         self._large_item_count = None
 
     def invalidate(self):
@@ -37,9 +40,8 @@ class EditorRenderCache:
         self._region = None
         self.geometry = None
         self._geometry_key = None
-        self._large_signature = None
+        self._large_scene_state = None
         self._large_selection = None
-        self._large_selected_tiles = frozenset()
         self._large_item_count = None
 
     def begin_group(self, group):
@@ -125,50 +127,51 @@ class EditorRenderCache:
                           items=len(self._items))
 
     @staticmethod
-    def _large_scene_signature(board, mission, units, options):
-        """Snapshot *values*, never model identities (Studio rebuilds Content).
+    def _large_inputs(board, mission, units, options):
+        """Conservative copy: detect in-place Studio changes, not just new IDs.
 
-        Both the authored board and live units can be edited in-place. The
-        display signature includes all non-selection inputs to the renderer,
-        including layer flags, threats, sprite poses and atlas identities.
-        Only the two selection overlays may be updated independently.
+        The atlases are Tk-backed caches. Track their identity, never deepcopy
+        a Tcl interpreter. Selected cells are handled by a separate overlay.
         """
-        visual_options = tuple((name, repr(value))
-                               for name, value in sorted(options.items())
-                               if name not in ('selected_cell', 'selected_tiles'))
-        state = repr((board, mission, units, visual_options))
-        return blake2b(state.encode('utf-8'), digest_size=16).digest()
+        content = deepcopy((board, mission, tuple(units)))
+        appearance = deepcopy({
+            key: value for key, value in options.items()
+            if key not in _ATLAS_OPTIONS
+            and key not in ('selected_cell', 'selected_tiles')
+        })
+        atlases = tuple(id(options.get(name)) for name in _ATLAS_OPTIONS)
+        return content, appearance, atlases
 
     def _large_selection_safe(self, before, after):
-        """Changing roof cutaway requires a complete depth/occlusion pass."""
+        """A roof-cutaway transition needs a full scene and depth repaint."""
         return not any((before in building.cells) != (after in building.cells)
                        for building in getattr(self.geometry,
                                                'architecture_instances', ()))
 
-    def _draw_large_selection(self, selected_cell, selected_tiles):
-        """Replace only the two selection contours, respecting painter order.
-
-        The normal renderer always raises the 'selection' tag above roofs and
-        actors. Recreating these final overlays is equivalent whenever the
-        authored scene and architectural cutaway state have not changed.
-        """
+    def _redraw_large_selection(self, selected_cell, selected_tiles):
+        """Update the same foreground outlines as the full scene renderer."""
+        deleted = len(self.canvas.find_withtag('selection'))
         self.canvas.delete('selection')
-        count = 0
+        selected_tiles = set(selected_tiles)
+        created = 0
         for cell in self.geometry.draw_order:
             if cell not in selected_tiles and cell != selected_cell:
                 continue
             corners = tuple(value for point in self.geometry.polygon(cell)
                             for value in point)
             if cell in selected_tiles:
-                self.canvas.create_polygon(*corners, outline='#23689e',
-                                           fill='', width=3, tags='selection')
-                count += 1
+                self.canvas.create_polygon(
+                    *corners, outline='#23689e', fill='', width=3,
+                    tags='selection')
+                created += 1
             if cell == selected_cell:
-                self.canvas.create_polygon(*corners, outline='#2361ff',
-                                           fill='', width=3, tags='selection')
-                count += 1
+                self.canvas.create_polygon(
+                    *corners, outline='#2361ff', fill='', width=3,
+                    tags='selection')
+                created += 1
+        # draw_architecture raises selection above roofs in the full renderer.
         self.canvas.tag_raise('selection')
-        return count
+        return created, deleted
 
     def draw(self, board, mission, units, **options):
         start = perf_counter()
@@ -186,64 +189,59 @@ class EditorRenderCache:
             # Content.from_dict produces fresh models on every Studio refresh.
             self.geometry.board = board
         if board.width * board.height > self.max_retained_cells:
-            # Full retained command diffing is too expensive at 128². Skip
-            # genuinely unchanged scenes and redraw just selection contours
-            # when roof cutaway is unaffected. Everything else is a full pass.
+            # At 128², keeping every Canvas command costs too much memory.
+            # Keep the geometry-only fallback, but avoid rebuilding thousands
+            # of Canvas items for unchanged scenes and selection-only edits.
             self._items.clear()
             self._order = self._raises = ()
             self._region = None
-            signature = self._large_scene_signature(board, mission, units, options)
-            selected_cell = options['selected_cell']
-            selected_tiles = frozenset(options['selected_tiles'])
-            reusable = (not rebuilt and self.stats.get('mode') == 'geometry'
-                        and signature == self._large_signature
-                        and hasattr(self.canvas, 'find_all')
-                        and self._large_item_count == len(self.canvas.find_all()))
-            if reusable:
-                if (selected_cell == self._large_selection
-                        and selected_tiles == self._large_selected_tiles):
-                    self.stats = dict(mode='geometry', fast_path='noop',
-                                      geometry_rebuilt=False, created=0,
-                                      updated=0, deleted=0,
-                                      items=self._large_item_count,
-                                      render_ms=(perf_counter() - start) * 1000)
-                    return self.geometry
-                if self._large_selection_safe(self._large_selection, selected_cell):
-                    try:
-                        count = self._draw_large_selection(selected_cell,
-                                                           selected_tiles)
-                        self._large_selection = selected_cell
-                        self._large_selected_tiles = selected_tiles
+            state = self._large_inputs(board, mission, units, options)
+            selection = (options.get('selected_cell'),
+                         frozenset(options.get('selected_tiles', ())))
+            can_reuse = (not rebuilt and self.stats.get('mode') == 'geometry'
+                         and state == self._large_scene_state
+                         and (self._large_item_count is None
+                              or not hasattr(self.canvas, 'find_all')
+                              or self._large_item_count == len(self.canvas.find_all()))
+                         and (selection == self._large_selection
+                              or self._large_selection_safe(
+                                  self._large_selection[0], selection[0])))
+            if can_reuse:
+                if selection != self._large_selection:
+                    created, deleted = self._redraw_large_selection(
+                        selection[0], selection[1])
+                    fast_path = 'selection'
+                    if hasattr(self.canvas, 'find_all'):
                         self._large_item_count = len(self.canvas.find_all())
-                    except Exception:
-                        self.invalidate()
-                        raise
-                    self.stats = dict(mode='geometry', fast_path='selection',
-                                      geometry_rebuilt=False, created=count,
-                                      updated=0, deleted=None,
-                                      items=self._large_item_count,
-                                      render_ms=(perf_counter() - start) * 1000)
-                    return self.geometry
+                else:
+                    created = deleted = 0
+                    fast_path = 'unchanged'
+                self._large_selection = selection
+                self.stats = dict(mode='geometry', geometry_rebuilt=False,
+                                  created=created, updated=0, deleted=deleted,
+                                  items=self._large_item_count, fast_path=fast_path,
+                                  render_ms=(perf_counter() - start) * 1000)
+                return self.geometry
             try:
                 render_isometric(self.canvas, board, mission, units,
                                  geometry=self.geometry, **options)
             except Exception:
                 self.invalidate()
                 raise
-            self._large_signature = signature
-            self._large_selection = selected_cell
-            self._large_selected_tiles = selected_tiles
+            self._large_scene_state = state
+            self._large_selection = selection
             self._large_item_count = (len(self.canvas.find_all())
                                       if hasattr(self.canvas, 'find_all') else None)
-            self.stats = dict(mode='geometry', fast_path='full',
-                              geometry_rebuilt=rebuilt, created=None,
-                              updated=0, deleted=None, items=self._large_item_count,
+            self.stats = dict(mode='geometry', geometry_rebuilt=rebuilt,
+                              created=None, updated=0, deleted=None, items=None,
+                              fast_path='full',
                               render_ms=(perf_counter() - start) * 1000)
             return self.geometry
+        self._large_scene_state = None
+        self._large_selection = None
+        self._large_item_count = None
         if self.stats.get('mode') == 'geometry':
             self.canvas.delete('all')
-        self._large_signature = None
-        self._large_item_count = None
         self._commands = {}
         self._pending_raises = []
         self.begin_group('scene')
