@@ -75,13 +75,20 @@ def tactical_intents(battle, *, max_cells=1024):
         role_name = squad_role(actor)
         if actor.team == "enemy" and (role_name or "protector" in actor.tags):
             stance = formation_preview(battle, actor.id)
+            # An escort provider protects its target; stance["escort"] alone
+            # describes whether the provider is itself being escorted.
+            escort_target = stance["mode"].partition(":")[2]
+            providing_escort = bool(escort_target and any(
+                ally.id == escort_target and ally.alive and ally.team == actor.team
+                and distance(ally.pos, actor.pos) == 1 for ally in battle.units))
             objective = battle.mission.objective
             contest = objective in {"extract", "hold", "crown"} and bool(battle.mission.goal)
             result["squads"].append({
                 "unit": actor.id, "role": role_name or "protector",
                 "formation": stance["mode"],
                 "formation_active": bool(stance["shield_wall"] or
-                                         stance["phalanx"] or stance["escort"]),
+                                         stance["phalanx"] or stance["escort"] or
+                                         providing_escort),
                 "intent": "contest_goal" if contest else "coordinate",
                 "goal_cells": [list(c) for c in sorted(battle.mission.goal)] if contest else [],
                 "certainty": "possible"})
