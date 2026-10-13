@@ -59,7 +59,8 @@ def rotate_group_prefab(prefab, quarter_turns):
             w, h = actor.get('footprint', (1, 1))
             actor['pos'] = rect_corner(actor['pos'], w, h)
             if 'footprint' in actor:
-                actor['footprint'] = [h, w]
+                # Keep tuple vs list on round-trips from historical content.
+                actor['footprint'] = type(actor['footprint'])((h, w))
             actor['patrol_route'] = [point(p)
                                      for p in actor.get('patrol_route', ())]
             if actor.get('facing') in ('north', 'east', 'south', 'west'):
