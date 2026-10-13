@@ -10,7 +10,9 @@ Allow-missing only skips an entirely absent art pack. Partial packs fail.
 from __future__ import annotations
 
 import argparse
+from binascii import crc32
 from collections import Counter
+from hashlib import sha256
 import json
 from pathlib import Path, PurePosixPath
 import struct
@@ -18,6 +20,42 @@ from zipfile import ZipFile
 
 PREFIX = "assets/watercolor/"
 MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def png_dimensions(data, path):
+    """Verify PNG chunks and terminal marker, not just its eight-byte signature."""
+    if not data.startswith(MAGIC):
+        raise ValueError(f"Invalid PNG signature: {path}")
+    pos, dimensions, seen_idat, seen_end = 8, None, False, False
+    while pos < len(data):
+        if len(data) - pos < 12:
+            raise ValueError(f"Truncated PNG chunk: {path}")
+        length = struct.unpack_from(">I", data, pos)[0]
+        end = pos + 12 + length
+        if end > len(data):
+            raise ValueError(f"Truncated PNG chunk: {path}")
+        tag = data[pos + 4:pos + 8]
+        payload = data[pos + 8:pos + 8 + length]
+        checksum = struct.unpack_from(">I", data, end - 4)[0]
+        if crc32(tag + payload) & 0xffffffff != checksum:
+            raise ValueError(f"PNG CRC mismatch: {path}")
+        if dimensions is None:
+            if tag != b"IHDR" or length != 13 or payload[8:] != b"\x08\x06\x00\x00\x00":
+                raise ValueError(f"Invalid 8-bit RGBA PNG: {path}")
+            dimensions = struct.unpack_from(">II", payload)
+        elif tag == b"IHDR":
+            raise ValueError(f"Duplicate PNG IHDR: {path}")
+        elif tag == b"IDAT":
+            seen_idat = True
+        elif tag == b"IEND":
+            if length or not seen_idat or end != len(data):
+                raise ValueError(f"Invalid PNG end: {path}")
+            seen_end = True
+            break
+        pos = end
+    if dimensions is None or not seen_idat or not seen_end:
+        raise ValueError(f"Incomplete PNG: {path}")
+    return dimensions
 
 
 def validate(index, registry, read_file, available):
@@ -55,11 +93,11 @@ def validate(index, registry, read_file, available):
         if full not in available:
             raise ValueError(f"Missing sprite: {full}")
         data = read_file(full)
-        if (len(data) < 33 or data[:8] != MAGIC or
-                data[8:12] != b"\x00\x00\x00\x0d" or
-                data[12:16] != b"IHDR" or data[24:26] != b"\x08\x06"):
-            raise ValueError(f"Invalid 8-bit RGBA PNG: {full}")
-        width, height = struct.unpack(">II", data[16:24])
+        width, height = png_dimensions(data, full)
+        expected_hash = sprite.get("sha256")
+        if expected_hash is not None and (not isinstance(expected_hash, str)
+                or sha256(data).hexdigest() != expected_hash.lower()):
+            raise ValueError(f"PNG SHA-256 mismatch: {full}")
         if not (1 <= width <= 4096 and 1 <= height <= 4096):
             raise ValueError(f"Invalid PNG size: {full}")
         if sprite.get("frame_size") != [width, height]:
