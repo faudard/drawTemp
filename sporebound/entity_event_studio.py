@@ -12,6 +12,7 @@ from .event_composer import action, condition, save_event
 from .event_graph import extend_condition
 from .event_context import preview_event
 from .game_project import GameProject
+from .story_authoring import set_tactical_scene
 from .model import Content, require
 from .tactical_rpg3 import authored_rules_for_document
 
@@ -31,7 +32,7 @@ def gate_context(data, mission_id, door_id):
 def author_gate_sequence(data, project, mission_id, *, door_id, lever_id,
                          lever_cell, event_id, danger_cell, danger=4,
                          dialogue='La porte est ouverte !', cinematic_id='',
-                         min_tick=None, extra_actions=()):
+                         min_tick=None, extra_actions=(), scene_id=''):
     """Prepare BOTH documents atomically, without mutating either input.
 
     An existing linked lever is reused; otherwise it is placed through the
@@ -103,6 +104,10 @@ def author_gate_sequence(data, project, mission_id, *, door_id, lever_id,
     content = Content.from_dict(
         staged, rules=authored_rules_for_document(staged))
     updated_project = GameProject.from_dict(project_data, content)
+    if scene_id:
+        # Existing Story Studio bridge validates the real trigger and scene.
+        updated_project = set_tactical_scene(
+            updated_project, content, mission_id, event_id, scene_id)
     return staged, updated_project
 
 
@@ -128,6 +133,8 @@ def probe_gate_sequence(data, project, mission_id, event_id, door_id):
         'gate_opened': gate_opened,
         'tactical_effect': tactical_effect,
         'cinematic_ids': [clip['id'] for clip in clips],
+        'narrative_scene_id': project.story.get(
+            'during_tactical_event', {}).get(mission_id + '/' + event_id, ''),
         'gate_passable': not after.board.tile(gate_cell).blocked,
         'gate_scenario_ok': (
             report['outcome'] == 'applied' and gate_opened
