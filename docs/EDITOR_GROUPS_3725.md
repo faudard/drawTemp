@@ -56,6 +56,35 @@ EditingContext. Pas de nouveau renderer ni de modèle parallèle à Mission.
   avec ΔX/ΔY.
 
 
+## Sélection multiple, déplacements et copies profondes (3.7.25C)
+
+- Ctrl+clic ou Maj+clic sélectionnent plusieurs **lignes de groupe**
+  dans le Treeview. Si un parent et un enfant sont sélectionnés, le parent
+  englobe l'enfant : aucun élément n'est transformé deux fois.
+- Dans la zone des groupes, choisir ΔX/ΔY puis **Aperçu / Déplacer** pour
+  translater tout le lot en une seule transaction, ou **Aperçu copie /
+  Dupliquer groupes** pour créer des copies indépendantes.
+- Une copie comprend : sous-groupes, cases et décors, toutes les données
+  des structures persistantes (y compris terrain retouché et étages),
+  acteurs, objets interactifs et connecteurs d'étages internes.
+- Identifiants de groupes, bâtiments, acteurs, objets et connecteurs :
+  nouveaux IDs déterministes et sans collision. Les liens internes
+  levier→porte et engins→porte sont redirigés vers les copies ;
+  les références extérieures conservent leur cible d'origine.
+- Les coordonnées des patrouilles copiées sont translatées, de même
+  que les cellules de défense ; les destinations de passage demeurent
+  absolues (conformément au contrat existant). Les événements globaux,
+  objectifs et zones de déploiement **ne sont pas copiés**.
+- Le placement refuse les collisions structurelles, les cases hors carte,
+  les conflits avec les objectifs/déploiements et l'écrasement de terrain
+  extérieur. Rien n'est écrit au moindre échec ; aperçu = sans mutation.
+- Pour les niveaux tactiques, les plateaux et connecteurs internes sont
+  reproduits avec de nouveaux IDs. Un acteur de niveau supérieur exige
+  que son bâtiment et son connecteur soient inclus.
+- Les copies deviennent des groupes persistants modifiables à leur tour.
+  Une seconde copie obtient encore de nouveaux IDs ; l'historique et la
+  sérialisation sont conservés à chaque étape.
+
 ## Contrat des données
 
 Métadonnée **optionnelle** missions[].editor_groups (Content v1 inchangé),
