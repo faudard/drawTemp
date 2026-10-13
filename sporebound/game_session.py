@@ -11,6 +11,7 @@ from .ai import play_activation
 from .campaign import Campaign
 from .engine import Battle
 from .exploration import Exploration
+from .world_travel import PENDING, WorldJourney
 from .fronts import MultiFrontSession
 from .model import RuleError, require
 from .narrative import StoryBook
@@ -31,7 +32,11 @@ def gameplay_project_digest(project):
     Other story, campaign, asset and gameplay fields remain strictly verified.
     """
     manifest = project.to_dict()
-    manifest.pop("world", None)
+    world = manifest.pop("world", {})
+    # Decorative positions remain save-compatible, but authored encounters
+    # affect gameplay and must invalidate incompatible checkpoints.
+    if world.get("events"):
+        manifest["world_events"] = world["events"]
     return digest(manifest)
 
 
@@ -198,6 +203,42 @@ class GameSession:
         return self.exploration.actor_action(self.progress, scene["id"],
                                              actor_id, action)
 
+    def world_state(self):
+        """Read the party cursor without mutating an old campaign slot."""
+        return WorldJourney(self.project.world, self.content,
+                            self.project.campaign(self.campaign_id)).state(self.progress)
+
+    def world_destination(self, mission_id):
+        require(self.mode == "campaign" and not self.progress.story_pending
+                and self.active_scene() is None,
+                "Resolve combat and narrative scenes before traveling")
+        return WorldJourney(self.project.world, self.content,
+                            self.project.campaign(self.campaign_id)).destination(
+                                self.progress, mission_id)
+
+    def world_advance(self):
+        require(self.mode == "campaign" and not self.progress.story_pending
+                and self.active_scene() is None,
+                "Resolve combat and narrative scenes before traveling")
+        journey = WorldJourney(self.project.world, self.content,
+                               self.project.campaign(self.campaign_id))
+        state = journey.advance(self.progress)
+        event = journey.event_at(self.progress)
+        if event is not None:
+            require(event["scene"] in self.story.scenes,
+                    "Unresolved world story scene")
+            self.progress.story_flags["world_evt_" + event["id"]] = True
+            self.progress.story_flags[PENDING] = event["id"]
+            self.progress.story_pending = event["scene"]
+        return state
+
+    def world_can_enter(self, mission_id):
+        return (self.mode == "campaign" and
+                mission_id in self.available_missions() and
+                WorldJourney(self.project.world, self.content,
+                             self.project.campaign(self.campaign_id)).can_enter(
+                                 self.progress, mission_id))
+
     def available_choices(self):
         stage = self.exploration_state()
         if stage is not None and not stage["completed"]:
@@ -214,7 +255,25 @@ class GameSession:
                 "Finish combat before choosing dialogue")
         stage = self.exploration_state()
         require(stage is None or stage["completed"], "Explore the area first")
+        active = self.active_scene()
+        event_id = self.progress.story_flags.get(PENDING, "")
+        event = None
+        if event_id:
+            event = next((item for item in self.project.world.get("events", [])
+                          if item["id"] == event_id), None)
+            require(event is not None and active is not None and
+                    active["id"] == event["scene"],
+                    "Pending world event does not match narrative scene")
         updated = self.story.choose(self.progress, choice_id)
+        if event is not None:
+            next_scene = updated.story_pending
+            # Validate the pending road checkpoint while choosing a route;
+            # StoryBook may already have switched to a chained next_scene.
+            updated.story_pending = active["id"]
+            WorldJourney(self.project.world, self.content,
+                         self.project.campaign(self.campaign_id)).redirect(
+                             updated, event, choice_id)
+            updated.story_pending = next_scene
         self.progress = updated
         return self.active_scene()
 
@@ -268,6 +327,14 @@ class GameSession:
     def start_mission(self, mission_id):
         require(self.mode == "campaign", "End the current encounter first")
         require(mission_id in self.available_missions(), "Mission is locked")
+        # Enforce arrival at a visible world location at the headless boundary:
+        # UI controls alone must not bypass an interrupted route event.
+        state = self.world_state()
+        if state is not None and any(
+                node["mission"] == mission_id
+                for node in self.project.world["nodes"]):
+            require(self.world_can_enter(mission_id),
+                    "Travel to the mission location before starting combat")
         # Campaign.prepare can materialize heroes: use a throwaway roster.
         battle = deepcopy(self.progress).prepare(
             self.content, mission_id, seed=self.seed, ruleset=self.rules,
@@ -661,6 +728,9 @@ class GameSession:
                                 and identity not in seen, "Invalid or duplicate battle identity")
                         battles[key].battle_id = identity
                         seen.add(identity)
+        # World map travel is optional, but an existing cursor must never be
+        # accepted from a malformed or inaccessible persisted route.
+        session.world_state()
         return session
 
     @classmethod

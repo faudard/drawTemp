@@ -15,13 +15,14 @@ WORLD_HEIGHT = 640
 MAX_WORLD_NODES = 160
 
 
-def validate_world(raw, content, campaigns):
-    """Validate an optional world projection against the real mission graph."""
+def validate_world(raw, content, campaigns, story=None):
+    """Validate world presentation and optional canonical narrative road events."""
     require(isinstance(raw, dict), "World must be an object")
     if not raw:
         return
-    require(set(raw) == {"width", "height", "theme", "nodes"},
-            "World needs width, height, theme and nodes")
+    required = {"width", "height", "theme", "nodes"}
+    require(required <= set(raw) <= required | {"events"},
+            "World needs width, height, theme, nodes and optional events")
     width, height = raw["width"], raw["height"]
     require(type(width) is int and 480 <= width <= 4000
             and type(height) is int and 320 <= height <= 4000,
@@ -44,12 +45,101 @@ def validate_world(raw, content, campaigns):
         region = node["region"]
         require(isinstance(region, str) and len(region) <= 64,
                 "World region name too long")
+    # Road events are authoring links to StoryBook scenes, not a new dialogue
+    # engine. Both road endpoints must belong to the actual mission graph.
+    events = raw.get("events", [])
+    require(isinstance(events, list) and len(events) <= 80,
+            "World needs at most 80 road events")
+    event_ids, event_positions = set(), set()
+    scene_catalog = ({scene["id"]: scene for scene in story.get("scenes", [])}
+                     if story is not None else None)
+    for event in events:
+        require(isinstance(event, dict) and
+                {"id", "from", "to", "scene"} <= set(event) <=
+                {"id", "from", "to", "scene", "when", "step", "routes"},
+                "Invalid world road event")
+        eid, source, target = event["id"], event["from"], event["to"]
+        require(isinstance(eid, str) and 0 < len(eid) <= 24 and
+                all(ch.isascii() and (ch.isalnum() or ch == "_") for ch in eid)
+                and eid not in event_ids, "Duplicate or invalid road event id")
+        event_ids.add(eid)
+        require(isinstance(source, str) and isinstance(target, str)
+                and source != target and source in seen and target in seen
+                and (target in content.missions[source].next_missions or
+                     source in content.missions[target].next_missions),
+                "World event must reference a real road between visible missions")
+        step = event.get("step", 4)
+        require(type(step) is int and 1 <= step < 8,
+                "World event step must be within its road")
+        position = (*sorted((source, target)),
+                    step if source < target else 8 - step)
+        require(position not in event_positions,
+                "Two road events cannot occupy the same position")
+        event_positions.add(position)
+        scene_id = event["scene"]
+        require(isinstance(scene_id, str) and
+                (scene_catalog is None or scene_id in scene_catalog),
+                "World road event references an unknown narrative scene")
+        if "when" in event:
+            from .narrative import _condition
+            _condition(event["when"], content)
+        routes = event.get("routes", {})
+        require(isinstance(routes, dict) and len(routes) <= 20,
+                "Invalid world-event choice routes")
+        scene_choices = ({choice["id"] for choice in
+                          scene_catalog[scene_id]["choices"]}
+                         if scene_catalog is not None else None)
+        for choice_id, action in routes.items():
+            require(isinstance(choice_id, str) and
+                    (scene_choices is None or choice_id in scene_choices),
+                    "Unknown world-event choice")
+            require(isinstance(action, dict) and action.get("kind") in
+                    {"continue", "return", "destination"},
+                    "Invalid world-event route action")
+            kind = action["kind"]
+            require(set(action) == ({"kind", "mission"} if kind == "destination"
+                                    else {"kind"}), "Invalid world-event route fields")
+            if kind == "destination":
+                destination = action["mission"]
+                require(isinstance(destination, str) and destination in seen
+                        and destination not in (source, target),
+                        "World detour must name another visible location")
+                # Destination must be reachable from either road endpoint
+                # through the canonical authored Mission graph.
+                graph = _undirected_roads(content, seen)
+                require(_connected(graph, source, destination) and
+                        _connected(graph, target, destination),
+                        "World detour must follow authored roads")
     # A partial world is legal (missions without nodes remain in the regular
     # mission list), but campaigns shown here need a visible starting location.
     for campaign in campaigns:
         start = campaign["start_mission"]
         if any(node["mission"] in _reachable(content, start) for node in nodes):
             require(start in seen, "World is missing a visible campaign start")
+
+
+def _undirected_roads(content, visible):
+    roads = {mid: set() for mid in visible}
+    for source in visible:
+        for target in content.missions[source].next_missions:
+            if target in roads:
+                roads[source].add(target)
+                roads[target].add(source)
+    return roads
+
+
+def _connected(roads, source, goal):
+    if source not in roads or goal not in roads:
+        return False
+    todo, visited = [source], set()
+    while todo:
+        at = todo.pop()
+        if at == goal:
+            return True
+        if at not in visited:
+            visited.add(at)
+            todo.extend(roads[at] - visited)
+    return False
 
 
 def _reachable(content, start):
