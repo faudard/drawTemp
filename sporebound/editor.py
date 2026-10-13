@@ -309,6 +309,9 @@ def launch(path):
             return
         name = filedialog.askopenfilename(filetypes=[('Projet Sporebound', '*.json')])
         if name:
+            if StudioTransactionStore(name).pending:
+                raise RuleError('Sauvegarde Studio interrompue : rouvrir le fichier '
+                                'au lancement pour choisir sa récupération.')
             raw = json.loads(Path(name).read_text(encoding='utf-8'))
             candidate = Document(Content.from_dict(
                 raw, rules=authored_rules_for_document(raw)))
