@@ -143,3 +143,43 @@ Il couvre rivière, surface pavée, décor, relief, champs tactiques, cases spar
 rotation/changement de structure, déplacement superposé, duplication,
 opérations groupées, Undo/Redo, relecture JSON, anciennes cartes et snapshots
 invalides. La réussite de la CI doit encore être vérifiée sur le dernier SHA.
+
+
+## Gate Valcroix après la fusion du 3.7.19B
+
+Le banc de validation utilise exclusivement la carte existante
+`examples/fortified_village_3717a.py`, réalisée via les commandes
+d'édition officielles (26 × 20 cases, dix structures). Aucun terrain
+de test dessiné manuellement ne remplace cette scène.
+
+- **Pont (12,9) → (12,7)** : le déplacement conserve son identifiant,
+  laisse réapparaître les six cases d'eau sous le pont initial et
+  capture l'eau sous le nouvel emplacement.
+- **Suppression du pont déplacé** : comparer toutes les tuiles et
+  identités de la scène à une suppression du pont à sa position initiale.
+  Les autres bâtiments, objets et décors restent inchangés.
+- **Deux maisons (3,3) et (6,13)** : une translation de groupe d'une
+  case en X conserve les IDs et restaure exactement les terrains
+  sous-jacents après retrait des maisons.
+- **Undo/Redo et sauvegarde JSON** : mêmes données et identités
+  après relecture, sans migration supplémentaire.
+- **Rendu Tk réel** aux zooms **24 / 54 / 96** : avant déplacement,
+  après déplacement et après suppression du pont, avec les atlas
+  existants. Les captures `village-underlay-<état>-<zoom>.png` sont
+  jointes à l'artefact de captures Valcroix du workflow Linux/Xvfb.
+
+Commandes de validation :
+
+```bash
+python -m unittest discover -s tests_standalone -p test_reference_village_underlay_3719b.py -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_reference_village_3717a_gui.py -v
+```
+
+Ces vérifications sécurisent la fidélité technique et créent des preuves
+inspectables. Elles ne remplacent **pas** la revue graphique humaine
+(occlusion, composition et lisibilité), notamment sous Windows/macOS.
+
+Le test historique d'underlay a également été corrigé dans `master`
+pour lire `structures` comme un champ optionnel lorsque la dernière
+structure est supprimée ; le format Content v1 omet volontairement
+la liste vide.
