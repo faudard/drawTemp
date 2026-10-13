@@ -128,6 +128,19 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     root.update()
                     self.assertIn('Condition non satisfaite',
                                   context_text.get('1.0', 'end'))
+                    # 3.2: the same UI can preview an entire real-engine
+                    # cascade without creating another simulator/editor.
+                    self.assertIn('Simuler chaîne', buttons)
+                    self.assertIn('+ Lier événement', buttons)
+                    self.assertIn('− Délier événement', buttons)
+                    scenario.set('Condition vraie')
+                    buttons['Simuler chaîne'].invoke()
+                    root.update()
+                    self.assertIn('CASCADE ISOLÉE',
+                                  context_text.get('1.0', 'end'))
+                    self.assertIn('Déclenchés : event_new',
+                                  context_text.get('1.0', 'end'))
+                    self.assertFalse(callback_errors)
 
                     action_box = next(w for w in widgets if isinstance(w, ttk.Combobox)
                                       and 'queue_wave' in tuple(w['values']))
