@@ -16,13 +16,14 @@ from .studio_transaction import StudioHistory, StudioTransactionStore
 class StudioPanels:
     def __init__(self, notebook, tk, ttk, dialogs, *, doc, content_path,
                  mission, selection, design_change, play_campaign, status, mission_change=None,
-                 select_mission=None, on_project_saved=None):
+                 select_mission=None, on_project_saved=None, set_active_mission=None):
         self.tk, self.ttk, self.dialogs = tk, ttk, dialogs
         self.doc, self.content_path = doc, content_path
         self.mission, self.selection = mission, selection
         self.design_change, self.play_campaign = design_change, play_campaign
         self.mission_change = mission_change or self.refresh
         self.select_mission = select_mission or (lambda _mid: None)
+        self.set_active_mission = set_active_mission or self.select_mission
         self.status = status
         self.on_project_saved = on_project_saved or (lambda _path: None)
         self.project = None
@@ -90,6 +91,10 @@ class StudioPanels:
         current.undo_stack.clear()
         current.redo_stack.clear()
         self.project = project
+        # An undo may delete the mission selected in the canvas. Restore a
+        # valid mission before refreshing any dependent Studio panel.
+        if self.mission() not in {m['id'] for m in document['missions']}:
+            self.set_active_mission(document['missions'][0]['id'])
         # Rebuild project-dependent models and preview registries. Simply
         # changing the owner.project pointer leaves stale storyboard/asset
         # caches visible after a global undo.
