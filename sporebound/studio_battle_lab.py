@@ -75,6 +75,8 @@ class BattleLabStudio:
             actions, text="Rejouer la trace", command=self.replay_selected,
             state="disabled")
         self.replay_button.pack(side="left", padx=4)
+        self.ttk.Button(actions, text="Visualiser résultats",
+                        command=self.visualize).pack(side="left", padx=4)
         self.status = self.ttk.Label(frame, text="Prêt · aucune simulation en cours.")
         self.status.pack(anchor="w", pady=4)
         columns = ("seed", "issue", "ticks", "commands", "ct", "stall")
@@ -216,6 +218,22 @@ class BattleLabStudio:
         self.status.configure(text="Terminé, replays vérifiés."
                               + (" Gate : " + self.comparison["status"]
                                  if self.comparison else ""))
+
+    def visualize(self):
+        if self.busy or self.current is None:
+            self.owner.dialogs.showerror("Battle Lab", "Simuler avant de visualiser.")
+            return
+        try:
+            visual = self.owner.visual_battle_lab
+            visual.show_report(
+                self.current, reference=self.baseline,
+                snapshot=self._run_snapshot)
+            selected = self.rows.selection()
+            if selected:
+                seed = int(self.rows.item(selected[0], "values")[0])
+                visual._select_seed(seed)
+        except (RuleError, ValueError, KeyError) as exc:
+            self.owner.dialogs.showerror("Visual Battle Lab", str(exc))
 
     def _select_seed(self, _event=None):
         self.replay_button.configure(state="disabled")
