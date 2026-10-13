@@ -123,6 +123,22 @@ class StudioTransactionTests(unittest.TestCase):
         self.store.save(self.new, self.next_project, expected_previous=baseline)
         self.assertNotEqual(self.store.revisions(), baseline)
 
+    def test_committed_content_changed_before_project_publish_keeps_journal(self):
+        self.first_save()
+        original_publish = self.store._publish_one
+        external = b'{"changed":"racing content writer"}'
+        def interfere(path):
+            original_publish(path)
+            if path == self.store.content_path:
+                self.store.content_path.write_bytes(external)
+        with patch.object(self.store, "_publish_one", side_effect=interfere):
+            with self.assertRaisesRegex(RuleError, "modifié pendant"):
+                self.store.save(self.new, self.next_project)
+        self.assertEqual(self.store.content_path.read_bytes(), external)
+        self.assertTrue(self.store.pending)
+        with self.assertRaisesRegex(RuleError, "modifié"):
+            self.store.recover("complete")
+
     def test_edit_during_staging_never_replaces_destination(self):
         self.first_save()
         from sporebound import studio_transaction as transactions
