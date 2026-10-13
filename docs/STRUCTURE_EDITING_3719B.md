@@ -25,7 +25,7 @@ Le contour bleu indique la structure sélectionnée. Pendant un glissement, l'em
 - Une erreur ne modifie pas le document ni son historique.
 - Une transformation est une seule opération `Document.replace` : Undo/Redo existant, sérialisation `Content` version 1 inchangée.
 
-**Sémantique du terrain :** comme une suppression suivie d'une nouvelle pose, modifier la structure entière efface son ancien tampon tactique, puis applique le preset sur le nouvel emplacement. Les retouches case par case de l'ancienne emprise **ne suivent pas** le bâtiment. Les retouches simples ne font toujours pas disparaître l'image de la structure persistante.
+**Sémantique du terrain :** les nouvelles structures conservent le sol d'origine dans une métadonnée `underlay`. Une suppression ou un déplacement restaure exactement les cases enregistrées sous le bâtiment, y compris les tuiles absentes du document initial. Une transformation réapplique ensuite le nouveau tampon sur sa destination, après capture de son terrain d'accueil. Les retouches tactiques peintes sur le bâtiment **ne remplacent pas** cette sauvegarde du sol d'origine.
 
 ## Vérifications
 
@@ -40,7 +40,7 @@ Gate **fonctionnel** : sélection → modification/duplication → Undo/Redo →
 
 - Préservation des retouches tactiques locales lors d'une transformation.
 - Bâtiments multi-étages jouables superposés.
-- Historique inter-éditeurs, commandes de groupe et refonte de l'agencement des panneaux (3.7.21).
+- Historique inter-éditeurs et refonte de l'agencement général des panneaux (3.7.21).
 
 ### Critères supplémentaires après la passe de manipulation directe
 
@@ -72,9 +72,10 @@ survolée n'est pas embarquée par erreur.
 
 ### Sécurité et compatibilité
 
-- La validation se fait sur une copie : retrait simultané des anciennes
-  emprises (pour le déplacement), puis contrôle des nouvelles emprises sans
-  ajouter de bâtiment en cours de validation.
+- La validation se fait sur une copie : restauration des terrains sous toutes
+  les anciennes emprises (pour le déplacement), puis contrôle des nouvelles
+  emprises avant d'ajouter un bâtiment. Les recouvrements avec l'ancienne
+  position d'un autre bâtiment du groupe conservent ainsi son vrai sol.
 - Les sources adjacentes peuvent se recouvrir avec leurs propres anciennes
   cases après translation. Deux nouvelles emprises ne peuvent jamais se
   chevaucher.
@@ -87,9 +88,11 @@ survolée n'est pas embarquée par erreur.
   des validations et l'historique.
 - Un décalage `(0,0)` n'engendre pas de nouvelle opération Undo ;
   une duplication `(0,0)` est refusée.
-- L'édition en groupe ne transporte pas les retouches de terrain indépendantes
-  de l'ancien tampon. Une reconstruction du fond de terrain nécessiterait un
-  contrat de sauvegarde des cellules sous-jacentes, traité séparément.
+- Les nouvelles structures conservent le fond de terrain en `underlay`.
+  Les anciennes structures sans cette métadonnée gardent l'effacement
+  historique à la suppression (aucune reconstitution du sol ne peut être
+  inventée). Les retouches de surface effectuées sur une structure restent
+  distinctes du fond enregistré.
 
 ### Gates ajoutés
 
@@ -99,3 +102,44 @@ survolée n'est pas embarquée par erreur.
 - `SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_structure_groups_3719b_gui.py -v`
   : rectangle, aperçu, déplacement, duplication et Undo/Rétablir depuis la
   vraie interface, câblé au job `editor` du workflow Standalone.
+
+
+## 3.7.19B — Terrain sauvegardé sous les bâtiments
+
+Chaque nouvelle structure persistante ajoute un champ **optionnel**
+`underlay` à son enregistrement `Mission.structures[]`. Ce champ contient
+une entrée par case de l'emprise sous forme
+`{"pos": [x, y], "tile": null | {surface, feature, height, cost, blocked, cover, hazard}}`.
+Une valeur `null` signifie que la case ne possédait **aucune tuile explicite**
+dans la carte sparse, ce qui permet de restaurer exactement l'état initial.
+
+- Pose : capturer le terrain **avant** d'écrire le tampon de la structure ;
+  la simulation continue à utiliser les tuiles tactiques ordinaires.
+- Suppression : supprimer le tampon, restaurer les tuiles sauvegardées et
+  rendre les anciennes cellules absentes au format sparse si nécessaire.
+- Déplacement : restaurer l'ancienne emprise, capturer le terrain à destination,
+  appliquer la nouvelle structure et conserver son identité.
+- Duplication : l'original conserve son `underlay` ; la copie capture le terrain
+  situé sous son propre emplacement.
+- Groupe : restaurer **tous** les terrains d'origine avant la validation et
+  avant d'appliquer les destinations, y compris lorsque des bâtiments adjacents
+  échangent partiellement leurs anciennes cases.
+- Éditeur : l'inspecteur précise si une structure dispose d'un terrain
+  sauvegardé ou si elle provient d'une ancienne carte.
+
+Le parseur `Content` conserve la version **1** et accepte les deux formats :
+enregistrement historique à cinq champs et enregistrement récent avec
+`underlay`. Il vérifie le nombre exact de cases, leur appartenance à
+l'emprise, l'absence de doublons et les types/valeurs de terrain. Aucune
+migration destructive de documents anciens n'est effectuée.
+
+**Limite importante :** les structures créées avant cette modification ne
+possèdent pas leur sol d'origine. Lors de leur premier déplacement, les anciennes
+cases restent effacées (comportement historique), tandis que la nouvelle
+position bénéficie immédiatement d'une sauvegarde du sol.
+
+**Gate :** `python -m unittest tests_standalone.test_structure_underlay_3719b -v`.
+Il couvre rivière, surface pavée, décor, relief, champs tactiques, cases sparse,
+rotation/changement de structure, déplacement superposé, duplication,
+opérations groupées, Undo/Redo, relecture JSON, anciennes cartes et snapshots
+invalides. La réussite de la CI doit encore être vérifiée sur le dernier SHA.
