@@ -71,7 +71,7 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     root.update()
                     context_text = next(w for w in widgets if isinstance(w, tk.Text))
                     self.assertIn('APERÇU ISOLÉ', context_text.get('1.0', 'end'))
-                    self.assertIn('condition non satisfaite',
+                    self.assertIn('Condition non satisfaite',
                                   context_text.get('1.0', 'end'))
                     self.assertEqual(context_text.cget('state'), 'disabled')
                     scenario = next(w for w in widgets if isinstance(w, ttk.Combobox)
