@@ -19,7 +19,7 @@ class StudioPanels:
     def __init__(self, notebook, tk, ttk, dialogs, *, doc, content_path,
                  mission, selection, design_change, play_campaign, status, mission_change=None,
                  select_mission=None, on_project_saved=None, set_active_mission=None,
-                 focus_map_cell=None):
+                 focus_map_cell=None, workspace_edit=None):
         self.tk, self.ttk, self.dialogs = tk, ttk, dialogs
         self.notebook = notebook
         self.doc, self.content_path = doc, content_path
@@ -29,6 +29,7 @@ class StudioPanels:
         self.select_mission = select_mission or (lambda _mid: None)
         self.set_active_mission = set_active_mission or self.select_mission
         self.focus_map_cell = focus_map_cell or (lambda mid, cell: None)
+        self.workspace_edit = workspace_edit
         self.status = status
         self.on_project_saved = on_project_saved or (lambda _path: None)
         self.project = None
@@ -59,8 +60,13 @@ class StudioPanels:
         from .studio_battle_lab import BattleLabStudio
         self.battle_lab = BattleLabStudio(self, notebook)
         self._last_mission_signature=None
+        self._deferred_map_refresh = False
         self.reload_project()
         self.refresh()
+        # Map-only brush strokes do not need to rebuild hidden editors.
+        # A tab switch flushes them before their data is inspected.
+        self.notebook.bind('<<NotebookTabChanged>>',
+                           self._flush_deferred_map_refresh, add='+')
 
     def _field(self, parent, row, caption, value='', *, choices=None, width=22):
         ttk = self.ttk
@@ -680,6 +686,25 @@ class StudioPanels:
             window,text=f"Langue : {self.project.options['language']} | Musique : {self.project.options['music_volume']}%").pack()).pack(pady=5)
         self.ttk.Button(window,text='Quitter l’aperçu',command=window.destroy).pack(pady=7)
 
+    def defer_map_refresh(self):
+        """Postpone heavy invisible Studio panels after a terrain-only edit."""
+        self._deferred_map_refresh = True
+        self.refresh_selection()
+
+    def _flush_deferred_map_refresh(self, _event=None):
+        if self._deferred_map_refresh:
+            self.refresh()
+
+    def refresh_selection(self):
+        """Update only map-context controls; no Studio-wide editor rebuild."""
+        if self.project is None:
+            return
+        chosen = next((m for m in self.doc().data['missions']
+                       if m['id'] == self.mission()), None)
+        if chosen is not None:
+            self.cell_label.config(
+                text=f'Case choisie : {self.selection()} | Mission : {chosen["name"]}')
+
     def refresh(self):
         if self.project is None:
             return
@@ -729,3 +754,4 @@ class StudioPanels:
         self.workspace.refresh()
         self.world_studio.refresh()
         self.battle_lab.refresh()
+        self._deferred_map_refresh = False

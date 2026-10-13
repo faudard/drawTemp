@@ -196,39 +196,71 @@ def matches_composite(battle, node):
     return not matches_composite(battle, node['not'])
 
 
-def dispatch(battle):
-    """Dispatch the canonical one-shot triggers, including dependency cascades.
+def dispatch(battle, *, observer=None, before_fire=None, fire_limit=None):
+    """Run the one canonical tactical dispatcher, with opt-in Studio hooks.
 
-    Legacy missions use exactly the historical single pass. Authored chained
-    missions settle dependencies at the *same command boundary*, regardless of
-    serialized trigger order. The number of passes is bounded by the number
-    of one-shot events; Content validation rejects reference cycles.
+    All normal Battle callers omit the hooks and retain historical behavior.
+    A disposable debug Battle may observe evaluated conditions, pause *before*
+    an event or execute a bounded number of real events. Nothing is serialized
+    by these hooks; no second interpreter, scheduler or rule registry exists.
     """
+    require(fire_limit is None or
+            (type(fire_limit) is int and 1 <= fire_limit <= 200),
+            'Invalid event-debug step limit')
     from ..temporal_events import temporal_status
     events = battle.mission.triggers
     cascades = any('after' in row for row in events)
-    for _ in range(len(events) if cascades else 1):
+    fired_now = 0
+    for pass_number in range(len(events) if cascades else 1):
         progressed = False
         for trigger in events:
-            if trigger['id'] in battle.fired:
+            eid = trigger['id']
+            if eid in battle.fired:
                 continue
-            if not all(ref in battle.fired for ref in trigger.get('after', ())):
+            blocked = [ref for ref in trigger.get('after', ())
+                       if ref not in battle.fired]
+            if blocked:
+                if observer is not None:
+                    observer({'event_id': eid, 'state': 'waiting',
+                              'missing': blocked, 'pass': pass_number})
                 continue
             if any(key in trigger for key in (
                     'cancel_after', 'delay_ticks', 'delay_activations')):
-                if temporal_status(battle, trigger)['state'] != 'ready':
+                temporal = temporal_status(battle, trigger)
+                if temporal['state'] != 'ready':
+                    if observer is not None:
+                        observer({'event_id': eid, 'state': temporal['state'],
+                                  'pass': pass_number})
                     continue
             if not battle.rules.trigger_conditions.get(
                     trigger['condition']).matches(battle, trigger):
+                if observer is not None:
+                    observer({'event_id': eid, 'state': 'condition_false',
+                              'pass': pass_number})
                 continue
             if 'when' in trigger and not matches_composite(
                     battle, trigger['when']):
+                if observer is not None:
+                    observer({'event_id': eid, 'state': 'composite_false',
+                              'pass': pass_number})
                 continue
-            battle.fired.append(trigger['id'])
-            battle.emit('trigger', id=trigger['id'])
+            if before_fire is not None and before_fire(trigger):
+                if observer is not None:
+                    observer({'event_id': eid, 'state': 'breakpoint',
+                              'pass': pass_number})
+                return {'fired': fired_now, 'paused': eid}
+            battle.fired.append(eid)
+            battle.emit('trigger', id=eid)
             for action in trigger['actions']:
                 battle.rules.trigger_actions.get(action['kind']).apply(
                     battle, action)
+            fired_now += 1
             progressed = True
+            if observer is not None:
+                observer({'event_id': eid, 'state': 'fired',
+                          'pass': pass_number})
+            if fire_limit is not None and fired_now >= fire_limit:
+                return {'fired': fired_now, 'paused': None}
         if not cascades or not progressed:
             break
+    return {'fired': fired_now, 'paused': None}

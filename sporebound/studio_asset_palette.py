@@ -1,5 +1,7 @@
 """Modeless visual palette using the editor's existing image loaders and tools."""
-from .asset_palette import CATEGORIES, ENTRIES, search_entries
+from .asset_palette import CATEGORIES, ENTRIES, PaletteEntry, search_entries
+from .watercolor_catalog import WatercolorCatalog
+from .tk_images import resize_photo
 from .iso_building_atlas import BUILDING_FRAMES
 from .iso_actor_atlas import actor_style
 from types import SimpleNamespace
@@ -16,12 +18,17 @@ class AssetPalette:
         self.window.geometry('860x660')
         self.window.minsize(700, 540)
         self.window.transient(parent)
-        self.window.protocol('WM_DELETE_WINDOW', self.window.withdraw)
+        self.window.protocol('WM_DELETE_WINDOW', self.hide)
         self.loaders = terrain, props, buildings, fortifications
         self.choose, self.cell_size = choose, cell_size
         self.actors, self.entities = actors, entities
         self.content, self.mission = content, mission
-        self.entries = {e.id: e for e in ENTRIES}
+        self.watercolor = WatercolorCatalog()
+        self.watercolor_entries = tuple(
+            PaletteEntry('watercolor:' + item.id, item.title + ' · ' + item.group,
+                         'Aquarelle', 'watercolor', item.id)
+            for item in self.watercolor.entries)
+        self.entries = {e.id: e for e in (*ENTRIES, *self.watercolor_entries)}
         self.images = {}
         self.turns = 0
         self.query = tk.StringVar(self.window)
@@ -34,6 +41,8 @@ class AssetPalette:
         self.entity_team = tk.StringVar(self.window, value='enemy')
         self.entity_facing = tk.StringVar(self.window, value='south')
         self.entity_pose = tk.StringVar(self.window, value='idle')
+        self.watercolor_frame = tk.StringVar(self.window, value='0')
+        self._watercolor_timer = None
         self.entity_link = tk.StringVar(self.window)
         self.entity_destination = tk.StringVar(self.window)
         controls = ttk.Frame(self.window, padding=8)
@@ -42,7 +51,7 @@ class AssetPalette:
         entry = ttk.Entry(controls, textvariable=self.query, width=28)
         entry.pack(side='left', padx=8)
         ttk.Combobox(controls, state='readonly', textvariable=self.category,
-                     values=CATEGORIES, width=16).pack(side='left')
+                     values=CATEGORIES + ('Aquarelle',), width=16).pack(side='left')
         ttk.Label(controls, textvariable=self.count).pack(side='right')
         body = ttk.Panedwindow(self.window, orient='horizontal')
         body.pack(fill='both', expand=True, padx=8)
@@ -80,6 +89,17 @@ class AssetPalette:
                                 values=tuple(range(24, 97, 6)), width=4)
         scale_box.pack(side='left')
         scale_box.bind('<<ComboboxSelected>>', self.preview)
+        self.watercolor_animation_controls = ttk.Frame(opts)
+        ttk.Label(self.watercolor_animation_controls, text='Frame').pack(side='left')
+        self.watercolor_frame_selector = ttk.Combobox(
+            self.watercolor_animation_controls, state='readonly', width=4,
+            textvariable=self.watercolor_frame)
+        self.watercolor_frame_selector.pack(side='left', padx=5)
+        self.watercolor_frame_selector.bind('<<ComboboxSelected>>', self.preview)
+        ttk.Button(self.watercolor_animation_controls, text='▶', width=3,
+                   command=self.play_watercolor).pack(side='left')
+        ttk.Button(self.watercolor_animation_controls, text='■', width=3,
+                   command=self.stop_watercolor).pack(side='left')
         ttk.Button(preview, text='Échelle de la carte', command=self.map_scale).pack(
             anchor='w', padx=8, pady=4)
         self.entity_frame = ttk.LabelFrame(preview, text='Placement — acteurs / objets')
@@ -115,6 +135,10 @@ class AssetPalette:
         self.populate()
         entry.focus_set()
 
+    def hide(self):
+        self.stop_watercolor()
+        self.window.withdraw()
+
     def show(self):
         self.populate()
         self.window.deiconify()
@@ -122,6 +146,28 @@ class AssetPalette:
 
     def sprite(self, entry, size, turns=0):
         terrain, props, buildings, fortifications = self.loaders
+        if entry.kind == 'watercolor':
+            item = self.watercolor.lookup(entry.value)
+            frame_index = (int(self.watercolor_frame.get())
+                           if item.kind == 'animation' else 0)
+            sprite_id, duration = self.watercolor.frame(entry.value, frame_index)
+            status, path = self.watercolor.status(sprite_id, verify=True)
+            if status != 'ready':
+                label = ('Fichier PNG absent : pack V3 à publier' if status == 'missing'
+                         else 'Provenance SHA-256 absente : image non certifiée'
+                         if status == 'uncertified'
+                         else 'PNG modifié : provenance SHA-256 incorrecte')
+                return None, label, 'assets/watercolor/' + sprite_id
+            import tkinter as tk
+            try:
+                source = tk.PhotoImage(file=str(path), master=self.canvas)
+                target_w = min(320, max(72, int(size) * 3))
+                target_h = max(1, round(source.height() * target_w / source.width()))
+                photo = resize_photo(source, target_w, target_h, master=self.canvas)
+            except (OSError, RuntimeError, ValueError, tk.TclError):
+                return None, 'PNG non décodable par Tk', str(path)
+            elapsed = f' · durée {duration} ms' if duration else ''
+            return photo, 'Sprite V3 vérifié (SHA-256)' + elapsed, path.name
         if entry.kind == 'surface':
             loader, photo = terrain, terrain.tile(entry.value, size)
         elif entry.kind == 'feature':
@@ -164,11 +210,22 @@ class AssetPalette:
     def populate(self, *_args):
         old = self.tree.selection()
         self.tree.delete(*self.tree.get_children())
-        extra = self.entities() if self.entities is not None else ()
+        extra = tuple(self.entities() if self.entities is not None else ())
+        extra += self.watercolor_entries
         self.entries = {e.id: e for e in (*ENTRIES, *extra)}
         rows = search_entries(self.query.get(), self.category.get(), extra)
 
         for entry in rows:
+            if entry.kind == 'watercolor':
+                item = self.watercolor.lookup(entry.value)
+                sprite_id, _duration = self.watercolor.frame(entry.value)
+                available, _path = self.watercolor.status(sprite_id)
+                suffix = (' (' + str(item.frame_count) + ' frames)'
+                          if item.kind == 'animation' else '')
+                self.tree.insert('', 'end', iid=entry.id,
+                                 text=entry.name + suffix +
+                                 (' ⚠ PNG absent' if available != 'ready' else ''))
+                continue
             photo, state, _path = self.sprite(entry, 8 if entry.kind == 'structure' else 22)
             options = {}
             if photo is not None:
@@ -188,14 +245,67 @@ class AssetPalette:
             self.use_button.state(['disabled'])
             self.rotate_button.state(['disabled'])
 
+    def stop_watercolor(self):
+        if self._watercolor_timer is not None:
+            self.window.after_cancel(self._watercolor_timer)
+            self._watercolor_timer = None
+
+    def _queue_watercolor_frame(self):
+        entry = self.selected()
+        if entry is None or entry.kind != 'watercolor':
+            return
+        item = self.watercolor.lookup(entry.value)
+        if item.kind != 'animation':
+            return
+        idx = int(self.watercolor_frame.get())
+        _id, duration = self.watercolor.frame(entry.value, idx)
+        animation = self.watercolor.registry.require_reference(
+            entry.value, 'animation')
+        if idx + 1 == item.frame_count and not animation['loop']:
+            return  # Hold the actual final frame of this one-shot animation.
+        self._watercolor_timer = self.window.after(
+            duration, self._advance_watercolor_frame)
+
+    def _advance_watercolor_frame(self):
+        self._watercolor_timer = None
+        entry = self.selected()
+        if entry is None or entry.kind != 'watercolor':
+            return
+        item = self.watercolor.lookup(entry.value)
+        if item.kind != 'animation':
+            return
+        self.watercolor_frame.set(str(
+            (int(self.watercolor_frame.get()) + 1) % item.frame_count))
+        self.preview()
+        self._queue_watercolor_frame()
+
+    def play_watercolor(self):
+        self.stop_watercolor()
+        entry = self.selected()
+        if entry is None or entry.kind != 'watercolor' or \
+                self.watercolor.lookup(entry.value).kind != 'animation':
+            return
+        self.watercolor_frame.set('0')
+        self.preview()
+        self._queue_watercolor_frame()
+
     def selected(self):
         selected = self.tree.selection()
         return self.entries[selected[0]] if selected else None
 
     def select(self, _event=None):
         self.turns = 0
+        self.stop_watercolor()
         entry = self.selected()
+        self.watercolor_animation_controls.pack_forget()
         if entry is not None:
+            if entry.kind == 'watercolor':
+                item = self.watercolor.lookup(entry.value)
+                self.watercolor_frame.set('0')
+                if item.kind == 'animation':
+                    self.watercolor_frame_selector['values'] = tuple(
+                        str(i) for i in range(item.frame_count))
+                    self.watercolor_animation_controls.pack(side='left', padx=8)
             self.entity_id.set('')
             self.entity_destination.set('')
             if self.content is not None and self.mission is not None:
@@ -239,7 +349,8 @@ class AssetPalette:
         entry = self.selected()
         if entry is None:
             return
-        self.use_button.state(['!disabled'])
+        self.use_button.state(['disabled'] if entry.kind == 'watercolor'
+                              else ['!disabled'])
         self.rotate_button.state(['!disabled'] if entry.kind == 'structure' else ['disabled'])
         self.canvas.delete('all')
         photo, state, path = self.sprite(entry, self.scale.get(), self.turns)
@@ -261,9 +372,12 @@ class AssetPalette:
         w, h = entry.footprint(self.turns)
         rotation = (f'\nRotation du terrain : {self.turns*90}° ; 2 vues PNG partagées.'
                     if entry.kind == 'structure' else '')
+        effect = ('Galerie artistique uniquement : les PNG ne remplacent pas les '
+                  'acteurs ou objets placés tant que leurs bindings Player ne '
+                  'sont pas configurés.' if entry.kind == 'watercolor' else entry.effect)
         self.detail.set(f'{entry.name} — {entry.category}\n{entry.id}\n'
                         f'Emprise : {w} × {h} case(s) · {path}\n{state}'
-                        f'{rotation}\n{entry.effect}')
+                        f'{rotation}\n{effect}')
 
     def placement_settings(self):
         return dict(entity_id=self.entity_id.get().strip(),
@@ -274,7 +388,7 @@ class AssetPalette:
 
     def use(self):
         entry = self.selected()
-        if entry is None:
+        if entry is None or entry.kind == 'watercolor':
             return
         if entry.kind == 'object':
             if entry.value in ('switch', 'ram', 'catapult') and not self.entity_link.get():
@@ -288,4 +402,4 @@ class AssetPalette:
                     self.detail.set(str(exc))
                     return
         if self.choose(entry, self.turns):
-            self.window.withdraw()
+            self.hide()
