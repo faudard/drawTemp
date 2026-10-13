@@ -1923,6 +1923,7 @@ def launch(path):
             studio.refresh()
         finish_ui("map.refresh", ui_started, canvas, counts={
             "map_cells": board.width * board.height,
+            "cell_size": tile_size, "isometric": iso_var.get(),
             "canvas_items": len(canvas.find_all()) if ui_started is not None else 0,
             "selected_tiles": len(selected_tiles),
             "renderer_enabled": views is None or RENDERER in views,
