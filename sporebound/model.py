@@ -288,6 +288,7 @@ class Content:
             for c in m.goal:
                 cell(c, b)
                 require(not b.tile(c).blocked, "Goal is blocked")
+            from .iso_map import SURFACES, FEATURES
             for c, t in b.tiles.items():
                 cell(c, b)
                 integer(t.height, 0, 99, "tile.height")
