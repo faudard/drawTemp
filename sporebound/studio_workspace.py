@@ -84,7 +84,7 @@ class ProjectWorkspaceTab:
                        fill='x', padx=8, pady=4)
         ttk.Label(detail_frame, text='Les cartes sont enregistrées avec le contenu; '
                   'le titre, les campagnes, dialogues et assets avec le fichier .game.json. '
-                  'Les deux enregistrements restent distincts.',
+                  'Utiliser « Enregistrer tout » pour publier les deux documents avec récupération.',
                   wraplength=470, justify='left').pack(anchor='w', padx=10, pady=6)
         self.status = ttk.Label(root, text='')
         self.status.pack(anchor='w', padx=12, pady=(2, 9))
