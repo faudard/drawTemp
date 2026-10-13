@@ -370,10 +370,11 @@ class WorldMapStudio:
             px-10, py-28, px+10, py-8, fill="#32b1e2",
             outline="#183b56", width=3, tags=("world_lab_party",))
         scene = report["scene"]
-        self.lab_choice_box["values"] = [
-            row["id"] for row in report["choices"]]
-        if self.lab_choice.get() not in self.lab_choice_box["values"]:
-            options = self.lab_choice_box["values"]
+        # Show the authored labels, not only opaque choice identifiers.
+        options = [
+            row["id"] + " — " + row["label"] for row in report["choices"]]
+        self.lab_choice_box["values"] = options
+        if self.lab_choice.get() not in options:
             self.lab_choice.set(options[0] if options else "")
         if scene is not None:
             message = "Dialogue : " + scene["title"]
@@ -398,7 +399,8 @@ class WorldMapStudio:
         self._render_lab()
 
     def choose_lab(self):
-        self._lab_is_fresh().choose(self.lab_choice.get())
+        selected = self.lab_choice.get().split(" — ", 1)[0]
+        self._lab_is_fresh().choose(selected)
         self._render_lab()
 
     def destination_lab(self):

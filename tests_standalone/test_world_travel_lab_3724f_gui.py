@@ -73,6 +73,8 @@ class WorldTravelLabGUITests(TestCase):
                     self.assertEqual(studio.lab.snapshot()["scene"]["id"], "caravan")
                     self.assertEqual(len(studio.canvas.find_withtag(
                         "world_lab_party")), 1)
+                    self.assertTrue(any("Protéger la caravane" in label
+                                        for label in studio.lab_choice_box["values"]))
                     studio.lab_choice.set("help")
                     studio.owner._run(studio.choose_lab)
                     self.assertIn("Flag rescued_caravan",
