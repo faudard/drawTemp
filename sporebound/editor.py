@@ -15,6 +15,7 @@ from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, render_isometric, SURFACE_COLORS, IsoTerrainAtlas)
 from .iso_props import IsoPropAtlas
+from .iso_object_atlas import IsoObjectAtlas
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
 from .iso_actor_atlas import IsoActorAtlas
@@ -245,6 +246,7 @@ def launch(path):
     entity_palette = None
     entity_choice = None
     entity_hover_key = None
+    entity_passage_entry = None
     mission_var = tk.StringVar(value=doc.data['missions'][0]['id'])
     brush_var = tk.StringVar(value='wall')
     tool_var = tk.StringVar(value='Pinceau')
@@ -626,7 +628,7 @@ def launch(path):
         entity_hover_key = None
         for tag in ('paste_preview', 'fill_preview', 'structure_preview',
                     'brush_preview', 'asset_ghost', 'entity_preview',
-                    'entity_ghost'):
+                    'entity_ghost', 'entity_route'):
             canvas.delete(tag)
 
     def paste_preview(event):
@@ -784,6 +786,7 @@ def launch(path):
     @guarded
     def click(event):
         nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive
+        nonlocal entity_passage_entry
         canvas.focus_set()
         stroke_cells = []
         selected_cell = event_cell(event)
@@ -979,7 +982,7 @@ def launch(path):
 
     def refresh(*args):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
-        nonlocal entity_hover_key
+        nonlocal entity_hover_key, entity_passage_entry
         entity_hover_key = None
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
             from .narrative import StoryBook
@@ -997,6 +1000,7 @@ def launch(path):
             mission_var.set(mids[0])
         if selection_mission != mission_var.get():
             selected_tiles.clear()
+            entity_passage_entry = None
             selection_mission = mission_var.get()
         content = Content.from_dict(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
@@ -1024,7 +1028,7 @@ def launch(path):
                 atlas=iso_atlas, prop_atlas=iso_props,
                 building_atlas=building_atlas,
                 fortification_atlas=fortification_atlas,
-                actor_atlas=actor_atlas)
+                actor_atlas=actor_atlas, object_atlas=object_atlas)
         else:
             iso_geometry = None
             canvas.delete('all')
@@ -1236,11 +1240,12 @@ def launch(path):
         return True
 
     def choose_entity(entry, facing, link, destination, team):
-        nonlocal entity_choice
+        nonlocal entity_choice, entity_passage_entry
         if battle is not None or source_pending():
             status_var.set('Terminer le playtest et appliquer le JSON avant édition.')
             return False
         entity_choice = (entry, facing, link, destination, team)
+        entity_passage_entry = None
         tool_var.set('Entité')
         iso_var.set(True)
         notebook.select(work)
@@ -1249,6 +1254,14 @@ def launch(path):
         canvas.focus_set()
         return True
 
+    def cancel_passage_placement():
+        nonlocal entity_passage_entry
+        if entity_passage_entry is not None:
+            entity_passage_entry = None
+            clear_placement_preview()
+            status_var.set('Placement du passage annulé. Aucun objet créé.')
+            refresh()
+
     def open_entity_palette():
         nonlocal entity_palette
         if entity_palette is None:
@@ -1256,7 +1269,8 @@ def launch(path):
             entity_palette = EntityPalette(
                 root, snapshot=lambda: (doc.data, mission_var.get()),
                 actors=actor_atlas, choose=choose_entity,
-                cell_size=lambda: tile_size, props=iso_props)
+                cell_size=lambda: tile_size, props=iso_props,
+                objects=object_atlas)
         else:
             entity_palette.show()
 
@@ -1335,6 +1349,7 @@ def launch(path):
     building_atlas = IsoBuildingAtlas(canvas)
     fortification_atlas = IsoFortificationAtlas(canvas)
     actor_atlas = IsoActorAtlas(canvas)
+    object_atlas = IsoObjectAtlas(canvas)
     xs,ys = ttk.Scrollbar(canvas_frame,orient='horizontal',command=canvas.xview),ttk.Scrollbar(canvas_frame,orient='vertical',command=canvas.yview)
     canvas.configure(xscrollcommand=xs.set,yscrollcommand=ys.set)
     xs.pack(side='bottom',fill='x'); ys.pack(side='right',fill='y'); canvas.pack(fill='both',expand=True)
@@ -1343,6 +1358,7 @@ def launch(path):
     canvas.bind('<ButtonRelease-1>',end_stroke)
     canvas.bind('<Motion>',paste_preview)
     canvas.bind('<Leave>',clear_placement_preview)
+    canvas.bind('<Escape>', lambda _e: cancel_passage_placement())
     canvas.bind('<Control-c>',lambda _e: copy_selection())
     canvas.bind('<Control-v>',lambda _e: paste_selection())
     canvas.bind('<Control-r>',lambda _e: rotate_or_flip('rotate_cw'))
