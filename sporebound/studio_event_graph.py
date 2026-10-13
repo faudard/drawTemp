@@ -7,6 +7,7 @@ from copy import deepcopy
 
 from . import event_composer, event_graph, event_context
 from .model import RuleError, require
+from .performance_trace import begin_ui, finish_ui
 
 
 class EventGraphStudio:
@@ -431,6 +432,7 @@ class EventGraphStudio:
         self.draw()
 
     def draw(self):
+        ui_started = begin_ui()
         graph = event_graph.build_event_graph(
             self.owner.doc().data, self.owner.mission(),
             max_nodes=750, max_events=200)
@@ -482,6 +484,11 @@ class EventGraphStudio:
             + (' Graphe limité : réduire le nombre de déclencheurs visibles.'
                if graph['truncated'] else
                ' Clic sur une condition ou une action pour modifier le bloc.'))
+        finish_ui('event_graph.draw', ui_started, canvas, counts={
+            'nodes': len(graph['nodes']), 'edges': len(graph['edges']),
+            'canvas_items': len(canvas.find_all()) if ui_started is not None else 0,
+            'truncated': graph['truncated'],
+        })
 
     def select_node(self, key):
         self.event_id.set(key[0])
