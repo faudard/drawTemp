@@ -1,0 +1,547 @@
+{
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "samples": [
+    {
+      "map": "village",
+      "samples_per_operation": 20,
+      "assets": false,
+      "modes": {
+        "full": {
+          "cold_ms": 24.181,
+          "operations": {
+            "noop": {
+              "p50_ms": 26.617,
+              "p95_ms": 27.959
+            },
+            "selection": {
+              "p50_ms": 25.032,
+              "p95_ms": 26.878
+            },
+            "paint": {
+              "p50_ms": 27.441,
+              "p95_ms": 31.021
+            },
+            "height": {
+              "p50_ms": 26.561,
+              "p95_ms": 35.355
+            },
+            "zoom": {
+              "p50_ms": 25.541,
+              "p95_ms": 26.786
+            },
+            "undo_redo": {
+              "p50_ms": 25.652,
+              "p95_ms": 28.882
+            },
+            "mass_selection": {
+              "p50_ms": 27.57,
+              "p95_ms": 29.948
+            }
+          },
+          "model_parse": {
+            "p50_ms": 3.085,
+            "p95_ms": 3.727
+          },
+          "python_current_bytes": 6424,
+          "python_peak_bytes": 154393,
+          "canvas_items": 1874
+        },
+        "retained": {
+          "cold_ms": 28.182,
+          "operations": {
+            "noop": {
+              "p50_ms": 13.193,
+              "p95_ms": 17.971,
+              "max_created_items": 0,
+              "max_updated_items": 0,
+              "cache_mode": "retained"
+            },
+            "selection": {
+              "p50_ms": 17.538,
+              "p95_ms": 22.353,
+              "max_created_items": 1,
+              "max_updated_items": 0,
+              "cache_mode": "retained"
+            },
+            "paint": {
+              "p50_ms": 20.102,
+              "p95_ms": 30.9,
+              "max_created_items": 10,
+              "max_updated_items": 1,
+              "cache_mode": "retained"
+            },
+            "height": {
+              "p50_ms": 20.83,
+              "p95_ms": 25.013,
+              "max_created_items": 2,
+              "max_updated_items": 11,
+              "cache_mode": "retained"
+            },
+            "zoom": {
+              "p50_ms": 23.927,
+              "p95_ms": 36.276,
+              "max_created_items": 0,
+              "max_updated_items": 1474,
+              "cache_mode": "retained"
+            },
+            "undo_redo": {
+              "p50_ms": 21.398,
+              "p95_ms": 24.765,
+              "max_created_items": 2,
+              "max_updated_items": 11,
+              "cache_mode": "retained"
+            },
+            "mass_selection": {
+              "p50_ms": 23.076,
+              "p95_ms": 34.062,
+              "max_created_items": 400,
+              "max_updated_items": 1,
+              "cache_mode": "retained"
+            }
+          },
+          "model_parse": {
+            "p50_ms": 3.165,
+            "p95_ms": 4.006
+          },
+          "python_current_bytes": 1135312,
+          "python_peak_bytes": 1213589,
+          "canvas_items": 1874
+        }
+      }
+    },
+    {
+      "map": "32",
+      "samples_per_operation": 20,
+      "assets": false,
+      "modes": {
+        "full": {
+          "cold_ms": 22.863,
+          "operations": {
+            "noop": {
+              "p50_ms": 21.713,
+              "p95_ms": 23.651
+            },
+            "selection": {
+              "p50_ms": 21.974,
+              "p95_ms": 28.936
+            },
+            "paint": {
+              "p50_ms": 24.781,
+              "p95_ms": 28.851
+            },
+            "height": {
+              "p50_ms": 24.496,
+              "p95_ms": 26.561
+            },
+            "zoom": {
+              "p50_ms": 25.106,
+              "p95_ms": 37.28
+            },
+            "undo_redo": {
+              "p50_ms": 23.791,
+              "p95_ms": 32.02
+            },
+            "mass_selection": {
+              "p50_ms": 25.42,
+              "p95_ms": 39.078
+            }
+          },
+          "model_parse": {
+            "p50_ms": 2.7,
+            "p95_ms": 3.386
+          },
+          "python_current_bytes": 43448,
+          "python_peak_bytes": 152305,
+          "canvas_items": 2323
+        },
+        "retained": {
+          "cold_ms": 29.559,
+          "operations": {
+            "noop": {
+              "p50_ms": 13.859,
+              "p95_ms": 19.229,
+              "max_created_items": 0,
+              "max_updated_items": 0,
+              "cache_mode": "retained"
+            },
+            "selection": {
+              "p50_ms": 17.386,
+              "p95_ms": 24.779,
+              "max_created_items": 1,
+              "max_updated_items": 0,
+              "cache_mode": "retained"
+            },
+            "paint": {
+              "p50_ms": 17.566,
+              "p95_ms": 49.052,
+              "max_created_items": 8,
+              "max_updated_items": 5,
+              "cache_mode": "retained"
+            },
+            "height": {
+              "p50_ms": 21.934,
+              "p95_ms": 34.258,
+              "max_created_items": 2,
+              "max_updated_items": 9,
+              "cache_mode": "retained"
+            },
+            "zoom": {
+              "p50_ms": 23.952,
+              "p95_ms": 44.65,
+              "max_created_items": 0,
+              "max_updated_items": 1923,
+              "cache_mode": "retained"
+            },
+            "undo_redo": {
+              "p50_ms": 19.979,
+              "p95_ms": 32.394,
+              "max_created_items": 2,
+              "max_updated_items": 9,
+              "cache_mode": "retained"
+            },
+            "mass_selection": {
+              "p50_ms": 23.385,
+              "p95_ms": 39.997,
+              "max_created_items": 400,
+              "max_updated_items": 1,
+              "cache_mode": "retained"
+            }
+          },
+          "model_parse": {
+            "p50_ms": 2.789,
+            "p95_ms": 3.718
+          },
+          "python_current_bytes": 1515549,
+          "python_peak_bytes": 1593378,
+          "canvas_items": 2323
+        }
+      }
+    },
+    {
+      "map": "64",
+      "samples_per_operation": 20,
+      "assets": false,
+      "modes": {
+        "full": {
+          "cold_ms": 70.825,
+          "operations": {
+            "noop": {
+              "p50_ms": 77.795,
+              "p95_ms": 93.238
+            },
+            "selection": {
+              "p50_ms": 74.521,
+              "p95_ms": 88.774
+            },
+            "paint": {
+              "p50_ms": 73.27,
+              "p95_ms": 94.571
+            },
+            "height": {
+              "p50_ms": 75.283,
+              "p95_ms": 102.348
+            },
+            "zoom": {
+              "p50_ms": 78.729,
+              "p95_ms": 108.764
+            },
+            "undo_redo": {
+              "p50_ms": 69.325,
+              "p95_ms": 70.694
+            },
+            "mass_selection": {
+              "p50_ms": 71.658,
+              "p95_ms": 81.944
+            }
+          },
+          "model_parse": {
+            "p50_ms": 4.722,
+            "p95_ms": 5.625
+          },
+          "python_current_bytes": 106656,
+          "python_peak_bytes": 722945,
+          "canvas_items": 7851
+        },
+        "retained": {
+          "cold_ms": 94.678,
+          "operations": {
+            "noop": {
+              "p50_ms": 49.215,
+              "p95_ms": 72.865,
+              "max_created_items": 0,
+              "max_updated_items": 0,
+              "cache_mode": "retained"
+            },
+            "selection": {
+              "p50_ms": 58.501,
+              "p95_ms": 79.336,
+              "max_created_items": 1,
+              "max_updated_items": 0,
+              "cache_mode": "retained"
+            },
+            "paint": {
+              "p50_ms": 65.756,
+              "p95_ms": 86.412,
+              "max_created_items": 8,
+              "max_updated_items": 5,
+              "cache_mode": "retained"
+            },
+            "height": {
+              "p50_ms": 73.406,
+              "p95_ms": 102.613,
+              "max_created_items": 2,
+              "max_updated_items": 9,
+              "cache_mode": "retained"
+            },
+            "zoom": {
+              "p50_ms": 87.632,
+              "p95_ms": 136.354,
+              "max_created_items": 0,
+              "max_updated_items": 7451,
+              "cache_mode": "retained"
+            },
+            "undo_redo": {
+              "p50_ms": 79.536,
+              "p95_ms": 136.405,
+              "max_created_items": 2,
+              "max_updated_items": 9,
+              "cache_mode": "retained"
+            },
+            "mass_selection": {
+              "p50_ms": 72.05,
+              "p95_ms": 144.577,
+              "max_created_items": 400,
+              "max_updated_items": 1,
+              "cache_mode": "retained"
+            }
+          },
+          "model_parse": {
+            "p50_ms": 5.628,
+            "p95_ms": 8.026
+          },
+          "python_current_bytes": 5949600,
+          "python_peak_bytes": 6248613,
+          "canvas_items": 7851
+        }
+      }
+    },
+    {
+      "map": "village",
+      "samples_per_operation": 20,
+      "assets": true,
+      "modes": {
+        "full": {
+          "cold_ms": 315.814,
+          "operations": {
+            "noop": {
+              "p50_ms": 45.201,
+              "p95_ms": 47.439
+            },
+            "selection": {
+              "p50_ms": 39.156,
+              "p95_ms": 48.65
+            },
+            "paint": {
+              "p50_ms": 43.06,
+              "p95_ms": 46.474
+            },
+            "height": {
+              "p50_ms": 44.833,
+              "p95_ms": 54.509
+            },
+            "zoom": {
+              "p50_ms": 44.071,
+              "p95_ms": 110.662
+            },
+            "undo_redo": {
+              "p50_ms": 37.01,
+              "p95_ms": 39.834
+            },
+            "mass_selection": {
+              "p50_ms": 37.829,
+              "p95_ms": 41.52
+            }
+          },
+          "model_parse": {
+            "p50_ms": 3.258,
+            "p95_ms": 3.918
+          },
+          "python_current_bytes": 6304,
+          "python_peak_bytes": 154273,
+          "canvas_items": 2260
+        },
+        "retained": {
+          "cold_ms": 283.734,
+          "operations": {
+            "noop": {
+              "p50_ms": 15.826,
+              "p95_ms": 21.44,
+              "max_created_items": 0,
+              "max_updated_items": 0,
+              "cache_mode": "retained"
+            },
+            "selection": {
+              "p50_ms": 32.219,
+              "p95_ms": 42.507,
+              "max_created_items": 1,
+              "max_updated_items": 0,
+              "cache_mode": "retained"
+            },
+            "paint": {
+              "p50_ms": 40.301,
+              "p95_ms": 51.091,
+              "max_created_items": 10,
+              "max_updated_items": 2,
+              "cache_mode": "retained"
+            },
+            "height": {
+              "p50_ms": 38.283,
+              "p95_ms": 61.285,
+              "max_created_items": 2,
+              "max_updated_items": 12,
+              "cache_mode": "retained"
+            },
+            "zoom": {
+              "p50_ms": 39.052,
+              "p95_ms": 113.723,
+              "max_created_items": 0,
+              "max_updated_items": 1860,
+              "cache_mode": "retained"
+            },
+            "undo_redo": {
+              "p50_ms": 32.496,
+              "p95_ms": 49.373,
+              "max_created_items": 2,
+              "max_updated_items": 12,
+              "cache_mode": "retained"
+            },
+            "mass_selection": {
+              "p50_ms": 34.12,
+              "p95_ms": 51.509,
+              "max_created_items": 400,
+              "max_updated_items": 1,
+              "cache_mode": "retained"
+            }
+          },
+          "model_parse": {
+            "p50_ms": 3.433,
+            "p95_ms": 4.281
+          },
+          "python_current_bytes": 1386632,
+          "python_peak_bytes": 1465437,
+          "canvas_items": 2260
+        }
+      }
+    },
+    {
+      "map": "128",
+      "samples_per_operation": 20,
+      "assets": false,
+      "modes": {
+        "full": {
+          "cold_ms": 274.909,
+          "operations": {
+            "noop": {
+              "p50_ms": 281.105,
+              "p95_ms": 327.638
+            },
+            "selection": {
+              "p50_ms": 295.069,
+              "p95_ms": 366.075
+            },
+            "paint": {
+              "p50_ms": 279.189,
+              "p95_ms": 302.506
+            },
+            "height": {
+              "p50_ms": 282.011,
+              "p95_ms": 355.026
+            },
+            "zoom": {
+              "p50_ms": 292.045,
+              "p95_ms": 381.314
+            },
+            "undo_redo": {
+              "p50_ms": 292.046,
+              "p95_ms": 370.623
+            },
+            "mass_selection": {
+              "p50_ms": 277.89,
+              "p95_ms": 354.869
+            }
+          },
+          "model_parse": {
+            "p50_ms": 12.814,
+            "p95_ms": 17.119
+          },
+          "python_current_bytes": 366424,
+          "python_peak_bytes": 3162985,
+          "canvas_items": 29891
+        },
+        "retained": {
+          "cold_ms": 269.525,
+          "operations": {
+            "noop": {
+              "p50_ms": 256.062,
+              "p95_ms": 311.905,
+              "cache_mode": "geometry",
+              "max_created_items": null,
+              "max_updated_items": 0
+            },
+            "selection": {
+              "p50_ms": 258.675,
+              "p95_ms": 354.777,
+              "cache_mode": "geometry",
+              "max_created_items": null,
+              "max_updated_items": 0
+            },
+            "paint": {
+              "p50_ms": 261.192,
+              "p95_ms": 304.445,
+              "cache_mode": "geometry",
+              "max_created_items": null,
+              "max_updated_items": 0
+            },
+            "height": {
+              "p50_ms": 280.861,
+              "p95_ms": 290.506,
+              "cache_mode": "geometry",
+              "max_created_items": null,
+              "max_updated_items": 0
+            },
+            "zoom": {
+              "p50_ms": 272.949,
+              "p95_ms": 338.116,
+              "cache_mode": "geometry",
+              "max_created_items": null,
+              "max_updated_items": 0
+            },
+            "undo_redo": {
+              "p50_ms": 275.597,
+              "p95_ms": 359.495,
+              "cache_mode": "geometry",
+              "max_created_items": null,
+              "max_updated_items": 0
+            },
+            "mass_selection": {
+              "p50_ms": 266.512,
+              "p95_ms": 332.653,
+              "cache_mode": "geometry",
+              "max_created_items": null,
+              "max_updated_items": 0
+            }
+          },
+          "model_parse": {
+            "p50_ms": 13.7,
+            "p95_ms": 25.636
+          },
+          "python_current_bytes": 2903000,
+          "python_peak_bytes": 2910801,
+          "canvas_items": 29891
+        }
+      }
+    }
+  ],
+  "note": "Local Tk/Xvfb observations, 20 samples per operation. Combined runs; not a universal latency budget. Full Studio refresh and native Tcl memory excluded."
+}

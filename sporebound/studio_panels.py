@@ -10,12 +10,13 @@ from . import authoring
 from .game_project import GameProject, load_slot, save_slot
 from .model import Content, RuleError
 from .tactical_rpg3 import authored_rules_for_document
+from .studio_transaction import StudioHistory, StudioTransactionStore
 
 
 class StudioPanels:
     def __init__(self, notebook, tk, ttk, dialogs, *, doc, content_path,
                  mission, selection, design_change, play_campaign, status, mission_change=None,
-                 select_mission=None):
+                 select_mission=None, on_project_saved=None, set_active_mission=None):
         self.tk, self.ttk, self.dialogs = tk, ttk, dialogs
         self.notebook = notebook
         self.doc, self.content_path = doc, content_path
@@ -23,10 +24,14 @@ class StudioPanels:
         self.design_change, self.play_campaign = design_change, play_campaign
         self.mission_change = mission_change or self.refresh
         self.select_mission = select_mission or (lambda _mid: None)
+        self.set_active_mission = set_active_mission or self.select_mission
         self.status = status
+        self.on_project_saved = on_project_saved or (lambda _path: None)
         self.project = None
         self.project_path = None
         self.project_saved = ''
+        self.history = None
+        self._history_busy = 0
         self.session = None
         self.session_campaign = ''
         from .studio_workspace import ProjectWorkspaceTab
@@ -62,10 +67,59 @@ class StudioPanels:
         return var, widget
 
     def _run(self, operation):
+        # Nested editor commands publish one coordinated snapshot after the
+        # complete user action, not one snapshot for each internal sub-edit.
+        self._history_busy += 1
         try:
             operation()
-        except (ValueError, KeyError, TypeError, OSError, StopIteration) as exc:
+        except (RuleError, ValueError, KeyError, TypeError, OSError, StopIteration) as exc:
             self.dialogs.showerror('Édition refusée', str(exc))
+        finally:
+            self._history_busy -= 1
+            if self._history_busy == 0:
+                self.capture_history()
+
+    def capture_history(self):
+        if self._history_busy == 0 and self.history is not None and self.project is not None:
+            return self.history.record(self.doc().data, self.project)
+        return False
+
+    def _restore_history(self, redo=False):
+        document, project = (self.history.redo() if redo else self.history.undo())
+        current = self.doc()
+        current.data = document
+        # Local histories are no longer valid after a cross-resource restore.
+        current.undo_stack.clear()
+        current.redo_stack.clear()
+        self.project = project
+        # An undo may delete the mission selected in the canvas. Restore a
+        # valid mission before refreshing any dependent Studio panel.
+        if self.mission() not in {m['id'] for m in document['missions']}:
+            self.set_active_mission(document['missions'][0]['id'])
+        # Rebuild project-dependent models and preview registries. Simply
+        # changing the owner.project pointer leaves stale storyboard/asset
+        # caches visible after a global undo.
+        self.story_editor.reset_project()
+        self.cinematic_studio.reset_project()
+        self.audio_studio.stop()
+        self.title.set(project.title)
+        self.subtitle.set(project.subtitle)
+        self.language.set(project.options['language'])
+        self.music.set(str(project.options['music_volume']))
+        self.effects.set(str(project.options['effects_volume']))
+        self.slots.set(str(project.save_slots))
+        self.fullscreen.set(project.options['fullscreen'])
+        if project.campaign(self.campaign_id.get()) is None:
+            self.campaign_id.set(project.campaigns[0]['id'])
+        self._show_campaign()
+        self._last_mission_signature = None
+        self.project_status.config(text='Historique Studio restauré (contenu + projet).')
+
+    def undo_global(self):
+        self._restore_history()
+
+    def redo_global(self):
+        self._restore_history(redo=True)
 
     def _change(self, operation):
         self.design_change(lambda: self.doc().replace(operation(self.doc().data, self.mission())))
@@ -369,6 +423,10 @@ class StudioPanels:
         self.project=(GameProject.load(self.project_path,content) if self.project_path.exists()
                       else GameProject.default(content))
         self.project_saved=json.dumps(self.project.to_dict(),sort_keys=True)
+        if self.history is None:
+            self.history = StudioHistory(self.doc().data, self.project)
+        else:
+            self.history.reset(self.doc().data, self.project)
         self.story_editor.reset_project()
         self.cinematic_studio.reset_project()
         self.audio_studio.stop()
@@ -442,6 +500,8 @@ class StudioPanels:
         self._show_campaign();self.refresh()
 
     def save_project(self):
+        if StudioTransactionStore(self.content_path()).pending:
+            raise RuleError('Récupérer la sauvegarde Studio interrompue avant toute écriture')
         self.apply_project()
         filename=self.dialogs.asksaveasfilename(initialfile=self.project_path.name,
             defaultextension='.json',filetypes=[('Projet de jeu JSON','*.json')])
@@ -449,6 +509,7 @@ class StudioPanels:
             self.project.save(filename,self._content())
             self.project_path=Path(filename)
             self.project_saved=json.dumps(self.project.to_dict(),sort_keys=True)
+            self.on_project_saved(self.project_path)
             self.project_status.config(text=f'Projet enregistré : {filename}')
 
     def new_game(self):

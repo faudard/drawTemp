@@ -27,7 +27,7 @@ instantané. Vérification GitHub effectuée sur `master` 8d5867b :
 | [#83](https://github.com/faudard/drawTemp/pull/83) — 3.7.16B survol PNG | Ouverte Draft ; CI testée verte sur 42bf34e | P0 | S, revue visuelle |
 | **3.7.17A — scène village Valcroix** | **Implémentée sur branche, gate à vérifier en CI** | **P0** | M ; [guide et captures](REFERENCE_FORTIFIED_VILLAGE_3717A.md) |
 | 3.7.17B — bâtiments éditables persistants | À faire, risque compatibilité Content | P0 | L après 17A |
-| 3.7.18D — budget graphique et profondeur | À faire après #82 | P0 | M |
+| 3.7.18D — budget graphique et profondeur | Cache Studio et profiling livrés ; budgets à consolider ([mesures](STUDIO_RENDER_PROFILING_3718D.md)) | P0 | M |
 | 3.7.19 — entités et objets interactifs, édition guidée | Partiel | P1 | M |
 | 3.7.21 — ergonomie/favoris/inspecteur | Partiel | P1 | L |
 | 3.7.20 — intérieurs et niveaux superposés | Partiel/absent ; RFC gameplay préalable | P1 | XL |

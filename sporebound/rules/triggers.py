@@ -11,6 +11,7 @@ class ValidationContext:
     unit_ids: set
     rules: object
     archetypes: dict | None = None
+    object_ids: set | None = None
 
     def integer(self, value, low, high):
         require(type(value) is int and low <= value <= high, f'Expected integer {low}..{high}')
@@ -62,6 +63,19 @@ def validate_hp_below(context, trigger):
     context.integer(trigger['percent'], 1, 99)
 
 
+def interact_condition(battle, trigger):
+    """Match interaction events produced by the battle command handler."""
+    return any(row['kind'] == 'interact' and row.get('object') == trigger['object']
+               for row in battle.events)
+
+
+def validate_interact(context, trigger):
+    require(isinstance(trigger.get('object'), str) and
+            context.object_ids is not None and
+            trigger['object'] in context.object_ids,
+            'Unknown interactive object for trigger')
+
+
 def default_trigger_conditions():
     return Registry((
         ('tick', TriggerConditionRule(lambda b, t: b.tick >= t['value'],
@@ -72,6 +86,7 @@ def default_trigger_conditions():
         ('hp_below', TriggerConditionRule(hp_below, validate_hp_below)),
         ('defeated', TriggerConditionRule(lambda b, t: not b.unit(t['unit']).alive,
                                          lambda c, t: c.unit(t['unit']))),
+        ('interact', TriggerConditionRule(interact_condition, validate_interact)),
     ))
 
 
