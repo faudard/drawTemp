@@ -404,7 +404,11 @@ class ProjectWorkspaceTab:
     def _preview_map_reference(self, key):
         """Reveal selection in the live map without stealing the Workspace tab."""
         mid, cell = navigation_target(self.owner.doc().data, key)
-        if mid is not None and cell is not None:
+        if mid is not None and key.startswith('editor_group:'):
+            gid = key.split('/', 1)[1]
+            self.owner.focus_map_cell(
+                mid, cell or (0, 0), show_map=False, group_id=gid)
+        elif mid is not None and cell is not None:
             self.owner.focus_map_cell(mid, cell, show_map=False)
 
     def sync_map_selection(self, mission_id, cell, *, cells=(), group_id=None,
@@ -494,10 +498,8 @@ class ProjectWorkspaceTab:
         elif node.kind == 'editor_group':
             mid, gid = node.id.split('/', 1)
             snapshot = inspect_persistent_group(self.owner.doc().data, mid, gid)
-            if snapshot.cell:
-                self.owner.focus_map_cell(mid, snapshot.cell)
-            else:
-                self.owner.select_mission(mid)
+            self.owner.focus_map_cell(mid, snapshot.cell or (0, 0),
+                                      group_id=gid)
             self._show_tab('Carte et combat')
         elif node.kind == 'mission':
             self.owner.select_mission(node.id)
