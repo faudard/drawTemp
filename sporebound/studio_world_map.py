@@ -562,13 +562,16 @@ class WorldMapStudio:
         if self.comparison is None:
             return
         name = self.comparison_selected.get()
-        if name not in self.comparison.variants:
-            self._set_comparison_detail("")
-            return
-        detail = self.comparison.detail(name)
-        self._set_comparison_detail(
-            "\n".join([name, *detail["log"],
-                      "— Conséquences —", *detail["changes"]]))
+        lines = []
+        if name in self.comparison.variants:
+            detail = self.comparison.detail(name)
+            lines.extend([name, *detail["log"],
+                          "— Conséquences —", *detail["changes"]])
+        if self.comparison.failures:
+            lines.append("— Choix refusés par le moteur —")
+            lines.extend(row["choice"] + " : " + row["reason"]
+                         for row in self.comparison.failures)
+        self._set_comparison_detail("\n".join(lines))
     def _scene(self, scene_id):
         return next((scene for scene in self._project().story.get("scenes", [])
                      if scene["id"] == scene_id), None)
