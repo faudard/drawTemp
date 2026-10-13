@@ -229,7 +229,10 @@ class ProjectWorkspaceTab:
             target = map_resource_target(node.key, self.owner.doc().data)
             if target is not None:
                 mid, cell, _kind, _eid = target
-                snapshot = inspect_map(self.owner.doc().data, mid, cell)
+                snapshot = inspect_map(
+                    self.owner.doc().data, mid, cell,
+                    preferred_kind='actor' if node.kind == 'map_actor' else 'object',
+                    preferred_id=node.id.split('/', 1)[1])
         self.heading.config(text=(snapshot.title + ' [' + node.kind + ']')
                             if snapshot else 'Sélectionner une ressource')
         self.summary.config(text=snapshot.detail if snapshot else
