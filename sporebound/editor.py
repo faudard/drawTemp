@@ -57,6 +57,8 @@ from .group_prefabs import (capture_group_prefab, load_group_prefab,
                             save_group_prefab, list_group_prefabs,
                             prefab_file_slug, prefab_display_cells)
 from .group_prefab_transform import rotate_group_prefab
+from .quarter_generator import (STYLES as QUARTER_STYLES, SIZES as QUARTER_SIZES,
+                                suggest_quarters, preview_quarter)
 from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
@@ -301,6 +303,13 @@ def launch(path):
     editor_group_dy = tk.IntVar(value=0)
     group_prefab_var = tk.StringVar(value='')
     group_prefab_rotation_var = tk.StringVar(value='0°')
+    quarter_style_var = tk.StringVar(value='Village')
+    quarter_size_var = tk.StringVar(value='16 × 14')
+    quarter_seed_var = tk.IntVar(value=1)
+    quarter_variant_var = tk.StringVar(value='Variante 1')
+    quarter_status_var = tk.StringVar(value='Choisir un style puis proposer trois variantes.')
+    quarter_choices = ()
+    quarter_pending = None
     group_prefab_preview_key = None
     group_prefab_cache_key = None
     group_prefab_cache_value = None
@@ -1103,12 +1112,12 @@ def launch(path):
         group_prefab_var.set(target.name)
         status_var.set('Préfab ajouté à la bibliothèque : '+target.name)
 
-    def draw_prefab_thumbnail(_event=None):
-        # A lightweight visual catalogue uses the *same* local prefab cells,
-        # not a second tile/structure representation or an art atlas.
+    def draw_prefab_thumbnail(_event=None, *, prefab=None):
+        # The library and generated alternatives share the same visual
+        # preview; no second model or renderer for generated buildings.
         prefab_thumbnail.delete('all')
         try:
-            prefab = _chosen_prefab()
+            prefab = _chosen_prefab() if prefab is None else prefab
         except (RuleError, OSError, ValueError) as exc:
             prefab_thumbnail.create_text(
                 8, 55, text=str(exc)[:40], anchor='w', fill='#a33c33')
@@ -1217,6 +1226,106 @@ def launch(path):
         tool_var.set('Préfab')
         status_var.set('Préfab actif : survoler la carte, clic pour insérer ; '
                        'choisir la rotation 0/90/180/270°.')
+
+    def _quarter_choice():
+        if not quarter_choices:
+            raise RuleError('Générer trois propositions avant sélection.')
+        index = {'Variante 1': 0, 'Variante 2': 1,
+                 'Variante 3': 2}.get(quarter_variant_var.get())
+        if index is None:
+            raise RuleError('Choisir une variante existante.')
+        return quarter_choices[index]
+
+    def refresh_quarter_thumbnail(_event=None):
+        if quarter_choices:
+            choice = _quarter_choice()
+            draw_prefab_thumbnail(prefab=choice)
+            quarter_status_var.set(
+                f'{choice["name"]} : {len(choice["structures"])} bâtiments, '
+                f'{len(choice["tiles"])} cases, 1 coffre interactif.')
+
+    @guarded
+    def propose_quarters():
+        nonlocal quarter_choices, quarter_pending
+        if battle is not None or source_pending():
+            raise RuleError('Revenir dans le Studio et appliquer le JSON.')
+        text = quarter_size_var.get()
+        sizes = {f'{w} × {h}': (w, h) for w, h in QUARTER_SIZES}
+        if text not in sizes:
+            raise RuleError('Taille de quartier non prise en charge.')
+        quarter_choices = suggest_quarters(
+            style=quarter_style_var.get(), size=sizes[text],
+            seed=quarter_seed_var.get())
+        quarter_pending = None
+        quarter_variant_var.set('Variante 1')
+        canvas.delete('quarter_generation_preview')
+        refresh_quarter_thumbnail()
+        status_var.set('Trois plans reproductibles proposés, aucun changement appliqué.')
+
+    @guarded
+    def preview_quarter_proposal():
+        nonlocal quarter_pending
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON.')
+        prefab = _quarter_choice()
+        anchor = tuple(selected_cell)
+        quarter_pending = None
+        canvas.delete('quarter_generation_preview')
+        try:
+            proposed, report = preview_quarter(doc.data, mission_var.get(),
+                                               prefab, anchor)
+            ensure_unlocked(doc.data, proposed, map_view_data)
+            color = '#36a16c'
+            quarter_pending = (mission_var.get(), anchor, id(doc.data),
+                               quarter_variant_var.get())
+            description = (
+                f'+{report["structures"]} bâtiments · +{report["objects"]} objet · '
+                f'+{report["groups"]} groupes · {report["cells"]} cases modifiées')
+        except RuleError as exc:
+            color = '#e05252'
+            description = 'Placement refusé : ' + str(exc)
+        mission = _group_tree_mission()
+        width, height = mission['board']['width'], mission['board']['height']
+        inside = (p for p in sorted(prefab_display_cells(prefab, anchor))
+                  if 0 <= p[0] < width and 0 <= p[1] < height)
+        preview_cells(tuple(islice(inside, 512)),
+                      tag='quarter_generation_preview', color=color)
+        quarter_status_var.set(description)
+        status_var.set(description)
+
+    @guarded
+    def confirm_quarter_proposal():
+        nonlocal quarter_pending
+        prefab = _quarter_choice()
+        key = (mission_var.get(), tuple(selected_cell), id(doc.data),
+               quarter_variant_var.get())
+        if quarter_pending != key:
+            raise RuleError('Prévisualiser cette variante à cette position avant validation.')
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le combat et appliquer le JSON.')
+        # Document.replace and editor locks are still authoritative. Reject a
+        # stale or now-invalid plan instead of installing a preview snapshot.
+        command = GroupPrefabPlaceCommand(prefab, tuple(selected_cell))
+        design_change(lambda: editing_context.execute(command, publish=False))
+        quarter_pending = None
+        canvas.delete('quarter_generation_preview')
+        quarter_status_var.set('Quartier inséré avec une seule opération Undo.')
+        status_var.set('Quartier inséré : ouvrir ses groupes pour modifier '
+                       'routes, bâtiments, objets et décors.')
+
+    @guarded
+    def save_quarter_as_prefab():
+        prefab = _quarter_choice()
+        output = _prefab_library() / prefab_file_slug(prefab['name'])
+        overwrite = output.exists() and messagebox.askyesno(
+            'Remplacer le modèle', 'Remplacer '+output.name+' ?')
+        if output.exists() and not overwrite:
+            return
+        save_group_prefab(prefab, output, overwrite=overwrite)
+        refresh_group_prefabs()
+        group_prefab_var.set(output.name)
+        draw_prefab_thumbnail()
+        quarter_status_var.set('Modèle conservé dans la bibliothèque : '+output.name)
 
     def _group_tree_mission():
         return next(m for m in doc.data['missions']
@@ -3234,6 +3343,42 @@ def launch(path):
               ).pack(side='left', padx=3)
     refresh_group_prefabs()
     draw_prefab_thumbnail()
+    quarter_frame = ttk.LabelFrame(side_panel, text='GÉNÉRATION ASSISTÉE · QUARTIER')
+    quarter_frame.pack(fill='x', padx=5, pady=4)
+    quarter_row = ttk.Frame(quarter_frame)
+    quarter_row.pack(fill='x')
+    ttk.Label(quarter_row, text='Style').pack(side='left', padx=2)
+    ttk.Combobox(quarter_row, textvariable=quarter_style_var, state='readonly',
+                 width=11, values=QUARTER_STYLES).pack(side='left', padx=2)
+    ttk.Label(quarter_row, text='Emprise').pack(side='left', padx=2)
+    ttk.Combobox(quarter_row, textvariable=quarter_size_var, state='readonly',
+                 width=9, values=tuple(f'{w} × {h}' for w, h in QUARTER_SIZES)
+                 ).pack(side='left', padx=2)
+    quarter_row2 = ttk.Frame(quarter_frame)
+    quarter_row2.pack(fill='x', pady=2)
+    ttk.Label(quarter_row2, text='Seed').pack(side='left', padx=2)
+    ttk.Spinbox(quarter_row2, from_=0, to=999998,
+                textvariable=quarter_seed_var, width=7).pack(side='left', padx=2)
+    ttk.Button(quarter_row2, text='Générer 3 variantes',
+               command=propose_quarters).pack(side='left', padx=2)
+    quarter_row3 = ttk.Frame(quarter_frame)
+    quarter_row3.pack(fill='x')
+    quarter_box = ttk.Combobox(
+        quarter_row3, textvariable=quarter_variant_var,
+        values=('Variante 1', 'Variante 2', 'Variante 3'),
+        state='readonly', width=13)
+    quarter_box.pack(side='left', padx=2)
+    quarter_box.bind('<<ComboboxSelected>>', refresh_quarter_thumbnail)
+    ttk.Button(quarter_row3, text='Aperçu des différences',
+               command=preview_quarter_proposal).pack(side='left', padx=2)
+    quarter_row4 = ttk.Frame(quarter_frame)
+    quarter_row4.pack(fill='x')
+    ttk.Button(quarter_row4, text='Confirmer placement',
+               command=confirm_quarter_proposal).pack(side='left', padx=2)
+    ttk.Button(quarter_row4, text='Enregistrer comme préfab',
+               command=save_quarter_as_prefab).pack(side='left', padx=2)
+    ttk.Label(quarter_frame, textvariable=quarter_status_var,
+              wraplength=278).pack(anchor='w', padx=3, pady=3)
     inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
     inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
     actor_focus = ttk.Button(side_panel, text='Modifier le personnage sélectionné',
