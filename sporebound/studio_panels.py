@@ -680,6 +680,16 @@ class StudioPanels:
             window,text=f"Langue : {self.project.options['language']} | Musique : {self.project.options['music_volume']}%").pack()).pack(pady=5)
         self.ttk.Button(window,text='Quitter l’aperçu',command=window.destroy).pack(pady=7)
 
+    def refresh_selection(self):
+        """Update only map-context controls; no Studio-wide editor rebuild."""
+        if self.project is None:
+            return
+        chosen = next((m for m in self.doc().data['missions']
+                       if m['id'] == self.mission()), None)
+        if chosen is not None:
+            self.cell_label.config(
+                text=f'Case choisie : {self.selection()} | Mission : {chosen["name"]}')
+
     def refresh(self):
         if self.project is None:
             return
