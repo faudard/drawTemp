@@ -83,6 +83,8 @@ class VisualPrefabPalette:
             child.destroy()
         visible = filter_prefab_cards(self.cards, self.query.get(),
                                      self.category.get())
+        total = len(visible)
+        visible = visible[:80]
         if not visible:
             self.ttk.Label(self.grid,
                            text='Aucun préfab dans cette catégorie.'
@@ -130,6 +132,12 @@ class VisualPrefabPalette:
                             lambda e, name=card.filename: self._press(e, name))
                 widget.bind('<B1-Motion>', self._motion)
                 widget.bind('<ButtonRelease-1>', self._release)
+        if total > len(visible):
+            self.ttk.Label(
+                self.grid,
+                text=f'{total - len(visible)} autres préfabs : affiner la recherche',
+            ).grid(row=(len(visible)+1)//2, column=0,
+                   columnspan=2, sticky='w', padx=5, pady=5)
 
     def _press(self, event, filename):
         card = self.entries.get(filename)
