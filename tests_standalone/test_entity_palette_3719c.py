@@ -176,6 +176,42 @@ class EntityPaletteTests(TestCase):
 @skipUnless(os.environ.get('SPOREBOUND_GUI_SMOKE') == '1',
             'Requires Tk display or Xvfb')
 class EntityPaletteGUITests(TestCase):
+    def test_real_isometric_object_pngs_at_three_zoom_levels(self):
+        import tkinter as tk
+        from sporebound.iso_map import render_isometric
+        from sporebound.iso_object_atlas import IsoObjectAtlas
+        raw = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
+                                'object_atlas_gui', 'Objects', 20, 20)
+        for kind, cell, extra in (
+            ('door', (6, 6), {}),
+            ('switch', (7, 6), {'link': 'door_1'}),
+            ('chest', (8, 6), {}),
+            ('passage', (9, 6), {'destination': (11, 6)}),
+            ('defense', (10, 6), {}),
+        ):
+            raw = place_entity(raw, 'object_atlas_gui',
+                               'object:' + kind, cell, **extra)
+        root = tk.Tk()
+        try:
+            canvas = tk.Canvas(root, width=900, height=650)
+            canvas.pack()
+            root.update()
+            atlas = IsoObjectAtlas(canvas)
+            for zoom in (24, 54, 96):
+                mission = Content.from_dict(raw).missions['object_atlas_gui']
+                render_isometric(
+                    canvas, mission.board, mission, mission.units,
+                    cell_size=zoom, layers={'Objets': True, 'Terrain': True},
+                    selected_cell=(0, 0), selected_tiles=(),
+                    object_atlas=atlas)
+                self.assertEqual(len(canvas.find_withtag('iso_object_sprite')), 5)
+                for kind in ('door', 'switch', 'chest', 'passage', 'defense'):
+                    image = atlas.sprite(kind, zoom)
+                    self.assertIsNotNone(image)
+                    self.assertIs(image, atlas.sprite(kind, zoom))
+        finally:
+            root.destroy()
+
     def test_actor_pose_preview_and_link_controls(self):
         import tkinter as tk
         from sporebound.iso_actor_atlas import IsoActorAtlas
