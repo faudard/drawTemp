@@ -914,6 +914,20 @@ def launch(path):
         canvas.yview_moveto(max(0.0, min(1.0, event.y / 184 - 0.2)))
         refresh()
 
+    @guarded
+    def open_selected_entity(kind):
+        if battle is not None:
+            raise RuleError('Revenir en mode Éditer pour ouvrir la fiche.')
+        mission = next(m for m in doc.data['missions']
+                       if m['id'] == mission_var.get())
+        entries = (mission['units'] if kind == 'unit'
+                   else mission.get('objects', []))
+        chosen = next((item for item in entries
+                       if tuple(item['pos']) == selected_cell), None)
+        if chosen is None:
+            raise RuleError('Aucun élément de ce type sur la case.')
+        studio.focus_map_entity(kind, chosen['id'])
+
     def refresh(*args):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         if campaign_battle and battle is not None and battle.result in ('victory', 'defeat'):
@@ -1035,6 +1049,8 @@ def launch(path):
                      f'PV {actor.hp}/{actor.max_hp} • CT {actor.ct}\n')
         for obj in selected_objects:
             text += f'Objet {obj["id"]} : {obj["kind"]}\n'
+        actor_focus.configure(state='normal' if selected_units and not battle else 'disabled')
+        object_focus.configure(state='normal' if selected_objects and not battle else 'disabled')
         if inspected_tile is not None:
             text += (f'Surface : {inspected_tile.surface} | Décor : '
                      f'{inspected_tile.feature or "aucun"} | Niveau : {inspected_tile.height}\n')
@@ -1065,10 +1081,15 @@ def launch(path):
                     except RuleError as exc:
                         text += '\nCible : '+str(exc)
             text += '\n\nUnités :\n'+'\n'.join(f'{u.name}: {u.hp} PV, {u.mp} MP, CT {u.ct}\n  {u.statuses}' for u in units)
+            journal.configure(state='normal')
             journal.delete('1.0','end')
             journal.insert('1.0','\n'.join(json.dumps(e,ensure_ascii=False) for e in battle.events[-100:]))
             journal.see('end')
+            journal.configure(state='disabled')
         else:
+            journal.configure(state='normal')
+            journal.delete('1.0', 'end')
+            journal.configure(state='disabled')
             text += ('\nCarte : sélectionner une zone, Ctrl+C, choisir le point '
                      'd’ancrage, Ctrl+V ou l’outil Collage.'
                      f'\nCases sélectionnées : {len(selected_tiles)}'
@@ -1083,8 +1104,10 @@ def launch(path):
                      '\nPipette sol/décor : cliquer une case pour reprendre son pinceau.'
                      '\nCouches : visibilité d’édition seulement ; règles inchangées.'
                      '\nDonnées tactiques avancées : onglet JSON.')
+        inspector.configure(state='normal')
         inspector.delete('1.0','end')
         inspector.insert('1.0', text)
+        inspector.configure(state='disabled')
         draw_minimap(board, mission, units)
         if studio is not None:
             studio.refresh()
@@ -1305,9 +1328,15 @@ def launch(path):
                             background='#f5f5f5',highlightthickness=1)
     mini_canvas.pack(anchor='w',padx=3,pady=3)
     mini_canvas.bind('<Button-1>', minimap_navigate)
-    inspector = tk.Text(side_panel,width=37,wrap='word')
+    inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
     inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
-    ttk.Button(side_panel, text='Éditer personnages et objets',
+    actor_focus = ttk.Button(side_panel, text='Modifier le personnage sélectionné',
+                             command=lambda: open_selected_entity('unit'))
+    actor_focus.pack(fill='x', padx=6, pady=2)
+    object_focus = ttk.Button(side_panel, text='Modifier l’objet sélectionné',
+                              command=lambda: open_selected_entity('object'))
+    object_focus.pack(fill='x', padx=6, pady=2)
+    ttk.Button(side_panel, text='Personnages et événements',
                command=lambda: studio.workspace._show_tab(
                    'Personnages et événements')).pack(fill='x', padx=6, pady=3)
     ttk.Button(side_panel, text='Explorer dans le Workspace',
