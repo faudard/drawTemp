@@ -32,8 +32,8 @@ class EntityPaletteTests(TestCase):
         units = self.row()['units']
         copy = units[-1]
         self.assertEqual(copy['id'], 'actor_1')
-        self.assertEqual(copy['pos'], [8, 8])
-        self.assertEqual(copy['facing'], [0, -1])
+        self.assertEqual(tuple(copy['pos']), (8, 8))
+        self.assertEqual(tuple(copy['facing']), (0, -1))
         self.assertEqual(copy['team'], source['team'])
         self.assertEqual(copy['weapon'], source['weapon'])
         self.assertEqual(source['pos'], units[0]['pos'])
@@ -58,7 +58,7 @@ class EntityPaletteTests(TestCase):
         self.assertEqual([o['id'] for o in objects],
                          ['door_1', 'door_2', 'switch_1', 'passage_1'])
         self.assertEqual(objects[2]['link'], 'door_1')
-        self.assertEqual(objects[3]['destination'], [4, 4])
+        self.assertEqual(tuple(objects[3]['destination']), (4, 4))
         reopened = Content.from_dict(self.doc.data).to_dict()
         self.assertEqual(next(m for m in reopened['missions']
                               if m['id'] == self.MID)['objects'], objects)
