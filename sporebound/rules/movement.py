@@ -9,7 +9,10 @@ def reachable(battle, unit: Unit | None = None) -> dict[Cell, tuple[int, list[Ce
     u = unit or battle.active
     if not u or not u.alive or u.moved or battle.status_blocks(u, "move"):
         return {}
-    blocked = set().union(*(o.occupied_cells() for o in battle.units if o.alive and o.id != u.id))
+    level = battle.unit_levels.get(u.id, 0)
+    blocked = set().union(*(o.occupied_cells() for o in battle.units
+                            if o.alive and o.id != u.id
+                            and battle.unit_levels.get(o.id, 0) == level))
     def free(anchor):
         cells = u.occupied_cells(anchor)
         return all(battle.board.contains(c) and c not in blocked and not battle.board.tile(c).blocked
@@ -75,6 +78,7 @@ def engagement_range(battle, u: Unit) -> int:
 
 def engaged_by(battle, u: Unit) -> list[Unit]:
     return [e for e in battle.units if e.alive and e.team != u.team
+            and battle.unit_levels.get(e.id, 0) == battle.unit_levels.get(u.id, 0)
             and battle.engagement_range(e) > 0
             and min(distance(a, b) for a in e.occupied_cells() for b in u.occupied_cells()) <= battle.engagement_range(e)
             and battle.line_of_sight(e.pos, u.pos)]
@@ -83,7 +87,8 @@ def engaged_by(battle, u: Unit) -> list[Unit]:
 def engagement_threats(battle, cell: Cell, moving_team: str) -> list[dict]:
     result = []
     for enemy in battle.units:
-        if not enemy.alive or enemy.team == moving_team:
+        if (not enemy.alive or enemy.team == moving_team
+                or battle.unit_levels.get(enemy.id, 0) != 0):
             continue
         radius = battle.engagement_range(enemy)
         if radius and min(distance(a, cell) for a in enemy.occupied_cells()) <= radius and battle.line_of_sight(enemy.pos, cell):
@@ -181,7 +186,9 @@ def _move(battle, u: Unit, cell: Cell):
         pursuers = []
         for enemy in battle.units:
             radius = battle.engagement_range(enemy)
-            leaving = (enemy.team != u.team and battle._can_react(enemy) and radius > 0
+            leaving = (enemy.team != u.team
+                       and battle.unit_levels.get(enemy.id, 0) == battle.unit_levels.get(u.id, 0)
+                       and battle._can_react(enemy) and radius > 0
                        and distance(previous, enemy.pos) <= radius
                        and distance(nxt, enemy.pos) > radius)
             if not leaving:
