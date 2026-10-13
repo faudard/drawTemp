@@ -48,7 +48,7 @@ class EntityInspectorGuiTests(unittest.TestCase):
             self.assertIsNotNone(inspector.photo)
             inspector.apply()
             self.assertEqual(get_entity(state['data'], mid, 'actor', player['id'])['facing'],
-                             [0, -1])
+                             (0, -1))
             inspector.target('duplicate')
             self.assertEqual(state['target'], ('duplicate', 'actor', player['id']))
             self.assertFalse(inspector.window.winfo_viewable())
