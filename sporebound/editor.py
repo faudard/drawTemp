@@ -3093,6 +3093,9 @@ def launch(path):
         nonlocal selected_cell
         select_workspace_mission(mid)
         validate_selection(doc.data, mid, [tuple(cell)])
+        # Navigating a diagnostic must replace, not compound, an old
+        # multi-selection or hierarchical group brush selection.
+        selected_tiles.clear()
         selected_cell = tuple(cell)
         editing_context.selection.set(mid, selected_cell, publish=False)
         notebook.select(work)
