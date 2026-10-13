@@ -53,6 +53,7 @@ class ProjectWorkspaceTab:
         scroll.pack(side='right', fill='y')
         self.tree.bind('<<TreeviewSelect>>', self._select)
         self.tree.bind('<Double-1>', lambda _e: self.owner._run(self.open_selected))
+        self.tree.bind('<Return>', lambda _e: self.owner._run(self.open_selected))
 
         ttk.Label(detail_frame, text='Inspecteur', font=('TkDefaultFont', 11, 'bold')).pack(
             anchor='w', padx=10, pady=8)
