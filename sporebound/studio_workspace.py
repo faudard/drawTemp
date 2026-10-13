@@ -15,6 +15,9 @@ class ProjectWorkspaceTab:
         self.owner = owner
         self.notebook = notebook
         self.query = owner.tk.StringVar()
+        self.sidebar_tree = None
+        self.sidebar_search = None
+        self._sidebar_mission = None
         ttk = owner.ttk
         root = ttk.Frame(notebook)
         notebook.add(root, text='Espace projet')
@@ -89,6 +92,64 @@ class ProjectWorkspaceTab:
         self.status = ttk.Label(root, text='')
         self.status.pack(anchor='w', padx=12, pady=(2, 9))
 
+    def attach_navigator(self, parent):
+        """Embed the same resource index beside the live map, not a second model."""
+        ttk = self.owner.ttk
+        ttk.Label(parent, text='PROJET', font=('TkDefaultFont', 11, 'bold')).pack(
+            anchor='w', padx=7, pady=(8, 3))
+        ttk.Label(parent, text='Rechercher les ressources').pack(
+            anchor='w', padx=7)
+        search = ttk.Entry(parent, textvariable=self.query)
+        self.sidebar_search = search
+        search.pack(fill='x', padx=7, pady=(2, 6))
+        search.bind('<Return>', lambda _event: self.owner._run(
+            self.open_sidebar_selected))
+        search.bind('<Escape>', lambda _event: self.query.set(''))
+        frame = ttk.Frame(parent)
+        frame.pack(fill='both', expand=True, padx=6, pady=4)
+        self.sidebar_tree = ttk.Treeview(
+            frame, show='tree', selectmode='browse', height=12)
+        scroll = ttk.Scrollbar(
+            frame, orient='vertical', command=self.sidebar_tree.yview)
+        self.sidebar_tree.configure(yscrollcommand=scroll.set)
+        self.sidebar_tree.pack(side='left', fill='both', expand=True)
+        scroll.pack(side='right', fill='y')
+        self.sidebar_tree.bind(
+            '<Double-1>', lambda _event: self.owner._run(self.open_sidebar_selected))
+        self.sidebar_tree.bind(
+            '<Return>', lambda _event: self.owner._run(self.open_sidebar_selected))
+        self.sidebar_count = ttk.Label(parent, text='')
+        self.sidebar_count.pack(anchor='w', padx=7, pady=(0, 4))
+        self.refresh()
+        return self.sidebar_tree
+
+    def open_sidebar_selected(self):
+        """Use the existing Studio navigation/guards for sidebar entries."""
+        if self.sidebar_tree is None:
+            return
+        selected = self.sidebar_tree.selection()
+        if selected and not selected[0].startswith('group:'):
+            self.open_key(selected[0])
+            return
+        # Enter from search should open the first visible hit when no tree
+        # selection survives filtering, rather than silently doing nothing.
+        for group in self.sidebar_tree.get_children(''):
+            matches = self.sidebar_tree.get_children(group)
+            if matches:
+                self.open_key(matches[0])
+                return
+
+    def open_key(self, key):
+        """Select a resource on the canonical Workspace before opening it."""
+        if self.query.get():
+            self.query.set('')
+        if not self.tree.exists(key):
+            raise RuleError('Ressource introuvable : ' + key)
+        self.tree.selection_set(key)
+        self.tree.see(key)
+        self._select()
+        self.open_selected()
+
     def index(self):
         return ProjectWorkspaceIndex(self.owner._content(), self.owner.project)
 
@@ -98,28 +159,51 @@ class ProjectWorkspaceTab:
     def refresh(self):
         if self.owner.project is None:
             return
-        current = self.tree.selection()
-        selected = current[0] if current else ''
-        expanded = {key for key in self.tree.get_children('')
-                    if self.tree.item(key, 'open')}
-        for key in self.tree.get_children(''):
-            self.tree.delete(key)
         model = self.model()
         sections = model.sections
         shown = {node.key for node in model.search(self.query.get())}
-        for kind, title in GROUPS:
-            parent = 'group:' + kind
-            items = [node for node in sections[kind] if node.key in shown]
-            self.tree.insert('', 'end', iid=parent, text=f'{title} ({len(items)})',
-                             open=parent in expanded or not expanded)
-            for node in items:
-                self.tree.insert(parent, 'end', iid=node.key, text=node.label)
-        if selected and self.tree.exists(selected):
-            self.tree.selection_set(selected)
+        self._populate_tree(self.tree, sections, shown)
+        if self.sidebar_tree is not None:
+            self._populate_tree(self.sidebar_tree, sections, shown)
+            self.sidebar_count.config(
+                text=f'{len(shown)} résultat(s) • Entrée pour ouvrir')
+            mission = 'mission:' + self.owner.mission()
+            if mission != self._sidebar_mission:
+                self._sidebar_mission = mission
+                if self.sidebar_tree.exists(mission):
+                    self.sidebar_tree.selection_set(mission)
+                    self.sidebar_tree.see(mission)
         self._select()
         self.status.config(text=f'{sum(len(items) for items in sections.values())} '
                                 'ressources indexées — modifications non sauvegardées : '
                                 f'{"oui" if self.owner.doc().dirty or self.owner.dirty() else "non"}')
+
+    @staticmethod
+    def _populate_tree(tree, sections, shown):
+        # Painting a tile refreshes Studio. Rebuilding two complete Tk trees
+        # on every brush stroke causes visible flicker and wasted Tcl calls.
+        signature = tuple(
+            (kind, tuple((node.key, node.label) for node in sections[kind]
+                         if node.key in shown))
+            for kind, _title in GROUPS)
+        if getattr(tree, '_workspace_signature', None) == signature:
+            return
+        current = tree.selection()
+        selected = current[0] if current else ''
+        existing_groups = tree.get_children('')
+        expanded = {key for key in existing_groups if tree.item(key, 'open')}
+        initial = not existing_groups
+        for key in existing_groups:
+            tree.delete(key)
+        for (kind, title), (_, entries) in zip(GROUPS, signature):
+            parent = 'group:' + kind
+            tree.insert('', 'end', iid=parent, text=f'{title} ({len(entries)})',
+                        open=parent in expanded or initial)
+            for key, label in entries:
+                tree.insert(parent, 'end', iid=key, text=label)
+        tree._workspace_signature = signature
+        if selected and tree.exists(selected):
+            tree.selection_set(selected)
 
     def _selected_node(self):
         selected = self.tree.selection()
@@ -149,10 +233,7 @@ class ProjectWorkspaceTab:
         if not selected:
             return
         target = self.ref_keys[selected[0]]
-        self.query.set('')
-        self.tree.selection_set(target)
-        self.tree.see(target)
-        self.open_selected()
+        self.open_key(target)
 
     def _show_tab(self, title):
         for tab in self.notebook.tabs():

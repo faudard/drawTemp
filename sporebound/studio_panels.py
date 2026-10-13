@@ -18,6 +18,7 @@ class StudioPanels:
                  mission, selection, design_change, play_campaign, status, mission_change=None,
                  select_mission=None, on_project_saved=None, set_active_mission=None):
         self.tk, self.ttk, self.dialogs = tk, ttk, dialogs
+        self.notebook = notebook
         self.doc, self.content_path = doc, content_path
         self.mission, self.selection = mission, selection
         self.design_change, self.play_campaign = design_change, play_campaign
@@ -128,14 +129,17 @@ class StudioPanels:
         ttk = self.ttk
         outer = ttk.Frame(notebook)
         notebook.add(outer, text='Personnages et événements')
+        self.entities_tab = outer
         ttk.Label(outer, text='Les coordonnées suivent la case sélectionnée sur la carte. Chaque modification est validée et annulable.').pack(anchor='w', padx=10, pady=8)
         self.cell_label = ttk.Label(outer, text='')
         self.cell_label.pack(anchor='w', padx=10)
         groups = ttk.Notebook(outer)
         groups.pack(fill='both', expand=True, padx=8, pady=8)
+        self.entities_groups = groups
 
         units = ttk.Frame(groups)
         groups.add(units, text='Personnages / monstres')
+        self.units_page = units
         self.uid, _ = self._field(units, 0, 'Identifiant', 'new_actor')
         self.uname, _ = self._field(units, 1, 'Nom', 'Nouveau personnage')
         self.uteam, _ = self._field(units, 2, 'Équipe', 'enemy', choices=['player','enemy','neutral'])
@@ -200,6 +204,7 @@ class StudioPanels:
 
         objects = ttk.Frame(groups)
         groups.add(objects, text='Objets interactifs')
+        self.objects_page = objects
         self.oid, _ = self._field(objects,0,'Identifiant','new_object')
         self.okind, _ = self._field(objects,1,'Type','chest',choices=['chest','door','switch','ram','catapult','passage','defense'])
         self.olink, _ = self._field(objects,2,'Porte liée (si besoin)')
@@ -258,6 +263,28 @@ class StudioPanels:
                 next_missions=[s.strip() for s in self.next_missions.get().split(',') if s.strip()])))).grid(
                     row=4,column=0,columnspan=2,pady=5)
         mission_form.columnconfigure(1,weight=1)
+
+    def focus_map_entity(self, kind, entity_id):
+        """Navigate to the selected map entity in the existing editing form."""
+        if kind not in ('unit', 'object'):
+            raise RuleError('Type de ressource non éditable depuis la carte.')
+        self.refresh()
+        mission = next(m for m in self.doc().data['missions']
+                       if m['id'] == self.mission())
+        entries = mission['units'] if kind == 'unit' else mission.get('objects', [])
+        index = next((i for i, entry in enumerate(entries)
+                      if entry['id'] == entity_id), None)
+        if index is None:
+            raise RuleError('Élément introuvable dans la mission : ' + entity_id)
+        self.notebook.select(self.entities_tab)
+        self.entities_groups.select(
+            self.units_page if kind == 'unit' else self.objects_page)
+        listing = self.unit_list if kind == 'unit' else self.object_list
+        listing.selection_clear(0, 'end')
+        listing.selection_set(index)
+        listing.activate(index)
+        listing.see(index)
+        listing.focus_set()
 
     def _refresh_talent_tree(self):
         jobs = self.doc().data.get('jobs', {})
@@ -550,9 +577,13 @@ class StudioPanels:
         for listing,items in ((self.unit_list,chosen['units']),
                               (self.object_list,chosen.get('objects',[])),
                               (self.event_list,chosen.get('triggers',[]))):
+            selected = {listing.get(i).split('  —  ', 1)[0]
+                        for i in listing.curselection()}
             listing.delete(0,'end')
-            for item in items:
+            for index, item in enumerate(items):
                 listing.insert('end',f"{item['id']}  —  {item.get('name',item.get('kind',item.get('condition','')))}")
+                if item['id'] in selected:
+                    listing.selection_set(index)
         self.start_box['values']=[m['id'] for m in missions]
         self.campaign_box['values']=[c['id'] for c in self.project.campaigns]
         if self.session is not None:
