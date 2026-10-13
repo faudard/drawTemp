@@ -29,8 +29,8 @@ class GameProject:
     sieges: list[dict] = field(default_factory=list)
     cinematics: list[dict] = field(default_factory=list)
     exploration: dict = field(default_factory=dict)
-    world: dict = field(default_factory=dict)
     battle_support: list[dict] = field(default_factory=list)
+    world: dict = field(default_factory=dict)
 
     @classmethod
     def default(cls, content):
