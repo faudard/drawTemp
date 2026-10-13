@@ -82,6 +82,21 @@ Example optional project field:
 `garden`. Other campaigns must place their own starting mission whenever
 they have a represented reachable node.
 
+## Exemple jouable reproductible
+
+Pour générer une copie de la campagne de base avec une carte du monde déjà
+positionnée (sans toucher aux assets ni aux fichiers source du dépôt) :
+
+```bash
+python -m examples.world_map_3724a --output /tmp/world_demo.json
+python -m sporebound validate --content /tmp/world_demo.json --project /tmp/world_demo.game.json
+python -m sporebound player --content /tmp/world_demo.json --project /tmp/world_demo.game.json
+```
+
+L'exemple utilise les véritables missions existantes et leurs liens, répartis
+en quatre ensembles régionaux indicatifs. Tous les combats et sauvegardes
+continuent à passer par les mécanismes habituels.
+
 ## Validation gate
 
 - `python -m unittest tests_standalone.test_world_map_3724a -v`
