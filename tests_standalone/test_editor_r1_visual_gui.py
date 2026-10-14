@@ -35,7 +35,7 @@ class VisualR1Acceptance(unittest.TestCase):
         import tkinter as tk
         from tkinter import ttk
 
-        initial, project = R1StudioGuiGate.prepared(None)
+        initial, project = R1StudioGuiGate.prepared(self)
         actor = next(m for m in initial['missions'] if m['id'] == self.MID)['units'][0]
         with TemporaryDirectory() as directory:
             path = Path(directory) / 'visual.json'
