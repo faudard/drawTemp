@@ -1,5 +1,6 @@
 """R2 — Workspace UX gates: atomic inspector, canonical explorer, diagnostics."""
 import unittest
+from copy import deepcopy
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_object, add_unit
@@ -20,6 +21,11 @@ from sporebound.workspace_refactoring import (RenameMapResourceCommand,
                                               plan_coordinated_rename)
 from sporebound.cinematics import cinematic_template, event_template
 from sporebound.studio_transaction import StudioHistory
+from sporebound.workspace_story_refactoring import (
+    story_baseline, plan_story_rename,
+)
+from tempfile import TemporaryDirectory
+from pathlib import Path
 
 
 class WorkspaceR2Tests(unittest.TestCase):
@@ -124,6 +130,95 @@ class WorkspaceR2Tests(unittest.TestCase):
             dependency_impact(index, 'map_actor:garden:deleted')
         with self.assertRaises(RuleError):
             validate_drop(self.doc.data, self.mid, 'asset:missing')
+
+    @staticmethod
+    def _linked_story_project(content):
+        raw = GameProject.default(content).to_dict()
+        raw['story'] = {
+            'scenes': [
+                {'id': 'r2_old_scene', 'title': 'Scène R2',
+                 'speaker': 'Jeanne', 'text': 'Prologue',
+                 'choices': [{'id': 'continue', 'label': 'Continuer'}]},
+                {'id': 'r2_parent_scene', 'title': 'Choix R2',
+                 'speaker': '', 'text': 'Que faire ?',
+                 'choices': [{'id': 'begin', 'label': 'Entrer',
+                              'next_scene': 'r2_old_scene'}]},
+            ],
+            'entry_scenes': {'main': 'r2_parent_scene'},
+            'after_mission': {'garden': 'r2_old_scene'},
+        }
+        raw['cinematics'] = [cinematic_template(
+            'r2_scene_clip', 'Scène cinématique', 'scene', 'r2_old_scene')]
+        return GameProject.from_dict(raw, content)
+
+    def test_scene_rename_rewrites_narrative_branches_and_cinematics(self):
+        project = self._linked_story_project(self.content)
+        key = 'scene:r2_old_scene'
+        form = story_baseline(project, key)
+        candidate, updated = plan_story_rename(
+            self.doc.data, project, key, form, 'r2_renamed_scene')
+        self.assertEqual(candidate, self.doc.data)
+        self.assertEqual(updated.story['after_mission']['garden'],
+                         'r2_renamed_scene')
+        self.assertEqual(updated.story['scenes'][1]['choices'][0]['next_scene'],
+                         'r2_renamed_scene')
+        self.assertEqual(updated.cinematics[0]['trigger']['target'],
+                         'r2_renamed_scene')
+        self.assertEqual(story_baseline(updated, 'scene:r2_renamed_scene'),
+                         story_baseline(updated.to_dict(), 'scene:r2_renamed_scene'))
+        history = StudioHistory(self.doc.data, project)
+        self.assertTrue(history.record(candidate, updated))
+        undo_content, undo_project = history.undo()
+        self.assertEqual(undo_project.story['after_mission']['garden'],
+                         'r2_old_scene')
+        redo_content, redo_project = history.redo()
+        self.assertEqual(redo_project.story['after_mission']['garden'],
+                         'r2_renamed_scene')
+        self.assertEqual(undo_content, redo_content)
+
+    def test_scene_rename_rejects_stale_and_unknown_project_refs(self):
+        project = self._linked_story_project(self.content)
+        before = project.to_dict()
+        baseline = story_baseline(project, 'scene:r2_old_scene')
+        with self.assertRaises(RuleError):
+            plan_story_rename(self.doc.data, project,
+                              'scene:r2_old_scene', '{}', 'another_scene')
+        modified = deepcopy(before)
+        modified['subtitle'] = 'r2_old_scene'
+        with self.assertRaises(RuleError):
+            plan_story_rename(self.doc.data, modified,
+                              'scene:r2_old_scene', baseline, 'another_scene')
+        self.assertEqual(project.to_dict(), before)
+        self.assertEqual(self.doc.data, self.content.to_dict())
+
+    def test_campaign_rename_updates_links_and_checks_save_namespace(self):
+        project = self._linked_story_project(self.content)
+        project_data = project.to_dict()
+        project_data['cinematics'].append(cinematic_template(
+            'r2_campaign_clip', 'Ouverture', 'campaign_start', 'main'))
+        project = GameProject.from_dict(project_data, self.content)
+        key = 'campaign:main'
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / 'scenario.game.json'
+            candidate, updated = plan_story_rename(
+                self.doc.data, project, key, story_baseline(project, key),
+                'r2_new_campaign', project_path=path)
+            self.assertEqual(candidate, self.doc.data)
+            self.assertEqual(updated.campaigns[0]['id'], 'r2_new_campaign')
+            self.assertEqual(updated.story['entry_scenes'],
+                             {'r2_new_campaign': 'r2_parent_scene'})
+            self.assertEqual(updated.cinematics[-1]['trigger']['target'],
+                             'r2_new_campaign')
+            legacy = path.with_name(path.stem + '_saves') / 'main'
+            legacy.mkdir(parents=True)
+            with self.assertRaises(RuleError):
+                plan_story_rename(self.doc.data, project, key,
+                                  story_baseline(project, key),
+                                  'r2_new_campaign', project_path=path)
+        with self.assertRaises(RuleError):
+            plan_story_rename(self.doc.data, project, key,
+                              story_baseline(project, key),
+                              'r2_new_campaign')
 
     def test_known_cinematic_actor_reference_migrates_both_documents(self):
         clip = cinematic_template(
