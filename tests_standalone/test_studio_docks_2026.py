@@ -94,5 +94,71 @@ class StudioDocksTkTests(unittest.TestCase):
             root.destroy()
 
 
+@unittest.skipUnless(os.environ.get("SPOREBOUND_GUI_SMOKE") == "1",
+                     "Tk/Xvfb required")
+class StudioApplicationLayoutSmoke(unittest.TestCase):
+    def test_real_editor_map_docks_and_menu_roundtrip(self):
+        from unittest.mock import patch
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.__main__ import DEFAULT_CONTENT
+        from sporebound.editor import launch
+
+        errors = []
+
+        def walk(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from walk(child)
+
+        def inspect(root):
+            try:
+                root.report_callback_exception = lambda *args: errors.append(args)
+                root.update()
+                book = next(w for w in walk(root)
+                            if isinstance(w, ttk.Notebook) and
+                            "Playtest Lab" in [w.tab(t, "text") for t in w.tabs()])
+                target = next(t for t in book.tabs()
+                              if book.tab(t, "text") == "Carte et combat")
+                work = root.nametowidget(target)
+                self.assertEqual(len(work.panes()), 3)
+
+                menu_button = next(w for w in walk(root)
+                                   if isinstance(w, ttk.Menubutton) and
+                                   w.cget("text").startswith("Affichage"))
+                menu = root.nametowidget(menu_button.cget("menu"))
+                menu.invoke(0)  # Explorer off
+                root.update()
+                self.assertEqual(len(work.panes()), 2)
+                menu.invoke(0)  # Explorer back
+                root.update()
+                self.assertEqual(len(work.panes()), 3)
+                menu.invoke(4)  # F11 equivalent from menu
+                root.update()
+                self.assertEqual(len(work.panes()), 1)
+                menu.invoke(4)
+                root.update()
+                self.assertEqual(len(work.panes()), 3)
+
+                tool_notebook = next(w for w in walk(root)
+                                     if isinstance(w, ttk.Notebook) and
+                                     "Architecture" in
+                                     [w.tab(t, "text") for t in w.tabs()])
+                main = root.nametowidget(tool_notebook.tabs()[0])
+                controls = [w for w in main.winfo_children()
+                            if isinstance(w, ttk.Frame)]
+                self.assertGreaterEqual(len(controls), 2)
+                self.assertEqual(
+                    sum(bool(w.winfo_manager()) for w in controls[:2]), 1)
+                self.assertFalse(errors)
+            finally:
+                root.destroy()
+
+        with patch.object(tk.Tk, "mainloop", inspect), \
+             patch("tkinter.messagebox.showerror") as errors_modal:
+            launch(DEFAULT_CONTENT)
+            errors_modal.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
