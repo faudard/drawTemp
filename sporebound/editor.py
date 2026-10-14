@@ -83,6 +83,9 @@ class Document:
         self.redo_stack = []
         self.edit_policy = None  # Optional editor-only validation before commit.
         self.saved = json.dumps(self.data, sort_keys=True)
+        # Monotonic lease: unlike a content hash this rejects an ABA edit
+        # (edit -> undo -> identical bytes) and direct history restorations.
+        self.mutation_revision = 0
 
     @property
     def dirty(self):
@@ -97,16 +100,28 @@ class Document:
         self.undo_stack = self.undo_stack[-50:]
         self.redo_stack.clear()
         self.data = validated
+        self.mutation_revision += 1
+
+    def restore_snapshot(self, data):
+        """Install one validated StudioHistory revision, not a local undo step."""
+        validated = Content.from_dict(
+            data, rules=authored_rules_for_document(data)).to_dict()
+        self.data = validated
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self.mutation_revision += 1
 
     def undo(self):
         if self.undo_stack:
             self.redo_stack.append(self.data)
             self.data = self.undo_stack.pop()
+            self.mutation_revision += 1
 
     def redo(self):
         if self.redo_stack:
             self.undo_stack.append(self.data)
             self.data = self.redo_stack.pop()
+            self.mutation_revision += 1
 
     def tile(self, mid, cell, brush):
         self.paint_many(mid, [cell], brush)
@@ -540,9 +555,7 @@ def launch(path):
                 studio.reload_project()
                 if next_work:
                     recovered_content = next_work[0]
-                    doc.data = Content.from_dict(
-                        recovered_content,
-                        rules=authored_rules_for_document(recovered_content)).to_dict()
+                    doc.restore_snapshot(recovered_content)
                     if mission_var.get() not in {
                             m['id'] for m in doc.data['missions']}:
                         mission_var.set(doc.data['missions'][0]['id'])
@@ -3891,9 +3904,7 @@ def launch(path):
         workspace_edit=commit_workspace_properties)
     if recovered_work:
         recovered_content = recovered_work[0]
-        doc.data = Content.from_dict(
-            recovered_content,
-            rules=authored_rules_for_document(recovered_content)).to_dict()
+        doc.restore_snapshot(recovered_content)
         if mission_var.get() not in {m['id'] for m in doc.data['missions']}:
             mission_var.set(doc.data['missions'][0]['id'])
         studio.restore_unsaved_project(recovered_work[1])
