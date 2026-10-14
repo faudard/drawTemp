@@ -78,6 +78,13 @@ jobs:
           python -m sporebound tactical-choices --mission garden
           --seed 1 --limit 60 --choice-min-multi 0
           --baseline tactical_choices_ci.json
+      - name: R6.15 one-command tactical quality and human-gate tests
+        run: python -m unittest tests_standalone.test_tactical_quality_r615 -v
+      - name: R6.15 report — automated probe is not human certification
+        run: >-
+          python -m sporebound tactical-quality --mission garden
+          --seed 1 --limit 20 --quality-min-differentiated 0
+          --quality-min-tradeoffs 0 --report tactical_quality_ci.json
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
         run: python -m examples.tactical_rpg3_castle
