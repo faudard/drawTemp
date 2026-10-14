@@ -236,7 +236,9 @@ class AppearancePreferences:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError, TypeError):
             return "light"
-        if isinstance(raw, dict) and raw.get("theme") in PALETTES:
+        if (isinstance(raw, dict) and
+                isinstance(raw.get("theme"), str) and
+                raw["theme"] in PALETTES):
             return raw["theme"]
         return "light"
 
