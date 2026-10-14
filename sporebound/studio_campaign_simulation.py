@@ -9,6 +9,9 @@ import json
 from copy import deepcopy
 from queue import Empty, Queue
 from threading import Thread
+from pathlib import Path
+
+from .storage import write_json
 
 from .campaign_path_certification import certify_path
 
@@ -60,6 +63,7 @@ class CampaignSimulationStudio:
         self.ttk.Entry(controls, textvariable=self.cert_seed, width=7).pack(
             side="left", padx=3)
         self._button(controls, "Certifier ce parcours R5.15", self.certify_selected)
+        self._button(controls, "Exporter plan R5.15", self.export_certificate_plan)
 
         panels = ttk.Panedwindow(root, orient="horizontal")
         panels.pack(fill="both", expand=True, padx=10, pady=5)
@@ -364,6 +368,28 @@ class CampaignSimulationStudio:
         self.draw()
         self.details.select(1)
 
+    def export_certificate_plan(self):
+        """User-initiated plan export, not a certification or gameplay save."""
+        self._ensure_current()
+        try:
+            seed = int(self.cert_seed.get())
+        except ValueError as exc:
+            raise RuleError("Seed de certification invalide") from exc
+        plan = self.sandbox.certification_plan(seed=seed)
+        path = self.owner.dialogs.asksaveasfilename(
+            initialfile=plan["id"] + "_r515.json",
+            defaultextension=".json",
+            filetypes=[("Plans de certification JSON", "*.json")])
+        if not path:
+            return
+        destination = Path(path).resolve()
+        content_path = Path(self.owner.content_path()).resolve()
+        project_path = self.owner.project_path.resolve()
+        require(destination not in {content_path, project_path},
+                "Un plan de certification ne peut écraser le Content ou le GameProject")
+        write_json(destination, {"version": 1, "cases": [plan]})
+        self.status.set("Plan candidat exporté : exécuter R5.15 pour le certifier.")
+        
     def certify_selected(self):
         """Run real Battle replay off the Tk thread, with stale-result rejection."""
         self._ensure_current()
