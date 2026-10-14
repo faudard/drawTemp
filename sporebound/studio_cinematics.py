@@ -5,6 +5,8 @@ from .cinematics import (KINDS, TRIGGERS, EASINGS, EXPRESSIONS, SHOT_TRANSITIONS
                          cinematic_template, event_template, matching_cinematics)
 from .event_cinematic_qa import audit_event_cinematic_path
 from .audio_timeline import mix_at
+from .cinematic_batch import (
+    copy_events, paste_events, shift_events, delete_events)
 from .cinematic_authoring4 import (
     add_motion_keyframe, update_motion_keyframe, remove_motion_keyframe,
     move_event, resize_event, clone_event)
@@ -19,6 +21,8 @@ class CinematicStudio:
         self.owner, self.tk, self.ttk = owner, owner.tk, owner.ttk
         self.clip_id = ""
         self.event_id = ""
+        self.selected_event_ids = ()
+        self.clipboard = None
         self.undo_stack = []
         self.redo_stack = []
         self._refreshing = False
@@ -40,6 +44,7 @@ class CinematicStudio:
             "x1": "0.65", "y1": "0.65", "zoom0": "1", "zoom1": "1",
             "key_time": "500", "key_x": "0.5", "key_y": "0.5",
             "key_zoom": "1", "copy_id": "event_copy",
+            "group_shift": "100",
         }.items()}
         self.qa_status = self.tk.StringVar(value="")
         self.audio_loop = self.tk.BooleanVar(value=False)
@@ -107,7 +112,8 @@ class CinematicStudio:
 
         middle = ttk.LabelFrame(main, text="Pistes / événements")
         middle.pack(side="left", fill="both", expand=True, padx=4)
-        self.events = self.tk.Listbox(middle, height=9, exportselection=False)
+        self.events = self.tk.Listbox(
+            middle, height=9, exportselection=False, selectmode="extended")
         self.events.pack(fill="x", padx=5, pady=5)
         self.events.bind("<<ListboxSelect>>", self._on_event)
         # Contextual tabs replace the long all-properties-at-once column.
@@ -174,6 +180,18 @@ class CinematicStudio:
         self._button(buttons, "Dupliquer", self.duplicate_event)
         self._button(buttons, "Supprimer événement", self.delete_event)
         self._button(buttons, "Ajuster durée", self.resize_selected)
+        selection_bar = ttk.Frame(middle)
+        selection_bar.pack(fill="x", padx=4, pady=2)
+        self._button(selection_bar, "Copier sélection", self.copy_selected)
+        self._button(selection_bar, "Couper sélection", self.cut_selected)
+        self._button(selection_bar, "Coller au curseur", self.paste_selected)
+        self._button(selection_bar, "Supprimer groupe", self.delete_selected)
+        group = ttk.Frame(middle)
+        group.pack(fill="x", padx=4, pady=2)
+        ttk.Label(group, text="Décalage groupe (ms)").pack(side="left")
+        ttk.Entry(group, textvariable=self.vars["group_shift"], width=9).pack(
+            side="left", padx=3)
+        self._button(group, "Décaler sélection", self.shift_selected)
         ttk.Label(middle, textvariable=self.qa_status, wraplength=460).pack(
             fill="x", padx=5, pady=3)
         side = ttk.LabelFrame(main, text="Aperçu instantané")
@@ -217,6 +235,8 @@ class CinematicStudio:
         self.timeline.bind("<ButtonRelease-1>", self._release)
         self.timeline.bind("<B1-Motion>", self._drag_motion)
         self.timeline.bind("<Escape>", lambda _: self.cancel_drag())
+        self._bind_editor_shortcuts(self.events)
+        self._bind_editor_shortcuts(self.timeline)
 
     def _project(self):
         return self.owner.project
