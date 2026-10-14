@@ -170,9 +170,10 @@ class LongSessionStore:
     @exclusive_write
     def initialize(self, session):
         require(isinstance(session, GameSession), "Expected GameSession")
+        damaged = self.store.path.with_name(self.store.path.name + ".damaged")
         require(not any(path.exists() for path in
-                        (self.store.path, self.store.backup, self.journal)),
-                "Long-session save already exists; explicit migration required")
+                        (self.store.path, self.store.backup, self.journal, damaged)),
+                "Long-session save or recovery evidence already exists; explicit migration required")
         record = session.recording()
         GameSession.from_recording(record, session.content, session.project,
                                    rules=session.rules)
