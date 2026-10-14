@@ -80,11 +80,16 @@ def boss_intent_preview(battle, boss_id):
     view = boss_preview(battle, boss_id)
     unit = battle.unit(boss_id)
     ready = (unit.alive and battle.active_id == unit.id and not battle.result
-             and not battle.deploying and unit.behavior == "phase_boss")
+             and not battle.deploying
+             and unit.behavior in {"phase_boss", "adaptive_boss"})
     result = {**view, "ready": ready, "command": None, "threats": []}
     if not ready:
         return result
-    command = phase_boss_command(battle)
+    if unit.behavior == "adaptive_boss":
+        from .elite_boss_r6 import adaptive_boss_command
+        command = adaptive_boss_command(battle)
+    else:
+        command = phase_boss_command(battle)
     result["command"] = command
     if command["kind"] == "charge":
         result["threats"] = next(
