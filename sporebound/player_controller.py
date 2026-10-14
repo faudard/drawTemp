@@ -25,6 +25,8 @@ class PlayerController:
         self.campaign_id = None
         self.slot = None
         self.last_load_status = None
+        # Optional local playtest observer; OFF by default. Never serialized.
+        self.playtest = None
 
     def path_for(self, campaign_id, slot):
         require(self.project.campaign(campaign_id) is not None, "Unknown campaign")
@@ -100,9 +102,26 @@ class PlayerController:
         require(self.session is not None, "No campaign loaded")
         # Verify before and after; restore in-memory state on persistence failure.
         old = self.session.recording()
+        recorder = self.playtest
+        evidence = None
+        if recorder is not None:
+            try:
+                evidence = recorder.before(self.session.active_battle)
+            except Exception as exc:
+                recorder.error = str(exc)
         try:
             result = action(*args, **kwargs)
             self.save()
+            # Record only *committed* player/AI choices. Recording is an
+            # opt-in observability sidecar; exceptions cannot roll back or
+            # invalidate a successfully saved canonical GameSession.
+            if recorder is not None:
+                try:
+                    command = args[0] if action.__name__ == "execute" and args else None
+                    recorder.committed(action.__name__, evidence,
+                                       self.session.active_battle, command=command)
+                except Exception as exc:
+                    recorder.error = str(exc)
             return result
         except Exception:
             self.session = GameSession.from_recording(
