@@ -43,8 +43,11 @@ TARGETS = {"journal": ".journal", "backup": ".bak",
            "checkpoint": ""}
 
 
-def worker(path, cut):
+def worker(path, cut, *, operation="choose_story_option"):
     """Worker writes one real action and *dies* at the selected fs cut."""
+    require(operation in {"choose_story_option", "switch_front"},
+            "Unsupported fault-lab operation")
+    argument = "assault" if operation == "choose_story_option" else "walls"
     from unittest.mock import patch
     content, project = fixture()
     store = LongSessionStore(path, checkpoint_every=1)
@@ -84,7 +87,7 @@ def worker(path, cut):
 
         with patch("sporebound.storage.tempfile.NamedTemporaryFile",
                    side_effect=partial_temp):
-            store.perform(snapshot, _REQUEST, "choose_story_option", "assault")
+            store.perform(snapshot, _REQUEST, operation, argument)
         raise AssertionError("Partial-temp cut was never reached")
 
     def replace(source, destination):
@@ -101,13 +104,14 @@ def worker(path, cut):
     # This is process-local; monkeypatching os.replace in a child never
     # affects the parent or another game process.
     with patch("sporebound.storage.os.replace", side_effect=replace):
-        store.perform(snapshot, _REQUEST, "choose_story_option", "assault")
+        store.perform(snapshot, _REQUEST, operation, argument)
     raise AssertionError("Requested filesystem cut was never reached")
 
 
-def _invoke_worker(path, cut):
+def _invoke_worker(path, cut, *, operation="choose_story_option"):
     cmd = [sys.executable, "-m", "examples.persistence_fault_lab",
-           "--worker", str(path), "--cut", ".".join(map(str, cut))]
+           "--worker", str(path), "--cut", ".".join(map(str, cut)),
+           "--operation", operation]
     result = subprocess.run(cmd, cwd=Path(__file__).resolve().parents[1],
                             capture_output=True, text=True, timeout=45)
     require(result.returncode == EXIT_CRASH,
@@ -191,6 +195,47 @@ def run_matrix(*, seeds=(1, 7)):
             "cases": cases}
 
 
+def run_multifront_crash_gate():
+    """Interrupt a first-time tactical focus switch and verify all fronts."""
+    content, project = fixture()
+    with TemporaryDirectory(prefix="r817-fronts-") as folder:
+        path = Path(folder) / "fronts.json"
+        store = LongSessionStore(path, checkpoint_every=1)
+        session = GameSession.new(content, project, "main", seed=17)
+        session.choose_story_option("assault")
+        session.start_fronts({"gate": "gate", "walls": "walls"}, "gate",
+                             specs={"gate": {"strength": 50, "opposition": 50},
+                                    "walls": {"strength": 50, "opposition": 50}})
+        session.execute({"kind": "end"})
+        session.set_doctrine("walls", "assault")
+        session.advance_fronts()
+        before = session.recording()
+        expected = GameSession.from_recording(before, content, project)
+        expected.switch_front("walls")
+        expected_recording = expected.recording()
+        store.initialize(session)
+        _invoke_worker(path, ("checkpoint", 1, "before"),
+                       operation="switch_front")
+        lock = path.with_name(path.name + ".lock")
+        require(lock.is_file(), "Multi-front crash left no writer evidence")
+        loaded = store.load_with_status(content, project)
+        require(loaded.session.recording() == expected_recording,
+                "Focused and offscreen fronts diverged after crash")
+        require(loaded.session.fronts.history == expected.fronts.history,
+                "Strategic history diverged after crash")
+        require(loaded.session.fronts.timeline.state() ==
+                expected.fronts.timeline.state(),
+                "Offscreen front state diverged after crash")
+        lock.unlink()  # the child has terminated and was reaped
+        retry = store.perform(loaded.session, _REQUEST, "switch_front", "walls")
+        require(not retry.applied, "A committed multi-front switch replayed twice")
+        require(store.load(content, project).recording() == expected_recording,
+                "Retry changed verified multi-front state")
+        return {"verified": True, "mode": "fronts", "cut": "checkpoint.1.before",
+                "final_digest": expected_recording["digest"],
+                "strategic_history_events": len(expected.fronts.history)}
+
+
 def run_concurrent_lock_gate():
     """A different OS process holding a slot blocks all other writers."""
     content, project = fixture()
@@ -256,6 +301,7 @@ def main(argv=None):
     parser.add_argument("--output", type=Path)
     parser.add_argument("--worker", type=Path)
     parser.add_argument("--cut")
+    parser.add_argument("--operation", default="choose_story_option")
     parser.add_argument("--holder", type=Path)
     parser.add_argument("--ready", type=Path)
     parser.add_argument("--release", type=Path)
@@ -265,7 +311,7 @@ def main(argv=None):
         name, number, moment = args.cut.split(".")
         cut = (name, int(number), moment)
         require(cut in CUTS, "Unsupported cut point")
-        worker(args.worker, cut)
+        worker(args.worker, cut, operation=args.operation)
         return 0
     if args.holder is not None:
         require(args.ready is not None and args.release is not None,
@@ -274,6 +320,7 @@ def main(argv=None):
     require(args.output is not None, "JSON report --output is required")
     report = run_matrix(seeds=args.seeds)
     report["concurrent_writers"] = run_concurrent_lock_gate()
+    report["multifront_crash"] = run_multifront_crash_gate()
     write_json(args.output, report)
     print("R8.17 verified %s crash cut points across %s seeds" %
           (len(CUTS), len(args.seeds)))
