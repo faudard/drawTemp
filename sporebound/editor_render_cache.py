@@ -8,6 +8,7 @@ from copy import deepcopy
 from time import perf_counter
 
 from .iso_map import IsoGeometry, render_isometric
+from .editor_dirty_tiles import affected_terrain_cells
 
 
 _ATLAS_OPTIONS = ('atlas', 'prop_atlas', 'building_atlas',
@@ -29,6 +30,7 @@ class EditorRenderCache:
         self._large_scene_state = None
         self._large_selection = None
         self._large_item_count = None
+        self._large_mission = None
 
     def invalidate(self):
         """Call when another renderer takes ownership of the Canvas."""
@@ -43,6 +45,7 @@ class EditorRenderCache:
         self._large_scene_state = None
         self._large_selection = None
         self._large_item_count = None
+        self._large_mission = None
 
     def begin_group(self, group):
         self._group = group
@@ -173,6 +176,38 @@ class EditorRenderCache:
         self.canvas.tag_raise('selection')
         return created, deleted
 
+    @staticmethod
+    def _tile_tag(cell):
+        return 'iso_tile_' + str(cell[0]) + '_' + str(cell[1])
+
+    def _paint_dirty_tiles(self, board, mission, units, options, affected):
+        """Replace just the tile groups, preserving global isometric z-order."""
+        canvas, geo = self.canvas, self.geometry
+        order = geo.draw_order
+        for cell in affected:
+            canvas.delete(self._tile_tag(cell))
+        # Selection overlays are always topmost in the large-map retained
+        # path; remove stale or in-group selection before painting tiles.
+        canvas.delete('selection')
+        geo.board = board
+        render_isometric(
+            canvas, board, mission, units, geometry=geo,
+            tile_subset=affected, omit_architecture=True,
+            draw_selection=False, **options)
+        # Insert new tile groups before the next higher-depth tile. Reverse
+        # traversal ensures the next group is already in its final position.
+        for index in range(len(order)-1, -1, -1):
+            cell = order[index]
+            if cell not in affected:
+                continue
+            tag = self._tile_tag(cell)
+            if index + 1 < len(order):
+                canvas.tag_lower(tag, self._tile_tag(order[index+1]))
+            else:
+                canvas.tag_raise(tag)
+        self._redraw_large_selection(
+            options.get('selected_cell'), options.get('selected_tiles', ()))
+
     def draw(self, board, mission, units, **options):
         start = perf_counter()
         # Validated document revision; Battle/external callers retain snapshots.
@@ -188,6 +223,43 @@ class EditorRenderCache:
                 tuple(sorted((pos, tile.height) for pos, tile in board.tiles.items()
                              if tile.height))))
         rebuilt = key != self._geometry_key
+        partial = None
+        partial_changed = ()
+        if (scene_revision is not None
+                and board.width * board.height > self.max_retained_cells
+                and self._large_mission is not None
+                and self._large_scene_state is not None
+                and self._geometry_key is not None
+                and self._geometry_key[:3] ==
+                    (board.width, board.height, options['cell_size'])
+                and self.stats.get('mode') == 'geometry'
+                and self._large_scene_state[0] != scene_revision
+                and self._large_scene_state[1] ==
+                    {name: value for name, value in options.items()
+                     if name not in _ATLAS_OPTIONS and
+                     name not in ('selected_cell', 'selected_tiles')}
+                and self._large_scene_state[2] ==
+                    tuple(id(options.get(name)) for name in _ATLAS_OPTIONS)
+                and (not hasattr(self.canvas, 'find_all') or
+                     self._large_item_count == len(self.canvas.find_all()))):
+            partial = affected_terrain_cells(
+                self._large_mission, mission, geometry=self.geometry)
+            if partial is not None:
+                previous = self._large_selection
+                current = (options.get('selected_cell'),
+                           frozenset(options.get('selected_tiles', ())))
+                overlays = set(previous[1] ^ current[1])
+                if previous[0] != current[0]:
+                    overlays.update((previous[0], current[0]))
+                if None in overlays:
+                    overlays.remove(None)
+                partial_changed = partial
+                partial = frozenset(set(partial) | overlays)
+                if len(partial) > 160:
+                    partial = None
+        if partial is not None:
+            self._geometry_key = key
+            rebuilt = False
         if rebuilt:
             self.geometry = IsoGeometry(board, options['cell_size'])
             self._geometry_key = key
@@ -212,6 +284,27 @@ class EditorRenderCache:
                 state = self._large_inputs(board, mission, units, options)
             selection = (options.get('selected_cell'),
                          frozenset(options.get('selected_tiles', ())))
+            if partial is not None:
+                try:
+                    self._paint_dirty_tiles(board, mission, units, options, partial)
+                except Exception:
+                    self.invalidate()
+                    raise
+                self._large_scene_state = state
+                self._large_selection = selection
+                self._large_mission = mission
+                self._large_item_count = (
+                    len(self.canvas.find_all())
+                    if hasattr(self.canvas, 'find_all') else None)
+                self.stats = dict(
+                    mode='geometry', geometry_rebuilt=False,
+                    created=None, updated=0, deleted=None,
+                    items=self._large_item_count,
+                    fast_path='dirty_tiles',
+                    dirty_cells=len(partial_changed),
+                    affected_cells=len(partial),
+                    render_ms=(perf_counter() - start) * 1000)
+                return self.geometry
             can_reuse = (not rebuilt and self.stats.get('mode') == 'geometry'
                          and state == self._large_scene_state
                          and (self._large_item_count is None
@@ -244,6 +337,7 @@ class EditorRenderCache:
                 raise
             self._large_scene_state = state
             self._large_selection = selection
+            self._large_mission = mission
             self._large_item_count = (len(self.canvas.find_all())
                                       if hasattr(self.canvas, 'find_all') else None)
             self.stats = dict(mode='geometry', geometry_rebuilt=rebuilt,
@@ -254,6 +348,7 @@ class EditorRenderCache:
         self._large_scene_state = None
         self._large_selection = None
         self._large_item_count = None
+        self._large_mission = None
         if self.stats.get('mode') == 'geometry':
             self.canvas.delete('all')
         self._commands = {}
