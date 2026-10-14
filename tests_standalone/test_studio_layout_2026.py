@@ -9,6 +9,7 @@ class NavigationClassificationTests(unittest.TestCase):
     def test_every_existing_family_has_a_home(self):
         expected = {
             "Carte et combat": "Carte & monde",
+            "Éditeur de bâtiments": "Bâtiments",
             "Monde": "Carte & monde",
             "Espace projet": "Projet",
             "Données JSON": "Projet",
@@ -59,11 +60,27 @@ class NavigationWidgetTests(unittest.TestCase):
             notebook.add(project_tab, text="Espace projet")
             notebook.add(play_tab, text="Playtest Lab")
 
-            nav = StudioNavigation(nav_host, notebook, tools, map_tab, tk, ttk)
+            switched = []
+            nav = StudioNavigation(nav_host, notebook, tools, map_tab, tk,
+                                   ttk, building_mode_change=switched.append)
             root.update()
             self.assertEqual(notebook.cget("style"), "Studio.TNotebook")
             self.assertEqual(nav.view.get(), "Carte et combat")
             self.assertTrue(tools.winfo_manager())
+            self.assertEqual(len(notebook.tabs()), 3)
+            self.assertIn("Éditeur de bâtiments",
+                          [title for title, _ in nav.group_tabs["Bâtiments"]])
+
+            nav.choose_section("Bâtiments")
+            root.update()
+            self.assertEqual(notebook.select(), str(map_tab))
+            self.assertEqual(nav.section.get(), "Bâtiments")
+            self.assertEqual(nav.view.get(), "Éditeur de bâtiments")
+            self.assertEqual(switched, [True])
+            nav.choose_section("Carte & monde")
+            root.update()
+            self.assertEqual(nav.view.get(), "Carte et combat")
+            self.assertEqual(switched, [True, False])
             self.assertEqual(len(notebook.tabs()), 3)
 
             # Cross-editor navigation is still just notebook.select().
