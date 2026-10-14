@@ -390,8 +390,11 @@ class ProjectWorkspaceTab:
 
     def _render_editable(self, key):
         if isinstance(key, tuple) and len(key) > 1:
-            form = batch_form(self.owner.doc().data, key)
-            signature = (form.keys, form.baselines)
+            try:
+                form = batch_form(self.owner.doc().data, key)
+                signature = (form.keys, form.baselines)
+            except RuleError:
+                form, signature = None, (key, None)
         elif isinstance(key, str) and key.startswith(
                 ('map_actor:', 'map_object:', 'editor_group:', 'map_tile:')):
             form = editable_form(self.owner.doc().data, key)
@@ -404,8 +407,8 @@ class ProjectWorkspaceTab:
         for widget in self.edit_frame.winfo_children():
             widget.destroy()
         self._form_fields = form.fields if form else ()
-        self._form_key = (form.keys if isinstance(form, type(None)) is False
-                          and hasattr(form, 'keys') else form.key if form else '')
+        self._form_key = (form.keys if form is not None and hasattr(form, 'keys')
+                          else form.key if form else '')
         self._form_baseline = (form.baselines if form is not None
                                and hasattr(form, 'baselines') else
                                form.baseline if form else '')
@@ -724,13 +727,11 @@ class ProjectWorkspaceTab:
         if not selected:
             raise RuleError('Choisir un diagnostic dans la liste.')
         key = self.problem_targets[selected[0]]
-        target = map_resource_target(key, self.owner.doc().data)
-        if target is not None:
-            mid, cell, _kind, _identifier = target
-            self.owner.focus_map_cell(mid, cell)
-            self._show_tab('Carte et combat')
-        else:
-            self.open_key(key)
+        self.open_key(key)
+        # Open the canonical inspector, while the live map has been focused by
+        # open_selected(). Authors can now fix the resource without reloading.
+        self.notebook.select(self.tab)
+        self.tree.focus_set()
 
     def new_mission(self):
         dialogs = self.owner.dialogs
