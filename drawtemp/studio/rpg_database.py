@@ -137,6 +137,31 @@ def _resource(content, family, identifier, mission_id=""):
 
 
 def _transform(content, family, operation, identifier, mission_id="", **kwargs):
+    if operation == "duplicate":
+        new_id = kwargs["new_id"]
+        source = deepcopy(_resource(content, family, identifier))
+        if family == "archetypes":
+            result = actors.create_archetype(
+                content, new_id, kind=source.get("kind", "character"))
+            result["archetypes"][new_id] = source
+        elif family == "jobs":
+            result = rules.create_job(content, new_id, source["name"] + " (copie)")
+            result["jobs"][new_id] = {**source, "name": source["name"] + " (copie)"}
+        elif family == "equipment":
+            result = rules.create_equipment(content, new_id,
+                                            source["name"] + " (copie)",
+                                            source["slot"])
+            result["equipment"][new_id] = {**source, "name": source["name"] + " (copie)"}
+        elif family == "skills":
+            result = rules.create_skill(content, new_id,
+                                        source["name"] + " (copie)")
+            index = next(i for i, row in enumerate(result["skills"])
+                         if row["id"] == new_id)
+            result["skills"][index] = {**source, "id": new_id,
+                                       "name": source["name"] + " (copie)"}
+        else:
+            raise RuleError("Only reusable definitions can be duplicated")
+        return result
     if operation == "create":
         if family == "archetypes":
             return actors.create_archetype(content, identifier, **kwargs)
@@ -257,37 +282,8 @@ class DatabaseEditor:
     def duplicate(self, family, identifier, new_id):
         require(family in {"archetypes", "jobs", "skills", "equipment"},
                 "Only reusable definitions can be duplicated")
-        row = self.detail(family, identifier)
-        if family == "archetypes":
-            fields = {k: deepcopy(row[k]) for k in
-                      ("kind", "max_hp", "attack", "speed", "move", "weapon", "skills")
-                      if k in row}
-        elif family == "jobs":
-            fields = {"name": row["name"] + " (copie)",
-                      "requires": row.get("requires", ""),
-                      "requires_level": row.get("requires_level", 1),
-                      "bonuses": deepcopy(row.get("bonuses", {})),
-                      "skills": deepcopy(row.get("skills", {}))}
-        elif family == "equipment":
-            fields = {"name": row["name"] + " (copie)",
-                      "slot": row["slot"], "price": row.get("price", 0),
-                      "bonuses": deepcopy(row.get("bonuses", {}))}
-        else:
-            fields = {"name": row["name"] + " (copie)",
-                      "effect": deepcopy(row["effects"][0]),
-                      "target": row["target"], "range": row["range"],
-                      "cost": row["cost"]}
-            actions = [("skills", "create", new_id, "", fields)]
-            for index, effect in enumerate(row["effects"][1:], start=1):
-                actions.append(("skills", "effect", new_id, "",
-                                {"index": index, "effect": deepcopy(effect),
-                                 "insert": True}))
-            extras = {key: deepcopy(value) for key, value in row.items()
-                      if key not in {"id", "name", "effects", "target", "range", "cost"}}
-            if extras:
-                actions.append(("skills", "update", new_id, "", extras))
-            return self.apply_many(actions)
-        return self.create(family, new_id, **fields)
+        return self.apply_many(((family, "duplicate", identifier, "",
+                                 {"new_id": new_id}),))
 
     def set_effect(self, skill_id, index, effect, *, insert=False):
         return self.apply_many((("skills", "effect", skill_id, "",
