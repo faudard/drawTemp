@@ -132,6 +132,11 @@ def launch(content_path):
         def _refresh(self, mission_id):
             if not mission_id:
                 return
+            # Any in-flight result belongs to an older mission snapshot.
+            self._sequence += 1
+            self.run_button.setEnabled(True)
+            self.trial.setEnabled(True)
+            self.status.setText("Mission : " + mission_id)
             try:
                 self.inspection = inspect_encounter(self.content, mission_id)
             except Exception as exc:
@@ -221,18 +226,24 @@ def launch(content_path):
             except ValueError:
                 self._show_error("Coordonnées X/Y : entiers requis")
                 return
-            self._submit("variante", lambda: evaluate_variant(
-                deepcopy(self.content), self.mission.currentText(),
-                {"unit_positions": positions},
-                seeds=tuple(range(1, self.seeds.value()+1)),
-                max_commands=self.limit.value()))
-
-        def _start_simulation(self):
+            # Snapshot ALL widget state on the GUI thread. Worker code only
+            # receives Python values and immutable authoring copies.
+            snapshot = deepcopy(self.content)
             mission = self.mission.currentText()
             seeds = tuple(range(1, self.seeds.value()+1))
+            limit = self.limit.value()
+            self._submit("variante", lambda: evaluate_variant(
+                snapshot, mission, {"unit_positions": positions},
+                seeds=seeds, max_commands=limit))
+
+        def _start_simulation(self):
+            snapshot = deepcopy(self.content)
+            mission = self.mission.currentText()
+            seeds = tuple(range(1, self.seeds.value()+1))
+            limit = self.limit.value()
             self._submit("simulation", lambda: simulate_encounter(
-                deepcopy(self.content), mission, seeds=seeds,
-                max_commands=self.limit.value(), trace_seed_id=seeds[0]))
+                snapshot, mission, seeds=seeds, max_commands=limit,
+                trace_seed_id=seeds[0]))
 
         def _complete(self, sequence, payload):
             if sequence != self._sequence:
