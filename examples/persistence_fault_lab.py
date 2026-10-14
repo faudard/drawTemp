@@ -38,8 +38,8 @@ CUTS = (
     ("journal", 2, "before"),
     ("journal", 2, "after"),
 )
-TARGETS = {"journal": ".json.journal", "backup": ".json.bak",
-           "checkpoint": ".json"}
+TARGETS = {"journal": ".journal", "backup": ".bak",
+           "checkpoint": ""}
 
 
 def worker(path, cut):
