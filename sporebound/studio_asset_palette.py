@@ -7,6 +7,7 @@ from .tk_images import resize_photo
 from .iso_building_atlas import BUILDING_FRAMES
 from .iso_actor_atlas import actor_style
 from types import SimpleNamespace
+from pathlib import Path
 
 
 class AssetPalette:
@@ -186,8 +187,8 @@ class AssetPalette:
         # Keep bookmarks with the edited project when using Enregistrer sous.
         new_path = (self._preferences_path() if callable(self._preferences_path)
                     else self._preferences_path)
-        if new_path is not None and self.browser.path != __import__('pathlib').Path(new_path):
-            self.browser.path = __import__('pathlib').Path(new_path)
+        if new_path is not None and self.browser.path != Path(new_path):
+            self.browser.path = Path(new_path)
         self.populate()
         self.window.deiconify()
         self.window.lift()
