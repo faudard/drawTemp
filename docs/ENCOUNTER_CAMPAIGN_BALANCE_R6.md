@@ -174,10 +174,13 @@ action score:
 | Objective hold ticks actually advanced | No prediction of future AI strategy |
 
 A state is **differentiated** only if executable alternatives have different
-immediate outcome vectors. A **trade-off** is present only when neither option
-wins on all observed dimensions: one improves at least one property and
-sacrifices another. This is a Pareto-style local comparison; it is **not**
-proof of optimality, a complete game tree or equivalent end-of-turn value.
+immediate outcome vectors. A **trade-off** is counted only when both options
+consume the **same exclusive movement or action slot** and neither wins on
+all observed dimensions: one improves at least one property and sacrifices
+another. This avoids falsely calling a move versus a subsequent attack an
+opportunity cost when the engine allows both in one activation. It is a
+Pareto-style local comparison, **not** a complete turn simulation, proof of
+optimality, complete game tree or equivalent end-of-turn value.
 
 ### Dual release requirement
 
