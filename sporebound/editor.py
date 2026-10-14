@@ -3455,13 +3455,15 @@ def launch(path):
                  values=REGION_STYLES, state='readonly', width=10).pack(side='left', padx=2)
     ttk.Label(procedural_row, text='Seed').pack(side='left', padx=2)
     ttk.Entry(procedural_row, textvariable=terrain_seed_var, width=7).pack(side='left', padx=2)
-    ttk.Label(procedural_row, text='Décors').pack(side='left', padx=2)
-    ttk.Combobox(procedural_row, textvariable=terrain_vegetation_var,
+    procedural_actions = ttk.Frame(tools_terrain)
+    procedural_actions.pack(fill='x', padx=5, pady=2)
+    ttk.Label(procedural_actions, text='Végétation (0–3)').pack(side='left', padx=2)
+    ttk.Combobox(procedural_actions, textvariable=terrain_vegetation_var,
                  state='readonly', width=3, values=(0, 1, 2, 3)).pack(
                      side='left', padx=2)
-    ttk.Button(procedural_row, text='Aperçu',
+    ttk.Button(procedural_actions, text='Aperçu',
                command=preview_procedural_terrain).pack(side='left', padx=2)
-    ttk.Button(procedural_row, text='Appliquer',
+    ttk.Button(procedural_actions, text='Appliquer',
                command=confirm_procedural_terrain).pack(side='left', padx=2)
     ttk.Label(tools_terrain, textvariable=terrain_status_var,
               wraplength=360).pack(fill='x', padx=5, pady=2)
