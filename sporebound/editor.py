@@ -3164,7 +3164,15 @@ def launch(path):
                     if record is not None:
                         ox = building_part_target.cell[0] - selected_building.anchor[0]
                         oy = building_part_target.cell[1] - selected_building.anchor[1]
-                        supported = (ox, oy) in exterior_wall_cells(record)
+                        valid_wall = (ox, oy) in exterior_wall_cells(record)
+                        existing = {
+                            tuple(cell) for cell in
+                            building_appearance(record)['windows']}
+                        supported = (valid_wall and
+                                     ((name == 'add_window' and
+                                       (ox, oy) not in existing) or
+                                      (name == 'remove_window' and
+                                       (ox, oy) in existing)))
             elif part_is_valid and name == 'move_door':
                 supported = (building_part_target.part == 'door' and
                              len(door_slots(selected_building.name)) > 1)
