@@ -110,7 +110,7 @@ class R720BatchTests(unittest.TestCase):
         cut = delete_events(self.clip, ("jeanne", "theme"))
         self.assertEqual([e["id"] for e in cut["events"]], ["line"])
         cut_project = self.validate(cut)
-        repasted, ids = paste_events(cut, clipboard, 3000)
+        repasted, ids = paste_events(cut, clipboard, 1200)
         reloaded = self.validate(repasted)
         with TemporaryDirectory() as folder:
             filename = Path(folder) / "r720.game.json"
