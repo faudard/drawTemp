@@ -8,6 +8,8 @@ from pathlib import Path
 
 from .tk_images import crop_scaled
 from .iso_depth import visual_center
+from .terrain_autoblend import (LAND_COLORS, blend_edges, blend_polygon,
+                                terrain_variant)
 
 from .iso_connections import (shoreline_mask, waterfall_mask, bridge_axis,
                               transition_segments, bridge_rails)
@@ -248,10 +250,19 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         photo = None
         if atlas is not None and layers.get('Terrain', True):
             photo = atlas.tile(surface, cell_size,
-                               variant=(c[0]*37 + c[1]*19) % ATLAS_VARIANTS)
+                               variant=terrain_variant(c, ATLAS_VARIANTS))
         if photo is not None:
             tile_canvas.create_image(cx-cell_size, cy-cell_size/2,
                                 image=photo, anchor='nw')
+        # Paint authored, neighbour-aware terrestrial transitions only on the
+        # receiving side of each shared edge. This belongs to the common
+        # Studio/Player renderer and is recomputed for dirty tiles as well.
+        if layers.get('Terrain', True) and layers.get('AutoBlend', True):
+            for blend in blend_edges(board, c):
+                tile_canvas.create_polygon(
+                    *blend_polygon(corners, blend),
+                    fill=LAND_COLORS[blend.incoming], outline='',
+                    tags=('terrain_autoblend',))
         if surface == 'water' and layers.get('Terrain', True):
             # Stable, neighbour-aware banks; no seams between water cells.
             mask = shoreline_mask(board, c)
