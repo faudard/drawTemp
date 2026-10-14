@@ -92,7 +92,8 @@ class StudioDocks:
     def set_focus(self, enabled):
         """F11: keep only viewport, restore each pane exactly on exit."""
         enabled = bool(enabled)
-        if enabled == self.focus_var.get():
+        if enabled == (self._before_focus is not None):
+            self.focus_var.set(enabled)
             return
         if enabled:
             self._before_focus = {
