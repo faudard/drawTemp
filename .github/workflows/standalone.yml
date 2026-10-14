@@ -343,6 +343,12 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_terrain_watercolor_3732g_gui.py -v
+      - name: Verify connected natural maps, bridges and protected authoring (3.7.32L)
+        run: python3 -m unittest tests_standalone.test_terrain_landscape_3732l -v
+      - name: Verify natural landscape parity in real Tk (3.7.32L)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_terrain_landscape_3732l_gui -v
       - name: Verify painterly biome generation and safe flora (3.7.32K)
         run: python3 -m unittest tests_standalone.test_terrain_biomes_3732k -v
       - name: Verify terrain AutoBlend and dirty-tile/full-render parity (3.7.32F)
