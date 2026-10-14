@@ -19,12 +19,28 @@ obligatoire.
   d'entrée secondaires. Le gestionnaire, la migration v1→v2, la copie v1/v2
   vers une session longue et les éventuelles démos restent accessibles.
 
-La scène à droite utilise, si présent, le portrait embarqué
-`sporebound/content/art/jeanne/jeanne_portrait.png`. Le décor du château est
-également dessiné en primitives Canvas pour que le menu reste autonome,
-notamment dans le cas d'un projet personnalisé et d'une installation sans
-assets optionnels. Les textes de campagne proviennent de `GameProject`, pas
-d'identifiants techniques.
+## Illustration intégrée
+
+La campagne Jeanne livre le fond de château peint
+`sporebound/content/art/jeanne/jeanne_menu_backdrop.png` (640 × 900,
+PNG à palette optimisé). La composition est une illustration seule, sans
+boutons ni texte rasterisés. Elle est dérivée d'une création originale
+générée pour le menu de Jeanne ; seules les zones illustrées ont été
+retenues pour supprimer les éléments factices de la maquette.
+
+Le rendu emploie un **cover crop** de la zone panoramique à droite des
+boutons, sans déformer le ratio de l'image. Avec Pillow, l'interpolation
+LANCZOS est mise en cache par taille de fenêtre. Sans Pillow, le
+`PhotoImage` natif charge le PNG ; le décor vectoriel est conservé en
+dernier recours, ainsi que pour les projets personnalisés. Le contraste
+renforcé masque l'illustration pour garder une surface lisible. Aucun
+asset distant, format de sauvegarde ou changement de règles n'est ajouté.
+
+En l'absence du nouveau fond, le portrait existant
+`sporebound/content/art/jeanne/jeanne_portrait.png` peut toujours
+apparaître sur le décor vectoriel. Les intitulés proviennent de
+`GameProject`, et le mode spécifique « Chapitre I » conserve son
+identité dans l'accroche du titre.
 
 La page de titre utilise la palette sombre/ivoire/or, avec focus visible et
 boutons Tk natifs. Les choix restent accessibles au clavier. Le contraste
@@ -39,7 +55,7 @@ SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_titl
 python -m sporebound player --content sporebound/content/jeanne.json --project sporebound/content/jeanne.game.json
 ```
 
-**Gate manuel avant fusion :** inspecter en 800×580, 1160×820 et plein écran,
+**Gate manuel avant fusion :** inspecter en 800×580, 1160×820 et plein écran, sans Pillow puis avec Pillow,
 à 100/125/150 % et contraste renforcé ; confirmer la lisibilité du titre,
 le focus clavier et la fermeture des panneaux, puis créer/charger une partie,
 inspecter un slot avec sauvegarde de secours, tester un slot libre et valider
