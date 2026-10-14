@@ -248,6 +248,20 @@ def diagnostics(document, *, require_outfits=False):
             if action not in variant["clips"]:
                 issues.append({"severity": "warning", "variant": vid,
                                "code": "missing_action", "action": action})
+        for action, clip in variant["clips"].items():
+            for direction, frames in clip["directions"].items():
+                for previous, current in zip(frames, frames[1:]):
+                    if (previous["path"], previous["region"], previous["offset"]) == (
+                            current["path"], current["region"], current["offset"]):
+                        issues.append({"severity": "warning", "variant": vid,
+                                       "code": "duplicated_keyframe", "action": action,
+                                       "direction": direction})
+                    if any(abs(x-y) > max(8, size // 3)
+                           for x, y, size in zip(
+                               previous["offset"], current["offset"], data["size"])):
+                        issues.append({"severity": "warning", "variant": vid,
+                                       "code": "pivot_discontinuity", "action": action,
+                                       "direction": direction})
         if not variant["expressions"]:
             issues.append({"severity": "warning", "variant": vid,
                            "code": "missing_portrait"})
