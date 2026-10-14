@@ -128,7 +128,7 @@ def install(bundle, content, project, output):
                  for entry in existing["entries"] if entry["kind"] != "animation"]
     with zipfile.ZipFile(bundle) as archive:
         entries, members = _validated_bundle(archive)
-        reserved = {entry["id"].casefold() for entry in existing["entries"]]
+        reserved = {entry["id"].casefold() for entry in existing["entries"]}
         if reserved & {entry["id"].casefold() for entry in entries}:
             raise ValueError("Conflicting asset IDs in existing project")
         merged = deepcopy(existing)
