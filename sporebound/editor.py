@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
+from .terrain_ambient import TerrainAmbientAnimator, TICK_MS
 from .editor_refresh_scale import EditorContentProjection, MinimapBackgroundCache
 from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
                                   StructureGroupCommand, EditorGroupMoveCommand,
@@ -306,6 +307,7 @@ def launch(path):
     tile_size = 54
     iso_geometry = None
     iso_var = tk.BooleanVar(value=False)
+    ambient_var = tk.BooleanVar(value=True)  # Presentation only; not Content.
     interior_var = tk.BooleanVar(value=False)  # Editor visibility only.
     floor_var = tk.IntVar(value=1)  # Selected visual deck (ground always 0).
     travel_level_var = tk.IntVar(value=0)  # Combat target includes ground floor.
@@ -2886,9 +2888,11 @@ def launch(path):
                 clear_placement_preview()
                 canvas.delete('stroke_preview')
                 live = battle_frame(battle, selected_cell) if battle else None
+                ambient_animator.restore(canvas)
                 iso_geometry = editor_renderer.draw(
                     board, mission, units, cell_size=tile_size,
                     layers={**{name: var.get() for name, var in layer_vars.items()},
+                            'Ambiance': ambient_var.get(),
                             'Intérieurs': interior_var.get(),
                             'Étage actif': (battle.unit_levels.get(battle.active_id, 0)
                                             if battle and battle.active_id else
@@ -2906,7 +2910,9 @@ def launch(path):
                     unit_levels=battle.unit_levels if battle else None,
                     scene_revision=None if battle else
                     (editor_content_cache.generation, mission.id))
+                ambient_animator.capture(canvas)
             else:
+                ambient_animator.clear()
                 iso_geometry = None
                 editor_renderer.invalidate()
                 canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
@@ -3203,6 +3209,8 @@ def launch(path):
     scenery_controls.pack(fill='x', padx=5, pady=2)
     ttk.Checkbutton(scenery_controls, text='Vue isométrique 2.5D',
                     variable=iso_var, command=refresh).pack(side='left', padx=4)
+    ttk.Checkbutton(scenery_controls, text='Ambiance animée',
+                    variable=ambient_var, command=refresh).pack(side='left', padx=4)
     ttk.Label(scenery_controls, text='Sol :').pack(side='left', padx=(10,2))
     surface_box = ttk.Combobox(scenery_controls, textvariable=surface_var,
                                state='readonly', width=12, values=sorted(SURFACES))
@@ -3531,6 +3539,8 @@ def launch(path):
     canvas_region.add(canvas_frame, weight=4)
     canvas = tk.Canvas(canvas_frame,background='#eeeeee',takefocus=1)
     editor_renderer = EditorRenderCache(canvas)
+    ambient_animator = TerrainAmbientAnimator()
+    ambient_job = None
     iso_atlas = IsoTerrainAtlas(canvas)
     iso_props = IsoPropAtlas(canvas)
     building_atlas = IsoBuildingAtlas(canvas)
@@ -4028,12 +4038,31 @@ def launch(path):
     work.bind('<ButtonRelease-1>', save_layout, add='+')
     canvas_region.bind('<ButtonRelease-1>', save_layout, add='+')
     root.after_idle(restore_layout)
+
+    def ambient_tick():
+        nonlocal ambient_job
+        ambient_job = None
+        try:
+            if iso_var.get() and ambient_var.get() and ambient_animator.active:
+                from time import monotonic
+                ambient_animator.tick(canvas, monotonic() * 1000)
+            ambient_job = root.after(TICK_MS, ambient_tick)
+        except tk.TclError:
+            # Closing the window cancels the visual loop; no game state saved.
+            pass
+
     def close_editor():
+        nonlocal ambient_job
         if discard_ok():
+            if ambient_job is not None:
+                root.after_cancel(ambient_job)
+                ambient_job = None
+            ambient_animator.clear()
             save_layout()
             root.destroy()
     root.protocol('WM_DELETE_WINDOW', close_editor)
     refresh_source()
     refresh()
+    ambient_job = root.after(TICK_MS, ambient_tick)
     root.mainloop()
 
