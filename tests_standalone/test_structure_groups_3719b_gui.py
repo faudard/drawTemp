@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -72,26 +73,26 @@ class StructureGroupGestures(unittest.TestCase):
                     buttons['Aperçu groupe'].invoke()
                     self.assertTrue(canvas.find_withtag('structure_group_preview'))
                     buttons['Déplacer groupe'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     moved = records()
                     self.assertEqual({tuple(row['anchor']) for row in moved},
                                      {(3, 1), (7, 1)})
                     self.assertEqual(len({row['id'] for row in moved}), 2)
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual({tuple(row['anchor']) for row in records()},
                                      {(2, 1), (6, 1)})
                     buttons['Rétablir'].invoke()
                     set_spinbox(group_x, 0)
                     set_spinbox(group_y, 5)
                     buttons['Dupliquer groupe'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(len(records()), 4)
                     self.assertEqual(len({row['id'] for row in records()}), 4)
                     self.assertEqual({tuple(row['anchor']) for row in records()},
                                      {(3, 1), (7, 1), (3, 6), (7, 6)})
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(len(records()), 2)
                     self.assertEqual(errors, [])
                 finally:

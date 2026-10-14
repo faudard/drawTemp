@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase, skipUnless
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -73,11 +74,11 @@ class GraphicalPassageEditorTests(TestCase):
                         root.update()
 
                     click((6, 7))
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     first = Content.load(saved).missions[mid]
                     self.assertEqual(first.objects, [], 'First click must not persist')
                     click((10, 7))
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     mission = Content.load(saved).missions[mid]
                     passages = [o for o in mission.objects if o['kind'] == 'passage']
                     self.assertEqual(len(passages), 1)
@@ -85,10 +86,10 @@ class GraphicalPassageEditorTests(TestCase):
                     self.assertEqual(tuple(passages[0]['destination']), (10, 7))
                     self.assertEqual(len(canvas.find_withtag('iso_object_sprite')), 1)
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(Content.load(saved).missions[mid].objects, [])
                     buttons['Rétablir'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(len(Content.load(saved).missions[mid].objects), 1)
                     palette.show()
                     palette.tree.selection_set('object:passage')
@@ -98,7 +99,7 @@ class GraphicalPassageEditorTests(TestCase):
                     click((4, 7))
                     canvas.event_generate('<Escape>')
                     root.update()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(len(Content.load(saved).missions[mid].objects), 1)
                     self.assertEqual(errors, [])
                 finally:

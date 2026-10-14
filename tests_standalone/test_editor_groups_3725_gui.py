@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -66,18 +67,18 @@ class EditorGroupGUITests(unittest.TestCase):
                     canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
                     self.assertTrue(canvas.find_withtag('editor_group_preview'))
                     buttons['Déplacer'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(state()['editor_groups'][0]['cells'],
                                      [[5, 4]])
                     self.assertTrue(any(t['pos'] == [5, 4] and
                                         t['feature'] == 'tree'
                                         for t in state()['board']['tiles']))
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(state()['editor_groups'][0]['cells'],
                                      [[4, 4]])
                     buttons['Créer vide'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(len(state()['editor_groups']), 2)
                     self.assertEqual(errors, [])
                 finally:
@@ -158,32 +159,32 @@ class EditorGroupGUITests(unittest.TestCase):
 
                     # Reparent group_3 from A to B, without moving terrain.
                     drop('g:group_3', 'g:group_2')
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(mission()['editor_groups'][2]['parent'],
                                      'group_2')
                     # A cycle must not modify the document or emit a popup.
                     drop('g:group_2', 'g:group_3')
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(mission()['editor_groups'][1]['parent'], None)
 
                     # Transfer the exact object leaf to B.
                     drop('m:group_1:object_ids:crate1', 'g:group_2')
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(mission()['editor_groups'][1]['object_ids'],
                                      ['crate1'])
                     self.assertEqual(mission()['objects'][0]['pos'], [8, 8])
 
                     # Unlink that object by dropping it onto the virtual root.
                     drop('m:group_2:object_ids:crate1', 'root:groups')
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(mission()['editor_groups'][1]['object_ids'],
                                      [])
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(mission()['editor_groups'][1]['object_ids'],
                                      ['crate1'])
                     buttons['Rétablir'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(mission()['editor_groups'][1]['object_ids'],
                                      [])
 
@@ -194,7 +195,7 @@ class EditorGroupGUITests(unittest.TestCase):
                     root.update()
                     self.assertTrue(hierarchy.exists('t:group_1:4:4'))
                     drop('t:group_1:4:4', 'g:group_2')
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     groups = mission()['editor_groups']
                     self.assertIn([4, 4], groups[1]['cells'])
                     self.assertNotIn([4, 4], groups[0]['cells'])
@@ -262,17 +263,17 @@ class EditorGroupGUITests(unittest.TestCase):
                     canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
                     self.assertTrue(canvas.find_withtag('editor_group_preview'))
                     buttons['Dupliquer groupes'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     groups = read_groups()
                     self.assertEqual(len(groups), 4)
                     self.assertEqual([g['cells'] for g in groups[-2:]],
                                      [[[4, 3]], [[8, 7]]])
                     self.assertEqual(len({g['id'] for g in groups}), 4)
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(len(read_groups()), 2)
                     buttons['Rétablir'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(len(read_groups()), 4)
                     self.assertEqual(errors, [])
                 finally:

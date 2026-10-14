@@ -433,6 +433,10 @@ def launch(path):
     active_layer_level = tk.IntVar(value=0)
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
     mode_var = tk.StringVar(value='MODE : ÉDITION')
+    building_selection_var = tk.StringVar(value='Aucun bâtiment sélectionné')
+    building_selection_actions = []
+    building_exterior_actions = []
+    building_floor_actions = []
     try:
         map_view_data = load_views(current_path)
     except RuleError as exc:
@@ -3022,6 +3026,32 @@ def launch(path):
                 structure_selection_id = None
             else:
                 structure_selection_cell = tuple(record['anchor'])
+        selected_building = None
+        if structure_selection_cell is None:
+            building_selection_var.set('Aucun bâtiment sélectionné. '
+                                       'Utiliser Sélectionner puis cliquer '
+                                       'sur une structure.')
+        else:
+            try:
+                selected_building = structure_at(
+                    doc.data, mission_var.get(), structure_selection_cell)
+                building_selection_var.set(
+                    f'{selected_building.name} — '
+                    f'{selected_building.id or "structure ancienne"}'
+                    f' | {selected_building.anchor}')
+            except (RuleError, KeyError):
+                building_selection_var.set('Aucun bâtiment sélectionné.')
+        available = selected_building is not None and battle is None
+        for widget in building_selection_actions:
+            widget.state(['!disabled'] if available else ['disabled'])
+        for widget in building_exterior_actions:
+            widget.state(['!disabled'] if available and
+                          selected_building.name in ('Maison', 'Tour')
+                          else ['disabled'])
+        for widget in building_floor_actions:
+            widget.state(['!disabled'] if available and
+                          selected_building.name in ('Maison', 'Tour', 'Ruines')
+                          else ['disabled'])
         content = editor_content_cache.get(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
         refresh_group_tree(content.missions[mission_var.get()])
@@ -3320,7 +3350,7 @@ def launch(path):
     tools_selection = ttk.Frame(tool_tabs)
     for page, title in ((tools_main, 'Carte & combat'),
                         (tools_terrain, 'Terrain & couches'),
-                        (tools_structure, 'Architecture'),
+                        (tools_structure, 'Structures'),
                         (tools_selection, 'Sélection & modèles')):
         tool_tabs.add(page, text=title)
     controls = ttk.Frame(tools_main)
@@ -3592,112 +3622,28 @@ def launch(path):
         tool_var.set('Inspecter entité')
         open_entity_inspector(selected_cell)
 
-    structure_controls = ttk.Frame(tools_structure)
-    structure_controls.pack(fill='x', padx=5, pady=2)
-    ttk.Button(structure_controls, text='Bibliothèque d’assets',
+    # Compact structure actions on the map; the full editor lives in the dock.
+    structure_strip = ttk.Frame(tools_structure)
+    structure_strip.pack(fill='x', padx=6, pady=4)
+    ttk.Button(structure_strip, text='Sélectionner bâtiment',
+               command=lambda: tool_var.set('Sélection structure')).pack(side='left', padx=2)
+    ttk.Button(structure_strip, text='Poser une structure',
+               command=lambda: tool_var.set('Structure')).pack(side='left', padx=2)
+    ttk.Button(structure_strip, text='Ouvrir l’éditeur de bâtiments',
+               command=lambda: studio_navigation.choose_section('Bâtiments')).pack(
+                   side='left', padx=(12, 2))
+    ttk.Label(structure_strip, text='Façades, portes, fenêtres et étages : menu Bâtiments'
+              ).pack(side='left', padx=8)
+
+    # Actor and asset workflows belong with map content, not architecture.
+    entity_strip = ttk.Frame(tools_selection)
+    entity_strip.pack(fill='x', padx=5, pady=2)
+    ttk.Button(entity_strip, text='Bibliothèque d’assets',
                command=open_asset_palette).pack(side='left', padx=4)
-    ttk.Button(structure_controls, text='Acteurs et objets',
+    ttk.Button(entity_strip, text='Acteurs et objets',
                command=open_entity_palette).pack(side='left', padx=4)
-    ttk.Button(structure_controls, text='Inspecter acteur / objet',
+    ttk.Button(entity_strip, text='Inspecter acteur / objet',
                command=inspect_selected_entity).pack(side='left', padx=4)
-    ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
-    structure_box = ttk.Combobox(structure_controls, textvariable=structure_var,
-                                 state='readonly', width=16, values=STRUCTURE_NAMES)
-    structure_box.pack(side='left', padx=2)
-    def change_structure(_event):
-        structure_door_var.set('Entrée A')
-        if structure_selection_cell is None:
-            tool_var.set('Structure')
-    structure_box.bind('<<ComboboxSelected>>', change_structure)
-    ttk.Button(structure_controls, text='Poser structure',
-               command=lambda: tool_var.set('Structure')).pack(side='left',padx=3)
-    ttk.Button(structure_controls, text='Supprimer structure',
-               command=remove_selected_structure).pack(side='left',padx=3)
-    ttk.Button(structure_controls, text='↺ Bâtiment',
-               command=lambda: rotate_structure(-1)).pack(side='left',padx=2)
-    ttk.Button(structure_controls, text='↻ Bâtiment',
-               command=lambda: rotate_structure(1)).pack(side='left',padx=2)
-    structure_options = ttk.Frame(tools_structure)
-    structure_options.pack(fill='x', padx=5, pady=2)
-    ttk.Checkbutton(structure_options, text='Intérieurs / coupe des toits',
-                    variable=interior_var, command=view_options_changed).pack(side='left', padx=4)
-    ttk.Label(structure_options, text='Pivot :').pack(side='left',padx=(2, 4))
-    ttk.Combobox(structure_options, textvariable=structure_pivot_var,
-                 state='readonly', width=8, values=PIVOTS).pack(side='left',padx=2)
-    ttk.Label(structure_options, text='Position de porte :').pack(side='left',padx=(12, 4))
-    ttk.Combobox(structure_options, textvariable=structure_door_var,
-                 state='readonly', width=10,
-                 values=('Entrée A','Entrée B')).pack(side='left',padx=2)
-    ttk.Label(structure_options,
-              text='Entrée B : Maison/Ruines seulement ; masquage automatique des toits en édition.').pack(side='left',padx=8)
-    structure_edit_controls = ttk.Frame(tools_structure)
-    structure_edit_controls.pack(fill='x', padx=5)
-    ttk.Button(structure_edit_controls, text='Sélectionner structure',
-               command=lambda: tool_var.set('Sélection structure')).pack(side='left',padx=3)
-    ttk.Button(structure_edit_controls, text='Déplacer sélection',
-               command=lambda: begin_structure_edit(False)).pack(side='left',padx=3)
-    ttk.Button(structure_edit_controls, text='Dupliquer sélection',
-               command=lambda: begin_structure_edit(True)).pack(side='left',padx=3)
-    ttk.Button(structure_edit_controls, text='Appliquer propriétés',
-               command=apply_structure_properties).pack(side='left',padx=3)
-    ttk.Label(structure_edit_controls, text='Glisser = déplacer · Maj+glisser = dupliquer · flèches = ajuster').pack(side='left',padx=8)
-    structure_group_controls = ttk.Frame(tools_structure)
-    structure_group_controls.pack(fill='x', padx=5)
-    ttk.Label(structure_group_controls,
-              text='Structures groupées (Sélection : inclure toutes les cases) :').pack(side='left',padx=(2,5))
-    ttk.Label(structure_group_controls,text='ΔX').pack(side='left')
-    ttk.Spinbox(structure_group_controls, from_=-128, to=128,
-                textvariable=structure_group_dx, width=4).pack(side='left',padx=2)
-    ttk.Label(structure_group_controls,text='ΔY').pack(side='left')
-    ttk.Spinbox(structure_group_controls, from_=-128, to=128,
-                textvariable=structure_group_dy, width=4).pack(side='left',padx=2)
-    ttk.Button(structure_group_controls, text='Aperçu groupe',
-               command=preview_structure_group).pack(side='left',padx=3)
-    ttk.Button(structure_group_controls, text='Déplacer groupe',
-               command=lambda: apply_structure_group(False)).pack(side='left',padx=3)
-    ttk.Button(structure_group_controls, text='Dupliquer groupe',
-               command=lambda: apply_structure_group(True)).pack(side='left',padx=3)
-    facade_controls = ttk.Frame(tools_structure)
-    facade_controls.pack(fill='x', padx=5, pady=3)
-    ttk.Label(facade_controls, text='Façade :').pack(side='left', padx=(2, 3))
-    ttk.Combobox(facade_controls, textvariable=facade_var, state='readonly',
-                 width=9, values=FACADES).pack(side='left')
-    ttk.Label(facade_controls, text='Toiture :').pack(side='left', padx=(10, 3))
-    ttk.Combobox(facade_controls, textvariable=roof_var, state='readonly',
-                 width=9, values=ROOFS).pack(side='left')
-    ttk.Button(facade_controls, text='Appliquer façade/toiture',
-               command=apply_building_style).pack(side='left', padx=5)
-    ttk.Button(facade_controls, text='Poser fenêtre',
-               command=lambda: choose_window_mode(True)).pack(side='left', padx=3)
-    ttk.Button(facade_controls, text='Effacer fenêtre',
-               command=lambda: choose_window_mode(False)).pack(side='left', padx=3)
-    ttk.Label(facade_controls,
-              text='Maison/Tour · Fenêtres décoratives sur murs extérieurs').pack(
-                  side='left', padx=5)
-    # Floor authoring is contextual to Architecture, not a global toolbar.
-    floor_controls = ttk.Frame(tools_structure)
-    floor_controls.pack(fill='x', padx=5)
-    ttk.Label(floor_controls, text='Étage supérieur (visuel) :').pack(side='left',padx=3)
-    floor_combo = ttk.Combobox(floor_controls, textvariable=floor_var,
-                               state='readonly', width=3,
-                               values=tuple(range(1, MAX_INTERIOR_LEVEL+1)))
-    floor_combo.pack(side='left')
-    floor_combo.bind('<<ComboboxSelected>>', lambda _e: refresh())
-    ttk.Button(floor_controls, text='Créer',
-               command=create_interior_level).pack(side='left',padx=2)
-    ttk.Button(floor_controls, text='Supprimer',
-               command=remove_interior_level).pack(side='left',padx=2)
-    ttk.Label(floor_controls, text='Opération').pack(side='left',padx=3)
-    ttk.Combobox(floor_controls, textvariable=floor_action_var, state='readonly',
-                 width=10, values=('Sol','Mobilier','Trou','Restaurer')).pack(side='left')
-    ttk.Label(floor_controls, text='Sol').pack(side='left',padx=3)
-    ttk.Combobox(floor_controls, textvariable=floor_surface_var, state='readonly',
-                 width=8, values=sorted(FLOOR_SURFACES)).pack(side='left')
-    ttk.Label(floor_controls, text='Objet').pack(side='left',padx=3)
-    ttk.Combobox(floor_controls, textvariable=floor_feature_var, state='readonly',
-                 width=9, values=sorted(FLOOR_FEATURES)).pack(side='left')
-    ttk.Button(floor_controls, text='Peindre étage',
-               command=select_interior_paint).pack(side='left',padx=4)
     tactical_floors = ttk.Frame(tools_selection)
     tactical_floors.pack(fill='x', padx=5, pady=2)
     ttk.Label(tactical_floors, text='Gameplay vertical :').pack(side='left',padx=3)
@@ -3798,6 +3744,203 @@ def launch(path):
     side_tabs.add(inspector_page, text='Inspecteur')
     side_tabs.add(groups_page, text='Groupes')
     side_tabs.add(prefabs_page, text='Préfabs')
+
+    # Building Editor 1.0 reuses the map Canvas and canonical commands.
+    buildings_page = ttk.Frame(side_tabs)
+    side_tabs.add(buildings_page, text='Bâtiments')
+    building_heading = ttk.Frame(buildings_page)
+    building_heading.pack(fill='x', padx=7, pady=(7, 3))
+    ttk.Label(building_heading, text='ÉDITEUR DE BÂTIMENTS',
+              font=('TkDefaultFont', 10, 'bold')).pack(side='left')
+    ttk.Button(building_heading, text='Retour carte',
+               command=lambda: studio_navigation.choose_section('Carte & monde')
+               ).pack(side='right')
+    ttk.Label(buildings_page, textvariable=building_selection_var,
+              wraplength=260, justify='left').pack(fill='x', padx=8, pady=(0, 6))
+    building_tabs = ttk.Notebook(buildings_page)
+    building_tabs.pack(fill='both', expand=True, padx=5, pady=(0, 5))
+
+    def building_tab(label):
+        frame = ttk.Frame(building_tabs)
+        building_tabs.add(frame, text=label)
+        scroll = tk.Canvas(frame, borderwidth=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(frame, orient='vertical', command=scroll.yview)
+        scroll.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right', fill='y')
+        scroll.pack(side='left', fill='both', expand=True)
+        body = ttk.Frame(scroll)
+        item = scroll.create_window((0, 0), window=body, anchor='nw')
+        body.bind('<Configure>', lambda _e: scroll.configure(
+            scrollregion=scroll.bbox('all')))
+        scroll.bind('<Configure>', lambda event: scroll.itemconfigure(
+            item, width=event.width))
+        return body
+
+    building_general = building_tab('Général')
+    building_exterior = building_tab('Extérieur')
+    building_interior = building_tab('Intérieur')
+    # Existing action widgets retain callbacks, variables and validations.
+    structure_controls = ttk.Frame(building_general)
+    structure_controls.pack(fill='x', padx=5, pady=2)
+    ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
+    structure_box = ttk.Combobox(structure_controls, textvariable=structure_var,
+                                 state='readonly', width=16, values=STRUCTURE_NAMES)
+    structure_box.pack(side='left', padx=2)
+    def change_structure(_event):
+        structure_door_var.set('Entrée A')
+        if structure_selection_cell is None:
+            tool_var.set('Structure')
+    structure_box.bind('<<ComboboxSelected>>', change_structure)
+    ttk.Button(structure_controls, text='Poser structure',
+               command=lambda: tool_var.set('Structure')).pack(side='left',padx=3)
+    ttk.Button(structure_controls, text='Supprimer structure',
+               command=remove_selected_structure).pack(side='left',padx=3)
+    ttk.Button(structure_controls, text='↺ Bâtiment',
+               command=lambda: rotate_structure(-1)).pack(side='left',padx=2)
+    ttk.Button(structure_controls, text='↻ Bâtiment',
+               command=lambda: rotate_structure(1)).pack(side='left',padx=2)
+    structure_options = ttk.Frame(building_general)
+    structure_options.pack(fill='x', padx=5, pady=2)
+    ttk.Checkbutton(structure_options, text='Intérieurs / coupe des toits',
+                    variable=interior_var, command=view_options_changed).pack(side='left', padx=4)
+    ttk.Label(structure_options, text='Pivot :').pack(side='left',padx=(2, 4))
+    ttk.Combobox(structure_options, textvariable=structure_pivot_var,
+                 state='readonly', width=8, values=PIVOTS).pack(side='left',padx=2)
+    ttk.Label(structure_options, text='Position de porte :').pack(side='left',padx=(12, 4))
+    ttk.Combobox(structure_options, textvariable=structure_door_var,
+                 state='readonly', width=10,
+                 values=('Entrée A','Entrée B')).pack(side='left',padx=2)
+    ttk.Label(structure_options,
+              text='Entrée B : Maison/Ruines seulement ; masquage automatique des toits en édition.').pack(side='left',padx=8)
+    structure_edit_controls = ttk.Frame(building_general)
+    structure_edit_controls.pack(fill='x', padx=5)
+    ttk.Button(structure_edit_controls, text='Sélectionner structure',
+               command=lambda: tool_var.set('Sélection structure')).pack(side='left',padx=3)
+    ttk.Button(structure_edit_controls, text='Déplacer sélection',
+               command=lambda: begin_structure_edit(False)).pack(side='left',padx=3)
+    ttk.Button(structure_edit_controls, text='Dupliquer sélection',
+               command=lambda: begin_structure_edit(True)).pack(side='left',padx=3)
+    ttk.Button(structure_edit_controls, text='Appliquer propriétés',
+               command=apply_structure_properties).pack(side='left',padx=3)
+    ttk.Label(structure_edit_controls, text='Glisser = déplacer · Maj+glisser = dupliquer · flèches = ajuster').pack(side='left',padx=8)
+    structure_group_controls = ttk.Frame(building_general)
+    structure_group_controls.pack(fill='x', padx=5)
+    ttk.Label(structure_group_controls,
+              text='Structures groupées (Sélection : inclure toutes les cases) :').pack(side='left',padx=(2,5))
+    ttk.Label(structure_group_controls,text='ΔX').pack(side='left')
+    ttk.Spinbox(structure_group_controls, from_=-128, to=128,
+                textvariable=structure_group_dx, width=4).pack(side='left',padx=2)
+    ttk.Label(structure_group_controls,text='ΔY').pack(side='left')
+    ttk.Spinbox(structure_group_controls, from_=-128, to=128,
+                textvariable=structure_group_dy, width=4).pack(side='left',padx=2)
+    ttk.Button(structure_group_controls, text='Aperçu groupe',
+               command=preview_structure_group).pack(side='left',padx=3)
+    ttk.Button(structure_group_controls, text='Déplacer groupe',
+               command=lambda: apply_structure_group(False)).pack(side='left',padx=3)
+    ttk.Button(structure_group_controls, text='Dupliquer groupe',
+               command=lambda: apply_structure_group(True)).pack(side='left',padx=3)
+    facade_controls = ttk.Frame(building_exterior)
+    facade_controls.pack(fill='x', padx=5, pady=3)
+    ttk.Label(facade_controls, text='Façade :').pack(side='left', padx=(2, 3))
+    ttk.Combobox(facade_controls, textvariable=facade_var, state='readonly',
+                 width=9, values=FACADES).pack(side='left')
+    ttk.Label(facade_controls, text='Toiture :').pack(side='left', padx=(10, 3))
+    ttk.Combobox(facade_controls, textvariable=roof_var, state='readonly',
+                 width=9, values=ROOFS).pack(side='left')
+    ttk.Button(facade_controls, text='Appliquer façade/toiture',
+               command=apply_building_style).pack(side='left', padx=5)
+    ttk.Button(facade_controls, text='Poser fenêtre',
+               command=lambda: choose_window_mode(True)).pack(side='left', padx=3)
+    ttk.Button(facade_controls, text='Effacer fenêtre',
+               command=lambda: choose_window_mode(False)).pack(side='left', padx=3)
+    ttk.Label(facade_controls,
+              text='Maison/Tour · Fenêtres décoratives sur murs extérieurs').pack(
+                  side='left', padx=5)
+    # Floor authoring is contextual to Architecture, not a global toolbar.
+    floor_controls = ttk.Frame(building_interior)
+    floor_controls.pack(fill='x', padx=5)
+    ttk.Label(floor_controls, text='Étage supérieur (visuel) :').pack(side='left',padx=3)
+    floor_combo = ttk.Combobox(floor_controls, textvariable=floor_var,
+                               state='readonly', width=3,
+                               values=tuple(range(1, MAX_INTERIOR_LEVEL+1)))
+    floor_combo.pack(side='left')
+    floor_combo.bind('<<ComboboxSelected>>', lambda _e: refresh())
+    ttk.Button(floor_controls, text='Créer',
+               command=create_interior_level).pack(side='left',padx=2)
+    ttk.Button(floor_controls, text='Supprimer',
+               command=remove_interior_level).pack(side='left',padx=2)
+    ttk.Label(floor_controls, text='Opération').pack(side='left',padx=3)
+    ttk.Combobox(floor_controls, textvariable=floor_action_var, state='readonly',
+                 width=10, values=('Sol','Mobilier','Trou','Restaurer')).pack(side='left')
+    ttk.Label(floor_controls, text='Sol').pack(side='left',padx=3)
+    ttk.Combobox(floor_controls, textvariable=floor_surface_var, state='readonly',
+                 width=8, values=sorted(FLOOR_SURFACES)).pack(side='left')
+    ttk.Label(floor_controls, text='Objet').pack(side='left',padx=3)
+    ttk.Combobox(floor_controls, textvariable=floor_feature_var, state='readonly',
+                 width=9, values=sorted(FLOOR_FEATURES)).pack(side='left')
+    ttk.Button(floor_controls, text='Peindre étage',
+               command=select_interior_paint).pack(side='left',padx=4)
+
+    def format_building_row(row, caption):
+        heading = ttk.Label(row.master, text=caption,
+                            font=('TkDefaultFont', 9, 'bold'))
+        row.pack_forget()
+        heading.pack(anchor='w', padx=10, pady=(10, 2))
+        row.pack(fill='x', padx=6)
+        for widget in row.winfo_children():
+            widget.pack_forget()
+            if isinstance(widget, ttk.Label):
+                widget.configure(wraplength=238)
+            widget.pack(fill='x', padx=7, pady=2)
+
+    for panel, title in (
+        (structure_controls, 'Création & rotation'),
+        (structure_options, 'Entrées & affichage'),
+        (structure_edit_controls, 'Sélection'),
+        (structure_group_controls, 'Structures groupées'),
+        (facade_controls, 'Façades & ouvertures'),
+        (floor_controls, 'Niveaux & intérieurs'),
+    ):
+        format_building_row(panel, title)
+
+    # Hide invalid authoring actions until the selected structure supports
+    # them; empty-map users only need placement and selection.
+    required_selection = (
+        'Supprimer structure', '↺ Bâtiment', '↻ Bâtiment',
+        'Déplacer sélection', 'Dupliquer sélection', 'Appliquer propriétés')
+    required_exterior = ('Appliquer façade/toiture',
+                         'Poser fenêtre', 'Effacer fenêtre')
+    required_floor = ('Créer', 'Supprimer', 'Peindre étage')
+    for panel in (structure_controls, structure_options,
+                  structure_edit_controls, structure_group_controls,
+                  facade_controls, floor_controls):
+        for widget in panel.winfo_children():
+            if not isinstance(widget, ttk.Button):
+                continue
+            title = widget.cget('text')
+            if title in required_selection:
+                building_selection_actions.append(widget)
+            elif title in required_exterior:
+                building_exterior_actions.append(widget)
+            elif title in required_floor:
+                building_floor_actions.append(widget)
+    for widget in (building_selection_actions + building_exterior_actions
+                   + building_floor_actions):
+        widget.state(['disabled'])
+
+    def show_building_mode(enabled):
+        if enabled:
+            tool_tabs.select(tools_structure)
+            side_tabs.select(buildings_page)
+            if battle is None:
+                tool_var.set('Sélection structure')
+            status_var.set('Bâtiments : sélectionner une structure sur la carte '
+                           'pour modifier son extérieur ou ses niveaux.')
+        else:
+            if tool_tabs.select() == str(tools_structure):
+                tool_tabs.select(tools_main)
+            if side_tabs.select() == str(buildings_page):
+                side_tabs.select(inspector_page)
 
     # Prefab tools can grow with content; only this dock scrolls vertically.
     prefab_canvas = tk.Canvas(prefabs_page, highlightthickness=0, borderwidth=0)
@@ -3988,6 +4131,9 @@ def launch(path):
         inspector_page, text='Créer événement lié à la porte',
         command=open_selected_gate_event)
     event_focus.pack(fill='x', padx=6, pady=2)
+    ttk.Button(inspector_page, text='Modifier le bâtiment sélectionné',
+               command=lambda: studio_navigation.choose_section('Bâtiments')
+               ).pack(fill='x', padx=6, pady=2)
     ttk.Button(inspector_page, text='Personnages et événements',
                command=lambda: studio.workspace._show_tab(
                    'Personnages et événements')).pack(fill='x', padx=6, pady=3)
@@ -4237,7 +4383,8 @@ def launch(path):
     studio.workspace.incremental_validator = editing_context.diagnostics
     from .studio_layout import StudioNavigation
     studio_navigation = StudioNavigation(
-        section_bar, notebook, tool_tabs, work, tk, ttk)
+        section_bar, notebook, tool_tabs, work, tk, ttk,
+        building_mode_change=show_building_mode)
     from .studio_docks import StudioDocks, DockPreferences
     studio_docks = StudioDocks(
         root, work, canvas_region, sidebar, side_panel, bottom_panel, tk)

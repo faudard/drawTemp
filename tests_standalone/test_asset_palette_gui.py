@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -233,7 +234,7 @@ class AssetPaletteGUITests(unittest.TestCase):
                     paint('surface:water', (2, 4))
                     paint('feature:tree', (3, 2))
                     paint('structure:Pont', (6, 6), turns=1)
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     first = Content.load(target)
                     board = first.missions['palette'].board
                     self.assertEqual(board.tile((2, 2)).surface, 'cobble')
@@ -242,19 +243,19 @@ class AssetPaletteGUITests(unittest.TestCase):
                     bridge = next(b for b in architecture_instances(board) if b.name == 'Pont')
                     self.assertEqual((bridge.width, bridge.height), (2, 3))
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertFalse(architecture_instances(Content.load(target).missions['palette'].board))
                     buttons['Rétablir'].invoke()
                     paint('structure:Maison', (9, 9))
                     paint('structure:Rempart', (3, 11))
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = Content.load(target)
                     self.assertEqual({b.name for b in architecture_instances(saved.missions['palette'].board)},
                                      {'Maison', 'Pont', 'Rempart'})
                     # Actual reopen path, not only a decoder assertion.
                     buttons['Ouvrir'].invoke()
                     root.update()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(Content.load(target).to_dict(), saved.to_dict())
                     buttons['Playtest'].invoke()
                     palette.show()
