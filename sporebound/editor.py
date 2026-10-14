@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
 from .terrain_ambient import TerrainAmbientAnimator, TICK_MS
+from .iso_environment_atlas import IsoEnvironmentAtlas
 from .editor_refresh_scale import EditorContentProjection, MinimapBackgroundCache
 from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
                                   StructureGroupCommand, EditorGroupMoveCommand,
@@ -3061,6 +3062,7 @@ def launch(path):
                     danger=live.danger if live else (),
                     active_id=live.active_id if live else None,
                     atlas=iso_atlas, prop_atlas=iso_props,
+                    ambient_atlas=environment_atlas,
                     building_atlas=building_atlas,
                     fortification_atlas=fortification_atlas,
                     actor_atlas=actor_atlas, object_atlas=object_atlas,
@@ -3753,6 +3755,7 @@ def launch(path):
     ambient_job = None
     iso_atlas = IsoTerrainAtlas(canvas)
     iso_props = IsoPropAtlas(canvas)
+    environment_atlas = IsoEnvironmentAtlas(canvas)
     building_atlas = IsoBuildingAtlas(canvas)
     fortification_atlas = IsoFortificationAtlas(canvas)
     actor_atlas = IsoActorAtlas(canvas)
@@ -4499,7 +4502,9 @@ def launch(path):
         try:
             if iso_var.get() and ambient_var.get() and ambient_animator.active:
                 from time import monotonic
-                ambient_animator.tick(canvas, monotonic() * 1000)
+                ambient_animator.tick(canvas, monotonic() * 1000,
+                                      atlas=environment_atlas,
+                                      cell_size=tile_size)
             ambient_job = root.after(TICK_MS, ambient_tick)
         except tk.TclError:
             pass
