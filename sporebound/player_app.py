@@ -678,81 +678,191 @@ class PlayerApplication:
                 "Playtest", "Rapport exporté localement. Aucune donnée envoyée.")
 
     def options_screen(self):
+        """Single scrolling Player settings screen; development tools are opt-in."""
+        import os
+        from .player_ux import (ACTION_LABELS, DEFAULT_KEYS, KEY_BY_LABEL,
+                                KEY_CHOICES, KEY_LABELS)
+
         self._clear()
         self.presentation.transition("options")
-        self._heading("Options")
-        self.ttk.Checkbutton(
-            self.view, text="Enregistrer les playtests (activation volontaire)",
-            variable=self.playtest_optin,
-            command=self._toggle_playtest).pack(anchor="w", pady=(5, 2))
-        self.ttk.Label(
-            self.view, text="Durée réelle écoulée, commandes et objectifs. "
-            "Mémoire locale uniquement, pas de serveur et pas d'enregistrement "
-            "dans les sauvegardes. L'export JSON est manuel. Désactivé au lancement.",
-            wraplength=750).pack(anchor="w", pady=(1, 5))
-        self._button(self.view, "Exporter rapport playtest JSON",
-                     self._export_playtest).pack(anchor="w", pady=4)
-        self.ttk.Label(self.view, text="Audio optionnel : installer pygame-ce et déclarer des sounds dans le projet.").pack(
-            anchor="w", pady=10)
-        effects = self.tk.IntVar(value=int(self.audio.effects_volume * 100))
-        music = self.tk.IntVar(value=int(self.audio.music_volume * 100))
-        for name, variable in (("Effets", effects), ("Musique", music)):
-            self.ttk.Label(self.view, text=name).pack(anchor="w", pady=(8, 0))
-            self.ttk.Scale(self.view, from_=0, to=100, variable=variable).pack(
-                fill="x", padx=24, pady=(2, 12))
-        if self.preferences_error:
-            self.ttk.Label(
-                self.view, text=self.preferences_error, wraplength=740
-            ).pack(anchor="w", pady=5)
-        access = self.ttk.LabelFrame(self.view, text="Accessibilité et commandes", padding=10)
-        access.pack(fill="x", pady=6)
-        self.ttk.Checkbutton(access, text="Contraste renforcé",
-                             variable=self.high_contrast).pack(anchor="w")
-        self.ttk.Checkbutton(access, text="HUD compact",
-                             variable=self.compact_hud).pack(anchor="w")
-        self.ttk.Label(access, text="Taille du texte (%)").pack(anchor="w")
-        self.ttk.Combobox(access, state="readonly", textvariable=self.text_scale,
-                          values=(100, 125, 150), width=9).pack(anchor="w")
-        self.ttk.Label(access, text="Raccourcis tactiques (uniquement lorsque la carte a le focus)").pack(
-            anchor="w", pady=(8, 2))
-        shortcuts = self.ttk.Frame(access)
-        shortcuts.pack(fill="x")
+        self._heading("Options", "Affichage, son et commandes sur une seule page")
+
+        # Fixed footer keeps navigation accessible on smaller window sizes.
+        footer = self.ttk.Frame(self.view)
+        footer.pack(side="bottom", fill="x", pady=(10, 0))
+        scrollbar = self.ttk.Scrollbar(self.view, orient="vertical")
+        scrollbar.pack(side="right", fill="y")
+        canvas = self.tk.Canvas(
+            self.view, background=self.root.cget("background"),
+            borderwidth=0, highlightthickness=0, yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.configure(command=canvas.yview)
+        body = self.ttk.Frame(canvas, padding=(4, 6, 18, 12))
+        window = canvas.create_window((0, 0), window=body, anchor="nw")
+        body.bind("<Configure>",
+                  lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>",
+                    lambda event: canvas.itemconfigure(window, width=event.width))
+
+        def wheel(event):
+            if event.num in (4, 5):
+                step = -1 if event.num == 4 else 1
+            elif event.delta:
+                step = -1 if event.delta > 0 else 1
+            else:
+                return
+            canvas.yview_scroll(step * 3, "units")
+
+        # Only labels/frames own scrolling; comboboxes retain native wheel use.
+        def scroll_surface(widget):
+            widget.bind("<MouseWheel>", wheel, add="+")
+            widget.bind("<Button-4>", wheel, add="+")
+            widget.bind("<Button-5>", wheel, add="+")
+
+        scroll_surface(canvas)
+        scroll_surface(body)
+
+        def section(title):
+            panel = self.ttk.LabelFrame(body, text=title, padding=14)
+            panel.pack(fill="x", pady=(0, 12))
+            scroll_surface(panel)
+            return panel
+
+        full = self.tk.BooleanVar(value=bool(self.root.attributes("-fullscreen")))
+        graphics = section("Affichage")
+        self.ttk.Checkbutton(graphics, text="Plein écran", variable=full).pack(
+            anchor="w", pady=4)
+        label = self.ttk.Label(
+            graphics, text="En mode fenêtré, ajustez la taille depuis les bords de la fenêtre.")
+        label.pack(anchor="w", pady=(2, 4))
+        scroll_surface(label)
+
+        effects = self.tk.IntVar(value=round(self.audio.effects_volume * 100))
+        music = self.tk.IntVar(value=round(self.audio.music_volume * 100))
+        audio = section("Son")
+        for title, variable in (("Effets sonores", effects), ("Musique", music)):
+            line = self.ttk.Frame(audio)
+            line.pack(fill="x", pady=(0, 8))
+            scroll_surface(line)
+            header = self.ttk.Frame(line)
+            header.pack(fill="x")
+            scroll_surface(header)
+            text = self.ttk.Label(header, text=title)
+            text.pack(side="left")
+            scroll_surface(text)
+            percentage = self.tk.StringVar(value=f"{variable.get()} %")
+            number = self.ttk.Label(header, textvariable=percentage)
+            number.pack(side="right")
+            scroll_surface(number)
+            self.ttk.Scale(
+                line, from_=0, to=100, variable=variable,
+                command=lambda value, output=percentage:
+                    output.set(f"{round(float(value))} %")).pack(fill="x", pady=(5, 0))
+
+        controls = section("Commandes")
+        note = self.ttk.Label(
+            controls, text="Touches modifiables : flèches, A à Z, chiffres et fonctions. "
+                           "Les raccourcis tactiques agissent lorsque la carte a le focus.",
+            wraplength=850)
+        note.pack(anchor="w", pady=(0, 10))
+        scroll_surface(note)
         key_vars = {}
-        from .player_ux import KEY_CHOICES
+        choices = tuple(KEY_LABELS.get(sequence, sequence)
+                        for sequence in KEY_CHOICES)
+        shortcuts = self.ttk.Frame(controls)
+        shortcuts.pack(fill="x")
+        scroll_surface(shortcuts)
+        shortcuts.columnconfigure(0, weight=1)
+        shortcuts.columnconfigure(1, weight=1)
         for index, (action, sequence) in enumerate(self.keymap.items()):
-            variable = self.tk.StringVar(value=sequence)
+            variable = self.tk.StringVar(value=KEY_LABELS.get(sequence, sequence))
             key_vars[action] = variable
             field = self.ttk.Frame(shortcuts)
-            field.grid(row=index // 4, column=index % 4,
-                       sticky="w", padx=5, pady=3)
-            self.ttk.Label(field, text=action).pack(anchor="w")
-            self.ttk.Combobox(field, textvariable=variable, state="readonly",
-                              values=KEY_CHOICES, width=16).pack(anchor="w")
-        full = self.tk.BooleanVar(value=bool(self.root.attributes("-fullscreen")))
-        self.ttk.Checkbutton(self.view, text="Plein écran", variable=full).pack(
-            anchor="w", pady=10)
+            field.grid(row=index // 2, column=index % 2,
+                       sticky="ew", padx=(0, 16), pady=4)
+            field.columnconfigure(0, weight=1)
+            scroll_surface(field)
+            name = self.ttk.Label(field, text=ACTION_LABELS.get(action, action))
+            name.grid(row=0, column=0, sticky="w", padx=(0, 8))
+            scroll_surface(name)
+            self.ttk.Combobox(
+                field, state="readonly", textvariable=variable,
+                values=choices, width=19).grid(row=0, column=1, sticky="e")
+
+        def reset_keys():
+            for action, sequence in DEFAULT_KEYS.items():
+                key_vars[action].set(KEY_LABELS.get(sequence, sequence))
+
+        self._button(controls, "Réinitialiser les touches", reset_keys).pack(
+            anchor="e", pady=(10, 0))
+
+        access = section("Accessibilité")
+        contrast = self.tk.BooleanVar(value=self.high_contrast.get())
+        compact = self.tk.BooleanVar(value=self.compact_hud.get())
+        scale = self.tk.IntVar(value=self.text_scale.get())
+        self.ttk.Checkbutton(access, text="Contraste renforcé",
+                             variable=contrast).pack(anchor="w", pady=3)
+        self.ttk.Checkbutton(access, text="HUD compact",
+                             variable=compact).pack(anchor="w", pady=3)
+        line = self.ttk.Frame(access)
+        line.pack(anchor="w", pady=(7, 0))
+        self.ttk.Label(line, text="Taille des textes").pack(side="left", padx=(0, 12))
+        self.ttk.Combobox(line, state="readonly", textvariable=scale,
+                          values=(100, 125, 150), width=9).pack(side="left")
+        self.ttk.Label(line, text="%").pack(side="left", padx=(5, 0))
+
+        # QA recording stays available without exposing JSON/dev jargon to players.
+        if os.environ.get("DRAWTEMP_DEVELOPER_OPTIONS") == "1":
+            dev = section("Outils de développement")
+            self.ttk.Checkbutton(
+                dev, text="Enregistrer les playtests (activation volontaire)",
+                variable=self.playtest_optin,
+                command=self._toggle_playtest).pack(anchor="w", pady=4)
+            self._button(dev, "Exporter rapport playtest JSON",
+                         self._export_playtest).pack(anchor="w", pady=4)
+            if self.preferences_error:
+                self.ttk.Label(dev, text=self.preferences_error,
+                               wraplength=750).pack(anchor="w")
+
         def apply():
-            proposed_keys = KeyBindings({action: var.get()
-                                         for action, var in key_vars.items()})
+            assignments = {}
+            for action, variable in key_vars.items():
+                label = variable.get()
+                if label not in KEY_BY_LABEL:
+                    raise ValueError("Touche non prise en charge : " + label)
+                assignments[action] = KEY_BY_LABEL[label]
+            used = {}
+            for action, sequence in assignments.items():
+                if sequence in used:
+                    raise ValueError(
+                        "La touche " + KEY_LABELS[sequence] + " est attribuée à "
+                        + ACTION_LABELS[used[sequence]] + " et "
+                        + ACTION_LABELS[action] + ".")
+                used[sequence] = action
+            proposed_keys = KeyBindings(assignments)
             settings = {
                 "version": 1,
                 "keybindings": dict(proposed_keys.items()),
-                "text_scale": self.text_scale.get(),
-                "high_contrast": self.high_contrast.get(),
-                "compact_hud": self.compact_hud.get(),
+                "text_scale": scale.get(),
+                "high_contrast": contrast.get(),
+                "compact_hud": compact.get(),
             }
-            # Persist only after validation. Failed disk writes cannot
-            # corrupt a savegame or the previous preferences.
+            # Retain the existing atomic sidecar and schema; cancel changes nothing.
             save_preferences(self.player.profile, settings)
             self.keymap = proposed_keys
             self.preferences_error = None
+            self.text_scale.set(scale.get())
+            self.high_contrast.set(contrast.get())
+            self.compact_hud.set(compact.get())
             self._style()
             self.audio.effects_volume = effects.get() / 100
             self.audio.music_volume = music.get() / 100
             self.root.attributes("-fullscreen", full.get())
             self.title_screen()
-        self._button(self.view, "Appliquer", apply).pack(anchor="w", pady=12)
-        self._button(self.view, "Retour", self.title_screen).pack(anchor="w")
+
+        self._button(footer, "Appliquer", apply).pack(side="right", padx=(8, 0))
+        self._button(footer, "Retour sans enregistrer",
+                     self.title_screen).pack(side="right")
 
     def show(self):
         session = self.player.session
