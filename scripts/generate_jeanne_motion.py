@@ -152,6 +152,13 @@ def build(root):
     provenance["derived_hashes"] = {
         path: sha256(png).hexdigest() for path, png in sorted(generated.items())}
     AssetRegistry(registry)
+    # Superseded generated cels must not poison the strict PNG release gate.
+    # Only this owned, derived directory is pruned; originals are untouched.
+    derived_dir = root / "sprites" / "jeanne_motion"
+    if derived_dir.is_dir():
+        for stale in derived_dir.glob("*.png"):
+            if stale.relative_to(root).as_posix() not in generated:
+                stale.unlink()
     for relative, png in generated.items():
         destination = root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
