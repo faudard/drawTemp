@@ -12,6 +12,7 @@ import struct
 import zlib
 
 from .iso_connections import N, E, S, W
+from .terrain_autoblend import LAND_PRIORITY
 from .terrain_watercolor import (
     PIGMENTS, WASHES, TILE_WIDTH, TILE_HEIGHT, _hash, _noise, _blend, _chunk,
 )
@@ -45,7 +46,7 @@ def painted_mask_pixel(material, bit, variant, x, y):
     Away from the edge the wash feathers into transparency, with low-frequency
     painterly fluctuations but no harsh tiling grid or clipped neighboring art.
     """
-    if material not in PIGMENTS or bit not in DIRECTIONS:
+    if material not in LAND_PRIORITY or bit not in DIRECTIONS:
         raise ValueError('Unsupported painted transition material or direction')
     if type(variant) is not int or not 0 <= variant < MASK_VARIANTS:
         raise ValueError('Unsupported painted transition variant')
@@ -90,7 +91,7 @@ def painted_mask_pixel(material, bit, variant, x, y):
 @lru_cache(maxsize=128)
 def painted_mask_png(material, bit, variant=0):
     """Return compact, valid RGBA PNG bytes for a reusable transition stamp."""
-    if material not in PIGMENTS or bit not in DIRECTIONS or (
+    if material not in LAND_PRIORITY or bit not in DIRECTIONS or (
             type(variant) is not int or not 0 <= variant < MASK_VARIANTS):
         raise ValueError('Invalid painted mask specification')
     rows = bytearray()
@@ -130,7 +131,7 @@ def main(argv=None):
     directory = Path(args.output_dir)
     directory.mkdir(parents=True, exist_ok=True)
     count = 0
-    for material in PIGMENTS:
+    for material in LAND_PRIORITY:
         for bit, tag in ((N, 'n'), (E, 'e'), (S, 's'), (W, 'w')):
             dest = directory / f'{material}_{tag}.png'
             dest.write_bytes(painted_mask_png(material, bit))
