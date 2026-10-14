@@ -184,6 +184,20 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_map_editor_gui.py -v
+      - name: Export deterministic watercolor terrain preview (3.7.32G)
+        run: |
+          mkdir -p "$RUNNER_TEMP/terrain-watercolor-art"
+          python3 -m sporebound.terrain_watercolor --output "$RUNNER_TEMP/terrain-watercolor-art/terrain_watercolor.png"
+      - name: Preserve watercolor terrain art preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: terrain-watercolor-materials-3732g
+          path: ${{ runner.temp }}/terrain-watercolor-art/terrain_watercolor.png
+          if-no-files-found: error
+      - name: Verify watercolor material atlas in real Tk (3.7.32G)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_terrain_watercolor_3732g_gui.py -v
       - name: Verify terrain AutoBlend and dirty-tile/full-render parity (3.7.32F)
         env:
           SPOREBOUND_GUI_SMOKE: '1'
