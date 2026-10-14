@@ -15,7 +15,7 @@ def launch(session):
     from tkinter import filedialog, messagebox, ttk
 
     root = tk.Tk()
-    root.title("Sporebound — Commandement stratégique")
+    root.title("DrawTemp — Commandement stratégique")
     root.geometry("1130x780")
     root.minsize(830, 600)
     current = [session]

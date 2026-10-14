@@ -67,16 +67,16 @@ jobs:
       - run: python -m unittest discover -s tests_standalone -v
       - name: Battle Lab 3.8 CLI report and paired deterministic replay gate
         run: |
-          python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --report battle_lab_ci.json
-          python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --baseline battle_lab_ci.json
+          python -m sporebound battle-lab --content sporebound/content/core.json --mission garden --seed 1 --runs 2 --limit 40 --report battle_lab_ci.json
+          python -m sporebound battle-lab --content sporebound/content/core.json --mission garden --seed 1 --runs 2 --limit 40 --baseline battle_lab_ci.json
       - name: Balance Matrix 3.8.2 paired missions, rules and replay smoke
         run: |
-          python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --report matrix_382_ci.json > matrix_382_console.json
-          python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --baseline matrix_382_ci.json > matrix_382_compare.json
+          python -m sporebound balance-matrix --content sporebound/content/core.json --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --report matrix_382_ci.json > matrix_382_console.json
+          python -m sporebound balance-matrix --content sporebound/content/core.json --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --baseline matrix_382_ci.json > matrix_382_compare.json
       - name: Visual Battle Lab 3.8.3 deterministic figures and CT replay
         run: python -m unittest tests_standalone.test_battle_visual_383 -v
       - name: Combat Diagnostics 3.8.1 canonical trace and CLI replay evidence
-        run: python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 40 --report battle_diagnostics_ci.json
+        run: python -m sporebound battle-diagnostics --content sporebound/content/core.json --mission garden --seed 42 --limit 40 --report battle_diagnostics_ci.json
       - name: Human Playtest Telemetry 3.8.4 opt-in, committed events and privacy
         run: python -m unittest tests_standalone.test_playtest_384 -v
       - name: R6 profiles, AI explainability, strict regression and campaign curves
@@ -85,26 +85,26 @@ jobs:
         run: python -m unittest tests_standalone.test_tactical_choice_r6 -v
       - name: R6.14 bounded CLI report (zero optional multi-choice quota for smoke)
         run: >-
-          python -m sporebound tactical-choices --mission garden
+          python -m sporebound tactical-choices --content sporebound/content/core.json --mission garden
           --seed 1 --limit 60 --choice-min-multi 0
           --report tactical_choices_ci.json
       - name: R6.14 repeat identical choices against saved reference
         run: >-
-          python -m sporebound tactical-choices --mission garden
+          python -m sporebound tactical-choices --content sporebound/content/core.json --mission garden
           --seed 1 --limit 60 --choice-min-multi 0
           --baseline tactical_choices_ci.json
       - name: R6.15 one-command tactical quality and human-gate tests
         run: python -m unittest tests_standalone.test_tactical_quality_r615 -v
       - name: R6.15 report — automated probe is not human certification
         run: >-
-          python -m sporebound tactical-quality --mission garden
+          python -m sporebound tactical-quality --content sporebound/content/core.json --mission garden
           --seed 1 --limit 20 --quality-min-differentiated 0
           --quality-min-tradeoffs 0 --report tactical_quality_ci.json
       - name: R6.16 full activation decision quality and replay
         run: python -m unittest tests_standalone.test_full_activation_r616 -v
       - name: R6.16 headless complete turn smoke (no design claim)
         run: >-
-          python -m sporebound full-activation --mission garden
+          python -m sporebound full-activation --content sporebound/content/core.json --mission garden
           --seed 1 --limit 20 --activation-min-distinct 0
           --activation-min-pairs 0 --report full_activation_ci.json
       - run: python -m sporebound validate
@@ -113,7 +113,7 @@ jobs:
       - name: Validate portable asset example
         run: |
           python examples/asset_pipeline.py --output "${{ runner.temp }}/asset-demo"
-          python -m sporebound validate --project "${{ runner.temp }}/asset-demo/game.json"
+          python -m sporebound validate --content sporebound/content/core.json --project "${{ runner.temp }}/asset-demo/game.json"
       - name: Verify complete campaigns and resumed replays
         run: python -m examples.reliability_gate --seeds 1 7 42 99 --output reliability.json
       - name: Preserve reliability measurements
@@ -122,7 +122,7 @@ jobs:
           name: reliability-${{ matrix.os }}-${{ matrix.python }}
           path: reliability.json
           if-no-files-found: error
-      - run: python -m sporebound simulate --mission garden --seed 42 --save battle.json
+      - run: python -m sporebound simulate --content sporebound/content/core.json --mission garden --seed 42 --save battle.json
       - run: python -m sporebound replay --load battle.json
       - name: Installed package and bundled content outside checkout
         working-directory: ${{ runner.temp }}
@@ -138,7 +138,7 @@ jobs:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest tests_standalone.test_map_builder4_3732d_gui -v
       - name: Development-only watercolor metadata check (NOT release certification)
-        run: python3 scripts/verify_watercolor_release.py --root assets/watercolor --allow-missing
+        run: python3 -m scripts.verify_watercolor_release --root assets/watercolor --allow-missing
       - name: Exercise the real editor
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -663,7 +663,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Gate 3.8 difficulty, duration and determinism against pinned garden baseline
-        run: python -m sporebound battle-lab --mission garden --seed 1 --runs 8 --limit 500 --baseline docs/evidence/battle_lab_garden_38.json --max-victory-drop 0.20 --max-p95-growth 0.30 --max-new-limits 0 --report battle_lab_garden_38.json
+        run: python -m sporebound battle-lab --content sporebound/content/core.json --mission garden --seed 1 --runs 8 --limit 500 --baseline docs/evidence/battle_lab_garden_38.json --max-victory-drop 0.20 --max-p95-growth 0.30 --max-new-limits 0 --report battle_lab_garden_38.json
       - name: Preserve balance evidence
         uses: actions/upload-artifact@v4
         with:

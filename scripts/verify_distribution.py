@@ -32,7 +32,7 @@ def main():
         # All commands are executed away from the working tree.
         run([python, "-c", "import sporebound; print(sporebound.__file__)"],
             cwd=root)
-        run([python, "-m", "sporebound", "validate"], cwd=root)
+        run([python, "-m", "drawtemp", "validate"], cwd=root)
         # The playable Jeanne atlas/portrait must ship inside the wheel, not
         # merely validate from a developer checkout.
         script = (
@@ -47,9 +47,9 @@ def main():
         )
         run([python, "-c", script], cwd=root)
         save = root / "battle.json"
-        run([python, "-m", "sporebound", "simulate", "--mission", "garden",
+        run([python, "-m", "drawtemp", "simulate", "--mission", "p0_01_lame",
              "--seed", "42", "--save", save], cwd=root)
-        run([python, "-m", "sporebound", "replay", "--load", save], cwd=root)
+        run([python, "-m", "drawtemp", "replay", "--load", save], cwd=root)
         if not save.is_file():
             raise SystemExit("Installed application did not create battle save")
         print(f"Wheel smoke OK: {wheels[0].name} ({sys.platform})")

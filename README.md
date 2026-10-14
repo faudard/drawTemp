@@ -1,31 +1,23 @@
-# Sporebound Tactics — gameplay autonome 2.0 alpha
+# Jeanne d'Arc — Les Cendres du Royaume
 
-**Le runtime actif est désormais 100 % Python 3.10+**, sans dépendance tierce pour
-le moteur tactique. L'éditeur et le client joueur sont dans `sporebound/` et
-utilisent Tk. La priorité reste aux règles, scénarios, tests et outils d'authoring.
+**DrawTemp** est un RPG tactique narratif autonome en Python 3.10+, avec un Player et un Game Studio Tk. La campagne **Jeanne d'Arc — Les Cendres du Royaume** est désormais le jeu par défaut.
 
-Les sources, scènes, plug-ins, ressources et anciens tests Godot ont été supprimés
-de la branche active. Leur historique reste consultable via Git, mais ils ne sont
-plus exécutés ni maintenus. Les illustrations PNG/JPG et les kits réutilisables
-sont conservés dans [`assets/`](assets/README.md) ; leur utilisation par un futur
-renderer est un chantier distinct. La conversion des anciennes cartes et sauvegardes
-n'est pas garantie. Voir [les limites de la migration](docs/GAMEPLAY.md#migration-de-godot).
+## Jouer à Jeanne d'Arc
 
-## Nouveau contenu : Jeanne d'Arc (prologue jouable)
-
-Une campagne indépendante, **Jeanne d'Arc — Les Cendres du Royaume**, propose
-sept scènes narratives et cinq missions tactiques, avec un embranchement
-secours / poursuite, un flashback d'entraînement, une fuite finale, ainsi
-qu'une exploration jouable des champs et des ruines de Domrémy. Les
-anciens exemples Sporebound restent conservés.
+Depuis la racine du dépôt :
 
 ```sh
-python -m sporebound validate --content sporebound/content/jeanne.json --project sporebound/content/jeanne.game.json
-python -m sporebound player --content sporebound/content/jeanne.json --project sporebound/content/jeanne.game.json
+python -m drawtemp player    # lance la campagne de Jeanne
+python -m drawtemp editor    # ouvre le Studio sur le contenu de Jeanne
+python -m drawtemp validate  # vérifie le contenu par défaut
+python -m drawtemp simulate --mission p0_01_lame --seed 42
 ```
 
-Cette tranche ne contient pas encore les actes I–V, l'exploration continue
-hors grille ni les cinématiques dessinées. Voir [le guide du prologue](docs/JEANNE_PROLOGUE.md).
+Le prologue et l'Acte I contiennent **11 missions tactiques**, des scènes narratives, des choix et une progression de campagne. Le contenu livré par défaut est `sporebound/content/jeanne.json`, associé à son manifeste `sporebound/content/jeanne.game.json`. Voir [le prologue](docs/JEANNE_PROLOGUE.md) et [l'Acte I](docs/JEANNE_ACTE_I.md).
+
+Le nom Python interne `sporebound` et `python -m sporebound` restent temporairement des alias techniques **pour compatibilité** des imports, anciens scripts, tests et sauvegardes. Ils ne sélectionnent plus l'ancienne campagne par défaut. `core.json` et `core.game.json` sont des fixtures de démonstration historiques, accessibles explicitement avec `--content sporebound/content/core.json --project sporebound/content/core.game.json`.
+
+Les nouveaux profils Player sont enregistrés sous `~/.drawtemp/`. Quand un profil plus ancien existe dans `~/.sporebound/` et qu'aucun nouveau profil n'existe, il continue d'être utilisé sans copie ou suppression silencieuse. `--profile` permet toujours de choisir un dossier personnalisé.
 
 ## Studio Cinématiques 2.9
 
@@ -40,7 +32,7 @@ dans le format de combat. Voir le [guide Cinématiques](docs/CINEMATICS.md).
 
 ## Player & Presentation 2.6
 
-Le client `python -m sporebound player` utilise désormais `GameSession` et les
+Le client `python -m drawtemp player` utilise désormais `GameSession` et les
 checkpoints `SessionStore` (sauvegarde/reprise des combats, scènes et fronts).
 Une interface Tk 2D/2.5D apporte grille, caméra, preview du moteur,
 déploiement, portraits optionnels, chronologie des fronts et commandes de siège.
@@ -65,7 +57,7 @@ session = GameSession.load("saves/session.json", content, project)
 ```
 
 Les checkpoints de session sont distincts des anciens slots `PlayerSession`.
-Le nouveau client `sporebound player` utilise cette façade, tandis que l'ancien `player_shell` et ses slots sont conservés pour compatibilité.
+Le nouveau client `drawtemp player` utilise cette façade, tandis que l'ancien `player_shell` et ses slots sont conservés pour compatibilité.
 Voir [contrats et exemples](docs/UNIFIED_SESSION.md).
 
 ## Persistence 2.0 — reprise et sauvegardes de secours
@@ -91,7 +83,7 @@ Voir [le guide Persistence 2.0](docs/PERSISTENCE_2.md). L'autosave reste
 Depuis **Battle Lab**, sélectionner une seed et cliquer **Diagnostiquer seed**
 pour rejouer les commandes réellement exécutées, naviguer dans la timeline
 CT/PV/positions et vérifier les anomalies signalées sans modifier la mission.
-En CLI : `python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 500 --report trace.json`.
+En CLI : `python -m drawtemp battle-diagnostics --mission p0_01_lame --seed 42 --limit 500 --report trace.json`.
 Voir [Combat Diagnostics 3.8.1](docs/BATTLE_DIAGNOSTICS_381.md).
 
 ## Visual Battle Lab 3.8.3 — analyse graphique et replay CT
@@ -126,7 +118,7 @@ projet. Créer plusieurs scénarios (PV, défense, attaques, composition des
 équipes), puis lancer les **mêmes seeds** sur toutes les variantes, chaque
 mission avec son témoin. Les simulations sont isolées et replays vérifiés.
 
-CLI : `python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 8 --limit 500 --report matrix.json`.
+CLI : `python -m drawtemp balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 8 --limit 500 --report matrix.json`.
 
 [Documentation Balance Matrix 3.8.2](docs/BALANCE_MATRIX_382.md).
 
@@ -138,40 +130,30 @@ activations CT, dommages/soins, survie des classes, objectifs, replays vérifié
 et comparaison avant/après avec alertes de difficulté et de durée.
 
 ```sh
-python -m sporebound battle-lab --mission garden --seed 1 --runs 20 --limit 500 --report before.json
-python -m sporebound battle-lab --mission garden --seed 1 --runs 20 --limit 500 --baseline before.json --report after.json
+python -m drawtemp battle-lab --mission p0_01_lame --seed 1 --runs 20 --limit 500 --report before.json
+python -m drawtemp battle-lab --mission p0_01_lame --seed 1 --runs 20 --limit 500 --baseline before.json --report after.json
 ```
 
 Une régression majeure fait échouer la comparaison (code 2). Les ticks CT
 ne sont **pas** des minutes de jeu humain. Voir le
 [guide Battle Lab 3.8](docs/BATTLE_LAB_38.md).
 
-## Démarrer
-
-Depuis la racine du dépôt :
+## Démarrer et développer
 
 ```sh
-python -m sporebound editor
-python -m sporebound player # client de jeu indépendant de l’éditeur
-```
-
-Tk/Tcl doit être disponible pour l’éditeur (`python -m tkinter` permet de vérifier).
-Sous Linux, installer le paquet `python3-tk` si nécessaire. Le moteur, les tests,
-le terminal et les simulations fonctionnent sans Tk ni écran.
-
-```sh
-python -m sporebound validate
-python -m sporebound play --mission garden
-python -m sporebound simulate --mission crown --seed 42 --save saves/battle.json
-python -m sporebound replay --load saves/battle.json
-python -m sporebound play --load saves/battle.json
-python -m sporebound balance --mission garden --runs 20
+python -m drawtemp editor
+python -m drawtemp player
+python -m drawtemp validate
+python -m drawtemp play --mission p0_01_lame
+python -m drawtemp simulate --mission a1_02_pont --seed 42 --save saves/battle.json
+python -m drawtemp replay --load saves/battle.json
+python -m drawtemp balance --mission p0_01_lame --runs 20
 python -m unittest discover -s tests_standalone -v
 ```
 
-Installation facultative : `python -m pip install .`, puis `sporebound editor`.
-Le paquet inclut les données JSON ; il fonctionne hors du dépôt. Aucun téléchargement
-ni exécutable Godot n’est requis.
+Tk/Tcl est requis pour le Studio et le Player (`python -m tkinter` permet de vérifier). Sous Linux, installer `python3-tk` si nécessaire. Le moteur, les tests et la simulation fonctionnent sans interface graphique.
+
+Installation facultative : `python -m pip install .`, puis `drawtemp player` ou `drawtemp editor`. Le paquet inclut les données de Jeanne et fonctionne hors du dépôt.
 
 ## Gameplay disponible
 
@@ -199,7 +181,7 @@ et les valeurs sont propres au prototype autonome.
 
 ## Studio de création (cartes et jeu complet)
 
-Lancer `python -m sporebound editor`. Le studio comprend maintenant :
+Lancer `python -m drawtemp editor`. Le studio comprend maintenant :
 
 - **Espace projet (2.5.5)** : inventaire central des campagnes, missions,
   dialogues, personnages, classes, compétences et assets ; navigation vers les
@@ -230,7 +212,7 @@ fichier des missions ; les sauvegardes de campagne n'écrasent pas les replays.
 **Playtest** ne modifie pas la progression, contrairement à **Jouer campagne**.
 Pour les règles, équipements, vagues et acteurs complexes, l'onglet **Données JSON**
 reste disponible. L'écran titre du Studio reste un aperçu de création ; la commande
-`sporebound player` lance désormais le client autonome 2.6.
+`drawtemp player` lance désormais le client autonome 2.6.
 
 Voir aussi le [guide Project Workspace](docs/WORKSPACE.md).
 Le gate Studio 3.0 reste partiel : l'édition complète des ressources sans JSON
@@ -267,8 +249,8 @@ Trois onglets d'authoring supplémentaires sont disponibles :
 Une application joueur distincte est également disponible :
 
 ```sh
-python -m sporebound player
-python -m sporebound player --content chemin/jeu.json --project chemin/jeu.game.json
+python -m drawtemp player
+python -m drawtemp player --content chemin/jeu.json --project chemin/jeu.game.json
 ```
 
 Le joueur choisit une campagne et un emplacement, lance les missions
@@ -306,16 +288,16 @@ Voir [les instructions de l'arbre narratif](docs/STUDIO.md#arbre-narratif--scèn
 ## Campagne et équipement
 
 ```sh
-python -m sporebound play --campaign --mission garden --save saves/current.json
-python -m sporebound play --campaign --load saves/current.json
-python -m sporebound roster
-python -m sporebound roster --buy rhythm_boots --hero ziggy --equip rhythm_boots
-python -m sporebound roster --hero ziggy --job spore_maestro
-python -m sporebound roster --hero ziggy --unequip accessory
+python -m drawtemp play --campaign --mission p0_01_lame --save saves/current.json
+python -m drawtemp play --campaign --load saves/current.json
+python -m drawtemp roster
+python -m drawtemp roster --buy rhythm_boots --hero ziggy --equip rhythm_boots
+python -m drawtemp roster --hero ziggy --job spore_maestro
+python -m drawtemp roster --hero ziggy --unequip accessory
 ```
 
 Les achats nécessitent de l’or ; les classes avancées demandent Brave niveau 2.
-`campaign --mission garden` permet aussi une simulation automatique avec progression.
+`campaign --mission p0_01_lame` permet aussi une simulation automatique avec progression.
 Par défaut, la campagne est dans `saves/campaign.json` ; `--campaign-file` la remplace.
 Les récompenses ne sont accordées qu’une fois par mission, même après rechargement.
 
@@ -418,7 +400,7 @@ Depuis le dépôt source, lancer `python -m examples.castle_player` (ou **Campag
 
 ### 2.8.2 — Campaign & Siege Studio → Player
 
-Dans le Studio (`python -m sporebound editor <contenu.json>`), onglet **Campagne & siège** : créer les fronts, configurer éventuellement les convois/logistiques et cliquer **Jouer dans Player 2.8**. Dans le Player (`python -m sporebound player --content <contenu.json> --project <jeu.game.json>`), cliquer **Sièges créés dans le Studio**, sélectionner le siège et son emplacement. Sauvegardes de siège indépendantes, contrôlées par rejeu.
+Dans le Studio (`python -m drawtemp editor <contenu.json>`), onglet **Campagne & siège** : créer les fronts, configurer éventuellement les convois/logistiques et cliquer **Jouer dans Player 2.8**. Dans le Player (`python -m drawtemp player --content <contenu.json> --project <jeu.game.json>`), cliquer **Sièges créés dans le Studio**, sélectionner le siège et son emplacement. Sauvegardes de siège indépendantes, contrôlées par rejeu.
 
 ### 2.8.3 — Narrative & Presentation
 

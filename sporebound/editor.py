@@ -282,7 +282,7 @@ def launch(path):
     from tkinter import ttk, filedialog, messagebox, simpledialog
 
     root = tk.Tk()
-    root.title('Sporebound — Atelier gameplay autonome')
+    root.title('DrawTemp — Game Studio')
     root.geometry('1280x850')
     def recover_if_pending(store):
         if not store.pending:
@@ -599,7 +599,7 @@ def launch(path):
         nonlocal selection_mission, edit_recovery
         if not discard_ok():
             return
-        name = filedialog.askopenfilename(filetypes=[('Projet Sporebound', '*.json')])
+        name = filedialog.askopenfilename(filetypes=[('Contenu de jeu (JSON)', '*.json')])
         if name:
             if not recover_if_pending(StudioTransactionStore(name)):
                 return
