@@ -1170,9 +1170,11 @@ class PlayerApplication:
         coords, destination = preview_screen_geometry(
             preview, self.camera, iso_geometry=geo, shift=shift)
         tags = ("player_action_preview",)
-        # A cross-floor route is never depicted as a continuous 2D path:
-        # only the target receives a marker; floor transitions remain textual.
-        if len(set(preview.levels)) <= 1 and len(coords) > 1:
+        # Upper-floor cells are not ground-plane polygons. Hide the planar
+        # overlay rather than draw a misleading path or target below a roof.
+        if preview.levels and any(level > 0 for level in preview.levels):
+            return
+        if len(coords) > 1:
             flat = tuple(n for xy in coords for n in xy)
             self.canvas.create_line(
                 *flat, fill="#3bf1d0", width=3, dash=(7, 4),
