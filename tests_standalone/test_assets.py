@@ -152,6 +152,7 @@ class ProjectAssetTests(unittest.TestCase):
             self.assertEqual(restored.recording(), session.recording())
 
     def test_cli_validates_project_relative_files_and_reports_all_errors(self):
+        from sporebound.__main__ import DEFAULT_CONTENT
         from contextlib import redirect_stdout
         from io import StringIO
         from sporebound.__main__ import main
