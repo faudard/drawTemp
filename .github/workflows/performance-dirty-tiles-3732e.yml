@@ -1,0 +1,42 @@
+name: Dirty Tiles 3.7.32E
+on:
+  pull_request:
+    paths:
+      - 'sporebound/editor_dirty_tiles.py'
+      - 'sporebound/editor_render_cache.py'
+      - 'sporebound/iso_map.py'
+      - 'tests_standalone/test_dirty_tiles_3732e.py'
+      - 'tests_standalone/test_dirty_tiles_3732e_gui.py'
+      - 'scripts/benchmark_dirty_tiles_3732e.py'
+      - '.github/workflows/performance-dirty-tiles-3732e.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dirty-tiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tk and virtual display
+        run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb python3-pil
+      - name: Verify dirty planner and all fallback paths
+        run: python3 -m unittest tests_standalone.test_dirty_tiles_3732e -v
+      - name: Compare selective and complete real Tk painter
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: >-
+          xvfb-run -a python3 -m unittest -v
+          tests_standalone.test_dirty_tiles_3732e_gui
+          tests_standalone.test_editor_render_cache_3718d_gui
+      - name: Smoke single-cell delta, reference and repaint fallback
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_dirty_tiles_3732e.py
+          --quick --output dirty-tiles-smoke.json
+      - name: Archive performance evidence even on failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dirty-tiles-3732e
+          path: dirty-tiles-smoke.json
+          if-no-files-found: warn
