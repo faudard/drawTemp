@@ -78,7 +78,11 @@ def install_objectives(rules):
 def tactical_r6_rules(base=None):
     """Explicit opt-in that preserves previous Tactical RPG 3.0 manifests."""
     from .tactical_rpg3 import tactical_rpg_rules
-    return install_objectives(tactical_rpg_rules(base))
+    from .rules.registry import BehaviorRule
+    from .elite_boss_r6 import adaptive_boss_command
+    rules = install_objectives(tactical_rpg_rules(base))
+    return rules.with_family("behaviors", rules.behaviors.with_rule(
+        "adaptive_boss", BehaviorRule(adaptive_boss_command, version="6.6")))
 
 
 def objective_progress(battle):
