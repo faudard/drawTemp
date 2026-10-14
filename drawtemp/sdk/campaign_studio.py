@@ -19,6 +19,7 @@ from sporebound.campaign_flow_simulation import CampaignSimulation
 from sporebound.campaign_graph import inspect_graph, set_link
 from sporebound.campaign_path_certification import certify_path
 from sporebound.game_export4 import export_game
+from sporebound.tactical_rpg3 import authored_rules_for_document
 from sporebound.siege_authoring import (
     add_front, new_blueprint, replace_siege, set_finale, timeline_preview,
 )
@@ -50,7 +51,7 @@ class CampaignStudio:
 
     def _models(self):
         document = self.authoring.snapshot().to_dict()
-        content = Content.from_dict(document["content"])
+        content = Content.from_dict(document["content"],\n                                    rules=authored_rules_for_document(document["content"]))
         project = GameProject.from_dict(document["project"], content)
         if project.campaign(self.campaign_id) is None:
             raise RuleError("Unknown campaign: " + self.campaign_id)
@@ -72,7 +73,7 @@ class CampaignStudio:
 
     def _project_edit(self, editor, kind):
         def change(content_data, project_data):
-            content = Content.from_dict(content_data)
+            content = Content.from_dict(content_data,\n                                        rules=authored_rules_for_document(content_data))
             project = GameProject.from_dict(project_data, content)
             replacement = editor(content, project)
             return content_data, replacement.to_dict()
@@ -158,11 +159,13 @@ class CampaignStudio:
         return self._project_edit(edit, "r10-world-location")
 
     def create_siege(self, siege_id, mission_id, front="approach"):
-        return self._project_edit(
-            lambda content, project: replace_siege(
+        def edit(content, project):
+            if any(row["id"] == siege_id for row in project.sieges):
+                raise RuleError("Siege ID already exists; refusing to overwrite it")
+            return replace_siege(
                 project, content,
-                new_blueprint(siege_id, self.campaign_id, mission_id, front=front)),
-            "r10-siege-create")
+                new_blueprint(siege_id, self.campaign_id, mission_id, front=front))
+        return self._project_edit(edit, "r10-siege-create")
 
     def _edit_siege(self, siege_id, modify, kind):
         def edit(content, project):
