@@ -893,21 +893,25 @@ class PlayerApplication:
         scene = session.active_scene()
         stage = session.exploration_state() if scene else None
         exploring = stage is not None and not stage["completed"]
-        if exploring:
-            # The exploration canvas is the game, not an appendix below headings.
+        if exploring or scene is not None:
+            # Both the exploration and dialogue scenes own their titles.
             self.view.configure(padding=8)
         else:
-            self._heading(self.project.campaign(session.campaign_id)["name"],
-                          "Or : " + str(session.progress.gold) +
-                          "    Missions terminées : " + str(len(session.progress.completed)))
-        if self.chapter_one and not exploring:
+            status = self.ttk.Frame(self.view)
+            status.pack(fill="x", pady=(0, 8))
+            self.ttk.Label(status, text=self.project.campaign(session.campaign_id)["name"],
+                           font=("TkDefaultFont", 12, "bold")).pack(side="left")
+            self.ttk.Label(status, text="Or : " + str(session.progress.gold) +
+                           " · Missions terminées : " +
+                           str(len(session.progress.completed))).pack(side="right")
+        if self.chapter_one and scene is None:
             chapter_ids = {"a1_01_route", "a1_02_pont", "a1_03_hospice",
                            "a1_04a_archives", "a1_04b_otages", "a1_05_vaucouleurs"}
             completed = len(set(session.progress.completed) & chapter_ids)
             self.ttk.Label(self.view, text=f"CHAPITRE I  ·  {completed}/5 étapes").pack(
                 anchor="w", pady=(0, 10))
         # Visible roster: recruitment and equipment have actual tactical effects.
-        if session.progress.heroes and not exploring:
+        if session.progress.heroes and scene is None:
             roster = self.ttk.LabelFrame(self.view, text="Équipe et progression", padding=8)
             roster.pack(fill="x", padx=60, pady=(2, 8))
             for uid, hero in sorted(session.progress.heroes.items()):
