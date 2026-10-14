@@ -14,7 +14,7 @@ alternative undo/event engine.
 | R2.4 | From Problèmes, navigate to the indexed resource **and** the existing editable inspector. Clearing text/family/favorites filters prevents deep links from becoming unreachable. Live `WorkspaceModelCache` diagnostics and deltas still drive automatic disappearance. | Does not suppress invalid Content or introduce an alternative validator. |
 | R2.5 | Existing docking, tab layout, shortcuts and navigation remain unchanged; explorer state is now saved with the UI layout. Ctrl+D toggles the selected favorite while the tree has focus. | DPI/focus behavior remains owned by ttk/Tk. |
 | R2.6 | From a selected door or linked lever, launch the existing **Personnages et événements** contextual gate authoring flow (condition, lever, tactical effect, scene/cinematic and preview). | Reuses `focus_gate_event`/`author_gate_sequence`; no custom JSON or parallel event graph. |
-| R2.7 | Incoming/outgoing dependency inspection plus guarded ID renaming for placed actors and objects, using one typed `EditingContext` transaction. Known mission-local links are propagated. | Unknown references or GameProject references reject the rename. Arbitrary ID changes across all families and destructive batch operations remain unsupported. |
+| R2.7 | Canonical incoming/outgoing impact graph, guarded actor/object ID renaming, safe deletion and validated paired Content/GameProject cinematic actor-cue migration. | Only known typed links are propagated; ambiguous narrative/foreign-mission cues and unknown references reject the operation. Arbitrary family-wide renames and batch deletion remain unsupported. |
 
 ## Automated regression gates
 
@@ -65,9 +65,32 @@ validation still cannot be stored as authorable documents.
 **Remaining scope:** the actor-reference warning above covers a concrete
 authorable `despawn` case. Global authoring-reference diagnostics still need
 broader field coverage. Renaming actors/objects is supported with guarded
-mission-local propagation; cross-document `GameProject` references and unknown
-opaque links are *refused* rather than rewritten. Full project-wide migrations
-and destructive operations remain separate follow-up work.
+mission-local propagation. A known actor cue in a `before_mission`,
+`after_mission` or same-mission `tactical_event` cinematic can be
+migrated alongside Content through the existing `StudioHistory`. Unknown
+GameProject/opaque references and ambiguous cross-mission cues are *refused*.
+Single-resource deletion is allowed only after the canonical delete command
+and conservative reference checks validate; batch destructive refactoring
+and unrestricted cross-document migrations are not supported.
+
+## R2.7 — resource lifecycle gate
+
+1. Rename a placed actor with a `protected_id`, tactical target or
+   editor-group membership: all known references follow the new ID.
+2. Rename an actor referenced in an explicit same-mission cinematic actor
+   track: preview and validate both `Content` and `GameProject`, then
+   capture one **StudioHistory** checkpoint. Global Undo/Redo restores both.
+3. Attempt to rename an actor used by a cinematic triggered by a different
+   mission, or by an opaque project reference: **reject before committing**.
+4. Delete an unreferenced chest: the canonical entity removal validates and
+   adds one Undo/Redo entry. Delete a door with a linked switch: **reject**,
+   leaving both the Content and history unchanged.
+5. Changing a resource after opening the inspector invalidates the baseline;
+   stale renames/deletions cannot proceed.
+
+**Note:** with a paired-document edit the global Studio Undo/Redo is the
+authoritative history. The existing save transaction store persists the two
+validated files together; no new disk format is added.
 
 ## Non-regression contract
 
@@ -76,6 +99,7 @@ and destructive operations remain separate follow-up work.
 - No stale preview can overwrite a later document revision.
 - Existing renderer, inspector, minimap, Workspace and navigation remain
   linked by the current editor notifications, not by a second event bus.
-- Renames update known mission-local references in one undoable operation,
-  and reject unknown/project-level dependencies instead of breaking them.
+- Renames update known mission-local references and supported same-mission
+  cinematic actor cues; unknown/cross-mission links are rejected.
+- Deletion requires a confirmation and validated absence of dangling links.
 - No tool may silently delete or rewrite third-party references.
