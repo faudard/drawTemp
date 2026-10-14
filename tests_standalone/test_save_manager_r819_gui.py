@@ -57,9 +57,10 @@ class SaveManagerGuiTests(unittest.TestCase):
                                  if isinstance(w, tk.Canvas) and
                                  w.find_withtag("title_footer_advanced"))
                     box = title.bbox("title_footer_advanced")
-                    title.event_generate("<Button-1>",
-                                         x=(box[0] + box[2]) // 2,
-                                         y=(box[1] + box[3]) // 2)
+                    x = (box[0] + box[2]) // 2
+                    y = (box[1] + box[3]) // 2
+                    title.event_generate("<Motion>", x=x, y=y)
+                    title.event_generate("<Button-1>", x=x, y=y)
                     root.update()
                     button("Gestionnaire de sauvegardes").invoke()
                     root.update()
