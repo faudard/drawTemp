@@ -19,13 +19,14 @@ def copied_metadata(directory):
 
 
 class WatercolorCatalogTests(unittest.TestCase):
-    def test_real_manifest_catalogues_all_88_png_and_15_animations(self):
+    def test_real_manifest_catalogues_88_original_and_12_derived_png(self):
         catalog = WatercolorCatalog()
         self.assertTrue(catalog.has_metadata())
-        self.assertEqual(sum(i.kind == "sprite" for i in catalog.entries), 88)
+        self.assertEqual(sum(i.kind == "sprite" for i in catalog.entries), 100)
         self.assertEqual(sum(i.kind == "animation" for i in catalog.entries), 15)
         self.assertEqual(catalog.lookup("jeanne_idle").group, "jeanne")
-        self.assertEqual(catalog.lookup("anim_jeanne_attack").frame_count, 3)
+        self.assertEqual(catalog.lookup("anim_jeanne_attack").frame_count, 12)
+        self.assertEqual(catalog.lookup("anim_jeanne_walk").frame_count, 8)
 
     def test_frames_already_exposed_by_animations_remain_addressable(self):
         catalog = WatercolorCatalog()
@@ -41,19 +42,17 @@ class WatercolorCatalogTests(unittest.TestCase):
     def test_authored_animation_timing_and_terminal_frames(self):
         catalog = WatercolorCatalog()
         self.assertEqual(catalog.frame("anim_jeanne_walk", 0),
-                         ("jeanne_walk_a", 180))
+                         ("jeanne_walk_a", 75))
         self.assertEqual(catalog.frame("anim_jeanne_walk", 1),
-                         ("jeanne_walk_b", 180))
-        self.assertEqual(catalog.sample("anim_jeanne_walk", 179),
-                         ("jeanne_walk_a", 0))
-        self.assertEqual(catalog.sample("anim_jeanne_walk", 180),
-                         ("jeanne_walk_b", 1))
-        self.assertEqual(catalog.sample("anim_jeanne_walk", 360),
+                         ("jeanne_motion_walk_00_01", 75))
+        self.assertEqual(catalog.sample("anim_jeanne_walk", 75),
+                         ("jeanne_motion_walk_00_01", 1))
+        self.assertEqual(catalog.sample("anim_jeanne_walk", 600),
                          ("jeanne_walk_a", 0))
         self.assertEqual(catalog.sample("anim_jeanne_attack", 9999),
-                         ("jeanne_followthrough", 2))
+                         ("jeanne_motion_attack_03_02", 11))
         with self.assertRaises(IndexError):
-            catalog.frame("anim_jeanne_walk", 2)
+            catalog.frame("anim_jeanne_walk", 8)
         with self.assertRaises(KeyError):
             catalog.lookup("fictional_pose")
 
