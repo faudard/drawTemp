@@ -98,6 +98,8 @@ class HumanPlaytestGUITests(unittest.TestCase):
                 model = PlaytestStudio(
                     SimpleNamespace(tk=tk, ttk=ttk, dialogs=None), book)
                 model.set_report(sample)
+                model.mission.set("garden")
+                model.render()
                 self.assertEqual(len(model.rows.get_children()), 1)
                 model.rows.selection_set(model.rows.get_children()[0])
                 model.select()
