@@ -31,6 +31,8 @@ def main(argv=None):
     parser.add_argument('--max-victory-drop', type=float, default=0.25)
     parser.add_argument('--max-p95-growth', type=float, default=0.30)
     parser.add_argument('--max-new-limits', type=int, default=0)
+    parser.add_argument('--max-choice-drop', type=float, default=0.25,
+                        help='Maximum paired decrease of multi-category opportunity rate')
     parser.add_argument('--choice-min-multi', type=int, default=1,
                         help='Minimum sampled multi-category player decisions')
     parser.add_argument('--choice-required-pair', action='append', default=[],
@@ -133,7 +135,8 @@ def main(argv=None):
                              ensure_ascii=False, sort_keys=True))
             return 2 if comparison is not None and not comparison['passed'] else 0
         if args.command == 'tactical-choices':
-            from .tactical_choice_lab_r6 import run_choice_lab, evaluate_choice_gate
+            from .tactical_choice_lab_r6 import (
+                run_choice_lab, evaluate_choice_gate, compare_choice_reports)
             from .tactical_rpg3 import authored_rules_for_document
             report = run_choice_lab(
                 content, args.mission, seed=args.seed, max_commands=args.limit,
@@ -142,6 +145,12 @@ def main(argv=None):
                 report, min_multi=args.choice_min_multi,
                 required_pairs=args.choice_required_pair)
             report["gate"] = gate
+            comparison = None
+            if args.baseline:
+                with args.baseline.open(encoding='utf-8') as stream:
+                    previous = json.load(stream)
+                comparison = compare_choice_reports(
+                    previous, report, max_multi_rate_drop=args.max_choice_drop)
             if args.report:
                 args.report.write_text(
                     json.dumps(report, sort_keys=True, ensure_ascii=False,
@@ -150,9 +159,11 @@ def main(argv=None):
                 'mission': report['mission'], 'seed': report['seed'],
                 'digest': report['digest'],
                 'replay_verified': report['replay_verified'],
-                'gate': gate, 'report': str(args.report) if args.report else None,
+                'gate': gate, 'comparison': comparison,
+                'report': str(args.report) if args.report else None,
             }, ensure_ascii=False, sort_keys=True))
-            return 0 if gate['passed'] else 2
+            return 0 if gate['passed'] and (
+                comparison is None or comparison['passed']) else 2
         if args.command == 'battle-lab':
             from .battle_lab import compare_reports, run_lab, save_report
             from .tactical_rpg3 import authored_rules_for_document
