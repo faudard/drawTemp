@@ -94,6 +94,15 @@ python -m unittest tests_standalone.test_campaign_flow_r5b -v
   --report /tmp/campaign-flow-r5b.json
 ```
 
+To check real save compatibility **without rewriting user files**, also pass
+`--save-campaign main --check-slot /path/to/slot_1.json` (old Campaign v1)
+or `--save-campaign main --check-session /path/to/checkpoint.json` (unified
+GameSession checkpoint). Repeat either file option as needed. The report
+contains a `save_checks` section with PASS/FAIL-equivalent `compatible`
+flags, source (primary vs backup) and an error message on incompatibility.
+Any incompatible save makes the CLI exit nonzero while still writing its
+diagnostic report.
+
 Add `--require-ending-witnesses` to enforce witnesses to all declared endings
 under **bounded symbolic exploration**. Reports include cycle/terminal
 analysis, conditional gates, potential mission and ending routes, duplicate
