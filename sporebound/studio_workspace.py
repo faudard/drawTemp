@@ -401,7 +401,8 @@ class ProjectWorkspaceTab:
             except RuleError:
                 form, signature = None, (key, None)
         elif isinstance(key, str) and key.startswith(
-                ('map_actor:', 'map_object:', 'editor_group:', 'map_tile:')):
+                ('map_actor:', 'map_object:', 'editor_group:', 'map_tile:',
+                 'tactical_event:')):
             form = editable_form(self.owner.doc().data, key)
             signature = (form.key, form.baseline)
         else:
@@ -641,6 +642,13 @@ class ProjectWorkspaceTab:
             self.owner.story_editor.scene_id = node.id
             self.owner.story_editor.refresh()
             self._show_tab('Scénario & dialogues')
+        elif node.kind == 'tactical_event':
+            # Tactical triggers have no fixed map coordinates. Reveal the
+            # canonical event resource in the shared Workspace inspector.
+            mid, _trigger_id = node.id.split('/', 1)
+            if self.owner.mission() != mid:
+                self.owner.select_mission(mid)
+            self._show_tab('Espace projet')
         elif node.kind == 'strategic_event':
             siege_id, event_id = node.id.split('/', 1)
             studio = self.owner.siege_studio
