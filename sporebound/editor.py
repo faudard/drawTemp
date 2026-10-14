@@ -25,6 +25,7 @@ from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
 from .map_builder4 import smart_brush_cells, surface_region
 from .terrain_autoblend import (REGION_STYLES, plan_terrain_region,
                                 apply_terrain_plan, terrain_variant)
+from .terrain_landscape import plan_natural_map, apply_natural_map
 from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, SURFACE_COLORS, IsoTerrainAtlas)
@@ -248,6 +249,20 @@ class Document:
         self.replace(data)
         return len({(x, y) for x, y, _ in (*plan.changes, *plan.decorations)})
 
+    def preview_natural_map(self, mid, start, end, *, seed=1,
+                            style='bocage', vegetation=2):
+        """Connected waterways, crossings and clearings; no source mutation."""
+        return plan_natural_map(self.data, mid, start, end, seed=seed,
+                                style=style, vegetation=vegetation)
+
+    def confirm_natural_map(self, plan):
+        """Apply an unchanged proposal with one Undo/Redo entry."""
+        data = apply_natural_map(self.data, plan)
+        if data == self.data:
+            return 0
+        self.replace(data)
+        return len(plan.changes)
+
     def flood_surface(self, mid, start, surface, *, allowed_cells=None):
         """Existing four-neighbour fill, optionally restricted to a selection."""
         if surface not in SURFACES:
@@ -393,6 +408,7 @@ def launch(path):
     terrain_vegetation_var = tk.IntVar(value=2)
     terrain_status_var = tk.StringVar(value='Sélectionner une zone rectangulaire.')
     terrain_pending = None
+    landscape_pending = None
     quarter_choices = ()
     quarter_pending = None
     group_prefab_preview_key = None
@@ -2507,6 +2523,70 @@ def launch(path):
         status_var.set(terrain_status_var.get())
 
     @guarded
+    def preview_natural_landscape():
+        nonlocal landscape_pending
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON.')
+        if not selected_tiles:
+            raise RuleError('Sélectionner la région à générer.')
+        xs = [p[0] for p in selected_tiles]
+        ys = [p[1] for p in selected_tiles]
+        start, end = (min(xs), min(ys)), (max(xs), max(ys))
+        if len(selected_tiles) != (end[0]-start[0]+1)*(end[1]-start[1]+1):
+            raise RuleError('Sélectionner un rectangle continu.')
+        if len(selected_tiles) > 4096:
+            raise RuleError('La limite est 4096 cases.')
+        landscape_pending = None
+        for tag in ('landscape_preview_ground', 'landscape_preview_river',
+                    'landscape_preview_road', 'landscape_preview_relief',
+                    'landscape_preview_flora'):
+            canvas.delete(tag)
+        plan = doc.preview_natural_map(
+            mission_var.get(), start, end,
+            seed=terrain_seed_var.get(), style=terrain_style_var.get(),
+            vegetation=terrain_vegetation_var.get())
+        landscape_pending = plan
+        preview_cells(((x, y) for x, y, *_ in plan.changes),
+                      tag='landscape_preview_ground', color='#80a774')
+        preview_cells(((x, y) for x, y, _, height, _, _ in plan.changes
+                       if height > 0),
+                      tag='landscape_preview_relief', color='#a187cf')
+        preview_cells(((x, y) for x, y, _, _, _, feature in plan.changes
+                       if feature),
+                      tag='landscape_preview_flora', color='#d9a451')
+        preview_cells(plan.river, tag='landscape_preview_river',
+                      color='#4da9cc')
+        preview_cells(plan.road, tag='landscape_preview_road',
+                      color='#c29a58')
+        terrain_status_var.set(
+            f'Carte: {len(plan.changes)} cases · '
+            f'{len(plan.river)} rivière · {len(plan.road)} route · '
+            f'{len(plan.clearings)} clairières. Aperçu sans écriture.')
+        status_var.set(terrain_status_var.get())
+
+    @guarded
+    def confirm_natural_landscape():
+        nonlocal landscape_pending
+        plan = landscape_pending
+        if plan is None or plan.mission_id != mission_var.get():
+            raise RuleError('Prévisualiser la carte naturelle avant confirmation.')
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON.')
+        count = 0
+        def apply():
+            nonlocal count
+            count = doc.confirm_natural_map(plan)
+        design_change(apply, board_only=True)
+        landscape_pending = None
+        for tag in ('landscape_preview_ground', 'landscape_preview_river',
+                    'landscape_preview_road', 'landscape_preview_relief',
+                    'landscape_preview_flora'):
+            canvas.delete(tag)
+        terrain_status_var.set(
+            f'{count} cases de paysage appliquées en une opération Undo.')
+        status_var.set(terrain_status_var.get())
+
+    @guarded
     def fill_selection():
         if battle or source_pending():
             raise RuleError('Terminer le combat et appliquer le JSON avant édition.')
@@ -3498,6 +3578,13 @@ def launch(path):
                command=preview_procedural_terrain).pack(side='left', padx=2)
     ttk.Button(procedural_actions, text='Appliquer',
                command=confirm_procedural_terrain).pack(side='left', padx=2)
+    landscape_row = ttk.Frame(tools_terrain)
+    landscape_row.pack(fill='x', padx=5, pady=2)
+    ttk.Label(landscape_row, text='Carte naturelle').pack(side='left', padx=2)
+    ttk.Button(landscape_row, text='Aperçu carte',
+               command=preview_natural_landscape).pack(side='left', padx=2)
+    ttk.Button(landscape_row, text='Créer carte',
+               command=confirm_natural_landscape).pack(side='left', padx=2)
     ttk.Label(tools_terrain, textvariable=terrain_status_var,
               wraplength=360).pack(fill='x', padx=5, pady=2)
     for label, tool in [('Remplir sol', 'Remplissage'),
