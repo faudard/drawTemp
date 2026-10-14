@@ -927,6 +927,10 @@ class PlayerApplication:
         scene = session.active_scene()
         stage = session.exploration_state() if scene else None
         if stage is not None and not stage["completed"]:
+            self.audio.music_for(f'music_scene_{scene["id"]}', "campaign")
+            if self._audible_scene != scene["id"]:
+                self.audio.cue(f'scene_enter_{scene["id"]}')
+                self._audible_scene = scene["id"]
             # Exploration is a game viewport, not a Studio inspection form.
             self.view.configure(padding=0)
             self._exploration_screen(scene, stage)
