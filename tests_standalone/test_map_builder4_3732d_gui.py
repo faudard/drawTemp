@@ -74,12 +74,7 @@ class ReusablePrefab4GuiTests(unittest.TestCase):
                     self.assertTrue(preview)
                     self.assertEqual(
                         canvas.itemcget(preview[0], 'outline'), '#36a16c',
-                        'Prefab hover invalid: ' + str(
-                            root.tk.globalgetvar(next(
-                                w.cget('textvariable') for w in descendants(root)
-                                if isinstance(w, ttk.Label)
-                                and 'Préfab' in str(w.cget('text'))))
-                            if False else 'preview was red'))
+                        'Prefab hover is invalid (red) before the click-to-stamp')
                     canvas.event_generate('<Button-1>', x=8*54+8, y=8*54+8)
                     canvas.event_generate('<ButtonRelease-1>', x=8*54+8, y=8*54+8)
                     root.update()
