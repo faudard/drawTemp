@@ -419,6 +419,8 @@ class BalanceMatrixStudio:
                 content = scenario_content(content, row["spec"], rules=rules)
             seed = self.current["seeds"][0]
             cap = min(self.current["max_commands"], 5000)
+            setup = ({"inventory": row["spec"]["inventory"]}
+                     if row["spec"].get("inventory") is not None else None)
         except (RuleError, ValueError, KeyError, StopIteration) as exc:
             self.owner.dialogs.showerror("Balance Matrix", str(exc))
             return
@@ -429,7 +431,8 @@ class BalanceMatrixStudio:
         def worker():
             try:
                 report = trace_encounter_ai(content, row["mission"],
-                                            seed=seed, max_commands=cap, rules=rules)
+                                            seed=seed, max_commands=cap,
+                                            rules=rules, initial_state=setup)
                 self.mailbox.put(("ai", report))
             except Exception as exc:
                 self.mailbox.put(("error", str(exc)))
