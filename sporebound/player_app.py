@@ -76,6 +76,7 @@ class PlayerApplication:
         self._preview_result = None
         self._preview_hover = None
         self._preview_job = None
+        self._preview_paint_key = None
         self.root.title(project.title)
         self.root.geometry("1160x820")
         self.root.minsize(800, 580)
@@ -171,6 +172,7 @@ class PlayerApplication:
             self._preview_job = None
         self._preview_result = None
         self._preview_hover = None
+        self._preview_paint_key = None
         self._motion_frame = None
         for key in ("<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q", "e"):
             self.root.unbind(key)
@@ -1094,6 +1096,7 @@ class PlayerApplication:
                 self._preview_job = None
             self._preview_hover = None
             self._preview_result = None
+            self._preview_paint_key = None
             self.canvas.delete("player_action_preview")
         self.canvas.focus_set()
 
@@ -1164,15 +1167,26 @@ class PlayerApplication:
     def _draw_action_preview(self):
         if self.canvas is None:
             return
-        self.canvas.delete("player_action_preview")
         preview = self._preview_result
         if not self.preview_enabled.get() or preview is None:
+            self.canvas.delete("player_action_preview")
+            self._preview_paint_key = None
             return
         iso = self.iso_view_var.get()
         geo = self.iso_renderer.geometry if iso and self.iso_renderer else None
         if iso and geo is None:
+            self.canvas.delete("player_action_preview")
+            self._preview_paint_key = None
             return
         shift = self.iso_renderer.shift if geo is not None else (0, 0)
+        # Preserve Canvas items on idle animation ticks when nothing changed.
+        # If a renderer rebuilt the scene, find_withtag detects the invalidation.
+        paint_key = (preview, self.camera, iso, id(geo), shift)
+        if (paint_key == self._preview_paint_key
+                and self.canvas.find_withtag("player_action_preview")):
+            return
+        self._preview_paint_key = paint_key
+        self.canvas.delete("player_action_preview")
         coords, destination = preview_screen_geometry(
             preview, self.camera, iso_geometry=geo, shift=shift)
         tags = ("player_action_preview",)
