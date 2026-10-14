@@ -195,6 +195,15 @@ ApplicationWindow {
                 Layout.alignment: Qt.AlignHCenter
                 onClicked: Qt.quit()
             }
+            Label {
+                text: root.playerData.message || ""
+                visible: text.length > 0
+                color: root.gold
+                wrapMode: Text.WordWrap
+                Layout.preferredWidth: 400
+                horizontalAlignment: Text.AlignHCenter
+                Layout.alignment: Qt.AlignHCenter
+            }
             Item { Layout.fillHeight: true }
         }
 
