@@ -47,6 +47,8 @@ class StudioPanels:
         self._project_tab(notebook)
         from .studio_campaign_flow_editor import CampaignFlowEditor
         self.flow_editor = CampaignFlowEditor(self, notebook)
+        from .studio_campaign_simulation import CampaignSimulationStudio
+        self.campaign_simulator = CampaignSimulationStudio(self, notebook)
         from .studio_world_map import WorldMapStudio
         self.world_studio = WorldMapStudio(self, notebook)
         from .studio_advanced import AdvancedStudio
@@ -126,6 +128,7 @@ class StudioPanels:
         self.story_editor.reset_project()
         self.cinematic_studio.reset_project()
         self.flow_editor.refresh()
+        self.campaign_simulator.refresh()
         self.audio_studio.stop()
         self.title.set(project.title)
         self.subtitle.set(project.subtitle)
@@ -773,6 +776,7 @@ class StudioPanels:
         self._refresh_talent_tree()
         self.advanced.refresh()
         self.flow_editor.refresh()
+        self.campaign_simulator.refresh()
         self.character_rules.refresh()
         self.story_editor.refresh()
         self.siege_studio.refresh()
