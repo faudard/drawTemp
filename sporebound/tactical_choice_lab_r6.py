@@ -147,9 +147,14 @@ def available_tactical_choices(battle):
     if ("prepare" in battle.rules.commands and not actor.acted
             and not battle.status_blocks(actor, "act")):
         for mode in ("guard", "overwatch"):
-            if mode in battle.rules.preparations:
+            relevant = bool(enemies) and (
+                mode == "overwatch" or
+                any(distance(actor.pos, other.pos) <=
+                    battle.movement_budget(actor) + battle.engagement_range(actor)
+                    for other in enemies))
+            if relevant and mode in battle.rules.preparations:
                 if add("protection", {"kind": "prepare", "mode": mode},
-                       "real guard/overwatch preparation"):
+                       "real guard/overwatch preparation with an enemy"):
                     break
 
     if ("item" in battle.rules.commands and not actor.acted
