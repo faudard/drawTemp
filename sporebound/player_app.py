@@ -1172,7 +1172,6 @@ class PlayerApplication:
         if self._explore_scene_id != scene["id"]:
             self._explore_feedback = ""
             self._explore_scene_id = scene["id"]
-        self.presentation.transition("campaign")
         board = self.tk.Canvas(self.view, highlightthickness=0,
                                background="#22372f", takefocus=1)
         board.pack(fill="both", expand=True)
@@ -1181,6 +1180,7 @@ class PlayerApplication:
                      if self.iso_view_var.get() else None)
         if iso_scene is not None:
             board.iso_scene = iso_scene  # Keep PhotoImages alive.
+        ortho_shift = [0, 0]
         px, py = stage["position"]
         nearest = [point for point in stage["interactions"]
                    if abs(point["pos"][0] - px) + abs(point["pos"][1] - py) <= 1]
@@ -1201,8 +1201,12 @@ class PlayerApplication:
                 iso_scene.draw(stage)
             else:
                 draw_exploration(board, stage)
+                # Legacy orthogonal view also fills its available canvas neatly.
+                ortho_shift[:] = [max(0, (width - stage["width"] * 58 - 84) / 2),
+                                  max(0, (height - stage["height"] * 58 - 100) / 2)]
+                board.move("all", *ortho_shift)
             # Compact in-world overlay, not a permanent right-side inspector.
-            board.create_rectangle(12, 12, min(width - 12, 480), 88,
+            board.create_rectangle(12, 12, min(width - 12, 480), 104,
                                    fill="#152822", outline="#476353",
                                    tags=("explore_hud",))
             board.create_text(26, 24, anchor="nw", text=stage["title"],
@@ -1211,7 +1215,7 @@ class PlayerApplication:
                               font=("TkDefaultFont", 13, "bold"),
                               tags=("explore_hud",))
             controls = "Flèches/ZQSD : marcher   ·   Échap : pause"
-            board.create_text(26, 66, anchor="nw", text=controls,
+            board.create_text(26, 77, anchor="nw", text=controls,
                               fill="#d4e1d8", font=("TkDefaultFont", 9),
                               tags=("explore_hud",))
             prompts = []
@@ -1225,11 +1229,14 @@ class PlayerApplication:
                 prompts.append("Espace : attendre")
             message = self._explore_feedback or "   ·   ".join(prompts)
             if message:
-                bottom = max(110, height - 65)
-                board.create_rectangle(12, bottom - 8, width - 12,
-                                       bottom + 40, fill="#152822",
+                # Discovery text can be several lines long.
+                panel_height = (min(height * .4, max(60, 40 + len(message) // 75 * 22))
+                                if self._explore_feedback else 60)
+                bottom = max(116, height - panel_height - 12)
+                board.create_rectangle(12, bottom, width - 12,
+                                       height - 12, fill="#152822",
                                        outline="#476353", tags=("explore_hud",))
-                board.create_text(26, bottom, anchor="nw", text=message,
+                board.create_text(26, bottom + 12, anchor="nw", text=message,
                                   width=max(100, width - 64), fill="#fff0cf",
                                   font=("TkDefaultFont", 11),
                                   tags=("explore_hud",))
@@ -1241,7 +1248,8 @@ class PlayerApplication:
                     return
                 x, y = cell
             else:
-                x, y = int((event.x - 42) // 58), int((event.y - 25) // 58)
+                x = int((event.x - ortho_shift[0] - 42) // 58)
+                y = int((event.y - ortho_shift[1] - 25) // 58)
                 if not (0 <= x < stage["width"] and 0 <= y < stage["height"]):
                     return
             if abs(x - px) + abs(y - py) == 1:
@@ -1268,7 +1276,7 @@ class PlayerApplication:
         if stage.get("actors"):
             self.root.bind("<space>", lambda event: self._safe(
                 self._exploration_wait))
-        board.after_idle(board.focus_set)
+        board.after_idle(lambda: board.focus_set() if board.winfo_exists() else None)
 
     def _narrative_scene(self, scene, *, choices=None, on_choice=None):
         panel = self.ttk.LabelFrame(self.view, text=scene["title"], padding=20)
