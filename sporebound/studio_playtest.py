@@ -74,6 +74,8 @@ class PlaytestStudio:
             chart, height=220, background="#252b33",
             highlightthickness=0)
         self.canvas.pack(fill="both", expand=True, padx=6, pady=6)
+        self._chart_sessions = ()
+        self.canvas.bind("<Configure>", self.draw_chart)
         self.details_panel = self.ttk.LabelFrame(
             self.tab, text="Détails de la session sélectionnée")
         self.detail = self.tk.Text(
@@ -186,13 +188,23 @@ class PlaytestStudio:
                 sum(row["command_kinds"].values()), row["ct_end"],
                 str(row["objective_hold_ticks"]) +
                 (" · goal" if row["goal_occupied"] else "")))
+        self._chart_sessions = chosen
+        self.draw_chart()
+        self.status.configure(
+            text="{} sessions · collecte volontaire et export local · "
+                 "données non modifiées".format(len(chosen)))
+
+    def draw_chart(self, _event=None):
+        """Only redraw the chart on resize; preserve the Treeview selection."""
+        if self.report is None:
+            return
         self.canvas.delete("all")
         self.canvas.create_text(14, 16, anchor="w", fill="#eff2f5",
                                 text="Durée réelle par session (minutes, y compris l'inactivité)")
-        maximum = max((row["duration_seconds"] for _, row in chosen), default=0)
+        maximum = max((row["duration_seconds"] for _, row in self._chart_sessions), default=0)
         span = max(1, maximum)
-        width = max(500, self.canvas.winfo_width())
-        for n, (_, row) in enumerate(chosen[:8]):
+        width = max(250, self.canvas.winfo_width())
+        for n, (_, row) in enumerate(self._chart_sessions[:8]):
             y = 36 + n * 17
             length = max(0, width - 185) * row["duration_seconds"] / span
             color = ("#56a891" if row["outcome"] == "victory" else
@@ -205,9 +217,6 @@ class PlaytestStudio:
             self.canvas.create_text(
                 139 + length, y + 6, anchor="w", fill="#eff2f5",
                 text="{:.1f}m".format(row["duration_seconds"] / 60))
-        self.status.configure(
-            text="{} sessions · collecte volontaire et export local · "
-                 "données non modifiées".format(len(chosen)))
 
     def select(self, _event=None):
         selected = self.rows.selection()
