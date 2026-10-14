@@ -184,7 +184,10 @@ class WorkspaceR2Tests(unittest.TestCase):
         trigger['after_choice'] = {
             'scene': 'r2_old_scene', 'choice': 'continue'}
         content = Content.from_dict(doc)
-        project_data = self._linked_story_project(content).to_dict()
+        # Build the initial story from content without the new guard, then
+        # validate the tactical link and choice guard together. An interim
+        # project containing only the guard is intentionally invalid.
+        project_data = self._linked_story_project(self.content).to_dict()
         project_data['story']['during_tactical_event'] = {
             'garden/' + trigger['id']: 'r2_old_scene'}
         project = GameProject.from_dict(project_data, content)
