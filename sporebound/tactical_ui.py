@@ -31,7 +31,7 @@ def tactical_snapshot(battle, cell=None):
             "attack": [], "movement_threats": [],
             "objective": objective_progress(battle),
             "coordination": squad_coordination(battle),
-            "enemy_plan": active_enemy_plan(battle)}
+            "enemy_plan": active_enemy_plan(battle) if enhanced else None}
     if not enhanced:
         return view
     for unit in sorted(battle.units, key=lambda u: u.id):
