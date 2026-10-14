@@ -77,9 +77,11 @@ different coordinated AI choices on different mission objectives.
 
 ## R6.6 — Elite & Boss AI (opt-in)
 
-Set `Unit.behavior = "adaptive_boss"` in a mission authored with
-`authored_rules_for_document()` or create a Battle using
-`tactical_r6_rules()`. `phase_boss` remains unchanged for old advanced
+Choose **adaptive_boss** in the existing Class & AI Studio for an enemy actor
+(no patrol route), or set `Unit.behavior = "adaptive_boss"` in a mission
+authored with `authored_rules_for_document()`. Headless callers can explicitly
+create a Battle with `tactical_r6_rules()`. The Studio change uses validated
+Content v1 transactions and normal undo/redo. `phase_boss` remains unchanged for old advanced
 replays; the new behavior gets its own versioned manifest entry `6.6`.
 
 In phase 1, this commander uses the old guard/defend rule. At phase 2 and
@@ -104,4 +106,5 @@ spawns, waves and their expiry remain in the existing trigger dispatcher.
 
 ```bash
 python -m unittest -v tests_standalone.test_elite_boss_r6
+python -m unittest -v tests_standalone.test_class_ai_authoring
 ```
