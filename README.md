@@ -94,6 +94,17 @@ CT/PV/positions et vérifier les anomalies signalées sans modifier la mission.
 En CLI : `python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 500 --report trace.json`.
 Voir [Combat Diagnostics 3.8.1](docs/BATTLE_DIAGNOSTICS_381.md).
 
+## Balance Matrix 3.8.2 — comparer missions et variantes tactiques
+
+Le Studio propose un onglet **Balance Matrix** accessible depuis l'Espace
+projet. Créer plusieurs scénarios (PV, défense, attaques, composition des
+équipes), puis lancer les **mêmes seeds** sur toutes les variantes, chaque
+mission avec son témoin. Les simulations sont isolées et replays vérifiés.
+
+CLI : `python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 8 --limit 500 --report matrix.json`.
+
+[Documentation Balance Matrix 3.8.2](docs/BALANCE_MATRIX_382.md).
+
 ## Battle Lab 3.8 — équilibrage reproductible
 
 Le **Game Studio** dispose d'un onglet **Battle Lab** (également accessible
