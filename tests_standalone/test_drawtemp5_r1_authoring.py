@@ -87,7 +87,7 @@ class AuthoringSessionTests(unittest.TestCase):
         self.assertEqual(error.exception.code, "unknown_mission")
         self.assertEqual(self.studio.snapshot(), baseline)
         with self.assertRaises(AuthoringError) as error:
-            self.studio.apply(self.studio.preview(rename_jeanne("Jeanne"), MISSION))
+            self.studio.apply(self.studio.preview(rename_jeanne("Jeanne d\'Arc"), MISSION))
         self.assertEqual(error.exception.code, "unchanged")
         self.assertEqual(self.studio.snapshot(), baseline)
 
