@@ -2,7 +2,7 @@
 
 > **Statut :** roadmap cible (proposition structurée, aucun lot 5.0 déclaré livré par ce document).  
 > **Date de référence :** 14 octobre 2026.  
-> **Dépôt :** [faudard/drawTemp](https://github.com/faudard/drawTemp) — branche principale \`master\`.  
+> **Dépôt :** [faudard/drawTemp](https://github.com/faudard/drawTemp) — branche principale `master`.  
 > **Décision produit :** **Qt 6 / PySide6 pour le Studio et le Player**, **un renderer GPU 2.5D isométrique commun**, **Tactical Core Python headless**.  
 > **Références UX :** RPG Maker MZ (ergonomie d'édition), RPG Maker U2U (construction P2D), gameplay tactique propre à DrawTemp.
 
@@ -16,7 +16,7 @@ La qualité est appréciée **de bout en bout** : Studio → jeu compilé/export
 
 ### Architecture décidée
 
-\`\`\`text
+```text
 DrawTemp Studio (Qt Widgets, PySide6)       DrawTemp Player (Qt Quick, PySide6)
          |                                              |
          +-------------- Shared Game SDK ---------------+
@@ -29,23 +29,23 @@ DrawTemp Studio (Qt Widgets, PySide6)       DrawTemp Player (Qt Quick, PySide6)
                               |
             Content / GameProject / Asset Registry
                   (versions & migrations)
-\`\`\`
+```
 
-- **Studio :** \`QMainWindow\`, docks natifs, vues modèles, inspecteurs, commandes et édition visuelle. Le viewport peut être intégré via Qt Quick, suivant un benchmark de composition.
+- **Studio :** `QMainWindow`, docks natifs, vues modèles, inspecteurs, commandes et édition visuelle. Le viewport peut être intégré via Qt Quick, suivant un benchmark de composition.
 - **Player :** Qt Quick/QML et PySide6; seules les informations de présentation transitent dans QML.
-- **Renderer :** une implémentation de scène isométrique (Qt Quick Scene Graph), texture atlases, batching/chunks/culling, profondeur, animations, picking et overlays. Ne pas présupposer qu'un \`QQuickPaintedItem\` à grande surface offre le meilleur chemin GPU.
+- **Renderer :** une implémentation de scène isométrique (Qt Quick Scene Graph), texture atlases, batching/chunks/culling, profondeur, animations, picking et overlays. Ne pas présupposer qu'un `QQuickPaintedItem` à grande surface offre le meilleur chemin GPU.
 - **Core :** Python sans import PySide6/Tk; déterminisme, replays, règles, validations et migrations testables en headless.
 - **Performance :** C++/QRhi envisagé pour le rendu critique seulement après benchmark représentatif, sans créer un second renderer.
 - **Compatibilité :** le dépôt actuel annonce Python >=3.10; **Python 3.12 est une cible initiale pour 5.0**, pas une modification immédiate de cette contrainte. Verrouiller les versions Qt/PySide6 testées avant migration.
-- **Données :** \`Content\` et \`GameProject\` restent les points de départ; évolutions possibles via versions/migrations explicites, sans fichier parallèle de vérité métier.
+- **Données :** `Content` et `GameProject` restent les points de départ; évolutions possibles via versions/migrations explicites, sans fichier parallèle de vérité métier.
 - **Environnement :** Windows, Linux et macOS. Le Player exporté ne requiert ni Studio ni une installation manuelle de Python.
 
 ### Référence du dépôt au lancement
 
-- \`master\` examiné à \`3ad7426c712c5f6a2519a02eee347a9724d79ac3\` (14-10-2026).
+- `master` examiné à `3ad7426c712c5f6a2519a02eee347a9724d79ac3` (14-10-2026).
 - [PR #218 — Consolidation Jeanne/Player/Studio/Terrain](https://github.com/faudard/drawTemp/pull/218) **ouverte et non fusionnée lors de la rédaction**, rassemble les dix PR antérieures; sa CI/validation et sa fusion doivent être réévaluées avant de définir le baseline de migration.
-- L'éditeur actuel utilise Tk dans \`sporebound/editor.py\`, \`studio_*\` et les vues Player historiques; le noyau s'appuie notamment sur \`model.py\`, \`engine.py\`, \`game_session.py\`, \`editor_architecture.py\`, \`persistence.py\` et les fichiers \`*.game.json\`.
-- \`drawtemp\` est déjà le point d'entrée utilisateur; \`sporebound\` subsiste en namespace technique de compatibilité.
+- L'éditeur actuel utilise Tk dans `sporebound/editor.py`, `studio_*` et les vues Player historiques; le noyau s'appuie notamment sur `model.py`, `engine.py`, `game_session.py`, `editor_architecture.py`, `persistence.py` et les fichiers `*.game.json`.
+- `drawtemp` est déjà le point d'entrée utilisateur; `sporebound` subsiste en namespace technique de compatibilité.
 - Le projet de référence doit être **Jeanne d'Arc — Les Cendres du Royaume**, avec prologue, maison, porte/levier, loup, acteur animé, combat, sauvegarde et conséquence narrative.
 
 ### Priorités et gouvernance
@@ -467,16 +467,16 @@ M0/M1 sont des jalons techniques et d'authoring, **pas** des démos de productio
 
 | Ordre | PR proposée | Gate |
 | --- | --- | --- |
-| 1 | \`refactor/qt-foundation-r0\` | Baseline reproductible, ADR et fixtures Jeanne. |
-| 2 | \`refactor/core-sdk-r1\` | Jeu headless pilotable et rejouable via SDK. |
-| 3 | \`feat/qt-studio-shell-r2\` | Shell Qt, explorateur, docks et chargement projet. |
-| 4 | \`feat/shared-iso-renderer-r3a\` | Iso viewport Qt, pan/zoom/picking. |
-| 5 | \`feat/shared-iso-renderer-r3b\` | Atlas, relief, profondeur, acteurs et goldens. |
-| 6 | \`feat/asset-pipeline-r4\` | Import/affichage atlas existants, mêmes IDs. |
-| 7 | \`feat/qt-player-foundation-r12\` | Même scène affichée par un Player Qt séparé. |
-| 8 | \`feat/qt-map-editor-r5\` | Palette graphique, peinture, Undo/Redo et sauvegarde. |
+| 1 | `refactor/qt-foundation-r0` | Baseline reproductible, ADR et fixtures Jeanne. |
+| 2 | `refactor/core-sdk-r1` | Jeu headless pilotable et rejouable via SDK. |
+| 3 | `feat/qt-studio-shell-r2` | Shell Qt, explorateur, docks et chargement projet. |
+| 4 | `feat/shared-iso-renderer-r3a` | Iso viewport Qt, pan/zoom/picking. |
+| 5 | `feat/shared-iso-renderer-r3b` | Atlas, relief, profondeur, acteurs et goldens. |
+| 6 | `feat/asset-pipeline-r4` | Import/affichage atlas existants, mêmes IDs. |
+| 7 | `feat/qt-player-foundation-r12` | Même scène affichée par un Player Qt séparé. |
+| 8 | `feat/qt-map-editor-r5` | Palette graphique, peinture, Undo/Redo et sauvegarde. |
 
-Créer les PR en dépendances explicites et préférer des lots isolés, vérifiables, qui ne rendent pas \`master\` inutilisable. Une branche de programme 5.0 peut aider à tester les intégrations, mais **elle ne doit pas remplacer** des PR étroites et révisables. Documenter les bases de PR; ne jamais fusionner une branche empirique contenant des travaux non validés.
+Créer les PR en dépendances explicites et préférer des lots isolés, vérifiables, qui ne rendent pas `master` inutilisable. Une branche de programme 5.0 peut aider à tester les intégrations, mais **elle ne doit pas remplacer** des PR étroites et révisables. Documenter les bases de PR; ne jamais fusionner une branche empirique contenant des travaux non validés.
 
 ## Scénarios utilisateurs d'acceptation
 
@@ -508,7 +508,7 @@ Les machines, GPU, pilotes, résolution, backend Qt et contenu exact doivent êt
 | --- | --- |
 | Qt Widgets ↔ Qt Quick coûteux ou fragile | Benchmark d'intégration viewport très tôt (R0/R3), mesurer focus, hi-DPI, resize, composition et GPU. |
 | Renderer de Studio différent du Player | Un seul package rendu, snapshots partagés, goldens et scénario de parité systématique. |
-| Glissement des modèles \`Content\` / \`GameProject\` | Évolutions par migrations, validations croisées et ancien fichier conservé. |
+| Glissement des modèles `Content` / `GameProject` | Évolutions par migrations, validations croisées et ancien fichier conservé. |
 | Réécriture inutile des règles CT/IA | Adapter l'existant au SDK; ne réécrire que sur preuve de défaut ou dette bloquante. |
 | Regressions de déterminisme | Même seed/actions, comparer RNG, état et hash; gates CLI indépendants. |
 | Animations incohérentes | Pivots/frames/version des atlas contrôlés, goldens et revue artistique. |
@@ -527,4 +527,4 @@ Les machines, GPU, pilotes, résolution, backend Qt et contenu exact doivent êt
 
 ## Politique de statut
 
-Pour chaque lot R*, suivre séparément : \`non démarré\`, \`en cours\`, \`en revue\`, \`validé\` ou \`bloqué\`; conserver PR, commit, preuves CI, captures et rapport de gate. **Ce document est une roadmap, pas une certification de livraison.** Les gates sont les seuls critères de clôture; la présence d'une classe ou d'une PR ne suffit pas.
+Pour chaque lot R*, suivre séparément : `non démarré`, `en cours`, `en revue`, `validé` ou `bloqué`; conserver PR, commit, preuves CI, captures et rapport de gate. **Ce document est une roadmap, pas une certification de livraison.** Les gates sont les seuls critères de clôture; la présence d'une classe ou d'une PR ne suffit pas.
