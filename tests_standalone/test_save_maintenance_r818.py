@@ -159,6 +159,22 @@ class SaveMaintenanceTests(unittest.TestCase):
                     min_age_seconds=3600, expected_token=plan["token"])
             self.assertEqual(old_temp.read_bytes(), b"changed")
 
+    def test_crashed_archive_staging_is_reported_and_not_deleted(self):
+        with TemporaryDirectory() as root:
+            _, _, manager = self.make(root)
+            manager.history.mkdir()
+            orphan = manager.history / ".staging-crashed-writer"
+            orphan.mkdir()
+            (orphan / "partial").write_bytes(b"unfinished archival copy")
+            report = manager.inspect()
+            self.assertIn(orphan.name, report["incomplete_archives"])
+            self.assertTrue(orphan.is_dir())
+            # A new healthy archive can be published independently, without
+            # discarding unfinished forensic evidence from a previous crash.
+            self.assertTrue(manager.archive_verified()["verified"])
+            self.assertEqual((orphan / "partial").read_bytes(),
+                             b"unfinished archival copy")
+
     def test_writer_lock_blocks_archival_cleanup_and_preserves_slot(self):
         with TemporaryDirectory() as root:
             store, _, manager = self.make(root)
