@@ -129,6 +129,25 @@ class LongSessionPlayerTests(unittest.TestCase):
             check.load_long_game("relique", 1)
             self.assertEqual(check.session.recording(), before)
 
+    def test_stale_recovery_preview_cannot_overwrite_newer_primary(self):
+        with TemporaryDirectory() as root:
+            ui = self.controller(root)
+            ui.new_long_game("relique", 1)
+            ui.choose_story_option("guard")
+            ui.save()
+            ui.long_path_for("relique", 1).write_bytes(b"{")
+            other = self.controller(root)
+            old = other.inspect_long_game("relique", 1)
+            other.restore_long_game(
+                "relique", 1,
+                expected_digest=old.session.recording()["digest"])
+            before = other.long_path_for("relique", 1).read_bytes()
+            with self.assertRaisesRegex(RuleError, "stale"):
+                other.long_store().restore(
+                    old, expected_digest=old.session.recording()["digest"])
+            self.assertEqual(other.long_path_for("relique", 1).read_bytes(),
+                             before)
+
     def test_lock_refuses_concurrent_writes_and_never_steals(self):
         with TemporaryDirectory() as root:
             ui = self.controller(root)
