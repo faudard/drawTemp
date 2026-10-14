@@ -3237,8 +3237,7 @@ def launch(path):
     ttk.Combobox(procedural_row, textvariable=terrain_style_var,
                  values=REGION_STYLES, state='readonly', width=9).pack(side='left', padx=2)
     ttk.Label(procedural_row, text='Seed').pack(side='left', padx=2)
-    ttk.Spinbox(procedural_row, from_=0, to=999999,
-                textvariable=terrain_seed_var, width=7).pack(side='left', padx=2)
+    ttk.Entry(procedural_row, textvariable=terrain_seed_var, width=7).pack(side='left', padx=2)
     ttk.Button(procedural_row, text='Aperçu',
                command=preview_procedural_terrain).pack(side='left', padx=2)
     ttk.Button(procedural_row, text='Appliquer',
