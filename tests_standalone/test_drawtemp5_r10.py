@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import subprocess
 import sys
 import unittest
@@ -134,6 +136,25 @@ class CampaignStudioTests(unittest.TestCase):
             real_runner.assert_called_once()
         studio.link_missions(MISSION, "r10_forest")
         self.assertEqual(studio.simulation_inspect()["node"], 0)
+
+    def test_save_and_reload_both_canonical_documents(self):
+        studio = _three_missions()
+        studio.link_missions(MISSION, "r10_forest")
+        studio.set_condition("ending", "alliance", "flag_eq",
+                             "allegiance", "aid")
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "r10_content.json"
+            written = studio.save_as(path)
+            self.assertEqual(len(written), 2)
+            self.assertTrue(all(item.is_file() for item in written))
+            reopened = CampaignStudio.open(path)
+            self.assertEqual(reopened.overview()["graph"]["edges"],
+                             [(MISSION, "r10_forest")])
+            self.assertIn("alliance", reopened.overview()["flow"]["endings"])
+            reopened.link_missions("r10_forest", "r10_castle")
+            reopened.save()
+            reloaded = CampaignStudio.open(path)
+            self.assertEqual(len(reloaded.overview()["graph"]["edges"]), 2)
 
     def test_validated_export_uses_existing_source_bundle(self):
         studio = _three_missions()
