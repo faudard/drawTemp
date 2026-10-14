@@ -90,6 +90,52 @@ campaign snapshots for reproducibility without overwriting them.
 `campaign_curve_review` flags abrupt budget increases for **human review**
 rather than claiming measured difficulty from a numeric ratio.
 
+## R6.14 — Tactical Choice Evidence
+
+`sporebound.tactical_choice_lab_r6` samples real canonical Battle states
+during a deterministic run. At each sampled Player command it attempts a
+bounded set of actions against **isolated Battle clones**, calling
+`Battle.execute` to confirm the alternatives are legal. It detects:
+- meaningful positioning changes (cover, hazard, objective distance or
+  distance to opponents), rather than counting every empty click;
+- positive-chance basic attacks, executed by the rules engine;
+- legitimate guard/overwatch preparations under enemy threat;
+- relevant healing/MP or revival consumables and costly skills;
+- nearby authored interactions, validated by Battle.
+
+The report has actor ID, command index, chosen command, representative
+alternatives with reasons, option categories, a fixed seed and a replay
+digest. It never chooses a different action for the simulated AI or modifies
+the authored Content.
+
+`evaluate_choice_gate` refuses zero player samples or unverified replays,
+allows a minimum count of multi-category states, and optionally requires
+`positioning+damage`, `positioning+protection`,
+`positioning+resources` or `positioning+objective` pairs. A failed pair
+is **actionable design evidence**: it may be expected for an introductory
+battle, but cannot be claimed as passing the richer encounter gate.
+
+```sh
+python -m sporebound tactical-choices --mission garden --seed 1 \
+  --limit 120 --choice-min-multi 1 \
+  --choice-required-pair positioning+damage \
+  --report tactical-choices.json
+```
+
+CLI exit codes: **0** for a passed coverage gate, **2** for an unmet
+coverage gate, **1** for invalid arguments or source content. CI includes
+a non-policy smoke check with `--choice-min-multi 0`; this does NOT
+certify the complete design requirements for any shipped mission.
+
+Within Studio → Balance Matrix, select a measured scenario and click
+**Tester alternatives tactiques**. The displayed strict R6 profile
+additionally asks for positioning-vs-attack/protection/resources. Export
+the report locally using **Exporter choix R6**.
+
+Coverage is **sampled**, not an exhaustive game tree, and still cannot
+establish player satisfaction, informed trade-offs or a 15–30-minute
+duration. Confirm these through real human playtests.
+
 ## R6 design gate — tactical choices, not merely DPS
 
 A release reviewer should check at least:
@@ -110,6 +156,7 @@ the human-design gate.
 
 ```sh
 python -m unittest tests_standalone.test_encounter_balance_r6 -v
+python -m unittest tests_standalone.test_tactical_choice_r6 -v
 python -m unittest tests_standalone.test_balance_matrix_382 -v
 python -m unittest tests_standalone.test_playtest_384 -v
 python -m unittest tests_standalone.test_battle_diagnostics_381 -v
