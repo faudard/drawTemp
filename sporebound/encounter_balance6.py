@@ -119,10 +119,12 @@ def ai_decision_analytics(trace):
     }
 
 
-def trace_encounter_ai(content, mission_id, *, seed=1, max_commands=500, rules=None):
+def trace_encounter_ai(content, mission_id, *, seed=1, max_commands=500,
+                       rules=None, initial_state=None):
     """Run real AI and preserve trace for drilldown; caller chooses export."""
     trace = trace_seed(content, mission_id, seed=seed,
-                       max_commands=max_commands, rules=rules)
+                       max_commands=max_commands, rules=rules,
+                       initial_state=initial_state)
     return {"analytics": ai_decision_analytics(trace), "trace": trace}
 
 
