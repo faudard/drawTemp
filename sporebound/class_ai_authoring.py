@@ -238,7 +238,12 @@ def set_unit_ai(data, mission_id, unit_id, *, behavior="tactical",
     require(behavior != "adaptive_boss" or actor["team"] == "enemy",
             "Adaptive boss needs an enemy actor")
     actor["behavior"] = behavior
-    actor["tags"] = list(roles)
+    # Boss phase progression is authored by canonical HP triggers, not an AI
+    # role field. Switching policy must not silently erase its phase state.
+    preserved = ([tag for tag in actor.get("tags", [])
+                  if tag.startswith("boss_phase:") and tag not in roles]
+                 if behavior == "adaptive_boss" else [])
+    actor["tags"] = list(roles) + preserved
     actor["patrol_route"] = cells
     return _validated(new)
 
