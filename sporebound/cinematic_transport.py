@@ -18,20 +18,17 @@ class CinematicTransport:
         self.duration_ms = duration_ms
         self._now = monotonic if monotonic is not None else time.monotonic
         self.position_ms = 0
+        self._origin_position = 0
         self.playing = True
         self._anchor = self._now()
 
     def read(self):
         if self.playing:
             elapsed = max(0, int((self._now() - self._anchor) * 1000))
-            self.position_ms = min(self.duration_ms, self.position_ms + elapsed)
-            self._anchor = self._now_anchor()  # do not accumulate per-frame rounding
+            projected = min(self.duration_ms, self._origin_position + elapsed)
+            # Monotonic progress even if a platform clock is imperfect.
+            self.position_ms = max(self.position_ms, projected)
         return self.position_ms
-
-    def _now_anchor(self):
-        # Preserve fractional milliseconds by measuring from an origin
-        # representing the *integer* committed playhead, not by adding 40 ms.
-        return self._now()
 
     def pause(self):
         position = self.read()
@@ -40,6 +37,7 @@ class CinematicTransport:
 
     def resume(self):
         if not self.playing:
+            self._origin_position = self.position_ms
             self._anchor = self._now()
             self.playing = True
         return self.position_ms
@@ -47,6 +45,7 @@ class CinematicTransport:
     def seek(self, position_ms):
         require(type(position_ms) is int, "Cinematic seek must be in milliseconds")
         self.position_ms = max(0, min(self.duration_ms, position_ms))
+        self._origin_position = self.position_ms
         self._anchor = self._now()
         return self.position_ms
 
