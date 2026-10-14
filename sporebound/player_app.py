@@ -40,6 +40,12 @@ class PlayerApplication:
         profile = (Path(profile_path) if profile_path is not None
                    else Path.home() / ".sporebound" / project_path.name)
         self.player = PlayerController(content, project, profile)
+        # Local playtest capture is opt-in, separate from savegames.
+        from .playtest_telemetry import PlaytestRecorder
+        self.playtest_recorder = PlaytestRecorder(content=content,
+                                                  rules=self.player.rules)
+        self.player.playtest = self.playtest_recorder
+        self.playtest_exported = False
         self.project_path = project_path
         self.project = project
         self.registry = project.asset_registry()
@@ -48,6 +54,7 @@ class PlayerApplication:
                                 effects_volume=project.options["effects_volume"],
                                 music_volume=project.options["music_volume"])
         self.root = tk.Tk()
+        self.playtest_optin = tk.BooleanVar(value=False)
         self.root.title(project.title)
         self.root.geometry("1160x820")
         self.root.minsize(800, 580)
@@ -300,9 +307,45 @@ class PlayerApplication:
             "Migration terminée", "Sauvegarde v2 vérifiée. L'original v1 est conservé.")
         self._load_game()
 
+    def _toggle_playtest(self):
+        if self.playtest_optin.get():
+            self.playtest_recorder.enable(
+                self.player.session.active_battle
+                if self.player.session is not None else None)
+        else:
+            self.playtest_recorder.disable()
+
+    def _export_playtest(self):
+        from tkinter import filedialog
+        from .playtest_telemetry import save_playtest
+        report = self.playtest_recorder.report()
+        if not report["sessions"]:
+            self.messagebox.showinfo("Playtest", "Aucune session de playtest enregistrée.")
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.root, title="Exporter les mesures playtest localement",
+            initialfile="playtest_telemetry.json",
+            defaultextension=".json", filetypes=[("JSON", "*.json")])
+        if path:
+            save_playtest(path, report)
+            self.playtest_exported = True
+            self.messagebox.showinfo(
+                "Playtest", "Rapport exporté localement. Aucune donnée envoyée.")
+
     def options_screen(self):
         self._clear()
         self._heading("Options")
+        self.ttk.Checkbutton(
+            self.view, text="Enregistrer les playtests (activation volontaire)",
+            variable=self.playtest_optin,
+            command=self._toggle_playtest).pack(anchor="w", pady=(5, 2))
+        self.ttk.Label(
+            self.view, text="Durée réelle écoulée, commandes et objectifs. "
+            "Mémoire locale uniquement, pas de serveur et pas d'enregistrement "
+            "dans les sauvegardes. L'export JSON est manuel. Désactivé au lancement.",
+            wraplength=750).pack(anchor="w", pady=(1, 5))
+        self._button(self.view, "Exporter rapport playtest JSON",
+                     self._export_playtest).pack(anchor="w", pady=4)
         self.ttk.Label(self.view, text="Audio optionnel : installer pygame-ce et déclarer des sounds dans le projet.").pack(
             anchor="w", pady=10)
         effects = self.tk.IntVar(value=int(self.audio.effects_volume * 100))
@@ -762,6 +805,8 @@ class PlayerApplication:
                          self._finish_mission_with_cinematic).pack(
                              side="left", padx=4)
         self._button(nav, "Sauvegarder", self.player.save).pack(side="right", padx=4)
+        self._button(nav, "Exporter playtest",
+                     self._export_playtest).pack(side="right", padx=4)
         self.ttk.Checkbutton(nav, text="Vue isométrique 2.5D",
                              variable=self.iso_view_var,
                              command=self._switch_projection).pack(side="right", padx=8)
@@ -1285,6 +1330,19 @@ class PlayerApplication:
                     if not self.messagebox.askyesno(
                             "Sauvegarde impossible",
                             str(exc) + "\nQuitter malgré l'échec ?"):
+                        self._closing = False
+                        return
+            if (self.playtest_recorder.enabled
+                    and self.playtest_recorder.active is not None):
+                self.playtest_recorder.finish("interrupted")
+            if (self.playtest_recorder.report()["sessions"]
+                    and not self.playtest_exported):
+                if self.messagebox.askyesno(
+                        "Playtest non exporté",
+                        "La télémétrie restera uniquement en mémoire et sera "
+                        "perdue en quittant. Exporter le rapport maintenant ?"):
+                    self._export_playtest()
+                    if not self.playtest_exported:
                         self._closing = False
                         return
             self.audio.close()
