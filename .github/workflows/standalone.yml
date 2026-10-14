@@ -295,6 +295,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_terrain_autoblend_3732f_gui.py -v
+      - name: Verify persistent 2D/Iso viewport switching in Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_viewport_projection_ux_gui.py -v
       - name: Verify shared isometric Editor and Player in real Tk (3.7.18A)
         env:
           SPOREBOUND_GUI_SMOKE: '1'

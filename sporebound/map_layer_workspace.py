@@ -27,7 +27,7 @@ TILE_DEFAULTS = dict(surface='grass', blocked=False, cost=1, cover=0,
 def default_view():
     return {'visible': {name: True for name in LAYERS},
             'locked': {name: False for name in LAYERS},
-            'active_level': 0, 'interiors': False}
+            'active_level': 0, 'interiors': False, 'projection': '2d'}
 
 
 def empty_views():
@@ -35,8 +35,9 @@ def empty_views():
 
 
 def normalize_view(row):
-    require(type(row) is dict and set(row) ==
-            {'visible', 'locked', 'active_level', 'interiors'},
+    legacy_keys = {'visible', 'locked', 'active_level', 'interiors'}
+    require(type(row) is dict and
+            set(row) in (legacy_keys, legacy_keys | {'projection'}),
             'Invalid map view settings')
     for key in ('visible', 'locked'):
         values = row[key]
@@ -46,7 +47,12 @@ def normalize_view(row):
     require(type(row['active_level']) is int and 0 <= row['active_level'] <= 3,
             'Active map floor must be 0..3')
     require(type(row['interiors']) is bool, 'Invalid interior visibility')
-    return deepcopy(row)
+    projection = row.get('projection', '2d')
+    require(type(projection) is str and projection in ('2d', 'iso'),
+            'Invalid map projection')
+    normalized = deepcopy(row)
+    normalized['projection'] = projection  # Version-1 sidecars remain readable.
+    return normalized
 
 
 def normalize_views(payload):
@@ -94,7 +100,7 @@ def view_for(payload, mission_id):
 
 
 def update_view(payload, mission_id, *, visible=None, locked=None,
-                active_level=None, interiors=None):
+                active_level=None, interiors=None, projection=None):
     result = normalize_views(payload)
     current = view_for(result, mission_id)
     for field, mapping in (('visible', visible), ('locked', locked)):
@@ -107,6 +113,8 @@ def update_view(payload, mission_id, *, visible=None, locked=None,
         current['active_level'] = active_level
     if interiors is not None:
         current['interiors'] = interiors
+    if projection is not None:
+        current['projection'] = projection
     result['missions'][mission_id] = normalize_view(current)
     return normalize_views(result)
 

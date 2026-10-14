@@ -218,8 +218,8 @@ class MapEditorGUITests(unittest.TestCase):
                     root.update()
                     widgets = list(descendants(root))
                     canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
-                    toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
-                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    toggle = next(w for w in widgets if isinstance(w, ttk.Radiobutton)
+                                  and w.cget('text') == 'Iso 2.5D')
                     surface = next(w for w in widgets if isinstance(w, ttk.Combobox)
                                    and 'bridge' in w.cget('values'))
                     buttons = {w.cget('text'): w for w in widgets
@@ -330,8 +330,8 @@ class MapEditorGUITests(unittest.TestCase):
                     click(4*54+12, 4*54+12)
                     self.assertEqual(brush.get(), 'feature-erase')
 
-                    toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
-                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    toggle = next(w for w in widgets if isinstance(w, ttk.Radiobutton)
+                                  and w.cget('text') == 'Iso 2.5D')
                     toggle.invoke()
                     root.update()
                     board = next(iter(Content.load(DEFAULT_CONTENT).missions.values())).board
@@ -434,8 +434,8 @@ class MapEditorGUITests(unittest.TestCase):
                     restored = Content.load(saved_path).missions[mid].board
                     self.assertTrue(restored.tile((3, 3)).blocked)
 
-                    toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
-                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    toggle = next(w for w in widgets if isinstance(w, ttk.Radiobutton)
+                                  and w.cget('text') == 'Iso 2.5D')
                     toggle.invoke()
                     structure_box.set('Pont')
                     structure_box.event_generate('<<ComboboxSelected>>')
@@ -525,8 +525,8 @@ class MapEditorGUITests(unittest.TestCase):
                     board = Content.load(saved).missions[mid].board
                     self.assertTrue(board.tile((3, 3)).blocked)
                     self.assertEqual(board.tile((5, 5)).surface, 'cobble')
-                    toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
-                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    toggle = next(w for w in widgets if isinstance(w, ttk.Radiobutton)
+                                  and w.cget('text') == 'Iso 2.5D')
                     toggle.invoke()
                     root.update()
                     # The selected cell is inside the house: no opaque roof.
@@ -585,8 +585,8 @@ class MapEditorGUITests(unittest.TestCase):
                                    and mid in w.cget('values'))
                     tool = next(w for w in widgets if isinstance(w, ttk.Combobox)
                                 and 'Sélection' in w.cget('values'))
-                    toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
-                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    toggle = next(w for w in widgets if isinstance(w, ttk.Radiobutton)
+                                  and w.cget('text') == 'Iso 2.5D')
                     buttons = {w.cget('text'): w for w in widgets
                                if isinstance(w, ttk.Button)}
                     mission.set(mid)
@@ -659,8 +659,8 @@ class MapEditorGUITests(unittest.TestCase):
                                    and mid in w.cget('values'))
                     tool = next(w for w in children if isinstance(w, ttk.Combobox)
                                 and 'Sélection' in w.cget('values'))
-                    toggle = next(w for w in children if isinstance(w, ttk.Checkbutton)
-                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                    toggle = next(w for w in children if isinstance(w, ttk.Radiobutton)
+                                  and w.cget('text') == 'Iso 2.5D')
                     mission.set(mid)
                     mission.event_generate('<<ComboboxSelected>>')
                     toggle.invoke()
