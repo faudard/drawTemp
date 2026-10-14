@@ -88,6 +88,17 @@ def _on_roof(geo, instance, px, py):
     return inside
 
 
+def _on_door(geo, instance, px, py):
+    """Approximate the actual doorway glyph when an atlas is a single PNG."""
+    if instance.entry is None:
+        return False
+    dx, dy = instance.entry
+    x = geo.origin_x + (dx - dy) * geo.half_width
+    y = geo.origin_y + (dx + dy) * geo.half_height
+    return (abs(px - x) <= geo.cell_size * .16 and
+            y - geo.cell_size * .4 <= py <= y + geo.cell_size * .06)
+
+
 def pick_building_part(canvas, geo, px, py, *, fallback_cell=None):
     """Pick a real building component at Canvas coordinates.
 
@@ -109,7 +120,12 @@ def pick_building_part(canvas, geo, px, py, *, fallback_cell=None):
         if part is None:
             continue
         if part == 'building':
-            part = 'roof' if _on_roof(geo, instance, px, py) else 'facade'
+            if _on_roof(geo, instance, px, py):
+                part = 'roof'
+            elif _on_door(geo, instance, px, py):
+                part = 'door'
+            else:
+                part = 'facade'
         if part == 'window':
             cell = _nearest_wall(geo, instance, px, py, only_windows=True)
         elif part == 'facade':
