@@ -1,8 +1,8 @@
 """Modeless visual palette using the editor's existing image loaders and tools."""
 from .asset_palette import CATEGORIES, ENTRIES, PaletteEntry, search_entries
 from .watercolor_catalog import WatercolorCatalog
-from .asset_browser_state import (AssetBrowserState, FAMILIES, FAMILY_LABELS,
-                                  BROWSER_SCOPES, collection_key, family_for)
+from .asset_browser_state import (AssetBrowserState, FAMILIES, BROWSER_SCOPES,
+                                  collection_key, family_for)
 from .tk_images import resize_photo
 from .iso_building_atlas import BUILDING_FRAMES
 from .iso_actor_atlas import actor_style
@@ -327,6 +327,7 @@ class AssetPalette:
     def populate(self, *_args):
         old = self.tree.selection()
         open_ids = set()
+
         def save_expanded(parent=''):
             for iid in self.tree.get_children(parent):
                 if self.tree.item(iid, 'open'):
