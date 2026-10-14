@@ -52,6 +52,7 @@ from .structure_groups import selected_structures, transform_structure_group
 from .building_visuals import (FACADES, ROOFS, DEFAULT_APPEARANCE,
                                building_appearance, exterior_wall_cells,
                                edit_building_appearance, set_building_window)
+from .building_visual_picker import (BuildingPartPick, pick_building_part)
 from .map_layer_workspace import (LAYERS as EDITOR_LAYERS, empty_views,
                                   load_views, save_views, view_for, update_view,
                                   ensure_unlocked)
@@ -434,6 +435,10 @@ def launch(path):
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
     mode_var = tk.StringVar(value='MODE : ÉDITION')
     building_selection_var = tk.StringVar(value='Aucun bâtiment sélectionné')
+    building_part_var = tk.StringVar(
+        value='Cliquer une toiture, un mur, une fenêtre ou une porte.')
+    building_part_target = None
+    building_part_actions = {}
     building_selection_actions = []
     building_exterior_actions = []
     building_floor_actions = []
@@ -1986,6 +1991,51 @@ def launch(path):
             facade=facade_var.get(), roof=roof_var.get())))
         status_var.set('Façade et toiture modifiées : Undo/Redo disponibles.')
 
+    @guarded
+    def edit_visual_window(present):
+        nonlocal building_part_target
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        building = selected_structure()
+        picked = building_part_target
+        if (picked is None or picked.structure_id != building.id or
+                picked.part not in ('facade', 'window')):
+            raise RuleError('Cliquer un mur extérieur ou une fenêtre du bâtiment.')
+        row = next((r for r in _mission_visual_records()
+                    if r['id'] == building.id), None)
+        if row is None:
+            raise RuleError('La structure doit avoir une identité persistante.')
+        offset = (picked.cell[0] - building.anchor[0],
+                  picked.cell[1] - building.anchor[1])
+        if offset not in exterior_wall_cells(row):
+            raise RuleError('Ce mur ne peut pas recevoir de fenêtre.')
+        design_change(lambda: doc.replace(set_building_window(
+            doc.data, mission_var.get(), building.id, picked.cell,
+            present=present)))
+        building_part_target = BuildingPartPick(
+            building.id, building.anchor, picked.cell,
+            'window' if present else 'facade')
+        building_part_var.set(
+            ('Fenêtre' if present else 'Mur extérieur') +
+            f' · case {picked.cell}. Action annulable.')
+        refresh()
+
+    @guarded
+    def switch_visual_door():
+        nonlocal building_part_target
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        building = selected_structure()
+        if (building_part_target is None or
+                building_part_target.structure_id != building.id or
+                building_part_target.part != 'door' or
+                len(door_slots(building.name)) < 2):
+            raise RuleError('Sélectionner la porte d’une maison ou de ruines.')
+        building_part_target = None
+        structure_door_var.set('Entrée A' if building.door_slot else 'Entrée B')
+        apply_structure_properties()
+        building_part_var.set('Porte déplacée sur l’entrée autorisée du plan.')
+
     def choose_window_mode(present):
         window_present_var.set(present)
         tool_var.set('Fenêtre façade')
@@ -2537,11 +2587,20 @@ def launch(path):
         nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive, entity_target
         nonlocal structure_turns, structure_selection_cell, structure_selection_id
         nonlocal structure_drag_from, structure_drag_anchor, structure_drag_duplicate
-        nonlocal entity_passage_entry
+        nonlocal entity_passage_entry, building_part_target
         cancel_structure_drag()
         canvas.focus_set()
         stroke_cells = []
-        selected_cell = event_cell(event)
+        visual_pick = None
+        in_building_mode = studio_navigation.building_mode and battle is None
+        if (in_building_mode and tool_var.get() == 'Sélection structure'
+                and iso_var.get() and iso_geometry is not None):
+            px, py = canvas.canvasx(event.x), canvas.canvasy(event.y)
+            visual_pick = pick_building_part(
+                canvas, iso_geometry, px, py,
+                fallback_cell=iso_geometry.hit_test(px, py))
+        selected_cell = (visual_pick.cell if visual_pick is not None
+                         else event_cell(event))
         if selected_cell is None:
             return
         validate_selection(doc.data, mission_var.get(), [selected_cell])
@@ -2558,7 +2617,18 @@ def launch(path):
         elif tool == 'Sélection structure':
             if source_pending():
                 raise RuleError('Appliquer ou abandonner le JSON avant édition.')
-            current = structure_at(doc.data, mission_var.get(), selected_cell)
+            try:
+                current = structure_at(doc.data, mission_var.get(), selected_cell)
+            except RuleError:
+                if not in_building_mode:
+                    raise
+                structure_selection_cell = None
+                structure_selection_id = None
+                building_part_target = None
+                building_part_var.set(
+                    'Aucun élément sélectionné. Cliquer sur un bâtiment.')
+                refresh()
+                return
             structure_selection_cell = current.anchor
             structure_selection_id = current.id or None
             structure_var.set(current.name)
@@ -2569,7 +2639,23 @@ def launch(path):
             settings = building_appearance(row) if row is not None else DEFAULT_APPEARANCE
             facade_var.set(settings['facade'])
             roof_var.set(settings['roof'])
-            structure_drag_from = selected_cell
+            building_part_target = (
+                visual_pick if visual_pick is not None and
+                visual_pick.structure_id == current.id else None)
+            names = {'roof': 'Toiture', 'facade': 'Mur extérieur',
+                     'window': 'Fenêtre', 'door': 'Porte',
+                     'building': 'Bâtiment'}
+            building_part_var.set(
+                f'{names.get(visual_pick.part, "Élément")} · case '
+                f'{visual_pick.cell}' if building_part_target is not None
+                else 'Bâtiment sélectionné : cliquer un de ses éléments en 2.5D.')
+            if building_part_target is not None:
+                building_tabs.select(building_tabs.tabs()[
+                    0 if building_part_target.part == 'door' else 1])
+            # Dragging a roof/window must not accidentally move the building.
+            structure_drag_from = (
+                selected_cell if building_part_target is None or
+                building_part_target.part == 'building' else None)
             structure_drag_anchor = None
             structure_drag_duplicate = bool(event.state & 0x0001)
             status_var.set(f'{current.name} sélectionnée : {current.id or "ancienne structure"}'
@@ -2986,7 +3072,7 @@ def launch(path):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal selected_group_id, group_tree_signature
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
-        nonlocal entity_hover_key, entity_passage_entry
+        nonlocal entity_hover_key, entity_passage_entry, building_part_target
         ui_started = begin_ui()
         structure_preview_key = None
         entity_hover_key = None
@@ -3005,6 +3091,8 @@ def launch(path):
         if mission_var.get() not in mids:
             mission_var.set(mids[0])
         if selection_mission != mission_var.get():
+            building_part_target = None
+            building_part_var.set('Cliquer un élément du nouveau bâtiment.')
             apply_saved_map_view()
             selected_tiles.clear()
             tree_drag_cancel()
@@ -3024,6 +3112,7 @@ def launch(path):
             if record is None:
                 structure_selection_cell = None
                 structure_selection_id = None
+                building_part_target = None
             else:
                 structure_selection_cell = tuple(record['anchor'])
         selected_building = None
@@ -3041,6 +3130,14 @@ def launch(path):
                     f' | {selected_building.anchor}')
             except (RuleError, KeyError):
                 building_selection_var.set('Aucun bâtiment sélectionné.')
+        # The part selection is revision-safe: removed, moved or replaced
+        # buildings cannot retain a stale clickable wall reference.
+        if (building_part_target is not None and
+                (selected_building is None or
+                 building_part_target.structure_id != selected_building.id or
+                 building_part_target.anchor != selected_building.anchor)):
+            building_part_target = None
+            building_part_var.set('Sélectionner un élément du bâtiment.')
         # Do not offer mutations while gameplay or the JSON source editor
         # owns the document. The command callbacks still enforce the rules.
         available = (selected_building is not None and battle is None
@@ -3055,6 +3152,23 @@ def launch(path):
             widget.state(['!disabled'] if available and
                           selected_building.name in ('Maison', 'Tour', 'Ruines')
                           else ['disabled'])
+        part_is_valid = (available and building_part_target is not None and
+                         building_part_target.structure_id == selected_building.id)
+        for name, widget in building_part_actions.items():
+            supported = False
+            if part_is_valid and name in ('add_window', 'remove_window'):
+                if selected_building.name in ('Maison', 'Tour') and (
+                        building_part_target.part in ('facade', 'window')):
+                    record = next((row for row in _mission_visual_records()
+                                   if row['id'] == selected_building.id), None)
+                    if record is not None:
+                        ox = building_part_target.cell[0] - selected_building.anchor[0]
+                        oy = building_part_target.cell[1] - selected_building.anchor[1]
+                        supported = (ox, oy) in exterior_wall_cells(record)
+            elif part_is_valid and name == 'move_door':
+                supported = (building_part_target.part == 'door' and
+                             len(door_slots(selected_building.name)) > 1)
+            widget.state(['!disabled'] if supported else ['disabled'])
         content = editor_content_cache.get(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
         refresh_group_tree(content.missions[mission_var.get()])
