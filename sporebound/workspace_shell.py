@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from .model import RuleError
+from .workspace import GROUPS
 
 
 @dataclass(frozen=True)
@@ -205,8 +206,7 @@ class LayoutStore:
                         break
                 safe[key] = unique
         if data.get('family_filter') in ('all',) + tuple(
-                kind for kind, _ in __import__(
-                    'sporebound.workspace', fromlist=['GROUPS']).GROUPS):
+                kind for kind, _ in GROUPS):
             safe['family_filter'] = data['family_filter']
         if data.get('scope_filter') in ('all', 'favorites', 'recents'):
             safe['scope_filter'] = data['scope_filter']
