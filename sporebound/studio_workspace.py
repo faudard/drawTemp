@@ -287,8 +287,7 @@ class ProjectWorkspaceTab:
             for kind, _title in GROUPS)
         if getattr(tree, '_workspace_signature', None) == signature:
             return
-        current = tree.selection()
-        selected = current[0] if current else ''
+        selected = tuple(tree.selection())
         existing_groups = tree.get_children('')
         expanded = {key for key in existing_groups if tree.item(key, 'open')}
         initial = not existing_groups
@@ -301,8 +300,9 @@ class ProjectWorkspaceTab:
             for key, label in entries:
                 tree.insert(parent, 'end', iid=key, text=label)
         tree._workspace_signature = signature
-        if selected and tree.exists(selected):
-            tree.selection_set(selected)
+        remaining = tuple(key for key in selected if tree.exists(key))
+        if remaining:
+            tree.selection_set(*remaining)
 
     def _selected_node(self):
         selected = self.tree.selection()
@@ -319,7 +319,8 @@ class ProjectWorkspaceTab:
         if _event is not None and self.tree.selection():
             self._explicit_tile = ''
         node = self._selected_node()
-        if _event is not None and node is not None and not self._navigation_busy:
+        if (_event is not None and node is not None and
+                len(self.tree.selection()) == 1 and not self._navigation_busy):
             self._map_tile_key = ''
             changed = self.navigation.record(node.key)
             self.explorer.visit(node.key)
