@@ -73,25 +73,63 @@ class PlaytestStudio:
         self.summary = self.ttk.Label(self.tab, text="Aucun rapport chargé.",
                                       wraplength=920, justify="left")
         self.summary.pack(anchor="w", pady=7)
+        # The report uses a two-column analysis workbench rather than
+        # stacking three full-width widgets down the window.
+        self.report_panels = self.ttk.Panedwindow(self.tab, orient="horizontal")
+        sessions = self.ttk.LabelFrame(self.report_panels, text="Sessions")
+        chart = self.ttk.LabelFrame(self.report_panels, text="Durées réelles")
+        self.report_panels.add(sessions, weight=3)
+        self.report_panels.add(chart, weight=2)
         columns = ("mission", "outcome", "duration", "commands", "ct", "hold")
         self.rows = self.ttk.Treeview(
-            self.tab, columns=columns, show="headings", height=9)
+            sessions, columns=columns, show="headings", height=9)
         for name, title, width in zip(
                 columns,
                 ("Mission", "Résultat", "Durée réelle (min)", "Commandes",
                  "CT fin", "Progression objectif"),
-                (170, 110, 160, 115, 110, 195)):
+                (135, 90, 145, 100, 80, 150)):
             self.rows.heading(name, text=title)
-            self.rows.column(name, width=width, anchor="center")
-        self.rows.pack(fill="x", pady=(6, 7))
+            self.rows.column(name, width=width, anchor="center",
+                             stretch=True)
+        table_scroll = self.ttk.Scrollbar(
+            sessions, orient="vertical", command=self.rows.yview)
+        self.rows.configure(yscrollcommand=table_scroll.set)
+        table_scroll.pack(side="right", fill="y")
+        self.rows.pack(side="left", fill="both", expand=True,
+                       padx=(6, 0), pady=6)
         self.rows.bind("<<TreeviewSelect>>", self.select)
         self.canvas = self.tk.Canvas(
-            self.tab, height=170, background="#252b33",
+            chart, height=220, background="#252b33",
             highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True)
-        self.detail = self.tk.Text(self.tab, height=9, state="disabled",
-                                    wrap="word")
-        self.detail.pack(fill="both", expand=True, pady=5)
+        self.canvas.pack(fill="both", expand=True, padx=6, pady=6)
+        self._chart_sessions = ()
+        self.canvas.bind("<Configure>", self.draw_chart)
+        self.details_panel = self.ttk.LabelFrame(
+            self.tab, text="Détails de la session sélectionnée")
+        self.detail = self.tk.Text(
+            self.details_panel, height=7, state="disabled", wrap="word")
+        details_scroll = self.ttk.Scrollbar(
+            self.details_panel, orient="vertical", command=self.detail.yview)
+        self.detail.configure(yscrollcommand=details_scroll.set)
+        details_scroll.pack(side="right", fill="y")
+        self.detail.pack(side="left", fill="both", expand=True, padx=6, pady=6)
+        self.empty_state = self.ttk.Frame(self.tab, padding=24)
+        self.empty_state.pack(fill="both", expand=True)
+        self.ttk.Label(
+            self.empty_state, text="Aucune session de playtest importée",
+            font=("TkDefaultFont", 13, "bold"),
+        ).pack(pady=(20, 8))
+        self.ttk.Label(
+            self.empty_state,
+            text="Lancez une partie avec la télémétrie volontaire activée, "
+                 "exportez le rapport JSON, puis importez-le ici pour "
+                 "comparer les sessions et inspecter les décisions.",
+            wraplength=580, justify="center",
+        ).pack(pady=(0, 14))
+        self.ttk.Button(
+            self.empty_state, text="Importer un premier rapport…",
+            command=self.load,
+        ).pack()
         self.status = self.ttk.Label(
             self.tab, text="Import manuel uniquement · aucun envoi.")
         self.status.pack(anchor="w")
@@ -129,6 +167,12 @@ class PlaytestStudio:
 
     def set_report(self, report):
         self.report = validate_report(report)
+        if self.empty_state.winfo_manager():
+            self.empty_state.pack_forget()
+            self.report_panels.pack(fill="both", expand=True,
+                                    pady=(6, 4), before=self.status)
+            self.details_panel.pack(fill="both", expand=True,
+                                    pady=(0, 6), before=self.status)
         self.annotations = []
         missions = sorted({row["mission"] for row in report["sessions"]})
         self.mission_box["values"] = ["Toutes missions", *missions]
@@ -186,13 +230,23 @@ class PlaytestStudio:
                 sum(row["command_kinds"].values()), row["ct_end"],
                 str(row["objective_hold_ticks"]) +
                 (" · goal" if row["goal_occupied"] else "")))
+        self._chart_sessions = chosen
+        self.draw_chart()
+        self.status.configure(
+            text="{} sessions · collecte volontaire et export local · "
+                 "données non modifiées".format(len(chosen)))
+
+    def draw_chart(self, _event=None):
+        """Only redraw the chart on resize; preserve the Treeview selection."""
+        if self.report is None:
+            return
         self.canvas.delete("all")
         self.canvas.create_text(14, 16, anchor="w", fill="#eff2f5",
                                 text="Durée réelle par session (minutes, y compris l'inactivité)")
-        maximum = max((row["duration_seconds"] for _, row in chosen), default=0)
+        maximum = max((row["duration_seconds"] for _, row in self._chart_sessions), default=0)
         span = max(1, maximum)
-        width = max(500, self.canvas.winfo_width())
-        for n, (_, row) in enumerate(chosen[:8]):
+        width = max(250, self.canvas.winfo_width())
+        for n, (_, row) in enumerate(self._chart_sessions[:8]):
             y = 36 + n * 17
             length = max(0, width - 185) * row["duration_seconds"] / span
             color = ("#56a891" if row["outcome"] == "victory" else
@@ -205,9 +259,6 @@ class PlaytestStudio:
             self.canvas.create_text(
                 139 + length, y + 6, anchor="w", fill="#eff2f5",
                 text="{:.1f}m".format(row["duration_seconds"] / 60))
-        self.status.configure(
-            text="{} sessions · collecte volontaire et export local · "
-                 "données non modifiées".format(len(chosen)))
 
     def annotate(self):
         if self.report is None or not self.rows.selection():
