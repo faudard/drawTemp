@@ -159,27 +159,11 @@ class PlayerApplication:
         self.title_screen()
 
     def _style(self):
-        """Apply high contrast and the selected text density across ttk views."""
-        scale = self.text_scale.get() / 100
-        contrast = self.high_contrast.get()
-        bg = "#000000" if contrast else "#101a2b"
-        fg = "#ffffff" if contrast else "#e8f0fa"
-        panel = "#172a3c" if contrast else "#304862"
-        self.root.configure(background=bg)
-        style = self.ttk.Style(self.root)
-        style.theme_use("clam")
-        style.configure(".", background=bg, foreground=fg,
-                        font=("TkDefaultFont", round(11 * scale)))
-        style.configure("TFrame", background=bg)
-        style.configure("TLabel", background=bg, foreground=fg)
-        style.configure("TButton", padding=8, background=panel, foreground="#ffffff")
-        style.map("TButton", background=[("active", "#43668a")])
-        style.configure("TCombobox", fieldbackground="#ffffff", foreground="#152438")
-        style.configure("TLabelframe", background=bg, foreground=fg)
-        style.configure("TLabelframe.Label", background=bg, foreground=fg)
-        style.configure("TCheckbutton", background=bg, foreground=fg)
-        style.configure("TRadiobutton", background=bg, foreground=fg)
-
+        """Use one accessible, Jeanne-themed skin across all Player views."""
+        from .player_visual_theme import apply_player_theme
+        self.palette = apply_player_theme(
+            self.root, self.ttk, scale=self.text_scale.get() / 100,
+            high_contrast=self.high_contrast.get())
 
     def _clear(self):
         self._close_pause()
@@ -235,14 +219,21 @@ class PlayerApplication:
         self._hud_portrait_unit = None
 
     def _heading(self, text, subtitle=""):
-        self.ttk.Label(self.view, text=text, font=("TkDefaultFont", round(24 * self.text_scale.get() / 100), "bold")).pack(
-            anchor="w", pady=(4, 12))
+        self.ttk.Label(self.view, text=text,
+                       style="Player.Title.TLabel").pack(
+                           anchor="w", pady=(4, 11))
         if subtitle:
-            self.ttk.Label(self.view, text=subtitle).pack(anchor="w", pady=(0, 12))
+            self.ttk.Label(self.view, text=subtitle,
+                           style="Player.Subtitle.TLabel").pack(
+                               anchor="w", pady=(0, 12))
 
     def _button(self, parent, text, action, **kwargs):
-        return self.ttk.Button(parent, text=text, command=lambda: self._safe(action),
-                               **kwargs)
+        if "style" not in kwargs and text in (
+                "Exécuter", "Continuer", "Nouvelle partie", "Commencer",
+                "Confirmer", "Valider"):
+            kwargs["style"] = "Player.Accent.TButton"
+        return self.ttk.Button(parent, text=text,
+                               command=lambda: self._safe(action), **kwargs)
 
     def _safe(self, action):
         try:
@@ -1173,7 +1164,7 @@ class PlayerApplication:
             self._explore_feedback = ""
             self._explore_scene_id = scene["id"]
         board = self.tk.Canvas(self.view, highlightthickness=0,
-                               background="#22372f", takefocus=1)
+                               background=self.palette.background, takefocus=1)
         board.pack(fill="both", expand=True)
         self.canvas = board
         iso_scene = (IsoExplorationCanvas(board, adaptive=True)
@@ -1207,16 +1198,16 @@ class PlayerApplication:
                 board.move("all", *ortho_shift)
             # Compact in-world overlay, not a permanent right-side inspector.
             board.create_rectangle(12, 12, min(width - 12, 480), 104,
-                                   fill="#152822", outline="#476353",
+                                   fill=self.palette.panel, outline=self.palette.border,
                                    tags=("explore_hud",))
             board.create_text(26, 24, anchor="nw", text=stage["title"],
                               width=max(120, min(width - 60, 420)),
-                              fill="#fff0cf",
-                              font=("TkDefaultFont", 13, "bold"),
+                              fill=self.palette.text,
+                              font=("Georgia", 14, "bold"),
                               tags=("explore_hud",))
             controls = "Flèches/ZQSD : marcher   ·   Échap : pause"
             board.create_text(26, 77, anchor="nw", text=controls,
-                              fill="#d4e1d8", font=("TkDefaultFont", 9),
+                              fill=self.palette.muted, font=("Segoe UI", 10),
                               tags=("explore_hud",))
             prompts = []
             if nearby_actors:
@@ -1234,11 +1225,11 @@ class PlayerApplication:
                                 if self._explore_feedback else 60)
                 bottom = max(116, height - panel_height - 12)
                 board.create_rectangle(12, bottom, width - 12,
-                                       height - 12, fill="#152822",
-                                       outline="#476353", tags=("explore_hud",))
+                                       height - 12, fill=self.palette.panel,
+                                       outline=self.palette.border, tags=("explore_hud",))
                 board.create_text(26, bottom + 12, anchor="nw", text=message,
-                                  width=max(100, width - 64), fill="#fff0cf",
-                                  font=("TkDefaultFont", 11),
+                                  width=max(100, width - 64), fill=self.palette.text,
+                                  font=("Segoe UI", 11),
                                   tags=("explore_hud",))
 
         def click(event):
@@ -1300,8 +1291,9 @@ class PlayerApplication:
         if scene["speaker"]:
             self.ttk.Label(panel, text=scene["speaker"],
                            font=("TkDefaultFont", 14, "bold")).pack(anchor="w", pady=6)
-        text = self.tk.Label(panel, text="", fg="#f2f0d9", bg="#101a2b",
-                             justify="left", wraplength=820, font=("TkDefaultFont", 12))
+        text = self.tk.Label(panel, text="", fg=self.palette.text,
+                             bg=self.palette.background, justify="left",
+                             wraplength=820, font=("Georgia", 13))
         text.pack(anchor="w", pady=15)
         # Typewriter effect is visual only: no changes to narrative state.
         message = scene["text"]
