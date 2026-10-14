@@ -37,9 +37,12 @@ class IsoTerrainAtlas:
     The editor remains functional if the file is absent or Tk cannot display it.
     Image refs stay alive as long as this loader stays alive.
     """
-    def __init__(self, canvas, path=DEFAULT_TERRAIN_ATLAS):
+    def __init__(self, canvas, path=None):
         self.canvas = canvas
-        self.path = Path(path)
+        # Default: watercolor paint generated once in memory. Explicit paths
+        # retain the previous atlas override contract, including legacy PNGs.
+        self._watercolor = path is None
+        self.path = DEFAULT_TERRAIN_ATLAS if path is None else Path(path)
         self._source = None
         self._tiles = {}
         self._unavailable = False
@@ -60,7 +63,20 @@ class IsoTerrainAtlas:
             return None
         try:
             if self._source is None:
-                self._source = tk.PhotoImage(file=str(self.path), master=self.canvas)
+                if self._watercolor:
+                    import base64
+                    from .terrain_watercolor import watercolor_atlas_png
+                    try:
+                        png_data = base64.b64encode(watercolor_atlas_png()).decode('ascii')
+                        self._source = tk.PhotoImage(data=png_data,
+                                                      format='png',
+                                                      master=self.canvas)
+                    except (ValueError, RuntimeError, tk.TclError):
+                        # A Tk image-loader incompatibility must never make
+                        # the existing bundled legacy atlas unusable.
+                        self._watercolor = False
+                if self._source is None:
+                    self._source = tk.PhotoImage(file=str(self.path), master=self.canvas)
                 required = len(ATLAS_MATERIALS) * ATLAS_VARIANTS * ATLAS_TILE_SIZE[0]
                 if (self._source.width() != required or
                         self._source.height() != ATLAS_TILE_SIZE[1]):
@@ -242,7 +258,12 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                     tile_canvas.create_polygon(*_flatten((p, q, (q[0], q[1]+drop),
                                                     (p[0], p[1]+drop))),
                                           fill=shade, outline='#615d52', width=1)
-        tile_canvas.create_polygon(*_flatten(corners), fill=top, outline='#777c6f', width=1)
+        # Fixed grey diamond outlines create obvious seams where two matching
+        # material tiles touch. Preserve distinct edges through paint and the
+        # height-face geometry, rather than through a per-cell grid stroke.
+        tile_canvas.create_polygon(*_flatten(corners), fill=top,
+                                   outline=top if atlas is not None else '#777c6f',
+                                   width=1)
         photo = None
         if atlas is not None and layers.get('Terrain', True):
             photo = atlas.tile(surface, cell_size,
