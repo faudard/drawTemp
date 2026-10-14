@@ -15,6 +15,7 @@ import json
 from .game_project import GameProject
 from .game_session import GameSession
 from .model import Content, RuleError, require
+from .story_graph_navigation import navigation_diagnostics
 from .tactical_rpg3 import authored_rules_for_document
 
 
@@ -283,6 +284,18 @@ def certify_gameplay_paths(data, project, suite, *, baseline=None):
     events = sorted({e for row in passed for e in row['events']})
     missing_choices = sorted(set(suite['required_choices']) - set(choices))
     missing_events = sorted(set(suite['required_events']) - set(events))
+    # The denominator is only structurally reachable authored choices.
+    # Conditional choices count as possible even if no oracle proved them
+    # available in the tested GameSession states.
+    statuses = {r['scene_id']: r['status']
+                for r in navigation_diagnostics(project.story)['records']}
+    authored = {
+        scene['id']+'/'+choice['id']
+        for scene in project.story.get('scenes', [])
+        if statuses.get(scene['id']) in ('reachable', 'conditional_only')
+        for choice in scene['choices']
+    }
+    covered_authored = sorted(authored.intersection(choices))
     semantic = {
         row['id']: _semantic_path(row)
         for row in results
@@ -315,6 +328,11 @@ def certify_gameplay_paths(data, project, suite, *, baseline=None):
         'paths': results, 'passed_paths': len(passed),
         'total_paths': len(results),
         'certified_choices': choices, 'certified_events': events,
+        'structurally_reachable_choice_count': len(authored),
+        'certified_reachable_choice_count': len(covered_authored),
+        'certified_reachable_choice_percent': (
+            round(100.0 * len(covered_authored)/len(authored), 2)
+            if authored else 0.0),
         'missing_choices': missing_choices, 'missing_events': missing_events,
         'semantic_baseline': semantic, 'baseline_compared': baseline is not None,
         'gate_errors': gate_errors,
@@ -344,6 +362,10 @@ def format_certification(report, *, max_rows=12):
         'Parcours : %d/%d vérifiés · Choix : %d · Événements : %d' %
         (report['passed_paths'], report['total_paths'],
          len(report['certified_choices']), len(report['certified_events'])),
+        'Couverture du graphe atteignable : %d/%d choix (%.2f %%)' %
+        (report['certified_reachable_choice_count'],
+         report['structurally_reachable_choice_count'],
+         report['certified_reachable_choice_percent']),
         'Gate : '+('PASS' if report['passed'] else 'FAIL'),
     ]
     for row in report['paths'][:max_rows]:
