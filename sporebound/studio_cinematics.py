@@ -834,7 +834,8 @@ class CinematicStudio:
             canvas.create_rectangle(x0, y, max(x0+5, x1), y+21,
                                     fill=colors[lane],
                                     outline="#ffffff"
-                                    if event["id"] == self.event_id else "")
+                                    if event["id"] in self.selected_event_ids
+                                    or event["id"] == self.event_id else "")
             canvas.create_text(x0+4, y+10, anchor="w",
                                text=event["id"][:22], fill="#081626")
             self._positions.append((x0, x1, y, y+21, event["id"]))
@@ -861,12 +862,26 @@ class CinematicStudio:
             if abs(event.x-kx) <= 8 and abs(canvas_y-ky) <= 9:
                 self._drag = ("key", event.x, eid, at)
                 self.event_id, self.selected_key_ms = eid, at
+                self.selected_event_ids = (eid,)
                 self.refresh()
                 self._select_key()
                 return
         for x0, x1, y0, y1, eid in reversed(self._positions):
             if x0 <= event.x <= max(x0+5, x1) and y0 <= canvas_y <= y1:
+                if getattr(event, "state", 0) & 0x0004:
+                    # Ctrl-click toggles timeline selection; no drag on toggle.
+                    updated = set(self.selected_event_ids)
+                    if eid in updated:
+                        updated.remove(eid)
+                    else:
+                        updated.add(eid)
+                    ordered = [row["id"] for row in self._clip()["events"]
+                               if row["id"] in updated]
+                    self._selection_after_edit(ordered)
+                    return
                 self._drag = ("event", event.x, eid, None)
+                if eid not in self.selected_event_ids:
+                    self.selected_event_ids = (eid,)
                 self.event_id = eid
                 self.selected_key_ms = None
                 self.refresh()
@@ -885,10 +900,13 @@ class CinematicStudio:
         if row is None:
             return
         if kind == "event":
-            x0, x1, y0, y1, _ = row
-            self.timeline.create_rectangle(x0+dx, y0, x1+dx, y1,
-                                           outline="#ffffff", width=2,
-                                           dash=(3, 2), tags="drag-preview")
+            moving = set(self.selected_event_ids or (eid,))
+            for x0, x1, y0, y1, target_id in self._positions:
+                if target_id in moving:
+                    self.timeline.create_rectangle(
+                        x0+dx, y0, x1+dx, y1,
+                        outline="#ffffff", width=2, dash=(3, 2),
+                        tags="drag-preview")
         else:
             handle = next(((x, y) for x, y, event_id, at
                            in self._key_handles
@@ -930,9 +948,12 @@ class CinematicStudio:
                     clip["duration_ms"]-current["duration_ms"],
                     round((current["start_ms"]+offset_ms)/100)*100))
                 if new_start != current["start_ms"]:
-                    replacement = move_event(current, new_start,
-                                             clip["duration_ms"])
-                    self.owner._run(lambda: self._update_selected_event(replacement))
+                    ids = (self.selected_event_ids if eid in self.selected_event_ids
+                           else (eid,))
+                    delta = new_start - current["start_ms"]
+                    proposed = shift_events(clip, ids, delta)
+                    self.owner._run(
+                        lambda: self._replace_clip_events(proposed))
         self._timeline()
         self._preview()
 
