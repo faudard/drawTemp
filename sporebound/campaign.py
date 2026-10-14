@@ -393,8 +393,9 @@ class Campaign:
                 "Invalid campaign flow digest")
         require(isinstance(result.flow_ledger, list)
                 and len(result.flow_ledger) <= 512
+                and all(isinstance(entry, str) for entry in result.flow_ledger)
                 and len(set(result.flow_ledger)) == len(result.flow_ledger)
-                and all(isinstance(entry, str) and entry.count(":") == 1
+                and all(entry.count(":") == 1
                         and entry.rsplit(":", 1)[1] in {"victory", "defeat"}
                         and 0 < len(entry.split(":", 1)[0]) <= 64
                         for entry in result.flow_ledger),
