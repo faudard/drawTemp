@@ -96,6 +96,7 @@ class Document:
         # Monotonic lease: unlike a content hash this rejects an ABA edit
         # (edit -> undo -> identical bytes) and direct history restorations.
         self.mutation_revision = 0
+        self._natural_map_lease = None
 
     @property
     def dirty(self):
@@ -252,15 +253,23 @@ class Document:
     def preview_natural_map(self, mid, start, end, *, seed=1,
                             style='bocage', vegetation=2):
         """Connected waterways, crossings and clearings; no source mutation."""
-        return plan_natural_map(self.data, mid, start, end, seed=seed,
+        plan = plan_natural_map(self.data, mid, start, end, seed=seed,
                                 style=style, vegetation=vegetation)
+        self._natural_map_lease = (plan, self.mutation_revision)
+        return plan
 
     def confirm_natural_map(self, plan):
-        """Apply an unchanged proposal with one Undo/Redo entry."""
+        """Commit only the exact plan from the current monotonic revision."""
+        lease = self._natural_map_lease
+        if (lease is None or lease[0] is not plan or
+                lease[1] != self.mutation_revision):
+            raise RuleError('Aperçu de carte périmé : régénérer la proposition.')
         data = apply_natural_map(self.data, plan)
         if data == self.data:
+            self._natural_map_lease = None
             return 0
         self.replace(data)
+        self._natural_map_lease = None
         return len(plan.changes)
 
     def flood_surface(self, mid, start, surface, *, allowed_cells=None):
