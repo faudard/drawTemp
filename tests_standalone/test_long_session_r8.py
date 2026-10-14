@@ -135,6 +135,29 @@ class LongSessionTests(unittest.TestCase):
             self.assertEqual(source.read_bytes(), original)
             self.assertFalse(dest.store.path.exists())
 
+    def test_existing_v2_save_requires_explicit_long_session_opt_in(self):
+        with TemporaryDirectory() as root:
+            path = Path(root) / "existing.json"
+            session = GameSession.new(self.content, self.project, "main")
+            SessionStore(path).save(session)
+            store = LongSessionStore(path)
+            with self.assertRaisesRegex(RuleError, "explicitly migrate"):
+                store.perform(session, "new-op", "choose_story_option", "assault")
+            self.assertFalse(store.journal.exists())
+            self.assertEqual(SessionStore(path).load(
+                self.content, self.project).recording(), session.recording())
+
+    def test_valid_primary_with_incompatible_journal_cannot_fall_back_silently(self):
+        with TemporaryDirectory() as root:
+            store, actor = self.make(root)
+            actor.perform("story", "choose_story_option", "assault")
+            another = GameSession.new(self.content, self.project, "main", seed=17)
+            another.choose_story_option("assault")
+            another.start_mission("gate")
+            SessionStore(store.store.path).save(another)
+            with self.assertRaisesRegex(RuleError, "does not belong"):
+                store.load(self.content, self.project)
+
     def test_malformed_journal_never_silently_drops_committed_actions(self):
         with TemporaryDirectory() as root:
             store, actor = self.make(root)
