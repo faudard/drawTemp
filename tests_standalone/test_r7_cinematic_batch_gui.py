@@ -79,6 +79,40 @@ class CinematicBatchGuiTests(unittest.TestCase):
                 self.assertEqual(
                     {e["id"]: e["start_ms"] for e in studio._clip()["events"]},
                     moved)
+                from types import SimpleNamespace as Pointer
+                # Ctrl-click toggles another track without mutating project.
+                talk = next(row for row in studio._positions
+                            if row[4] == "parole")
+                click = Pointer(x=(talk[0]+talk[1])/2,
+                                y=talk[2]+10, state=4)
+                before_select = owner.project.to_dict()
+                studio._press(click)
+                self.assertEqual(set(studio.selected_event_ids),
+                                 {"jeanne", "score", "parole"})
+                studio._press(click)
+                self.assertEqual(set(studio.selected_event_ids),
+                                 {"jeanne", "score"})
+                self.assertEqual(owner.project.to_dict(), before_select)
+                # Dragging a selected block moves both lanes in ONE revision.
+                actor_row = next(row for row in studio._positions
+                                 if row[4] == "jeanne")
+                start_x = (actor_row[0]+actor_row[1])/2
+                pressed = Pointer(x=start_x, y=actor_row[2]+10, state=0)
+                depth_before_drag = len(studio.undo_stack)
+                studio._press(pressed)
+                studio._drag_motion(Pointer(x=start_x+10, y=pressed.y,
+                                            state=0))
+                self.assertTrue(studio.timeline.find_withtag("drag-preview"))
+                studio._release(Pointer(x=start_x+10, y=pressed.y, state=0))
+                self.assertEqual(len(studio.undo_stack), depth_before_drag+1)
+                self.assertEqual(
+                    {e["id"]: e["start_ms"] for e in studio._clip()["events"]
+                     if e["id"] in ("jeanne", "score")},
+                    {"jeanne": 900, "score": 700})
+                studio.undo()
+                self.assertEqual(
+                    {e["id"]: e["start_ms"] for e in studio._clip()["events"]},
+                    moved)
                 studio.clip_id = "castle"
                 studio.event_id = ""
                 studio.selected_event_ids = ()
