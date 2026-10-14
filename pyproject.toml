@@ -9,7 +9,11 @@ description = "Jeanne d Arc tactical RPG, player and Game Studio (DrawTemp)"
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+qt6 = ["PySide6==6.8.3; python_version == '3.12'"]
+
 [project.scripts]
+drawtemp-qt6 = "drawtemp.platform.qt_bootstrap:main"
 drawtemp = "sporebound.__main__:main"
 sporebound = "sporebound.__main__:main"
 
@@ -18,3 +22,5 @@ include = ["sporebound*", "drawtemp*"]
 
 [tool.setuptools.package-data]
 sporebound = ["content/*.json", "content/art/jeanne/*.png", "content/art/jeanne/*.jpg", "content/art/iso/*.png"]
+
+drawtemp = ["render/*.qml"]

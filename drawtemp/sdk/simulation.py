@@ -1,0 +1,184 @@
+"""R1 synchronous simulation API. All gameplay remains owned by GameSession."""
+from collections.abc import Mapping
+from copy import deepcopy
+from dataclasses import asdict, dataclass
+from types import MappingProxyType
+
+from drawtemp.core import GameSession, RuleError
+from sporebound.ai import choose_command
+from sporebound.game_session import IncompatibleSaveError
+
+
+def freeze(value):
+    """Detach and recursively freeze JSON-compatible runtime presentation data."""
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: freeze(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(freeze(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(freeze(item) for item in value)
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    raise TypeError('Unsupported presentation value: ' + type(value).__name__)
+
+
+def thaw(value):
+    if isinstance(value, Mapping):
+        return {key: thaw(item) for key, item in value.items()}
+    if isinstance(value, (tuple, frozenset)):
+        return [thaw(item) for item in value]
+    return value
+
+
+class SimulationError(RuleError):
+    """Stable code + operation; the underlying canonical exception is __cause__."""
+    def __init__(self, code, operation, message):
+        self.code, self.operation = code, operation
+        super().__init__(message)
+
+
+@dataclass(frozen=True)
+class StateSnapshot:
+    revision: int
+    mode: str
+    campaign_id: str
+    missions: tuple[str, ...]
+    progress: Mapping
+    scene: Mapping | None
+    battle: Mapping | None
+
+    def to_dict(self):
+        return {name: thaw(getattr(self, name)) for name in self.__dataclass_fields__}
+
+
+@dataclass(frozen=True)
+class GameEvent:
+    revision: int
+    index: int
+    kind: str
+    tick: int | None
+    payload: Mapping
+
+
+@dataclass(frozen=True)
+class Transition:
+    source_revision: int
+    snapshot: StateSnapshot
+    events: tuple[GameEvent, ...]
+
+
+class Simulation:
+    """Single-owner session; returns no mutable engine objects to UI consumers.
+
+    Revisions belong to this handle and restart on load. This is not a worker,
+    save format or replay format. Multi-front authoring APIs are not exposed yet.
+    """
+    def __init__(self, session):
+        self._session = deepcopy(session)
+        self._revision = 0
+
+    @classmethod
+    def new(cls, content, project, campaign_id, *, seed=17, rules=None):
+        try:
+            return cls(GameSession.new(content, project, campaign_id, seed=seed, rules=rules))
+        except RuleError as exc:
+            raise SimulationError('invalid_session', 'new', str(exc)) from exc
+
+    @classmethod
+    def load(cls, path, content, project, *, rules=None):
+        try:
+            return cls(GameSession.load(path, content, project, rules=rules))
+        except IncompatibleSaveError as exc:
+            raise SimulationError('incompatible_save', 'load', str(exc)) from exc
+        except RuleError as exc:
+            raise SimulationError('invalid_save', 'load', str(exc)) from exc
+        except OSError as exc:
+            raise SimulationError('io_error', 'load', str(exc)) from exc
+
+    def recording(self):
+        return deepcopy(self._session.recording())
+
+    def snapshot(self):
+        session = self._session
+        battle = session.active_battle
+        scene = session.tactical_scene() if session.tactical_story_pending else session.active_scene()
+        state = None
+        if battle is not None:
+            state = freeze({**battle.state(), 'mission_id': battle.mission.id,
+                            'objective': battle.mission.objective,
+                            'width': battle.board.width, 'height': battle.board.height})
+        return StateSnapshot(self._revision, session.mode, session.campaign_id,
+                             tuple(session.available_missions()),
+                             freeze(asdict(session.progress)), freeze(scene), state)
+
+    def _check_revision(self, expected, operation):
+        if expected is not None and (type(expected) is not int or expected != self._revision):
+            raise SimulationError('stale_revision', operation, 'Session changed; refresh the preview')
+
+    def _apply(self, operation, *args, expected_revision=None):
+        self._check_revision(expected_revision, operation)
+        before = deepcopy(self._session)
+        previous_revision = self._revision
+        old_battle = before.active_battle
+        try:
+            getattr(self._session, operation)(*deepcopy(args))
+            self._revision += 1
+            battle = self._session.active_battle
+            start = len(old_battle.events) if (battle is not None and old_battle is not None
+                                              and battle.battle_id == old_battle.battle_id) else 0
+            rows = battle.events[start:] if battle is not None else ()
+            events = [GameEvent(self._revision, index, row['kind'], row.get('tick'),
+                                freeze({k: v for k, v in row.items() if k not in ('kind', 'tick')}))
+                      for index, row in enumerate(rows)]
+            events.append(GameEvent(self._revision, len(events), 'session.' + operation,
+                                    battle.tick if battle is not None else None, freeze({})))
+            return Transition(previous_revision, self.snapshot(), tuple(events))
+        except Exception as exc:
+            self._session, self._revision = before, previous_revision
+            if isinstance(exc, RuleError):
+                raise SimulationError('invalid_action', operation, str(exc)) from exc
+            raise
+
+    def choose_story_option(self, choice, *, expected_revision=None):
+        return self._apply('choose_story_option', choice, expected_revision=expected_revision)
+
+    def choose_tactical_story_option(self, choice, *, expected_revision=None):
+        return self._apply('choose_tactical_story_option', choice, expected_revision=expected_revision)
+
+    def start_mission(self, mission, *, expected_revision=None):
+        return self._apply('start_mission', mission, expected_revision=expected_revision)
+
+    def execute(self, command, *, expected_revision=None):
+        return self._apply('execute', command, expected_revision=expected_revision)
+
+    def return_to_campaign(self, *, expected_revision=None):
+        return self._apply('return_to_campaign', expected_revision=expected_revision)
+
+    def preview(self, command, *, expected_revision=None):
+        self._check_revision(expected_revision, 'preview')
+        sandbox = Simulation(self._session)
+        sandbox._revision = self._revision
+        return sandbox.execute(command)
+
+    def simulate(self, *, max_steps=100):
+        """Bounded detached AI simulation; may stop before victory or at dialogue.
+
+        Returns a final immutable state. Never advances the live handle.
+        """
+        if type(max_steps) is not int or not 1 <= max_steps <= 1000:
+            raise SimulationError('invalid_budget', 'simulate', 'Expected 1..1000 steps')
+        sandbox = Simulation(self._session)
+        sandbox._revision = self._revision
+        for _ in range(max_steps):
+            battle = sandbox._session.active_battle
+            if (battle is None or battle.result or sandbox._session.tactical_story_pending
+                    or sandbox._session.progress.story_pending):
+                break
+            sandbox.execute(choose_command(battle))
+        return sandbox.snapshot()
+
+    def save(self, path):
+        try:
+            self._session.save(path)
+        except OSError as exc:
+            raise SimulationError('io_error', 'save', str(exc)) from exc

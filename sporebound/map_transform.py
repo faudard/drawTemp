@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .map_authoring import TerrainClipboard, _cell, _mission, _transaction, selected_cells
 from .model import RuleError, require
-from .iso_map import SURFACES, FEATURES
+from .terrain_schema import SURFACES, FEATURES
 from .storage import write_json
 
 STAMP_KIND = 'sporebound_terrain_stamp'

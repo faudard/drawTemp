@@ -296,14 +296,13 @@ class Content:
             for c in m.goal:
                 cell(c, b)
                 require(not b.tile(c).blocked, "Goal is blocked")
-            from .iso_map import SURFACES, FEATURES
+            from .terrain_schema import SURFACES, FEATURES
             for c, t in b.tiles.items():
                 cell(c, b)
                 integer(t.height, 0, 99, "tile.height")
                 integer(t.cost, 1, 99, "tile.cost")
                 integer(t.hazard, 0, 10000, "tile.hazard")
                 integer(t.cover, 0, 100, "tile.cover")
-                from .iso_map import SURFACES, FEATURES
                 require(type(t.surface) is str and t.surface in SURFACES,
                         "Invalid tile surface")
                 require(type(t.feature) is str and t.feature in FEATURES,
