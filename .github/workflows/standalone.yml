@@ -66,6 +66,13 @@ jobs:
         run: python -m unittest tests_standalone.test_playtest_384 -v
       - name: R6 profiles, AI explainability, strict regression and campaign curves
         run: python -m unittest tests_standalone.test_encounter_balance_r6 -v
+      - name: R6.14 tactical choice gate — real executable options and replay
+        run: python -m unittest tests_standalone.test_tactical_choice_r6 -v
+      - name: R6.14 bounded CLI report (zero optional multi-choice quota for smoke)
+        run: >-
+          python -m sporebound tactical-choices --mission garden
+          --seed 1 --limit 60 --choice-min-multi 0
+          --report tactical_choices_ci.json
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
         run: python -m examples.tactical_rpg3_castle
