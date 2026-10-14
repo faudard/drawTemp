@@ -82,7 +82,7 @@ class BiomeCompositionTests(unittest.TestCase):
         self.doc.paint_many(self.mid, [(8, 6)], 'feature:tree')
         self.doc.paint_many(self.mid, [(9, 6)], 'height:2')
         self.doc.paint_many(self.mid, [(10, 6)], 'surface:rock')
-        self.doc.paint_many(self.mid, [(10, 6)], 'cover:30')
+        self.doc.paint_many(self.mid, [(10, 6)], 'feature:boulder')
         original = {point: self.board().tile(point)
                     for point in ((6, 6), (7, 6), (8, 6),
                                   (9, 6), (10, 6))}
