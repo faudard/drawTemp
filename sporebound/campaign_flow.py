@@ -318,3 +318,46 @@ def audit_campaign(content, project, campaign_id, *, max_states=384, max_depth=3
         "errors": errors, "warnings": warnings,
         "scope": "Bounded symbolic routes, not tactical victory or full GameSession replay",
     }
+
+
+def check_campaign_save(path, content, project, campaign_id, *, kind, rules=None):
+    """Read and validate a user-owned save without rewriting it.
+
+    Legacy slots retain their campaign v1 envelope; unified checkpoints use
+    SessionStore's digest, project identity, rules and tactical replay checks.
+    Recovery from a valid backup is disclosed explicitly to the caller.
+    """
+    from pathlib import Path
+    from .campaign import Campaign
+    from .game_session import GameSession
+    from .narrative import StoryBook
+    from .persistence import SessionStore
+
+    project.validate(content)
+    require(project.campaign(campaign_id) is not None, "Unknown save campaign")
+    require(kind in {"slot", "session"}, "Unknown campaign save kind")
+    path = Path(path)
+    if kind == "slot":
+        progress = Campaign.load(path, ruleset=rules)
+        verify_save(progress, project.campaign_flow)
+        require(set(progress.unlocked + progress.completed) <= set(content.missions),
+                "Saved campaign references missing missions")
+        # Story.initialize only modifies this disposable snapshot.
+        StoryBook(project.story, content, project.campaigns).initialize(
+            progress, campaign_id)
+        source = "legacy_slot"
+        sequence = None
+    else:
+        result = SessionStore(path).load_with_status(
+            content, project, rules=rules)
+        require(result.session.campaign_id == campaign_id,
+                "Session checkpoint belongs to a different campaign")
+        progress = result.session.progress
+        verify_save(progress, project.campaign_flow)
+        source = result.source
+        sequence = result.sequence
+    return {
+        "path": str(path), "kind": kind, "campaign": campaign_id,
+        "compatible": True, "source": source, "sequence": sequence,
+        "completed": list(progress.completed), "ledger": list(progress.flow_ledger),
+    }
