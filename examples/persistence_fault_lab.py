@@ -29,6 +29,7 @@ _REQUEST = "r8.17.story.assault"
 # Publication is always atomic. Inject a true process death either side of
 # os.replace on the first journal, backup, full checkpoint, or compact clear.
 CUTS = (
+    ("temp", 1, "partial"),
     ("journal", 1, "before"),
     ("journal", 1, "after"),
     ("backup", 1, "before"),
@@ -51,6 +52,40 @@ def worker(path, cut):
     target, ordinal, moment = cut
     seen = [0]
     original = os.replace
+
+    if target == "temp":
+        # Kill the actual process halfway through the temporary file's
+        # write, before flush/fsync/replace. The original JSON must remain.
+        import tempfile
+        named_temp = tempfile.NamedTemporaryFile
+
+        class PartialFile:
+            def __init__(self, file):
+                self.file = file
+
+            def __enter__(self):
+                self.file.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.file.__exit__(*args)
+
+            def write(self, data):
+                self.file.write(data[:max(1, len(data) // 2)])
+                self.file.flush()
+                os._exit(EXIT_CRASH)
+
+        def partial_temp(*args, **kwargs):
+            file = named_temp(*args, **kwargs)
+            prefix = kwargs.get("prefix", "")
+            if prefix == Path(str(path) + ".journal").name + ".":
+                return PartialFile(file)
+            return file
+
+        with patch("sporebound.storage.tempfile.NamedTemporaryFile",
+                   side_effect=partial_temp):
+            store.perform(snapshot, _REQUEST, "choose_story_option", "assault")
+        raise AssertionError("Partial-temp cut was never reached")
 
     def replace(source, destination):
         dest = Path(destination)
@@ -106,7 +141,8 @@ def run_matrix(*, seeds=(1, 7)):
                 # Only death *before the FIRST journal publish* can lose an
                 # uncommitted action. Once journal replace returned, recovery
                 # must replay the action, including during checkpoint writes.
-                committed = cut != ("journal", 1, "before")
+                committed = cut not in (("temp", 1, "partial"),
+                                        ("journal", 1, "before"))
                 expected_digest = after["digest"] if committed else before["digest"]
                 require(status.session.recording()["digest"] == expected_digest,
                         "Persistence divergence at %s seed=%s" % (cut, seed))
@@ -125,6 +161,9 @@ def run_matrix(*, seeds=(1, 7)):
                             "Wrong concurrent-writer rejection")
                 else:
                     raise AssertionError("Crashed writer lock was stolen")
+                if cut == ("temp", 1, "partial"):
+                    require(list(Path(folder).glob("*.tmp")),
+                            "Partial temporary file was not retained as evidence")
                 lock.unlink()  # parent has already reaped the crashed child
                 retried = store.perform(status.session, _REQUEST,
                                         "choose_story_option", "assault")
