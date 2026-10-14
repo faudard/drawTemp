@@ -297,3 +297,49 @@ def run_choice_lab(content, mission_id, *, seed=1, max_commands=120,
     }
     report["gate"] = evaluate_choice_gate(report)
     return report
+
+
+def compare_choice_reports(before, after, *, max_multi_rate_drop=.25):
+    """Paired-seed, mission and sampling-policy regression of tactical options.
+
+    Different authored Content is allowed and signalled. The comparison is
+    descriptive; it does not pretend that snapshots from changed encounters
+    denote equivalent tactical positions.
+    """
+    require(type(max_multi_rate_drop) in (float, int)
+            and not isinstance(max_multi_rate_drop, bool)
+            and 0 <= max_multi_rate_drop <= 1,
+            "Invalid tactical coverage tolerance")
+    old = evaluate_choice_gate(before, min_multi=0)
+    new = evaluate_choice_gate(after, min_multi=0)
+    require(all(before.get(key) == after.get(key) for key in (
+                "mission", "seed", "max_commands", "sample_stride",
+                "max_samples")), "Choice regression requires matching seed and scope")
+    old_rate = (old["multi_category_decisions"] /
+                max(1, old["sampled_player_decisions"]))
+    new_rate = (new["multi_category_decisions"] /
+                max(1, new["sampled_player_decisions"]))
+    issues = []
+    if old_rate - new_rate > max_multi_rate_drop:
+        issues.append("Multi-category opportunities fell beyond tolerance")
+    pairs_disappeared = sorted(
+        key for key, count in old["pair_occurrences"].items()
+        if count > 0 and not new["pair_occurrences"].get(key, 0))
+    if pairs_disappeared:
+        issues.append("Previously available tactical pair disappeared")
+    changed = (before.get("content_sha256") != after.get("content_sha256") or
+               before.get("rules_manifest") != after.get("rules_manifest") or
+               before.get("context_sha256") != after.get("context_sha256"))
+    if not changed and before.get("digest") != after.get("digest"):
+        issues.append("Tactical choice replay determinism changed on identical inputs")
+    return {
+        "kind": "r6_choice_comparison", "status": "fail" if issues else "pass",
+        "passed": not issues, "issues": issues,
+        "authored_inputs_changed": changed,
+        "multi_category_rate_before": round(old_rate, 4),
+        "multi_category_rate_after": round(new_rate, 4),
+        "pairs_disappeared": pairs_disappeared,
+        "sampled_before": old["sampled_player_decisions"],
+        "sampled_after": new["sampled_player_decisions"],
+        "note": "Matched simulation seeds, not necessarily identical decision states",
+    }
