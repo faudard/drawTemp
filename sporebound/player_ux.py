@@ -16,8 +16,8 @@ KEY_CHOICES = (
     "<Return>", "<space>", "<Escape>", "<plus>", "<minus>",
     "<Up>", "<Down>", "<Left>", "<Right>",
     "<Control-Up>", "<Control-Down>", "<Control-Left>", "<Control-Right>",
-    "<Key-1>", "<Key-2>", "<Key-3>", "<F1>", "<F2>", "<F3>",
-    "<F4>", "<F5>", "<F6>", "<F7>", "<F8>", "<F9>", "<F10>",
+    "<Key-1>", "<Key-2>", "<Key-3>", "<F1>", "<F2>",
+    "<F4>", "<F6>", "<F7>", "<F8>", "<F10>",
 )
 DEFAULT_KEYS = {
     "execute": "<Return>", "end": "<space>", "cancel": "<Escape>",
