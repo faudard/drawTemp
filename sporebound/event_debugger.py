@@ -156,11 +156,20 @@ class EventDebugger:
             if event['id'] in fired:
                 continue
             missing = [p for p in event.get('after', ()) if p not in fired]
+            alternatives = event.get('after_any', ())
+            if alternatives and not any(p in fired for p in alternatives):
+                missing += list(alternatives)
             if missing:
                 reason = 'prerequisite'
             else:
                 passed, _ = condition_trace(self.battle, event)
-                reason = 'ready' if passed else 'condition'
+                reason = 'ready' if passed else (
+                    'choice' if event.get('after_choice') and
+                    not any(row['kind'] == 'story_choice' and
+                            row.get('scene') == event['after_choice']['scene'] and
+                            row.get('choice') == event['after_choice']['choice']
+                            for row in self.battle.events)
+                    else 'condition')
             waiting.append({'event_id': event['id'],
                             'reason': reason, 'missing': missing})
         clips, scenes = [], []

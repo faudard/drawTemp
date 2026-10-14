@@ -61,7 +61,7 @@ class ChainedTacticalEventTests(unittest.TestCase):
             self.assertEqual(self.data, previous)
         self.assertEqual(self.event(self.data, 'chain_final')['after'],
                          ['chain_middle'])
-        self.assertIn('APRÈS chain_middle',
+        self.assertIn('APRÈS (ET) chain_middle',
                       condition_summary(self.event(self.data, 'chain_final')))
         graph = build_event_graph(self.data, self.mid)
         self.assertIn({'source': ('chain_middle', 'action', 0),

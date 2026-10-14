@@ -155,11 +155,13 @@ class GameSession:
             updated = self.story.choose(projected, choice_id)
             # Every tactical choice has a journal entry, including an empty
             # tactical-effects list. This makes replay and story history agree.
+            before_fired = tuple(self.battle.fired)
             self.battle.execute({
                 'kind': 'story_effects', 'scene': scene_id,
                 'choice': choice_id,
                 'effects': deepcopy(selected.get('tactical_effects', [])),
             })
+            self._queue_tactical_story(self.battle, before_fired)
             next_scene = updated.story_pending
             updated.story_pending = ""
             self.progress = updated

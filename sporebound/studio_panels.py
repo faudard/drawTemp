@@ -290,6 +290,13 @@ class StudioPanels:
                 d,m,self.eid.get(),condition=self.econdition.get(),action=self.eaction.get(),
                 pos=self.selection(),tick=int(self.etick.get()),unit=self.eunit.get(),
                 text=self.etext.get(),amount=int(self.etick.get()))))).grid(row=6,column=0,columnspan=2,pady=5)
+        ttk.Button(
+            events, text='Créer un embranchement narratif sur la case',
+            command=lambda: self._run(
+                lambda: self.advanced.event_graph.launch_branch_wizard(
+                    origin_id=''))).grid(
+                        row=9, column=0, columnspan=2,
+                        sticky='ew', padx=6, pady=4)
         self.event_list = self.tk.Listbox(events,height=8,exportselection=False)
         self.event_list.grid(row=7,column=0,columnspan=2,sticky='nsew',padx=6,pady=4)
         ttk.Button(events,text='Supprimer l’événement sélectionné',command=lambda: self._run(

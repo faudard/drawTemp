@@ -333,10 +333,18 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_event_graph_gui.py -v
+      - name: Verify 3.5 visual choice branch builder directly from map
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_event_branch_builder_35_gui.py -v
       - name: Exercise unfolded story tree authoring
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_story_graph_gui.py -v
+      - name: Verify 3.6 visual Story and Event drag-and-drop links
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_visual_branch_graph_36_gui.py -v
       - name: Exercise full Studio to Player talent progression under Xvfb
         env:
           SPOREBOUND_GUI_SMOKE: '1'

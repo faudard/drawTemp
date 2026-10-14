@@ -633,6 +633,11 @@ class Battle:
                 apply_tactical_effects(self, command['effects'])
                 self.emit('story_choice', scene=command['scene'],
                           choice=command['choice'])
+                # Resolve authored branches at the genuine, recorded dialogue
+                # command boundary. Legacy missions without choice guards keep
+                # their exact previous dispatch timing.
+                if any('after_choice' in row for row in self.mission.triggers):
+                    triggers.dispatch(self)
                 self.commands.append(deepcopy(command))
                 self._outcome()
                 return
