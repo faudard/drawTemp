@@ -27,6 +27,23 @@ jobs:
         with:
           name: r0-headless-${{ matrix.python }}
           path: r0-*.json
+  studio-transaction-gui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tk, Pillow and virtual display for real GUI gates
+        run: sudo apt-get update && sudo apt-get install -y python3-tk python3-pil xvfb
+      - name: R1 authoring, history, recovery and Player opt-in GUI gates
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: >-
+          xvfb-run -a -s "-screen 0 1600x900x24" python3 -m unittest
+          tests_standalone.test_editor_r1_gui_gate
+          tests_standalone.test_editor_r1_visual_gui
+          tests_standalone.test_studio_history_gui_3721b
+          tests_standalone.test_playtest_384_gui
+          -v
   qt6-composition:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
