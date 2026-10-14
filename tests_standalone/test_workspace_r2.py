@@ -2,7 +2,7 @@
 import unittest
 
 from sporebound.__main__ import DEFAULT_CONTENT
-from sporebound.authoring import add_object
+from sporebound.authoring import add_object, add_unit
 from sporebound.editor import Document
 from sporebound.editor_architecture import EditingContext
 from sporebound.game_project import GameProject
@@ -15,6 +15,7 @@ from sporebound.workspace_r2 import (
     validate_drop,
 )
 from sporebound.workspace_shell import map_reference_problems, problem_delta
+from sporebound.workspace_refactoring import RenameMapResourceCommand
 
 
 class WorkspaceR2Tests(unittest.TestCase):
@@ -119,6 +120,67 @@ class WorkspaceR2Tests(unittest.TestCase):
             dependency_impact(index, 'map_actor:garden:deleted')
         with self.assertRaises(RuleError):
             validate_drop(self.doc.data, self.mid, 'asset:missing')
+
+    def test_resource_id_rename_propagates_known_actor_dependencies(self):
+        mid = self.mid
+        initial = add_unit(self.doc.data, mid, 'r2_actor_old',
+                           'Unit R2', 'player', self.free_tiles(1)[0])
+        mission = next(m for m in initial['missions'] if m['id'] == mid)
+        mission['protected_id'] = 'r2_actor_old'
+        mission['triggers'][0]['actions'].append({
+            'kind': 'despawn', 'unit': 'r2_actor_old'})
+        self.doc.replace(initial)
+        key = 'map_actor:garden/r2_actor_old'
+        form = editable_form(self.doc.data, key)
+        count = len(self.doc.undo_stack)
+        self.context.execute(RenameMapResourceCommand(
+            key, form.baseline, 'r2_actor_new', self.project.to_dict()))
+        self.assertEqual(len(self.doc.undo_stack), count + 1)
+        after = next(m for m in self.doc.data['missions'] if m['id'] == mid)
+        self.assertEqual(after['protected_id'], 'r2_actor_new')
+        self.assertTrue(any(u['id'] == 'r2_actor_new' for u in after['units']))
+        self.assertEqual(after['triggers'][0]['actions'][-1]['unit'], 'r2_actor_new')
+        self.doc.undo()
+        self.assertTrue(any(u['id'] == 'r2_actor_old'
+                            for u in next(m for m in self.doc.data['missions']
+                                          if m['id'] == mid)['units']))
+
+    def test_rename_linked_door_updates_switch_and_blocks_unknown_refs(self):
+        mid = self.mid
+        first, second = self.free_tiles(2)
+        data = add_object(self.doc.data, mid, 'r2_door_old', 'door', first)
+        data = add_object(data, mid, 'r2_switch_new', 'switch', second,
+                          link='r2_door_old')
+        self.doc.replace(data)
+        key = 'map_object:garden/r2_door_old'
+        baseline = editable_form(self.doc.data, key).baseline
+        self.context.execute(RenameMapResourceCommand(
+            key, baseline, 'r2_door_new', self.project.to_dict()))
+        mission = next(m for m in self.doc.data['missions'] if m['id'] == mid)
+        self.assertIn('r2_door_new', {o['id'] for o in mission['objects']})
+        self.assertEqual(next(o['link'] for o in mission['objects']
+                              if o['id'] == 'r2_switch_new'), 'r2_door_new')
+        with self.assertRaises(RuleError):
+            self.context.execute(RenameMapResourceCommand(
+                'map_object:garden/r2_door_new',
+                editable_form(self.doc.data,
+                              'map_object:garden/r2_door_new').baseline,
+                'r2_door_new', self.project.to_dict()))
+
+        # Unknown references are blocked, never silently left behind.
+        data = self.doc.data
+        mission = next(m for m in data['missions'] if m['id'] == mid)
+        mission['triggers'][0]['actions'].append({
+            'kind': 'message', 'text': 'r2_door_new'})
+        self.doc.replace(data)
+        frozen = self.doc.data
+        with self.assertRaises(RuleError):
+            self.context.execute(RenameMapResourceCommand(
+                'map_object:garden/r2_door_new',
+                editable_form(self.doc.data,
+                              'map_object:garden/r2_door_new').baseline,
+                'r2_door_later', self.project.to_dict()))
+        self.assertEqual(self.doc.data, frozen)
 
     def test_actor_reference_warning_is_repairable_by_existing_inspector(self):
         """An authored despawn action can reference an unknown actor ID."""
