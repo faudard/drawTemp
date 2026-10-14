@@ -45,6 +45,8 @@ class StudioPanels:
         self.workspace = ProjectWorkspaceTab(self, notebook)
         self._entities_tab(notebook)
         self._project_tab(notebook)
+        from .studio_campaign_flow_editor import CampaignFlowEditor
+        self.flow_editor = CampaignFlowEditor(self, notebook)
         from .studio_world_map import WorldMapStudio
         self.world_studio = WorldMapStudio(self, notebook)
         from .studio_advanced import AdvancedStudio
@@ -123,6 +125,7 @@ class StudioPanels:
         # caches visible after a global undo.
         self.story_editor.reset_project()
         self.cinematic_studio.reset_project()
+        self.flow_editor.refresh()
         self.audio_studio.stop()
         self.title.set(project.title)
         self.subtitle.set(project.subtitle)
@@ -769,6 +772,7 @@ class StudioPanels:
             self.project_status.config(text=f'Campagne active : {self.session_campaign} | Missions : {len(self.session.completed)} terminées | Or : {self.session.gold}')
         self._refresh_talent_tree()
         self.advanced.refresh()
+        self.flow_editor.refresh()
         self.character_rules.refresh()
         self.story_editor.refresh()
         self.siege_studio.refresh()
