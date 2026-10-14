@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .audio_stage import AudioStage
 from .exploration_view import draw_exploration, draw_story_backdrop
-from .exploration_iso_view import IsoExplorationCanvas
+from .exploration_iso_view import IsoExplorationCanvas, CELL_SIZE as EXPLORE_CELL_SIZE
 from .game_project import GameProject
 from .profile_paths import default_profile_path
 from .model import Content, RuleError
@@ -147,6 +147,10 @@ class PlayerApplication:
         self._resume_world_after_scene = False
         self._explore_feedback = ""
         self._explore_scene_id = None
+        # Camera is view-only and survives redraws after narrative movement.
+        self._explore_zoom = EXPLORE_CELL_SIZE
+        self._explore_pan = (0, 0)
+        self._explore_resize_job = None
         self._audible_scene = None
         self._closing = False
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -190,6 +194,9 @@ class PlayerApplication:
         if self._world_job is not None:
             self.root.after_cancel(self._world_job)
             self._world_job = None
+        if self._explore_resize_job is not None:
+            self.root.after_cancel(self._explore_resize_job)
+            self._explore_resize_job = None
         if self._motion_job is not None:
             self.root.after_cancel(self._motion_job)
             self._motion_job = None
@@ -213,6 +220,7 @@ class PlayerApplication:
             self.iso_renderer = None
         for child in self.view.winfo_children():
             child.destroy()
+        self.view.configure(padding=18)
         self.canvas = None
         self.info = None
         self.guide_panel = None
@@ -882,17 +890,24 @@ class PlayerApplication:
         session = self.player.session
         self._clear()
         self.presentation.transition("campaign")
-        self._heading(self.project.campaign(session.campaign_id)["name"],
-                      "Or : " + str(session.progress.gold) +
-                      "    Missions terminées : " + str(len(session.progress.completed)))
-        if self.chapter_one:
+        scene = session.active_scene()
+        stage = session.exploration_state() if scene else None
+        exploring = stage is not None and not stage["completed"]
+        if exploring:
+            # The exploration canvas is the game, not an appendix below headings.
+            self.view.configure(padding=8)
+        else:
+            self._heading(self.project.campaign(session.campaign_id)["name"],
+                          "Or : " + str(session.progress.gold) +
+                          "    Missions terminées : " + str(len(session.progress.completed)))
+        if self.chapter_one and not exploring:
             chapter_ids = {"a1_01_route", "a1_02_pont", "a1_03_hospice",
                            "a1_04a_archives", "a1_04b_otages", "a1_05_vaucouleurs"}
             completed = len(set(session.progress.completed) & chapter_ids)
             self.ttk.Label(self.view, text=f"CHAPITRE I  ·  {completed}/5 étapes").pack(
                 anchor="w", pady=(0, 10))
         # Visible roster: recruitment and equipment have actual tactical effects.
-        if session.progress.heroes:
+        if session.progress.heroes and not exploring:
             roster = self.ttk.LabelFrame(self.view, text="Équipe et progression", padding=8)
             roster.pack(fill="x", padx=60, pady=(2, 8))
             for uid, hero in sorted(session.progress.heroes.items()):
@@ -905,14 +920,12 @@ class PlayerApplication:
             if bonds:
                 self.ttk.Label(roster, text="Relations : " +
                     ", ".join(f"{name} {value}" for name, value in bonds)).pack(anchor="w")
-        scene = session.active_scene()
         if scene:
             self.audio.music_for(f'music_scene_{scene["id"]}', "campaign")
             if self._audible_scene != scene["id"]:
                 self.audio.cue(f'scene_enter_{scene["id"]}')
                 self._audible_scene = scene["id"]
-            stage = session.exploration_state()
-            if stage is not None and not stage["completed"]:
+            if exploring:
                 self._exploration_screen(scene, stage)
             else:
                 self._narrative_scene(scene)
@@ -1015,8 +1028,8 @@ class PlayerApplication:
             completed=session.progress.completed)
         self._clear()
         self.presentation.transition("world")
-        self._heading("Carte du monde", "Déplacez votre groupe sur les routes. "
-                      "Cliquez à nouveau sur un lieu atteint pour y combattre.")
+        self.ttk.Label(self.view, text="Carte du monde",
+                       font=("TkDefaultFont", 12, "bold")).pack(anchor="w", pady=(0, 3))
         surface = self.ttk.Frame(self.view)
         surface.pack(fill="both", expand=True, padx=24, pady=8)
         surface.columnconfigure(0, weight=1)
@@ -1129,23 +1142,77 @@ class PlayerApplication:
         if self._explore_scene_id != scene["id"]:
             self._explore_feedback = ""
             self._explore_scene_id = scene["id"]
-        subtitle = ("Le village brûle. Chaque déplacement compte : secourez les habitants !"
-                    if stage["theme"] == "village" else
-                    "Explorez les champs avant l'appel des voix.")
-        self._heading(stage["title"], subtitle)
+            self._explore_zoom = EXPLORE_CELL_SIZE
+            self._explore_pan = (0, 0)
         area = self.ttk.Frame(self.view)
         area.pack(fill="both", expand=True)
-        board = self.tk.Canvas(area, width=690, height=495,
-                               highlightthickness=0, background="#314936")
-        board.pack(side="left", padx=8, pady=6)
+        map_area = self.ttk.Frame(area)
+        map_area.pack(side="left", fill="both", expand=True)
+        toolbar = self.ttk.Frame(map_area)
+        toolbar.pack(fill="x", pady=(0, 4))
+        self.ttk.Label(toolbar, text=stage["title"],
+                       font=("TkDefaultFont", 12, "bold")).pack(side="left", padx=(2, 10))
+        self.ttk.Checkbutton(toolbar, text="2.5D", variable=self.iso_view_var,
+                             command=self.show).pack(side="left", padx=(0, 12))
+        zoom_status = self.tk.StringVar(value=f"{self._explore_zoom / EXPLORE_CELL_SIZE:.0%}")
+        board = self.tk.Canvas(map_area, width=690, height=495,
+                               highlightthickness=0, background="#22372f")
+        board.pack(fill="both", expand=True)
         iso_scene = None
         if self.iso_view_var.get():
-            iso_scene = IsoExplorationCanvas(board)
+            iso_scene = IsoExplorationCanvas(
+                board, cell_size=self._explore_zoom, pan=self._explore_pan)
             iso_scene.draw(stage)
-            # Preserve the cached Tk PhotoImages for the lifetime of the canvas.
+            # Keep Tk PhotoImage atlases alive until the Canvas is destroyed.
             board.iso_scene = iso_scene
         else:
             draw_exploration(board, stage)
+
+        def zoom(direction, anchor=None):
+            if iso_scene is not None and iso_scene.zoom_at(direction, stage, anchor):
+                self._explore_zoom, self._explore_pan = iso_scene.cell_size, iso_scene.pan
+                zoom_status.set(f"{iso_scene.cell_size / EXPLORE_CELL_SIZE:.0%}")
+
+        def recenter():
+            if iso_scene is not None:
+                iso_scene.recenter(stage)
+                self._explore_zoom, self._explore_pan = iso_scene.cell_size, iso_scene.pan
+                zoom_status.set("100%")
+
+        for symbol, direction in (("−", -1), ("+", 1)):
+            self._button(toolbar, symbol, lambda step=direction: zoom(step),
+                         width=3, state="normal" if iso_scene else "disabled").pack(
+                             side="left", padx=2)
+        self.ttk.Label(toolbar, textvariable=zoom_status, width=6).pack(side="left")
+        self._button(toolbar, "Centrer", recenter,
+                     state="normal" if iso_scene else "disabled").pack(side="left", padx=3)
+        self.ttk.Label(toolbar, text="Molette : zoom · bouton central : déplacer",
+                       foreground="#9eacb3").pack(side="right", padx=4)
+
+        if iso_scene is not None:
+            board.bind("<MouseWheel>", lambda e: zoom(1 if e.delta > 0 else -1,
+                                                      (e.x, e.y)) if e.delta else None)
+            board.bind("<Button-4>", lambda e: zoom(1, (e.x, e.y)))
+            board.bind("<Button-5>", lambda e: zoom(-1, (e.x, e.y)))
+            pan_origin = [0, 0]
+            def start_pan(event):
+                pan_origin[:] = [event.x, event.y]
+            def drag_pan(event):
+                dx, dy = event.x - pan_origin[0], event.y - pan_origin[1]
+                iso_scene.pan_by(dx, dy)
+                self._explore_pan = iso_scene.pan
+                pan_origin[:] = [event.x, event.y]
+            board.bind("<ButtonPress-2>", start_pan)
+            board.bind("<B2-Motion>", drag_pan)
+            def refresh_viewport():
+                self._explore_resize_job = None
+                if board.winfo_exists():
+                    iso_scene.draw(stage)
+            def resize_board(_event):
+                if self._explore_resize_job is not None:
+                    self.root.after_cancel(self._explore_resize_job)
+                self._explore_resize_job = self.root.after(60, refresh_viewport)
+            board.bind("<Configure>", resize_board)
         def click(event):
             if iso_scene is not None:
                 cell = iso_scene.hit_test(event.x, event.y)
@@ -1160,15 +1227,10 @@ class PlayerApplication:
             if abs(x - px) + abs(y - py) == 1:
                 self._safe(lambda: self._exploration_step(x - px, y - py))
         board.bind("<Button-1>", click)
-        sidebar = self.ttk.Frame(area, padding=10)
-        sidebar.pack(side="left", fill="both", expand=True)
-        self.ttk.Checkbutton(
-            sidebar, text="Vue isométrique 2.5D", variable=self.iso_view_var,
-            command=self.show).pack(anchor="w", pady=(0, 8))
-        self.ttk.Label(sidebar, text="Déplacement : flèches / ZQSD (WASD)",
-                       wraplength=310).pack(anchor="w", pady=(4, 8))
-        self.ttk.Label(sidebar, text="Cliquer une case voisine pour marcher.",
-                       wraplength=310).pack(anchor="w", pady=(0, 5))
+        sidebar = self.ttk.Frame(area, padding=8, width=236)
+        sidebar.pack(side="right", fill="y", padx=(8, 2))
+        self.ttk.Label(sidebar, text="À proximité",
+                       font=("TkDefaultFont", 11, "bold")).pack(anchor="w", pady=(2, 6))
         if stage.get("actors"):
             self.ttk.Label(sidebar, text="Temps écoulé : " + str(stage["tick"]) +
                            " déplacements", wraplength=310).pack(anchor="w", pady=3)
@@ -1178,9 +1240,6 @@ class PlayerApplication:
         nearest = []
         for point in stage["interactions"]:
             distance = abs(point["pos"][0] - px) + abs(point["pos"][1] - py)
-            info = (" ✓" if point["visited"] else "")
-            self.ttk.Label(sidebar, text=point["title"] + info,
-                           wraplength=270).pack(anchor="w", pady=(3, 0))
             if distance <= 1:
                 nearest.append(point["id"])
                 self._button(sidebar, "Examiner : " + point["title"],
@@ -1193,10 +1252,10 @@ class PlayerApplication:
                 "trop tard" if actor["status"] == "lost" else
                 "à secourir (" + str(max(0, actor["deadline"] - stage["tick"])) +
                 " pas)" if actor["kind"] == "civilian" else "témoin")
-            self.ttk.Label(sidebar, text=description,
-                           wraplength=310).pack(anchor="w", pady=(3, 0))
             distance = abs(actor["pos"][0] - px) + abs(actor["pos"][1] - py)
             if distance <= 1 and actor["status"] != "lost":
+                self.ttk.Label(sidebar, text=description,
+                               wraplength=218).pack(anchor="w", pady=(3, 0))
                 nearest_actor.append(actor["id"])
                 self._button(sidebar, "Parler à " + actor["name"],
                              lambda aid=actor["id"]: self._exploration_actor(
@@ -1206,8 +1265,9 @@ class PlayerApplication:
                                  lambda aid=actor["id"]: self._exploration_actor(
                                      aid, "rescue")).pack(anchor="w", fill="x", pady=(1, 4))
         self.ttk.Label(sidebar, text=self._explore_feedback or
-                       "Avancez vers un point d'intérêt ou un habitant.",
-                       wraplength=300).pack(anchor="w", pady=9)
+                       ("E : interagir · ZQSD / flèches : avancer"
+                        if not nearest and not nearest_actor else ""),
+                       wraplength=218).pack(anchor="w", pady=9)
         moves = {"<Up>": (0, -1), "<Down>": (0, 1),
                  "<Left>": (-1, 0), "<Right>": (1, 0),
                  "w": (0, -1), "z": (0, -1), "a": (-1, 0),
@@ -1300,9 +1360,9 @@ class PlayerApplication:
         title_row = self.ttk.Frame(self.view)
         title_row.pack(fill="x", pady=(0, 3))
         self.ttk.Label(
-            title_row, text=battle.mission.name,
-            font=("TkDefaultFont", round(16 * self.text_scale.get() / 100),
-                  "bold")).pack(side="left")
+            title_row, text=battle.mission.name + " · " + str(battle.mission.objective),
+            font=("TkDefaultFont", round(11 * self.text_scale.get() / 100),
+                  "bold"), wraplength=760).pack(side="left")
         self.ttk.Label(
             title_row, text=("Tick " + str(battle.tick) + " · " +
                  ("Résultat : " + str(battle.result) if battle.result else
@@ -1310,10 +1370,6 @@ class PlayerApplication:
                   "Actif : " + (battle.active.name if battle.active else "CT"))),
             font=("TkDefaultFont", round(10 * self.text_scale.get() / 100))
         ).pack(side="right")
-        self.ttk.Label(
-            self.view, text="Objectif : " + str(battle.mission.objective),
-            font=("TkDefaultFont", round(12 * self.text_scale.get() / 100), "bold")
-        ).pack(anchor="w")
         self.feedback_var.set("")
         self.ttk.Label(self.view, textvariable=self.feedback_var,
                        wraplength=1050).pack(anchor="w", pady=(3, 5))
