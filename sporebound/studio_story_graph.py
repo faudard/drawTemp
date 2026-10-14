@@ -9,10 +9,12 @@ from . import story_authoring as edit
 from .story_graph import build_story_tree
 from .studio_visual_branch_links import VisualBranchInteractions
 from .studio_story_scale import StoryGraphScaleControls
+from .studio_story_navigation import StoryGraphNavigationControls
 from .performance_trace import begin_ui, finish_ui
 
 
-class StoryGraphEditor(StoryGraphScaleControls, VisualBranchInteractions):
+class StoryGraphEditor(StoryGraphNavigationControls, StoryGraphScaleControls,
+                       VisualBranchInteractions):
     def __init__(self, editor, notebook):
         self.editor=editor
         self.owner=editor.owner
@@ -27,6 +29,7 @@ class StoryGraphEditor(StoryGraphScaleControls, VisualBranchInteractions):
         self._build(notebook)
         self._visual_setup()
         self._scale_setup()
+        self._navigation_setup()
 
     def _button(self,parent,label,fn):
         self.ttk.Button(parent,text=label,command=lambda:self.owner._run(fn)).pack(
@@ -52,6 +55,8 @@ class StoryGraphEditor(StoryGraphScaleControls, VisualBranchInteractions):
         self.zoom_box.bind('<<ComboboxSelected>>',lambda event:self.draw())
         self._button(header,'Tout déplier',self.expand_all)
         self._button(header,'Recentrer',self.recenter)
+        self.nav_bar = ttk.Frame(page)
+        self.nav_bar.pack(fill='x', padx=8, pady=(0, 4))
 
         main=ttk.Frame(page)
         main.pack(fill='both',expand=True,padx=8,pady=4)
@@ -167,6 +172,8 @@ class StoryGraphEditor(StoryGraphScaleControls, VisualBranchInteractions):
                                 ensure_ascii=False),self.current_root)
         if fingerprint!=self._fingerprint:
             self._fingerprint=fingerprint
+            if hasattr(self, 'nav_rows'):
+                self._navigation_refresh_index()
             self.draw()
         else:
             self._details()
