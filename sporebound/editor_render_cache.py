@@ -165,12 +165,12 @@ class EditorRenderCache:
             if cell in selected_tiles:
                 self.canvas.create_polygon(
                     *corners, outline='#23689e', fill='', width=3,
-                    tags='selection')
+                    tags=('selection', self._tile_tag(cell)))
                 created += 1
             if cell == selected_cell:
                 self.canvas.create_polygon(
                     *corners, outline='#2361ff', fill='', width=3,
-                    tags='selection')
+                    tags=('selection', self._tile_tag(cell)))
                 created += 1
         # draw_architecture raises selection above roofs in the full renderer.
         self.canvas.tag_raise('selection')
