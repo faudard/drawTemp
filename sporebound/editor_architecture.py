@@ -271,6 +271,7 @@ class CommandPreview:
     # undo, redo, reload or an edit of a separate GameProject resource.
     document_revision: int = 0
     source_document: object = None
+    context_revision: int = 0
 
 
 class EditingContext:
@@ -290,6 +291,7 @@ class EditingContext:
                 'Unknown mission: ' + str(mid))
         source = self.document
         before_revision = getattr(source, 'mutation_revision', 0)
+        before_context_revision = self.revision
         before = _fingerprint(source.data)
         candidate = command.transform(deepcopy(source.data), mid)
         # Run the exact current authored rules, including opt-in features.
@@ -297,12 +299,15 @@ class EditingContext:
             candidate, rules=authored_rules_for_document(candidate)).to_dict()
         require(self.document is source and
                 getattr(source, 'mutation_revision', 0) == before_revision and
+                self.revision == before_context_revision and
                 _fingerprint(source.data) == before,
                 'A preview must never change its source document')
         return CommandPreview(command, mid, before, candidate,
-                              before_revision, source)
+                              before_revision, source, before_context_revision)
 
     def apply(self, preview, *, publish=True):
+        require(preview.context_revision == self.revision,
+                'Studio context changed since preview; recompute before applying')
         require(preview.source_document is self.document and
                 preview.document_revision ==
                 getattr(self.document, 'mutation_revision', 0),
@@ -326,6 +331,12 @@ class EditingContext:
     def execute(self, command, *, mission_id=None, publish=True):
         return self.apply(self.preview(command, mission_id=mission_id),
                           publish=publish)
+
+    def invalidate(self):
+        """Revoke previews/reports after StudioHistory or project-only changes."""
+        self.revision += 1
+        self.diagnostics.cancel()
+        return self.revision
 
     def validate_incremental(self, project=None, *, on_scan=None):
         """Report canonical/cross-resource issues for the current revision."""
