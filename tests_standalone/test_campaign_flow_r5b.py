@@ -112,6 +112,27 @@ class CampaignFlowR5BTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             Campaign.from_dict({"version": 1, **asdict(malformed)})
 
+    def test_legacy_player_session_settles_once_and_reloads(self):
+        with TemporaryDirectory() as dirname:
+            profile = Path(dirname) / "game.json"
+            first = PlayerSession(self.content, self.project, profile)
+            first.new_game("main", 1)
+            first.progress.unlocked.append("hold")
+            self.assertNotIn("hold", first.available_missions())
+            first.battle = first.progress.prepare(self.content, "garden")
+            # Directly exercise the same committed settlement boundary as real
+            # Battle victory, without claiming this fake result is a replay.
+            first.battle.result = "victory"
+            first._finish_if_done()
+            self.assertTrue(first.finalized)
+            self.assertEqual(first.progress.flow_ledger, ["garden:victory"])
+            self.assertIn("hold", first.available_missions())
+            second = PlayerSession(self.content, self.project, profile)
+            second.load_game("main", 1)
+            self.assertEqual(second.progress, first.progress)
+            self.assertIn("fortification_gate",
+                          second.campaign_inspector()["fortifications"])
+
     def test_legacy_saves_accept_only_legacy_project(self):
         legacy_project = GameProject.default(self.content)
         legacy = legacy_project.new_game("main", self.content)
