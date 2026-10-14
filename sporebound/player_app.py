@@ -528,9 +528,9 @@ class PlayerApplication:
         scroll.pack(side="right", fill="y")
         text.pack(fill="both", expand=True, pady=10)
         for section, values in report.items():
-            text.insert("end", section.replace("_", " ").title() + "\\n", "header")
+            text.insert("end", section.replace("_", " ").title() + "\n", "header")
             text.insert("end", json.dumps(values, ensure_ascii=False, indent=2,
-                                          sort_keys=True) + "\\n\\n")
+                                          sort_keys=True) + "\n\n")
         text.tag_configure("header", font=("TkDefaultFont", 11, "bold"))
         text.configure(state="disabled")
         self._button(frame, "Fermer", dialog.destroy).pack(anchor="e")
