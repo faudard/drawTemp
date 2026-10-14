@@ -14,6 +14,7 @@ qt6 = ["PySide6==6.8.3; python_version == '3.12'"]
 
 [project.scripts]
 drawtemp-qt6 = "drawtemp.platform.qt_bootstrap:main"
+drawtemp-event-studio = "drawtemp.studio.event_studio:main"
 drawtemp = "sporebound.__main__:main"
 sporebound = "sporebound.__main__:main"
 
