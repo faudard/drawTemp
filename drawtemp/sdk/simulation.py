@@ -46,6 +46,7 @@ class StateSnapshot:
     progress: Mapping
     scene: Mapping | None
     battle: Mapping | None
+    exploration: Mapping | None = None
 
     def to_dict(self):
         return {name: thaw(getattr(self, name)) for name in self.__dataclass_fields__}
@@ -107,9 +108,11 @@ class Simulation:
             state = freeze({**battle.state(), 'mission_id': battle.mission.id,
                             'objective': battle.mission.objective,
                             'width': battle.board.width, 'height': battle.board.height})
+        exploration = session.exploration_state() if session.mode == 'campaign' and scene else None
         return StateSnapshot(self._revision, session.mode, session.campaign_id,
                              tuple(session.available_missions()),
-                             freeze(asdict(session.progress)), freeze(scene), state)
+                             freeze(asdict(session.progress)), freeze(scene), state,
+                             freeze(exploration) if exploration is not None else None)
 
     def _check_revision(self, expected, operation):
         if expected is not None and (type(expected) is not int or expected != self._revision):
@@ -138,6 +141,38 @@ class Simulation:
             if isinstance(exc, RuleError):
                 raise SimulationError('invalid_action', operation, str(exc)) from exc
             raise
+
+    def choices(self):
+        """Only currently permitted story choices; never expose rule internals."""
+        if self._session.tactical_story_pending:
+            return freeze(self._session.tactical_choices())
+        return freeze(self._session.available_choices())
+
+    def explore_move(self, dx, dy, *, expected_revision=None):
+        return self._apply('explore_move', dx, dy, expected_revision=expected_revision)
+
+    def explore_interact(self, point_id, *, expected_revision=None):
+        return self._apply('explore_interact', point_id, expected_revision=expected_revision)
+
+    def explore_wait(self, *, expected_revision=None):
+        return self._apply('explore_wait', expected_revision=expected_revision)
+
+    def explore_actor(self, actor_id, action, *, expected_revision=None):
+        return self._apply('explore_actor', actor_id, action,
+                           expected_revision=expected_revision)
+
+    def auto_enemy_turn(self, *, expected_revision=None):
+        """One bounded engine-owned AI activation; never play the human's turn."""
+        self._check_revision(expected_revision, 'auto_enemy_turn')
+        battle = self._session.active_battle
+        if (battle is None or battle.result or battle.deploying or
+                self._session.tactical_story_pending or
+                self._session.progress.story_pending or
+                battle.active is None or battle.active.team != 'enemy'):
+            raise SimulationError('invalid_action', 'auto_enemy_turn',
+                                  'No enemy activation is ready')
+        return self._apply('execute', choose_command(battle),
+                           expected_revision=expected_revision)
 
     def choose_story_option(self, choice, *, expected_revision=None):
         return self._apply('choose_story_option', choice, expected_revision=expected_revision)
