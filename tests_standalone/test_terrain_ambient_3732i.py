@@ -59,8 +59,6 @@ class AmbientTerrainTests(unittest.TestCase):
             for cell in puddles))
         # All water animations are purely visual; no new surface flags.
         self.assertEqual(board.tile(puddles[0]).surface, 'water')
-        self.assertTrue(board.tile(puddles[0]).blocked is False or
-                        board.tile(puddles[0]).blocked is True)
         board.tiles[(8, 8)] = Tile(feature='tree', surface='grass')
         leaves = strokes_for_cell(board, (8, 8), (150, 100), 54)
         self.assertEqual(len(leaves), 2)
@@ -100,12 +98,14 @@ class AmbientTerrainTests(unittest.TestCase):
         self.assertEqual(clock.capture(canvas), len(original))
         self.assertTrue(clock.active)
         base = {item: canvas.coords(item) for item in canvas.find_withtag('iso_ambient')}
-        for tick in (0, TICK_MS, 2*TICK_MS, 3*TICK_MS):
-            self.assertEqual(clock.tick(canvas, tick), len(original))
-            self.assertEqual(clock.tick(canvas, tick+1), 0)
-        self.assertNotEqual(
-            {item: canvas.coords(item) for item in canvas.find_withtag('iso_ambient')},
-            base)
+        snapshots = set()
+        for tick in range(8):
+            stamp = tick*TICK_MS
+            self.assertEqual(clock.tick(canvas, stamp), len(original))
+            self.assertEqual(clock.tick(canvas, stamp+1), 0)
+            snapshots.add(tuple(canvas.coords(item)
+                                for item in canvas.find_withtag('iso_ambient')))
+        self.assertGreater(len(snapshots), 2)
         clock.restore(canvas)
         self.assertEqual(
             {item: canvas.coords(item) for item in canvas.find_withtag('iso_ambient')},
