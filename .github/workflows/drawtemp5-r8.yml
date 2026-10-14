@@ -1,0 +1,41 @@
+name: DrawTemp 5.0 R8 database
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/rpg_database*.py'
+      - 'tests_standalone/test_drawtemp5_r8_*.py'
+      - 'docs/drawtemp5/R8_RPG_DATABASE.md'
+      - 'pyproject.toml'
+      - '.github/workflows/drawtemp5-r8.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/studio/rpg_database*.py'
+      - 'tests_standalone/test_drawtemp5_r8_*.py'
+      - 'pyproject.toml'
+
+jobs:
+  rpg-database:
+    name: R8 / Python 3.12 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install project and Qt
+        run: python -m pip install -e ".[qt6]"
+      - name: Targeted headless regression
+        run: python -m unittest discover -s tests_standalone -p "test_drawtemp5_r8_database.py" -v
+      - name: Qt Widgets offscreen regression (Linux)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m unittest discover -s tests_standalone -p "test_drawtemp5_r8_qt.py" -v
+          python -m drawtemp.studio.rpg_database_qt --smoke
