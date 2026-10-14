@@ -7,10 +7,11 @@ import json
 
 from . import story_authoring as edit
 from .story_graph import build_story_tree
+from .studio_visual_branch_links import VisualBranchInteractions
 from .performance_trace import begin_ui, finish_ui
 
 
-class StoryGraphEditor:
+class StoryGraphEditor(VisualBranchInteractions):
     def __init__(self, editor, notebook):
         self.editor=editor
         self.owner=editor.owner
@@ -23,6 +24,7 @@ class StoryGraphEditor:
         self.layout=None
         self._fingerprint=None
         self._build(notebook)
+        self._visual_setup()
 
     def _button(self,parent,label,fn):
         self.ttk.Button(parent,text=label,command=lambda:self.owner._run(fn)).pack(
@@ -65,6 +67,7 @@ class StoryGraphEditor:
         self.canvas.bind('<Button-5>',lambda event:self.canvas.yview_scroll(3,'units'))
 
         details=ttk.LabelFrame(main,text='Branche sélectionnée',width=305)
+        self.visual_details=details
         details.pack(side='right',fill='y',padx=(8,0))
         details.pack_propagate(False)
         self.info=self.tk.Text(details,wrap='word',height=13,width=35,
@@ -119,6 +122,8 @@ class StoryGraphEditor:
                 roots['Début · '+campaign['id']]=scene
         for mission,scene in sorted(story.get('after_mission',{}).items()):
             roots['Victoire · '+mission]=scene
+        for ref,scene in sorted(story.get('during_tactical_event',{}).items()):
+            roots['Tactique · '+ref]=scene
         for scene in scenes:
             roots['Scène · '+scene['id']]=scene['id']
         return roots
@@ -253,6 +258,9 @@ class StoryGraphEditor:
             ('arbre limité (replier des branches)' if layout['truncated']
              else 'clic = sélectionner · double-clic = éditer'))
         self._details()
+        self._visual_draw(layout, scale, width, height)
+        if self.selected_event:
+            self._visual_details_event()
         finish_ui("story_graph.draw", ui_started, canvas, counts={
             "nodes": len(layout["nodes"]), "edges": len(layout["edges"]),
             "zoom_pct": int(self.zoom_var.get().rstrip("%")),
@@ -263,6 +271,7 @@ class StoryGraphEditor:
     def _node_click(self,index):
         self.selected_path=self.layout['nodes'][index]['path']
         self.selected_choice=''
+        self.selected_event=''
         self.draw()
 
     def _node_double_click(self,index):
@@ -273,11 +282,12 @@ class StoryGraphEditor:
         edge=self.layout['edges'][index]
         self.selected_path=edge['source']
         self.selected_choice=edge['choice_id']
+        self.selected_event=''
         self.draw()
 
     def _choice_selected(self):
         self.selected_choice=self.choice_var.get()
-        self._details()
+        self.draw()
 
     def _selected_node(self):
         if self.layout is None:
