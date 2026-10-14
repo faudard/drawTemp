@@ -15,14 +15,14 @@ class JeanneChapterUiMixin:
         from .tk_renderer import CanvasRenderer
 
         hero = self.ttk.Frame(parent)
-        hero.pack(fill="x", pady=(0, 12))
+        hero.pack(fill="x", pady=(0, 5))
         portrait = CanvasRenderer(
             hero, registry=self.registry,
             asset_root=self.asset_root).image("portrait", "Jeanne")
         if portrait is not None:
             from .tk_images import resize_photo
             try:
-                portrait = resize_photo(portrait, 104, 104, master=hero)
+                portrait = resize_photo(portrait, 80, 80, master=hero)
             except (ValueError, self.tk.TclError):
                 pass
             label = self.ttk.Label(hero, image=portrait)
@@ -87,7 +87,7 @@ class JeanneChapterUiMixin:
         start.pack(fill="x", pady=(0, 8))
         start.focus_set()
         self._button(
-            board, "Revenir au camp", self.campaign_screen).pack(fill="x")
+            board, "Revenir à la campagne", self.campaign_screen).pack(fill="x")
 
     def _chapter_ending_panel(self, progress):
         report = chapter_progress(progress)

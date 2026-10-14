@@ -289,8 +289,13 @@ class PlayerApplication(JeanneChapterUiMixin):
         self._clear()
         self.presentation.transition("title")
         self._heading(self.project.title, self.project.subtitle)
-        panel = self.ttk.LabelFrame(self.view, text="Nouvelle aventure / reprendre", padding=18)
-        panel.pack(anchor="center", fill="x", padx=160, pady=30)
+        panel = self.ttk.LabelFrame(
+            self.view, text="Nouvelle aventure / reprendre",
+            padding=10 if self.chapter_one else 18)
+        panel.pack(
+            anchor="center", fill="x",
+            padx=32 if self.chapter_one else 160,
+            pady=8 if self.chapter_one else 30)
         if self.chapter_one:
             self._chapter_cover(panel)
             self.ttk.Label(
