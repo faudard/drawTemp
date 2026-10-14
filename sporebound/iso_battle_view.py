@@ -8,6 +8,7 @@ from .iso_depth import depth_order, visual_center
 
 from .iso_map import IsoGeometry, IsoTerrainAtlas, render_isometric
 from .iso_props import IsoPropAtlas
+from .iso_environment_atlas import IsoEnvironmentAtlas
 from .terrain_ambient import TerrainAmbientAnimator
 from .iso_object_atlas import IsoObjectAtlas
 from .iso_building_atlas import IsoBuildingAtlas
@@ -67,6 +68,7 @@ class IsoBattleCanvas:
         self.canvas = canvas
         self.terrain = IsoTerrainAtlas(canvas)
         self.props = IsoPropAtlas(canvas)
+        self.environment = IsoEnvironmentAtlas(canvas)
         self.objects = IsoObjectAtlas(canvas)
         self.buildings = IsoBuildingAtlas(canvas)
         self.fortifications = IsoFortificationAtlas(canvas)
@@ -193,7 +195,9 @@ class IsoBattleCanvas:
             self._positions = positions
             self._actor_only_frames += 1
             if ambient_clock_ms is not None:
-                self.ambient.tick(self.canvas, ambient_clock_ms)
+                self.ambient.tick(self.canvas, ambient_clock_ms,
+                                  atlas=self.environment,
+                                  cell_size=camera.cell_size)
             return self.geometry
 
         geo = render_isometric(
@@ -206,6 +210,7 @@ class IsoBattleCanvas:
             selected_cell=frame.selected, selected_tiles=(),
             reachable=frame.reachable, danger=frame.danger,
             active_id=frame.active_id, atlas=self.terrain, prop_atlas=self.props,
+            ambient_atlas=self.environment,
             building_atlas=self.buildings, fortification_atlas=self.fortifications,
             actor_atlas=self.actors, poses=poses,
             object_atlas=self.objects,
@@ -274,6 +279,7 @@ class IsoBattleCanvas:
         self._level_map = {}
         self.terrain._tiles.clear()
         self.props.clear_cache()
+        self.environment.clear_cache()
         self.objects.clear_cache()
         self.buildings.clear_cache()
         self.fortifications.clear_cache()

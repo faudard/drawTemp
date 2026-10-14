@@ -11,7 +11,7 @@ from .iso_map import IsoGeometry, render_isometric
 from .editor_dirty_tiles import affected_terrain_cells
 
 
-_ATLAS_OPTIONS = ('atlas', 'prop_atlas', 'building_atlas',
+_ATLAS_OPTIONS = ('atlas', 'prop_atlas', 'ambient_atlas', 'building_atlas',
                   'fortification_atlas', 'actor_atlas', 'object_atlas')
 
 
