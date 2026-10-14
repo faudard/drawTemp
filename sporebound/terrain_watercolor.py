@@ -78,12 +78,14 @@ def pixel(material, variant, x, y):
                 abs(y+.5-TILE_HEIGHT/2)/(TILE_HEIGHT/2))
     if distance >= 1:
         return 0, 0, 0, 0
+    base = PIGMENTS[material]
+    if distance >= .90:
+        return (*base, 255)  # Exact shared-edge pigment for both variants.
     seed = MATERIALS.index(material)*31337 + variant*13579 + 17
     coarse = _noise(x, y, 17, seed)
     medium = _noise(x, y, 7, seed ^ 0x52e125)
     granule = _hash(x, y, seed ^ 0x9e74) / 0xffffffff
     tone = .64*coarse+.29*medium+.07*granule
-    base = PIGMENTS[material]
     highlight, shade = WASHES[material]
     candidate = (_blend(base, highlight, min(.44, max(0, tone-.47)*1.8))
                  if tone >= .47 else
@@ -95,7 +97,7 @@ def pixel(material, variant, x, y):
         amount = .18 if material != 'water' else .28
         candidate = _blend(candidate, highlight, amount)
     # Identical pigment precisely along shared perimeter across both variants.
-    strength = min(1., max(0., (1.-distance)*9.))
+    strength = min(1., max(0., (.90-distance)*14.))
     strength = strength*strength*(3-2*strength)
     return (*_blend(base, candidate, strength), 255)
 
