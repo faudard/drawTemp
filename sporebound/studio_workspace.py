@@ -88,6 +88,9 @@ class ProjectWorkspaceTab:
         ttk.Button(navigation_bar, text='Renommer ID',
                    command=lambda: self.owner._run(self.rename_selected_id)).pack(
                        side='left', padx=(0, 6))
+        ttk.Button(navigation_bar, text='Supprimer (contrôlé)',
+                   command=lambda: self.owner._run(self.delete_selected_resource)).pack(
+                       side='left', padx=(0, 6))
         ttk.Label(navigation_bar, textvariable=self.breadcrumb,
                   wraplength=620).pack(side='left', fill='x', expand=True)
         body = ttk.Panedwindow(root, orient='horizontal')
@@ -568,6 +571,28 @@ class ProjectWorkspaceTab:
             self.owner.select_mission(mid)
         self.owner.focus_gate_event(door)
         self._show_tab('Personnages et événements')
+
+    def delete_selected_resource(self):
+        if len(self.tree.selection()) != 1:
+            raise RuleError('Sélectionner un seul acteur ou objet à supprimer')
+        node = self._selected_node()
+        if node is None or node.kind not in ('map_actor', 'map_object'):
+            raise RuleError('Choisir un acteur ou objet placé')
+        if self.owner.workspace_delete is None:
+            raise RuleError('Suppression indisponible')
+        impact = dependency_impact(self.model(), node.key)
+        label = node.label
+        if not self.owner.dialogs.askyesno(
+                'Suppression contrôlée',
+                f'Supprimer {label} ?\\n'
+                f'{len(impact.incoming)} référence(s) entrante(s), '
+                f'{len(impact.outgoing)} sortante(s).\\n'
+                'Les liens non pris en charge interdiront la suppression. '
+                'L’opération reste annulable.'):
+            return
+        form = editable_form(self.owner.doc().data, node.key)
+        self.owner.workspace_delete(node.key, form.baseline)
+        self.status.config(text='Suppression effectuée : ' + node.key)
 
     def rename_selected_id(self):
         if len(self.tree.selection()) != 1:
