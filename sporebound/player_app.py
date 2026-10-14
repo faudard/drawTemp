@@ -25,6 +25,7 @@ from .player_ux import (KeyBindings, PresentationState, combat_hud,
                         clamp_selection, zoom_to, ZOOM_PRESETS)
 from .player_preferences import load_preferences, save_preferences
 from .player_guidance import combat_guidance
+from .player_action_preview import action_preview, preview_screen_geometry
 
 
 class PlayerApplication:
@@ -70,6 +71,13 @@ class PlayerApplication:
         self.guidance_enabled = tk.BooleanVar(value=False)
         self.guidance_var = tk.StringVar()
         self.guide_panel = None
+        self.preview_enabled = tk.BooleanVar(value=False)
+        self.preview_var = tk.StringVar()
+        self.preview_panel = None
+        self._preview_result = None
+        self._preview_hover = None
+        self._preview_job = None
+        self._preview_paint_key = None
         self.root.title(project.title)
         self.root.geometry("1160x820")
         self.root.minsize(800, 580)
@@ -160,6 +168,12 @@ class PlayerApplication:
         if self._motion_job is not None:
             self.root.after_cancel(self._motion_job)
             self._motion_job = None
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+            self._preview_job = None
+        self._preview_result = None
+        self._preview_hover = None
+        self._preview_paint_key = None
         self._motion_frame = None
         for key in ("<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q", "e"):
             self.root.unbind(key)
@@ -174,6 +188,7 @@ class PlayerApplication:
         self.canvas = None
         self.info = None
         self.guide_panel = None
+        self.preview_panel = None
 
     def _heading(self, text, subtitle=""):
         self.ttk.Label(self.view, text=text, font=("TkDefaultFont", round(24 * self.text_scale.get() / 100), "bold")).pack(
@@ -996,6 +1011,9 @@ class PlayerApplication:
         self.ttk.Checkbutton(
             nav, text="Aide tactique", variable=self.guidance_enabled,
             command=self._toggle_guidance).pack(side="right", padx=8)
+        self.ttk.Checkbutton(
+            nav, text="Prévision d'action", variable=self.preview_enabled,
+            command=self._toggle_action_preview).pack(side="right", padx=8)
         if not session.finalized and not battle.result:
             actions = self.ttk.Frame(self.view)
             actions.pack(fill="x", pady=9)
@@ -1069,6 +1087,12 @@ class PlayerApplication:
             wraplength=970, justify="left").pack(anchor="w")
         if self.guidance_enabled.get():
             self.guide_panel.pack(fill="x", pady=4)
+        self.preview_panel = self.ttk.LabelFrame(
+            self.view, text="Prévision de l'action (sans l'exécuter)", padding=8)
+        self.ttk.Label(self.preview_panel, textvariable=self.preview_var,
+                       wraplength=950, justify="left").pack(anchor="w")
+        if self.preview_enabled.get():
+            self.preview_panel.pack(fill="x", pady=3)
         body = self.ttk.Frame(self.view)
         body.pack(fill="both", expand=True, pady=9)
         self.canvas = self.tk.Canvas(
@@ -1079,6 +1103,8 @@ class PlayerApplication:
                                        asset_root=self.asset_root)
         self.iso_renderer = IsoBattleCanvas(self.canvas)
         self.canvas.bind("<Button-1>", self._select_cell)
+        self.canvas.bind("<Motion>", self._preview_motion)
+        self.canvas.bind("<Leave>", self._preview_leave)
         self._bind_battle_keys()
         self.canvas.bind("<MouseWheel>", self._zoom)
         self.canvas.bind("<Button-4>", lambda _: self._zoom_step(1))
@@ -1123,6 +1149,159 @@ class PlayerApplication:
         # The map retains keyboard navigation after toggling the help panel.
         if self.canvas is not None:
             self.canvas.focus_set()
+
+    def _toggle_action_preview(self):
+        if self.preview_panel is None or self.canvas is None:
+            return
+        if self.preview_enabled.get():
+            self.preview_panel.pack(fill="x", pady=3, before=self.canvas.master)
+            self._update_action_preview()
+        else:
+            self.preview_panel.pack_forget()
+            if self._preview_job is not None:
+                self.root.after_cancel(self._preview_job)
+                self._preview_job = None
+            self._preview_hover = None
+            self._preview_result = None
+            self._preview_paint_key = None
+            self.canvas.delete("player_action_preview")
+        self.canvas.focus_set()
+
+    def _preview_motion(self, event):
+        if not self.preview_enabled.get() or self.iso_renderer is None:
+            return
+        battle = self.player.session.active_battle
+        if battle is None:
+            return
+        if self.iso_view_var.get():
+            floor = (self.level_var.get()
+                     if self.action_var.get() in {"level_move", "level_attack"}
+                     else battle.unit_levels.get(battle.active_id, 0)
+                     if battle.active_id else 0)
+            cell = self.iso_renderer.hit_test(event.x, event.y, level=floor)
+        else:
+            cell = self.camera.screen_to_cell(event.x, event.y)
+        if cell is None or not battle.board.contains(cell):
+            self._preview_leave()
+            return
+        if self._preview_hover == cell:
+            return
+        self._preview_hover = cell
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+        # Avoid running Dijkstra / forecast on every mouse-motion event.
+        self._preview_job = self.root.after(90, self._flush_action_preview)
+
+    def _flush_action_preview(self):
+        self._preview_job = None
+        self._update_action_preview()
+
+    def _preview_leave(self, event=None):
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+            self._preview_job = None
+        if self._preview_hover is not None:
+            self._preview_hover = None
+            self._update_action_preview()
+
+    def _update_action_preview(self):
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+            self._preview_job = None
+        if not self.preview_enabled.get() or self.canvas is None:
+            return
+        session = self.player.session
+        battle = session.active_battle if session is not None else None
+        if battle is None:
+            return
+        cell = self._preview_hover if self._preview_hover is not None else self.selection
+        try:
+            preview = action_preview(
+                battle, self.action_var.get(), cell,
+                target_level=self.level_var.get())
+        except (RuleError, ValueError) as exc:
+            self._preview_result = None
+            self.preview_var.set("Prévision indisponible : " + str(exc))
+            self.canvas.delete("player_action_preview")
+            return
+        self._preview_result = preview
+        display = ("[" + preview.status + "] " + preview.headline +
+                   (" · " + ", ".join(map(str, preview.path)) if preview.path else "") +
+                   ("\n" + "\n".join(preview.details) if preview.details else ""))
+        self.preview_var.set(display)
+        self._draw_action_preview()
+
+    def _draw_action_preview(self):
+        if self.canvas is None:
+            return
+        preview = self._preview_result
+        if not self.preview_enabled.get() or preview is None:
+            self.canvas.delete("player_action_preview")
+            self._preview_paint_key = None
+            return
+        iso = self.iso_view_var.get()
+        geo = self.iso_renderer.geometry if iso and self.iso_renderer else None
+        if iso and geo is None:
+            self.canvas.delete("player_action_preview")
+            self._preview_paint_key = None
+            return
+        shift = self.iso_renderer.shift if geo is not None else (0, 0)
+        # Preserve Canvas items on idle animation ticks when nothing changed.
+        # If a renderer rebuilt the scene, find_withtag detects the invalidation.
+        paint_key = (preview, self.camera, iso, id(geo), shift)
+        if (paint_key == self._preview_paint_key
+                and self.canvas.find_withtag("player_action_preview")):
+            return
+        self._preview_paint_key = paint_key
+        self.canvas.delete("player_action_preview")
+        coords, destination = preview_screen_geometry(
+            preview, self.camera, iso_geometry=geo, shift=shift)
+        tags = ("player_action_preview",)
+        # Never draw an upstairs destination as a ground-plane polygon.
+        # The guidance panel retains the authoritative floor/path details.
+        session = self.player.session
+        battle = session.active_battle if session is not None else None
+        actor_floor = (battle.unit_levels.get(battle.active_id, 0)
+                       if battle is not None and battle.active_id else 0)
+        requested_floor = (self.level_var.get() if preview.action in
+                           {"level_move", "level_attack"} else actor_floor)
+        if (requested_floor > 0 or
+                preview.levels and any(level > 0 for level in preview.levels)):
+            return
+        if len(coords) > 1:
+            flat = tuple(n for xy in coords for n in xy)
+            targeting = (preview.action == "attack" or
+                         preview.action in (battle.active.skills
+                                            if battle and battle.active else ()))
+            line_color = "#ffe38d" if targeting else "#3bf1d0"
+            self.canvas.create_line(
+                *flat, fill=line_color, width=3,
+                dash=(3, 5) if targeting else (7, 4),
+                arrow="last", tags=tags)
+            if not targeting:
+                for x, y in coords[1:-1]:
+                    self.canvas.create_oval(
+                        x-3, y-3, x+3, y+3,
+                        outline=line_color, width=2, tags=tags)
+        if destination is not None:
+            if preview.status == "available":
+                color = "#3bf1d0"
+            elif preview.status == "blocked":
+                color = "#ff8888"
+            else:
+                color = "#ffe38d"
+            if geo is not None:
+                polygon = tuple(v + shift[i % 2] for point in
+                                geo.polygon(preview.destination)
+                                for i, v in enumerate(point))
+                self.canvas.create_polygon(
+                    *polygon, fill="", outline=color, width=3, tags=tags)
+            else:
+                x, y = self.camera.cell_to_screen(preview.destination)
+                size = self.camera.cell_size
+                self.canvas.create_rectangle(
+                    x+2, y+2, x+size-2, y+size-2,
+                    outline=color, width=3, tags=tags)
 
     def _submit_tactical(self, command):
         """Show expected engine refusal inline, without a blocking dialog.
@@ -1236,12 +1415,14 @@ class PlayerApplication:
                 self.iso_renderer.draw(
                     battle, self._motion_frame, self.camera,
                     poses=self.motion.poses(clock_ms))
+            self._draw_action_preview()
             if self.motion.active(clock_ms) and self._motion_job is None:
                 self._motion_job = self.root.after(60, self._motion_tick)
             return
         self.renderer.draw(
             self._motion_frame, self.camera, poses=self.motion.poses(clock_ms),
             elapsed_ms=self.motion.elapsed_ms(clock_ms), clock_ms=int(clock_ms))
+        self._draw_action_preview()
         if (self.motion.active(clock_ms) or
                 self.renderer.animates_when_idle(self._motion_frame)):
             if self._motion_job is None:
@@ -1263,6 +1444,11 @@ class PlayerApplication:
         self._motion_frame = frame
         self._render_motion(clock_ms)
         self.audio.observe(battle)
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+            self._preview_job = None
+        self._preview_hover = None
+        self._update_action_preview()
         hud = combat_hud(frame, battle.mission.objective, self.selection)
         self.feedback_var.set(hud.selection_summary)
         if self.guidance_enabled.get():
