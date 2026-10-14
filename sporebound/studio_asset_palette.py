@@ -1,6 +1,8 @@
 """Modeless visual palette using the editor's existing image loaders and tools."""
 from .asset_palette import CATEGORIES, ENTRIES, PaletteEntry, search_entries
 from .watercolor_catalog import WatercolorCatalog
+from .asset_browser_state import (AssetBrowserState, FAMILIES, FAMILY_LABELS,
+                                  BROWSER_SCOPES, collection_key, family_for)
 from .tk_images import resize_photo
 from .iso_building_atlas import BUILDING_FRAMES
 from .iso_actor_atlas import actor_style
@@ -10,13 +12,13 @@ from types import SimpleNamespace
 class AssetPalette:
     def __init__(self, parent, *, terrain, props, buildings, fortifications,
                  choose, cell_size, actors=None, entities=None, content=None,
-                 mission=None):
+                 mission=None, preferences_path=None):
         import tkinter as tk
         from tkinter import ttk
         self.window = tk.Toplevel(parent)
         self.window.title('Bibliothèque d’assets — Carte')
-        self.window.geometry('860x660')
-        self.window.minsize(700, 540)
+        self.window.geometry('1100x720')
+        self.window.minsize(850, 580)
         self.window.transient(parent)
         self.window.protocol('WM_DELETE_WINDOW', self.hide)
         self.loaders = terrain, props, buildings, fortifications
@@ -29,6 +31,10 @@ class AssetPalette:
                          'Aquarelle', 'watercolor', item.id)
             for item in self.watercolor.entries)
         self.entries = {e.id: e for e in (*ENTRIES, *self.watercolor_entries)}
+        self._preferences_path = preferences_path
+        self.browser = AssetBrowserState.load(
+            preferences_path() if callable(preferences_path) else preferences_path)
+        self.browse_scope = tk.StringVar(self.window, value='all')
         self.images = {}
         self.group_variants = {}
         self._group_selected = None
@@ -60,9 +66,24 @@ class AssetPalette:
         ttk.Label(controls, textvariable=self.count).pack(side='right')
         body = ttk.Panedwindow(self.window, orient='horizontal')
         body.pack(fill='both', expand=True, padx=8)
-        listing, preview = ttk.Frame(body), ttk.Frame(body)
+        navigation, listing, preview = ttk.Frame(body), ttk.Frame(body), ttk.Frame(body)
+        body.add(navigation, weight=0)
         body.add(listing, weight=1)
-        body.add(preview, weight=1)
+        body.add(preview, weight=2)
+        ttk.Label(navigation, text='COLLECTIONS').pack(anchor='w', padx=6, pady=(8, 4))
+        self.nav = ttk.Treeview(navigation, show='tree', height=11,
+                                selectmode='browse')
+        self.nav.column('#0', width=150, minwidth=130, stretch=False)
+        nav_rows = (
+            ('all', 'Tous les assets'),
+            ('favorites', '☆ Favoris'),
+            ('recents', '◷ Récents'),
+        ) + FAMILIES
+        for scope, label in nav_rows:
+            self.nav.insert('', 'end', iid='browse:' + scope, text=label)
+        self.nav.pack(fill='both', expand=True, padx=3)
+        self.nav.selection_set('browse:all')
+        self.nav.bind('<<TreeviewSelect>>', self.choose_collection)
         style = ttk.Style(self.window)
         style.configure('AssetPalette.Treeview', rowheight=48)
         self.tree = ttk.Treeview(listing, show='tree', selectmode='browse',
@@ -139,6 +160,9 @@ class AssetPalette:
             self.entity_rows[label] = row
         for variable in (self.entity_facing, self.entity_pose, self.entity_team):
             variable.trace_add('write', lambda *_: self.preview())
+        self.favorite_button = ttk.Button(preview, text='☆ Ajouter aux favoris',
+                                          command=self.toggle_favorite)
+        self.favorite_button.pack(fill='x', padx=8, pady=(4, 0))
         self.use_button = ttk.Button(preview, text='Utiliser sur la carte', command=self.use)
         self.use_button.pack(fill='x', padx=8, pady=8)
         ttk.Label(self.window, text='Choisir → Utiliser → cliquer sur la carte. '
@@ -148,6 +172,9 @@ class AssetPalette:
         self.tree.bind('<Return>', lambda _e: self.use())
         self.query.trace_add('write', self.populate)
         self.category.trace_add('write', self.populate)
+        self.browse_scope.trace_add('write', self.populate)
+        self.window.bind('<Control-d>', self.toggle_favorite)
+        self.window.bind('<Control-f>', lambda _e: entry.focus_set())
         self.populate()
         entry.focus_set()
 
