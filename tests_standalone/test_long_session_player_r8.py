@@ -143,7 +143,7 @@ class LongSessionPlayerTests(unittest.TestCase):
                 expected_digest=old.session.recording()["digest"])
             before = other.long_path_for("relique", 1).read_bytes()
             with self.assertRaisesRegex(RuleError, "stale"):
-                other.long_store().restore(
+                LongSessionStore(other.long_path_for("relique", 1)).restore(
                     old, expected_digest=old.session.recording()["digest"])
             self.assertEqual(other.long_path_for("relique", 1).read_bytes(),
                              before)
