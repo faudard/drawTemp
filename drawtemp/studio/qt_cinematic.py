@@ -399,6 +399,8 @@ class CinematicEditor(QMainWindow):
         if kind in ("actor", "camera"):
             if kind == "actor":
                 self._field("Acteur", event["actor"])
+                self._field("Pose", event.get("pose", ""))
+                self._field("Animation", event.get("animation", ""))
             for field in ("from", "to"):
                 for index, suffix in enumerate(("X", "Y")):
                     self._field(field + " " + suffix, event[field][index],
@@ -456,6 +458,10 @@ class CinematicEditor(QMainWindow):
                             "easing": self._value("Easing")})
             if kind == "actor":
                 updates["actor"] = self._value("Acteur")
+                if self._value("Pose"):
+                    updates["pose"] = self._value("Pose")
+                if self._value("Animation"):
+                    updates["animation"] = self._value("Animation")
             else:
                 updates.update(zoom_from=self._value("zoom_from"),
                                zoom_to=self._value("zoom_to"),
