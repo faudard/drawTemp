@@ -211,8 +211,9 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 danger_priority[kind] > danger_priority[threats[cell]]):
             threats[cell] = kind
 
+    # Sorting the small dirty set is O(k log k), not a 16k-cell scan.
     order = (geo.draw_order if tile_subset is None else
-             (c for c in geo.draw_order if c in tile_subset))
+             sorted(tile_subset, key=lambda c: (sum(c), c[0])))
     for c in order:
         if retained:
             canvas.begin_group(c)
@@ -392,6 +393,11 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     # Board is always the tactical source of truth for height and collisions.
     if omit_architecture:
         return geo
+    if tile_subset is not None:
+        # Depth sorting includes unchanged raised décor groups, too. A
+        # subset render cannot pass only its newly painted props here.
+        decor_cells = ([c for c, tile in board.tiles.items() if tile.feature]
+                       if layers.get('Décors', True) else [])
     from .iso_architecture import draw_architecture
     if retained:
         canvas.begin_group('architecture')
