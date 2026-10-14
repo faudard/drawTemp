@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 import traceback
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.editor import launch
@@ -192,7 +193,7 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     root.update()
                     all_buttons = {w.cget('text'): w for w in descendants(root)
                                    if isinstance(w, ttk.Button)}
-                    all_buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     output = Content.load(saved_path)
                     trigger = next(e for e in output.missions['garden'].triggers
                                    if e['id'] == 'event_new')
