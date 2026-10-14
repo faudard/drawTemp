@@ -66,8 +66,7 @@ class DatabaseTests(unittest.TestCase):
         with self.assertRaises(AuthoringError):
             self.editor.remove("skills", "r8_guard_ally")
         with self.assertRaises(AuthoringError):
-            self.editor.remove("jobs", "r8_lancier") if False else self.editor.remove(
-                "archetypes", "missing")
+            self.editor.remove("archetypes", "missing")
         self.assertEqual(self.session.snapshot(), before)
         self.assertIn("archetype/r8_lancier/skills",
                       self.editor.references("skills", "r8_guard_ally"))
