@@ -73,6 +73,11 @@ jobs:
           python -m sporebound tactical-choices --mission garden
           --seed 1 --limit 60 --choice-min-multi 0
           --report tactical_choices_ci.json
+      - name: R6.14 repeat identical choices against saved reference
+        run: >-
+          python -m sporebound tactical-choices --mission garden
+          --seed 1 --limit 60 --choice-min-multi 0
+          --baseline tactical_choices_ci.json
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
         run: python -m examples.tactical_rpg3_castle
