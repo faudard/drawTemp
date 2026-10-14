@@ -13,7 +13,11 @@ class AssetPalette:
                  mission=None):
         import tkinter as tk
         from tkinter import ttk
+        from .studio_theme import palette_for
+        self.appearance = getattr(parent.winfo_toplevel(),
+                                  '_studio_palette', palette_for('light'))
         self.window = tk.Toplevel(parent)
+        self.window.configure(background=self.appearance.background)
         self.window.title('Bibliothèque d’assets — Carte')
         self.window.geometry('860x660')
         self.window.minsize(700, 540)
@@ -70,7 +74,7 @@ class AssetPalette:
         image_frame = ttk.Frame(preview)
         image_frame.pack(fill='both', expand=True)
         self.canvas = tk.Canvas(image_frame, width=390, height=280,
-                                background='#e5e0d4', highlightthickness=0)
+                                background=self.appearance.canvas, highlightthickness=0)
         ys = ttk.Scrollbar(image_frame, orient='vertical', command=self.canvas.yview)
         ys.pack(side='right', fill='y')
         self.canvas.configure(yscrollcommand=ys.set)
@@ -138,6 +142,11 @@ class AssetPalette:
     def hide(self):
         self.stop_watercolor()
         self.window.withdraw()
+
+    def apply_appearance(self, palette):
+        self.appearance = palette
+        self.window.configure(background=palette.background)
+        self.canvas.configure(background=palette.canvas)
 
     def show(self):
         self.populate()
