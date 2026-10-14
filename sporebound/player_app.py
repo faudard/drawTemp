@@ -1896,8 +1896,11 @@ class PlayerApplication(JeanneChapterUiMixin):
         self._clear()
         self.presentation.transition("results")
         self.audio.music_for("campaign")
-        self._heading("Résultats · " + battle.mission.name,
-                      "Issue : " + str(battle.result))
+        self._heading(
+            "Résultats · " + battle.mission.name,
+            "Issue : " + ({"victory": "Victoire", "defeat": "Défaite"}.get(
+                battle.result, str(battle.result))
+                if self.chapter_one else str(battle.result)))
         if self.chapter_one:
             card = chapter_mission_card(battle.mission.id)
             self.ttk.Label(
@@ -1917,7 +1920,9 @@ class PlayerApplication(JeanneChapterUiMixin):
         frame = battle_frame(battle)
         for actor in frame.actors:
             self.ttk.Label(
-                self.view, text=actor.name + " · " + actor.team +
+                self.view, text=actor.name + " · " +
+                ({"player": "Allié", "enemy": "Ennemi"}.get(
+                    actor.team, actor.team) if self.chapter_one else actor.team) +
                 " · PV " + str(actor.hp) + "/" + str(actor.max_hp) +
                 (" · hors combat" if not actor.alive else "")
             ).pack(anchor="w", pady=2)
@@ -1994,7 +1999,10 @@ class PlayerApplication(JeanneChapterUiMixin):
             else "Aucune activation CT actuellement disponible")
         self.hud_focus_var.set(sections.focus)
         self._update_hud_portrait(battle)
-        self.hud_objective_var.set("Objectif : " + sections.objective)
+        display_objective = (
+            chapter_mission_card(battle.mission.id)["objective"]
+            if self.chapter_one else sections.objective)
+        self.hud_objective_var.set("Objectif : " + display_objective)
         self.hud_party_var.set("\n".join(sections.party))
         for widget, content in ((self.hud_journal,
                                   "\n".join(sections.journal)
@@ -2011,7 +2019,7 @@ class PlayerApplication(JeanneChapterUiMixin):
             self.guidance_var.set(
                 guide.title + " — " + guide.instruction +
                 ("\n" + " | ".join(guide.notes) if guide.notes else ""))
-        rows = ["Objectif : " + hud.objective, hud.headline,
+        rows = ["Objectif : " + display_objective, hud.headline,
                 hud.selection_summary, "", "Escouades"]
         if self.action_var.get() == 'level_attack' and battle.active is not None:
             try:
