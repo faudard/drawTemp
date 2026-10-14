@@ -18,11 +18,7 @@ from .terrain_transition_masks import (ordered_blend_masks,
 from .iso_connections import (shoreline_mask, waterfall_mask, bridge_axis,
                               transition_segments, bridge_rails)
 
-SURFACES = frozenset({'grass', 'dirt', 'stone', 'cobble', 'sand',
-                      'rock', 'water', 'bridge'})
-FEATURES = frozenset({'', 'tree', 'bush', 'boulder', 'ruin', 'crate',
-                      'lantern', 'stairs', 'stone_wall',
-                      'arch', 'fence', 'reeds', 'pillar'})
+from .terrain_schema import SURFACES, FEATURES
 SURFACE_COLORS = {**LAND_COLORS, 'water': '#4d92ac', 'bridge': '#c5b496'}
 
 

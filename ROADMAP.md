@@ -1,3 +1,10 @@
+# DrawTemp 5.0 — refondation Qt 6
+
+La cible est désormais Studio Qt Widgets/PySide6, Player Qt Quick/PySide6,
+renderer partagé et Tactical Core Python indépendant.
+Voir [R0 : fondation, décisions, migration et gates](docs/drawtemp5/R0_FOUNDATION.md).
+Les sections ci-dessous conservent l’historique du runtime et des chantiers réutilisables.
+
 # Roadmap — priorité gameplay, sans dépendance à Godot
 
 ## Priorité éditeur — audit réel du 12 octobre 2026

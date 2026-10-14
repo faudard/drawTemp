@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "seed": 17,
+  "result": "victory",
+  "trace": [
+    {
+      "stage": "new",
+      "sha256": "a386812c00e2f921317ab7506ddc0e83832056e393315f9268fa695c50ea99be"
+    },
+    {
+      "stage": "dialogue",
+      "sha256": "3ff287a12273c31ce180ca006bad9af1361c1d0cb3f4e5fe0022cc1db5005c5a"
+    },
+    {
+      "stage": "mission",
+      "sha256": "607cf8a76bc688591f30ba984ee11aaa26a4115e07139d5842d0eed81b79866c"
+    },
+    {
+      "stage": "lever",
+      "sha256": "a9bfa5e4ddcbcb8fbed93adc4c16e476ee5dbf56776c92f0e2f7e919e4d00c6d"
+    },
+    {
+      "stage": "resume",
+      "sha256": "a9bfa5e4ddcbcb8fbed93adc4c16e476ee5dbf56776c92f0e2f7e919e4d00c6d"
+    },
+    {
+      "stage": "command-0",
+      "sha256": "79e0af2ebb4d950d4c16caf4acab8481f8c3febffcc3255521d3ea9b024cc408"
+    },
+    {
+      "stage": "command-1",
+      "sha256": "09319402932ceecff9d73c17a0633ad7af9bd76a19204692df624fa4b2daf6fe"
+    },
+    {
+      "stage": "command-2",
+      "sha256": "8e3718de9fc2342a8a48cc23e3d8717ecc459efa37e211a7149f5784055b551b"
+    }
+  ],
+  "content_sha256": "9f9921843803223e75fc58d21128701e51048d73b377865980286b7f0c0882c0",
+  "project_sha256": "0eab4666181f651cfcafb620d37de008bbbd20fd9718172ec30a62adbfc4a8a1"
+}

@@ -405,3 +405,10 @@ Dans le Studio (`python -m drawtemp editor <contenu.json>`), onglet **Campagne &
 ### 2.8.3 — Narrative & Presentation
 
 Les sièges du Studio acceptent désormais des **choix narratifs réels** : conditions, drapeaux, or de campagne narratif, chaînes de scènes et scènes **après victoire d'une mission**. Les opérations de combat restent pilotées par le moteur tactique et sont bloquées pendant les choix de dialogue. Les sauvegardes enregistrent les décisions dans un journal complémentaire contrôlé par rejeu. Portraits PNG, sprites PNG et pistes audio WAV/OGG utilisent le registre d'assets du projet ; un repli sans images/son existe. Voir [guide 2.8](docs/VERTICAL_SLICE_2_8.md).
+
+## DrawTemp 5.0 — fondation Qt 6 (R0)
+
+Prototype opt-in sous Python 3.12 : `python -m pip install ".[qt6]"`,
+puis `python -m drawtemp.platform.qt_bootstrap`.
+Voir [les contrats et validations R0](docs/drawtemp5/R0_FOUNDATION.md).
+Le Studio/Player Tk demeure le client fonctionnel pendant la migration.

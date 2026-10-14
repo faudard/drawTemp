@@ -1,0 +1,48 @@
+{
+  "commit": "8d29cdf8eaa907a9317130ae5a2efc4c6024f9db",
+  "date": "2026-10-14",
+  "python": "3.12.14",
+  "platform": "Linux (local container, no display)",
+  "command": "python -m unittest discover -s tests_standalone",
+  "isolated_unmodified_worktree": true,
+  "summary": [
+    "Ran 1661 tests in 183.793s",
+    "FAILED (failures=10, errors=17, skipped=199)"
+  ],
+  "failures_and_errors": [
+    "ERROR: test_cli_validates_project_relative_files_and_reports_all_errors (test_assets.ProjectAssetTests.test_cli_validates_project_relative_files_and_reports_all_errors)",
+    "ERROR: test_install_watercolor_pack (unittest.loader._FailedTest.test_install_watercolor_pack)",
+    "ERROR: test_same_battle_state_rendered_with_live_reachable_and_danger (test_iso_battle_view_3718.IsoBattleViewTests.test_same_battle_state_rendered_with_live_reachable_and_danger)",
+    "ERROR: test_camera_or_selection_changes_force_full_redraw (test_iso_cache_invalidation_3718c.IncrementalSceneTests.test_camera_or_selection_changes_force_full_redraw)",
+    "ERROR: test_hp_change_invalidates_cached_actor_labels_even_with_same_frame (test_iso_cache_invalidation_3718c.IncrementalSceneTests.test_hp_change_invalidates_cached_actor_labels_even_with_same_frame)",
+    "ERROR: test_identical_snapshot_reuses_scene_and_motion_moves_only_actor_tags (test_iso_cache_invalidation_3718c.IncrementalSceneTests.test_identical_snapshot_reuses_scene_and_motion_moves_only_actor_tags)",
+    "ERROR: test_actor_group_ids_invalidate_when_actor_order_changes (test_iso_frame_cache_3718c.IsoFrameCacheTests.test_actor_group_ids_invalidate_when_actor_order_changes)",
+    "ERROR: test_animated_doorway_forces_only_cutaway_transition_redraws (test_iso_frame_cache_3718c.IsoFrameCacheTests.test_animated_doorway_forces_only_cutaway_transition_redraws)",
+    "ERROR: test_motion_only_updates_actor_items_not_terrain_or_roofs (test_iso_frame_cache_3718c.IsoFrameCacheTests.test_motion_only_updates_actor_items_not_terrain_or_roofs)",
+    "ERROR: test_selected_threats_camera_zoom_viewport_and_frames_invalidate (test_iso_frame_cache_3718c.IsoFrameCacheTests.test_selected_threats_camera_zoom_viewport_and_frames_invalidate)",
+    "ERROR: test_composition_and_unchanged_source_provenance (test_jeanne_motion_pack.JeanneMotionPackTests.test_composition_and_unchanged_source_provenance)",
+    "ERROR: test_real_clean_alpha_pngs_and_dimensions (test_jeanne_motion_pack.JeanneMotionPackTests.test_real_clean_alpha_pngs_and_dimensions)",
+    "ERROR: test_controller_records_only_after_persistence_success (test_playtest_384.RecorderTests.test_controller_records_only_after_persistence_success)",
+    "ERROR: test_studio_theme_2026 (unittest.loader._FailedTest.test_studio_theme_2026)",
+    "ERROR: test_upper_floor_squad_uses_existing_layered_policy (test_tactical_r6.IntelligenceTests.test_upper_floor_squad_uses_existing_layered_policy)",
+    "ERROR: test_known_cinematic_actor_reference_migrates_both_documents (test_workspace_r2.WorkspaceR2Tests.test_known_cinematic_actor_reference_migrates_both_documents)",
+    "ERROR: test_scene_rename_updates_content_choice_guards_and_story_links (test_workspace_r2.WorkspaceR2Tests.test_scene_rename_updates_content_choice_guards_and_story_links)",
+    "FAIL: test_originals_and_derived_pass_full_release_gate (test_jeanne_motion_pack.JeanneMotionPackTests.test_originals_and_derived_pass_full_release_gate)",
+    "FAIL: test_walk_eight_attack_twelve_hold_and_loop (test_jeanne_motion_pack.JeanneMotionPackTests.test_walk_eight_attack_twelve_hold_and_loop)",
+    "FAIL: test_deployment_help_never_changes_battle (test_player_guidance_r7.PlayerGuidanceR7Tests.test_deployment_help_never_changes_battle)",
+    "FAIL: test_focus_handles_deployment_and_multicell_actors (test_player_hud_layout_r710.PlayerHudLayoutR710Tests.test_focus_handles_deployment_and_multicell_actors)",
+    "FAIL: test_arrows_and_letter_shortcuts_are_readable_and_remappable (test_player_ux_r7.PlayerUXR7Tests.test_arrows_and_letter_shortcuts_are_readable_and_remappable)",
+    "FAIL: test_invalid_paste_is_atomic_even_if_only_one_event_overflows (test_r7_cinematic_batch.R720BatchTests.test_invalid_paste_is_atomic_even_if_only_one_event_overflows)",
+    "FAIL: test_accidental_rebaseline_is_rejected_by_default (test_r7_cinematic_goldens.R718GoldenTests.test_accidental_rebaseline_is_rejected_by_default) (change='text')",
+    "FAIL: test_actor_keyframes_insert_edit_remove_and_exact_pose (test_r7_cinematic_studio4.CinematicStudio4ModelTests.test_actor_keyframes_insert_edit_remove_and_exact_pose)",
+    "FAIL: test_authored_animation_timing_and_terminal_frames (test_watercolor_catalog.WatercolorCatalogTests.test_authored_animation_timing_and_terminal_frames)",
+    "FAIL: test_real_manifest_catalogues_88_original_and_11_derived_png (test_watercolor_catalog.WatercolorCatalogTests.test_real_manifest_catalogues_88_original_and_11_derived_png)"
+  ],
+  "certified": false,
+  "github_commit_workflow_runs_observed": [],
+  "notes": [
+    "Missing optional dependencies/assets and legacy assertions are reported, not suppressed.",
+    "No GUI certification: skipped tests are not passed tests.",
+    "No successful master workflow was returned by the connector at inspection time."
+  ]
+}
