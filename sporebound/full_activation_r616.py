@@ -154,6 +154,21 @@ def sample_activation_plans(battle):
         action = row["command"]
         attempt(row["category"] + " then End",
                 [action, _end(battle, actor_id)])
+    # Always sample Act -> Move before expanding all Move -> Act branches;
+    # otherwise a large movement palette could consume the entire plan cap.
+    for row in actions[:2]:
+        if len(cases) >= MAX_PLANS:
+            break
+        try:
+            mid = deepcopy(battle)
+            mid.execute(deepcopy(row["command"]))
+            if mid.result or mid.active_id != actor_id:
+                continue
+            for movement in _move_candidates(mid)[:1]:
+                attempt(row["category"] + " then Move then End",
+                        [row["command"], movement, _end(mid, actor_id)])
+        except RuleError:
+            continue
     for movement in move_starts:
         if len(cases) >= MAX_PLANS:
             break
@@ -171,21 +186,6 @@ def sample_activation_plans(battle):
                     break
                 attempt("Move then " + row["category"] + " then End",
                         [movement, row["command"], _end(mid, actor_id)])
-        except RuleError:
-            continue
-    # Attack -> Move can be legal and tactically different from Move -> Attack.
-    # Sample one such order if the activation budget still permits.
-    for row in actions[:2]:
-        if len(cases) >= MAX_PLANS:
-            break
-        try:
-            mid = deepcopy(battle)
-            mid.execute(deepcopy(row["command"]))
-            if mid.result or mid.active_id != actor_id:
-                continue
-            for movement in _move_candidates(mid)[:1]:
-                attempt(row["category"] + " then Move then End",
-                        [row["command"], movement, _end(mid, actor_id)])
         except RuleError:
             continue
     require(bool(cases) and cases[0]["reference"], "No valid activation evidence")
