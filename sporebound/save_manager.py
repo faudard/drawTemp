@@ -15,9 +15,9 @@ from .persistence import SessionStore
 from .save_maintenance import LongSessionMaintenance
 from .session_lock import session_writer_lock
 
-_SUMMARY_FIELDS = ("completed", "unlocked", "gold", "experience", "flags",
-                   "reputation", "resources", "companions", "party", "inventory",
-                   "story_history", "choices", "missions", "consequences")
+_SUMMARY_FIELDS = ("completed", "unlocked", "gold", "experience", "story_flags",
+                   "reputation", "resources", "companions", "heroes", "party",
+                   "inventory", "story_history", "choices", "missions", "consequences")
 _DIFF_LIMIT = 24
 
 
@@ -48,6 +48,7 @@ def snapshot_summary(record):
     tactical = record.get("tactical")
     if isinstance(tactical, dict):
         summary["tactical_entries"] = len(tactical.get("commands", []))
+        summary["tactical_digest"] = digest(tactical)[:16]
     return summary
 
 
@@ -234,10 +235,14 @@ class SaveManagerModel:
         target = self._destination_free(campaign_id, destination_slot)
         evidence, record = self._archive_record(campaign_id, source_slot, generation)
         preview = self.compare_archive(campaign_id, source_slot, generation)
+        # Revalidation must also invalidate approval when the source live
+        # checkpoint advances after the user inspected its consequences.
+        current_identity = (preview["current"] or {}).get("digest", "unavailable")
         token = digest({"kind": "save_manager_restore_r819",
                         "campaign": campaign_id, "source_slot": source_slot,
                         "destination_slot": destination_slot, "generation": generation,
-                        "manifest": evidence["digest"], "session": record["digest"]})
+                        "manifest": evidence["digest"], "session": record["digest"],
+                        "current": current_identity})
         return {"campaign_id": campaign_id, "source_slot": source_slot,
                 "destination_slot": destination_slot,
                 "generation": generation, "destination": str(target),
