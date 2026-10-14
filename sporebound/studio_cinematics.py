@@ -238,6 +238,85 @@ class CinematicStudio:
         self._bind_editor_shortcuts(self.events)
         self._bind_editor_shortcuts(self.timeline)
 
+    def _bind_editor_shortcuts(self, widget):
+        """Scope shortcuts to timeline/list; never steal Ctrl+C from text inputs."""
+        actions = (
+            ("c", self.copy_selected), ("v", self.paste_selected),
+            ("x", self.cut_selected), ("z", self.undo), ("y", self.redo),
+        )
+        for modifier in ("Control", "Command"):
+            for key, action in actions:
+                widget.bind(f"<{modifier}-KeyPress-{key}>",
+                            lambda _event, action=action:
+                            self._keyboard_action(action))
+        widget.bind("<Delete>",
+                    lambda _event: self._keyboard_action(self.delete_selected))
+
+    def _keyboard_action(self, action):
+        self.owner._run(action)
+        return "break"
+
+    def _selected_ids(self):
+        ids = self.selected_event_ids or (
+            (self.event_id,) if self.event_id else ())
+        require(bool(ids), "Sélectionner un ou plusieurs événements")
+        # Resolve against the latest project, not a cached event selection.
+        from .cinematic_batch import selected_events
+        selected_events(self._clip(), ids)
+        return ids
+
+    def _replace_clip_events(self, new_clip):
+        cid = self.clip_id
+        require(new_clip["id"] == cid, "Mauvaise cinématique de destination")
+        def commit(data):
+            target = next(c for c in data["cinematics"] if c["id"] == cid)
+            target["events"] = deepcopy(new_clip["events"])
+        self._apply(commit)
+
+    def _selection_after_edit(self, ids):
+        self.selected_event_ids = tuple(ids)
+        self.event_id = ids[-1] if ids else ""
+        self.selected_key_ms = None
+        self.refresh()
+
+    def copy_selected(self):
+        self.clipboard = copy_events(self._clip(), self._selected_ids())
+        self.qa_status.set(f"{len(self.clipboard['events'])} événement(s) copiés.")
+
+    def paste_selected(self):
+        require(self.clipboard is not None, "Copier des événements avant collage")
+        clip = self._clip()
+        at = int(round(self.cursor.get()))
+        proposed, ids = paste_events(clip, self.clipboard, at)
+        self._replace_clip_events(proposed)
+        self._selection_after_edit(ids)
+        self.qa_status.set(f"{len(ids)} événement(s) collés.")
+
+    def cut_selected(self):
+        clip, ids = self._clip(), self._selected_ids()
+        staged_clipboard = copy_events(clip, ids)
+        proposed = delete_events(clip, ids)
+        self._replace_clip_events(proposed)
+        # The clipboard is only replaced if the validated commit succeeded.
+        self.clipboard = staged_clipboard
+        self._selection_after_edit(())
+        self.qa_status.set(f"{len(ids)} événement(s) coupés.")
+
+    def delete_selected(self):
+        clip, ids = self._clip(), self._selected_ids()
+        self._replace_clip_events(delete_events(clip, ids))
+        self._selection_after_edit(())
+        self.qa_status.set(f"{len(ids)} événement(s) supprimés.")
+
+    def shift_selected(self):
+        ids = self._selected_ids()
+        delta = int(self.vars["group_shift"].get())
+        proposed = shift_events(self._clip(), ids, delta)
+        self._replace_clip_events(proposed)
+        self._selection_after_edit(ids)
+        self.qa_status.set(
+            f"{len(ids)} événement(s) déplacés de {delta:+d} ms.")
+
     def _project(self):
         return self.owner.project
 
