@@ -15,7 +15,8 @@ from sporebound.workspace_r2 import (
     validate_drop,
 )
 from sporebound.workspace_shell import map_reference_problems, problem_delta
-from sporebound.workspace_refactoring import RenameMapResourceCommand
+from sporebound.workspace_refactoring import (RenameMapResourceCommand,
+                                              DeleteMapResourceCommand)
 
 
 class WorkspaceR2Tests(unittest.TestCase):
@@ -120,6 +121,59 @@ class WorkspaceR2Tests(unittest.TestCase):
             dependency_impact(index, 'map_actor:garden:deleted')
         with self.assertRaises(RuleError):
             validate_drop(self.doc.data, self.mid, 'asset:missing')
+
+    def test_delete_independent_object_is_atomic_and_undoable(self):
+        mid = self.mid
+        free = self.free_tiles(1)[0]
+        data = add_object(self.doc.data, mid, 'r2_unused_chest', 'chest', free)
+        self.doc.replace(data)
+        key = 'map_object:garden/r2_unused_chest'
+        count = len(self.doc.undo_stack)
+        baseline = editable_form(self.doc.data, key).baseline
+        self.context.execute(DeleteMapResourceCommand(
+            key, baseline, self.project.to_dict()))
+        self.assertEqual(len(self.doc.undo_stack), count + 1)
+        self.assertFalse(any(obj['id'] == 'r2_unused_chest'
+                             for obj in next(m for m in self.doc.data['missions']
+                                             if m['id'] == mid)['objects']))
+        self.doc.undo()
+        self.assertTrue(any(obj['id'] == 'r2_unused_chest'
+                            for obj in next(m for m in self.doc.data['missions']
+                                            if m['id'] == mid)['objects']))
+        self.doc.redo()
+        with self.assertRaises(RuleError):
+            editable_form(self.doc.data, key)
+
+    def test_delete_refused_when_object_still_referenced(self):
+        mid = self.mid
+        first, second = self.free_tiles(2)
+        data = add_object(self.doc.data, mid, 'r2_referenced_door',
+                          'door', first)
+        data = add_object(data, mid, 'r2_referencing_switch',
+                          'switch', second, link='r2_referenced_door')
+        self.doc.replace(data)
+        key = 'map_object:garden/r2_referenced_door'
+        before = self.doc.data
+        count = len(self.doc.undo_stack)
+        with self.assertRaises(RuleError):
+            self.context.execute(DeleteMapResourceCommand(
+                key, editable_form(self.doc.data, key).baseline,
+                self.project.to_dict()))
+        self.assertEqual(self.doc.data, before)
+        self.assertEqual(len(self.doc.undo_stack), count)
+
+    def test_delete_refused_on_stale_or_project_reference(self):
+        key = 'map_actor:garden/ziggy'
+        form = editable_form(self.doc.data, key)
+        before = self.doc.data
+        with self.assertRaises(RuleError):
+            self.context.execute(DeleteMapResourceCommand(
+                key, form.baseline, {'caption': 'ziggy'}))
+        with self.assertRaises(RuleError):
+            self.context.execute(DeleteMapResourceCommand(
+                key, '{}', self.project.to_dict()))
+        self.assertEqual(self.doc.data, before)
+        self.assertFalse(self.doc.undo_stack)
 
     def test_resource_id_rename_propagates_known_actor_dependencies(self):
         mid = self.mid
