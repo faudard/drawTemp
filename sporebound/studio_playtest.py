@@ -55,15 +55,31 @@ class PlaytestStudio:
                 (170, 110, 160, 115, 110, 195)):
             self.rows.heading(name, text=title)
             self.rows.column(name, width=width, anchor="center")
-        self.rows.pack(fill="x", pady=(6, 7))
+        # Data views start hidden. Empty report state must not consume most
+        # of the editor with blank tables and a dark, empty chart.
         self.rows.bind("<<TreeviewSelect>>", self.select)
         self.canvas = self.tk.Canvas(
             self.tab, height=170, background="#252b33",
             highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True)
         self.detail = self.tk.Text(self.tab, height=9, state="disabled",
                                     wrap="word")
-        self.detail.pack(fill="both", expand=True, pady=5)
+        self.empty_state = self.ttk.Frame(self.tab, padding=24)
+        self.empty_state.pack(fill="both", expand=True)
+        self.ttk.Label(
+            self.empty_state, text="Aucune session de playtest importée",
+            font=("TkDefaultFont", 13, "bold"),
+        ).pack(pady=(20, 8))
+        self.ttk.Label(
+            self.empty_state,
+            text="Lancez une partie avec la télémétrie volontaire activée, "
+                 "exportez le rapport JSON, puis importez-le ici pour "
+                 "comparer les sessions et inspecter les décisions.",
+            wraplength=580, justify="center",
+        ).pack(pady=(0, 14))
+        self.ttk.Button(
+            self.empty_state, text="Importer un premier rapport…",
+            command=self.load,
+        ).pack()
         self.status = self.ttk.Label(
             self.tab, text="Import manuel uniquement · aucun envoi.")
         self.status.pack(anchor="w")
@@ -101,6 +117,12 @@ class PlaytestStudio:
 
     def set_report(self, report):
         self.report = validate_report(report)
+        if self.empty_state.winfo_manager():
+            self.empty_state.pack_forget()
+            self.rows.pack(fill="x", pady=(6, 7), before=self.status)
+            self.canvas.pack(fill="both", expand=True, before=self.status)
+            self.detail.pack(fill="both", expand=True, pady=5,
+                             before=self.status)
         missions = sorted({row["mission"] for row in report["sessions"]})
         self.mission_box["values"] = ["Toutes missions", *missions]
         if self.mission.get() not in self.mission_box["values"]:
