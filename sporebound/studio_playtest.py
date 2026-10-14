@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 
+from .encounter_balance6 import human_variant_breakdown
 from .playtest_telemetry import analyze_playtests, validate_report
 from .model import RuleError
 
@@ -17,6 +18,7 @@ class PlaytestStudio:
         self.tk, self.ttk = owner.tk, owner.ttk
         self.report = None
         self.ai_report = None
+        self.annotations = []
         self.tab = self.ttk.Frame(notebook, padding=10)
         notebook.add(self.tab, text="Playtest Lab")
 
@@ -41,6 +43,32 @@ class PlaytestStudio:
         self.mission_box.pack(side="right", padx=3)
         self.ttk.Label(actions, text="Mission :").pack(side="right")
         self.mission_box.bind("<<ComboboxSelected>>", lambda _e: self.render())
+        tuning = self.ttk.Frame(self.tab)
+        tuning.pack(fill="x", pady=3)
+        self.variant_name = self.tk.StringVar(value="authored")
+        self.confusion_tag = self.tk.StringVar(value="aucune")
+        self.exit_reason = self.tk.StringVar(value="unknown")
+        self.ttk.Label(tuning, text="Variante").pack(side="left", padx=2)
+        self.ttk.Entry(tuning, textvariable=self.variant_name,
+                       width=18).pack(side="left", padx=3)
+        self.ttk.Label(tuning, text="Incompréhension").pack(side="left", padx=2)
+        self.ttk.Combobox(
+            tuning, textvariable=self.confusion_tag, state="readonly",
+            values=("aucune", "objective", "positioning", "controls",
+                    "resources", "tutorial", "other"), width=15).pack(
+                    side="left", padx=3)
+        self.ttk.Label(tuning, text="Abandon").pack(side="left", padx=2)
+        self.ttk.Combobox(
+            tuning, textvariable=self.exit_reason, state="readonly",
+            values=("unknown", "difficulty", "unclear_objective",
+                    "technical", "voluntary"), width=16).pack(
+                    side="left", padx=3)
+        self.ttk.Button(tuning, text="Annoter session",
+                        command=self.annotate).pack(side="left", padx=3)
+        self.ttk.Button(tuning, text="Exporter annotations",
+                        command=self.export_annotations).pack(side="left", padx=3)
+        self.ttk.Button(tuning, text="Importer annotations",
+                        command=self.import_annotations).pack(side="left", padx=3)
 
         self.summary = self.ttk.Label(self.tab, text="Aucun rapport chargé.",
                                       wraplength=920, justify="left")
@@ -101,6 +129,7 @@ class PlaytestStudio:
 
     def set_report(self, report):
         self.report = validate_report(report)
+        self.annotations = []
         missions = sorted({row["mission"] for row in report["sessions"]})
         self.mission_box["values"] = ["Toutes missions", *missions]
         if self.mission.get() not in self.mission_box["values"]:
@@ -133,6 +162,19 @@ class PlaytestStudio:
             label += "\nAttention : la référence IA a un contenu authored différent."
         label += ("\nActions joueur : {} · actions IA : {}").format(
             summary["player_commands"], summary["enemy_commands"])
+        if mission is not None:
+            analysis = human_variant_breakdown(
+                self.report, self.annotations, min_complete=5)
+            for row in analysis["groups"]:
+                if row["mission"] != mission:
+                    continue
+                measured = row["duration_target_15_30_minutes"]
+                evidence = ("non vérifiée" if measured is None else
+                            "dans la cible" if measured else "hors cible")
+                label += ("\nR6.11 · {} : {} parties complètes, {} défaites ; "
+                          "incompréhensions {} ; durée 15–30 min : {}").format(
+                    row["variant"], row["summary"]["complete_observations"],
+                    row["failures"], row["confusion"], evidence)
         self.summary.configure(text=label)
         self.rows.delete(*self.rows.get_children())
         chosen = [(i, row) for i, row in enumerate(self.report["sessions"])
@@ -166,6 +208,70 @@ class PlaytestStudio:
         self.status.configure(
             text="{} sessions · collecte volontaire et export local · "
                  "données non modifiées".format(len(chosen)))
+
+    def annotate(self):
+        if self.report is None or not self.rows.selection():
+            self.owner.dialogs.showerror(
+                "Playtest Lab", "Sélectionner une session à annoter.")
+            return
+        index = int(self.rows.selection()[0])
+        item = {
+            "index": index, "variant": self.variant_name.get().strip(),
+            "confusion": ([] if self.confusion_tag.get() == "aucune"
+                          else [self.confusion_tag.get()]),
+            "exit_reason": self.exit_reason.get(),
+        }
+        updated = [a for a in self.annotations if a["index"] != index] + [item]
+        try:
+            human_variant_breakdown(self.report, updated)
+        except (RuleError, ValueError, TypeError) as exc:
+            self.owner.dialogs.showerror("Playtest Lab", str(exc))
+            return
+        self.annotations = sorted(updated, key=lambda a: a["index"])
+        self.render()
+
+    def export_annotations(self):
+        from tkinter import filedialog
+        if self.report is None:
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.tab, defaultextension=".json",
+            filetypes=[("JSON", "*.json")])
+        if path:
+            try:
+                payload = {
+                    "kind": "r6_playtest_annotations", "schema": 1,
+                    "session_count": len(self.report["sessions"]),
+                    "content_sha256": self.report.get("content_sha256"),
+                    "annotations": self.annotations}
+                with open(path, "w", encoding="utf-8") as stream:
+                    json.dump(payload, stream, indent=2, ensure_ascii=False,
+                              sort_keys=True)
+            except OSError as exc:
+                self.owner.dialogs.showerror("Playtest Lab", str(exc))
+
+    def import_annotations(self):
+        from tkinter import filedialog
+        if self.report is None:
+            return
+        path = filedialog.askopenfilename(
+            parent=self.tab, filetypes=[("JSON", "*.json")])
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8") as stream:
+                data = json.load(stream)
+            if (type(data) is not dict or
+                    data.get("kind") != "r6_playtest_annotations" or
+                    data.get("schema") != 1 or
+                    data.get("session_count") != len(self.report["sessions"]) or
+                    data.get("content_sha256") != self.report.get("content_sha256")):
+                raise RuleError("Annotations incompatibles avec ces sessions.")
+            human_variant_breakdown(self.report, data["annotations"])
+            self.annotations = data["annotations"]
+            self.render()
+        except (OSError, ValueError, TypeError, KeyError, RuleError) as exc:
+            self.owner.dialogs.showerror("Playtest Lab", str(exc))
 
     def select(self, _event=None):
         selected = self.rows.selection()

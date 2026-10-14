@@ -6,10 +6,19 @@ thread; the worker communicates only through Queue.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from queue import Queue, Empty
 from threading import Thread
 
-from .balance_matrix import run_matrix, compare_matrices, save_matrix
+from .balance_matrix import run_matrix, compare_matrices, save_matrix, scenario_content
+from .encounter_balance6 import (encounter_profile, strict_regression_gate,
+                                trace_encounter_ai, campaign_balance_curve,
+                                campaign_curve_review)
+from .tactical_choice_lab_r6 import run_choice_lab, evaluate_choice_gate
+from .tactical_quality_r6 import (
+    run_quality_lab, evaluate_quality_gate, release_quality_review,
+    SIGNOFF_FIELDS)
+from .full_activation_r616 import run_activation_lab, evaluate_activation_gate
 from .model import RuleError
 from .tactical_rpg3 import authored_rules_for_document
 
@@ -22,6 +31,13 @@ PRESETS = (
     "Ennemis -1 attaque",
     "Retirer unité sélectionnée",
     "Unité choisie +2 attaque",
+    "Déplacer unité vers X,Y",
+    "Dupliquer unité en X,Y",
+    "Équiper unité : arc",
+    "Inventaire : potions personnalisées",
+    "Case X,Y : couverture",
+    "Case X,Y : danger",
+    "IA choisie : comportement",
 )
 
 
@@ -35,6 +51,12 @@ class BalanceMatrixStudio:
         self._run_snapshot = None
         self.baseline = None
         self.comparison = None
+        self.last_ai = None
+        self.current_choices = None
+        self.current_quality = None
+        self.current_quality_review = None
+        self.current_full_activations = None
+        self.current_campaign = None
         self.busy = False
         self.mailbox = Queue()
         self.frame = self.ttk.Frame(notebook, padding=10)
@@ -79,6 +101,28 @@ class BalanceMatrixStudio:
         for col in range(5):
             options.columnconfigure(col, weight=1)
 
+        tuning = self.ttk.Frame(self.frame)
+        tuning.pack(fill="x", pady=3)
+        self.pos_x = self.tk.StringVar(value="0")
+        self.pos_y = self.tk.StringVar(value="0")
+        self.attack_delta = self.tk.StringVar(value="2")
+        self.potions = self.tk.StringVar(value="4")
+        self.cover = self.tk.StringVar(value="50")
+        self.hazard = self.tk.StringVar(value="10")
+        self.ai_behavior = self.tk.StringVar(value="tactical")
+        for col, (label, var) in enumerate((
+                ("Position X", self.pos_x), ("Position Y", self.pos_y),
+                ("Bonus attaque", self.attack_delta),
+                ("Potions joueur", self.potions),
+                ("Couverture", self.cover), ("Danger", self.hazard),
+                ("IA comportement", self.ai_behavior))):
+            self.ttk.Label(tuning, text=label).grid(row=0, column=col, sticky="w")
+            self.ttk.Entry(tuning, textvariable=var, width=13).grid(
+                row=1, column=col, sticky="w", padx=(0, 12))
+        self.profile_status = self.ttk.Label(
+            self.frame, text="Profil d'affrontement R6 : chargement…")
+        self.profile_status.pack(anchor="w", pady=2)
+
         actions = self.ttk.Frame(self.frame)
         actions.pack(fill="x", pady=4)
         self.ttk.Button(actions, text="Ajouter scénario",
@@ -90,6 +134,12 @@ class BalanceMatrixStudio:
         self.run_button = self.ttk.Button(actions, text="Comparer les scénarios",
                                           command=self.start)
         self.run_button.pack(side="left", padx=3)
+        self.ttk.Button(actions, text="Analyser décisions IA",
+                        command=self.analyze_ai).pack(side="left", padx=3)
+        self.ttk.Button(actions, text="Tester alternatives tactiques",
+                        command=self.analyze_choices).pack(side="left", padx=3)
+        self.ttk.Button(actions, text="Parcours campagne R6",
+                        command=self.analyze_campaign).pack(side="left", padx=3)
 
         self.scenarios = self.ttk.Treeview(
             self.frame, columns=("id", "mission", "preset", "target"),
@@ -112,6 +162,22 @@ class BalanceMatrixStudio:
                         command=self.inspect_mission).pack(side="left", padx=3)
         self.ttk.Button(results, text="Visualiser scénario",
                         command=self.visualize_selected).pack(side="left", padx=3)
+        self.ttk.Button(results, text="Exporter bilan campagne",
+                        command=self.export_campaign).pack(side="left", padx=3)
+        self.ttk.Button(results, text="Exporter choix R6",
+                        command=self.export_choices).pack(side="left", padx=3)
+        quality_actions = self.ttk.Frame(self.frame)
+        quality_actions.pack(fill="x", pady=3)
+        self.ttk.Button(quality_actions, text="R6.15 · Mesurer les compromis",
+                        command=self.analyze_quality).pack(side="left", padx=3)
+        self.ttk.Button(quality_actions, text="Revue humaine R6.15",
+                        command=self.review_quality_human).pack(side="left", padx=3)
+        self.ttk.Button(quality_actions, text="Exporter qualité R6.15",
+                        command=self.export_quality).pack(side="left", padx=3)
+        self.ttk.Button(quality_actions, text="R6.16 · Tours complets",
+                        command=self.analyze_activations).pack(side="left", padx=3)
+        self.ttk.Button(quality_actions, text="Exporter tours R6.16",
+                        command=self.export_activations).pack(side="left", padx=3)
         self.status = self.ttk.Label(self.frame, text="Prêt · aucun scénario exécuté.")
         self.status.pack(anchor="w", pady=2)
         self.rows = self.ttk.Treeview(
@@ -144,6 +210,18 @@ class BalanceMatrixStudio:
         self.unit_box["values"] = ids
         if self.unit.get() not in ids:
             self.unit.set(ids[0] if ids else "")
+        if record:
+            try:
+                p = encounter_profile(self.owner._content(), self.mission.get())
+                self.profile_status.configure(
+                    text="R6.8 · {} héros / {} ennemis · carte {}×{} · "
+                         "objectif {} · cible 4–6 / 5–10 : {}".format(
+                         p["player_count"], p["enemy_count"],
+                         p["map"]["width"], p["map"]["height"],
+                         p["objective"],
+                         "OK" if p["target_roster_met"] else "à évaluer"))
+            except (RuleError, ValueError, KeyError):
+                self.profile_status.configure(text="Profil non disponible.")
 
     def _case(self, mid, preset, uid, ordinal):
         result = {"id": "{}::case{:02d}".format(mid, ordinal),
@@ -159,7 +237,32 @@ class BalanceMatrixStudio:
         elif preset == PRESETS[5]:
             result["remove_units"] = [uid]
         elif preset == PRESETS[6]:
-            result["unit_deltas"] = {uid: {"attack": 2}}
+            result["unit_deltas"] = {uid: {"attack": int(self.attack_delta.get())}}
+        elif preset == PRESETS[7]:
+            result["unit_positions"] = {
+                uid: [int(self.pos_x.get()), int(self.pos_y.get())]}
+        elif preset == PRESETS[8]:
+            result["clone_units"] = [{
+                "id": "{}_r6_{}".format(uid, ordinal),
+                "template_id": uid,
+                "pos": [int(self.pos_x.get()), int(self.pos_y.get())]}]
+        elif preset == PRESETS[9]:
+            result["unit_overrides"] = {
+                uid: {"weapon": "ranged", "attack_range": 3}}
+        elif preset == PRESETS[10]:
+            result["inventory"] = {"potion": int(self.potions.get()),
+                                   "ether": 2, "phoenix": 1}
+        elif preset == PRESETS[11]:
+            result["tile_changes"] = [{
+                "pos": [int(self.pos_x.get()), int(self.pos_y.get())],
+                "cover": int(self.cover.get())}]
+        elif preset == PRESETS[12]:
+            result["tile_changes"] = [{
+                "pos": [int(self.pos_x.get()), int(self.pos_y.get())],
+                "hazard": int(self.hazard.get())}]
+        elif preset == PRESETS[13]:
+            result["unit_overrides"] = {
+                uid: {"behavior": self.ai_behavior.get().strip()}}
         return result
 
     def _add(self, mid, preset, uid=""):
@@ -177,13 +280,16 @@ class BalanceMatrixStudio:
         if self.busy:
             return
         mid, preset, uid = self.mission.get(), self.preset.get(), self.unit.get()
-        if preset in (PRESETS[5], PRESETS[6]) and not uid:
+        if preset in (*PRESETS[5:10], PRESETS[13]) and not uid:
             self.owner.dialogs.showerror("Balance Matrix", "Choisir une unité cible.")
             return
         if len(self.cases) >= 24:
             self.owner.dialogs.showerror("Balance Matrix", "Maximum 24 scénarios.")
             return
-        self._add(mid, preset, uid)
+        try:
+            self._add(mid, preset, uid)
+        except (ValueError, RuleError) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
 
     def add_all_missions(self):
         if self.busy:
@@ -245,8 +351,137 @@ class BalanceMatrixStudio:
         self.busy = False
         self.run_button.configure(state="normal")
         if kind == "error":
-            self.status.configure(text="Échec matrice")
+            self.status.configure(text="Échec analyse")
             self.owner.dialogs.showerror("Balance Matrix", data)
+        elif kind == "full_activations":
+            self.current_full_activations = data
+            evidence = evaluate_activation_gate(
+                data, min_samples=1, min_distinct=1,
+                min_non_dominated=1)
+            lines = [
+                "R6.16 · tours complets réels Move / Act / End",
+                "Mission {} · seed {} · replay vérifié {}".format(
+                    data["mission"], data["seed"], data["replay_verified"]),
+                "Activations échantillonnées : {}".format(
+                    evidence["sampled_activations"]),
+                "Tours aux résultats distincts : {}".format(
+                    evidence["states_with_distinct_turns"]),
+                "États avec alternatives non dominées : {}".format(
+                    evidence["states_with_non_dominated_pairs"]),
+                "Gate d'échantillonnage : " + evidence["status"].upper(),
+                "Manques : " + str(evidence["issues"]),
+                "Effets après End : PV, ressources, position, CT, réactions.",
+                "Comparaison bornée ; aucune simulation des tours ennemis suivants.",
+                "Certification humaine R6.15 toujours requise.",
+            ]
+            for decision in data["decisions"][:3]:
+                lines.append(
+                    "  CT {} acteur {} · {} plans · {} empreintes".format(
+                        decision["ct_tick"], decision["actor"],
+                        decision["plan_count"],
+                        decision["distinct_full_activation_footprints"]))
+                for plan in decision["plans"][:6]:
+                    lines.append(
+                        "    {} · CT {} · PV ennemis -{} · PV alliés +{} · "
+                        "couverture +{} · résultat {}".format(
+                            plan["label"], plan["ct_end_cost"],
+                            plan["metrics"]["enemy_hp_removed"],
+                            plan["metrics"]["ally_hp_restored"],
+                            plan["metrics"]["cover_gain"], plan["result"]))
+            self.output.configure(state="normal")
+            self.output.delete("1.0", "end")
+            self.output.insert("end", "\n".join(lines))
+            self.output.configure(state="disabled")
+            self.status.configure(
+                text="R6.16 · tours comparés ; revue humaine distincte.")
+        elif kind == "quality":
+            self.current_quality = data
+            self.current_quality_review = None
+            evidence = evaluate_quality_gate(
+                data, min_decisions=1, min_differentiated=1,
+                min_tradeoffs=1)
+            lines = [
+                "R6.15 · Contrastes tactiques directs (une commande par branche)",
+                "Mission {} · seed {} · replay vérifié {}".format(
+                    data["mission"], data["seed"], data["replay_verified"]),
+                "Décisions joueur : {}".format(evidence["sampled_player_decisions"]),
+                "États différenciés : {}".format(evidence["differentiated_states"]),
+                "États avec compromis : {}".format(evidence["tradeoff_states"]),
+                "Couverture automatique : " + evidence["status"].upper(),
+                "Signaux manquants : " + str(evidence["issues"]),
+                "Gate de livraison : EN ATTENTE de playtests et revue humaine.",
+                "Un résultat immédiat n'évalue pas les effets sur plusieurs tours."]
+            for row in data["decisions"][:4]:
+                lines.append(
+                    "  CT {} acteur {} · {} empreintes · {} compromis".format(
+                    row["ct_tick"], row["actor"],
+                    row["distinct_immediate_footprints"], len(row["tradeoffs"])))
+            self.output.configure(state="normal")
+            self.output.delete("1.0", "end")
+            self.output.insert("end", "\n".join(lines))
+            self.output.configure(state="disabled")
+            self.status.configure(text="R6.15 · mesures prêtes ; gate humain à compléter.")
+        elif kind == "choices":
+            self.current_choices = data
+            basic = data["gate"]
+            strict = evaluate_choice_gate(
+                data, min_decisions=1, min_multi=1,
+                required_pairs=("positioning+damage", "positioning+protection",
+                                "positioning+resources"))
+            lines = [
+                "R6.14 · options légalement exécutables (Battle réel)",
+                "Mission {} · seed {} · replay vérifié {}".format(
+                    data["mission"], data["seed"], data["replay_verified"]),
+                "Activations observées {} · multichoix {}".format(
+                    basic["sampled_player_decisions"],
+                    basic["multi_category_decisions"]),
+                "Catégories : " + str(basic["choice_categories"]),
+                "Paires alternatives : " + str(basic["pair_occurrences"]),
+                "Gate observatoire : " + basic["status"].upper(),
+                "Gate ambitieux (position/dégâts, protection, ressources) : "
+                    + strict["status"].upper(),
+                "Non couvert : " + str(strict["issues"]),
+                "Sondes bornées : options échantillonnées, pas un solveur de combat.",
+                "Les décisions doivent encore être validées en playtests humains."]
+            self.output.configure(state="normal")
+            self.output.delete("1.0", "end")
+            self.output.insert("end", "\n".join(lines))
+            self.output.configure(state="disabled")
+            self.status.configure(text="R6.14 · options testées, replay vérifié.")
+        elif kind == "campaign":
+            self.current_campaign = data
+            review = campaign_curve_review(data)
+            lines = ["R6.13 · parcours de campagne simulé (Battle réel)"]
+            lines.extend("{} · {} · CT {} · commandes {} · XP {} · or +{} · "
+                         "ratio budget ennemi/héros {}".format(
+                         row["mission"], row["status"],
+                         row.get("ticks_ct", "n.d."),
+                         row.get("commands", "n.d."),
+                         row.get("xp_delta", {}), row.get("gold_delta", 0),
+                         row.get("enemy_to_player_budget", "n.d."))
+                         for row in data["rows"])
+            lines.append("À revoir : " + str(review["warnings"]))
+            lines.append("Les ratios sont des indicateurs, pas une durée humaine.")
+            self.output.configure(state="normal")
+            self.output.delete("1.0", "end")
+            self.output.insert("end", "\n".join(lines))
+            self.output.configure(state="disabled")
+            self.status.configure(text="R6.13 · parcours terminé, replays vérifiés.")
+        elif kind == "ai":
+            self.last_ai = data["analytics"]
+            summary = self.last_ai
+            self.output.configure(state="normal")
+            self.output.delete("1.0", "end")
+            self.output.insert("end", "R6.9 · décisions IA réelles (replay vérifié)\n"
+                + "Actions : " + str(summary["team_decisions"]) + "\n"
+                + "Signaux : " + str(summary["signals"]) + "\n"
+                + "Protection d'alliés : " + str(summary["protective_reactions"])
+                + " · contrôles de zone : " +
+                  str(summary["player_goal_occupied_commands"]) + "\n"
+                + "Déplacements aller-retour et attentes sont des signaux "
+                  "heuristiques, jamais des erreurs IA prouvées.")
+            self.output.configure(state="disabled")
+            self.status.configure(text="R6.9 · trace vérifiée, analyse terminée.")
         else:
             self.current = data
             self._render()
@@ -274,11 +509,12 @@ class BalanceMatrixStudio:
         self.comparison = None
         if self.baseline is not None:
             try:
-                self.comparison = compare_matrices(self.baseline, self.current)
-                lines.append("Gate inter-versions : " +
+                self.comparison = strict_regression_gate(self.baseline, self.current)
+                lines.append("R6.10 · Gate strict (scénarios, seeds, règles) : " +
                              self.comparison["status"].upper())
                 lines.append("Scénarios KO : " + ", ".join(
-                    self.comparison["failures"]))
+                    self.comparison["regressions"]))
+                lines.extend(self.comparison["incompatible_inputs"])
             except (RuleError, ValueError, KeyError) as exc:
                 lines.append("Référence incompatible : " + str(exc))
         self.output.configure(state="normal")
@@ -286,6 +522,390 @@ class BalanceMatrixStudio:
         self.output.insert("end", "\n".join(lines))
         self.output.configure(state="disabled")
         self.status.configure(text="Terminé · matrice reproductible.")
+
+    def analyze_activations(self):
+        """Compare complete tactical turns against the measured Matrix snapshot."""
+        if self.busy or self.current is None:
+            return
+        selected = self.rows.selection()
+        if not selected:
+            self.owner.dialogs.showerror(
+                "Balance Matrix", "Choisir une rencontre mesurée.")
+            return
+        try:
+            row = next(item for item in self.current["cases"]
+                       if item["id"] == selected[0])
+            if self._run_snapshot is None:
+                raise RuleError("Matrice sans instantané de référence.")
+            content = deepcopy(self._run_snapshot[0])
+            rules = self._run_snapshot[1]
+            if row["id"] != row["mission"] + "::baseline":
+                content = scenario_content(content, row["spec"], rules=rules)
+            setup = ({"inventory": row["spec"]["inventory"]}
+                     if row["spec"].get("inventory") is not None else None)
+            seed = self.current["seeds"][0]
+            cap = min(self.current["max_commands"], 5000)
+        except (RuleError, ValueError, KeyError, StopIteration) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
+            return
+        self.busy = True
+        self.run_button.configure(state="disabled")
+        self.status.configure(text="R6.16 · comparaison des tours en cours…")
+
+        def worker():
+            try:
+                data = run_activation_lab(
+                    content, row["mission"], seed=seed,
+                    max_commands=cap, max_samples=3,
+                    rules=rules, initial_state=setup)
+                self.mailbox.put(("full_activations", data))
+            except Exception as exc:
+                self.mailbox.put(("error", str(exc)))
+        Thread(target=worker, daemon=True).start()
+        self.tab.after(80, self._poll)
+
+    def export_activations(self):
+        from tkinter import filedialog
+        import json
+        if self.current_full_activations is None:
+            self.owner.dialogs.showerror(
+                "Balance Matrix", "Mesurer les tours R6.16 d'abord.")
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.tab, defaultextension=".json",
+            filetypes=[("JSON", "*.json")])
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as stream:
+                    json.dump(self.current_full_activations, stream,
+                              ensure_ascii=False, sort_keys=True, indent=2)
+            except (OSError, TypeError) as exc:
+                self.owner.dialogs.showerror("Balance Matrix", str(exc))
+
+    def analyze_quality(self):
+        """Run bounded immediate counterfactuals for the selected Matrix case."""
+        if self.busy or self.current is None:
+            return
+        selected = self.rows.selection()
+        if not selected:
+            self.owner.dialogs.showerror(
+                "Balance Matrix", "Choisir une rencontre mesurée.")
+            return
+        try:
+            row = next(item for item in self.current["cases"]
+                       if item["id"] == selected[0])
+            # Use the exact immutable snapshot that produced the Matrix row.
+            # Later Studio edits must not silently change measured scenarios.
+            if self._run_snapshot is None:
+                raise RuleError("Matrice sans instantané de référence.")
+            content = deepcopy(self._run_snapshot[0])
+            rules = self._run_snapshot[1]
+            if row["id"] != row["mission"] + "::baseline":
+                content = scenario_content(content, row["spec"], rules=rules)
+            setup = ({"inventory": row["spec"]["inventory"]}
+                     if row["spec"].get("inventory") is not None else None)
+            seed = self.current["seeds"][0]
+            cap = min(self.current["max_commands"], 5000)
+        except (RuleError, ValueError, KeyError, StopIteration) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
+            return
+        self.busy = True
+        self.run_button.configure(state="disabled")
+        self.status.configure(text="R6.15 · mesure des compromis en cours…")
+
+        def worker():
+            try:
+                data = run_quality_lab(
+                    content, row["mission"], seed=seed, max_commands=cap,
+                    rules=rules, initial_state=setup)
+                self.mailbox.put(("quality", data))
+            except Exception as exc:
+                self.mailbox.put(("error", str(exc)))
+        Thread(target=worker, daemon=True).start()
+        self.tab.after(80, self._poll)
+
+    def review_quality_human(self):
+        """Explicit local opt-in report and checkbox signoff, never automatic."""
+        from tkinter import filedialog
+        import json
+        if self.current_quality is None:
+            self.owner.dialogs.showerror(
+                "Balance Matrix", "Exécuter d'abord la mesure R6.15.")
+            return
+        path = filedialog.askopenfilename(
+            parent=self.tab, title="Rapport de playtests humains (collecte opt-in)",
+            filetypes=[("JSON", "*.json")])
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8") as stream:
+                human = json.load(stream)
+            # Optional local annotations from Playtest Lab R6.11.
+            annotation_path = filedialog.askopenfilename(
+                parent=self.tab, title="Annotations R6.11 (facultatif)",
+                filetypes=[("JSON", "*.json")])
+            annotations = []
+            if annotation_path:
+                with open(annotation_path, encoding="utf-8") as stream:
+                    annotated = json.load(stream)
+                if (annotated.get("kind") != "r6_playtest_annotations"
+                        or annotated.get("schema") != 1
+                        or annotated.get("session_count") != len(human["sessions"])
+                        or annotated.get("content_sha256") !=
+                        human.get("content_sha256")):
+                    raise RuleError("Annotations incompatibles avec le playtest.")
+                annotations = annotated["annotations"]
+            # Validate the submitted source before asking for a human approval.
+            release_quality_review(
+                self.current_quality, human, annotations=annotations,
+                min_tradeoffs=1)
+        except (OSError, KeyError, ValueError, TypeError, RuleError) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
+            return
+        dialog = self.tk.Toplevel(self.tab)
+        dialog.title("Revue de conception R6.15 — approbation explicite")
+        dialog.transient(self.tab.winfo_toplevel())
+        frame = self.ttk.Frame(dialog, padding=14)
+        frame.pack(fill="both", expand=True)
+        self.ttk.Label(
+            frame, wraplength=460,
+            text="Cochez les observations réellement vérifiées auprès "
+                 "des joueurs. Une simulation ne peut pas les approuver.").pack(
+                     anchor="w", pady=6)
+        variant = self.tk.StringVar(value="authored")
+        self.ttk.Label(frame, text="Variante annotée :").pack(anchor="w")
+        self.ttk.Entry(frame, textvariable=variant).pack(fill="x", pady=4)
+        captions = {
+            "positioning": "Le positionnement compte dans les décisions",
+            "protection": "La protection des alliés est compréhensible",
+            "resources": "Les ressources créent des arbitrages",
+            "objectives": "Les objectifs sont compris et exploitables",
+            "player_comprehension": "Les joueurs comprennent les conséquences"}
+        checks = {field: self.tk.BooleanVar(value=False)
+                  for field in SIGNOFF_FIELDS}
+        for field in SIGNOFF_FIELDS:
+            self.ttk.Checkbutton(
+                frame, text=captions[field], variable=checks[field]).pack(
+                    anchor="w", pady=2)
+
+        def accept():
+            try:
+                decision = release_quality_review(
+                    self.current_quality, human, annotations=annotations,
+                    variant=variant.get().strip(),
+                    human_signoff={field: checks[field].get()
+                                   for field in SIGNOFF_FIELDS},
+                    min_tradeoffs=1)
+                self.current_quality_review = decision
+                self.output.configure(state="normal")
+                self.output.insert(
+                    "end", "\n\nR6.15 · Revue humaine : " +
+                    decision["status"].upper() + "\n" +
+                    "\n".join(decision["issues"]))
+                self.output.configure(state="disabled")
+                self.status.configure(text="R6.15 · revue " +
+                                      decision["status"].upper())
+                dialog.destroy()
+            except (RuleError, ValueError, KeyError, TypeError) as exc:
+                self.owner.dialogs.showerror("Revue humaine R6.15", str(exc))
+        actions = self.ttk.Frame(frame)
+        actions.pack(fill="x", pady=8)
+        self.ttk.Button(actions, text="Évaluer la revue",
+                        command=accept).pack(side="left", padx=3)
+        self.ttk.Button(actions, text="Annuler",
+                        command=dialog.destroy).pack(side="left", padx=3)
+
+    def export_quality(self):
+        from tkinter import filedialog
+        import json
+        if self.current_quality is None:
+            self.owner.dialogs.showerror(
+                "Balance Matrix", "Mesurer les compromis R6.15 d'abord.")
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.tab, defaultextension=".json",
+            filetypes=[("JSON", "*.json")])
+        if path:
+            try:
+                result = dict(self.current_quality)
+                if self.current_quality_review is not None:
+                    result["human_review"] = self.current_quality_review
+                with open(path, "w", encoding="utf-8") as stream:
+                    json.dump(result, stream, ensure_ascii=False,
+                              sort_keys=True, indent=2)
+            except (OSError, TypeError) as exc:
+                self.owner.dialogs.showerror("Balance Matrix", str(exc))
+
+    def analyze_choices(self):
+        """Try executable alternatives for a selected verified matrix case."""
+        if self.busy or self.current is None:
+            return
+        selected = self.rows.selection()
+        if not selected:
+            self.owner.dialogs.showerror(
+                "Balance Matrix", "Sélectionner une rencontre simulée.")
+            return
+        try:
+            row = next(item for item in self.current["cases"]
+                       if item["id"] == selected[0])
+            # Use the exact immutable snapshot that produced the Matrix row.
+            # Later Studio edits must not silently change measured scenarios.
+            if self._run_snapshot is None:
+                raise RuleError("Matrice sans instantané de référence.")
+            content = deepcopy(self._run_snapshot[0])
+            rules = self._run_snapshot[1]
+            if row["id"] != row["mission"] + "::baseline":
+                content = scenario_content(content, row["spec"], rules=rules)
+            setup = ({"inventory": row["spec"]["inventory"]}
+                     if row["spec"].get("inventory") is not None else None)
+            seed = self.current["seeds"][0]
+            cap = min(self.current["max_commands"], 5000)
+        except (RuleError, ValueError, KeyError, StopIteration) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
+            return
+        self.busy = True
+        self.run_button.configure(state="disabled")
+        self.status.configure(text="R6.14 · vérification des options en cours…")
+
+        def worker():
+            try:
+                report = run_choice_lab(
+                    content, row["mission"], seed=seed, max_commands=cap,
+                    rules=rules, initial_state=setup)
+                self.mailbox.put(("choices", report))
+            except Exception as exc:
+                self.mailbox.put(("error", str(exc)))
+        Thread(target=worker, daemon=True).start()
+        self.tab.after(80, self._poll)
+
+    def export_choices(self):
+        from tkinter import filedialog
+        import json
+        if self.current_choices is None:
+            self.owner.dialogs.showerror("Balance Matrix",
+                                         "Analyser les alternatives d'abord.")
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.tab, defaultextension=".json",
+            filetypes=[("JSON", "*.json")])
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as stream:
+                    json.dump(self.current_choices, stream, ensure_ascii=False,
+                              sort_keys=True, indent=2)
+            except (OSError, TypeError) as exc:
+                self.owner.dialogs.showerror("Balance Matrix", str(exc))
+
+    def analyze_ai(self):
+        if self.busy or self.current is None:
+            return
+        selected = self.rows.selection()
+        if not selected:
+            self.owner.dialogs.showerror(
+                "Balance Matrix", "Sélectionner une rencontre déjà simulée.")
+            return
+        try:
+            row = next(row for row in self.current["cases"]
+                       if row["id"] == selected[0])
+            # Use the exact immutable snapshot that produced the Matrix row.
+            # Later Studio edits must not silently change measured scenarios.
+            if self._run_snapshot is None:
+                raise RuleError("Matrice sans instantané de référence.")
+            content = deepcopy(self._run_snapshot[0])
+            rules = self._run_snapshot[1]
+            if row["id"] != row["mission"] + "::baseline":
+                content = scenario_content(content, row["spec"], rules=rules)
+            seed = self.current["seeds"][0]
+            cap = min(self.current["max_commands"], 5000)
+            setup = ({"inventory": row["spec"]["inventory"]}
+                     if row["spec"].get("inventory") is not None else None)
+        except (RuleError, ValueError, KeyError, StopIteration) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
+            return
+        self.busy = True
+        self.run_button.configure(state="disabled")
+        self.status.configure(text="Analyse IA R6.9 en cours…")
+
+        def worker():
+            try:
+                report = trace_encounter_ai(content, row["mission"],
+                                            seed=seed, max_commands=cap,
+                                            rules=rules, initial_state=setup)
+                self.mailbox.put(("ai", report))
+            except Exception as exc:
+                self.mailbox.put(("error", str(exc)))
+        Thread(target=worker, daemon=True).start()
+        self.tab.after(80, self._poll)
+
+    def analyze_campaign(self):
+        """Analyze the authored next_missions chain from the selected mission.
+
+        Read an existing save to respect unlocks/equipment, or start a fresh
+        default profile; neither document nor save is ever overwritten.
+        """
+        if self.busy:
+            return
+        from tkinter import filedialog
+        from .campaign import Campaign
+        try:
+            content = self.owner._content()
+            rules = authored_rules_for_document(self.owner.doc().data)
+            start = self.mission.get()
+            if start not in content.missions:
+                raise RuleError("Sélectionner une mission.")
+            saved = filedialog.askopenfilename(
+                parent=self.tab, title="Sauvegarde campagne (Annuler = nouvelle campagne)",
+                filetypes=[("JSON", "*.json")])
+            campaign = (Campaign.load(saved, ruleset=rules) if saved
+                        else Campaign(unlocked=[start]))
+            route, visited = [], set()
+            mid = start
+            while mid and mid not in visited and len(route) < 8:
+                route.append(mid)
+                visited.add(mid)
+                following = content.missions[mid].next_missions
+                mid = next((n for n in following
+                            if n in content.missions and n not in visited), None)
+            if not route:
+                raise RuleError("Aucun parcours de campagne trouvé.")
+            first = int(self.seeds.get().split(",")[0])
+            seeds = [(first + i) % (2**32) for i in range(len(route))]
+            cap = int(self.limit.get())
+        except (RuleError, ValueError, OSError, TypeError) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
+            return
+        self.busy = True
+        self.run_button.configure(state="disabled")
+        self.status.configure(text="Simulation campagne R6.13 en cours…")
+
+        def worker():
+            try:
+                report = campaign_balance_curve(
+                    content, campaign, route, seeds=seeds,
+                    max_commands=cap, rules=rules)
+                self.mailbox.put(("campaign", report))
+            except Exception as exc:
+                self.mailbox.put(("error", str(exc)))
+        Thread(target=worker, daemon=True).start()
+        self.tab.after(80, self._poll)
+
+    def export_campaign(self):
+        from tkinter import filedialog
+        import json
+        if self.current_campaign is None:
+            self.owner.dialogs.showerror("Balance Matrix",
+                                         "Analyser un parcours d'abord.")
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.tab, defaultextension=".json",
+            filetypes=[("JSON", "*.json")])
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as stream:
+                    json.dump(self.current_campaign, stream, ensure_ascii=False,
+                              sort_keys=True, indent=2)
+            except (OSError, TypeError) as exc:
+                self.owner.dialogs.showerror("Balance Matrix", str(exc))
 
     def set_baseline(self):
         if self.current is None:
