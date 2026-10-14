@@ -42,7 +42,7 @@ class CinematicStudio4GUITests(unittest.TestCase):
                 studio.vars["target"].set("main")
                 studio.vars["length"].set("4000")
                 studio.create_clip()
-                self.assertEqual(studio.preview_scale.cget("to"), 4000.)
+                self.assertEqual(float(studio.preview_scale.cget("to")), 4000.)
                 studio.vars["eid"].set("walk")
                 studio.vars["kind"].set("actor")
                 studio.vars["start"].set("0")
@@ -84,8 +84,8 @@ class CinematicStudio4GUITests(unittest.TestCase):
                 owner.project.save(owner.project_path, content)
                 project = GameProject.load(owner.project_path, content)
                 self.assertEqual(len(project.cinematics[0]["events"]), 2)
-                self.assertEqual(owner.capture_history.call_count,
-                                 len(studio.undo_stack)+2)  # undo/redo local
+                self.assertEqual(owner.capture_history.call_count, 7)
+                # Undo/redo themselves do not append duplicate history items.
         finally:
             if studio is not None and studio.preview_renderer is not None:
                 studio.preview_renderer.dispose()
