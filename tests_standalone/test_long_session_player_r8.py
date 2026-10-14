@@ -162,6 +162,18 @@ class LongSessionPlayerTests(unittest.TestCase):
             self.assertEqual(ui.store().path.read_bytes(), original)
             self.assertFalse(ui.long_path_for("main", 1).exists())
 
+    def test_orphaned_damaged_evidence_blocks_reuse_of_slot(self):
+        with TemporaryDirectory() as root:
+            ui = self.controller(root)
+            path = ui.long_path_for("relique", 1)
+            path.parent.mkdir(parents=True)
+            evidence = path.with_name(path.name + ".damaged")
+            evidence.write_bytes(b"recover me first")
+            with self.assertRaisesRegex(RuleError, "recovery evidence"):
+                ui.new_long_game("relique", 1)
+            self.assertEqual(evidence.read_bytes(), b"recover me first")
+            self.assertFalse(path.exists())
+
     def test_player_ui_never_restores_or_switches_when_user_cancels(self):
         with TemporaryDirectory() as root:
             ui = self.controller(root)
