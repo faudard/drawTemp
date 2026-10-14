@@ -6,11 +6,13 @@ using the unified, replay-validated session format (never legacy save slots).
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 from .ai import choose_command
 from .game_session import GameSession
 from .model import require
 from .persistence import SessionStore
+from .long_session import LongSessionStore
 
 
 class PlayerController:
@@ -25,6 +27,7 @@ class PlayerController:
         self.campaign_id = None
         self.slot = None
         self.last_load_status = None
+        self.long_mode = False  # Explicit opt-in; never upgrade existing slots.
         # Optional local playtest observer; OFF by default. Never serialized.
         self.playtest = None
 
@@ -33,6 +36,59 @@ class PlayerController:
         require(type(slot) is int and 1 <= slot <= self.project.save_slots, "Invalid slot")
         return (self.profile.with_name(self.profile.stem + "_session_saves")
                 / campaign_id / ("slot_" + str(slot) + ".json"))
+
+    def long_path_for(self, campaign_id, slot):
+        """Separate filename: legacy Player v2 data is never overwritten."""
+        old = self.path_for(campaign_id, slot)
+        return old.with_name(old.stem + ".long" + old.suffix)
+
+    def long_store(self):
+        require(self.campaign_id is not None and self.slot is not None,
+                "No save selected")
+        return LongSessionStore(self.long_path_for(self.campaign_id, self.slot))
+
+    def new_long_game(self, campaign_id, slot, *, seed=1):
+        """Start a new opt-in slot; refuse overwrite of any previous evidence."""
+        candidate = GameSession.new(self.content, self.project, campaign_id,
+                                    seed=seed, rules=self.rules)
+        store = LongSessionStore(self.long_path_for(campaign_id, slot))
+        store.initialize(candidate)
+        self.campaign_id, self.slot, self.session = campaign_id, slot, candidate
+        self.long_mode, self.last_load_status = True, None
+        return candidate
+
+    def migrate_to_long_game(self, campaign_id, slot):
+        """Explicit non-destructive v2/v1 import into an independent slot."""
+        store = LongSessionStore(self.long_path_for(campaign_id, slot))
+        outcome = store.migrate_from(self.path_for(campaign_id, slot),
+                                     self.content, self.project, rules=self.rules)
+        require(outcome.session.campaign_id == campaign_id,
+                "Migration belongs to a different campaign")
+        return outcome
+
+    def inspect_long_game(self, campaign_id, slot):
+        """Read-only verification for an explicit recovery decision."""
+        status = LongSessionStore(self.long_path_for(campaign_id, slot)).load_with_status(
+            self.content, self.project, rules=self.rules)
+        require(status.session.campaign_id == campaign_id,
+                "Save belongs to another campaign")
+        return status
+
+    def restore_long_game(self, campaign_id, slot, *, expected_digest):
+        """Restore a verified backup only after the user's confirmation."""
+        status = self.inspect_long_game(campaign_id, slot)
+        require(status.source == "backup" or status.degraded,
+                "No damaged primary requiring restoration")
+        store = LongSessionStore(self.long_path_for(campaign_id, slot))
+        return store.restore(status, expected_digest=expected_digest)
+
+    def load_long_game(self, campaign_id, slot):
+        status = self.inspect_long_game(campaign_id, slot)
+        require(status.source == "primary" and not status.degraded,
+                "Recovery must be explicitly confirmed before playing")
+        self.campaign_id, self.slot, self.session = campaign_id, slot, status.session
+        self.long_mode, self.last_load_status = True, status
+        return status.session
 
     def store(self):
         require(self.campaign_id is not None and self.slot is not None, "No save selected")
@@ -55,6 +111,7 @@ class PlayerController:
         store.save(candidate)
         self.campaign_id, self.slot, self.session = campaign_id, slot, candidate
         self.last_load_status = None
+        self.long_mode = False
         return candidate
 
     def load_game(self, campaign_id, slot, *, allow_legacy_default_rules=False):
@@ -67,6 +124,7 @@ class PlayerController:
                 "Save belongs to another campaign")
         self.campaign_id, self.slot, self.session = campaign_id, slot, outcome.session
         self.last_load_status = outcome
+        self.long_mode = False
         return outcome.session
 
     def _load_compatible(self, store, *, allow_legacy_default_rules=False):
@@ -96,6 +154,10 @@ class PlayerController:
 
     def save(self):
         require(self.session is not None, "No campaign loaded")
+        if self.long_mode:
+            store = self.long_store()
+            store.compact(self.content, self.project, rules=self.session.rules)
+            return store.store.path
         return self.store().save(self.session)
 
     def _apply(self, action, *args, **kwargs):
@@ -110,8 +172,12 @@ class PlayerController:
             except Exception as exc:
                 recorder.error = str(exc)
         try:
-            result = action(*args, **kwargs)
-            self.save()
+            if self.long_mode:
+                result = self.long_store().perform(
+                    self.session, uuid4().hex, action.__name__, *args, **kwargs).value
+            else:
+                result = action(*args, **kwargs)
+                self.save()
             # Record only *committed* player/AI choices. Recording is an
             # opt-in observability sidecar; exceptions cannot roll back or
             # invalidate a successfully saved canonical GameSession.
@@ -124,8 +190,15 @@ class PlayerController:
                     recorder.error = str(exc)
             return result
         except Exception:
-            self.session = GameSession.from_recording(
-                old, self.content, self.project, rules=self.session.rules)
+            if self.long_mode:
+                # An action may have committed its journal before a later
+                # error. Trust the verified disk state, not a stale in-memory
+                # snapshot; never undo a durable accepted player intent.
+                self.session = self.long_store().load(
+                    self.content, self.project, rules=self.session.rules)
+            else:
+                self.session = GameSession.from_recording(
+                    old, self.content, self.project, rules=self.session.rules)
             raise
 
     def choose_story_option(self, choice_id):
