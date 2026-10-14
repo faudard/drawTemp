@@ -31,7 +31,7 @@ from .player_hud_layout import combat_hud_sections
 
 
 class PlayerApplication:
-    def __init__(self, content_path, project_path=None, profile_path=None):
+    def __init__(self, content_path, project_path=None, profile_path=None, *, chapter_one=False):
         import tkinter as tk
         from tkinter import ttk, messagebox
 
@@ -45,8 +45,15 @@ class PlayerApplication:
         content = Content.from_dict(document, rules=authored_rules_for_document(document))
         project = (GameProject.load(project_path, content) if project_path.is_file()
                    else GameProject.default(content))
+        if chapter_one:
+            from .jeanne_chapter1 import chapter_one_project
+            project = chapter_one_project(content, project)
+        # The opt-in chapter never shares the original prologue's save profile.
+        profile_source = (project_path.with_name("jeanne.chapitre1.game.json")
+                          if chapter_one else project_path)
         profile = (Path(profile_path) if profile_path is not None
-                   else default_profile_path(project_path))
+                   else default_profile_path(profile_source))
+        self.chapter_one = chapter_one
         preferences, self.preferences_error = load_preferences(profile)
         self.keymap = KeyBindings(preferences["keybindings"])
         self.player = PlayerController(content, project, profile)
@@ -275,6 +282,31 @@ class PlayerApplication:
         self._heading(self.project.title, self.project.subtitle)
         panel = self.ttk.LabelFrame(self.view, text="Nouvelle aventure / reprendre", padding=18)
         panel.pack(anchor="center", fill="x", padx=160, pady=30)
+        if self.chapter_one:
+            self.ttk.Label(
+                panel, text="CHAPITRE I  ·  LES CENDRES",
+                font=("TkDefaultFont", 16, "bold")).pack(anchor="w", pady=(0, 10))
+            self.ttk.Label(
+                panel, text="Du camp des réfugiés à Vaucouleurs : recrutez un "
+                            "compagnon, traversez le pont et choisissez entre "
+                            "archives et otages.",
+                wraplength=620, justify="left").pack(anchor="w", pady=(0, 16))
+            slot_row = self.ttk.Frame(panel)
+            slot_row.pack(fill="x", pady=(0, 12))
+            self.ttk.Label(slot_row, text="Emplacement").pack(side="left", padx=(0, 12))
+            self.ttk.Combobox(
+                slot_row, textvariable=self.slot_var, state="readonly",
+                values=[str(i) for i in range(1, self.project.save_slots + 1)],
+                width=8).pack(side="left")
+            self._button(panel, "Commencer le chapitre I", self._new_game).pack(
+                fill="x", pady=4)
+            self._button(panel, "Continuer le chapitre I", self._load_game).pack(
+                fill="x", pady=4)
+            self._button(panel, "Sauvegardes", self.save_manager_screen).pack(
+                fill="x", pady=4)
+            self._button(panel, "Options", self.options_screen).pack(fill="x", pady=4)
+            self._button(panel, "Quitter", self.close).pack(fill="x", pady=4)
+            return
         self.ttk.Label(panel, text="Campagne").grid(row=0, column=0, sticky="w", pady=9)
         self.ttk.Combobox(panel, textvariable=self.campaign_var, state="readonly",
                           values=[c["id"] for c in self.project.campaigns],
@@ -852,6 +884,12 @@ class PlayerApplication:
         self._heading(self.project.campaign(session.campaign_id)["name"],
                       "Or : " + str(session.progress.gold) +
                       "    Missions terminées : " + str(len(session.progress.completed)))
+        if self.chapter_one:
+            chapter_ids = {"a1_01_route", "a1_02_pont", "a1_03_hospice",
+                           "a1_04a_archives", "a1_04b_otages", "a1_05_vaucouleurs"}
+            completed = len(set(session.progress.completed) & chapter_ids)
+            self.ttk.Label(self.view, text=f"CHAPITRE I  ·  {completed}/5 étapes").pack(
+                anchor="w", pady=(0, 10))
         # Visible roster: recruitment and equipment have actual tactical effects.
         if session.progress.heroes:
             roster = self.ttk.LabelFrame(self.view, text="Équipe et progression", padding=8)
@@ -924,8 +962,12 @@ class PlayerApplication:
                 self._button(self.view, "Commandement multi-fronts",
                              lambda: self.front_setup(available)).pack(pady=16)
             if not available:
-                self.ttk.Label(self.view,
-                               text="Campagne terminée : aucun objectif disponible.").pack(pady=20)
+                finished = (self.chapter_one and
+                            session.progress.story_flags.get("acte1_complete"))
+                message = ("Chapitre I terminé — Vaucouleurs. Votre décision "
+                           "est conservée pour la suite." if finished else
+                           "Campagne terminée : aucun objectif disponible.")
+                self.ttk.Label(self.view, text=message).pack(pady=20)
         footer = self.ttk.Frame(self.view)
         footer.pack(side="bottom", fill="x", pady=12)
         self._button(footer, "Inspecter la campagne", self._campaign_flow_inspector).pack(side="left", padx=6)
@@ -2329,5 +2371,6 @@ class PlayerApplication:
         self.root.mainloop()
 
 
-def launch(content_path, project_path=None, profile_path=None):
-    PlayerApplication(content_path, project_path, profile_path).run()
+def launch(content_path, project_path=None, profile_path=None, *, chapter_one=False):
+    PlayerApplication(content_path, project_path, profile_path,
+                      chapter_one=chapter_one).run()
