@@ -59,12 +59,14 @@ class PlayerController:
 
     def migrate_to_long_game(self, campaign_id, slot):
         """Explicit non-destructive v2/v1 import into an independent slot."""
-        store = LongSessionStore(self.long_path_for(campaign_id, slot))
-        outcome = store.migrate_from(self.path_for(campaign_id, slot),
-                                     self.content, self.project, rules=self.rules)
-        require(outcome.session.campaign_id == campaign_id,
+        source = SessionStore(self.path_for(campaign_id, slot))
+        verified = source.load_with_status(self.content, self.project,
+                                           rules=self.rules)
+        require(verified.session.campaign_id == campaign_id,
                 "Migration belongs to a different campaign")
-        return outcome
+        store = LongSessionStore(self.long_path_for(campaign_id, slot))
+        return store.migrate_from(self.path_for(campaign_id, slot),
+                                  self.content, self.project, rules=self.rules)
 
     def inspect_long_game(self, campaign_id, slot):
         """Read-only verification for an explicit recovery decision."""
