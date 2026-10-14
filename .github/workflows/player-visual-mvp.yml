@@ -1,0 +1,39 @@
+name: Jeanne Visual MVP
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/exploration_iso_view.py'
+      - 'sporebound/player_visual_theme.py'
+      - 'sporebound/player_app.py'
+      - 'tests_standalone/test_exploration_iso_view.py'
+      - 'tests_standalone/test_exploration_iso_view_gui.py'
+      - 'tests_standalone/test_player_visual_theme.py'
+      - '.github/workflows/player-visual-mvp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-presentation:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.11']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Headless visual and narrative contracts
+        run: |
+          python -m unittest tests_standalone.test_exploration_iso_view tests_standalone.test_player_visual_theme tests_standalone.test_player_immersive_map tests_standalone.test_jeanne_prologue -v
+      - name: Compile presentation modules
+        run: python -m compileall -q sporebound/exploration_iso_view.py sporebound/player_visual_theme.py sporebound/player_app.py
+      - name: Actual Tk map render and diamond picking
+        if: runner.os == 'Linux'
+        run: xvfb-run -a env SPOREBOUND_GUI_SMOKE=1 python -m unittest tests_standalone.test_exploration_iso_view_gui -v
