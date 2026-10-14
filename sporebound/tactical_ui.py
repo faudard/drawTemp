@@ -16,6 +16,7 @@ def tactical_snapshot(battle, cell=None):
     from .synergies3 import synergy_readiness
     from .spatial3 import positional_preview
     from .tactical_intents import tactical_intents
+    from .tactical_r6 import active_enemy_plan, objective_progress, squad_coordination
 
     if cell is not None:
         require(isinstance(cell, (tuple, list)) and len(cell) == 2
@@ -27,7 +28,10 @@ def tactical_snapshot(battle, cell=None):
             "enhanced": enhanced, "intents": tactical_intents(battle),
             "position": None, "formations": [], "zones": [],
             "bosses": [], "focus": [], "synergies": [],
-            "attack": [], "movement_threats": []}
+            "attack": [], "movement_threats": [],
+            "objective": objective_progress(battle),
+            "coordination": squad_coordination(battle),
+            "enemy_plan": active_enemy_plan(battle)}
     if not enhanced:
         return view
     for unit in sorted(battle.units, key=lambda u: u.id):
