@@ -322,7 +322,8 @@ class StudioPanels:
         mission_form.pack(fill='x',padx=10,pady=5)
         self.mission_name,_=self._field(mission_form,0,'Titre mission')
         self.objective,_=self._field(mission_form,1,'Objectif','eliminate',
-            choices=['eliminate','survive','extract','hold','crown'])
+            choices=['eliminate','survive','extract','hold','crown',
+                      'capture','escort','defend','sabotage','retreat'])
         self.reward,_=self._field(mission_form,2,'Récompense','100')
         self.next_missions,_=self._field(mission_form,3,'Missions suivantes (id,id)')
         ttk.Button(mission_form,text='Appliquer la mission',command=lambda: self._run(

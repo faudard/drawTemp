@@ -12,16 +12,22 @@ def _is_healer(unit):
     return "healer" in unit.tags or "medic" in unit.tags or "squad:medic" in unit.tags
 
 
+def _same_floor(battle, left, right):
+    """Squad actions share a deck; cross-floor shots use explicit level_attack."""
+    return battle.unit_levels.get(left.id, 0) == battle.unit_levels.get(right.id, 0)
+
+
 def _protective_move(battle, actor):
     """Place a frontline actor between an enemy and an exposed support unit."""
     if actor.moved or battle.status_blocks(actor, "move") or "move" not in battle.rules.commands:
         return None
     medics = sorted((u for u in battle.units if u.alive and u.team == actor.team
-                     and u.id != actor.id and
+                     and u.id != actor.id and _same_floor(battle, actor, u) and
                      (_is_healer(u) or
                       (squad_role(actor) in {"vanguard", "pikeman"}
                        and squad_role(u) == "archer"))), key=lambda u: u.id)
-    foes = [u for u in battle.units if u.alive and u.team != actor.team]
+    foes = [u for u in battle.units if u.alive and u.team != actor.team
+            and _same_floor(battle, actor, u)]
     if not medics or not foes:
         return None
     targets = []
@@ -55,7 +61,8 @@ def _healing_command(battle, actor):
     if actor.acted or battle.status_blocks(actor, "act") or "act" not in battle.rules.commands:
         return None
     allies = sorted((u for u in battle.units if u.alive and u.team == actor.team
-                     and u.hp < u.max_hp), key=lambda u: (u.hp / u.max_hp, u.id))
+                     and u.hp < u.max_hp and _same_floor(battle, actor, u)),
+                    key=lambda u: (u.hp / u.max_hp, u.id))
     for target in allies:
         for skill_id in sorted(actor.skills):
             skill = battle._skill(actor, skill_id)
@@ -88,7 +95,8 @@ def squad_focus_preview(battle, actor_id=None):
         return []
     rows = []
     for foe in sorted((u for u in battle.units
-                       if u.alive and u.team != actor.team), key=lambda u: u.id):
+                       if u.alive and u.team != actor.team
+                       and _same_floor(battle, actor, u)), key=lambda u: u.id):
         try:
             forecast = battle.forecast("attack", foe.pos, actor)
         except RuleError:
@@ -101,7 +109,8 @@ def squad_focus_preview(battle, actor_id=None):
         supporters = []
         for ally in sorted(battle.units, key=lambda u: u.id):
             if (not ally.alive or ally.team != actor.team or ally.id == actor.id
-                    or ally.acted or battle.status_blocks(ally, "act")):
+                    or ally.acted or battle.status_blocks(ally, "act")
+                    or not _same_floor(battle, actor, ally)):
                 continue
             basic = battle._basic(ally)
             separation = min(distance(cell, foe.pos)
@@ -255,7 +264,8 @@ def squad_objective_guard_move(battle, actor):
     if (actor.team != "enemy" or actor.moved
             or battle.status_blocks(actor, "move")
             or "move" not in battle.rules.commands
-            or battle.mission.objective not in {"extract", "hold", "crown"}
+            or battle.mission.objective not in {"extract", "hold", "crown",
+                                               "capture", "escort", "retreat"}
             or not battle.mission.goal):
         return None
     goals = tuple(sorted(battle.mission.goal))
@@ -285,6 +295,56 @@ def squad_objective_guard_move(battle, actor):
     return {"kind": "move", "cell": list(min(options)[3])}
 
 
+def squad_terrain_vantage_move(battle, actor):
+    """Acquire a legal ranged firing tile with demonstrable terrain advantage.
+
+    Only moves when no current basic shot exists. Compare reachable tiles by
+    real terrain, LOS, movement threats and hazard exposure; this planner
+    cannot perform attacks, teleport, or reason across different floors.
+    """
+    if (squad_role(actor) != "archer" or actor.weapon != "ranged"
+            or actor.moved or battle.status_blocks(actor, "move")
+            or "move" not in battle.rules.commands
+            or battle.unit_levels.get(actor.id, 0) != 0
+            or battle.engaged_by(actor)):
+        return None
+    opponents = [u for u in battle.units if u.alive and u.team != actor.team
+                 and battle.unit_levels.get(u.id, 0) == 0]
+    if not opponents:
+        return None
+    basic = battle._basic(actor)
+
+    def shot_from(cell):
+        return any(basic.min_range <= distance(cell, enemy.pos) <= basic.range
+                   and (not basic.los or battle.line_of_sight(cell, enemy.pos))
+                   for enemy in opponents)
+
+    if shot_from(actor.pos):
+        return None
+    current = battle.board.tile(actor.pos)
+    options = []
+    for cell, (cost, path) in battle.reachable(actor).items():
+        if cell == actor.pos or not shot_from(cell):
+            continue
+        tile = battle.board.tile(cell)
+        height_gain = tile.height - current.height
+        cover_gain = tile.cover - current.cover
+        if height_gain <= 0 and cover_gain < 20:
+            continue
+        risk = sum(row["amount"] * row["chance"]
+                   for row in battle.movement_threats(actor, path))
+        hazards = sum(battle.board.tile(position).hazard for position in path[1:])
+        if risk + hazards >= max(1, actor.hp / 4):
+            continue
+        # Gain must be worth the path; ties are stable across runs/platforms.
+        score = height_gain * 8 + cover_gain * .12 - cost * .15 - risk - hazards
+        if score > 0:
+            options.append((-score, cost, cell))
+    if not options:
+        return None
+    return {"kind": "move", "cell": list(min(options)[2])}
+
+
 def squad_plan_preview(battle, actor_id):
     """Read-only companion/role diagnostics for UI and tests."""
     actor = battle.unit(actor_id)
@@ -308,6 +368,11 @@ def coordinated_command(battle):
     actor = battle.active
     if actor is None or actor.cast:
         return _choose_tactical_command(battle)
+    # The existing layered planner owns stairs and upper-floor actions.
+    # Ground-only formation, escort and healing policies cannot issue
+    # ordinary Move/Act commands on an authored upper deck.
+    if battle.mission.level_links and battle.unit_levels.get(actor.id, 0) != 0:
+        return _choose_tactical_command(battle)
     if _is_healer(actor):
         healing = _healing_command(battle, actor)
         if healing is not None:
@@ -328,6 +393,9 @@ def coordinated_command(battle):
         approach = squad_archer_cover_move(battle, actor)
         if approach is not None:
             return approach
+        vantage = squad_terrain_vantage_move(battle, actor)
+        if vantage is not None:
+            return vantage
     posture = squad_posture_command(battle, actor)
     if posture is not None:
         return posture

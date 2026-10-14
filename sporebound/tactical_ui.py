@@ -11,11 +11,13 @@ from .model import RuleError, require
 def tactical_snapshot(battle, cell=None):
     """Return a JSON-serializable, deterministic view without changing Battle."""
     from .bosses3 import boss_intent_preview
+    from .elite_boss_r6 import boss_r6_telegraph
     from .coordinated_ai import squad_focus_preview
     from .formations3 import formation_control_map, formation_preview
     from .synergies3 import synergy_readiness
     from .spatial3 import positional_preview
     from .tactical_intents import tactical_intents
+    from .tactical_r6 import active_enemy_plan, objective_progress, squad_coordination
 
     if cell is not None:
         require(isinstance(cell, (tuple, list)) and len(cell) == 2
@@ -27,15 +29,21 @@ def tactical_snapshot(battle, cell=None):
             "enhanced": enhanced, "intents": tactical_intents(battle),
             "position": None, "formations": [], "zones": [],
             "bosses": [], "focus": [], "synergies": [],
-            "attack": [], "movement_threats": []}
+            "attack": [], "movement_threats": [],
+            "objective": objective_progress(battle),
+            "coordination": squad_coordination(battle),
+            "enemy_plan": active_enemy_plan(battle) if enhanced else None}
     if not enhanced:
         return view
     for unit in sorted(battle.units, key=lambda u: u.id):
         if unit.alive and any(tag.startswith("formation:") for tag in unit.tags):
             view["formations"].append(formation_preview(battle, unit.id))
-        if unit.alive and (unit.behavior == "phase_boss"
+        if unit.alive and (unit.behavior in {"phase_boss", "adaptive_boss"}
                            or any(tag.startswith("boss_phase:") for tag in unit.tags)):
-            view["bosses"].append(boss_intent_preview(battle, unit.id))
+            view["bosses"].append(
+                boss_r6_telegraph(battle, unit.id)
+                if unit.behavior == "adaptive_boss"
+                else boss_intent_preview(battle, unit.id))
     for team in ("player", "enemy"):
         view["zones"].extend({"team": team, **row}
                              for row in formation_control_map(battle, team))

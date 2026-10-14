@@ -60,7 +60,12 @@ def authored_rules_for_document(data):
     """
     missions = data.get("missions", []) if isinstance(data, dict) else []
     unlocks = data.get("tactic_unlocks", []) if isinstance(data, dict) else []
-    advanced = any(
+    from .tactical_r6 import ADVANCED_OBJECTIVES
+    r6_objective = any(mission.get("objective") in ADVANCED_OBJECTIVES
+                       or any(unit.get("behavior") == "adaptive_boss"
+                              for unit in mission.get("units", []))
+                       for mission in missions)
+    advanced = r6_objective or any(
         unit.get("behavior") in {"coordinated", "phase_boss"}
         or any(t in {"chain_strike", "trio_burst"} for t in unit.get("tactics", []))
         or any(t in {"medic", "healer", "protector"}
@@ -76,4 +81,8 @@ def authored_rules_for_document(data):
     ) or any(row.get("id") in {"chain_strike", "trio_burst"}
              for row in unlocks)
     from .rules import default_rules
-    return tactical_rpg_rules() if advanced else default_rules()
+    rules = tactical_rpg_rules() if advanced else default_rules()
+    if r6_objective:
+        from .tactical_r6 import tactical_r6_rules
+        rules = tactical_r6_rules()
+    return rules
