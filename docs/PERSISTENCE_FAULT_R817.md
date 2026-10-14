@@ -20,6 +20,7 @@ propre répertoire temporaire et sauvegarde un état initial vérifié.
 
 | Point d'injection | Moment | Résultat autorisé |
 |---|---|---|
+| Temporaire journal | Mort du processus au milieu de `write()`, avant flush/fsync | Fichier primaire intact ; temporaire partiel ignoré |
 | Journal #1 | Avant `os.replace` | L'action n'est pas publiée ; reprise avant action |
 | Journal #1 | Après `os.replace` | L'action est durable et rejouée exactement une fois |
 | Backup | Avant / après remplacement | Journal publié ; action restaurée sans perte |
