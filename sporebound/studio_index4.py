@@ -146,6 +146,17 @@ class StudioIndex:
                     add('cinematic:' + clip['id'],
                         'asset:' + bindings.get(event['cue'], event['cue']),
                         'Piste audio')
+                elif event['kind'] == 'actor':
+                    trigger_kind = clip['trigger']['kind']
+                    target = clip['trigger']['target']
+                    mission_id = (
+                        target if trigger_kind in ('before_mission', 'after_mission')
+                        else target.split('/', 1)[0]
+                        if trigger_kind == 'tactical_event' else '')
+                    if mission_id:
+                        add('cinematic:' + clip['id'],
+                            'map_actor:' + mission_id + '/' + event['actor'],
+                            'Acteur cinématique')
         for asset in self.project.asset_registry().to_dict()['entries']:
             if asset['kind'] == 'animation':
                 for frame in asset['frames']:
