@@ -126,6 +126,9 @@ class ProjectWorkspaceTab:
                    command=lambda: self.owner._run(self.open_selected)).pack(
                        anchor='w', padx=10, pady=6)
 
+        ttk.Button(detail_frame, text='Créer interaction depuis la sélection',
+                   command=lambda: self.owner._run(self.create_contextual_interaction)).pack(
+                       anchor='w', padx=10, pady=3)
         controls = ttk.LabelFrame(detail_frame, text='Création guidée')
         controls.pack(fill='x', padx=10, pady=10)
         ttk.Button(controls, text='Nouvelle carte / mission',
@@ -535,6 +538,24 @@ class ProjectWorkspaceTab:
         self._map_tile_key = ''
         self._explicit_tile = ''
         self.breadcrumb.set('Projet')
+
+    def create_contextual_interaction(self):
+        """Reuse the 3.7.21 event authoring wizard instead of parallel JSON."""
+        node = self._selected_node()
+        if node is None or node.kind != 'map_object':
+            raise RuleError('Sélectionner une porte ou un levier interactif')
+        mid, obj_id = node.id.split('/', 1)
+        mission = next(m for m in self.owner.doc().data['missions']
+                       if m['id'] == mid)
+        obj = next(o for o in mission['objects'] if o['id'] == obj_id)
+        door = (obj['id'] if obj['kind'] == 'door' else
+                obj.get('link') if obj['kind'] == 'switch' else '')
+        if not door:
+            raise RuleError('Choisir une porte ou un levier associé à une porte')
+        if self.owner.mission() != mid:
+            self.owner.select_mission(mid)
+        self.owner.focus_gate_event(door)
+        self._show_tab('Personnages et événements')
 
     def toggle_favorite(self):
         node = self._selected_node()
