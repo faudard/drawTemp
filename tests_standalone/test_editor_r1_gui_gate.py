@@ -114,6 +114,7 @@ class R1StudioGuiGate(unittest.TestCase):
                     self.assertEqual(current(), initial)
                     before_runtime = observed(current(), project)
                     original = deepcopy(current())
+                    snapshots = [deepcopy(original)]
                     for operation in operations:
                         # Simulate authoring from the actual JSON editor and
                         # run the public Apply command (StudioHistory records).
@@ -124,21 +125,26 @@ class R1StudioGuiGate(unittest.TestCase):
                         buttons['Valider et appliquer'].invoke()
                         root.update()
                         self.assertEqual(current(), candidate)
+                        snapshots.append(deepcopy(current()))
 
                     edited = deepcopy(current())
                     self.assertEqual(observed(edited, project),
                                      ((9, 9), 'Éclaireuse R1', 'r1_door_b', 12))
 
-                    for _ in range(4):
+                    for expected in reversed(snapshots[:-1]):
                         buttons['Annuler'].invoke()
                         root.update()
+                        self.assertEqual(current(), expected)
+                        observed(current(), project)
                     self.assertEqual(current(), original)
                     self.assertEqual(observed(current(), project),
                                      before_runtime)
 
-                    for _ in range(4):
+                    for expected in snapshots[1:]:
                         buttons['Rétablir'].invoke()
                         root.update()
+                        self.assertEqual(current(), expected)
+                        observed(current(), project)
                     self.assertEqual(current(), edited)
                     self.assertEqual(observed(current(), project),
                                      ((9, 9), 'Éclaireuse R1', 'r1_door_b', 12))
