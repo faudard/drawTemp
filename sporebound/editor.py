@@ -376,9 +376,9 @@ def launch(path):
     minimap_background = MinimapBackgroundCache()
 
     def guarded(fn):
-        def run(*args):
+        def run(*args, **kwargs):
             try:
-                return fn(*args)
+                return fn(*args, **kwargs)
             except (RuleError, OSError, ValueError, KeyError, StopIteration) as exc:
                 messagebox.showerror('Opération refusée', str(exc))
         return run
