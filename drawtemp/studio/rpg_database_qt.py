@@ -178,7 +178,8 @@ class DatabaseWindow(QMainWindow):
         splitter.addWidget(right)
         splitter.setSizes([225, 330, 765])
         self.statusBar().showMessage("La base utilise Content / GameProject et l'historique R1.")
-        self.tree.setCurrentItem(self.tree.topLevelItem(0))
+        # Canonical Jeanne reference has no archetypes yet: show placed actors first.
+        self.tree.setCurrentItem(self.tree.topLevelItem(1))
 
     def _category_changed(self, item, _old):
         if item is None:
