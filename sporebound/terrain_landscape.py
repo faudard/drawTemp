@@ -90,6 +90,69 @@ def _eligible(old, point, protected):
             old.get('surface', 'grass') not in ('water', 'bridge', 'cobble'))
 
 
+def _components(width, height, original, planned=None):
+    """Traversable components with the same 1-step relief rule for both states."""
+    component = {}
+    index = 0
+    for y in range(height):
+        for x in range(width):
+            start = x, y
+            if start in component:
+                continue
+            def state(p):
+                if planned is not None and p in planned:
+                    surface, level, blocked, _ = planned[p]
+                    return level, blocked
+                old = original.get(p, {})
+                return old.get('height', 0), old.get('blocked', False)
+            level, blocked = state(start)
+            if blocked:
+                continue
+            component[start] = index
+            pending = [start]
+            while pending:
+                cx, cy = pending.pop()
+                level, _ = state((cx, cy))
+                for dx, dy in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+                    q = (cx+dx, cy+dy)
+                    if (q in component or not 0 <= q[0] < width or
+                            not 0 <= q[1] < height):
+                        continue
+                    elevation, barrier = state(q)
+                    if not barrier and abs(elevation-level) <= 1:
+                        component[q] = index
+                        pending.append(q)
+            index += 1
+    return component
+
+
+def _preserve_mission_access(mission, original, result):
+    """Never split important mission anchors which were connected before."""
+    points = [tuple(u['pos']) for u in mission.get('units', ())]
+    points.extend(tuple(o['pos']) for o in mission.get('objects', ()))
+    points.extend(tuple(p) for p in mission.get('goal', ()))
+    points.extend(tuple(p) for zone in mission.get('deployment', ())
+                  for p in zone.get('cells', ()))
+    if mission.get('relic') is not None:
+        points.append(tuple(mission['relic']))
+    if len(points) < 2:
+        return
+    width, height = mission['board']['width'], mission['board']['height']
+    before = _components(width, height, original)
+    after = _components(width, height, original, result)
+    representative = {}
+    for point in points:
+        group = before.get(point)
+        if group is None:
+            continue
+        if group in representative:
+            require(after.get(representative[group]) == after.get(point)
+                    and after.get(point) is not None,
+                    'Landscape disconnects a mission objective or unit')
+        else:
+            representative[group] = point
+
+
 def _landscape(data, mission_id, start, end, *, seed, style, vegetation):
     """Pure planning function; also used to rederive a plan at commit time."""
     require(type(seed) is int and 0 <= seed <= 0x7fffffff,
@@ -196,6 +259,7 @@ def _landscape(data, mission_id, start, end, *, seed, style, vegetation):
                 for point in road), 'Generated route must stay walkable')
     require(all(result[point][0] in ('water', 'bridge')
                 for point in river), 'River must remain continuous')
+    _preserve_mission_access(mission, original, result)
     changes = []
     for x, y in cells:  # row-major
         point = x, y
