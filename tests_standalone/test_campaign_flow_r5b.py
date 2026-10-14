@@ -194,6 +194,91 @@ class CampaignFlowR5BTests(unittest.TestCase):
         StudioPanels.start_game(stub)
         self.assertEqual(stub.started, ["garden"])
 
+    def test_exported_three_mission_flow_runs_without_studio_with_real_replays(self):
+        from examples.reliability_gate import fixture
+
+        content, project = fixture()
+        project.campaign_flow = {
+            "gates": {
+                "walls": {"flag": "fortification_gate", "eq": "open"},
+                "throne": {"all": [
+                    {"completed_mission": "walls"},
+                    {"flag": "supplies_player", "gte": 2},
+                ]},
+            },
+            "outcomes": {
+                "gate": {"victory": [
+                    {"kind": "set_flag", "flag": "fortification_gate", "value": "open"},
+                    {"kind": "add_flag", "flag": "supplies_player", "amount": 2},
+                    {"kind": "wound", "hero": "captain", "wound": "arm_injury"},
+                ]},
+                "walls": {"victory": [
+                    {"kind": "heal_wound", "hero": "captain",
+                     "wound": "arm_injury"},
+                ]},
+            },
+            "endings": {
+                "mercy": {"flag": "ending", "eq": "mercy"},
+            },
+        }
+        project.validate(content)
+        with TemporaryDirectory() as dirname:
+            base = Path(dirname)
+            archive = export_game(content, project, base, base / "game.zip")
+            root = base / "isolated"
+            with ZipFile(archive) as bundle:
+                self.assertIn("game/campaign_qa.json", bundle.namelist())
+                bundle.extractall(root)
+            # Use the actual shipped source package, game manifest, and replay
+            # checkpoints. There is no Studio import in the isolated process.
+            run = """
+from pathlib import Path
+from sporebound.ai import choose_command
+from sporebound.game_project import GameProject
+from sporebound.game_session import GameSession
+from sporebound.model import Content
+from sporebound.persistence import SessionStore
+
+content = Content.load('game/content.json')
+project = GameProject.load('game/project.game.json', content)
+session = GameSession.new(content, project, 'main', seed=7)
+store = SessionStore(Path('session.json'))
+assert session.active_scene()['id'] == 'briefing'
+session.choose_story_option('assault')
+assert session.available_missions() == ['gate']
+for mission, expected_available in [
+    ('gate', ['walls']),
+    ('walls', ['throne']),
+    ('throne', []),
+]:
+    session.start_mission(mission)
+    for attempt in range(200):
+        if session.active_battle.result is not None:
+            break
+        session.execute(choose_command(session.active_battle))
+        if attempt % 7 == 0:
+            saved = session.recording()
+            store.save(session)
+            session = store.load(content, project)
+            assert session.recording() == saved
+    assert session.active_battle.result == 'victory', mission
+    store.save(session)
+    session = store.load(content, project)
+    session.return_to_campaign()
+    assert session.available_missions() == expected_available, mission
+assert session.progress.flow_ledger == ['gate:victory', 'walls:victory']
+assert not session.progress.heroes['captain'].wounds
+session.choose_story_option('spare')
+report = session.campaign_inspector()
+assert 'mercy' in report['endings']
+assert report['missions']['completed'] == ['gate','walls','throne']
+store.save(session)
+assert store.load(content, project).recording() == session.recording()
+"""
+            result = subprocess.run([sys.executable, "-c", run], cwd=root,
+                                    capture_output=True, text=True, timeout=90)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_portable_export_contains_verified_qa_and_playable_runtime(self):
         report = audit_campaign(self.content, self.project, "main")
         self.assertEqual(report["errors"], [])
