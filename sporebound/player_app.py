@@ -149,13 +149,13 @@ class PlayerApplication:
         self._explore_scene_id = None
         self._audible_scene = None
         self._closing = False
+        self._pause_dialog = None
         self.root.protocol("WM_DELETE_WINDOW", self.close)
-        self.root.bind(
-            "<Escape>",
-            lambda event: (self._title_menu._close_overlay()
-                           if getattr(self, "_title_menu", None) is not None
-                           and self._title_menu.overlay is not None
-                           else self.root.attributes("-fullscreen", False)))
+        self.root.bind("<Escape>", self._handle_escape)
+        self.root.bind("<F5>", lambda event: self._game_shortcut(self._quick_save))
+        self.root.bind("<F9>", lambda event: self._game_shortcut(self._quick_load))
+        self.root.bind("<F3>", lambda event: self._game_shortcut(
+            self._campaign_flow_inspector, campaign_only=True))
         self.title_screen()
 
     def _style(self):
@@ -182,6 +182,7 @@ class PlayerApplication:
 
 
     def _clear(self):
+        self._close_pause()
         self.presentation.transition(self.presentation.screen)
         if self.cinematic is not None:
             self.cinematic.close()
@@ -208,7 +209,7 @@ class PlayerApplication:
         self._preview_hover = None
         self._preview_paint_key = None
         self._motion_frame = None
-        for key in ("<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q", "e"):
+        for key in ("<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q", "e", "r", "<space>"):
             self.root.unbind(key)
         if self.renderer:
             self.renderer.dispose()
@@ -250,6 +251,103 @@ class PlayerApplication:
                 IndexError, StopIteration) as exc:
             self.messagebox.showerror("Action refusée", str(exc))
             return None
+
+    def _game_shortcut(self, action, *, campaign_only=False):
+        """Route player shortcuts only while playing, never in title/options."""
+        if self.player.session is None or self.presentation.screen not in (
+                ("campaign",) if campaign_only else ("campaign", "world", "battle")):
+            return
+        self._safe(action)
+        return "break"
+
+    def _handle_escape(self, event=None):
+        menu = getattr(self, "_title_menu", None)
+        if menu is not None and menu.overlay is not None:
+            menu._close_overlay()
+            return "break"
+        if self.player.session is not None and self.presentation.screen in (
+                "campaign", "world", "battle"):
+            # The tactical Canvas uses Escape to cancel its own selection.
+            if (self.presentation.screen == "battle" and self.canvas is not None
+                    and event is not None and event.widget is self.canvas
+                    and self.keymap.get("cancel") == "<Escape>"):
+                return
+            self._pause_menu()
+            return "break"
+        if self.presentation.screen == "title":
+            self.root.attributes("-fullscreen", False)
+        return "break"
+
+    def _close_pause(self):
+        dialog = getattr(self, "_pause_dialog", None)
+        self._pause_dialog = None
+        if dialog is not None and dialog.winfo_exists():
+            dialog.grab_release()
+            dialog.destroy()
+        if self.canvas is not None and self.canvas.winfo_exists():
+            self.canvas.focus_set()
+
+    def _pause_menu(self):
+        if self._pause_dialog is not None:
+            self._close_pause()
+            return
+        dialog = self.tk.Toplevel(self.root)
+        self._pause_dialog = dialog
+        dialog.title("Pause")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+        dialog.protocol("WM_DELETE_WINDOW", self._close_pause)
+        dialog.bind("<Escape>", lambda _event: self._close_pause())
+        panel = self.ttk.Frame(dialog, padding=22)
+        panel.pack(fill="both", expand=True)
+        self.ttk.Label(panel, text="PAUSE",
+                       font=("TkDefaultFont", 19, "bold")).pack(pady=(0, 10))
+        self.ttk.Label(panel, text="Échap : reprendre   ·   F5 : sauvegarder"
+                       "   ·   F9 : charger").pack(pady=(0, 12))
+
+        def go(action):
+            self._close_pause()
+            self._safe(action)
+
+        resume = self._button(panel, "Reprendre", self._close_pause)
+        resume.pack(fill="x", pady=4)
+        self._button(panel, "Sauvegarder (F5)",
+                     lambda: go(self._quick_save)).pack(fill="x", pady=4)
+        self._button(panel, "Charger (F9)",
+                     lambda: go(self._quick_load)).pack(fill="x", pady=4)
+        self._button(panel, "Gestion des sauvegardes",
+                     lambda: go(self.save_manager_screen)).pack(fill="x", pady=4)
+        self.ttk.Checkbutton(
+            panel, text="Vue isométrique 2.5D", variable=self.iso_view_var,
+            command=lambda: go(self.show)).pack(anchor="w", pady=7)
+        self._button(panel, "Options",
+                     lambda: go(lambda: self.options_screen(
+                         return_to_game=True))).pack(fill="x", pady=4)
+        self._button(panel, "Menu principal",
+                     lambda: go(self.title_screen)).pack(fill="x", pady=4)
+        dialog.grab_set()
+        resume.focus_set()
+
+    def _quick_save(self):
+        """Save the current slot using the existing validated persistence."""
+        self.player.save()
+        if (self.presentation.screen == "campaign"
+                and self.player.session.active_scene() is not None
+                and self.player.session.exploration_state() is not None):
+            self._explore_feedback = "Progression sauvegardée (F5)."
+            self.show()
+
+    def _quick_load(self):
+        """Reload only the active slot, with explicit confirmation."""
+        if not self.messagebox.askyesno(
+                "Charger la partie",
+                "Recharger la dernière sauvegarde de cet emplacement ? "
+                "La progression non enregistrée sera perdue."):
+            return
+        self.campaign_var.set(self.player.campaign_id)
+        self.slot_var.set(str(self.player.slot))
+        self.long_save_var.set(self.player.long_mode)
+        self._load_game()
 
     def _change(self, action):
         action()
@@ -677,7 +775,7 @@ class PlayerApplication:
             self.messagebox.showinfo(
                 "Playtest", "Rapport exporté localement. Aucune donnée envoyée.")
 
-    def options_screen(self):
+    def options_screen(self, *, return_to_game=False):
         self._clear()
         self.presentation.transition("options")
         self._heading("Options")
@@ -750,9 +848,10 @@ class PlayerApplication:
             self.audio.effects_volume = effects.get() / 100
             self.audio.music_volume = music.get() / 100
             self.root.attributes("-fullscreen", full.get())
-            self.title_screen()
+            self.show() if return_to_game else self.title_screen()
         self._button(self.view, "Appliquer", apply).pack(anchor="w", pady=12)
-        self._button(self.view, "Retour", self.title_screen).pack(anchor="w")
+        self._button(self.view, "Retour",
+                     self.show if return_to_game else self.title_screen).pack(anchor="w")
 
     def show(self):
         session = self.player.session
@@ -825,6 +924,13 @@ class PlayerApplication:
         session = self.player.session
         self._clear()
         self.presentation.transition("campaign")
+        scene = session.active_scene()
+        stage = session.exploration_state() if scene else None
+        if stage is not None and not stage["completed"]:
+            # Exploration is a game viewport, not a Studio inspection form.
+            self.view.configure(padding=0)
+            self._exploration_screen(scene, stage)
+            return
         self._heading(self.project.campaign(session.campaign_id)["name"],
                       "Or : " + str(session.progress.gold) +
                       "    Missions terminées : " + str(len(session.progress.completed)))
@@ -848,17 +954,12 @@ class PlayerApplication:
             if bonds:
                 self.ttk.Label(roster, text="Relations : " +
                     ", ".join(f"{name} {value}" for name, value in bonds)).pack(anchor="w")
-        scene = session.active_scene()
         if scene:
             self.audio.music_for(f'music_scene_{scene["id"]}', "campaign")
             if self._audible_scene != scene["id"]:
                 self.audio.cue(f'scene_enter_{scene["id"]}')
                 self._audible_scene = scene["id"]
-            stage = session.exploration_state()
-            if stage is not None and not stage["completed"]:
-                self._exploration_screen(scene, stage)
-            else:
-                self._narrative_scene(scene)
+            self._narrative_scene(scene)
         else:
             self._audible_scene = None
             self.audio.music_for("campaign")
@@ -912,12 +1013,6 @@ class PlayerApplication:
                            "est conservée pour la suite." if finished else
                            "Campagne terminée : aucun objectif disponible.")
                 self.ttk.Label(self.view, text=message).pack(pady=20)
-        footer = self.ttk.Frame(self.view)
-        footer.pack(side="bottom", fill="x", pady=12)
-        self._button(footer, "Inspecter la campagne", self._campaign_flow_inspector).pack(side="left", padx=6)
-        self._button(footer, "Sauvegardes", self.save_manager_screen).pack(side="left", padx=6)
-        self._button(footer, "Sauvegarder", self.player.save).pack(side="left", padx=6)
-        self._button(footer, "Menu principal", self.title_screen).pack(side="left", padx=6)
 
     def _campaign_flow_inspector(self):
         """Read-only campaign state panel, sourced from the live session."""
@@ -1069,26 +1164,72 @@ class PlayerApplication:
         self._change(apply)
 
     def _exploration_screen(self, scene, stage):
+        """Fullscreen exploration; only contextual instructions overlay the map."""
         if self._explore_scene_id != scene["id"]:
             self._explore_feedback = ""
             self._explore_scene_id = scene["id"]
-        subtitle = ("Le village brûle. Chaque déplacement compte : secourez les habitants !"
-                    if stage["theme"] == "village" else
-                    "Explorez les champs avant l'appel des voix.")
-        self._heading(stage["title"], subtitle)
-        area = self.ttk.Frame(self.view)
-        area.pack(fill="both", expand=True)
-        board = self.tk.Canvas(area, width=690, height=495,
-                               highlightthickness=0, background="#314936")
-        board.pack(side="left", padx=8, pady=6)
-        iso_scene = None
-        if self.iso_view_var.get():
-            iso_scene = IsoExplorationCanvas(board)
-            iso_scene.draw(stage)
-            # Preserve the cached Tk PhotoImages for the lifetime of the canvas.
-            board.iso_scene = iso_scene
-        else:
-            draw_exploration(board, stage)
+        self.presentation.transition("campaign")
+        board = self.tk.Canvas(self.view, highlightthickness=0,
+                               background="#22372f", takefocus=1)
+        board.pack(fill="both", expand=True)
+        self.canvas = board
+        iso_scene = (IsoExplorationCanvas(board, adaptive=True)
+                     if self.iso_view_var.get() else None)
+        if iso_scene is not None:
+            board.iso_scene = iso_scene  # Keep PhotoImages alive.
+        px, py = stage["position"]
+        nearest = [point for point in stage["interactions"]
+                   if abs(point["pos"][0] - px) + abs(point["pos"][1] - py) <= 1]
+        nearby_actors = [actor for actor in stage.get("actors", ())
+                         if actor["status"] != "lost"
+                         and abs(actor["pos"][0] - px) +
+                         abs(actor["pos"][1] - py) <= 1]
+        rescue = next((actor for actor in nearby_actors
+                       if actor["kind"] == "civilian"
+                       and actor["status"] == "active"), None)
+
+        def repaint(width, height):
+            if width < 2 or height < 2:
+                return
+            board.delete("all")
+            if iso_scene is not None:
+                iso_scene.viewport = (width, height)
+                iso_scene.draw(stage)
+            else:
+                draw_exploration(board, stage)
+            # Compact in-world overlay, not a permanent right-side inspector.
+            board.create_rectangle(12, 12, min(width - 12, 480), 88,
+                                   fill="#152822", outline="#476353",
+                                   tags=("explore_hud",))
+            board.create_text(26, 24, anchor="nw", text=stage["title"],
+                              width=max(120, min(width - 60, 420)),
+                              fill="#fff0cf",
+                              font=("TkDefaultFont", 13, "bold"),
+                              tags=("explore_hud",))
+            controls = "Flèches/ZQSD : marcher   ·   Échap : pause"
+            board.create_text(26, 66, anchor="nw", text=controls,
+                              fill="#d4e1d8", font=("TkDefaultFont", 9),
+                              tags=("explore_hud",))
+            prompts = []
+            if nearby_actors:
+                prompts.append("E : parler à " + nearby_actors[0]["name"])
+            elif nearest:
+                prompts.append("E : examiner " + nearest[0]["title"])
+            if rescue is not None:
+                prompts.append("R : secourir " + rescue["name"])
+            if stage.get("actors"):
+                prompts.append("Espace : attendre")
+            message = self._explore_feedback or "   ·   ".join(prompts)
+            if message:
+                bottom = max(110, height - 65)
+                board.create_rectangle(12, bottom - 8, width - 12,
+                                       bottom + 40, fill="#152822",
+                                       outline="#476353", tags=("explore_hud",))
+                board.create_text(26, bottom, anchor="nw", text=message,
+                                  width=max(100, width - 64), fill="#fff0cf",
+                                  font=("TkDefaultFont", 11),
+                                  tags=("explore_hud",))
+
         def click(event):
             if iso_scene is not None:
                 cell = iso_scene.hit_test(event.x, event.y)
@@ -1099,58 +1240,11 @@ class PlayerApplication:
                 x, y = int((event.x - 42) // 58), int((event.y - 25) // 58)
                 if not (0 <= x < stage["width"] and 0 <= y < stage["height"]):
                     return
-            px, py = stage["position"]
             if abs(x - px) + abs(y - py) == 1:
                 self._safe(lambda: self._exploration_step(x - px, y - py))
+
+        board.bind("<Configure>", lambda event: repaint(event.width, event.height))
         board.bind("<Button-1>", click)
-        sidebar = self.ttk.Frame(area, padding=10)
-        sidebar.pack(side="left", fill="both", expand=True)
-        self.ttk.Checkbutton(
-            sidebar, text="Vue isométrique 2.5D", variable=self.iso_view_var,
-            command=self.show).pack(anchor="w", pady=(0, 8))
-        self.ttk.Label(sidebar, text="Déplacement : flèches / ZQSD (WASD)",
-                       wraplength=310).pack(anchor="w", pady=(4, 8))
-        self.ttk.Label(sidebar, text="Cliquer une case voisine pour marcher.",
-                       wraplength=310).pack(anchor="w", pady=(0, 5))
-        if stage.get("actors"):
-            self.ttk.Label(sidebar, text="Temps écoulé : " + str(stage["tick"]) +
-                           " déplacements", wraplength=310).pack(anchor="w", pady=3)
-            self._button(sidebar, "Attendre un déplacement",
-                         self._exploration_wait).pack(anchor="w", pady=(2, 8))
-        px, py = stage["position"]
-        nearest = []
-        for point in stage["interactions"]:
-            distance = abs(point["pos"][0] - px) + abs(point["pos"][1] - py)
-            info = (" ✓" if point["visited"] else "")
-            self.ttk.Label(sidebar, text=point["title"] + info,
-                           wraplength=270).pack(anchor="w", pady=(3, 0))
-            if distance <= 1:
-                nearest.append(point["id"])
-                self._button(sidebar, "Examiner : " + point["title"],
-                             lambda pid=point["id"]: self._exploration_interact(pid)).pack(
-                                 anchor="w", fill="x", pady=(1, 5))
-        nearest_actor = []
-        for actor in stage.get("actors", []):
-            description = actor["name"] + " — " + (
-                "sauvé" if actor["status"] == "rescued" else
-                "trop tard" if actor["status"] == "lost" else
-                "à secourir (" + str(max(0, actor["deadline"] - stage["tick"])) +
-                " pas)" if actor["kind"] == "civilian" else "témoin")
-            self.ttk.Label(sidebar, text=description,
-                           wraplength=310).pack(anchor="w", pady=(3, 0))
-            distance = abs(actor["pos"][0] - px) + abs(actor["pos"][1] - py)
-            if distance <= 1 and actor["status"] != "lost":
-                nearest_actor.append(actor["id"])
-                self._button(sidebar, "Parler à " + actor["name"],
-                             lambda aid=actor["id"]: self._exploration_actor(
-                                 aid, "talk")).pack(anchor="w", fill="x", pady=(1, 2))
-                if actor["kind"] == "civilian" and actor["status"] == "active":
-                    self._button(sidebar, "Secourir " + actor["name"],
-                                 lambda aid=actor["id"]: self._exploration_actor(
-                                     aid, "rescue")).pack(anchor="w", fill="x", pady=(1, 4))
-        self.ttk.Label(sidebar, text=self._explore_feedback or
-                       "Avancez vers un point d'intérêt ou un habitant.",
-                       wraplength=300).pack(anchor="w", pady=9)
         moves = {"<Up>": (0, -1), "<Down>": (0, 1),
                  "<Left>": (-1, 0), "<Right>": (1, 0),
                  "w": (0, -1), "z": (0, -1), "a": (-1, 0),
@@ -1158,12 +1252,19 @@ class PlayerApplication:
         for key, delta in moves.items():
             self.root.bind(key, lambda event, vector=delta:
                            self._safe(lambda: self._exploration_step(*vector)))
-        if nearest_actor:
+        if nearby_actors:
             self.root.bind("e", lambda event: self._safe(
-                lambda: self._exploration_actor(nearest_actor[0], "talk")))
+                lambda: self._exploration_actor(nearby_actors[0]["id"], "talk")))
         elif nearest:
             self.root.bind("e", lambda event: self._safe(
-                lambda: self._exploration_interact(nearest[0])))
+                lambda: self._exploration_interact(nearest[0]["id"])))
+        if rescue is not None:
+            self.root.bind("r", lambda event: self._safe(
+                lambda: self._exploration_actor(rescue["id"], "rescue")))
+        if stage.get("actors"):
+            self.root.bind("<space>", lambda event: self._safe(
+                self._exploration_wait))
+        board.after_idle(board.focus_set)
 
     def _narrative_scene(self, scene, *, choices=None, on_choice=None):
         panel = self.ttk.LabelFrame(self.view, text=scene["title"], padding=20)
