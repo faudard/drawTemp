@@ -18,13 +18,43 @@ def _asset_uri(registry, root, kind, slot):
     return ""
 
 
+def _animation_uri(registry, root, slot, elapsed_ms):
+    """Select a real atlas frame from the canonical animation registry."""
+    if registry is None or root is None or not slot:
+        return ""
+    try:
+        spec = registry.binding("animation", slot)
+        if spec is None:
+            return ""
+        frames = spec["frames"]
+        total = sum(frame["duration_ms"] for frame in frames)
+        elapsed = max(0, int(elapsed_ms))
+        elapsed = elapsed % total if spec["loop"] else min(elapsed, total - 1)
+        for frame in frames:
+            if elapsed < frame["duration_ms"]:
+                return Path(registry.resolve(frame["sprite"], root)).as_uri()
+            elapsed -= frame["duration_ms"]
+    except (RuleError, OSError, ValueError):
+        pass
+    return ""
+
+
 def frame_payload(clip, time_ms, *, registry=None, asset_root=None):
     """Studio and Player use this exact projection; only renderer owns pixels."""
     frame = frame_at(clip, time_ms)
     actors = []
+    actor_events = sorted((e for e in clip["events"] if e["kind"] == "actor"
+                           and e["start_ms"] <= frame.time_ms),
+                          key=lambda event: event["start_ms"])
     for actor, (x, y) in frame.actors:
-        actors.append({"name": actor, "x": x, "y": y,
-                       "image": _asset_uri(registry, asset_root, "sprite", actor)})
+        track = next((e for e in reversed(actor_events) if e["actor"] == actor), {})
+        pose = track.get("pose", "")
+        image = (_animation_uri(registry, asset_root, track.get("animation", ""),
+                                frame.time_ms - track.get("start_ms", 0))
+                 or (_asset_uri(registry, asset_root, "sprite", actor + "_" + pose)
+                     if pose else "")
+                 or _asset_uri(registry, asset_root, "sprite", actor))
+        actors.append({"name": actor, "x": x, "y": y, "image": image})
     detail = frame.dialogue_presentation
     portrait = (detail.portrait if detail else "") if frame.dialogue else ""
     expression = detail.expression if detail else "neutral"
