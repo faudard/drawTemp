@@ -3931,6 +3931,10 @@ def launch(path):
                 'outer_right': work.sashpos(1),
                 'vertical': canvas_region.sashpos(0),
                 'tab': notebook.tab(notebook.select(), 'text'),
+                'favorites': sorted(studio.workspace.explorer.favorites),
+                'recents': studio.workspace.explorer.recents,
+                'family_filter': studio.workspace.family_filter.get(),
+                'scope_filter': studio.workspace.scope_filter.get(),
             })
         except (OSError, ValueError, tk.TclError):
             # UI preferences must never prevent authoring or saving gameplay.
@@ -3938,6 +3942,10 @@ def launch(path):
 
     def restore_layout():
         values = layout_store().load()
+        studio.workspace.explorer.favorites = set(values.get('favorites', ()))
+        studio.workspace.explorer.recents = list(values.get('recents', ()))
+        studio.workspace.family_filter.set(values.get('family_filter', 'all'))
+        studio.workspace.scope_filter.set(values.get('scope_filter', 'all'))
         try:
             if 'outer_left' in values and values['outer_left'] < work.winfo_width():
                 work.sashpos(0, values['outer_left'])
