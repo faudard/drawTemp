@@ -59,7 +59,7 @@ class WorkspaceNavigationGuiTests(TestCase):
                 tree.selection_set('map_object:garden/switch')
                 tree.event_generate('<<TreeviewSelect>>')
                 root.update()
-                self.assertIn('switch', tree.selection())
+                self.assertEqual(tree.selection(), ('map_object:garden/switch',))
                 previous.invoke()
                 root.update()
                 self.assertIn('map_actor:garden/ziggy', tree.selection())
