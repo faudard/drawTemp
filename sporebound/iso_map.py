@@ -19,11 +19,7 @@ SURFACES = frozenset({'grass', 'dirt', 'stone', 'cobble', 'sand',
 FEATURES = frozenset({'', 'tree', 'bush', 'boulder', 'ruin', 'crate',
                       'lantern', 'stairs', 'stone_wall',
                       'arch', 'fence', 'reeds', 'pillar'})
-SURFACE_COLORS = {
-    'grass': '#9aa66c', 'dirt': '#c6a875', 'stone': '#aca69a',
-    'cobble': '#c6b9a0', 'sand': '#dec897', 'rock': '#8e978d',
-    'water': '#4d92ac', 'bridge': '#c5b496',
-}
+SURFACE_COLORS = {**LAND_COLORS, 'water': '#4d92ac', 'bridge': '#c5b496'}
 
 
 
