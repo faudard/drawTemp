@@ -142,7 +142,8 @@ class RevisionLeaseTests(unittest.TestCase):
         restored, _ = history.undo()
         self.doc.restore_snapshot(restored)
         self.assertEqual(self.doc.data, baseline)
-        with self.assertRaisesRegex(RuleError, 'revision'):
+        # Either revision lease may reject first; both are correct stale gates.
+        with self.assertRaisesRegex(RuleError, 'revision|context changed'):
             self.context.apply(pending)
 
     def test_project_only_history_revokes_content_preview(self):
