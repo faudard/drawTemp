@@ -237,12 +237,15 @@ class CinematicStudio:
         self.timeline.bind("<Escape>", lambda _: self.cancel_drag())
         self._bind_editor_shortcuts(self.events)
         self._bind_editor_shortcuts(self.timeline)
+        self.events.bind("<Escape>",
+                         lambda _: self._keyboard_action(self.clear_selection))
 
     def _bind_editor_shortcuts(self, widget):
         """Scope shortcuts to timeline/list; never steal Ctrl+C from text inputs."""
         actions = (
             ("c", self.copy_selected), ("v", self.paste_selected),
             ("x", self.cut_selected), ("z", self.undo), ("y", self.redo),
+            ("a", self.select_all_events),
         )
         for modifier in ("Control", "Command"):
             for key, action in actions:
@@ -278,6 +281,16 @@ class CinematicStudio:
         self.event_id = ids[-1] if ids else ""
         self.selected_key_ms = None
         self.refresh()
+
+    def clear_selection(self):
+        self._selection_after_edit(())
+
+    def select_all_events(self):
+        ids = tuple(event["id"] for event in sorted(
+            self._clip()["events"], key=lambda e: (e["start_ms"], e["id"])))
+        if ids:
+            self._selection_after_edit(ids)
+            self.qa_status.set(f"{len(ids)} événement(s) sélectionnés.")
 
     def copy_selected(self):
         self.clipboard = copy_events(self._clip(), self._selected_ids())
