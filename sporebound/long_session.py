@@ -9,7 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import re
+from functools import wraps
 
+from .session_lock import session_writer_lock
 from .game_session import GameSession, digest
 from .model import RuleError, require
 from .persistence import SessionStore
@@ -19,7 +21,7 @@ _SHA = re.compile(r"^[0-9a-f]{64}$")
 # Only canonical GameSession commands may enter the replay log. Never eval
 # untrusted method names or arbitrary object properties.
 OPERATIONS = frozenset({
-    "choose_story_option", "choose_tactical_story_option",
+    "choose_story_option", "choose_tactical_story_option", "start_configured_siege",
     "explore_move", "explore_interact", "explore_wait", "explore_actor",
     "world_destination", "world_advance", "start_mission", "start_fronts",
     "execute", "switch_front", "advance_fronts", "set_doctrine",
@@ -28,6 +30,15 @@ OPERATIONS = frozenset({
     "escort_convoy", "rescue_convoy", "ai_turn", "return_to_campaign",
     "abandon_encounter",
 })
+
+
+def exclusive_write(method):
+    """Serialize long-session mutations across independent writers."""
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with session_writer_lock(self.store.path):
+            return method(self, *args, **kwargs)
+    return guarded
 
 
 @dataclass(frozen=True)
@@ -156,6 +167,7 @@ class LongSessionStore:
         require(verified.recording() == record, "Long-session replay diverged")
         return verified
 
+    @exclusive_write
     def initialize(self, session):
         require(isinstance(session, GameSession), "Expected GameSession")
         require(not any(path.exists() for path in
@@ -231,6 +243,7 @@ class LongSessionStore:
                 return self._empty(current_digest, dict.fromkeys(receipts))
         return journal
 
+    @exclusive_write
     def perform(self, session, request_id, operation, *args, **kwargs):
         """Execute once, durably journal, then opportunistically compact.
 
@@ -312,6 +325,7 @@ class LongSessionStore:
         # will recognize the stale journal, without duplicating any operation.
         self._publish(self._empty(record["digest"], receipts))
 
+    @exclusive_write
     def compact(self, content, project, *, rules=None):
         status = self.load_with_status(content, project, rules=rules)
         require(not status.degraded, "Recover the damaged checkpoint before compacting")
@@ -331,6 +345,7 @@ class LongSessionStore:
                 outcome.session.recording(), "Migration verification failed")
         return outcome
 
+    @exclusive_write
     def restore(self, status, *, expected_digest):
         """Explicit restoration; preserve the damaged primary as .damaged.
 
