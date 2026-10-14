@@ -61,6 +61,8 @@ class StudioPanels:
         self.battle_lab = BattleLabStudio(self, notebook)
         from .studio_balance_matrix import BalanceMatrixStudio
         self.balance_matrix = BalanceMatrixStudio(self, notebook)
+        from .studio_battle_visual import VisualBattleLabStudio
+        self.visual_battle_lab = VisualBattleLabStudio(self, notebook)
         self._last_mission_signature=None
         self._deferred_map_refresh = False
         self.reload_project()

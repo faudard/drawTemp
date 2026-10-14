@@ -94,6 +94,18 @@ CT/PV/positions et vérifier les anomalies signalées sans modifier la mission.
 En CLI : `python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 500 --report trace.json`.
 Voir [Combat Diagnostics 3.8.1](docs/BATTLE_DIAGNOSTICS_381.md).
 
+## Visual Battle Lab 3.8.3 — analyse graphique et replay CT
+
+Un onglet **Visual Battle Lab** transforme les mesures 3.8 et 3.8.2 en
+graphiques : répartition des issues, CT/commandes par seed, dégâts, soins,
+réactions et survie par classe. Depuis Battle Lab ou Balance Matrix,
+sélectionner un résultat puis **Visualiser** ; les seeds problématiques
+peuvent être rejouées avec la chronologie CT et le lecteur 3.8.1 existant.
+Les replays vérifient le digest d'origine et ne modifient aucun document
+d'authoring.
+
+[Documentation Visual Battle Lab 3.8.3](docs/VISUAL_BATTLE_LAB_383.md).
+
 ## Balance Matrix 3.8.2 — comparer missions et variantes tactiques
 
 Le Studio propose un onglet **Balance Matrix** accessible depuis l'Espace
