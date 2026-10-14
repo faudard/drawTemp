@@ -106,6 +106,18 @@ def main(argv=None):
             self.invoke(self.controller.command, kind)
 
         @Slot(str)
+        def useSkill(self, skill):
+            self.invoke(self.controller.use_skill, skill)
+
+        @Slot(str)
+        def useItem(self, item):
+            self.invoke(self.controller.use_item, item)
+
+        @Slot(str)
+        def interactObject(self, object_id):
+            self.invoke(self.controller.interact_object, object_id)
+
+        @Slot(str)
         def preview(self, kind):
             self.invoke(self.controller.preview, kind)
 
