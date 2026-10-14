@@ -33,6 +33,7 @@ def main(argv=None):
             cmd.add_argument("--directions", nargs="+",
                              default=("south", "east", "north", "west"))
             cmd.add_argument("--footprint", nargs=2, type=int, default=(1, 1))
+            cmd.add_argument("--bind-prefix", default=None)
             cmd.add_argument("--frame-ms", type=int, default=120)
         if name == "import-strip":
             cmd.add_argument("--frames", type=int, required=True)
@@ -58,7 +59,7 @@ def main(argv=None):
             DirectionalLayout(
                 tuple(args.frame_size), rows, tuple(args.directions),
                 tuple(args.pivot), tuple(args.footprint), args.frame_ms),
-            license_id=args.license)
+            license_id=args.license, binding_prefix=args.bind_prefix)
     else:
         plan = plan_strip_import(
             registry, args.source, args.id,

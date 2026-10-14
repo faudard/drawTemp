@@ -218,12 +218,14 @@ class R4AtlasTests(unittest.TestCase):
         original = project_path.read_bytes()
         plan = plan_directional_import(
             project.asset_registry(), self.source, "jeanne", jeanne(),
-            license_id="CC0-1.0")
+            license_id="CC0-1.0", binding_prefix="jeanne")
         imported = import_into_project(project_path, content, plan)
         reopened = GameProject.load(project_path, content)
         self.assertEqual(imported.to_dict(), reopened.to_dict())
         self.assertNotEqual(original, project_path.read_bytes())
         self.assertEqual(reopened.asset_registry().to_dict(), plan.manifest)
+        self.assertEqual(reopened.asset_registry().binding("animation", "jeanne_south_idle")["id"],
+                         "jeanne.south.idle")
         self.assertEqual(validate_project_assets(project_path, content), [])
         image = AssetResolver(reopened.asset_registry(), self.root).resolve(
             "jeanne.south.idle", elapsed_ms=121)

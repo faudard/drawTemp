@@ -26,7 +26,7 @@ def asset_family(asset_id, kind):
         return "audio"
     if name.startswith(("grass", "dirt", "sand", "water", "stone", "rock", "terrain")):
         return "terrain"
-    if name.startswith(("fx", "effect", "smoke", "fire", "vfx", "ambient")):
+    if name.startswith(("fx", "effect", "smoke", "fire", "vfx", "ambient", "environment")):
         return "effects"
     if kind == "portrait" or name.startswith(("jeanne", "wolf", "hero", "actor", "unit")):
         return "characters"

@@ -144,7 +144,8 @@ class AtlasPlan:
 
 def plan_directional_import(registry: AssetRegistry, source: Path, asset_id: str,
                             layout: DirectionalLayout, *,
-                            license_id: str = "UNVERIFIED") -> AtlasPlan:
+                            license_id: str = "UNVERIFIED",
+                            binding_prefix: str | None = None) -> AtlasPlan:
     """Build an import plan without changing a project, or touching its files."""
     if not isinstance(asset_id, str) or not ASSET_ID.fullmatch(asset_id):
         raise ValueError("Invalid stable atlas ID")
@@ -180,6 +181,16 @@ def plan_directional_import(registry: AssetRegistry, source: Path, asset_id: str
                 "loop": action in ("idle", "move", "walk", "run"),
                 "frames": frames,
             })
+    if binding_prefix is not None:
+        if not isinstance(binding_prefix, str) or not ASSET_ID.fullmatch(binding_prefix):
+            raise ValueError("Invalid binding prefix")
+        slots = manifest["bindings"].setdefault("animation", {})
+        for direction in layout.directions:
+            for action in sorted(layout.action_rows):
+                slot = f"{binding_prefix}_{direction}_{action}"
+                if slot in slots:
+                    raise ValueError(f"Existing animation binding: {slot}")
+                slots[slot] = f"{asset_id}.{direction}.{action}"
     # This canonical validation detects ID collisions, bad paths and references.
     AssetRegistry(manifest)
     return AtlasPlan(source, relative_path, manifest, annotations, sha256(data).hexdigest())

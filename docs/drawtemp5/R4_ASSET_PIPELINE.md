@@ -22,12 +22,12 @@ python -m drawtemp.assets import-sheet \
   --project /tmp/jeanne/game.json \
   --content sporebound/content/core.json \
   --source sporebound/content/art/jeanne/jeanne_atlas.png \
-  --id jeanne --frame-size 64 64 --pivot 32 60 \
+  --id jeanne --bind-prefix jeanne --frame-size 64 64 --pivot 32 60 \
   --rows '{"idle":[0,1],"move":[2,3],"attack":[4,5],"hit":[6],"defeat":[7]}' \
   --license UNVERIFIED
 ```
 
-Cette disposition crée 32 entrées sprite régionales et 20 entrées animation directionnelles dans la structure actuelle de GameProject.assets. Le contenu de la source reste intact, et une deuxième importation du même ID est rejetée. Il appartient à l'auteur de remplacer UNVERIFIED par une licence vérifiée.
+Cette disposition crée 32 entrées sprite régionales, 20 animations directionnelles et 20 slots de binding (avec --bind-prefix) dans la structure actuelle de GameProject.assets. Le contenu de la source reste intact, et une deuxième importation du même ID est rejetée. Il appartient à l'auteur de remplacer UNVERIFIED par une licence vérifiée.
 
 ```sh
 python -m drawtemp.assets validate --project /tmp/jeanne/game.json \
