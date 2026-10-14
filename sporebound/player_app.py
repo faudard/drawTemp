@@ -124,6 +124,7 @@ class PlayerApplication:
         self._motion_source = None
         self._motion_frame = None
         self._motion_job = None
+        self._hud_resize_job = None
         self.canvas = None
         self.renderer = None
         self.iso_renderer = None
@@ -184,6 +185,9 @@ class PlayerApplication:
         if self._motion_job is not None:
             self.root.after_cancel(self._motion_job)
             self._motion_job = None
+        if self._hud_resize_job is not None:
+            self.root.after_cancel(self._hud_resize_job)
+            self._hud_resize_job = None
         if self._preview_job is not None:
             self.root.after_cancel(self._preview_job)
             self._preview_job = None
@@ -1363,9 +1367,12 @@ class PlayerApplication:
                 if self.unit_var.get() not in players:
                     self.unit_var.set(players[0] if players else "")
                 self.ttk.Label(select_row, text="Héros").pack(side="left")
-                self.ttk.Combobox(select_row, textvariable=self.unit_var,
-                                  values=players, state="readonly", width=11).pack(
-                                      side="left", padx=5)
+                hero_box = self.ttk.Combobox(
+                    select_row, textvariable=self.unit_var,
+                    values=players, state="readonly", width=11)
+                hero_box.pack(side="left", padx=5)
+                hero_box.bind("<<ComboboxSelected>>",
+                              lambda _event: self._redraw())
             elif battle.active is None:
                 options = []
             elif battle.active.team == "enemy":
@@ -1445,6 +1452,7 @@ class PlayerApplication:
                                        asset_root=self.asset_root)
         self.iso_renderer = IsoBattleCanvas(self.canvas)
         self.canvas.bind("<Button-1>", self._select_cell)
+        self.canvas.bind("<Configure>", self._on_battle_canvas_resize)
         self.canvas.bind("<Motion>", self._preview_motion)
         self.canvas.bind("<Leave>", self._preview_leave)
         self._bind_battle_keys()
@@ -1461,7 +1469,6 @@ class PlayerApplication:
             relief="flat")
         self.info.pack(fill="both", expand=True)
         self._redraw()
-        self.canvas.focus_set()
         # Action instructions remain in Options and Assistance; do not consume
         # another permanent 40px row under the map.
         self.canvas.focus_set()
@@ -1505,6 +1512,23 @@ class PlayerApplication:
         self.hud_portrait.configure(image="", text=active.name[:1].upper())
         self.hud_portrait.image = None
 
+    def _on_battle_canvas_resize(self, event):
+        """Refresh renderer cache and isometric centering after a resize."""
+        if self.canvas is not None and event.widget is self.canvas:
+            self._schedule_battle_viewport_refresh()
+
+    def _schedule_battle_viewport_refresh(self):
+        if self._hud_resize_job is not None:
+            return
+        revision = self.presentation.revision
+        def refresh():
+            self._hud_resize_job = None
+            if (self.presentation.current(revision)
+                    and self.presentation.screen == "battle"
+                    and self.canvas is not None):
+                self._redraw()
+        self._hud_resize_job = self.root.after_idle(refresh)
+
     def _toggle_hud_sidebar(self):
         if self.hud_panes is None or self.hud_sidebar is None:
             return
@@ -1516,6 +1540,7 @@ class PlayerApplication:
             self.hud_sidebar_visible.set(True)
         if self.canvas is not None:
             self.canvas.focus_set()
+            self._schedule_battle_viewport_refresh()
 
     def _toggle_combat_log(self):
         if self.hud_notebook is None:

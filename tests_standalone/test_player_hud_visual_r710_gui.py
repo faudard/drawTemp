@@ -128,6 +128,12 @@ class PlayerHudVisualR710Tests(unittest.TestCase):
                                   win["x"] + win["width"],
                                   win["y"] + win["height"]),
                             xdisplay=os.environ.get("DISPLAY"))
+                        # Distinct on-screen pixels must be captured; a
+                        # uniform/empty screenshot would be invalid evidence.
+                        from PIL import ImageStat
+                        self.assertGreater(
+                            ImageStat.Stat(shot.convert("L")).stddev[0], 5.0,
+                            (case, "blank or uniform screenshot"))
                         shot.save(output / (case + ".png"))
                         snapshots.append({
                             "case": case, "window": win, "canvas": canvas,
@@ -146,9 +152,17 @@ class PlayerHudVisualR710Tests(unittest.TestCase):
                 app._toggle_hud_sidebar()
                 app.root.update()
                 self.assertGreater(app.canvas.winfo_width(), width_before)
+                # Resize-triggered 2.5D layout must use the new viewport
+                # rather than retain the pre-expansion centered coordinates.
+                self.assertEqual(
+                    app.iso_renderer._viewport,
+                    (app.canvas.winfo_width(), app.canvas.winfo_height()))
                 app._toggle_hud_sidebar()
                 app.root.update()
                 self.assertEqual(len(app.hud_panes.panes()), 2)
+                self.assertEqual(
+                    app.iso_renderer._viewport,
+                    (app.canvas.winfo_width(), app.canvas.winfo_height()))
             finally:
                 (output / "layout-metrics.json").write_text(
                     json.dumps({"format": "drawtemp-r710-visual-v1",

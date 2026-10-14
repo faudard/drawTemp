@@ -72,3 +72,29 @@ At **800×580, 1160×820 and 1920×1080**, without opening the Studio:
 
 No new persisted UI fields or `Content/GameProject/GameSession` schema,
 no extra Player engine, no Tk references in headless rules.
+
+## Visual evidence and resize closure (R7.10.V)
+
+The real Tk Player acceptance matrix lives in
+`tests_standalone/test_player_hud_visual_r710_gui.py` and produces eight
+lossless PNGs plus `layout-metrics.json` for:
+
+- 800×580, 1160×820, 1920×1080 in both 2D and 2.5D isometric;
+- compact/high-contrast 800×580 at 125% text;
+- compact/high-contrast 1160×820 at 150% text.
+
+GitHub Actions (`Standalone gameplay` / `editor`) publishes the
+`player-hud-r710-visual` artifact even after a test failure. The test checks
+that the actual Tk/X11 screenshot contains non-uniform pixels, the map has
+practical dimensions, the Execute button remains within the window, the
+sidebar stays usable, and the HUD stays anchored to the window.
+
+R7.10.V also invalidates stale 2.5D/isometric geometry when the map Canvas
+changes width after a resize, pane collapse, or restoration. The refresh
+callback is coalesced and ignored following a screen transition. Choosing a
+different deployment hero immediately updates the portrait and stats.
+
+**Certification condition:** a green test is necessary, but the resulting
+PNGs must additionally be opened and checked for overlap, clipping, occlusion,
+font legibility, visual hierarchy and focus at all viewport sizes. Do not
+mark visual fidelity certified on test assertions alone.
