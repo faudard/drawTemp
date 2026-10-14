@@ -7,8 +7,7 @@ next_missions. Hypothetical battle outcomes are NEVER declared verified battles.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict, dataclass
-from types import MappingProxyType
+from dataclasses import dataclass
 
 from .campaign_flow import (available_missions, inspect_campaign, settle,
                             verify_save)
@@ -90,28 +89,32 @@ class CampaignSimulation:
     def size(self):
         return len(self._nodes)
 
-    def node(self, node_id=None):
+    def _node_raw(self, node_id=None):
         node_id = self._current if node_id is None else node_id
         require(type(node_id) is int and node_id in self._nodes,
                 "Unknown campaign simulation node")
         return self._nodes[node_id]
 
+    def node(self, node_id=None):
+        """Public node metadata is a copy, including its Campaign progress."""
+        return deepcopy(self._node_raw(node_id))
+
     def snapshot(self, node_id=None):
         """Return a deep copy so external consumers cannot mutate branch state."""
-        return deepcopy(self.node(node_id).progress)
+        return deepcopy(self._node_raw(node_id).progress)
 
     def inspect(self, node_id=None):
         progress = self.snapshot(node_id)
         result = inspect_campaign(progress, self.flow)
         result["story_pending"] = progress.story_pending
         result["choices"] = [choice["id"] for choice in self.story.choices(progress)]
-        result["node"] = self.node(node_id).id
+        result["node"] = self._node_raw(node_id).id
         result["symbolic_only"] = True
         return result
 
     def actions(self, node_id=None):
         """Every offered action is conditional on the exact node state."""
-        progress = self.node(node_id).progress
+        progress = self._node_raw(node_id).progress
         if progress.story_pending:
             return [{"kind": "choice", "id": c["id"], "scene": progress.story_pending,
                      "label": c["label"]} for c in self.story.choices(progress)]
@@ -130,12 +133,12 @@ class CampaignSimulation:
                 for node in self._nodes.values()]
 
     def select(self, node_id):
-        self.node(node_id)  # validate before changing cursor
+        self._node_raw(node_id)  # validate before changing cursor
         self._current = node_id
         return self.inspect()
 
     def _publish(self, progress, action):
-        parent = self.node()
+        parent = self._node_raw()
         require(len(self._nodes) < self.max_nodes, "Campaign simulation node budget reached")
         require(parent.depth < self.max_depth, "Campaign simulation depth reached")
         verify_save(progress, self.flow)
@@ -151,7 +154,7 @@ class CampaignSimulation:
         return self.inspect()
 
     def choose(self, choice_id):
-        current = self.node().progress
+        current = self._node_raw().progress
         require(bool(current.story_pending), "No pending scene to choose")
         require(any(c["id"] == choice_id for c in self.story.choices(current)),
                 "Story choice is not currently available")
@@ -189,7 +192,7 @@ class CampaignSimulation:
         return self._publish(self.snapshot(), "fork:" + label.strip())
 
     def path(self, node_id=None):
-        node = self.node(node_id)
+        node = self._node_raw(node_id)
         result = []
         while node is not None:
             result.append(node.id)
@@ -197,7 +200,7 @@ class CampaignSimulation:
         return list(reversed(result))
 
     def compare(self, a, b):
-        left, right = self.node(a), self.node(b)
+        left, right = self._node_raw(a), self._node_raw(b)
         lhs, rhs = self.path(a), self.path(b)
         common = 0
         for i, j in zip(lhs, rhs):
