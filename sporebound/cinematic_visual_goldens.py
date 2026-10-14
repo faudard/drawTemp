@@ -93,6 +93,16 @@ def golden_at(clip, time_ms, *, viewport=(800, 500), portrait=False):
                       options.get("fill") == "#091523"]
     labels = [options.get("text", "") for operation, _, options in calls
               if operation == "text"]
+    def rects_for(color):
+        return [[_coordinate(coord) for coord in coords]
+                for operation, coords, options in calls
+                if operation == "rectangle" and
+                options.get("fill") == color]
+    portrait_centers = [[_coordinate(coord) for coord in coords]
+                        for operation, coords, options in calls
+                        if operation == "image" and
+                        isinstance(options.get("image"), str) and
+                        options["image"].startswith("portrait:")]
     data = {
         "ms": frame.time_ms,
         "viewport": list(viewport),
@@ -117,14 +127,26 @@ def golden_at(clip, time_ms, *, viewport=(800, 500), portrait=False):
         } if frame.dialogue else None),
         "dialogue_boxes": dialogue_boxes,
         "portrait_images": portraits,
+        "portrait_centers": portrait_centers,
+        "transition_rects": (rects_for("#101a2b")
+                             if frame.shot_transition else []),
+        "fade_rects": (rects_for(frame.fade[0]) if
+                       frame.fade and frame.fade[1] > 0 else []),
         "labels": labels,
         "fade": ([frame.fade[0], _coordinate(frame.fade[1])]
                  if frame.fade else None),
         "mix": [[track.event_id, track.bus, _coordinate(track.level),
                  track.loop] for track in tracks],
     }
-    # Lightweight renderer layer-order gate: dialogue belongs above the wipe;
-    # fades obscure everything. A changed ordering is a visible regression.
+    # A fade has to be the final full-viewport primitive, with or without
+    # an active dialogue. Do not only certify the projection's fade metadata.
+    if frame.fade and frame.fade[1] > 0:
+        require(data["fade_rects"] == [[0, 0, *viewport]],
+                "Fade is missing from the full viewport")
+        require(calls[-1][0] == "rectangle" and
+                calls[-1][2].get("fill") == frame.fade[0],
+                "Final fade must be drawn above every UI layer")
+    # Lightweight renderer layer-order gate: dialogue belongs above wipe.
     if frame.dialogue:
         panels = [i for i, (kind, _, kw) in enumerate(calls)
                   if kind == "rectangle" and kw.get("fill") == "#091523"]
@@ -134,10 +156,6 @@ def golden_at(clip, time_ms, *, viewport=(800, 500), portrait=False):
                            if kind == "rectangle" and kw.get("fill") == "#101a2b"]
             require(not transitions or transitions[-1] < panels[0],
                     "Camera transition covered the dialogue UI")
-        if frame.fade and frame.fade[1] > 0:
-            require(calls[-1][0] == "rectangle" and
-                    calls[-1][2].get("fill") == frame.fade[0],
-                    "Final fade must cover the entire scene")
     return data
 
 
@@ -162,7 +180,8 @@ def assert_golden_matches(clips, fixture):
         expected = sample["expected"]
         required_keys = {"ms", "viewport", "background", "actor_centers",
                          "camera", "zoom", "shot", "transition", "dialogue",
-                         "dialogue_boxes", "portrait_images", "labels", "fade", "mix"}
+                         "dialogue_boxes", "portrait_images", "portrait_centers",
+                         "transition_rects", "fade_rects", "labels", "fade", "mix"}
         require(required_keys <= set(expected),
                 "Golden missing required structural fields")
         for field, value in expected.items():
