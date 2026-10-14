@@ -20,8 +20,9 @@ from PySide6.QtWidgets import (
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.reference import reference_project
 from drawtemp.studio.rpg_database import DatabaseEditor, FAMILIES, LABELS
-from sporebound.character_authoring import parse_bonuses, parse_skill_levels
-from sporebound.model import RuleError
+from sporebound.character_authoring import make_effect, parse_bonuses, parse_skill_levels
+from sporebound.model import MOVEMENTS, REACTIONS, STATUSES, SUPPORTS, Unit, RuleError
+from sporebound.rules import default_rules
 
 
 # Field types are explicit and validated by the canonical authoring backend.
@@ -34,6 +35,9 @@ SPECS = {
         ("move", "Déplacement", (0, 99)),
         ("weapon", "Arme", ("melee", "spear", "ranged", "focus", "unarmed")),
         ("skills", "Compétences (IDs)", "csv"),
+        ("behavior", "Comportement IA", tuple(sorted(default_rules().behaviors))),
+        ("reaction", "Réaction", tuple(sorted(REACTIONS))),
+        ("support", "Soutien", tuple(sorted(SUPPORTS))),
     ),
     "actors": (
         ("name", "Nom", "text"),
@@ -43,6 +47,9 @@ SPECS = {
         ("move", "Déplacement", (0, 99)),
         ("weapon", "Arme", ("melee", "spear", "ranged", "focus", "unarmed")),
         ("skills", "Compétences (IDs)", "csv"),
+        ("reaction", "Réaction", tuple(sorted(REACTIONS))),
+        ("support", "Soutien", tuple(sorted(SUPPORTS))),
+        ("movement", "Mouvement spécial", tuple(sorted(MOVEMENTS))),
     ),
     "jobs": (
         ("name", "Nom", "text"),
@@ -240,6 +247,8 @@ class DatabaseWindow(QMainWindow):
         else:
             for field, label, kind in SPECS[family]:
                 value = row.get(field)
+                if value is None and family == "archetypes":
+                    value = Unit.__dataclass_fields__[field].default
                 if value is None:
                     continue
                 if isinstance(kind, tuple) and len(kind) == 2 and all(
@@ -265,12 +274,78 @@ class DatabaseWindow(QMainWindow):
                     f"· puissance {effect.get('power', 0)}"
                     for index, effect in enumerate(effects))
                 self.form.addRow("Effets", QLabel(text or "Aucun effet"))
+                effect_button = QPushButton("Éditer / ajouter / retirer / déplacer un effet…")
+                effect_button.clicked.connect(self._edit_effects)
+                self.form.addRow(effect_button)
             if family == "jobs":
                 self.form.addRow("Arbre de classe", QLabel(
                     "Prérequis validés ; liens supplémentaires via l'API R8"))
         refs = self.editor.references(family, key)
         self.references.setPlainText(
             "\n".join(refs) if refs else "Aucune référence directe connue.")
+
+    def _edit_effects(self):
+        if not self.selected or self.selected[0] != "skills":
+            return
+        key = self.selected[1]
+        effects = self.editor.detail("skills", key)["effects"]
+        choices = ["Ajouter", "Modifier", "Retirer", "Monter", "Descendre"]
+        action, ok = QInputDialog.getItem(self, "Effets de compétence",
+                                           "Opération", choices, 0, False)
+        if not ok:
+            return
+        index = len(effects)
+        if action != "Ajouter":
+            if not effects:
+                return
+            index, ok = QInputDialog.getInt(self, "Effets",
+                "Indice d'effet (1 = premier)", 1, 1, len(effects))
+            if not ok:
+                return
+            index -= 1
+        try:
+            if action in ("Ajouter", "Modifier"):
+                base = effects[index] if action == "Modifier" else make_effect()
+                kinds = sorted(default_rules().effects)
+                kind, ok = QInputDialog.getItem(self, "Type d'effet", "Type",
+                    kinds, kinds.index(base["kind"]) if base["kind"] in kinds else 0, False)
+                if not ok:
+                    return
+                power, ok = QInputDialog.getInt(
+                    self, "Puissance", "Puissance", base["power"], 0, 10000)
+                if not ok:
+                    return
+                duration, ok = QInputDialog.getInt(
+                    self, "Durée", "Ticks", base["duration"], 1, 10000)
+                if not ok:
+                    return
+                status = base.get("status", "")
+                if kind in ("status", "cleanse"):
+                    statuses = sorted(STATUSES)
+                    status, ok = QInputDialog.getItem(
+                        self, "Statut", "Statut", statuses,
+                        statuses.index(status) if status in statuses else 0, False)
+                    if not ok:
+                        return
+                scope_values = ["target", "allies", "enemies", "all"]
+                scope, ok = QInputDialog.getItem(
+                    self, "Portée de l'effet", "Affecte",
+                    scope_values, scope_values.index(base.get("scope", "target")), False)
+                if not ok:
+                    return
+                effect = make_effect(kind, power=power, duration=duration,
+                    status=status if kind in ("status", "cleanse") else "",
+                    element=base.get("element", "physical"), scope=scope)
+                self.editor.set_effect(key, index, effect, insert=(action == "Ajouter"))
+            elif action == "Retirer":
+                self.editor.remove_effect(key, index)
+            elif action == "Monter":
+                self.editor.move_effect(key, index, -1)
+            else:
+                self.editor.move_effect(key, index, 1)
+            self._reload(self.selected)
+        except (RuleError, ValueError, TypeError) as exc:
+            QMessageBox.warning(self, "Effet rejeté", str(exc))
 
     def _apply(self):
         if not self.selected or self.family not in SPECS:
