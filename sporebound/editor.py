@@ -90,6 +90,9 @@ class Document:
         self.redo_stack = []
         self.edit_policy = None  # Optional editor-only validation before commit.
         self.saved = json.dumps(self.data, sort_keys=True)
+        # Monotonic lease: unlike a content hash this rejects an ABA edit
+        # (edit -> undo -> identical bytes) and direct history restorations.
+        self.mutation_revision = 0
 
     @property
     def dirty(self):
@@ -104,16 +107,28 @@ class Document:
         self.undo_stack = self.undo_stack[-50:]
         self.redo_stack.clear()
         self.data = validated
+        self.mutation_revision += 1
+
+    def restore_snapshot(self, data):
+        """Install one validated StudioHistory revision, not a local undo step."""
+        validated = Content.from_dict(
+            data, rules=authored_rules_for_document(data)).to_dict()
+        self.data = validated
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self.mutation_revision += 1
 
     def undo(self):
         if self.undo_stack:
             self.redo_stack.append(self.data)
             self.data = self.undo_stack.pop()
+            self.mutation_revision += 1
 
     def redo(self):
         if self.redo_stack:
             self.undo_stack.append(self.data)
             self.data = self.redo_stack.pop()
+            self.mutation_revision += 1
 
     def tile(self, mid, cell, brush):
         self.paint_many(mid, [cell], brush)
@@ -503,7 +518,7 @@ def launch(path):
 
     def schedule_work_checkpoint():
         nonlocal work_checkpoint_job
-        editing_context.diagnostics.cancel()
+        editing_context.invalidate()
         if work_checkpoint_job is not None:
             root.after_cancel(work_checkpoint_job)
         work_checkpoint_job = root.after(350, checkpoint_work)
@@ -564,9 +579,7 @@ def launch(path):
                 studio.reload_project()
                 if next_work:
                     recovered_content = next_work[0]
-                    doc.data = Content.from_dict(
-                        recovered_content,
-                        rules=authored_rules_for_document(recovered_content)).to_dict()
+                    doc.restore_snapshot(recovered_content)
                     if mission_var.get() not in {
                             m['id'] for m in doc.data['missions']}:
                         mission_var.set(doc.data['missions'][0]['id'])
@@ -622,6 +635,7 @@ def launch(path):
                 edited, rules=authored_rules_for_document(edited)).to_dict()
             ensure_unlocked(doc.data, new_data, map_view_data)
             doc.data = new_data
+            doc.mutation_revision += 1
             studio.apply_project()
             store.save(doc.data, studio.project.to_dict(),
                        expected_previous=disk_revisions)
@@ -630,6 +644,7 @@ def launch(path):
             # half an in-memory transaction. Inputs remain in their widgets
             # so the designer can fix the issue and retry after recovery.
             doc.data = original
+            doc.mutation_revision += 1
             studio.project = original_project
             raise
         doc.saved = json.dumps(doc.data, sort_keys=True)
@@ -2788,6 +2803,7 @@ def launch(path):
                     temporary.paint_many(mission_var.get(), stroke_cells, brush)
             except (RuleError, ValueError, KeyError):
                 doc.data = stroke_before
+                doc.mutation_revision += 1
                 if doc.undo_stack:
                     doc.undo_stack.pop()
                 doc.redo_stack = stroke_redo
@@ -2797,6 +2813,7 @@ def launch(path):
             else:
                 ensure_unlocked(stroke_before, temporary.data, map_view_data)
                 doc.data = temporary.data
+                doc.mutation_revision += 1
                 refresh_source()
                 refresh(board_only=brush not in ('erase', 'goal'))
         if stroke_before is not None and studio is not None:
@@ -4057,9 +4074,7 @@ def launch(path):
         workspace_delete=delete_workspace_resource)
     if recovered_work:
         recovered_content = recovered_work[0]
-        doc.data = Content.from_dict(
-            recovered_content,
-            rules=authored_rules_for_document(recovered_content)).to_dict()
+        doc.restore_snapshot(recovered_content)
         if mission_var.get() not in {m['id'] for m in doc.data['missions']}:
             mission_var.set(doc.data['missions'][0]['id'])
         studio.restore_unsaved_project(recovered_work[1])

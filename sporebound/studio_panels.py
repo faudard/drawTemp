@@ -112,10 +112,9 @@ class StudioPanels:
     def _restore_history(self, redo=False):
         document, project = (self.history.redo() if redo else self.history.undo())
         current = self.doc()
-        current.data = document
-        # Local histories are no longer valid after a cross-resource restore.
-        current.undo_stack.clear()
-        current.redo_stack.clear()
+        # Preserve the monotonic edit lease when the snapshot returns to the
+        # exact same bytes after Undo/Redo (ABA).
+        current.restore_snapshot(document)
         self.project = project
         # An undo may delete the mission selected in the canvas. Restore a
         # valid mission before refreshing any dependent Studio panel.
