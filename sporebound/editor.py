@@ -3127,10 +3127,35 @@ def launch(path):
             "renderer_enabled": views is None or RENDERER in views,
         })
 
-    bar = ttk.Frame(root)
-    bar.pack(fill='x')
-    for label,cmd in [('Ouvrir',open_doc),('Enregistrer sous',save_doc),('Enregistrer tout',save_all),('Nouvelle mission',new_mission),('Carte vierge',blank_mission),('Annuler',undo_global),('Rétablir',redo_global),('Playtest',start),('Éditer',stop),('Sauver combat',save_game),('Charger combat',load_game)]:
-        ttk.Button(bar,text=label,command=cmd).pack(side='left',padx=2,pady=4)
+    # A single application header replaces the eleven equally prominent
+    # buttons. Common actions stay one click away; the others live in menus.
+    header = ttk.Frame(root, padding=(9, 5))
+    header.pack(fill='x')
+    ttk.Label(header, text='SPOREBOUND  /  STUDIO',
+              font=('TkDefaultFont', 11, 'bold')).pack(
+                  side='left', padx=(0, 18))
+    file_button = ttk.Menubutton(header, text='Fichier ▾')
+    file_button.pack(side='left', padx=(0, 5))
+    file_menu = tk.Menu(file_button, tearoff=False)
+    for title, callback in (
+        ('Ouvrir…', open_doc), ('Enregistrer sous…', save_doc),
+        ('Enregistrer tout', save_all), ('Nouvelle mission', new_mission),
+        ('Carte vierge', blank_mission), ('Sauver combat', save_game),
+        ('Charger combat', load_game)):
+        file_menu.add_command(label=title, command=callback)
+    file_button.configure(menu=file_menu)
+    ttk.Button(header, text='Enregistrer tout',
+               command=save_all).pack(side='left', padx=2)
+    ttk.Button(header, text='↶', command=undo_global,
+               width=3).pack(side='left', padx=(13, 2))
+    ttk.Button(header, text='↷', command=redo_global,
+               width=3).pack(side='left', padx=2)
+    ttk.Button(header, text='Éditer', command=stop).pack(
+        side='right', padx=(4, 0))
+    ttk.Button(header, text='▶ Playtest', command=start).pack(
+        side='right', padx=(4, 0))
+    section_bar = ttk.Frame(root)
+    section_bar.pack(fill='x')
     # A compact tool notebook replaces the seven permanent toolbar rows.
     # Keep the existing action callbacks/variables; only presentation changes.
     tool_tabs = ttk.Notebook(root)
@@ -3464,7 +3489,8 @@ def launch(path):
     ttk.Label(facade_controls,
               text='Maison/Tour · Fenêtres décoratives sur murs extérieurs').pack(
                   side='left', padx=5)
-    floor_controls = ttk.Frame(root)
+    # Floor authoring is contextual to Architecture, not a global toolbar.
+    floor_controls = ttk.Frame(tools_structure)
     floor_controls.pack(fill='x', padx=5)
     ttk.Label(floor_controls, text='Étage supérieur (visuel) :').pack(side='left',padx=3)
     floor_combo = ttk.Combobox(floor_controls, textvariable=floor_var,
@@ -3564,20 +3590,46 @@ def launch(path):
     canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
     canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
     canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
-    ttk.Button(side_panel, text='Ouvrir la palette visuelle de préfabs',
+    # Right dock: separate inspector, group tools and prefab authoring.
+    # In the old layout these were one long, mostly inaccessible column.
+    side_tabs = ttk.Notebook(side_panel)
+    side_tabs.pack(fill='both', expand=True)
+    inspector_page = ttk.Frame(side_tabs)
+    groups_page = ttk.Frame(side_tabs)
+    prefabs_page = ttk.Frame(side_tabs)
+    side_tabs.add(inspector_page, text='Inspecteur')
+    side_tabs.add(groups_page, text='Groupes')
+    side_tabs.add(prefabs_page, text='Préfabs')
+
+    # Prefab tools can grow with content; only this dock scrolls vertically.
+    prefab_canvas = tk.Canvas(prefabs_page, highlightthickness=0, borderwidth=0)
+    prefab_scroll = ttk.Scrollbar(prefabs_page, orient='vertical',
+                                  command=prefab_canvas.yview)
+    prefab_canvas.configure(yscrollcommand=prefab_scroll.set)
+    prefab_scroll.pack(side='right', fill='y')
+    prefab_canvas.pack(side='left', fill='both', expand=True)
+    prefabs_body = ttk.Frame(prefab_canvas)
+    prefab_window_id = prefab_canvas.create_window(
+        (0, 0), window=prefabs_body, anchor='nw')
+    prefabs_body.bind('<Configure>', lambda _e: prefab_canvas.configure(
+        scrollregion=prefab_canvas.bbox('all')))
+    prefab_canvas.bind('<Configure>', lambda event: prefab_canvas.itemconfigure(
+        prefab_window_id, width=event.width))
+
+    ttk.Button(prefabs_body, text='Ouvrir la palette visuelle de préfabs',
                command=open_visual_prefab_palette).pack(
                    fill='x', padx=6, pady=(4, 0))
-    ttk.Label(side_panel, text='INSPECTEUR', font=('TkDefaultFont', 11, 'bold')).pack(
+    ttk.Label(inspector_page, text='INSPECTEUR', font=('TkDefaultFont', 11, 'bold')).pack(
         anchor='w', padx=6, pady=(8, 3))
-    ttk.Label(side_panel, textvariable=mode_var).pack(anchor='w', padx=6)
-    ttk.Label(side_panel,text='Vue tactique').pack(anchor='w',padx=6,pady=(7,0))
-    mini_canvas = tk.Canvas(side_panel,width=184,height=184,
+    ttk.Label(inspector_page, textvariable=mode_var).pack(anchor='w', padx=6)
+    ttk.Label(inspector_page,text='Vue tactique').pack(anchor='w',padx=6,pady=(7,0))
+    mini_canvas = tk.Canvas(inspector_page,width=184,height=184,
                             background='#f5f5f5',highlightthickness=1)
     mini_canvas.pack(anchor='w',padx=3,pady=3)
     mini_canvas.bind('<Button-1>', minimap_navigate)
-    ttk.Label(side_panel, text='GROUPES ET APPARTENANCES',
+    ttk.Label(groups_page, text='GROUPES ET APPARTENANCES',
               font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=6)
-    tree_box = ttk.Frame(side_panel)
+    tree_box = ttk.Frame(groups_page)
     tree_box.pack(fill='x', padx=6, pady=3)
     group_tree = ttk.Treeview(tree_box, show='tree', height=8, selectmode='extended')
     group_scroll = ttk.Scrollbar(tree_box, orient='vertical',
@@ -3594,7 +3646,7 @@ def launch(path):
     group_tree.bind('<ButtonRelease-1>', tree_drag_release)
     group_tree.bind('<Escape>', tree_drag_cancel)
     group_tree.bind('<FocusOut>', tree_drag_cancel)
-    group_controls = ttk.Frame(side_panel)
+    group_controls = ttk.Frame(groups_page)
     group_controls.pack(fill='x', padx=5)
     for actions in (
         (('Créer vide', lambda: create_map_group(empty=True)),
@@ -3610,7 +3662,7 @@ def launch(path):
         for text, action in actions:
             ttk.Button(group_row, text=text, command=action).pack(
                 side='left', padx=1, pady=1)
-    group_move_controls = ttk.Frame(side_panel)
+    group_move_controls = ttk.Frame(groups_page)
     group_move_controls.pack(fill='x', padx=5, pady=(0, 5))
     ttk.Label(group_move_controls, text='ΔX').pack(side='left')
     ttk.Spinbox(group_move_controls, from_=-128, to=128,
@@ -3622,7 +3674,7 @@ def launch(path):
                command=lambda: shift_map_group(preview=True)).pack(side='left',padx=2)
     ttk.Button(group_move_controls, text='Déplacer',
                command=shift_map_group).pack(side='left',padx=2)
-    group_clone_controls = ttk.Frame(side_panel)
+    group_clone_controls = ttk.Frame(groups_page)
     group_clone_controls.pack(fill='x', padx=5, pady=(0, 5))
     ttk.Button(group_clone_controls, text='Aperçu copie',
                command=lambda: shift_map_group(
@@ -3632,18 +3684,18 @@ def launch(path):
                    duplicate=True)).pack(side='left',padx=2)
     ttk.Label(group_clone_controls, text='Ctrl/Maj : sélection multiple'
               ).pack(side='left',padx=3)
-    ttk.Label(side_panel, text='BIBLIOTHÈQUE DE PRÉFABS',
+    ttk.Label(prefabs_body, text='BIBLIOTHÈQUE DE PRÉFABS',
               font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=6)
-    group_prefab_box = ttk.Combobox(side_panel,
+    group_prefab_box = ttk.Combobox(prefabs_body,
                                    textvariable=group_prefab_var,
                                    state='readonly')
     group_prefab_box.pack(fill='x', padx=6, pady=2)
-    prefab_thumbnail = tk.Canvas(side_panel, width=254, height=114,
+    prefab_thumbnail = tk.Canvas(prefabs_body, width=254, height=114,
                                  background='#eef0ea', highlightthickness=1,
                                  highlightbackground='#adb2ad')
     prefab_thumbnail.pack(anchor='w', padx=6, pady=(1, 5))
     group_prefab_box.bind('<<ComboboxSelected>>', draw_prefab_thumbnail)
-    group_prefab_row = ttk.Frame(side_panel)
+    group_prefab_row = ttk.Frame(prefabs_body)
     group_prefab_row.pack(fill='x', padx=5)
     for text, action in (
         ('Enregistrer préfab', export_group_prefab),
@@ -3652,7 +3704,7 @@ def launch(path):
     ):
         ttk.Button(group_prefab_row, text=text, command=action).pack(
             side='left', padx=1, pady=1)
-    group_prefab_row_2 = ttk.Frame(side_panel)
+    group_prefab_row_2 = ttk.Frame(prefabs_body)
     group_prefab_row_2.pack(fill='x', padx=5, pady=(0, 5))
     ttk.Label(group_prefab_row_2, text='Rotation').pack(side='left', padx=2)
     group_prefab_rotation_box = ttk.Combobox(
@@ -3665,7 +3717,7 @@ def launch(path):
                ).pack(side='left', padx=2)
     ttk.Button(group_prefab_row_2, text='Placer préfab',
                command=place_chosen_prefab).pack(side='left', padx=2)
-    group_prefab_stamp_row = ttk.Frame(side_panel)
+    group_prefab_stamp_row = ttk.Frame(prefabs_body)
     group_prefab_stamp_row.pack(fill='x', padx=5, pady=(0, 5))
     ttk.Button(group_prefab_stamp_row, text='Poser à la souris',
                command=enable_prefab_stamping).pack(side='left', padx=2)
@@ -3674,7 +3726,7 @@ def launch(path):
               ).pack(side='left', padx=3)
     refresh_group_prefabs()
     draw_prefab_thumbnail()
-    quarter_frame = ttk.LabelFrame(side_panel, text='GÉNÉRATION ASSISTÉE · QUARTIER')
+    quarter_frame = ttk.LabelFrame(prefabs_body, text='GÉNÉRATION ASSISTÉE · QUARTIER')
     quarter_frame.pack(fill='x', padx=5, pady=4)
     quarter_row = ttk.Frame(quarter_frame)
     quarter_row.pack(fill='x')
@@ -3710,11 +3762,11 @@ def launch(path):
                command=save_quarter_as_prefab).pack(side='left', padx=2)
     ttk.Label(quarter_frame, textvariable=quarter_status_var,
               wraplength=278).pack(anchor='w', padx=3, pady=3)
-    ttk.Label(side_panel, text='PALETTE VISUELLE · GLISSER SUR LA CARTE',
+    ttk.Label(prefabs_body, text='PALETTE VISUELLE · GLISSER SUR LA CARTE',
               font=('TkDefaultFont', 9, 'bold')).pack(anchor='w', padx=6,
                                                      pady=(3, 2))
     prefab_gallery = VisualPrefabPalette(
-        side_panel, tk, ttk,
+        prefabs_body, tk, ttk,
         on_select=group_prefab_var.set,
         on_preview=palette_prefab_hover,
         on_drop=palette_prefab_drop,
@@ -3726,22 +3778,22 @@ def launch(path):
         '<<ComboboxSelected>>',
         lambda _event: prefab_gallery.choose(group_prefab_var.get()))
     refresh_group_prefabs()
-    inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
+    inspector = tk.Text(inspector_page,width=37,wrap='word',takefocus=1)
     inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
-    actor_focus = ttk.Button(side_panel, text='Modifier le personnage sélectionné',
+    actor_focus = ttk.Button(inspector_page, text='Modifier le personnage sélectionné',
                              command=lambda: open_selected_entity('unit'))
     actor_focus.pack(fill='x', padx=6, pady=2)
-    object_focus = ttk.Button(side_panel, text='Modifier l’objet sélectionné',
+    object_focus = ttk.Button(inspector_page, text='Modifier l’objet sélectionné',
                               command=lambda: open_selected_entity('object'))
     object_focus.pack(fill='x', padx=6, pady=2)
     event_focus = ttk.Button(
-        side_panel, text='Créer événement lié à la porte',
+        inspector_page, text='Créer événement lié à la porte',
         command=open_selected_gate_event)
     event_focus.pack(fill='x', padx=6, pady=2)
-    ttk.Button(side_panel, text='Personnages et événements',
+    ttk.Button(inspector_page, text='Personnages et événements',
                command=lambda: studio.workspace._show_tab(
                    'Personnages et événements')).pack(fill='x', padx=6, pady=3)
-    ttk.Button(side_panel, text='Explorer dans le Workspace',
+    ttk.Button(inspector_page, text='Explorer dans le Workspace',
                command=lambda: notebook.select(studio.workspace.tab)).pack(
                    fill='x', padx=6, pady=(1, 7))
 
@@ -3900,6 +3952,9 @@ def launch(path):
         status_var.set('Travail interrompu restauré en mémoire ; enregistrer pour le conserver.')
     studio.history.on_change = schedule_work_checkpoint
     studio.workspace.incremental_validator = editing_context.diagnostics
+    from .studio_layout import StudioNavigation
+    studio_navigation = StudioNavigation(
+        section_bar, notebook, tool_tabs, work, tk, ttk)
     studio.workspace.attach_navigator(sidebar)
     studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
