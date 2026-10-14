@@ -333,6 +333,10 @@ def launch(path):
     quarter_seed_var = tk.IntVar(value=1)
     quarter_variant_var = tk.StringVar(value='Variante 1')
     quarter_status_var = tk.StringVar(value='Choisir un style puis proposer trois variantes.')
+    terrain_style_var = tk.StringVar(value='prairie')
+    terrain_seed_var = tk.IntVar(value=1)
+    terrain_status_var = tk.StringVar(value='Sélectionner une zone rectangulaire.')
+    terrain_pending = None
     quarter_choices = ()
     quarter_pending = None
     group_prefab_preview_key = None
@@ -2280,6 +2284,56 @@ def launch(path):
                       color='#36a16c' if all(map(inside,cells)) else '#e05252')
 
     @guarded
+    @guarded
+    def preview_procedural_terrain():
+        nonlocal terrain_pending
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON.')
+        if not selected_tiles:
+            raise RuleError('Sélectionner un rectangle avant la génération.')
+        xs = [p[0] for p in selected_tiles]
+        ys = [p[1] for p in selected_tiles]
+        start, end = (min(xs), min(ys)), (max(xs), max(ys))
+        if len(selected_tiles) != (end[0]-start[0]+1)*(end[1]-start[1]+1):
+            raise RuleError('La génération nécessite une sélection rectangulaire.')
+        if len(selected_tiles) > 512:
+            raise RuleError('Limiter la sélection visuelle à 512 cases.')
+        terrain_pending = None
+        canvas.delete('terrain_generation_preview')
+        plan = doc.preview_generated_terrain(
+            mission_var.get(), start, end, seed=terrain_seed_var.get(),
+            style=terrain_style_var.get())
+        terrain_pending = plan
+        preview_cells(((x, y) for x, y, material in plan.changes),
+                      tag='terrain_generation_preview', color='#36a16c')
+        terrain_status_var.set(f'{len(plan.changes)} cases à modifier · '
+                               'aperçu sans écriture · confirmer pour appliquer')
+        status_var.set(terrain_status_var.get())
+
+    @guarded
+    def confirm_procedural_terrain():
+        nonlocal terrain_pending
+        plan = terrain_pending
+        if plan is None or plan.mission_id != mission_var.get():
+            raise RuleError('Prévisualiser le terrain avant confirmation.')
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON.')
+        if not plan.changes:
+            terrain_pending = None
+            canvas.delete('terrain_generation_preview')
+            terrain_status_var.set('Aucun changement nécessaire.')
+            return
+        count = 0
+        def apply():
+            nonlocal count
+            count = doc.confirm_generated_terrain(plan)
+        design_change(apply, board_only=True)
+        terrain_pending = None
+        canvas.delete('terrain_generation_preview')
+        terrain_status_var.set(f'{count} cases générées en une opération Undo.')
+        status_var.set(terrain_status_var.get())
+
+    @guarded
     def fill_selection():
         if battle or source_pending():
             raise RuleError('Terminer le combat et appliquer le JSON avant édition.')
@@ -3178,6 +3232,20 @@ def launch(path):
                  state='readonly', width=8, values=('diamond', 'square')).pack(side='left')
     ttk.Button(smart_controls, text='Remplir sélection',
                command=fill_selection).pack(side='left', padx=2)
+    procedural_row = ttk.Frame(tools_terrain)
+    procedural_row.pack(fill='x', padx=5, pady=2)
+    ttk.Label(procedural_row, text='Terrain auto').pack(side='left', padx=2)
+    ttk.Combobox(procedural_row, textvariable=terrain_style_var,
+                 values=REGION_STYLES, state='readonly', width=9).pack(side='left', padx=2)
+    ttk.Label(procedural_row, text='Seed').pack(side='left', padx=2)
+    ttk.Spinbox(procedural_row, from_=0, to=999999,
+                textvariable=terrain_seed_var, width=7).pack(side='left', padx=2)
+    ttk.Button(procedural_row, text='Aperçu',
+               command=preview_procedural_terrain).pack(side='left', padx=2)
+    ttk.Button(procedural_row, text='Appliquer',
+               command=confirm_procedural_terrain).pack(side='left', padx=2)
+    ttk.Label(tools_terrain, textvariable=terrain_status_var,
+              wraplength=360).pack(fill='x', padx=5, pady=2)
     for label, tool in [('Remplir sol', 'Remplissage'),
                         ('Pipette sol', 'Pipette sol'),
                         ('Pipette décor', 'Pipette décor')]:
