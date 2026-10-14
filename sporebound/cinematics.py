@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 from .model import RuleError, require
 
-KINDS = ("background", "actor", "camera", "dialogue", "fade", "sound")
+KINDS = ("background", "actor", "camera", "dialogue", "fade", "sound", "fx")
+FX_KINDS = ("fire", "smoke", "rain", "fog", "light", "camera_shake")
 TRIGGERS = ("campaign_start", "before_mission", "after_mission", "scene", "tactical_event")
 COLORS = ("#101a2b", "#243c56", "#f3dfbf", "#000000", "#ffffff")
 EASINGS = ("linear", "ease_in", "ease_out", "ease_in_out", "step")
@@ -79,6 +80,7 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
                 "dialogue": {"speaker", "text"},
                 "fade": {"color"},
                 "sound": {"cue"},
+                "fx": {"effect", "intensity", "seed", "at"},
             }
             optional_fields = {
                 "actor": {"easing", "keyframes"},
@@ -147,6 +149,13 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
                     cps = event["chars_per_second"]
                     require(type(cps) is int and 0 <= cps <= 120,
                             "Dialogue pacing must be 0..120 characters/second")
+            if kind == "fx":
+                require(event["effect"] in FX_KINDS, "Unknown cinematic effect")
+                require(_number(event["intensity"], 0, 1),
+                        "Effect intensity must be between 0 and 1")
+                require(type(event["seed"]) is int and 0 <= event["seed"] <= 2147483647,
+                        "Effect seed must be a nonnegative 32-bit integer")
+                require(_point(event["at"]), "Effect location must be a normalized point")
             if kind == "sound":
                 require(_id(event["cue"]), "Sound cue ID is required")
                 from .audio_timeline import BUSES
@@ -215,6 +224,8 @@ def event_template(kind, eid, start_ms=0, duration_ms=1000):
         "dialogue": {"speaker": "Jeanne", "text": "Notre histoire commence..."},
         "fade": {"color": "#000000"},
         "sound": {"cue": "cinematic"},
+        "fx": {"effect": "fire", "intensity": .7, "seed": 1,
+               "at": [.5, .55]},
     }
     require(kind in details, "Unknown cinematic event type")
     return {**common, **deepcopy(details[kind])}
@@ -292,6 +303,7 @@ class CinematicFrame:
     dialogue_presentation: DialoguePresentation | None = None
     shot: str | None = None
     shot_transition: tuple | None = None
+    effects: tuple = ()
 
 
 def frame_at(clip, ms):
@@ -309,6 +321,7 @@ def frame_at(clip, ms):
     presentation = None
     shot = None
     shot_transition = None
+    effects = []
     for _, event in events:
         start = event["start_ms"]
         end = start + event["duration_ms"]
@@ -343,6 +356,10 @@ def frame_at(clip, ms):
             fade = (event["color"], ratio)
         elif kind == "sound" and ms < end:
             sounds.append(event["cue"])
+        elif kind == "fx" and ms < end:
+            effects.append((event["effect"], event["intensity"], event["seed"],
+                            tuple(event["at"]),
+                            round((ms - start) / event["duration_ms"], 6)))
     return CinematicFrame(ms, background, tuple(sorted(actors.items())),
                           camera, zoom, dialogue, fade, tuple(sounds),
-                          presentation, shot, shot_transition)
+                          presentation, shot, shot_transition, tuple(effects))
