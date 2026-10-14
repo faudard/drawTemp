@@ -156,6 +156,14 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_cinematics_gui.py -v
+      - name: Verify R7.17 cinematic monotonic timing, seek, portraits and resume in Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_r7_cinematic_visual_qa_gui -v
+      - name: Verify R7.18 reviewed audiovisual goldens and transparent portraits in Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_r7_cinematic_goldens_gui -v
       - name: Exercise 2.5.4 visual Campaign & Siege Studio
         env:
           SPOREBOUND_GUI_SMOKE: '1'

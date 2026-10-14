@@ -1,0 +1,429 @@
+{
+  "version": 1,
+  "description": "Reviewed semantic reference for same Player and Studio draw_frame path; no raster/font dependencies",
+  "samples": [
+    {
+      "clip": "castle_golden",
+      "portrait": true,
+      "expected": {
+        "ms": 0,
+        "viewport": [
+          800,
+          500
+        ],
+        "background": "#243c56",
+        "actors": [
+          [
+            "jeanne",
+            [
+              0.25,
+              0.6
+            ]
+          ]
+        ],
+        "actor_centers": [
+          [
+            200,
+            300
+          ]
+        ],
+        "camera": [
+          0,
+          0
+        ],
+        "zoom": 1,
+        "shot": "arrival",
+        "transition": [
+          "wipe",
+          0
+        ],
+        "dialogue": null,
+        "dialogue_boxes": [],
+        "portrait_images": [],
+        "labels": [
+          "Reference gate",
+          "JE",
+          "jeanne",
+          "arrival"
+        ],
+        "fade": null,
+        "mix": [
+          [
+            "score",
+            "music",
+            0.8,
+            true
+          ]
+        ],
+        "portrait_centers": [],
+        "transition_rects": [
+          [
+            0,
+            0,
+            800,
+            500
+          ]
+        ],
+        "fade_rects": []
+      }
+    },
+    {
+      "clip": "castle_golden",
+      "portrait": true,
+      "expected": {
+        "ms": 250,
+        "viewport": [
+          800,
+          500
+        ],
+        "background": "#243c56",
+        "actors": [
+          [
+            "jeanne",
+            [
+              0.2715,
+              0.6
+            ]
+          ]
+        ],
+        "actor_centers": [
+          [
+            184.5117,
+            303.125
+          ]
+        ],
+        "camera": [
+          0.025,
+          0
+        ],
+        "zoom": 1.0625,
+        "shot": "arrival",
+        "transition": [
+          "wipe",
+          0.5
+        ],
+        "dialogue": null,
+        "dialogue_boxes": [],
+        "portrait_images": [],
+        "labels": [
+          "Reference gate",
+          "JE",
+          "jeanne",
+          "arrival"
+        ],
+        "fade": null,
+        "mix": [
+          [
+            "score",
+            "music",
+            0.75,
+            true
+          ]
+        ],
+        "portrait_centers": [],
+        "transition_rects": [
+          [
+            0,
+            0,
+            400,
+            500
+          ]
+        ],
+        "fade_rects": []
+      }
+    },
+    {
+      "clip": "castle_golden",
+      "portrait": true,
+      "expected": {
+        "ms": 500,
+        "viewport": [
+          800,
+          500
+        ],
+        "background": "#243c56",
+        "actors": [
+          [
+            "jeanne",
+            [
+              0.3281,
+              0.6
+            ]
+          ]
+        ],
+        "actor_centers": [
+          [
+            200.3125,
+            306.25
+          ]
+        ],
+        "camera": [
+          0.05,
+          0
+        ],
+        "zoom": 1.125,
+        "shot": "arrival",
+        "transition": null,
+        "dialogue": {
+          "speaker": "Jeanne",
+          "visible": "",
+          "expression": "determined",
+          "portrait": "jeanne"
+        },
+        "dialogue_boxes": [
+          [
+            18,
+            365,
+            782,
+            488
+          ]
+        ],
+        "portrait_images": [
+          "portrait:jeanne_determined"
+        ],
+        "labels": [
+          "Reference gate",
+          "JE",
+          "jeanne",
+          "arrival",
+          "Jeanne · determined",
+          ""
+        ],
+        "fade": null,
+        "mix": [
+          [
+            "score",
+            "music",
+            0.7,
+            true
+          ]
+        ],
+        "portrait_centers": [
+          [
+            74,
+            420
+          ]
+        ],
+        "transition_rects": [],
+        "fade_rects": []
+      }
+    },
+    {
+      "clip": "castle_golden",
+      "portrait": true,
+      "expected": {
+        "ms": 1000,
+        "viewport": [
+          800,
+          500
+        ],
+        "background": "#243c56",
+        "actors": [
+          [
+            "jeanne",
+            [
+              0.5,
+              0.6
+            ]
+          ]
+        ],
+        "actor_centers": [
+          [
+            300,
+            312.5
+          ]
+        ],
+        "camera": [
+          0.1,
+          0
+        ],
+        "zoom": 1.25,
+        "shot": "arrival",
+        "transition": null,
+        "dialogue": {
+          "speaker": "Jeanne",
+          "visible": "Une ",
+          "expression": "determined",
+          "portrait": "jeanne"
+        },
+        "dialogue_boxes": [
+          [
+            18,
+            365,
+            782,
+            488
+          ]
+        ],
+        "portrait_images": [
+          "portrait:jeanne_determined"
+        ],
+        "labels": [
+          "Reference gate",
+          "JE",
+          "jeanne",
+          "arrival",
+          "Jeanne · determined",
+          "Une "
+        ],
+        "fade": null,
+        "mix": [
+          [
+            "score",
+            "music",
+            0.6,
+            true
+          ]
+        ],
+        "portrait_centers": [
+          [
+            74,
+            420
+          ]
+        ],
+        "transition_rects": [],
+        "fade_rects": []
+      }
+    },
+    {
+      "clip": "castle_golden",
+      "portrait": true,
+      "expected": {
+        "ms": 1750,
+        "viewport": [
+          800,
+          500
+        ],
+        "background": "#243c56",
+        "actors": [
+          [
+            "jeanne",
+            [
+              0.7285,
+              0.6
+            ]
+          ]
+        ],
+        "actor_centers": [
+          [
+            461.543,
+            321.875
+          ]
+        ],
+        "camera": [
+          0.175,
+          0
+        ],
+        "zoom": 1.4375,
+        "shot": "arrival",
+        "transition": null,
+        "dialogue": null,
+        "dialogue_boxes": [],
+        "portrait_images": [],
+        "labels": [
+          "Reference gate",
+          "JE",
+          "jeanne",
+          "arrival"
+        ],
+        "fade": [
+          "#000000",
+          0.5
+        ],
+        "mix": [
+          [
+            "score",
+            "music",
+            0.45,
+            true
+          ]
+        ],
+        "portrait_centers": [],
+        "transition_rects": [],
+        "fade_rects": [
+          [
+            0,
+            0,
+            800,
+            500
+          ]
+        ]
+      }
+    },
+    {
+      "clip": "castle_golden",
+      "portrait": true,
+      "expected": {
+        "ms": 1000,
+        "viewport": [
+          1600,
+          1000
+        ],
+        "background": "#243c56",
+        "actors": [
+          [
+            "jeanne",
+            [
+              0.5,
+              0.6
+            ]
+          ]
+        ],
+        "actor_centers": [
+          [
+            600,
+            625
+          ]
+        ],
+        "camera": [
+          0.1,
+          0
+        ],
+        "zoom": 1.25,
+        "shot": "arrival",
+        "transition": null,
+        "dialogue": {
+          "speaker": "Jeanne",
+          "visible": "Une ",
+          "expression": "determined",
+          "portrait": "jeanne"
+        },
+        "dialogue_boxes": [
+          [
+            18,
+            730,
+            1582,
+            988
+          ]
+        ],
+        "portrait_images": [
+          "portrait:jeanne_determined"
+        ],
+        "labels": [
+          "Reference gate",
+          "JE",
+          "jeanne",
+          "arrival",
+          "Jeanne · determined",
+          "Une "
+        ],
+        "fade": null,
+        "mix": [
+          [
+            "score",
+            "music",
+            0.6,
+            true
+          ]
+        ],
+        "portrait_centers": [
+          [
+            74,
+            840
+          ]
+        ],
+        "transition_rects": [],
+        "fade_rects": []
+      }
+    }
+  ]
+}
