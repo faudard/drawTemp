@@ -275,7 +275,7 @@ class WorkspaceR2Tests(unittest.TestCase):
         self.doc.replace(candidate)
         self.assertTrue(history.record(self.doc.data, updated))
         old_content, old_project = history.undo()
-        self.assertTrue(any(actor['id'] == 'ziggy'
+        self.assertTrue(any(actor.id == 'ziggy'
                             for actor in Content.from_dict(
                                 old_content).missions[self.mid].units))
         self.assertEqual(old_project.cinematics[0]['events'][0]['actor'], 'ziggy')
