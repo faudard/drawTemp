@@ -366,8 +366,8 @@ class CampaignWindow(QMainWindow):
         names = {row["id"]: row["name"] for row in data["missions"]}
         for mid, (x, y) in positions.items():
             unreachable = mid in data["graph"]["unreachable"]
-            scene.addRoundedRect(x, y, 152, 54, 12, 12,
-                                 QPen(QColor("#596d82")),
+            scene.addRect(x, y, 152, 54,
+                          QPen(QColor("#596d82")),
                                  QBrush(QColor("#8f5555" if unreachable else "#31516f")))
             item = scene.addText(names[mid][:26])
             item.setDefaultTextColor(QColor("#ffffff"))
