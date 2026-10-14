@@ -69,6 +69,10 @@ def main(argv=None):
         def saveGame(self, slot):
             self.invoke(self.controller.save, slot)
 
+        @Slot(int)
+        def restoreBackup(self, slot):
+            self.invoke(self.controller.restore_backup, slot)
+
         @Slot()
         def titleScreen(self):
             self.invoke(self.controller.title)
