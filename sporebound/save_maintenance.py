@@ -170,7 +170,9 @@ class LongSessionMaintenance:
                 "Unsafe archive history directory")
         archives = []
         for p in self.history.iterdir():
-            if _ARCHIVE_NAME.fullmatch(p.name):
+            if p.name.startswith("gen-"):
+                require(_ARCHIVE_NAME.fullmatch(p.name),
+                        f"Unrecognized archive generation: {p.name}")
                 require(p.is_dir() and not p.is_symlink(),
                         f"Unsafe archive generation: {p.name}")
                 archives.append(p)
