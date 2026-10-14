@@ -4,6 +4,10 @@ from copy import deepcopy
 from .cinematics import (KINDS, TRIGGERS, EASINGS, EXPRESSIONS, SHOT_TRANSITIONS,
                          cinematic_template, event_template, matching_cinematics)
 from .event_cinematic_qa import audit_event_cinematic_path
+from .audio_timeline import mix_at
+from .cinematic_authoring4 import (
+    add_motion_keyframe, update_motion_keyframe, remove_motion_keyframe,
+    move_event, resize_event, clone_event)
 from .cinematic_player import CinematicPlayback, draw_frame
 from .tk_renderer import CanvasRenderer
 from .game_project import GameProject
@@ -20,6 +24,8 @@ class CinematicStudio:
         self._refreshing = False
         self._drag = None
         self._positions = []
+        self._key_handles = []
+        self.selected_key_ms = None
         self._clip_ids = []
         self._event_ids = []
         self.vars = {name: self.tk.StringVar(value=default) for name, default in {
@@ -32,6 +38,8 @@ class CinematicStudio:
             "portrait": "", "expression": "neutral", "pace": "0", "fadein": "0",
             "fadeout": "0", "duck": "40", "color": "#243c56", "x0": "0.15", "y0": "0.65",
             "x1": "0.65", "y1": "0.65", "zoom0": "1", "zoom1": "1",
+            "key_time": "500", "key_x": "0.5", "key_y": "0.5",
+            "key_zoom": "1", "copy_id": "event_copy",
         }.items()}
         self.qa_status = self.tk.StringVar(value="")
         self.audio_loop = self.tk.BooleanVar(value=False)
@@ -102,60 +110,70 @@ class CinematicStudio:
         self.events = self.tk.Listbox(middle, height=9, exportselection=False)
         self.events.pack(fill="x", padx=5, pady=5)
         self.events.bind("<<ListboxSelect>>", self._on_event)
-        form = ttk.Frame(middle)
-        form.pack(fill="x")
-        fields = [
-            ("Événement ID", "eid", None),
-            ("Type", "kind", KINDS),
-            ("Début (ms)", "start", None),
-            ("Durée (ms)", "duration", None),
-            ("Acteur / voix / son", "subject", None),
-            ("Texte du dialogue", "text", None),
-            ("Couleur #RRGGBB", "color", None),
-            ("Départ X", "x0", None),
-            ("Départ Y", "y0", None),
-            ("Arrivée X", "x1", None),
-            ("Arrivée Y", "y1", None),
-            ("Zoom départ", "zoom0", None),
-            ("Zoom arrivée", "zoom1", None),
-            ("Easing", "easing", EASINGS),
-            ("Plan caméra", "shot", None),
-            ("Transition", "transition", SHOT_TRANSITIONS),
-            ("Portrait dialogue", "portrait", None),
-            ("Expression", "expression", EXPRESSIONS),
-            ("Rythme caractères/s (0=immédiat)", "pace", None),
-        ]
-        for row, (label, key, choices) in enumerate(fields):
-            self._field(form, row, label, key, choices)
-        audio = ttk.LabelFrame(middle, text="Pistes audio — événements sound")
-        audio.pack(fill="x", padx=4, pady=3)
-        audio_fields = (
-            (0, 0, "Bus", "bus", ("music", "ambience", "voice", "sfx")),
-            (0, 2, "Volume initial (%)", "volume", None),
-            (1, 0, "Volume final (%)", "volume_to", None),
-            (1, 2, "Fondu entrée (ms)", "fadein", None),
-            (2, 0, "Fondu sortie (ms)", "fadeout", None),
-            (2, 2, "Ducking voix (%)", "duck", None),
-        )
-        for row, col, label, key, choices in audio_fields:
-            ttk.Label(audio, text=label).grid(
-                row=row, column=col, sticky="w", padx=3, pady=2)
-            if choices is None:
-                control = ttk.Entry(audio, textvariable=self.vars[key], width=12)
-            else:
-                control = ttk.Combobox(audio, state="readonly",
-                                       textvariable=self.vars[key],
-                                       values=choices, width=12)
-            control.grid(row=row, column=col+1, sticky="ew", padx=3, pady=2)
-        ttk.Checkbutton(audio, text="Répéter la piste", variable=self.audio_loop).grid(
-            row=3, column=2, columnspan=2, sticky="w", padx=3)
-        audio.columnconfigure(1, weight=1)
-        audio.columnconfigure(3, weight=1)
+        # Contextual tabs replace the long all-properties-at-once column.
+        common = ttk.Frame(middle)
+        common.pack(fill="x", padx=4, pady=3)
+        for row, (label, key, values) in enumerate((
+                ("ID", "eid", None), ("Type", "kind", KINDS),
+                ("Début (ms)", "start", None), ("Durée (ms)", "duration", None))):
+            self._field(common, row, label, key, values)
+        self.inspector_tabs = ttk.Notebook(middle)
+        self.inspector_tabs.pack(fill="x", padx=4, pady=3)
+        motion = ttk.Frame(self.inspector_tabs)
+        dialogue = ttk.Frame(self.inspector_tabs)
+        audio = ttk.Frame(self.inspector_tabs)
+        self.inspector_tabs.add(motion, text="Animation / caméra")
+        self.inspector_tabs.add(dialogue, text="Dialogue / portrait")
+        self.inspector_tabs.add(audio, text="Son / musique")
+        for row, (label, key, choices) in enumerate((
+                ("Acteur", "subject", None), ("Couleur", "color", None),
+                ("Départ X", "x0", None), ("Départ Y", "y0", None),
+                ("Arrivée X", "x1", None), ("Arrivée Y", "y1", None),
+                ("Zoom départ", "zoom0", None), ("Zoom arrivée", "zoom1", None),
+                ("Easing", "easing", EASINGS), ("Plan", "shot", None),
+                ("Transition", "transition", SHOT_TRANSITIONS))):
+            self._field(motion, row, label, key, choices)
+        keys = ttk.LabelFrame(motion, text="Keyframes (acteur / caméra)")
+        keys.grid(row=11, column=0, columnspan=2, sticky="ew", pady=4)
+        self.key_list = self.tk.Listbox(keys, height=3, exportselection=False)
+        self.key_list.pack(fill="x", padx=4, pady=2)
+        self.key_list.bind("<<ListboxSelect>>", self._select_key)
+        key_form = ttk.Frame(keys)
+        key_form.pack(fill="x")
+        for row, (label, key) in enumerate((
+                ("Temps relatif (ms)", "key_time"), ("Position X", "key_x"),
+                ("Position Y", "key_y"), ("Zoom", "key_zoom"))):
+            self._field(key_form, row, label, key)
+        key_buttons = ttk.Frame(keys)
+        key_buttons.pack(fill="x")
+        self._button(key_buttons, "Ajouter au curseur", self.add_key)
+        self._button(key_buttons, "Modifier key", self.update_key)
+        self._button(key_buttons, "Supprimer key", self.delete_key)
+        for row, (label, key, choices) in enumerate((
+                ("Intervenant", "subject", None), ("Texte", "text", None),
+                ("Portrait", "portrait", None),
+                ("Expression", "expression", EXPRESSIONS),
+                ("Caractères/s (0=direct)", "pace", None))):
+            self._field(dialogue, row, label, key, choices)
+        for row, (label, key, choices) in enumerate((
+                ("Son", "subject", None),
+                ("Bus", "bus", ("music", "ambience", "voice", "sfx")),
+                ("Volume initial (%)", "volume", None),
+                ("Volume final (%)", "volume_to", None),
+                ("Fondu entrée (ms)", "fadein", None),
+                ("Fondu sortie (ms)", "fadeout", None),
+                ("Ducking voix (%)", "duck", None))):
+            self._field(audio, row, label, key, choices)
+        ttk.Checkbutton(audio, text="Répéter la piste",
+                        variable=self.audio_loop).grid(
+                            row=7, column=0, columnspan=2, sticky="w", padx=4)
         buttons = ttk.Frame(middle)
         buttons.pack(fill="x")
         self._button(buttons, "Ajouter événement", self.add_event)
         self._button(buttons, "Appliquer événement", self.update_event)
+        self._button(buttons, "Dupliquer", self.duplicate_event)
         self._button(buttons, "Supprimer événement", self.delete_event)
+        self._button(buttons, "Ajuster durée", self.resize_selected)
         ttk.Label(middle, textvariable=self.qa_status, wraplength=460).pack(
             fill="x", padx=5, pady=3)
         side = ttk.LabelFrame(main, text="Aperçu instantané")
@@ -170,8 +188,15 @@ class CinematicStudio:
         controls.pack(fill="x")
         self._button(controls, "Lecture complète", self.preview)
         self._button(controls, "Début", lambda: self.cursor.set(0))
-        ttk.Label(side, text="Événements temporels, caméra interpolée, dialogue et fondus.",
+        ttk.Label(side, text="Plans, portraits, interpolations et mixage au curseur.",
                   wraplength=340).pack(fill="x", padx=7, pady=5)
+        self.audio_canvas = self.tk.Canvas(side, width=360, height=96,
+                                           background="#111c2a",
+                                           highlightthickness=0)
+        self.audio_canvas.pack(fill="x", padx=4, pady=4)
+        self.audio_caption = self.tk.StringVar(value="Audio : sélectionner une séquence")
+        ttk.Label(side, textvariable=self.audio_caption).pack(
+            fill="x", padx=6, pady=2)
         timeline = ttk.LabelFrame(root, text="Timeline — cliquer pour parcourir, glisser pour déplacer")
         timeline.pack(fill="x", padx=12, pady=7)
         self.timeline = self.tk.Canvas(timeline, height=175, background="#152237",
@@ -188,6 +213,7 @@ class CinematicStudio:
         self.timeline.bind("<Configure>", lambda _: self._timeline())
         self.timeline.bind("<ButtonPress-1>", self._press)
         self.timeline.bind("<ButtonRelease-1>", self._release)
+        self.timeline.bind("<Escape>", lambda _: self.cancel_drag())
 
     def _project(self):
         return self.owner.project
