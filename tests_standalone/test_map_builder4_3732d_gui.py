@@ -70,7 +70,16 @@ class ReusablePrefab4GuiTests(unittest.TestCase):
                     # starts with rectangular view, where (8,8) is stable.
                     canvas.event_generate('<Motion>', x=8*54+8, y=8*54+8)
                     root.update()
-                    self.assertTrue(canvas.find_withtag('editor_group_preview'))
+                    preview = canvas.find_withtag('editor_group_preview')
+                    self.assertTrue(preview)
+                    self.assertEqual(
+                        canvas.itemcget(preview[0], 'outline'), '#36a16c',
+                        'Prefab hover invalid: ' + str(
+                            root.tk.globalgetvar(next(
+                                w.cget('textvariable') for w in descendants(root)
+                                if isinstance(w, ttk.Label)
+                                and 'Préfab' in str(w.cget('text'))))
+                            if False else 'preview was red'))
                     canvas.event_generate('<Button-1>', x=8*54+8, y=8*54+8)
                     canvas.event_generate('<ButtonRelease-1>', x=8*54+8, y=8*54+8)
                     root.update()
