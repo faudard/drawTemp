@@ -71,7 +71,8 @@ def _validate_case(spec):
         require(set(step['expect']) <= {
             'mode', 'pending_campaign', 'pending_tactical', 'flags',
             'history', 'fired', 'fired_exact', 'not_fired',
-            'completed', 'battle_result', 'hazards'},
+            'completed', 'unlocked', 'gold', 'inventory',
+            'battle_result', 'hazards'},
             'Unsupported certified observation')
 
 
@@ -113,6 +114,9 @@ def _observe(session, tracked_hazards=()):
         'history': deepcopy(session.progress.story_history),
         'fired': sorted(battle.fired) if battle is not None else [],
         'completed': sorted(session.progress.completed),
+        'unlocked': sorted(session.progress.unlocked),
+        'gold': session.progress.gold,
+        'inventory': deepcopy(session.progress.inventory),
         'battle_result': battle.result if battle is not None else None,
         'hazards': cells,
     }
@@ -129,6 +133,11 @@ def _assert_expected(observed, expected):
             wrongly_fired = sorted(set(reference) & set(observed['fired']))
             if wrongly_fired:
                 failures.append('Unexpected fired events: '+repr(wrongly_fired))
+        elif key == 'fired_exact':
+            if sorted(reference) != observed['fired']:
+                failures.append('Fired events differ: expected '+
+                                repr(sorted(reference))+', got '+
+                                repr(observed['fired']))
         elif key == 'flags':
             for flag, value in reference.items():
                 observed_flag = observed['flags'].get(flag)
@@ -182,7 +191,6 @@ def execute_certified_path(content, project, spec, *, rules=None):
         content.to_dict())
     session = GameSession.new(
         content, project, spec['campaign'], seed=spec['seed'], rules=rules)
-    original_history = []
     evidence = []
     fired_seen = set()
     choices_seen = set()
@@ -204,8 +212,7 @@ def execute_certified_path(content, project, spec, *, rules=None):
             observed = _observe(restored, hazards)
             failed = _assert_expected(observed, step['expect'])
             fired_seen.update(observed['fired'])
-            original_history.append(checkpoint['digest'])
-            evidence.append({
+             evidence.append({
                 'index': index, 'kind': step['kind'],
                 'choice_id': selected,
                 'replay_verified': True,
