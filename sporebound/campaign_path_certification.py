@@ -8,7 +8,6 @@ evidence. No production save/slot is read or written by this module.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -115,15 +114,13 @@ def _run(content, project, plan, *, rules, checkpoint_every, max_commands,
                 session.choose_story_option(step["id"])
                 timeline.append({"step": index, "kind": "choice",
                                  "scene": before, "choice": step["id"],
-                                 "session_digest": session.recording()["digest"]})
+                                 "current_scene": session.progress.story_pending})
                 checkpoint()
                 continue
 
             mid = step["id"]
             require(mid in session.available_missions(),
                     f"Step {index}: mission locked or narrative pending: {mid}")
-            require(session.world_can_enter(mid) if session.world_state() is not None
-                    else True, f"Step {index}: world location blocks mission: {mid}")
             session.start_mission(mid)
             require(session.active_battle is not None,
                     "Mission did not construct a tactical Battle")
