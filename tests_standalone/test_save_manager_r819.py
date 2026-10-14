@@ -69,7 +69,6 @@ class SaveManagerTests(unittest.TestCase):
             equal = manager.compare_archive("main", 1, second["name"])
             self.assertTrue(equal["same"])
             preview = manager.restoration_plan("main", 1, first["name"], 3)
-            self.assertIn("diff", "differences")
             self.assertEqual(preview["digest"], old_record["digest"])
             self.assertFalse(player.long_path_for("main", 3).exists())
             before_primary = player.long_path_for("main", 1).read_bytes()
@@ -162,6 +161,36 @@ class SaveManagerTests(unittest.TestCase):
                     "main", 1, archive["name"], 3,
                     expected_token=approval["token"])
             self.assertFalse(player.long_path_for("main", 3).exists())
+
+    def test_source_progress_change_invalidates_previously_confirmed_diff(self):
+        with TemporaryDirectory() as root:
+            player, manager = self.make(root)
+            player.new_long_game("main", 1)
+            archive = manager._maintenance("main", 1).archive_verified()
+            preview = manager.restoration_plan("main", 1, archive["name"], 3)
+            player.choose_story_option("assault")
+            with self.assertRaisesRegex(RuleError, "changed"):
+                manager.restore_to_free_slot(
+                    "main", 1, archive["name"], 3,
+                    expected_token=preview["token"])
+            self.assertFalse(player.long_path_for("main", 3).exists())
+            refreshed = manager.restoration_plan("main", 1, archive["name"], 3)
+            self.assertNotEqual(refreshed["token"], preview["token"])
+
+    def test_multifront_differences_appear_in_preview(self):
+        initial = GameSession.new(self.content, self.project, "main", seed=17)
+        initial.choose_story_option("assault")
+        prior = initial.recording()
+        initial.start_fronts(
+            {"gate": "gate", "walls": "walls"}, "gate",
+            specs={f: {"strength": 50, "opposition": 50}
+                   for f in ("gate", "walls")})
+        after = initial.recording()
+        difference = compare_recordings(prior, after)
+        self.assertFalse(difference["same"])
+        self.assertTrue(any(d["field"] == "tactical_digest"
+                            for d in difference["fields"]))
+        self.assertEqual(difference["selected"]["mode"], "fronts")
 
     def test_existing_writer_lock_blocks_guided_restore_and_no_ui_session_switch(self):
         with TemporaryDirectory() as root:
