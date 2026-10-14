@@ -18,7 +18,33 @@ KEY_CHOICES = (
     "<Control-Up>", "<Control-Down>", "<Control-Left>", "<Control-Right>",
     "<Key-1>", "<Key-2>", "<Key-3>", "<F1>", "<F2>", "<F3>",
     "<F4>", "<F5>", "<F6>", "<F7>", "<F8>", "<F9>", "<F10>",
-)
+) + tuple("<Key-" + chr(code) + ">" for code in range(ord("a"), ord("z") + 1))
+
+# Player-facing names are separate from the canonical Tk event sequences.
+KEY_LABELS = {
+    "<Return>": "Entrée", "<space>": "Espace", "<Escape>": "Échap",
+    "<plus>": "+", "<minus>": "-",
+    "<Up>": "↑ Haut", "<Down>": "↓ Bas",
+    "<Left>": "← Gauche", "<Right>": "→ Droite",
+    "<Control-Up>": "Ctrl + ↑", "<Control-Down>": "Ctrl + ↓",
+    "<Control-Left>": "Ctrl + ←", "<Control-Right>": "Ctrl + →",
+    "<Key-1>": "1", "<Key-2>": "2", "<Key-3>": "3",
+}
+KEY_LABELS.update({f"<Key-{chr(code)}>": chr(code).upper()
+                   for code in range(ord("a"), ord("z") + 1)})
+KEY_LABELS.update({f"<F{number}>": f"F{number}" for number in range(1, 11)})
+KEY_BY_LABEL = {label: sequence for sequence, label in KEY_LABELS.items()}
+ACTION_LABELS = {
+    "execute": "Valider l'action", "end": "Terminer le tour",
+    "cancel": "Annuler / Retour",
+    "zoom_in": "Zoom avant", "zoom_out": "Zoom arrière",
+    "north": "Sélection : haut", "south": "Sélection : bas",
+    "west": "Sélection : gauche", "east": "Sélection : droite",
+    "pan_north": "Caméra : haut", "pan_south": "Caméra : bas",
+    "pan_west": "Caméra : gauche", "pan_east": "Caméra : droite",
+    "zoom_24": "Zoom éloigné", "zoom_54": "Zoom normal",
+    "zoom_96": "Zoom rapproché",
+}
 DEFAULT_KEYS = {
     "execute": "<Return>", "end": "<space>", "cancel": "<Escape>",
     "zoom_in": "<plus>", "zoom_out": "<minus>",
