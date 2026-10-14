@@ -3815,16 +3815,19 @@ def launch(path):
         project_before = studio.project.to_dict()
         old = key.partition(':')[2].split('/', 1)[1]
         if _mentions(project_before, old):
+            content_before = json.dumps(doc.data, sort_keys=True)
             # Pre-validate both snapshots. Commit inside the existing Studio
             # history timeline so a single global Undo restores both files.
             next_content, next_project = plan_coordinated_rename(
                 doc.data, studio.project, key, baseline, new_id)
 
             def commit_joint_rename():
-                if studio.project.to_dict() != project_before:
-                    raise RuleError('GameProject modifié depuis la prévisualisation')
+                if (studio.project.to_dict() != project_before or
+                        json.dumps(doc.data, sort_keys=True) != content_before):
+                    raise RuleError('Documents modifiés depuis la prévisualisation')
                 doc.replace(next_content)
                 studio.project = next_project
+                editing_context.revision += 1
 
             design_change(commit_joint_rename)
         else:
