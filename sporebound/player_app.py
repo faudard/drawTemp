@@ -849,6 +849,13 @@ class PlayerApplication:
                       ("Résultat : " + battle.result if battle.result else
                        "Déploiement" if battle.deploying else
                        "Unité active : " + (battle.active.name if battle.active else "?")))
+        self.ttk.Label(
+            self.view, text="Objectif : " + str(battle.mission.objective),
+            font=("TkDefaultFont", round(12 * self.text_scale.get() / 100), "bold")
+        ).pack(anchor="w")
+        self.feedback_var.set("")
+        self.ttk.Label(self.view, textvariable=self.feedback_var,
+                       wraplength=1050).pack(anchor="w", pady=(3, 5))
         nav = self.ttk.Frame(self.view)
         nav.pack(fill="x", pady=4)
         if session.mode == "fronts":
@@ -933,27 +940,36 @@ class PlayerApplication:
                     self._button(actions, "Fin de tour", self._end).pack(side="left", padx=5)
         body = self.ttk.Frame(self.view)
         body.pack(fill="both", expand=True, pady=9)
-        self.canvas = self.tk.Canvas(body, background="#172638", highlightthickness=0,
-                                     takefocus=1)
+        self.canvas = self.tk.Canvas(
+            body, background="#172638", takefocus=1, highlightthickness=2,
+            highlightcolor="#ffeb70", highlightbackground="#446077")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.renderer = CanvasRenderer(self.canvas, registry=self.registry,
                                        asset_root=self.asset_root)
         self.iso_renderer = IsoBattleCanvas(self.canvas)
         self.canvas.bind("<Button-1>", self._select_cell)
-        self.canvas.bind("<Return>", lambda _event: self._safe(self._execute))
-        self.canvas.bind("<space>", lambda _event: self._safe(self._end))
+        self._bind_battle_keys()
         self.canvas.bind("<MouseWheel>", self._zoom)
         self.canvas.bind("<Button-4>", lambda _: self._zoom_step(1))
         self.canvas.bind("<Button-5>", lambda _: self._zoom_step(-1))
         self.canvas.bind("<ButtonPress-2>", self._pan_start)
         self.canvas.bind("<B2-Motion>", self._pan_drag)
-        self.info = self.tk.Text(body, width=37, wrap="word", fg="#e9f2fc",
-                                 bg="#182a40", relief="flat")
+        self.info = self.tk.Text(
+            body, width=29 if self.compact_hud.get() else 37, wrap="word",
+            fg="#ffffff" if self.high_contrast.get() else "#e9f2fc",
+            bg="#000000" if self.high_contrast.get() else "#182a40",
+            font=("TkDefaultFont", round(11 * self.text_scale.get() / 100)),
+            relief="flat")
         self.info.pack(side="right", fill="y", padx=(9, 0))
         self._redraw()
-        self.ttk.Label(self.view,
-                       text="Carte : Entrée = exécuter • Espace = finir le tour | "
-                            "Rouge = terrain, violet = incantation, orange = charge possible").pack(anchor="w")
+        self.canvas.focus_set()
+        self.ttk.Label(
+            self.view,
+            text="Carte : " + self.keymap.get("execute") + " = action ; " +
+            self.keymap.get("end") + " = fin de tour ; flèches = sélection ; " +
+            "Ctrl+flèches = caméra ; raccourcis modifiables dans Options. "
+            "Menaces : terrain certain, sorts programmés, réactions armées, charges possibles."
+        ).pack(anchor="w")
         if not session.finalized:
             self._button(self.view, "Abandonner l'opération",
                          self._abandon).pack(anchor="e", pady=4)
@@ -1000,7 +1016,10 @@ class PlayerApplication:
         self._motion_frame = frame
         self._render_motion(clock_ms)
         self.audio.observe(battle)
-        rows = ["Case : " + str(self.selection), "", "Escouades"]
+        hud = combat_hud(frame, battle.mission.objective, self.selection)
+        self.feedback_var.set(hud.selection_summary)
+        rows = ["Objectif : " + hud.objective, hud.headline,
+                hud.selection_summary, "", "Escouades"]
         if self.action_var.get() == 'level_attack' and battle.active is not None:
             try:
                 rows.append('Tir vertical : ' + str(battle.vertical_forecast(
@@ -1010,12 +1029,10 @@ class PlayerApplication:
         if battle.mission.level_links:
             rows.insert(1, "Étage actif : N" + str(
                 battle.unit_levels.get(battle.active_id, 0) if battle.active_id else 0))
-        rows.extend(u.name + " (" + u.team + ") : PV " + str(u.hp) + "/" +
-                    str(u.max_hp) + " / MP " + str(u.mp) + "/" + str(u.max_mp)
-                    for u in frame.actors)
-        if frame.forecast:
-            rows.extend(["", "Prévisions"])
-            rows.extend(str(item) for item in frame.forecast)
+        rows.extend(hud.roster)
+        if hud.forecasts:
+            rows.extend(["", "Prévisions moteur (sans simulation cachée)"])
+            rows.extend(hud.forecasts)
         # Clarity: scheduled casts, armed reactions and hypothetical charges
         # are not equivalent to certain environmental damage.
         threats = {}
