@@ -148,6 +148,9 @@ class CampaignSimulationTests(unittest.TestCase):
             progress.story_flags["reputation_village"] = 999
             progress.gold = 999
             self.assertEqual(sim.inspect()["variables"]["reputation_village"], 2)
+            exposed_node = sim.node()
+            exposed_node.progress.story_flags["reputation_village"] = -999
+            self.assertEqual(sim.inspect()["variables"]["reputation_village"], 2)
             self.assertEqual(initial.story_flags, {})
             sim.select(0)
             sim.fork("alternate checkpoint")
