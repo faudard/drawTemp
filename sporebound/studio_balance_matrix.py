@@ -32,6 +32,7 @@ class BalanceMatrixStudio:
         self.notebook = notebook
         self.cases = []
         self.current = None
+        self._run_snapshot = None
         self.baseline = None
         self.comparison = None
         self.busy = False
@@ -109,6 +110,8 @@ class BalanceMatrixStudio:
                         command=self.export).pack(side="left", padx=3)
         self.ttk.Button(results, text="Inspecter mission dans Battle Lab",
                         command=self.inspect_mission).pack(side="left", padx=3)
+        self.ttk.Button(results, text="Visualiser scénario",
+                        command=self.visualize_selected).pack(side="left", padx=3)
         self.status = self.ttk.Label(self.frame, text="Prêt · aucun scénario exécuté.")
         self.status.pack(anchor="w", pady=2)
         self.rows = self.ttk.Treeview(
@@ -219,6 +222,7 @@ class BalanceMatrixStudio:
             self.owner.dialogs.showerror("Balance Matrix", str(exc))
             return
         self.busy = True
+        self._run_snapshot = (content, rules)
         self.run_button.configure(state="disabled")
         self.status.configure(text="Simulations matricielles en cours…")
         def worker():
@@ -321,6 +325,21 @@ class BalanceMatrixStudio:
                 save_matrix(path, self.current)
             except (OSError, RuleError) as exc:
                 self.owner.dialogs.showerror("Balance Matrix", str(exc))
+
+    def visualize_selected(self):
+        """Open true A/B metrics, retaining the variant content at run time."""
+        if self.busy or self.current is None:
+            return
+        selection = self.rows.selection()
+        if not selection:
+            self.owner.dialogs.showerror(
+                "Balance Matrix", "Sélectionner un scénario mesuré.")
+            return
+        try:
+            self.owner.visual_battle_lab.show_matrix(
+                self.current, selection[0], snapshot=self._run_snapshot)
+        except (RuleError, KeyError, ValueError) as exc:
+            self.owner.dialogs.showerror("Visual Battle Lab", str(exc))
 
     def inspect_mission(self):
         if not self.rows.selection():

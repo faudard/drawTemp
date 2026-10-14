@@ -131,6 +131,14 @@ class TacticalEventGraphGUITests(unittest.TestCase):
                     # 3.2: the same UI can preview an entire real-engine
                     # cascade without creating another simulator/editor.
                     self.assertIn('Simuler chaîne', buttons)
+                    # 3.4: branch editing stays in the same studio inspector.
+                    # This mission has no linked story: no fabricated option
+                    # is offered until an author connects a real scene.
+                    self.assertIn('Simuler branches', buttons)
+                    self.assertIn('Lier au choix', buttons)
+                    self.assertIn('Effacer choix', buttons)
+                    self.assertIn('+ OU rejoindre', buttons)
+                    self.assertIn('− OU retirer', buttons)
                     self.assertIn('+ Lier événement', buttons)
                     self.assertIn('− Délier événement', buttons)
                     scenario.set('Condition vraie')

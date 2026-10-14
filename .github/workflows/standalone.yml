@@ -45,6 +45,10 @@ jobs:
           python -m sporebound validate --content "${{ runner.temp }}/world-3724a.json" --project "${{ runner.temp }}/world-3724a.game.json"
       - name: Verify 3.7.32C Map Builder layer locking and sidecar state
         run: python -m unittest discover -s tests_standalone -p test_map_layer_workspace_3732c.py -v
+      - name: Verify Map Builder 4.0D rotated reusable prefabs and model references
+        run: python -m unittest tests_standalone.test_map_builder4_3732d -v
+      - name: Verify 3.7.32E reproducible assisted quarter proposals and model safety
+        run: python -m unittest tests_standalone.test_map_builder4_3732e -v
       - run: python -m unittest discover -s tests_standalone -v
       - name: Battle Lab 3.8 CLI report and paired deterministic replay gate
         run: |
@@ -54,6 +58,8 @@ jobs:
         run: |
           python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --report matrix_382_ci.json > matrix_382_console.json
           python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --baseline matrix_382_ci.json > matrix_382_compare.json
+      - name: Visual Battle Lab 3.8.3 deterministic figures and CT replay
+        run: python -m unittest tests_standalone.test_battle_visual_383 -v
       - name: Combat Diagnostics 3.8.1 canonical trace and CLI replay evidence
         run: python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 40 --report battle_diagnostics_ci.json
       - name: Human Playtest Telemetry 3.8.4 opt-in, committed events and privacy
@@ -130,6 +136,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_playtest_384_gui.py -v
+      - name: Visual Battle Lab 3.8.3 GUI charts and seed replay
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_battle_visual_383_gui.py -v
       - name: Combat Diagnostics 3.8.1 selected-seed replay GUI
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -237,6 +247,14 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_map_layer_workspace_3732c_gui.py -v
+      - name: Verify Map Builder 4.0D visual prefab palette and click-to-stamp
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_map_builder4_3732d_gui -v
+      - name: Verify 3.7.32E Studio proposal preview, explicit commit, save and undo
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_map_builder4_3732e_gui -v
       - name: Verify 3.7.20A interior roof cutaway and picking at three zoom levels
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -321,10 +339,18 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_event_graph_gui.py -v
+      - name: Verify 3.5 visual choice branch builder directly from map
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_event_branch_builder_35_gui.py -v
       - name: Exercise unfolded story tree authoring
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_story_graph_gui.py -v
+      - name: Verify 3.6 visual Story and Event drag-and-drop links
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_visual_branch_graph_36_gui.py -v
       - name: Exercise full Studio to Player talent progression under Xvfb
         env:
           SPOREBOUND_GUI_SMOKE: '1'

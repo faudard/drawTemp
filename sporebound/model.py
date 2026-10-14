@@ -440,16 +440,22 @@ class Content:
                             "Siege engine needs a gate target")
             # Chained events use ordinary Mission.triggers and stored event IDs;
             # validate the complete graph before allowing any Player load.
-            if any('after' in t for t in m.triggers):
+            if any('after' in t or 'after_any' in t for t in m.triggers):
                 require(len(m.triggers) <= 200,
                         "Event chain budget exceeded (200 triggers)")
                 dependencies = {}
                 known = {t['id'] for t in m.triggers}
                 for row in m.triggers:
-                    refs = row.get('after', [])
-                    if 'after' in row:
-                        require(isinstance(refs, list) and 1 <= len(refs) <= 8,
-                                "Event prerequisites must have 1..8 entries")
+                    refs = []
+                    for field in ('after', 'after_any'):
+                        group = row.get(field, [])
+                        if field in row:
+                            require(isinstance(group, list) and
+                                    1 <= len(group) <= 8,
+                                    'Event ' + field + ' requires 1..8 entries')
+                        require(isinstance(group, list),
+                                'Event prerequisites must be lists')
+                        refs += group
                     require(all(isinstance(ref, str) and ref in known
                                 and ref != row['id'] for ref in refs)
                             and len(refs) == len(set(refs)),
@@ -496,6 +502,14 @@ class Content:
                 trigger_ids.add(trigger["id"])
                 from .rules.triggers import ValidationContext
                 context = ValidationContext(b, ids, rules, self.archetypes, object_ids)
+                if 'after_choice' in trigger:
+                    choice = trigger['after_choice']
+                    require(isinstance(choice, dict)
+                            and set(choice) == {'scene', 'choice'}
+                            and all(isinstance(choice.get(key), str)
+                                    and 0 < len(choice[key]) <= 64
+                                    for key in ('scene', 'choice')),
+                            'Invalid tactical choice event guard')
                 rules.trigger_conditions.get(trigger['condition']).validate(context, trigger)
                 if 'when' in trigger:
                     from .rules.triggers import validate_composite

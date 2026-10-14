@@ -68,8 +68,10 @@ class WatercolorCatalogTests(unittest.TestCase):
             provenance["sprite_hashes"][relative] = sha256(png()).hexdigest()
             provenance_path.write_text(json.dumps(provenance))
             catalog = WatercolorCatalog(root)
-            self.assertEqual(catalog.status("jeanne_idle", verify=True),
-                             ("ready", target))
+            status, verified_path = catalog.status("jeanne_idle", verify=True)
+            self.assertEqual(status, "ready")
+            # Windows 8.3 aliases and long paths may spell the same file differently.
+            self.assertTrue(verified_path.samefile(target))
 
     def test_missing_metadata_is_safe_for_installed_wheels(self):
         with TemporaryDirectory() as tmp:

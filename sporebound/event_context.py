@@ -287,6 +287,24 @@ def condition_trace(battle, event):
         prerequisites = prerequisites and passed
         result.append({'path': 'after:' + prior, 'label': 'APRÈS ' + prior,
                        'kind': 'prerequisite', 'passed': passed})
+    alternatives = event.get('after_any', [])
+    if alternatives:
+        passed = any(prior in battle.fired for prior in alternatives)
+        prerequisites = prerequisites and passed
+        result.append({'path': 'after_any',
+                       'label': 'APRÈS AU MOINS UN : ' + ', '.join(alternatives),
+                       'kind': 'prerequisite_any', 'passed': passed})
+    guard = event.get('after_choice')
+    if guard:
+        passed = any(
+            row['kind'] == 'story_choice' and
+            row.get('scene') == guard['scene'] and
+            row.get('choice') == guard['choice']
+            for row in battle.events)
+        prerequisites = prerequisites and passed
+        result.append({'path': 'after_choice', 'kind': 'choice',
+                       'label': ('CHOIX ' + guard['scene'] + '/' +
+                                 guard['choice']), 'passed': passed})
     return primary and secondary and prerequisites, result
 
 
@@ -416,7 +434,11 @@ def preview_event_chain(data, mission_id, event_id, *, project=None,
     fired = [eid for eid in battle.fired if eid in ids]
     waiting = [{'event_id': row['id'],
                 'missing': [ref for ref in row.get('after', [])
-                            if ref not in battle.fired]}
+                            if ref not in battle.fired] +
+                           (list(row['after_any'])
+                            if row.get('after_any') and not any(
+                                ref in battle.fired
+                                for ref in row['after_any']) else [])}
                for row in ordered if row['id'] not in fired]
     clips = []
     scenes = []

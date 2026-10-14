@@ -7,7 +7,9 @@ from copy import deepcopy
 
 from . import event_composer, event_graph, event_context
 from .event_debugger import EventDebugger, format_debug_report
-from .model import RuleError, require
+from .event_branches import preview_choice_routes, format_choice_routes
+from .model import Content, RuleError, require
+from .tactical_rpg3 import authored_rules_for_document
 from .performance_trace import begin_ui, finish_ui
 
 
@@ -28,6 +30,7 @@ class EventGraphStudio:
         self.cond_object = self.tk.StringVar()
         self.composite_summary = self.tk.StringVar(value='Aucune condition ajoutée')
         self.prereq_choice = self.tk.StringVar()
+        self.branch_choice = self.tk.StringVar()
         self.condition_path = None
         self.action_kind = self.tk.StringVar(value='message')
         self.action_text = self.tk.StringVar(value='Renforts !')
@@ -93,6 +96,7 @@ class EventGraphStudio:
         self._button(header, '↑ Priorité', lambda: self.reorder_event(-1))
         self._button(header, '↓ Priorité', lambda: self.reorder_event(1))
         self._button(header, 'Supprimer événement', self.delete_event)
+        self._button(header, '+ Choix depuis carte', self.launch_branch_wizard)
         ttk.Label(header, text='Zoom').pack(side='left', padx=(12, 3))
         self.zoom_box = ttk.Combobox(header, textvariable=self.zoom,
                                     values=['70%', '100%', '130%'],
@@ -145,6 +149,12 @@ class EventGraphStudio:
             chain_controls, text='Simuler chaîne',
             command=lambda: self.owner._run(self.preview_chain))
         self.chain_button.pack(side='left', padx=3)
+        branch_controls = ttk.Frame(contextual)
+        branch_controls.pack(fill='x', pady=2)
+        self.branch_button = ttk.Button(
+            branch_controls, text='Simuler branches',
+            command=lambda: self.owner._run(self.preview_branches))
+        self.branch_button.pack(side='left', padx=3)
         scenario_controls = ttk.Frame(contextual)
         scenario_controls.pack(fill='x', pady=2)
         ttk.Label(scenario_controls, text='Scénario :').pack(side='left', padx=3)
@@ -216,9 +226,26 @@ class EventGraphStudio:
         dep_controls.pack(fill='x')
         self._button(dep_controls, '+ Lier événement', self.link_predecessor)
         self._button(dep_controls, '− Délier événement', self.unlink_predecessor)
+        alternative_controls = ttk.Frame(dependencies)
+        alternative_controls.pack(fill='x')
+        self._button(alternative_controls, '+ OU rejoindre', self.link_alternative)
+        self._button(alternative_controls, '− OU retirer', self.unlink_alternative)
         self.prereq_text = ttk.Label(
             dependencies, text='Aucune dépendance', wraplength=300)
         self.prereq_text.pack(fill='x', padx=4, pady=3)
+        choice_frame = ttk.LabelFrame(cond, text='Branchement par choix narratif')
+        choice_frame.grid(row=13, column=0, columnspan=2, sticky='ew',
+                          padx=4, pady=4)
+        ttk.Label(choice_frame, text='Choix réel : scène / réponse').pack(
+            anchor='w', padx=4)
+        self.branch_box = ttk.Combobox(
+            choice_frame, textvariable=self.branch_choice,
+            state='readonly', width=30)
+        self.branch_box.pack(fill='x', padx=4)
+        branch_buttons = ttk.Frame(choice_frame)
+        branch_buttons.pack(fill='x')
+        self._button(branch_buttons, 'Lier au choix', self.bind_choice)
+        self._button(branch_buttons, 'Effacer choix', self.clear_choice)
         composite = ttk.LabelFrame(cond, text='Conditions supplémentaires (ET / OU / NON)')
         composite.grid(row=11, column=0, columnspan=2, sticky='ew', padx=4, pady=5)
         ttk.Label(composite, textvariable=self.composite_summary,
@@ -465,6 +492,56 @@ class EventGraphStudio:
         self._edit(lambda doc: event_graph.unlink_event(
             doc, self.owner.mission(), event['id'], prior))
 
+    def link_alternative(self):
+        event, prior = self._event(), self.prereq_choice.get()
+        self._edit(lambda doc: event_graph.link_alternative(
+            doc, self.owner.mission(), event['id'], prior))
+
+    def unlink_alternative(self):
+        event, prior = self._event(), self.prereq_choice.get()
+        self._edit(lambda doc: event_graph.unlink_alternative(
+            doc, self.owner.mission(), event['id'], prior))
+
+    def _tactical_choices(self):
+        project = self.owner.project
+        if project is None:
+            return []
+        story = project.story
+        scenes = {row['id']: row for row in story.get('scenes', [])}
+        links = story.get('during_tactical_event', {})
+        roots = [scene for ref, scene in links.items()
+                 if ref.startswith(self.owner.mission() + '/')]
+        visited = set()
+        todo = list(roots)
+        while todo:
+            sid = todo.pop()
+            if sid in visited or sid not in scenes:
+                continue
+            visited.add(sid)
+            todo.extend(choice['next_scene']
+                        for choice in scenes[sid]['choices']
+                        if choice.get('next_scene'))
+        return sorted(sid + '/' + row['id']
+                      for sid in visited for row in scenes[sid]['choices'])
+
+    def bind_choice(self):
+        event = self._event()
+        label = self.branch_choice.get()
+        require(label in self._tactical_choices(), 'Choisir un choix tactique lié')
+        sid, cid = label.split('/', 1)
+        def change(doc):
+            result = event_graph.bind_choice(
+                doc, self.owner.mission(), event['id'], sid, cid)
+            self.owner.project.validate(Content.from_dict(
+                result, rules=authored_rules_for_document(result)))
+            return result
+        self._edit(change)
+
+    def clear_choice(self):
+        event = self._event()
+        self._edit(lambda doc: event_graph.clear_choice(
+            doc, self.owner.mission(), event['id']))
+
     def clear_composite(self):
         event = self._event()
         self._edit(lambda doc: event_graph.clear_composite_condition(
@@ -567,8 +644,17 @@ class EventGraphStudio:
         if self.prereq_choice.get() not in options:
             self.prereq_choice.set(options[0] if options else '')
         self.prereq_text.config(
-            text='Attend : ' + ', '.join(event.get('after', []))
-            if event.get('after') else 'Aucune dépendance')
+            text=('ET : ' + ', '.join(event.get('after', [])) +
+                  ' | OU : ' + ', '.join(event.get('after_any', [])))
+            if event.get('after') or event.get('after_any')
+            else 'Aucune dépendance')
+        choices = self._tactical_choices()
+        self.branch_box['values'] = choices
+        guard = event.get('after_choice')
+        if guard:
+            self.branch_choice.set(guard['scene'] + '/' + guard['choice'])
+        elif self.branch_choice.get() not in choices:
+            self.branch_choice.set(choices[0] if choices else '')
         self.action_list.delete(0, 'end')
         for i, action in enumerate(event['actions']):
             self.action_list.insert('end', f"{i+1}. {event_graph.action_title(action)}")
@@ -895,6 +981,28 @@ class EventGraphStudio:
             str(len(report['fired_ids'])) + '/' +
             str(len(report['chain_ids'])) +
             ' événements de la chaîne exécutés dans Battle.')
+        self.draw()
+
+    def launch_branch_wizard(self, *, origin_id=None):
+        """Create tactical and narrative branches from the current map cell."""
+        require(self.owner.project is not None, 'Ouvrir un projet de jeu')
+        from .studio_event_branch_wizard import VisualChoiceWizard
+        return VisualChoiceWizard(
+            self, origin_id=self.event_id.get() if origin_id is None
+            else origin_id)
+
+    def preview_branches(self):
+        require(self.context is not None and self.owner.project is not None,
+                'Choisir un événement relié à un dialogue tactique')
+        report = preview_choice_routes(
+            self.owner.doc().data, self.owner.project,
+            self.owner.mission(), self.context['event_id'],
+            tick=int(self.preview_tick.get()),
+            scenario=self.scenario_labels[self.preview_scenario.get()])
+        self.last_preview = None
+        self._set_context_text(format_choice_routes(report), show_end=True)
+        self.status.set(str(len(report['routes'])) +
+                        ' chemins narratifs simulés séparément.')
         self.draw()
 
     def preview_scene(self):
