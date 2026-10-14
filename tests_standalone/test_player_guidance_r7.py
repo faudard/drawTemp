@@ -27,10 +27,11 @@ class PlayerGuidanceR7Tests(unittest.TestCase):
 
     def test_deployment_help_never_changes_battle(self):
         digest = self.battle.digest()
-        result = combat_guidance(self.frame, "deploy")
+        deploying = replace(self.frame, deploying=True, active_id=None)
+        result = combat_guidance(deploying, "deploy")
         self.assertEqual(result.phase, "deployment")
         self.assertIn("deploy", result.instruction)
-        self.assertEqual(result, combat_guidance(self.frame, "deploy"))
+        self.assertEqual(result, combat_guidance(deploying, "deploy"))
         self.assertEqual(self.battle.digest(), digest)
 
     def test_results_enemy_and_idle_have_distinct_instructions(self):
