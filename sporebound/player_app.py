@@ -23,6 +23,7 @@ from .world_map_view import draw_world_map, pick_world_mission
 from .visual_motion import MotionDirector
 from .player_ux import (KeyBindings, PresentationState, combat_hud,
                         clamp_selection, zoom_to, ZOOM_PRESETS)
+from .player_preferences import load_preferences, save_preferences
 
 
 class PlayerApplication:
@@ -32,7 +33,6 @@ class PlayerApplication:
 
         self.tk, self.ttk, self.messagebox = tk, ttk, messagebox
         self.presentation = PresentationState()
-        self.keymap = KeyBindings()
         content_path = Path(content_path)
         project_path = (Path(project_path) if project_path is not None
                         else content_path.with_suffix(".game.json"))
@@ -43,6 +43,8 @@ class PlayerApplication:
                    else GameProject.default(content))
         profile = (Path(profile_path) if profile_path is not None
                    else Path.home() / ".sporebound" / project_path.name)
+        preferences, self.preferences_error = load_preferences(profile)
+        self.keymap = KeyBindings(preferences["keybindings"])
         self.player = PlayerController(content, project, profile)
         # Local playtest capture is opt-in, separate from savegames.
         from .playtest_telemetry import PlaytestRecorder
@@ -59,9 +61,9 @@ class PlayerApplication:
                                 music_volume=project.options["music_volume"])
         self.root = tk.Tk()
         self.playtest_optin = tk.BooleanVar(value=False)
-        self.text_scale = tk.IntVar(value=100)
-        self.high_contrast = tk.BooleanVar(value=False)
-        self.compact_hud = tk.BooleanVar(value=False)
+        self.text_scale = tk.IntVar(value=preferences["text_scale"])
+        self.high_contrast = tk.BooleanVar(value=preferences["high_contrast"])
+        self.compact_hud = tk.BooleanVar(value=preferences["compact_hud"])
         self.feedback_var = tk.StringVar()
         self.root.title(project.title)
         self.root.geometry("1160x820")
@@ -375,6 +377,10 @@ class PlayerApplication:
             self.ttk.Label(self.view, text=name).pack(anchor="w", pady=(8, 0))
             self.ttk.Scale(self.view, from_=0, to=100, variable=variable).pack(
                 fill="x", padx=24, pady=(2, 12))
+        if self.preferences_error:
+            self.ttk.Label(
+                self.view, text=self.preferences_error, wraplength=740
+            ).pack(anchor="w", pady=5)
         access = self.ttk.LabelFrame(self.view, text="Accessibilité et commandes", padding=10)
         access.pack(fill="x", pady=6)
         self.ttk.Checkbutton(access, text="Contraste renforcé",
@@ -403,7 +409,20 @@ class PlayerApplication:
         self.ttk.Checkbutton(self.view, text="Plein écran", variable=full).pack(
             anchor="w", pady=10)
         def apply():
-            self.keymap.replace({action: var.get() for action, var in key_vars.items()})
+            proposed_keys = KeyBindings({action: var.get()
+                                         for action, var in key_vars.items()})
+            settings = {
+                "version": 1,
+                "keybindings": dict(proposed_keys.items()),
+                "text_scale": self.text_scale.get(),
+                "high_contrast": self.high_contrast.get(),
+                "compact_hud": self.compact_hud.get(),
+            }
+            # Persist only after validation. Failed disk writes cannot
+            # corrupt a savegame or the previous preferences.
+            save_preferences(self.player.profile, settings)
+            self.keymap = proposed_keys
+            self.preferences_error = None
             self._style()
             self.audio.effects_volume = effects.get() / 100
             self.audio.music_volume = music.get() / 100
