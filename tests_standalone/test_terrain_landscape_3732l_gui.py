@@ -5,7 +5,7 @@ import unittest
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
 from sporebound.editor import Document
-from sporebound.iso_map import render_isometric
+from sporebound.iso_map import IsoTerrainAtlas, render_isometric
 from sporebound.model import Content
 
 
@@ -17,6 +17,7 @@ class NaturalMapGuiTests(unittest.TestCase):
         root = tk.Tk()
         self.addCleanup(root.destroy)
         first, second = tk.Canvas(root), tk.Canvas(root)
+        first_atlas, second_atlas = IsoTerrainAtlas(first), IsoTerrainAtlas(second)
         data = add_blank_mission(Content.load(DEFAULT_CONTENT).to_dict(),
                                  'landscape_gui', 'Landscape render', 32, 32)
         doc = Document(Content.from_dict(data))
@@ -30,9 +31,9 @@ class NaturalMapGuiTests(unittest.TestCase):
                 params = dict(cell_size=zoom, layers={},
                               selected_cell=(0, 0), selected_tiles=())
                 render_isometric(first, mission.board, mission, mission.units,
-                                 **params)
+                                 atlas=first_atlas, **params)
                 render_isometric(second, mission.board, mission, mission.units,
-                                 **params)
+                                 atlas=second_atlas, **params)
                 def snapshot(canvas):
                     return tuple((canvas.type(item),
                                   tuple(canvas.coords(item)),
@@ -42,6 +43,7 @@ class NaturalMapGuiTests(unittest.TestCase):
                                  for item in canvas.find_all())
                 self.assertEqual(snapshot(first), snapshot(second))
                 self.assertTrue(first.find_all())
+                self.assertTrue(first.find_withtag('terrain_autoblend'))
                 self.assertTrue(all(mission.board.tile(point).surface in
                                     ('dirt', 'bridge') for point in plan.road))
 
