@@ -33,6 +33,25 @@ class PlayerUXR7Tests(unittest.TestCase):
             keys.replace({"teleport": "<F4>"})
         self.assertEqual(keys.items(), before)
 
+    def test_arrows_and_letter_shortcuts_are_readable_and_remappable(self):
+        from sporebound.player_ux import (ACTION_LABELS, KEY_BY_LABEL,
+                                         KEY_CHOICES, KEY_LABELS)
+        self.assertEqual(KEY_LABELS["<Left>"], "← Gauche")
+        self.assertEqual(KEY_LABELS["<Right>"], "→ Droite")
+        self.assertEqual(KEY_BY_LABEL["A"], "<Key-a>")
+        self.assertEqual(KEY_BY_LABEL["W"], "<Key-w>")
+        self.assertEqual(KEY_BY_LABEL["Q"], "<Key-q>")
+        self.assertEqual(KEY_BY_LABEL["R"], "<Key-r>")
+        self.assertEqual(set(KEY_CHOICES), set(KEY_LABELS))
+        self.assertEqual(len(KEY_CHOICES), len(KEY_BY_LABEL))
+        self.assertEqual(ACTION_LABELS["pan_west"], "Caméra : gauche")
+        remapped = KeyBindings()
+        remapped.replace({"north": "<Key-w>", "south": "<Key-s>",
+                          "west": "<Key-a>", "east": "<Key-d>"})
+        self.assertEqual(remapped.get("west"), "<Key-a>")
+        with self.assertRaises(ValueError):
+            remapped.replace({"execute": "<Key-a>"})
+
     def test_presentation_invalidates_stale_callbacks(self):
         state = PresentationState()
         old = state.transition("battle")
