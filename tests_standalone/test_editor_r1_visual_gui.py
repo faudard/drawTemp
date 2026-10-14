@@ -166,10 +166,8 @@ class VisualR1Acceptance(unittest.TestCase):
                     danger = next(w for w in self.walk(root)
                                   if isinstance(w, ttk.Label) and
                                   w.cget('text') == 'Case danger (x,y)')
-                    danger_field = next(w for w in danger.master.winfo_children()
-                                        if isinstance(w, ttk.Entry))
-                    # Some Studio form fields share a parent; select its
-                    # grid-mate explicitly rather than the first entry.
+                    # Studio form fields share a parent: select the exact
+                    # entry in the same grid row as its caption.
                     danger_row = int(danger.grid_info()['row'])
                     danger_field = next(
                         w for w in danger.master.grid_slaves(row=danger_row,
