@@ -12,12 +12,14 @@ from zipfile import ZipFile
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.campaign import Campaign
 from sporebound.campaign_flow import (audit_campaign, available_missions,
-                                     inspect_campaign, settle, verify_save)
+                                     inspect_campaign, settle, verify_save,
+                                     check_campaign_save)
 from sporebound.game_export4 import export_game
 from sporebound.game_project import GameProject, load_slot, save_slot
 from sporebound.game_session import GameSession
 from sporebound.model import Content, RuleError
 from sporebound.player_session import PlayerSession
+from sporebound.persistence import SessionStore
 from sporebound.studio_campaign_flow import studio_campaign_snapshot, studio_campaign_qa
 from sporebound.studio_panels import StudioPanels
 
@@ -134,6 +136,33 @@ class CampaignFlowR5BTests(unittest.TestCase):
             self.assertEqual(second.progress, first.progress)
             self.assertIn("fortification_gate",
                           second.campaign_inspector()["fortifications"])
+
+    def test_save_compatibility_qa_checks_slots_and_verified_checkpoints(self):
+        with TemporaryDirectory() as dirname:
+            profile = Path(dirname) / "profile.json"
+            progress = self.project.new_game("main", self.content)
+            slot = save_slot(profile, self.project, self.content, "main", 1,
+                             progress)
+            session = GameSession.new(self.content, self.project, "main")
+            checkpoint = Path(dirname) / "checkpoint.json"
+            SessionStore(checkpoint).save(session)
+            slot_bytes, check_bytes = slot.read_bytes(), checkpoint.read_bytes()
+            verified_slot = check_campaign_save(
+                slot, self.content, self.project, "main", kind="slot")
+            verified_checkpoint = check_campaign_save(
+                checkpoint, self.content, self.project, "main", kind="session")
+            self.assertTrue(verified_slot["compatible"])
+            self.assertEqual(verified_checkpoint["source"], "primary")
+            changed = deepcopy(self.project)
+            changed.campaign_flow["gates"]["garden"] = {
+                "flag": "reputation_village", "gte": 1}
+            changed.validate(self.content)
+            for path, kind in ((slot, "slot"), (checkpoint, "session")):
+                with self.subTest(kind=kind), self.assertRaises(RuleError):
+                    check_campaign_save(
+                        path, self.content, changed, "main", kind=kind)
+            self.assertEqual(slot.read_bytes(), slot_bytes)
+            self.assertEqual(checkpoint.read_bytes(), check_bytes)
 
     def test_legacy_saves_accept_only_legacy_project(self):
         legacy_project = GameProject.default(self.content)
