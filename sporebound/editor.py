@@ -233,10 +233,12 @@ class Document:
         self.paint_many(mid, cells, brush)
         return len(cells)
 
-    def preview_generated_terrain(self, mid, start, end, *, seed=1, style='prairie'):
+    def preview_generated_terrain(self, mid, start, end, *, seed=1, style='prairie',
+                                  vegetation=0):
         """Pure proposal. The user must confirm against the current revision."""
         return plan_terrain_region(self.data, mid, start, end,
-                                   seed=seed, style=style)
+                                   seed=seed, style=style,
+                                   vegetation=vegetation)
 
     def confirm_generated_terrain(self, plan):
         """One atomic, validated Undo; stale proposals are rejected."""
@@ -244,7 +246,7 @@ class Document:
         if data == self.data:
             return 0
         self.replace(data)
-        return len(plan.changes)
+        return len({(x, y) for x, y, _ in (*plan.changes, *plan.decorations)})
 
     def flood_surface(self, mid, start, surface, *, allowed_cells=None):
         """Existing four-neighbour fill, optionally restricted to a selection."""
@@ -385,6 +387,7 @@ def launch(path):
     quarter_status_var = tk.StringVar(value='Choisir un style puis proposer trois variantes.')
     terrain_style_var = tk.StringVar(value='prairie')
     terrain_seed_var = tk.IntVar(value=1)
+    terrain_vegetation_var = tk.IntVar(value=2)
     terrain_status_var = tk.StringVar(value='Sélectionner une zone rectangulaire.')
     terrain_pending = None
     quarter_choices = ()
@@ -2456,14 +2459,19 @@ def launch(path):
             raise RuleError('Limiter la sélection visuelle à 512 cases.')
         terrain_pending = None
         canvas.delete('terrain_generation_preview')
+        canvas.delete('terrain_vegetation_preview')
         plan = doc.preview_generated_terrain(
             mission_var.get(), start, end, seed=terrain_seed_var.get(),
-            style=terrain_style_var.get())
+            style=terrain_style_var.get(),
+            vegetation=terrain_vegetation_var.get())
         terrain_pending = plan
         preview_cells(((x, y) for x, y, material in plan.changes),
                       tag='terrain_generation_preview', color='#36a16c')
-        terrain_status_var.set(f'{len(plan.changes)} cases à modifier · '
-                               'aperçu sans écriture · confirmer pour appliquer')
+        preview_cells(((x, y) for x, y, feature in plan.decorations),
+                      tag='terrain_vegetation_preview', color='#c79a43')
+        terrain_status_var.set(
+            f'{len(plan.changes)} sols · {len(plan.decorations)} décors · '
+            'vert = matière, ocre = végétation · confirmer pour appliquer')
         status_var.set(terrain_status_var.get())
 
     @guarded
@@ -2474,9 +2482,10 @@ def launch(path):
             raise RuleError('Prévisualiser le terrain avant confirmation.')
         if battle is not None or source_pending():
             raise RuleError('Quitter le playtest et appliquer le JSON.')
-        if not plan.changes:
+        if not plan.changes and not plan.decorations:
             terrain_pending = None
             canvas.delete('terrain_generation_preview')
+            canvas.delete('terrain_vegetation_preview')
             terrain_status_var.set('Aucun changement nécessaire.')
             return
         count = 0
@@ -2486,6 +2495,7 @@ def launch(path):
         design_change(apply, board_only=True)
         terrain_pending = None
         canvas.delete('terrain_generation_preview')
+        canvas.delete('terrain_vegetation_preview')
         terrain_status_var.set(f'{count} cases générées en une opération Undo.')
         status_var.set(terrain_status_var.get())
 
@@ -3442,9 +3452,13 @@ def launch(path):
     procedural_row.pack(fill='x', padx=5, pady=2)
     ttk.Label(procedural_row, text='Terrain auto').pack(side='left', padx=2)
     ttk.Combobox(procedural_row, textvariable=terrain_style_var,
-                 values=REGION_STYLES, state='readonly', width=9).pack(side='left', padx=2)
+                 values=REGION_STYLES, state='readonly', width=10).pack(side='left', padx=2)
     ttk.Label(procedural_row, text='Seed').pack(side='left', padx=2)
     ttk.Entry(procedural_row, textvariable=terrain_seed_var, width=7).pack(side='left', padx=2)
+    ttk.Label(procedural_row, text='Décors').pack(side='left', padx=2)
+    ttk.Combobox(procedural_row, textvariable=terrain_vegetation_var,
+                 state='readonly', width=3, values=(0, 1, 2, 3)).pack(
+                     side='left', padx=2)
     ttk.Button(procedural_row, text='Aperçu',
                command=preview_procedural_terrain).pack(side='left', padx=2)
     ttk.Button(procedural_row, text='Appliquer',
