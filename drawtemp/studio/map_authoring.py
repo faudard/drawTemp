@@ -321,6 +321,36 @@ class MapStudio:
             warnings.append("No player spawn")
         return tuple(warnings)
 
+    def playtest(self, *, max_steps=100):
+        """Run a bounded *detached* headless playtest of the selected map.
+
+        No changes to campaign progression, authored documents or global RNG.
+        The interactive Qt Player is intentionally deferred to R12.
+        """
+        from drawtemp.core import Content, GameProject
+        from drawtemp.sdk.simulation import Simulation
+        documents = self.snapshot()
+        content = Content.from_dict(documents["content"])
+        project_data = deepcopy(documents["project"])
+        project_data["campaigns"][0]["start_mission"] = self.mission_id
+        project = GameProject.from_dict(project_data, content)
+        campaign_id = project_data["campaigns"][0]["id"]
+        playtest = Simulation.new(content, project, campaign_id, seed=17)
+        scene = playtest.snapshot().scene
+        if scene:
+            choices = scene.get("choices", ())
+            if choices:
+                playtest.choose_story_option(choices[0]["id"])
+        playtest.start_mission(self.mission_id)
+        initial = playtest.snapshot()
+        ending = playtest.simulate(max_steps=max_steps)
+        return {
+            "mission": self.mission_id, "seed": 17,
+            "initial_mode": initial.mode, "final_mode": ending.mode,
+            "result": ending.battle.get("result") if ending.battle else None,
+            "remaining_steps_limit": max_steps,
+        }
+
     def undo(self):
         return self.authoring.undo()
 
