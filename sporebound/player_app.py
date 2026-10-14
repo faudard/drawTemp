@@ -1335,21 +1335,23 @@ class PlayerApplication:
                             str(exc) + "\nQuitter malgré l'échec ?"):
                         self._closing = False
                         return
-            if (self.playtest_recorder.enabled
-                    and self.playtest_recorder.active is not None):
-                self.playtest_recorder.finish("interrupted")
-            if (self.playtest_recorder.report()["sessions"]
-                    and self.playtest_recorder.revision !=
-                    self.playtest_exported_revision):
-                if self.messagebox.askyesno(
-                        "Playtest non exporté",
-                        "La télémétrie restera uniquement en mémoire et sera "
-                        "perdue en quittant. Exporter le rapport maintenant ?"):
-                    self._export_playtest()
-                    if (self.playtest_recorder.revision !=
-                            self.playtest_exported_revision):
-                        self._closing = False
-                        return
+            # Test helpers and partially initialized apps may lack a recorder.
+            # Closing still has to release audio and destroy the Tk root.
+            recorder = getattr(self, "playtest_recorder", None)
+            if recorder is not None:
+                if recorder.enabled and recorder.active is not None:
+                    recorder.finish("interrupted")
+                if (recorder.report()["sessions"]
+                        and recorder.revision !=
+                        self.playtest_exported_revision):
+                    if self.messagebox.askyesno(
+                            "Playtest non exporté",
+                            "La télémétrie restera uniquement en mémoire et sera "
+                            "perdue en quittant. Exporter le rapport maintenant ?"):
+                        self._export_playtest()
+                        if recorder.revision != self.playtest_exported_revision:
+                            self._closing = False
+                            return
             self.audio.close()
             self.root.destroy()
         except Exception:
