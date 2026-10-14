@@ -161,6 +161,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_playtest_384_gui.py -v
+      - name: R6.15 quality analysis and explicit Tk human-signoff gate
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_tactical_quality_r615_gui -v
       - name: Visual Battle Lab 3.8.3 GUI charts and seed replay
         env:
           SPOREBOUND_GUI_SMOKE: '1'
