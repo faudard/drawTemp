@@ -122,3 +122,34 @@ def _rewrite_interaction(node, old, new):
             _rewrite_interaction(child, old, new)
     if 'not' in node:
         _rewrite_interaction(node['not'], old, new)
+
+
+@dataclass(frozen=True)
+class DeleteMapResourceCommand:
+    """Remove a map resource only when all external references remain sound.
+
+    Canonical entity deletion handles group membership cleanup. A complete
+    Content validation and a conservative token scan reject dangling links.
+    """
+    key: str
+    baseline: str
+    project_snapshot: dict
+    kind: str = 'workspace-delete-resource'
+    views: tuple = ('renderer', 'minimap', 'inspector', 'workspace')
+
+    def transform(self, data, mission_id):
+        category, mid, identifier, _mission, row = _locate(data, self.key)
+        require(category in ('map_actor', 'map_object'),
+                'Suppression réservée aux acteurs et objets placés')
+        require(mid == mission_id, 'Changer de mission avant de supprimer')
+        require(json.dumps(row, sort_keys=True, ensure_ascii=True) == self.baseline,
+                'Ressource modifiée : recommencer la prévisualisation')
+        require(not _mentions(self.project_snapshot, identifier),
+                'Référence GameProject : suppression refusée')
+        from .entity_editing import remove_entity
+        candidate = remove_entity(
+            data, mid, 'actor' if category == 'map_actor' else 'object', identifier)
+        require(not _mentions(candidate, identifier),
+                'Suppression refusée : référence Content restante')
+        return Content.from_dict(
+            candidate, rules=authored_rules_for_document(candidate)).to_dict()
