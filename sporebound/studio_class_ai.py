@@ -251,7 +251,8 @@ class ClassAIStudio:
         right = ttk.LabelFrame(body, text='Comportement & rôles')
         right.pack(side='right', fill='y', padx=(8,0))
         self.ai_behavior = tk.StringVar(value='tactical')
-        self._field(right,'Comportement',self.ai_behavior,0,values=['tactical'])
+        self._field(right,'Comportement',self.ai_behavior,0,
+                    values=['tactical', 'adaptive_boss'])
         self.ai_roles = tk.StringVar()
         self._field(right,'Étiquettes / rôles',self.ai_roles,1)
         self.ai_route = tk.StringVar()
@@ -264,7 +265,8 @@ class ClassAIStudio:
         self._button(controls,'Appliquer IA et route',self.save_ai)
         self._button(controls,'Effacer route',self.clear_route)
         self._button(controls,'Ajouter case sélectionnée',self.add_selected_point)
-        self.ai_status = tk.StringVar(value='IA standard ; la route sera suivie hors combat.')
+        self.ai_status = tk.StringVar(
+            value='IA standard ou boss adaptatif R6 (ennemi, sans route de patrouille).')
         ttk.Label(right,textvariable=self.ai_status,wraplength=280).grid(
             row=5,column=0,columnspan=2,sticky='w',padx=5,pady=5)
 

@@ -26,6 +26,27 @@ yet switch the Player actor renderer to the watercolor pack. Binding
 specific actors/objects to authored art and checking directional fidelity is
 the next tranche (VF-C), once the real PNGs are committed.
 
+## Navigation compacte par familles (UX)
+
+Dans **Bibliothèque d'assets — Carte**, les entrées aquarelle sont désormais
+regroupées sous leurs familles (Jeanne, Lancier, Loup, etc.). Une famille fermée
+occupe une ligne au lieu de dérouler ses poses et animations au niveau racine.
+
+- Sélectionner **Jeanne** affiche la pose `idle` si elle existe.
+- Le champ **Pose / animation** permet de choisir Marche, Attaque, Garde,
+  Victoire et les autres variantes déclarées, sans développer toute la liste.
+- Les animations conservent leurs durées natives et le contrôle frame / lecture.
+- Les sprites déjà utilisés comme frames d'une animation ne sont pas dupliqués
+  dans l'arbre par défaut ; une recherche par identifiant exact les expose.
+- Les groupes peuvent être développés à la demande. Le filtre **Aquarelle**,
+  la recherche et les diagnostics de PNG absents restent disponibles.
+- Le preview du sprite est centré et reste défilable si la source est plus
+  grande que le viewport ; ceci ne corrige **pas** un éventuel débordement de
+  pixels présent dans les PNG sources.
+
+Ce changement ne modifie ni `registry.json`, ni les mappings Player, ni
+le format de projet ou de sauvegarde. Les assets aquarelle demeurent en lecture seule.
+
 ## Delivery blocker: assets are still not checked in
 
 The original V3 ZIP has been recovered and locally verified. However, the

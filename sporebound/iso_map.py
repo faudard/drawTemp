@@ -8,6 +8,11 @@ from pathlib import Path
 
 from .tk_images import crop_scaled
 from .iso_depth import visual_center
+from .terrain_ambient import strokes_for_cell, stroke_tag
+from .terrain_autoblend import (LAND_COLORS, LAND_PRIORITY, blend_edges,
+                                blend_polygon, terrain_variant)
+from .terrain_transition_masks import (ordered_blend_masks,
+                                      painted_mask_key, painted_mask_png)
 
 from .iso_connections import (shoreline_mask, waterfall_mask, bridge_axis,
                               transition_segments, bridge_rails)
@@ -17,11 +22,7 @@ SURFACES = frozenset({'grass', 'dirt', 'stone', 'cobble', 'sand',
 FEATURES = frozenset({'', 'tree', 'bush', 'boulder', 'ruin', 'crate',
                       'lantern', 'stairs', 'stone_wall',
                       'arch', 'fence', 'reeds', 'pillar'})
-SURFACE_COLORS = {
-    'grass': '#9aa66c', 'dirt': '#c6a875', 'stone': '#aca69a',
-    'cobble': '#c6b9a0', 'sand': '#dec897', 'rock': '#8e978d',
-    'water': '#4d92ac', 'bridge': '#c5b496',
-}
+SURFACE_COLORS = {**LAND_COLORS, 'water': '#4d92ac', 'bridge': '#c5b496'}
 
 
 
@@ -39,11 +40,17 @@ class IsoTerrainAtlas:
     The editor remains functional if the file is absent or Tk cannot display it.
     Image refs stay alive as long as this loader stays alive.
     """
-    def __init__(self, canvas, path=DEFAULT_TERRAIN_ATLAS):
+    def __init__(self, canvas, path=None):
         self.canvas = canvas
-        self.path = Path(path)
+        # Default: watercolor paint generated once in memory. Explicit paths
+        # retain the previous atlas override contract, including legacy PNGs.
+        self._watercolor = path is None
+        self.path = DEFAULT_TERRAIN_ATLAS if path is None else Path(path)
         self._source = None
         self._tiles = {}
+        self._mask_sources = {}
+        self._mask_tiles = {}
+        self._mask_unavailable = False
         self._unavailable = False
 
     def tile(self, surface, cell_size, variant=0):
@@ -62,7 +69,20 @@ class IsoTerrainAtlas:
             return None
         try:
             if self._source is None:
-                self._source = tk.PhotoImage(file=str(self.path), master=self.canvas)
+                if self._watercolor:
+                    import base64
+                    from .terrain_watercolor import watercolor_atlas_png
+                    try:
+                        png_data = base64.b64encode(watercolor_atlas_png()).decode('ascii')
+                        self._source = tk.PhotoImage(data=png_data,
+                                                      format='png',
+                                                      master=self.canvas)
+                    except (ValueError, RuntimeError, tk.TclError):
+                        # A Tk image-loader incompatibility must never make
+                        # the existing bundled legacy atlas unusable.
+                        self._watercolor = False
+                if self._source is None:
+                    self._source = tk.PhotoImage(file=str(self.path), master=self.canvas)
                 required = len(ATLAS_MATERIALS) * ATLAS_VARIANTS * ATLAS_TILE_SIZE[0]
                 if (self._source.width() != required or
                         self._source.height() != ATLAS_TILE_SIZE[1]):
@@ -79,6 +99,41 @@ class IsoTerrainAtlas:
         except (OSError, ValueError, RuntimeError, ImportError, tk.TclError):
             self._unavailable = True
             return None
+
+    def blend_tile(self, material, bit, variant, cell_size):
+        """A shared painterly RGBA stamp; never one new image per map cell.
+
+        Every image stays referenced for the lifetime of this atlas/Canvas.
+        Evicting a PhotoImage still used by Tk would blank retained tiles.
+        """
+        if not self._watercolor or self._unavailable or self._mask_unavailable:
+            return None
+        if type(cell_size) is not int or cell_size < 1:
+            return None
+        key = material, bit, variant
+        scaled_key = (*key, cell_size)
+        if scaled_key in self._mask_tiles:
+            return self._mask_tiles[scaled_key]
+        try:
+            import tkinter as tk
+        except ImportError:
+            self._mask_unavailable = True
+            return None
+        try:
+            import base64
+            if key not in self._mask_sources:
+                png = base64.b64encode(painted_mask_png(*key)).decode('ascii')
+                self._mask_sources[key] = tk.PhotoImage(
+                    data=png, format='png', master=self.canvas)
+            photo = crop_scaled(self._mask_sources[key],
+                                (0, 0, ATLAS_TILE_SIZE[0], ATLAS_TILE_SIZE[1]),
+                                (2*cell_size, cell_size), master=self.canvas)
+            self._mask_tiles[scaled_key] = photo
+            return photo
+        except (OSError, ValueError, RuntimeError, ImportError, tk.TclError):
+            self._mask_unavailable = True
+            return None
+
 
 class _TaggedFeatureCanvas:
     """Attach a depth group to all vector prop primitives (also in retained mode)."""
@@ -211,8 +266,9 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 danger_priority[kind] > danger_priority[threats[cell]]):
             threats[cell] = kind
 
+    # Sorting the small dirty set is O(k log k), not a 16k-cell scan.
     order = (geo.draw_order if tile_subset is None else
-             (c for c in geo.draw_order if c in tile_subset))
+             sorted(tile_subset, key=lambda c: (sum(c), c[0])))
     for c in order:
         if retained:
             canvas.begin_group(c)
@@ -244,14 +300,38 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                     tile_canvas.create_polygon(*_flatten((p, q, (q[0], q[1]+drop),
                                                     (p[0], p[1]+drop))),
                                           fill=shade, outline='#615d52', width=1)
-        tile_canvas.create_polygon(*_flatten(corners), fill=top, outline='#777c6f', width=1)
+        # Fixed grey diamond outlines create obvious seams where two matching
+        # material tiles touch. Preserve distinct edges through paint and the
+        # height-face geometry, rather than through a per-cell grid stroke.
+        tile_canvas.create_polygon(*_flatten(corners), fill=top,
+                                   outline=top if atlas is not None else '#777c6f',
+                                   width=1)
         photo = None
         if atlas is not None and layers.get('Terrain', True):
             photo = atlas.tile(surface, cell_size,
-                               variant=(c[0]*37 + c[1]*19) % ATLAS_VARIANTS)
+                               variant=terrain_variant(c, ATLAS_VARIANTS))
         if photo is not None:
             tile_canvas.create_image(cx-cell_size, cy-cell_size/2,
                                 image=photo, anchor='nw')
+        # Paint authored, neighbour-aware terrestrial transitions only on the
+        # receiving side of each shared edge. This belongs to the common
+        # Studio/Player renderer and is recomputed for dirty tiles as well.
+        if layers.get('Terrain', True) and layers.get('AutoBlend', True):
+            for blend in ordered_blend_masks(blend_edges(board, c),
+                                            LAND_PRIORITY):
+                mask = (atlas.blend_tile(*painted_mask_key(blend), cell_size)
+                        if atlas is not None and hasattr(atlas, 'blend_tile')
+                        else None)
+                if mask is not None:
+                    tile_canvas.create_image(
+                        cx-cell_size, cy-cell_size/2, image=mask, anchor='nw',
+                        tags=('terrain_autoblend', 'painted_transition'))
+                else:
+                    # Historical vector renderer (no atlas / Tk PNG support).
+                    tile_canvas.create_polygon(
+                        *blend_polygon(corners, blend),
+                        fill=LAND_COLORS[blend.incoming], outline='',
+                        tags=('terrain_autoblend',))
         if surface == 'water' and layers.get('Terrain', True):
             # Stable, neighbour-aware banks; no seams between water cells.
             mask = shoreline_mask(board, c)
@@ -294,6 +374,20 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                     for r in (p,q):
                         tile_canvas.create_line(r[0],r[1],r[0],r[1]-raise_by,
                                            fill='#a69070',width=max(2,cell_size//15))
+        # Small, budgeted ambient vegetation/water accents are regular
+        # per-tile Canvas items. The owning UI animates just their coordinates,
+        # not the board, render stack, actors, camera or gameplay clock.
+        if layers.get('Terrain', True) and layers.get('Ambiance', True):
+            for accent in strokes_for_cell(board, c, (cx, cy), cell_size):
+                method = (tile_canvas.create_oval if accent.shape == 'oval'
+                          else tile_canvas.create_line)
+                options = dict(width=max(1, round(cell_size / 52)),
+                               tags=('iso_ambient', stroke_tag(accent)))
+                if accent.shape == 'oval':
+                    method(*accent.coords, fill='', outline=accent.color,
+                           **options)
+                else:
+                    method(*accent.coords, fill=accent.color, **options)
         if c in deploy and layers.get('Déploiement', True):
             tile_canvas.create_polygon(*_flatten(corners), outline='#3b9ec0', fill='',
                                   width=3)
@@ -392,6 +486,11 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
     # Board is always the tactical source of truth for height and collisions.
     if omit_architecture:
         return geo
+    if tile_subset is not None:
+        # Depth sorting includes unchanged raised décor groups, too. A
+        # subset render cannot pass only its newly painted props here.
+        decor_cells = ([c for c, tile in board.tiles.items() if tile.feature]
+                       if layers.get('Décors', True) else [])
     from .iso_architecture import draw_architecture
     if retained:
         canvas.begin_group('architecture')

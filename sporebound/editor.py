@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
+from .terrain_ambient import TerrainAmbientAnimator, TICK_MS
 from .editor_refresh_scale import EditorContentProjection, MinimapBackgroundCache
 from .editor_architecture import (EditingContext, EditorChange, StructureCommand,
                                   StructureGroupCommand, EditorGroupMoveCommand,
@@ -21,6 +22,8 @@ from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
 from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
                             transform_terrain)
 from .map_builder4 import smart_brush_cells, surface_region
+from .terrain_autoblend import (REGION_STYLES, plan_terrain_region,
+                                apply_terrain_plan, terrain_variant)
 from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, SURFACE_COLORS, IsoTerrainAtlas)
@@ -73,6 +76,11 @@ from .editor_reliability import EditRecoveryJournal
 from .performance_trace import begin_ui, finish_ui
 from .workspace_shell import inspect_map, LayoutStore, palette_source_for_tree
 from .workspace_editing import WorkspacePropertyCommand, editable_form
+from .workspace_r2 import BatchPropertyCommand, batch_form
+from .workspace_refactoring import (RenameMapResourceCommand,
+                                    DeleteMapResourceCommand, DeleteMapResourcesCommand,
+                                    _mentions, plan_coordinated_rename)
+from .workspace_story_refactoring import plan_story_rename
 
 
 class Document:
@@ -83,6 +91,9 @@ class Document:
         self.redo_stack = []
         self.edit_policy = None  # Optional editor-only validation before commit.
         self.saved = json.dumps(self.data, sort_keys=True)
+        # Monotonic lease: unlike a content hash this rejects an ABA edit
+        # (edit -> undo -> identical bytes) and direct history restorations.
+        self.mutation_revision = 0
 
     @property
     def dirty(self):
@@ -97,16 +108,28 @@ class Document:
         self.undo_stack = self.undo_stack[-50:]
         self.redo_stack.clear()
         self.data = validated
+        self.mutation_revision += 1
+
+    def restore_snapshot(self, data):
+        """Install one validated StudioHistory revision, not a local undo step."""
+        validated = Content.from_dict(
+            data, rules=authored_rules_for_document(data)).to_dict()
+        self.data = validated
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self.mutation_revision += 1
 
     def undo(self):
         if self.undo_stack:
             self.redo_stack.append(self.data)
             self.data = self.undo_stack.pop()
+            self.mutation_revision += 1
 
     def redo(self):
         if self.redo_stack:
             self.undo_stack.append(self.data)
             self.data = self.redo_stack.pop()
+            self.mutation_revision += 1
 
     def tile(self, mid, cell, brush):
         self.paint_many(mid, [cell], brush)
@@ -208,6 +231,19 @@ class Document:
         cells = smart_brush_cells(self.data, mid, anchors, radius=radius, shape=shape)
         self.paint_many(mid, cells, brush)
         return len(cells)
+
+    def preview_generated_terrain(self, mid, start, end, *, seed=1, style='prairie'):
+        """Pure proposal. The user must confirm against the current revision."""
+        return plan_terrain_region(self.data, mid, start, end,
+                                   seed=seed, style=style)
+
+    def confirm_generated_terrain(self, plan):
+        """One atomic, validated Undo; stale proposals are rejected."""
+        data = apply_terrain_plan(self.data, plan)
+        if data == self.data:
+            return 0
+        self.replace(data)
+        return len(plan.changes)
 
     def flood_surface(self, mid, start, surface, *, allowed_cells=None):
         """Existing four-neighbour fill, optionally restricted to a selection."""
@@ -317,6 +353,8 @@ def launch(path):
     tile_size = 54
     iso_geometry = None
     iso_var = tk.BooleanVar(value=False)
+    projection_choice = tk.StringVar(value='2d')
+    ambient_var = tk.BooleanVar(value=True)  # Cosmetic and not saved in Content.
     interior_var = tk.BooleanVar(value=False)  # Editor visibility only.
     floor_var = tk.IntVar(value=1)  # Selected visual deck (ground always 0).
     travel_level_var = tk.IntVar(value=0)  # Combat target includes ground floor.
@@ -344,6 +382,10 @@ def launch(path):
     quarter_seed_var = tk.IntVar(value=1)
     quarter_variant_var = tk.StringVar(value='Variante 1')
     quarter_status_var = tk.StringVar(value='Choisir un style puis proposer trois variantes.')
+    terrain_style_var = tk.StringVar(value='prairie')
+    terrain_seed_var = tk.IntVar(value=1)
+    terrain_status_var = tk.StringVar(value='Sélectionner une zone rectangulaire.')
+    terrain_pending = None
     quarter_choices = ()
     quarter_pending = None
     group_prefab_preview_key = None
@@ -416,6 +458,8 @@ def launch(path):
             layer_lock_vars[name].set(current['locked'][name])
         active_layer_level.set(current['active_level'])
         interior_var.set(current['interiors'])
+        iso_var.set(current['projection'] == 'iso')
+        projection_choice.set(current['projection'])
 
     def persist_map_view():
         nonlocal map_view_data
@@ -424,7 +468,8 @@ def launch(path):
             map_view_data, mid,
             visible={name: var.get() for name, var in layer_vars.items()},
             locked={name: var.get() for name, var in layer_lock_vars.items()},
-            active_level=active_layer_level.get(), interiors=interior_var.get())
+            active_level=active_layer_level.get(), interiors=interior_var.get(),
+            projection='iso' if iso_var.get() else '2d')
         save_views(current_path, updated)
         map_view_data = updated
         status_var.set('Vue de carte enregistrée (préférences du Studio).')
@@ -433,6 +478,55 @@ def launch(path):
     def view_options_changed():
         persist_map_view()
         refresh()
+
+    @guarded
+    def switch_projection(projection):
+        """Change only the viewport projection; keep zoom, selection and focus cell."""
+        previous = 'iso' if iso_var.get() else '2d'
+        if projection not in ('2d', 'iso'):
+            raise RuleError('Projection inconnue : ' + str(projection))
+        if projection == previous:
+            projection_choice.set(previous)
+            return
+        width, height = max(canvas.winfo_width(), 1), max(canvas.winfo_height(), 1)
+        px = canvas.canvasx(width / 2)
+        py = canvas.canvasy(height / 2)
+        board = (battle.board if battle else
+                 editor_content_cache.get(doc.data).missions[mission_var.get()].board)
+        if previous == 'iso' and iso_geometry is not None:
+            focal_cell = iso_geometry.hit_test(px, py)
+        else:
+            focal_cell = (int(px // tile_size), int(py // tile_size))
+        if focal_cell is None or not board.contains(focal_cell):
+            focal_cell = selected_cell if board.contains(selected_cell) else (0, 0)
+        iso_var.set(projection == 'iso')
+        projection_choice.set(projection)
+        try:
+            persist_map_view()
+            refresh()
+        except Exception:
+            # Keep the selector and renderer in sync if persisting fails.
+            iso_var.set(previous == 'iso')
+            projection_choice.set(previous)
+            raise
+        if iso_var.get() and iso_geometry is not None:
+            center_x, center_y = iso_geometry.center(focal_cell)
+        else:
+            center_x = (focal_cell[0] + .5) * tile_size
+            center_y = (focal_cell[1] + .5) * tile_size
+        canvas.update_idletasks()
+        bounds = canvas.cget('scrollregion').split()
+        if len(bounds) == 4:
+            left, top, right, bottom = map(float, bounds)
+            total_w, total_h = right - left, bottom - top
+            canvas.xview_moveto(
+                max(0.0, min(1.0, (center_x - width / 2 - left) / total_w))
+                if total_w > width else 0.0)
+            canvas.yview_moveto(
+                max(0.0, min(1.0, (center_y - height / 2 - top) / total_h))
+                if total_h > height else 0.0)
+        canvas.focus_set()
+        status_var.set('Vue de carte : ' + ('Iso 2.5D' if iso_var.get() else '2D'))
 
     @guarded
     def active_level_changed(_event=None):
@@ -479,7 +573,7 @@ def launch(path):
 
     def schedule_work_checkpoint():
         nonlocal work_checkpoint_job
-        editing_context.diagnostics.cancel()
+        editing_context.invalidate()
         if work_checkpoint_job is not None:
             root.after_cancel(work_checkpoint_job)
         work_checkpoint_job = root.after(350, checkpoint_work)
@@ -540,9 +634,7 @@ def launch(path):
                 studio.reload_project()
                 if next_work:
                     recovered_content = next_work[0]
-                    doc.data = Content.from_dict(
-                        recovered_content,
-                        rules=authored_rules_for_document(recovered_content)).to_dict()
+                    doc.restore_snapshot(recovered_content)
                     if mission_var.get() not in {
                             m['id'] for m in doc.data['missions']}:
                         mission_var.set(doc.data['missions'][0]['id'])
@@ -598,6 +690,7 @@ def launch(path):
                 edited, rules=authored_rules_for_document(edited)).to_dict()
             ensure_unlocked(doc.data, new_data, map_view_data)
             doc.data = new_data
+            doc.mutation_revision += 1
             studio.apply_project()
             store.save(doc.data, studio.project.to_dict(),
                        expected_previous=disk_revisions)
@@ -606,6 +699,7 @@ def launch(path):
             # half an in-memory transaction. Inputs remain in their widgets
             # so the designer can fix the issue and retry after recovery.
             doc.data = original
+            doc.mutation_revision += 1
             studio.project = original_project
             raise
         doc.saved = json.dumps(doc.data, sort_keys=True)
@@ -2305,7 +2399,7 @@ def launch(path):
             cx, cy = iso_geometry.center(cell)
             if brush.startswith('surface:'):
                 surface = brush.partition(':')[2]
-                variant = (cell[0]*37 + cell[1]*19) % 2
+                variant = terrain_variant(cell)
                 photo = iso_atlas.tile(surface, tile_size, variant=variant)
                 if photo is not None:
                     canvas.create_image(cx-tile_size, cy-tile_size/2,
@@ -2344,6 +2438,55 @@ def launch(path):
             return
         preview_cells([c for c in cells if inside(c)], tag='paste_preview',
                       color='#36a16c' if all(map(inside,cells)) else '#e05252')
+
+    @guarded
+    def preview_procedural_terrain():
+        nonlocal terrain_pending
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON.')
+        if not selected_tiles:
+            raise RuleError('Sélectionner un rectangle avant la génération.')
+        xs = [p[0] for p in selected_tiles]
+        ys = [p[1] for p in selected_tiles]
+        start, end = (min(xs), min(ys)), (max(xs), max(ys))
+        if len(selected_tiles) != (end[0]-start[0]+1)*(end[1]-start[1]+1):
+            raise RuleError('La génération nécessite une sélection rectangulaire.')
+        if len(selected_tiles) > 512:
+            raise RuleError('Limiter la sélection visuelle à 512 cases.')
+        terrain_pending = None
+        canvas.delete('terrain_generation_preview')
+        plan = doc.preview_generated_terrain(
+            mission_var.get(), start, end, seed=terrain_seed_var.get(),
+            style=terrain_style_var.get())
+        terrain_pending = plan
+        preview_cells(((x, y) for x, y, material in plan.changes),
+                      tag='terrain_generation_preview', color='#36a16c')
+        terrain_status_var.set(f'{len(plan.changes)} cases à modifier · '
+                               'aperçu sans écriture · confirmer pour appliquer')
+        status_var.set(terrain_status_var.get())
+
+    @guarded
+    def confirm_procedural_terrain():
+        nonlocal terrain_pending
+        plan = terrain_pending
+        if plan is None or plan.mission_id != mission_var.get():
+            raise RuleError('Prévisualiser le terrain avant confirmation.')
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON.')
+        if not plan.changes:
+            terrain_pending = None
+            canvas.delete('terrain_generation_preview')
+            terrain_status_var.set('Aucun changement nécessaire.')
+            return
+        count = 0
+        def apply():
+            nonlocal count
+            count = doc.confirm_generated_terrain(plan)
+        design_change(apply, board_only=True)
+        terrain_pending = None
+        canvas.delete('terrain_generation_preview')
+        terrain_status_var.set(f'{count} cases générées en une opération Undo.')
+        status_var.set(terrain_status_var.get())
 
     @guarded
     def fill_selection():
@@ -2715,6 +2858,7 @@ def launch(path):
                     temporary.paint_many(mission_var.get(), stroke_cells, brush)
             except (RuleError, ValueError, KeyError):
                 doc.data = stroke_before
+                doc.mutation_revision += 1
                 if doc.undo_stack:
                     doc.undo_stack.pop()
                 doc.redo_stack = stroke_redo
@@ -2724,6 +2868,7 @@ def launch(path):
             else:
                 ensure_unlocked(stroke_before, temporary.data, map_view_data)
                 doc.data = temporary.data
+                doc.mutation_revision += 1
                 refresh_source()
                 refresh(board_only=brush not in ('erase', 'goal'))
         if stroke_before is not None and studio is not None:
@@ -2865,6 +3010,7 @@ def launch(path):
             cancel_structure_drag()
             entity_passage_entry = None
             selection_mission = mission_var.get()
+        projection_choice.set('iso' if iso_var.get() else '2d')
         if structure_selection_id is not None:
             mission_row = next(m for m in doc.data['missions']
                                if m['id'] == mission_var.get())
@@ -2899,9 +3045,11 @@ def launch(path):
                 clear_placement_preview()
                 canvas.delete('stroke_preview')
                 live = battle_frame(battle, selected_cell) if battle else None
+                ambient_animator.restore(canvas)
                 iso_geometry = editor_renderer.draw(
                     board, mission, units, cell_size=tile_size,
                     layers={**{name: var.get() for name, var in layer_vars.items()},
+                            'Ambiance': ambient_var.get(),
                             'Intérieurs': interior_var.get(),
                             'Étage actif': (battle.unit_levels.get(battle.active_id, 0)
                                             if battle and battle.active_id else
@@ -2919,7 +3067,9 @@ def launch(path):
                     unit_levels=battle.unit_levels if battle else None,
                     scene_revision=None if battle else
                     (editor_content_cache.generation, mission.id))
+                ambient_animator.capture(canvas)
             else:
+                ambient_animator.clear()
                 iso_geometry = None
                 editor_renderer.invalidate()
                 canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
@@ -3127,10 +3277,37 @@ def launch(path):
             "renderer_enabled": views is None or RENDERER in views,
         })
 
-    bar = ttk.Frame(root)
-    bar.pack(fill='x')
-    for label,cmd in [('Ouvrir',open_doc),('Enregistrer sous',save_doc),('Enregistrer tout',save_all),('Nouvelle mission',new_mission),('Carte vierge',blank_mission),('Annuler',undo_global),('Rétablir',redo_global),('Playtest',start),('Éditer',stop),('Sauver combat',save_game),('Charger combat',load_game)]:
-        ttk.Button(bar,text=label,command=cmd).pack(side='left',padx=2,pady=4)
+    # A single application header replaces the eleven equally prominent
+    # buttons. Common actions stay one click away; the others live in menus.
+    header = ttk.Frame(root, padding=(9, 5))
+    header.pack(fill='x')
+    ttk.Label(header, text='SPOREBOUND  /  STUDIO',
+              font=('TkDefaultFont', 11, 'bold')).pack(
+                  side='left', padx=(0, 18))
+    file_button = ttk.Menubutton(header, text='Fichier ▾')
+    file_button.pack(side='left', padx=(0, 5))
+    file_menu = tk.Menu(file_button, tearoff=False)
+    for title, callback in (
+        ('Ouvrir…', open_doc), ('Enregistrer sous…', save_doc),
+        ('Enregistrer tout', save_all), ('Nouvelle mission', new_mission),
+        ('Carte vierge', blank_mission), ('Sauver combat', save_game),
+        ('Charger combat', load_game)):
+        file_menu.add_command(label=title, command=callback)
+    file_button.configure(menu=file_menu)
+    view_button = ttk.Menubutton(header, text='Affichage ▾')
+    view_button.pack(side='left', padx=(5, 0))
+    ttk.Button(header, text='Enregistrer tout',
+               command=save_all).pack(side='left', padx=2)
+    ttk.Button(header, text='↶', command=undo_global,
+               width=3).pack(side='left', padx=(13, 2))
+    ttk.Button(header, text='↷', command=redo_global,
+               width=3).pack(side='left', padx=2)
+    ttk.Button(header, text='Éditer', command=stop).pack(
+        side='right', padx=(4, 0))
+    ttk.Button(header, text='▶ Playtest', command=start).pack(
+        side='right', padx=(4, 0))
+    section_bar = ttk.Frame(root)
+    section_bar.pack(fill='x')
     # A compact tool notebook replaces the seven permanent toolbar rows.
     # Keep the existing action callbacks/variables; only presentation changes.
     tool_tabs = ttk.Notebook(root)
@@ -3165,6 +3342,9 @@ def launch(path):
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
                          'cover','goal','unit','object','zone+','zone-']).pack(side='left')
+    ttk.Checkbutton(controls, text='Vue iso 2.5D',
+                    variable=iso_var, command=refresh).pack(
+                        side='left', padx=(12, 2))
     ttk.Label(battle_controls, text='Unité').pack(side='left')
     unit_box = ttk.Combobox(battle_controls,textvariable=unit_var,state='readonly',width=12)
     unit_box.pack(side='left')
@@ -3179,6 +3359,18 @@ def launch(path):
     ttk.Combobox(battle_controls,textvariable=facing_var,state='readonly',width=6,values=['north','south','east','west']).pack(side='left')
     ttk.Button(battle_controls,text='Fin',command=end_turn).pack(side='left')
     ttk.Button(battle_controls,text='IA : 1 tour',command=ai_turn).pack(side='left')
+
+    def sync_mode_toolbar(*_args):
+        # Map paint tools must not be stacked with inapplicable battle orders.
+        active, inactive = ((battle_controls, controls) if battle is not None
+                            else (controls, battle_controls))
+        if inactive.winfo_manager():
+            inactive.pack_forget()
+        if not active.winfo_manager():
+            active.pack(fill='x', padx=5, pady=2)
+
+    mode_var.trace_add('write', sync_mode_toolbar)
+    sync_mode_toolbar()
     authoring_controls = ttk.Frame(tools_terrain)
     authoring_controls.pack(fill='x', padx=5, pady=2)
     ttk.Button(authoring_controls, text='Copier cases', command=copy_selection).pack(side='left',padx=2)
@@ -3214,9 +3406,9 @@ def launch(path):
     active_combo.bind('<<ComboboxSelected>>', active_level_changed)
     scenery_controls = ttk.Frame(tools_terrain)
     scenery_controls.pack(fill='x', padx=5, pady=2)
-    ttk.Checkbutton(scenery_controls, text='Vue isométrique 2.5D',
-                    variable=iso_var, command=refresh).pack(side='left', padx=4)
-    ttk.Label(scenery_controls, text='Sol :').pack(side='left', padx=(10,2))
+    ttk.Checkbutton(scenery_controls, text='Ambiance animée',
+                    variable=ambient_var, command=refresh).pack(side='left', padx=4)
+    ttk.Label(scenery_controls, text='Sol :').pack(side='left', padx=(4,2))
     surface_box = ttk.Combobox(scenery_controls, textvariable=surface_var,
                                state='readonly', width=12, values=sorted(SURFACES))
     surface_box.pack(side='left')
@@ -3244,6 +3436,19 @@ def launch(path):
                  state='readonly', width=8, values=('diamond', 'square')).pack(side='left')
     ttk.Button(smart_controls, text='Remplir sélection',
                command=fill_selection).pack(side='left', padx=2)
+    procedural_row = ttk.Frame(tools_terrain)
+    procedural_row.pack(fill='x', padx=5, pady=2)
+    ttk.Label(procedural_row, text='Terrain auto').pack(side='left', padx=2)
+    ttk.Combobox(procedural_row, textvariable=terrain_style_var,
+                 values=REGION_STYLES, state='readonly', width=9).pack(side='left', padx=2)
+    ttk.Label(procedural_row, text='Seed').pack(side='left', padx=2)
+    ttk.Entry(procedural_row, textvariable=terrain_seed_var, width=7).pack(side='left', padx=2)
+    ttk.Button(procedural_row, text='Aperçu',
+               command=preview_procedural_terrain).pack(side='left', padx=2)
+    ttk.Button(procedural_row, text='Appliquer',
+               command=confirm_procedural_terrain).pack(side='left', padx=2)
+    ttk.Label(tools_terrain, textvariable=terrain_status_var,
+              wraplength=360).pack(fill='x', padx=5, pady=2)
     for label, tool in [('Remplir sol', 'Remplissage'),
                         ('Pipette sol', 'Pipette sol'),
                         ('Pipette décor', 'Pipette décor')]:
@@ -3277,6 +3482,7 @@ def launch(path):
             brush_var.set(entry.id)
             tool_var.set('Pinceau')
         iso_var.set(True)
+        persist_map_view()
         notebook.select(work)
         refresh()
         status_var.set(entry.name + ' : cliquer sur la carte. ' + entry.effect)
@@ -3293,6 +3499,7 @@ def launch(path):
         entity_passage_entry = None
         tool_var.set('Entité')
         iso_var.set(True)
+        persist_map_view()
         notebook.select(work)
         refresh()
         status_var.set(entry.label + ' : cliquer sur la carte pour placer une copie.')
@@ -3464,7 +3671,8 @@ def launch(path):
     ttk.Label(facade_controls,
               text='Maison/Tour · Fenêtres décoratives sur murs extérieurs').pack(
                   side='left', padx=5)
-    floor_controls = ttk.Frame(root)
+    # Floor authoring is contextual to Architecture, not a global toolbar.
+    floor_controls = ttk.Frame(tools_structure)
     floor_controls.pack(fill='x', padx=5)
     ttk.Label(floor_controls, text='Étage supérieur (visuel) :').pack(side='left',padx=3)
     floor_combo = ttk.Combobox(floor_controls, textvariable=floor_var,
@@ -3529,8 +3737,20 @@ def launch(path):
     work.add(side_panel, weight=2)
     canvas_frame = ttk.Frame(canvas_region)
     canvas_region.add(canvas_frame, weight=4)
+    viewport_bar = ttk.Frame(canvas_frame)
+    viewport_bar.pack(fill='x', padx=8, pady=(4, 3))
+    ttk.Label(viewport_bar, text='VUE DE LA CARTE').pack(
+        side='left', padx=(0, 12))
+    for label, projection in (('2D', '2d'), ('Iso 2.5D', 'iso')):
+        ttk.Radiobutton(
+            viewport_bar, text=label, variable=projection_choice,
+            value=projection,
+            command=lambda selected=projection: switch_projection(selected),
+        ).pack(side='left', padx=(0, 10))
     canvas = tk.Canvas(canvas_frame,background='#eeeeee',takefocus=1)
     editor_renderer = EditorRenderCache(canvas)
+    ambient_animator = TerrainAmbientAnimator()
+    ambient_job = None
     iso_atlas = IsoTerrainAtlas(canvas)
     iso_props = IsoPropAtlas(canvas)
     building_atlas = IsoBuildingAtlas(canvas)
@@ -3564,20 +3784,46 @@ def launch(path):
     canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
     canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
     canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
-    ttk.Button(side_panel, text='Ouvrir la palette visuelle de préfabs',
+    # Right dock: separate inspector, group tools and prefab authoring.
+    # In the old layout these were one long, mostly inaccessible column.
+    side_tabs = ttk.Notebook(side_panel)
+    side_tabs.pack(fill='both', expand=True)
+    inspector_page = ttk.Frame(side_tabs)
+    groups_page = ttk.Frame(side_tabs)
+    prefabs_page = ttk.Frame(side_tabs)
+    side_tabs.add(inspector_page, text='Inspecteur')
+    side_tabs.add(groups_page, text='Groupes')
+    side_tabs.add(prefabs_page, text='Préfabs')
+
+    # Prefab tools can grow with content; only this dock scrolls vertically.
+    prefab_canvas = tk.Canvas(prefabs_page, highlightthickness=0, borderwidth=0)
+    prefab_scroll = ttk.Scrollbar(prefabs_page, orient='vertical',
+                                  command=prefab_canvas.yview)
+    prefab_canvas.configure(yscrollcommand=prefab_scroll.set)
+    prefab_scroll.pack(side='right', fill='y')
+    prefab_canvas.pack(side='left', fill='both', expand=True)
+    prefabs_body = ttk.Frame(prefab_canvas)
+    prefab_window_id = prefab_canvas.create_window(
+        (0, 0), window=prefabs_body, anchor='nw')
+    prefabs_body.bind('<Configure>', lambda _e: prefab_canvas.configure(
+        scrollregion=prefab_canvas.bbox('all')))
+    prefab_canvas.bind('<Configure>', lambda event: prefab_canvas.itemconfigure(
+        prefab_window_id, width=event.width))
+
+    ttk.Button(prefabs_body, text='Ouvrir la palette visuelle de préfabs',
                command=open_visual_prefab_palette).pack(
                    fill='x', padx=6, pady=(4, 0))
-    ttk.Label(side_panel, text='INSPECTEUR', font=('TkDefaultFont', 11, 'bold')).pack(
+    ttk.Label(inspector_page, text='INSPECTEUR', font=('TkDefaultFont', 11, 'bold')).pack(
         anchor='w', padx=6, pady=(8, 3))
-    ttk.Label(side_panel, textvariable=mode_var).pack(anchor='w', padx=6)
-    ttk.Label(side_panel,text='Vue tactique').pack(anchor='w',padx=6,pady=(7,0))
-    mini_canvas = tk.Canvas(side_panel,width=184,height=184,
+    ttk.Label(inspector_page, textvariable=mode_var).pack(anchor='w', padx=6)
+    ttk.Label(inspector_page,text='Vue tactique').pack(anchor='w',padx=6,pady=(7,0))
+    mini_canvas = tk.Canvas(inspector_page,width=184,height=184,
                             background='#f5f5f5',highlightthickness=1)
     mini_canvas.pack(anchor='w',padx=3,pady=3)
     mini_canvas.bind('<Button-1>', minimap_navigate)
-    ttk.Label(side_panel, text='GROUPES ET APPARTENANCES',
+    ttk.Label(groups_page, text='GROUPES ET APPARTENANCES',
               font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=6)
-    tree_box = ttk.Frame(side_panel)
+    tree_box = ttk.Frame(groups_page)
     tree_box.pack(fill='x', padx=6, pady=3)
     group_tree = ttk.Treeview(tree_box, show='tree', height=8, selectmode='extended')
     group_scroll = ttk.Scrollbar(tree_box, orient='vertical',
@@ -3594,7 +3840,7 @@ def launch(path):
     group_tree.bind('<ButtonRelease-1>', tree_drag_release)
     group_tree.bind('<Escape>', tree_drag_cancel)
     group_tree.bind('<FocusOut>', tree_drag_cancel)
-    group_controls = ttk.Frame(side_panel)
+    group_controls = ttk.Frame(groups_page)
     group_controls.pack(fill='x', padx=5)
     for actions in (
         (('Créer vide', lambda: create_map_group(empty=True)),
@@ -3610,7 +3856,7 @@ def launch(path):
         for text, action in actions:
             ttk.Button(group_row, text=text, command=action).pack(
                 side='left', padx=1, pady=1)
-    group_move_controls = ttk.Frame(side_panel)
+    group_move_controls = ttk.Frame(groups_page)
     group_move_controls.pack(fill='x', padx=5, pady=(0, 5))
     ttk.Label(group_move_controls, text='ΔX').pack(side='left')
     ttk.Spinbox(group_move_controls, from_=-128, to=128,
@@ -3622,7 +3868,7 @@ def launch(path):
                command=lambda: shift_map_group(preview=True)).pack(side='left',padx=2)
     ttk.Button(group_move_controls, text='Déplacer',
                command=shift_map_group).pack(side='left',padx=2)
-    group_clone_controls = ttk.Frame(side_panel)
+    group_clone_controls = ttk.Frame(groups_page)
     group_clone_controls.pack(fill='x', padx=5, pady=(0, 5))
     ttk.Button(group_clone_controls, text='Aperçu copie',
                command=lambda: shift_map_group(
@@ -3632,18 +3878,18 @@ def launch(path):
                    duplicate=True)).pack(side='left',padx=2)
     ttk.Label(group_clone_controls, text='Ctrl/Maj : sélection multiple'
               ).pack(side='left',padx=3)
-    ttk.Label(side_panel, text='BIBLIOTHÈQUE DE PRÉFABS',
+    ttk.Label(prefabs_body, text='BIBLIOTHÈQUE DE PRÉFABS',
               font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=6)
-    group_prefab_box = ttk.Combobox(side_panel,
+    group_prefab_box = ttk.Combobox(prefabs_body,
                                    textvariable=group_prefab_var,
                                    state='readonly')
     group_prefab_box.pack(fill='x', padx=6, pady=2)
-    prefab_thumbnail = tk.Canvas(side_panel, width=254, height=114,
+    prefab_thumbnail = tk.Canvas(prefabs_body, width=254, height=114,
                                  background='#eef0ea', highlightthickness=1,
                                  highlightbackground='#adb2ad')
     prefab_thumbnail.pack(anchor='w', padx=6, pady=(1, 5))
     group_prefab_box.bind('<<ComboboxSelected>>', draw_prefab_thumbnail)
-    group_prefab_row = ttk.Frame(side_panel)
+    group_prefab_row = ttk.Frame(prefabs_body)
     group_prefab_row.pack(fill='x', padx=5)
     for text, action in (
         ('Enregistrer préfab', export_group_prefab),
@@ -3652,7 +3898,7 @@ def launch(path):
     ):
         ttk.Button(group_prefab_row, text=text, command=action).pack(
             side='left', padx=1, pady=1)
-    group_prefab_row_2 = ttk.Frame(side_panel)
+    group_prefab_row_2 = ttk.Frame(prefabs_body)
     group_prefab_row_2.pack(fill='x', padx=5, pady=(0, 5))
     ttk.Label(group_prefab_row_2, text='Rotation').pack(side='left', padx=2)
     group_prefab_rotation_box = ttk.Combobox(
@@ -3665,7 +3911,7 @@ def launch(path):
                ).pack(side='left', padx=2)
     ttk.Button(group_prefab_row_2, text='Placer préfab',
                command=place_chosen_prefab).pack(side='left', padx=2)
-    group_prefab_stamp_row = ttk.Frame(side_panel)
+    group_prefab_stamp_row = ttk.Frame(prefabs_body)
     group_prefab_stamp_row.pack(fill='x', padx=5, pady=(0, 5))
     ttk.Button(group_prefab_stamp_row, text='Poser à la souris',
                command=enable_prefab_stamping).pack(side='left', padx=2)
@@ -3674,7 +3920,7 @@ def launch(path):
               ).pack(side='left', padx=3)
     refresh_group_prefabs()
     draw_prefab_thumbnail()
-    quarter_frame = ttk.LabelFrame(side_panel, text='GÉNÉRATION ASSISTÉE · QUARTIER')
+    quarter_frame = ttk.LabelFrame(prefabs_body, text='GÉNÉRATION ASSISTÉE · QUARTIER')
     quarter_frame.pack(fill='x', padx=5, pady=4)
     quarter_row = ttk.Frame(quarter_frame)
     quarter_row.pack(fill='x')
@@ -3710,11 +3956,11 @@ def launch(path):
                command=save_quarter_as_prefab).pack(side='left', padx=2)
     ttk.Label(quarter_frame, textvariable=quarter_status_var,
               wraplength=278).pack(anchor='w', padx=3, pady=3)
-    ttk.Label(side_panel, text='PALETTE VISUELLE · GLISSER SUR LA CARTE',
+    ttk.Label(prefabs_body, text='PALETTE VISUELLE · GLISSER SUR LA CARTE',
               font=('TkDefaultFont', 9, 'bold')).pack(anchor='w', padx=6,
                                                      pady=(3, 2))
     prefab_gallery = VisualPrefabPalette(
-        side_panel, tk, ttk,
+        prefabs_body, tk, ttk,
         on_select=group_prefab_var.set,
         on_preview=palette_prefab_hover,
         on_drop=palette_prefab_drop,
@@ -3726,22 +3972,22 @@ def launch(path):
         '<<ComboboxSelected>>',
         lambda _event: prefab_gallery.choose(group_prefab_var.get()))
     refresh_group_prefabs()
-    inspector = tk.Text(side_panel,width=37,wrap='word',takefocus=1)
+    inspector = tk.Text(inspector_page,width=37,wrap='word',takefocus=1)
     inspector.pack(side='top',fill='both',expand=True, padx=6, pady=4)
-    actor_focus = ttk.Button(side_panel, text='Modifier le personnage sélectionné',
+    actor_focus = ttk.Button(inspector_page, text='Modifier le personnage sélectionné',
                              command=lambda: open_selected_entity('unit'))
     actor_focus.pack(fill='x', padx=6, pady=2)
-    object_focus = ttk.Button(side_panel, text='Modifier l’objet sélectionné',
+    object_focus = ttk.Button(inspector_page, text='Modifier l’objet sélectionné',
                               command=lambda: open_selected_entity('object'))
     object_focus.pack(fill='x', padx=6, pady=2)
     event_focus = ttk.Button(
-        side_panel, text='Créer événement lié à la porte',
+        inspector_page, text='Créer événement lié à la porte',
         command=open_selected_gate_event)
     event_focus.pack(fill='x', padx=6, pady=2)
-    ttk.Button(side_panel, text='Personnages et événements',
+    ttk.Button(inspector_page, text='Personnages et événements',
                command=lambda: studio.workspace._show_tab(
                    'Personnages et événements')).pack(fill='x', padx=6, pady=3)
-    ttk.Button(side_panel, text='Explorer dans le Workspace',
+    ttk.Button(inspector_page, text='Explorer dans le Workspace',
                command=lambda: notebook.select(studio.workspace.tab)).pack(
                    fill='x', padx=6, pady=(1, 7))
 
@@ -3864,22 +4110,107 @@ def launch(path):
             schedule_work_checkpoint()
 
     def commit_workspace_properties(key, baseline, values):
-        """One typed, validated edit with Editor undo and Studio history."""
+        """Single canonical EditingContext transaction for one or many resources."""
         if battle is not None or source_pending():
             raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
-        form = editable_form(doc.data, key)
-        if form.mission_id != mission_var.get():
-            select_workspace_mission(form.mission_id)
-        command = WorkspacePropertyCommand(
-            key, baseline, tuple(values.items()))
+        if isinstance(key, tuple):
+            form = batch_form(doc.data, key)
+            if form.mission_id != mission_var.get():
+                select_workspace_mission(form.mission_id)
+            command = BatchPropertyCommand(
+                key, tuple(baseline), tuple(values.items()))
+        else:
+            form = editable_form(doc.data, key)
+            if form.mission_id != mission_var.get():
+                select_workspace_mission(form.mission_id)
+            command = WorkspacePropertyCommand(
+                key, baseline, tuple(values.items()))
         design_change(lambda: editing_context.execute(command, publish=False))
         status_var.set('Propriétés Workspace enregistrées (Annuler/Rétablir).')
+        return True
+
+    def rename_workspace_resource(key, baseline, new_id):
+        """Typed, stale-safe rename using the existing Studio history."""
+        if battle is not None or source_pending():
+            raise RuleError('Terminer le playtest et appliquer le JSON.')
+        category, _, identity = key.partition(':')
+        if category in ('scene', 'campaign'):
+            project_before = studio.project.to_dict()
+            content_before = json.dumps(doc.data, sort_keys=True)
+            candidate, updated_project = plan_story_rename(
+                doc.data, studio.project, key, baseline, new_id,
+                project_path=studio.project_path)
+
+            def commit_story_rename():
+                if (studio.project.to_dict() != project_before or
+                        json.dumps(doc.data, sort_keys=True) != content_before):
+                    raise RuleError('Documents modifiés depuis la prévisualisation')
+                if candidate != doc.data:
+                    doc.replace(candidate)
+                studio.project = updated_project
+                if category == 'scene' and studio.story_editor.scene_id == identity:
+                    studio.story_editor.scene_id = new_id
+                if category == 'campaign' and studio.campaign_id.get() == identity:
+                    studio.campaign_id.set(new_id)
+                    studio._show_campaign()
+                editing_context.revision += 1
+
+            design_change(commit_story_rename)
+            status_var.set('Références du scénario/campagne migrées (Undo global).')
+            return True
+        mid = identity.split('/', 1)[0]
+        if mid != mission_var.get():
+            select_workspace_mission(mid)
+        project_before = studio.project.to_dict()
+        old = identity.split('/', 1)[1]
+        if _mentions(project_before, old):
+            content_before = json.dumps(doc.data, sort_keys=True)
+            # Pre-validate both snapshots. Commit inside the existing Studio
+            # history timeline so a single global Undo restores both files.
+            next_content, next_project = plan_coordinated_rename(
+                doc.data, studio.project, key, baseline, new_id)
+
+            def commit_joint_rename():
+                if (studio.project.to_dict() != project_before or
+                        json.dumps(doc.data, sort_keys=True) != content_before):
+                    raise RuleError('Documents modifiés depuis la prévisualisation')
+                doc.replace(next_content)
+                studio.project = next_project
+                editing_context.revision += 1
+
+            design_change(commit_joint_rename)
+        else:
+            command = RenameMapResourceCommand(
+                key, baseline, new_id, project_before)
+            design_change(lambda: editing_context.execute(command, publish=False))
+        status_var.set('Identifiant renommé avec propagation validée (Annuler/Rétablir).')
+        return True
+
+    def delete_workspace_resource(key, baseline):
+        """One canonical history entry even for dependent multi-selections."""
+        if battle is not None or source_pending():
+            raise RuleError('Terminer le playtest et appliquer le JSON.')
+        if isinstance(key, tuple):
+            if not key:
+                raise RuleError('Sélectionner au moins une ressource')
+            mid = key[0].partition(':')[2].split('/', 1)[0]
+            command = DeleteMapResourcesCommand(
+                key, tuple(baseline), studio.project.to_dict())
+        else:
+            mid = key.partition(':')[2].split('/', 1)[0]
+            command = DeleteMapResourceCommand(
+                key, baseline, studio.project.to_dict())
+        if mid != mission_var.get():
+            select_workspace_mission(mid)
+        design_change(lambda: editing_context.execute(command, publish=False))
+        status_var.set('Suppression validée (Annuler/Rétablir disponibles).')
         return True
 
     studio = StudioPanels(
         notebook, tk, ttk,
         SimpleNamespace(showerror=messagebox.showerror,
                         askstring=simpledialog.askstring,
+                        askyesno=messagebox.askyesno,
                         asksaveasfilename=filedialog.asksaveasfilename),
         doc=lambda: doc, content_path=lambda: current_path,
         mission=mission_var.get, selection=lambda: selected_cell,
@@ -3888,18 +4219,40 @@ def launch(path):
         select_mission=select_workspace_mission,
         on_project_saved=on_project_saved, set_active_mission=mission_var.set,
         focus_map_cell=focus_workspace_map,
-        workspace_edit=commit_workspace_properties)
+        workspace_edit=commit_workspace_properties,
+        workspace_rename=rename_workspace_resource,
+        workspace_delete=delete_workspace_resource)
     if recovered_work:
         recovered_content = recovered_work[0]
-        doc.data = Content.from_dict(
-            recovered_content,
-            rules=authored_rules_for_document(recovered_content)).to_dict()
+        doc.restore_snapshot(recovered_content)
         if mission_var.get() not in {m['id'] for m in doc.data['missions']}:
             mission_var.set(doc.data['missions'][0]['id'])
         studio.restore_unsaved_project(recovered_work[1])
         status_var.set('Travail interrompu restauré en mémoire ; enregistrer pour le conserver.')
     studio.history.on_change = schedule_work_checkpoint
     studio.workspace.incremental_validator = editing_context.diagnostics
+    from .studio_layout import StudioNavigation
+    studio_navigation = StudioNavigation(
+        section_bar, notebook, tool_tabs, work, tk, ttk)
+    from .studio_docks import StudioDocks, DockPreferences
+    studio_docks = StudioDocks(
+        root, work, canvas_region, sidebar, side_panel, bottom_panel, tk)
+    view_menu = tk.Menu(view_button, tearoff=False)
+    view_button.configure(menu=view_menu)
+    dock_titles = (
+        ('explorer', 'Explorateur  ·  Ctrl+B'),
+        ('inspector', 'Inspecteur  ·  Ctrl+Alt+I'),
+        ('bottom', 'Journal  ·  Ctrl+J'),
+    )
+    for dock_name, dock_title in dock_titles:
+        view_menu.add_checkbutton(
+            label=dock_title, variable=studio_docks.visible_vars[dock_name],
+            command=lambda name=dock_name: toggle_studio_dock(name))
+    view_menu.add_separator()
+    view_menu.add_checkbutton(
+        label='Carte plein espace  ·  F11',
+        variable=studio_docks.focus_var,
+        command=lambda: set_studio_focus(studio_docks.focus_var.get()))
     studio.workspace.attach_navigator(sidebar)
     studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
@@ -3919,7 +4272,62 @@ def launch(path):
             if row and not row.startswith('group:'):
                 gesture.update(row=row, x=event.x_root, y=event.y_root)
 
+        def drag_preview(event):
+            row = gesture.get('row')
+            sx, sy = gesture.get('x'), gesture.get('y')
+            canvas.delete('workspace_drop_preview')
+            if (not row or sx is None or
+                    abs(event.x_root - sx) + abs(event.y_root - sy) < 12):
+                return
+            x = event.x_root - canvas.winfo_rootx()
+            y = event.y_root - canvas.winfo_rooty()
+            if not (0 <= x < canvas.winfo_width() and
+                    0 <= y < canvas.winfo_height()):
+                return
+            from types import SimpleNamespace
+            cell = event_cell(SimpleNamespace(x=int(x), y=int(y), state=0))
+            if cell is None:
+                return
+            try:
+                if kind == 'asset':
+                    # Asset placement still validates through choose_palette_asset.
+                    preview_cells((cell,), tag='workspace_drop_preview',
+                                  color='#c58d36')
+                    return
+                if kind == 'workspace':
+                    entry = palette_source_for_tree(row, doc.data, mission_var.get())
+                    link, destination = '', ''
+                    if row.startswith('map_object:'):
+                        source_mid, eid = row.partition(':')[2].split('/', 1)
+                        original = next(o for m in doc.data['missions']
+                                        if m['id'] == source_mid
+                                        for o in m['objects'] if o['id'] == eid)
+                        link = original.get('link', '')
+                        destination = original.get('destination', '')
+                else:
+                    entry = entity_palette.entries.get(row)
+                    if entry is None:
+                        return
+                    link, destination = (entity_palette.link.get(),
+                                         entity_palette.destination.get())
+                cells, valid = preview_entity_cells(
+                    doc.data, mission_var.get(), entry, cell,
+                    link=link, destination=destination)
+                if battle or source_pending():
+                    valid = False
+                mission = next(m for m in doc.data['missions']
+                               if m['id'] == mission_var.get())
+                inside = (pos for pos in cells
+                          if 0 <= pos[0] < mission['board']['width']
+                          and 0 <= pos[1] < mission['board']['height'])
+                preview_cells(inside, tag='workspace_drop_preview',
+                              color='#36a16c' if valid else '#e05252')
+            except (RuleError, ValueError, KeyError, StopIteration, TypeError):
+                preview_cells((cell,), tag='workspace_drop_preview',
+                              color='#e05252')
+
         def finish(event):
+            canvas.delete('workspace_drop_preview')
             row = gesture.get('row')
             start_x, start_y = gesture.get('x'), gesture.get('y')
             gesture.clear()
@@ -3975,6 +4383,10 @@ def launch(path):
                 messagebox.showerror('Dépôt refusé', str(exc))
 
         tree.bind('<ButtonPress-1>', start, add='+')
+        tree.bind('<B1-Motion>', drag_preview, add='+')
+        tree.bind('<Escape>',
+                  lambda _event: (gesture.clear(),
+                                  canvas.delete('workspace_drop_preview')), add='+')
         tree.bind('<ButtonRelease-1>', finish, add='+')
 
     wire_drop(studio.workspace.tree, 'workspace')
@@ -4009,21 +4421,57 @@ def launch(path):
     def layout_store():
         return LayoutStore(current_path.with_suffix('.workspace.layout.json'))
 
+    def docks_store():
+        return DockPreferences(current_path.with_suffix('.workspace.docks.json'))
+
     def save_layout(_event=None):
         try:
-            layout_store().save({
-                'outer_left': work.sashpos(0),
-                'outer_right': work.sashpos(1),
-                'vertical': canvas_region.sashpos(0),
+            # Preserve the existing explorer configuration as well as dock geometry.
+            state = layout_store().load()
+            state.update({
                 'tab': notebook.tab(notebook.select(), 'text'),
+                'favorites': sorted(studio.workspace.explorer.favorites),
+                'recents': studio.workspace.explorer.recents,
+                'family_filter': studio.workspace.family_filter.get(),
+                'scope_filter': studio.workspace.scope_filter.get(),
             })
+            if len(work.panes()) == 3 and not studio_docks.focus_var.get():
+                state['outer_left'] = work.sashpos(0)
+                state['outer_right'] = work.sashpos(1)
+            if len(canvas_region.panes()) == 2 and not studio_docks.focus_var.get():
+                state['vertical'] = canvas_region.sashpos(0)
+            layout_store().save(state)
+            docks_store().save(studio_docks.persistence())
         except (OSError, ValueError, tk.TclError):
             # UI preferences must never prevent authoring or saving gameplay.
             pass
 
+    def toggle_studio_dock(name):
+        if notebook.select() != str(work):
+            return
+        studio_docks.toggle(name)
+        save_layout()
+
+    def set_studio_focus(enabled):
+        if enabled and notebook.select() != str(work):
+            notebook.select(work)
+        studio_docks.set_focus(enabled)
+        save_layout()
+
+    def toggle_focus_key(_event=None):
+        set_studio_focus(not studio_docks.focus_var.get())
+
+    def dock_shortcut(name):
+        return lambda _event: toggle_studio_dock(name)
+
     def restore_layout():
         values = layout_store().load()
+        studio.workspace.explorer.favorites = set(values.get('favorites', ()))
+        studio.workspace.explorer.recents = list(values.get('recents', ()))
+        studio.workspace.family_filter.set(values.get('family_filter', 'all'))
+        studio.workspace.scope_filter.set(values.get('scope_filter', 'all'))
         try:
+            root.update_idletasks()
             if 'outer_left' in values and values['outer_left'] < work.winfo_width():
                 work.sashpos(0, values['outer_left'])
             if 'outer_right' in values and values['outer_right'] < work.winfo_width():
@@ -4034,14 +4482,35 @@ def launch(path):
                 if notebook.tab(tab, 'text') == values.get('tab', 'Carte et combat'):
                     notebook.select(tab)
                     break
-        except tk.TclError:
+            studio_docks.restore(docks_store().load())
+        except (OSError, ValueError, tk.TclError):
             pass
 
     work.bind('<ButtonRelease-1>', save_layout, add='+')
     canvas_region.bind('<ButtonRelease-1>', save_layout, add='+')
+    root.bind('<Control-b>', dock_shortcut('explorer'), add='+')
+    root.bind('<Control-Alt-i>', dock_shortcut('inspector'), add='+')
+    root.bind('<Control-j>', dock_shortcut('bottom'), add='+')
+    root.bind('<F11>', toggle_focus_key, add='+')
     root.after_idle(restore_layout)
+    def ambient_tick():
+        nonlocal ambient_job
+        ambient_job = None
+        try:
+            if iso_var.get() and ambient_var.get() and ambient_animator.active:
+                from time import monotonic
+                ambient_animator.tick(canvas, monotonic() * 1000)
+            ambient_job = root.after(TICK_MS, ambient_tick)
+        except tk.TclError:
+            pass
+
     def close_editor():
+        nonlocal ambient_job
         if discard_ok():
+            if ambient_job is not None:
+                root.after_cancel(ambient_job)
+                ambient_job = None
+            ambient_animator.clear()
             if work_checkpoint_job is not None:
                 root.after_cancel(work_checkpoint_job)
             edit_recovery.discard()
@@ -4050,5 +4519,6 @@ def launch(path):
     root.protocol('WM_DELETE_WINDOW', close_editor)
     refresh_source()
     refresh()
+    ambient_job = root.after(TICK_MS, ambient_tick)
     root.mainloop()
 

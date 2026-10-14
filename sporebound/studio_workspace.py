@@ -4,6 +4,7 @@ Only this module creates widgets; the index and game engine remain headless.
 """
 from .model import RuleError
 from .workspace_editing import editable_form
+from .workspace_r2 import ExplorerState, batch_form, MIXED, dependency_impact
 from .workspace_navigation import (NavigationHistory, map_selection_key,
                                    navigation_target)
 from .workspace_shell import (inspect_resource, inspect_map,
@@ -26,6 +27,9 @@ class ProjectWorkspaceTab:
         self.sidebar_search = None
         self._sidebar_mission = None
         self._model_cache = WorkspaceModelCache()
+        self.explorer = ExplorerState()
+        self.family_filter = owner.tk.StringVar(value='all')
+        self.scope_filter = owner.tk.StringVar(value='all')
         self.problem_tree = None
         self.problem_targets = {}
         self.problem_snapshot = ()
@@ -33,6 +37,7 @@ class ProjectWorkspaceTab:
         self._explicit_tile = ''
         self._form_signature = None
         self._form_fields = ()
+        self._form_mixed = set()
         self._form_vars = {}
         self._form_key = ''
         self._form_baseline = ''
@@ -56,6 +61,16 @@ class ProjectWorkspaceTab:
         ttk.Entry(searchbar, textvariable=self.query).pack(
             side='left', fill='x', expand=True, padx=7)
         self.query.trace_add('write', lambda *_: self.refresh())
+        ttk.Label(searchbar, text='Famille').pack(side='left', padx=(5, 2))
+        families = ('all',) + tuple(kind for kind, _ in GROUPS)
+        ttk.Combobox(searchbar, textvariable=self.family_filter, values=families,
+                     state='readonly', width=17).pack(side='left')
+        ttk.Label(searchbar, text='Vue').pack(side='left', padx=(8, 2))
+        ttk.Combobox(searchbar, textvariable=self.scope_filter,
+                     values=('all', 'favorites', 'recents'),
+                     state='readonly', width=11).pack(side='left')
+        self.family_filter.trace_add('write', lambda *_: self.refresh())
+        self.scope_filter.trace_add('write', lambda *_: self.refresh())
         navigation_bar = ttk.Frame(root)
         navigation_bar.pack(fill='x', padx=12, pady=(0, 3))
         ttk.Button(navigation_bar, text='← Précédent',
@@ -64,6 +79,18 @@ class ProjectWorkspaceTab:
         ttk.Button(navigation_bar, text='Suivant →',
                    command=lambda: self.owner._run(
                        lambda: self.navigate_history(1))).pack(side='left', padx=(0, 9))
+        ttk.Button(navigation_bar, text='☆ Favori',
+                   command=lambda: self.owner._run(self.toggle_favorite)).pack(
+                       side='left', padx=(0, 6))
+        ttk.Button(navigation_bar, text='Impact',
+                   command=lambda: self.owner._run(self.show_impact)).pack(
+                       side='left', padx=(0, 6))
+        ttk.Button(navigation_bar, text='Renommer ID',
+                   command=lambda: self.owner._run(self.rename_selected_id)).pack(
+                       side='left', padx=(0, 6))
+        ttk.Button(navigation_bar, text='Supprimer (contrôlé)',
+                   command=lambda: self.owner._run(self.delete_selected_resource)).pack(
+                       side='left', padx=(0, 6))
         ttk.Label(navigation_bar, textvariable=self.breadcrumb,
                   wraplength=620).pack(side='left', fill='x', expand=True)
         body = ttk.Panedwindow(root, orient='horizontal')
@@ -72,7 +99,7 @@ class ProjectWorkspaceTab:
         detail_frame = ttk.Frame(body)
         body.add(tree_frame, weight=2)
         body.add(detail_frame, weight=3)
-        self.tree = ttk.Treeview(tree_frame, show='tree', selectmode='browse')
+        self.tree = ttk.Treeview(tree_frame, show='tree', selectmode='extended')
         scroll = ttk.Scrollbar(tree_frame, orient='vertical', command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.pack(side='left', fill='both', expand=True)
@@ -80,6 +107,8 @@ class ProjectWorkspaceTab:
         self.tree.bind('<<TreeviewSelect>>', self._select)
         self.tree.bind('<Double-1>', lambda _e: self.owner._run(self.open_selected))
         self.tree.bind('<Return>', lambda _e: self.owner._run(self.open_selected))
+        self.tree.bind('<Control-d>',
+                       lambda _e: self.owner._run(self.toggle_favorite))
 
         ttk.Label(detail_frame, text='Inspecteur', font=('TkDefaultFont', 11, 'bold')).pack(
             anchor='w', padx=10, pady=8)
@@ -103,6 +132,9 @@ class ProjectWorkspaceTab:
                    command=lambda: self.owner._run(self.open_selected)).pack(
                        anchor='w', padx=10, pady=6)
 
+        ttk.Button(detail_frame, text='Créer interaction depuis la sélection',
+                   command=lambda: self.owner._run(self.create_contextual_interaction)).pack(
+                       anchor='w', padx=10, pady=3)
         controls = ttk.LabelFrame(detail_frame, text='Création guidée')
         controls.pack(fill='x', padx=10, pady=10)
         ttk.Button(controls, text='Nouvelle carte / mission',
@@ -197,6 +229,10 @@ class ProjectWorkspaceTab:
         self._explicit_tile = ''
         if self.query.get():
             self.query.set('')
+        if self.family_filter.get() != 'all':
+            self.family_filter.set('all')
+        if self.scope_filter.get() != 'all':
+            self.scope_filter.set('all')
         if not self.tree.exists(key):
             raise RuleError('Ressource introuvable : ' + key)
         self._map_tile_key = ''
@@ -205,6 +241,7 @@ class ProjectWorkspaceTab:
         self.tree.see(key)
         if record:
             self.navigation.record(key)
+            self.explorer.visit(key)
         self._select()
         self.open_selected()
 
@@ -221,7 +258,9 @@ class ProjectWorkspaceTab:
         ui_started = begin_ui()
         model = self.model()
         sections = model.sections
-        shown = {node.key for node in model.search(self.query.get())}
+        shown = self.explorer.shown(
+            model, self.query.get(),
+            kind=self.family_filter.get(), scope=self.scope_filter.get())
         self._populate_tree(self.tree, sections, shown)
         if self.sidebar_tree is not None:
             self._populate_tree(self.sidebar_tree, sections, shown)
@@ -254,8 +293,7 @@ class ProjectWorkspaceTab:
             for kind, _title in GROUPS)
         if getattr(tree, '_workspace_signature', None) == signature:
             return
-        current = tree.selection()
-        selected = current[0] if current else ''
+        selected = tuple(tree.selection())
         existing_groups = tree.get_children('')
         expanded = {key for key in existing_groups if tree.item(key, 'open')}
         initial = not existing_groups
@@ -268,8 +306,9 @@ class ProjectWorkspaceTab:
             for key, label in entries:
                 tree.insert(parent, 'end', iid=key, text=label)
         tree._workspace_signature = signature
-        if selected and tree.exists(selected):
-            tree.selection_set(selected)
+        remaining = tuple(key for key in selected if tree.exists(key))
+        if remaining:
+            tree.selection_set(*remaining)
 
     def _selected_node(self):
         selected = self.tree.selection()
@@ -286,9 +325,11 @@ class ProjectWorkspaceTab:
         if _event is not None and self.tree.selection():
             self._explicit_tile = ''
         node = self._selected_node()
-        if _event is not None and node is not None and not self._navigation_busy:
+        if (_event is not None and node is not None and
+                len(self.tree.selection()) == 1 and not self._navigation_busy):
             self._map_tile_key = ''
             changed = self.navigation.record(node.key)
+            self.explorer.visit(node.key)
             if changed:
                 self._preview_map_reference(node.key)
         snapshot = inspect_resource(node) if node else None
@@ -307,7 +348,10 @@ class ProjectWorkspaceTab:
                 mid, gid = node.id.split('/', 1)
                 snapshot = inspect_persistent_group(
                     self.owner.doc().data, mid, gid)
-        edit_key = node.key if node is not None else self._explicit_tile
+        keys = tuple(key for key in self.tree.selection()
+                     if key in self.model().nodes)
+        edit_key = (keys if len(keys) > 1 else
+                    node.key if node is not None else self._explicit_tile)
         if self._explicit_tile and node is None:
             _, identifier = self._explicit_tile.split(':', 1)
             mid, xy = identifier.split('/', 1)
@@ -321,6 +365,11 @@ class ProjectWorkspaceTab:
                      else 'Sélectionner une ressource')
             detail = (snapshot.detail if snapshot else
                       'Explorer campagnes, missions, scénarios et bibliothèques.')
+        if len(keys) > 1:
+            title = f'SÉLECTION MULTIPLE — {len(keys)} ressources'
+            detail = ('Les propriétés communes peuvent être appliquées en une '
+                      'seule transaction. Les champs mixtes ne sont pas modifiés '
+                      'tant que leur valeur n’est pas explicitement remplacée.')
         self.heading.config(text=title)
         self.summary.config(text=detail)
         self._render_editable(edit_key)
@@ -351,20 +400,31 @@ class ProjectWorkspaceTab:
         self._select()
 
     def _render_editable(self, key):
-        if not key or not key.startswith(
-                ('map_actor:', 'map_object:', 'editor_group:', 'map_tile:')):
-            form = None
-        else:
+        if isinstance(key, tuple) and len(key) > 1:
+            try:
+                form = batch_form(self.owner.doc().data, key)
+                signature = (form.keys, form.baselines)
+            except RuleError:
+                form, signature = None, (key, None)
+        elif isinstance(key, str) and key.startswith(
+                ('map_actor:', 'map_object:', 'editor_group:', 'map_tile:',
+                 'tactical_event:')):
             form = editable_form(self.owner.doc().data, key)
-        signature = ((form.key, form.baseline) if form else (None, None))
+            signature = (form.key, form.baseline)
+        else:
+            form, signature = None, (None, None)
         if signature == self._form_signature:
             return
         self._form_signature = signature
         for widget in self.edit_frame.winfo_children():
             widget.destroy()
         self._form_fields = form.fields if form else ()
-        self._form_key = form.key if form else ''
-        self._form_baseline = form.baseline if form else ''
+        self._form_key = (form.keys if form is not None and hasattr(form, 'keys')
+                          else form.key if form else '')
+        self._form_baseline = (form.baselines if form is not None
+                               and hasattr(form, 'baselines') else
+                               form.baseline if form else '')
+        self._form_mixed = set(getattr(form, 'mixed', ()))
         self._form_vars = {}
         if form is None:
             self.owner.ttk.Label(
@@ -376,18 +436,27 @@ class ProjectWorkspaceTab:
         for field in form.fields:
             row = ttk.Frame(self.edit_frame)
             row.pack(fill='x', padx=7, pady=2)
-            ttk.Label(row, text=field.label, width=21).pack(side='left')
-            variable = (tk.BooleanVar(value=field.value) if
-                        field.kind == 'boolean' else
-                        tk.StringVar(value=str(field.value)))
-            self._form_vars[field.name] = variable
-            if field.kind == 'boolean':
+            mixed = field.name in self._form_mixed
+            ttk.Label(row, text=field.label + (' *' if mixed else ''),
+                      width=21).pack(side='left')
+            if field.kind == 'boolean' and not mixed:
+                variable = tk.BooleanVar(value=field.value)
                 editor = ttk.Checkbutton(row, variable=variable)
-            elif field.kind == 'choice':
-                editor = ttk.Combobox(row, textvariable=variable,
-                                      values=field.choices, state='readonly')
             else:
-                editor = ttk.Entry(row, textvariable=variable)
+                variable = tk.StringVar(
+                    value=MIXED if mixed else str(field.value))
+                if field.kind == 'boolean':
+                    editor = ttk.Combobox(row, textvariable=variable,
+                                          values=(MIXED, 'True', 'False'),
+                                          state='readonly')
+                elif field.kind == 'choice':
+                    editor = ttk.Combobox(
+                        row, textvariable=variable,
+                        values=((MIXED,) if mixed else ()) + field.choices,
+                        state='readonly')
+                else:
+                    editor = ttk.Entry(row, textvariable=variable)
+            self._form_vars[field.name] = variable
             editor.pack(side='left', fill='x', expand=True)
         ttk.Button(self.edit_frame, text='Appliquer les propriétés',
                    command=lambda: self.owner._run(self.apply_properties)).pack(
@@ -399,14 +468,18 @@ class ProjectWorkspaceTab:
         changed = {}
         for field in self._form_fields:
             value = self._form_vars[field.name].get()
+            mixed = field.name in self._form_mixed
+            if mixed and value == MIXED:
+                continue
+            if mixed and field.kind == 'boolean':
+                value = value == 'True'
             before = field.value
-            if (value if field.kind == 'boolean' else str(value)) != (
+            if mixed or (value if field.kind == 'boolean' else str(value)) != (
                     before if field.kind == 'boolean' else str(before)):
                 changed[field.name] = value
         if not changed:
             self.status.config(text='Aucune propriété modifiée.')
             return
-        # The form's baseline must still match the current resource.
         self.owner.workspace_edit(self._form_key, self._form_baseline, changed)
         self.status.config(text='Propriétés appliquées. Undo/Redo disponibles.')
 
@@ -481,6 +554,116 @@ class ProjectWorkspaceTab:
         self._explicit_tile = ''
         self.breadcrumb.set('Projet')
 
+    def create_contextual_interaction(self):
+        """Reuse the 3.7.21 event authoring wizard instead of parallel JSON."""
+        node = self._selected_node()
+        if node is None or node.kind != 'map_object':
+            raise RuleError('Sélectionner une porte ou un levier interactif')
+        mid, obj_id = node.id.split('/', 1)
+        mission = next(m for m in self.owner.doc().data['missions']
+                       if m['id'] == mid)
+        obj = next(o for o in mission['objects'] if o['id'] == obj_id)
+        door = (obj['id'] if obj['kind'] == 'door' else
+                obj.get('link') if obj['kind'] == 'switch' else '')
+        if not door:
+            raise RuleError('Choisir une porte ou un levier associé à une porte')
+        if self.owner.mission() != mid:
+            self.owner.select_mission(mid)
+        self.owner.focus_gate_event(door)
+        self._show_tab('Personnages et événements')
+
+    def delete_selected_resource(self):
+        keys = tuple(self.tree.selection())
+        if not keys:
+            raise RuleError('Sélectionner un ou plusieurs acteurs ou objets')
+        if self.owner.workspace_delete is None:
+            raise RuleError('Suppression indisponible')
+        model = self.model()
+        if any(key not in model.nodes or
+               model.nodes[key].kind not in ('map_actor', 'map_object')
+               for key in keys):
+            raise RuleError('Sélection limitée aux acteurs/objets placés')
+        impact_count = sum(len(dependency_impact(model, key).incoming)
+                           for key in keys)
+        if not self.owner.dialogs.askyesno(
+                'Suppression contrôlée',
+                f'Supprimer {len(keys)} ressource(s) ?\\n'
+                f'{impact_count} référence(s) entrante(s) détectée(s).\\n'
+                'Les dépendances internes à la sélection sont traitées '
+                'dans le bon ordre; toute référence restante bloque '
+                'toute la transaction (Undo/Redo global).'):
+            return
+        forms = tuple(editable_form(self.owner.doc().data, key).baseline
+                      for key in keys)
+        if len(keys) == 1:
+            self.owner.workspace_delete(keys[0], forms[0])
+        else:
+            self.owner.workspace_delete(keys, forms)
+        self.status.config(text=f'{len(keys)} ressource(s) supprimée(s).')
+
+    def rename_selected_id(self):
+        if len(self.tree.selection()) != 1:
+            raise RuleError('Renommer une seule ressource à la fois')
+        node = self._selected_node()
+        allowed = ('map_actor', 'map_object', 'scene', 'campaign')
+        if node is None or node.kind not in allowed:
+            raise RuleError('Choisir un acteur, objet, scène ou campagne')
+        if self.owner.workspace_rename is None:
+            raise RuleError('Renommage indisponible')
+        new_id = self.owner.dialogs.askstring(
+            'Renommer un identifiant', 'Nouvel identifiant :',
+            initialvalue=(node.id.split('/', 1)[1]
+                          if node.kind in ('map_actor', 'map_object')
+                          else node.id))
+        if new_id is None:
+            return
+        new_id = new_id.strip()
+        impact = dependency_impact(self.model(), node.key)
+        if impact.has_dependents and not self.owner.dialogs.askyesno(
+                'Propagation contrôlée',
+                f'{len(impact.incoming)} lien(s) entrant(s) détecté(s). '
+                'Vérifier et réécrire les références reconnues dans une '
+                'transaction unique ? Les références inconnues bloqueront l’opération.'):
+            return
+        if node.kind in ('scene', 'campaign'):
+            from .workspace_story_refactoring import story_baseline
+            fingerprint = story_baseline(self.owner.project, node.key)
+            next_key = node.kind + ':' + new_id
+        else:
+            fingerprint = editable_form(self.owner.doc().data, node.key).baseline
+            next_key = node.kind + ':' + node.id.split('/', 1)[0] + '/' + new_id
+        self.owner.workspace_rename(node.key, fingerprint, new_id)
+        self.open_key(next_key)
+
+    def toggle_favorite(self):
+        node = self._selected_node()
+        if node is None:
+            raise RuleError('Choisir une ressource pour les favoris')
+        active = self.explorer.toggle_favorite(node.key)
+        self.status.config(text=('Ajouté aux favoris : ' if active else
+                                 'Retiré des favoris : ') + node.key)
+        self.refresh()
+
+    def show_impact(self):
+        node = self._selected_node()
+        if node is None:
+            raise RuleError('Choisir une ressource à analyser')
+        report = dependency_impact(self.model(), node.key)
+        self.refs.delete(0, 'end')
+        self.ref_keys = []
+        for ref in report.incoming:
+            self.ref_keys.append(ref.source)
+            self.refs.insert('end', '← ' + ref.label + ' : ' + ref.source)
+        for ref in report.outgoing:
+            self.ref_keys.append(ref.target)
+            self.refs.insert('end', '→ ' + ref.label + ' : ' + ref.target)
+        self.status.config(text=(
+            f'Impact {node.key} : {len(report.incoming)} lien(s) entrant(s), '
+            f'{len(report.outgoing)} sortant(s). '
+            + ('Renommage/suppression nécessite une propagation contrôlée.'
+               if report.has_dependents else
+               'Aucune dépendance tierce détectée.')))
+
     def open_reference(self):
         selected = self.refs.curselection()
         if not selected:
@@ -528,6 +711,13 @@ class ProjectWorkspaceTab:
             self.owner.story_editor.scene_id = node.id
             self.owner.story_editor.refresh()
             self._show_tab('Scénario & dialogues')
+        elif node.kind == 'tactical_event':
+            # Tactical triggers have no fixed map coordinates. Reveal the
+            # canonical event resource in the shared Workspace inspector.
+            mid, _trigger_id = node.id.split('/', 1)
+            if self.owner.mission() != mid:
+                self.owner.select_mission(mid)
+            self._show_tab('Espace projet')
         elif node.kind == 'strategic_event':
             siege_id, event_id = node.id.split('/', 1)
             studio = self.owner.siege_studio
@@ -629,13 +819,10 @@ class ProjectWorkspaceTab:
         if not selected:
             raise RuleError('Choisir un diagnostic dans la liste.')
         key = self.problem_targets[selected[0]]
-        target = map_resource_target(key, self.owner.doc().data)
-        if target is not None:
-            mid, cell, _kind, _identifier = target
-            self.owner.focus_map_cell(mid, cell)
-            self._show_tab('Carte et combat')
-        else:
-            self.open_key(key)
+        # Preserve the 3.7.31 navigation contract: the target is revealed
+        # on the tactical canvas. open_key synchronizes the shared Workspace
+        # inspector behind the map without changing the selected map tab.
+        self.open_key(key)
 
     def new_mission(self):
         dialogs = self.owner.dialogs

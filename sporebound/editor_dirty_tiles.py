@@ -6,14 +6,16 @@ alter tactical rules or the authored Content serialization.
 """
 from dataclasses import replace
 
+from .iso_architecture import architecture_instances
+
 
 def affected_terrain_cells(before, after, *, geometry, max_changed=16,
                            max_affected=144):
     """Return affected (x,y) cells, empty for a true no-op, None for fallback.
 
-    Only a simple, static map with unchanged elevation and no depth-ordering
-    dependencies can use this initial fast path. Water shoreline, bridge
-    orientation and visible side faces depend on surrounding tiles.
+    Static actors, objects, props and buildings are supported when metadata
+    and architecture instances remain identical. Elevation changes fall back
+    because they may affect global isometric geometry.
     """
     if before is None or after is None or geometry is None:
         return None
@@ -22,15 +24,13 @@ def affected_terrain_cells(before, after, *, geometry, max_changed=16,
         return None
     if geometry.board is not old_board:
         return None
-    # Check all authored metadata except Board; forbid structures, objects,
-    # elevated actors and props. Ordinary actors are allowed only well clear
-    # of the dirty region (see sprite-proximity guard below).
+    # Only validated board-only mutations qualify. Static units, objects,
+    # roofs, facades and props may remain as long as scene identity is stable.
     if replace(before, board=board) != after:
         return None
-    if (after.objects or after.structures or
-            after.interior_floors or after.unit_levels or after.level_links or
-            any(t.feature for t in board.tiles.values()) or
-            any(t.feature for t in old_board.tiles.values()) or
+    # A terrain change can create or break a legacy structure stamp.
+    # Revalidate using the same architecture detector as the full painter.
+    if tuple(architecture_instances(board, after.structures)) != tuple(
             getattr(geometry, 'architecture_instances', ())):
         return None
     changed = set()
@@ -38,7 +38,7 @@ def affected_terrain_cells(before, after, *, geometry, max_changed=16,
         old, new = old_board.tile(cell), board.tile(cell)
         if old == new:
             continue
-        if old.height != new.height or old.feature != new.feature:
+        if old.height != new.height:
             return None
         changed.add(cell)
         if len(changed) > max_changed:
@@ -56,13 +56,9 @@ def affected_terrain_cells(before, after, *, geometry, max_changed=16,
         )
         if len(affected) > max_affected:
             return None
-    # Character sprites (including labels) project beyond their own diamond.
-    # Keep their complete draw unchanged only when well clear of edited tiles.
-    # Otherwise the same full painter handles sprite/terrain occlusion.
-    for unit in after.units:
-        if getattr(unit, 'footprint', (1, 1)) != (1, 1):
-            return None
-        ux, uy = unit.pos
-        if any(abs(ux-x) <= 6 and abs(uy-y) <= 6 for x, y in affected):
-            return None
+    # Static actors, objects and props are owned by their isometric cell.
+    # Multi-cell actors need a dedicated footprint dependency planner.
+    if any(getattr(unit, 'footprint', (1, 1)) != (1, 1)
+           for unit in after.units):
+        return None
     return frozenset(affected)

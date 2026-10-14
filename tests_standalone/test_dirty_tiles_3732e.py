@@ -66,7 +66,9 @@ class DirtyTilePlannerTests(unittest.TestCase):
         doc.undo()
         doc.paint_many('dirty_map', [(10, 10)], 'feature:tree')
         with_prop = Content.from_dict(doc.data).missions['dirty_map']
-        self.assertIsNone(self.affected(old, with_prop))
+        self.assertEqual(self.affected(old, with_prop),
+                         {(x, y) for x in (9, 10, 11)
+                          for y in (9, 10, 11)})
         doc.undo()
         doc.paint_many('dirty_map', [(x, 12) for x in range(50)],
                        'surface:water')

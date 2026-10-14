@@ -8,6 +8,9 @@ from copy import deepcopy
 
 from .ai import play_activation
 from .campaign import Campaign
+from .campaign_flow import (available_missions as flow_available_missions,
+                            inspect_campaign as flow_inspect_campaign,
+                            settle as settle_campaign_flow)
 from .game_project import GameProject, load_slot, save_slot
 from .model import Content, require
 from .narrative import StoryBook
@@ -143,13 +146,20 @@ class PlayerSession:
         require(self.progress is not None, 'No campaign loaded')
         if self.progress.story_pending:
             return []
-        return [mid for mid in self.progress.unlocked if mid not in self.progress.completed]
+        return flow_available_missions(self.progress, self.project.campaign_flow)
 
-    def begin(self, mission_id):
-        require(self.progress is not None and self.battle is None, 'Return to campaign before starting a mission')
-        require(not self.progress.story_pending, 'Resolve the pending dialogue first')
-        require(mission_id in self.available_missions(), 'Mission is not currently available')
-        mission = self.content.missions[mission_id]
+    def campaign_inspector(self):
+        require(self.progress is not None, "No campaign loaded")
+        return flow_inspect_campaign(self.progress, self.project.campaign_flow)
+
+    def _rules_for_mission(self, mission):
+        """Keep original manifests for non-R6 missions and saved encounters."""
+        from .rules import default_rules
+        from .tactical_r6 import ADVANCED_OBJECTIVES, tactical_r6_rules
+        from .tactical_rpg3 import tactical_rpg_rules
+
+        r6 = (mission.objective in ADVANCED_OBJECTIVES
+              or any(unit.behavior == "adaptive_boss" for unit in mission.units))
         advanced = (
             any(unit.behavior in {"coordinated", "phase_boss"}
                 or any(tactic in {"chain_strike", "trio_burst"}
@@ -166,12 +176,28 @@ class PlayerSession:
             or any(tactic in {"chain_strike", "trio_burst"}
                    for prepared in self.progress.prepared_tactics.values()
                    for tactic in prepared))
-        if advanced:
-            from .tactical_rpg3 import tactical_rpg_rules
-            self.battle = self.progress.prepare(
-                self.content, mission_id, ruleset=tactical_rpg_rules())
-        else:
-            self.battle = self.progress.prepare(self.content, mission_id)
+        if r6:
+            return tactical_r6_rules()
+        return tactical_rpg_rules() if advanced else default_rules()
+
+    def party_build_preview(self, mission_id):
+        """Read-only roster projection for the campaign preparation screen."""
+        require(self.progress is not None and self.battle is None,
+                "Party preview is available between battles")
+        require(mission_id in self.available_missions(), "Mission not available")
+        from .tactical_r6 import party_build_preview
+        return party_build_preview(
+            self.content, self.progress, mission_id,
+            ruleset=self._rules_for_mission(self.content.missions[mission_id]))
+
+    def begin(self, mission_id):
+        require(self.progress is not None and self.battle is None, 'Return to campaign before starting a mission')
+        require(not self.progress.story_pending, 'Resolve the pending dialogue first')
+        require(mission_id in self.available_missions(), 'Mission is not currently available')
+        mission = self.content.missions[mission_id]
+        ruleset = self._rules_for_mission(mission)
+        self.battle = self.progress.prepare(
+            self.content, mission_id, ruleset=ruleset)
         self.finalized=False
         self._finish_if_done()
         return self.battle
@@ -198,6 +224,9 @@ class PlayerSession:
             changed = updated.finish(self.battle, unlock_next=not route_choice)
             if changed and route_choice:
                 self.story.after_victory(updated, mission_id)
+            updated = settle_campaign_flow(updated, self.project.campaign_flow,
+                                          mission_id, self.battle.result,
+                                          content=self.content)
             # Commit only if both reward and narrative state persist successfully.
             save_slot(self.profile, self.project, self.content,
                       self.campaign_id, self.slot, updated)

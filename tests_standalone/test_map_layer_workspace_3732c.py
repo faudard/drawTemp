@@ -38,13 +38,14 @@ class MapLayerWorkspaceTests(unittest.TestCase):
             self.assertTrue(all(view['visible'].values()))
             self.assertFalse(any(view['locked'].values()))
             self.assertEqual(view['active_level'], 0)
+            self.assertEqual(view['projection'], '2d')
             self.assertFalse(view_sidecar_path(path).exists())
 
     def test_mission_scoped_view_roundtrip_and_deepcopy(self):
         views = update_view(empty_views(), self.MID,
                             visible={'Terrain': False, 'Étages': False},
                             locked={'Bâtiments': True, 'Toitures': True},
-                            active_level=2, interiors=True)
+                            active_level=2, interiors=True, projection='iso')
         views = update_view(views, 'other_mission',
                             visible={'Objets': False}, active_level=1)
         original = deepcopy(views)
@@ -58,9 +59,35 @@ class MapLayerWorkspaceTests(unittest.TestCase):
             self.assertEqual(restored, views)
             self.assertFalse(view_for(restored, self.MID)['visible']['Étages'])
             self.assertTrue(view_for(restored, self.MID)['locked']['Bâtiments'])
+            self.assertEqual(view_for(restored, self.MID)['projection'], 'iso')
+            self.assertEqual(view_for(restored, 'other_mission')['projection'], '2d')
             self.assertFalse(view_for(restored, 'other_mission')['visible']['Objets'])
             self.assertTrue(view_for(restored, 'other_mission')['visible']['Terrain'])
             self.assertFalse(path.exists())  # Sidecar cannot rewrite gameplay content.
+
+    def test_legacy_v1_sidecar_without_projection_is_migrated_on_read(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'mission.json'
+            legacy = update_view(empty_views(), self.MID,
+                                 visible={'Terrain': False})
+            del legacy['missions'][self.MID]['projection']
+            view_sidecar_path(path).write_text(
+                json.dumps(legacy), encoding='utf-8')
+            loaded = load_views(path)
+            self.assertEqual(view_for(loaded, self.MID)['projection'], '2d')
+            self.assertFalse(view_for(loaded, self.MID)['visible']['Terrain'])
+            self.assertNotIn('projection', legacy['missions'][self.MID])
+            self.assertFalse(path.exists())
+            save_views(path, loaded)
+            self.assertEqual(view_for(load_views(path), self.MID)['projection'], '2d')
+
+    def test_projection_rejects_invalid_modes_without_changing_other_missions(self):
+        original = update_view(empty_views(), self.MID, projection='iso')
+        for value in ('isometric', '', False, 1):
+            with self.subTest(value=value), self.assertRaises(RuleError):
+                update_view(original, 'another_mission', projection=value)
+        self.assertEqual(view_for(original, self.MID)['projection'], 'iso')
+        self.assertEqual(view_for(original, 'another_mission')['projection'], '2d')
 
     def test_invalid_sidecar_is_rejected_without_modifying_content(self):
         with TemporaryDirectory() as tmp:

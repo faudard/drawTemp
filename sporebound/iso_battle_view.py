@@ -8,6 +8,7 @@ from .iso_depth import depth_order, visual_center
 
 from .iso_map import IsoGeometry, IsoTerrainAtlas, render_isometric
 from .iso_props import IsoPropAtlas
+from .terrain_ambient import TerrainAmbientAnimator
 from .iso_object_atlas import IsoObjectAtlas
 from .iso_building_atlas import IsoBuildingAtlas
 from .iso_fortification_atlas import IsoFortificationAtlas
@@ -39,13 +40,13 @@ def hit_test_battle(board, camera, viewport, screen):
     return geo.hit_test(screen[0] - dx, screen[1] - dy)
 
 
-def anchored_iso_zoom(board, camera, viewport, steps, point):
-    """Keep the pointed *tile center* stable when changing isometric zoom."""
+def anchored_iso_zoom(board, camera, viewport, steps, point, *, size=None):
+    """Keep the pointed *tile center* stable at incremental or exact zoom."""
     from .presentation import Camera
     geo = IsoGeometry(board, camera.cell_size)
     old_dx, old_dy = viewport_shift(geo, camera, viewport)
     cell = geo.hit_test(point[0]-old_dx, point[1]-old_dy)
-    size = max(16, min(128, camera.cell_size + 8*steps))
+    size = max(16, min(128, camera.cell_size + 8*steps if size is None else size))
     if size == camera.cell_size:
         return camera
     updated = Camera(size, camera.offset_x, camera.offset_y)
@@ -72,6 +73,7 @@ class IsoBattleCanvas:
         self.actors = IsoActorAtlas(canvas)
         self.geometry = None
         self.shift = (0, 0)
+        self.ambient = TerrainAmbientAnimator()
         # A frame is immutable and identical throughout each MotionDirector
         # animation. Preserve authored scenery on animation-only redraws.
         self._frame = None
@@ -141,7 +143,11 @@ class IsoBattleCanvas:
                         self.canvas.itemconfigure(item, image=image)
         self._actor_sprite_states = states
 
-    def draw(self, battle, frame, camera, *, poses=None):
+    @property
+    def animates_when_idle(self):
+        return self.ambient.active
+
+    def draw(self, battle, frame, camera, *, poses=None, ambient_clock_ms=None):
         """Reuse the scene on motion ticks; repaint on any meaningful change.
 
         A changed frame, board, camera, viewport, actor list or roof-cutaway
@@ -162,6 +168,10 @@ class IsoBattleCanvas:
             and actor_state == self._unit_state
             and self._level_map == battle.unit_levels
             and self._cutaways == self._cutaway_flags(frame, units, poses)
+            # The 2D Player renderer may have taken the *same* Canvas
+            # between two ISO ticks. Never animate stale/destroyed item IDs.
+            and (not hasattr(self.canvas, 'find_withtag')
+                 or bool(self.canvas.find_withtag('iso_tile_0_0')))
         )
         if reusable:
             moved = False
@@ -182,6 +192,8 @@ class IsoBattleCanvas:
             self._refresh_sprite_frames(units, poses, camera)
             self._positions = positions
             self._actor_only_frames += 1
+            if ambient_clock_ms is not None:
+                self.ambient.tick(self.canvas, ambient_clock_ms)
             return self.geometry
 
         geo = render_isometric(
@@ -201,6 +213,9 @@ class IsoBattleCanvas:
         self.geometry = geo
         self.shift = viewport_shift(geo, camera, viewport)
         self.canvas.move('all', *self.shift)
+        self.ambient.capture(self.canvas)
+        if ambient_clock_ms is not None:
+            self.ambient.tick(self.canvas, ambient_clock_ms)
         if frame.result:
             self.canvas.create_text(viewport[0]/2, 22,
                                     text=frame.result.upper(), fill='#ffe38d',
@@ -241,6 +256,7 @@ class IsoBattleCanvas:
         return self.geometry.hit_test(px, py)
 
     def dispose(self):
+        self.ambient.clear()
         self.geometry = None
         self._frame = None
         self._board = None

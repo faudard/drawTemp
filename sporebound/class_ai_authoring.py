@@ -16,7 +16,9 @@ BONUS_NAMES = tuple(sorted(TALENT_STATS))
 
 
 def _content(data):
-    return Content.from_dict(data).to_dict()
+    from .tactical_rpg3 import authored_rules_for_document
+    return Content.from_dict(
+        data, rules=authored_rules_for_document(data)).to_dict()
 
 
 def _job(data, job_id):
@@ -211,13 +213,15 @@ def validate_route(data, mission_id, cells):
 
 def set_unit_ai(data, mission_id, unit_id, *, behavior="tactical",
                 roles=(), route=()):
-    """Use default deterministic tactical rules with an optional patrol.
+    """Validated tactical or explicitly opt-in elite boss behavior.
 
-    coordinated AI is an opt-in ruleset; do not silently author it into
-    Content validated by the default battle engine.
+    Patrol waypoints apply only to standard tactical actors. Coordinated AI
+    remains a separate authoring feature; the legacy option is not changed.
     """
-    require(behavior == "tactical",
-            "Only standard tactical AI is portable; coordinated AI needs opt-in rules")
+    require(behavior in {"tactical", "adaptive_boss"},
+            "Unsupported AI behavior; use tactical or adaptive_boss")
+    require(behavior != "adaptive_boss" or not route,
+            "Adaptive boss must use tactical navigation, not patrol waypoints")
     require(isinstance(roles, (list, tuple))
             and all(isinstance(r, str) for r in roles)
             and len(set(roles)) == len(roles), "Duplicate or invalid AI roles")
@@ -231,8 +235,15 @@ def set_unit_ai(data, mission_id, unit_id, *, behavior="tactical",
     m = _mission(new, mission_id)
     actor = next((u for u in m["units"] if u["id"] == unit_id), None)
     require(actor is not None, "Unknown actor")
+    require(behavior != "adaptive_boss" or actor["team"] == "enemy",
+            "Adaptive boss needs an enemy actor")
     actor["behavior"] = behavior
-    actor["tags"] = list(roles)
+    # Boss phase progression is authored by canonical HP triggers, not an AI
+    # role field. Switching policy must not silently erase its phase state.
+    preserved = ([tag for tag in actor.get("tags", [])
+                  if tag.startswith("boss_phase:") and tag not in roles]
+                 if behavior == "adaptive_boss" else [])
+    actor["tags"] = list(roles) + preserved
     actor["patrol_route"] = cells
     return _validated(new)
 
@@ -244,7 +255,11 @@ def ai_preview(data, mission_id, unit_id):
     actor = next((u for u in m["units"] if u["id"] == unit_id), None)
     require(actor is not None, "Unknown actor")
     route = actor.get("patrol_route", [])
-    return {"unit_id": unit_id, "behavior": actor.get("behavior", "tactical"),
+    behavior = actor.get("behavior", "tactical")
+    return {"unit_id": unit_id, "behavior": behavior,
             "roles": list(actor.get("tags", [])),
-            "waypoints": deepcopy(route), "mode": "patrol" if route else "tactical",
-            "ruleset": "standard", "coordinated_active": False}
+            "waypoints": deepcopy(route),
+            "mode": "patrol" if route else ("boss" if behavior == "adaptive_boss"
+                                         else "tactical"),
+            "ruleset": "r6" if behavior == "adaptive_boss" else "standard",
+            "coordinated_active": False}

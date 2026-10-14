@@ -34,7 +34,34 @@ class WatercolorCatalogGuiTests(unittest.TestCase):
             root.update()
             palette.category.set("Aquarelle")
             root.update()
-            self.assertEqual(len(palette.tree.get_children()), 103)
+            self.assertEqual(len(palette.tree.get_children()), 9)
+            self.assertTrue(palette.tree.exists("watercolor-group:jeanne"))
+            self.assertFalse(palette.tree.item("watercolor-group:jeanne", "open"))
+            self.assertFalse(palette.tree.exists("watercolor:jeanne_walk_b"))
+            self.assertIn("watercolor:anim_jeanne_walk",
+                          palette.tree.get_children("watercolor-group:jeanne"))
+
+            # One character row; swap its pose/animation without expanding
+            # 12 individual frames into the library.
+            palette.tree.selection_set("watercolor-group:jeanne")
+            palette.select()
+            self.assertEqual(palette.selected().id, "watercolor:jeanne_idle")
+            self.assertTrue(palette.variant_controls.winfo_manager())
+            walk = next(label for label, eid in palette._group_option_lookup.items()
+                        if eid == "watercolor:anim_jeanne_walk")
+            palette.watercolor_variant.set(walk)
+            palette.choose_group_variant()
+            self.assertEqual(palette.selected().id, "watercolor:anim_jeanne_walk")
+            self.assertTrue(palette.watercolor_animation_controls.winfo_manager())
+            self.assertFalse(palette.tree.item("watercolor-group:jeanne", "open"))
+
+            # Exact-ID search can still reveal a frame hidden by default.
+            palette.query.set("jeanne_walk_b")
+            root.update()
+            self.assertTrue(palette.tree.exists("watercolor:jeanne_walk_b"))
+            self.assertTrue(palette.tree.item("watercolor-group:jeanne", "open"))
+            palette.query.set("")
+            root.update()
 
             palette.tree.selection_set("watercolor:jeanne_idle")
             palette.select()

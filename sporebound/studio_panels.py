@@ -10,6 +10,8 @@ from . import authoring
 from .entity_event_studio import author_gate_sequence, gate_context, probe_gate_sequence
 from .event_context import format_preview_report
 from .game_project import GameProject, load_slot, save_slot
+from .campaign_flow import available_missions as flow_available_missions
+from .studio_campaign_flow import open_campaign_inspector, open_campaign_qa
 from .model import Content, RuleError
 from .tactical_rpg3 import authored_rules_for_document
 from .studio_transaction import StudioHistory, StudioTransactionStore
@@ -19,7 +21,8 @@ class StudioPanels:
     def __init__(self, notebook, tk, ttk, dialogs, *, doc, content_path,
                  mission, selection, design_change, play_campaign, status, mission_change=None,
                  select_mission=None, on_project_saved=None, set_active_mission=None,
-                 focus_map_cell=None, workspace_edit=None):
+                 focus_map_cell=None, workspace_edit=None, workspace_rename=None,
+                 workspace_delete=None):
         self.tk, self.ttk, self.dialogs = tk, ttk, dialogs
         self.notebook = notebook
         self.doc, self.content_path = doc, content_path
@@ -30,6 +33,8 @@ class StudioPanels:
         self.set_active_mission = set_active_mission or self.select_mission
         self.focus_map_cell = focus_map_cell or (lambda mid, cell: None)
         self.workspace_edit = workspace_edit
+        self.workspace_rename = workspace_rename
+        self.workspace_delete = workspace_delete
         self.status = status
         self.on_project_saved = on_project_saved or (lambda _path: None)
         self.project = None
@@ -43,6 +48,10 @@ class StudioPanels:
         self.workspace = ProjectWorkspaceTab(self, notebook)
         self._entities_tab(notebook)
         self._project_tab(notebook)
+        from .studio_campaign_flow_editor import CampaignFlowEditor
+        self.flow_editor = CampaignFlowEditor(self, notebook)
+        from .studio_campaign_simulation import CampaignSimulationStudio
+        self.campaign_simulator = CampaignSimulationStudio(self, notebook)
         from .studio_world_map import WorldMapStudio
         self.world_studio = WorldMapStudio(self, notebook)
         from .studio_advanced import AdvancedStudio
@@ -107,10 +116,9 @@ class StudioPanels:
     def _restore_history(self, redo=False):
         document, project = (self.history.redo() if redo else self.history.undo())
         current = self.doc()
-        current.data = document
-        # Local histories are no longer valid after a cross-resource restore.
-        current.undo_stack.clear()
-        current.redo_stack.clear()
+        # Preserve the monotonic edit lease when the snapshot returns to the
+        # exact same bytes after Undo/Redo (ABA).
+        current.restore_snapshot(document)
         self.project = project
         # An undo may delete the mission selected in the canvas. Restore a
         # valid mission before refreshing any dependent Studio panel.
@@ -121,6 +129,8 @@ class StudioPanels:
         # caches visible after a global undo.
         self.story_editor.reset_project()
         self.cinematic_studio.reset_project()
+        self.flow_editor.refresh()
+        self.campaign_simulator.refresh()
         self.audio_studio.stop()
         self.title.set(project.title)
         self.subtitle.set(project.subtitle)
@@ -320,7 +330,8 @@ class StudioPanels:
         mission_form.pack(fill='x',padx=10,pady=5)
         self.mission_name,_=self._field(mission_form,0,'Titre mission')
         self.objective,_=self._field(mission_form,1,'Objectif','eliminate',
-            choices=['eliminate','survive','extract','hold','crown'])
+            choices=['eliminate','survive','extract','hold','crown',
+                      'capture','escort','defend','sabotage','retreat'])
         self.reward,_=self._field(mission_form,2,'Récompense','100')
         self.next_missions,_=self._field(mission_form,3,'Missions suivantes (id,id)')
         ttk.Button(mission_form,text='Appliquer la mission',command=lambda: self._run(
@@ -540,6 +551,10 @@ class StudioPanels:
         ttk.Button(right,text='Charger partie',command=lambda: self._run(self.load_game)).grid(row=7,column=1,pady=5)
         ttk.Button(right,text='Enregistrer partie',command=lambda: self._run(self.save_game)).grid(row=8,column=0,pady=5)
         ttk.Button(right,text='Jouer campagne',command=lambda: self._run(self.start_game)).grid(row=8,column=1,pady=5)
+        ttk.Button(right,text='Inspecter état R5.8',
+                   command=lambda: self._run(lambda: open_campaign_inspector(self))).grid(row=10,column=0,pady=5)
+        ttk.Button(right,text='Analyser parcours R5.11',
+                   command=lambda: self._run(lambda: open_campaign_qa(self))).grid(row=10,column=1,pady=5)
         self.project_status=ttk.Label(right,text='',wraplength=450)
         self.project_status.grid(row=9,column=0,columnspan=2,sticky='w',padx=8,pady=12)
         right.columnconfigure(1,weight=1)
@@ -704,9 +719,10 @@ class StudioPanels:
             self.new_game()
         if self.session.story_pending:
             raise RuleError('Un dialogue narratif est en attente : utiliser le client joueur pour répondre.')
-        mid=next((m for m in self.session.unlocked if m not in self.session.completed),
-                 self.project.campaign(self.campaign_id.get())['start_mission'])
-        self.play_campaign(self.session,mid)
+        available = flow_available_missions(self.session, self.project.campaign_flow)
+        if not available:
+            raise RuleError('Aucune mission jouable : résoudre les conditions ou dialogues dans le Player')
+        self.play_campaign(self.session, available[0])
 
     def preview(self):
         self.apply_project()
@@ -783,6 +799,8 @@ class StudioPanels:
             self.project_status.config(text=f'Campagne active : {self.session_campaign} | Missions : {len(self.session.completed)} terminées | Or : {self.session.gold}')
         self._refresh_talent_tree()
         self.advanced.refresh()
+        self.flow_editor.refresh()
+        self.campaign_simulator.refresh()
         self.character_rules.refresh()
         self.story_editor.refresh()
         self.siege_studio.refresh()

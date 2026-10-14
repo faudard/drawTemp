@@ -32,8 +32,8 @@ class SharedIsometricBattleGuiTests(unittest.TestCase):
                 root.update()
                 widgets = list(descendants(root))
                 canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
-                toggle = next(w for w in widgets if isinstance(w, ttk.Checkbutton)
-                              and w.cget('text') == 'Vue isométrique 2.5D')
+                toggle = next(w for w in widgets if isinstance(w, ttk.Radiobutton)
+                              and w.cget('text') == 'Iso 2.5D')
                 buttons = {w.cget('text'): w for w in widgets
                            if isinstance(w, ttk.Button)}
                 toggle.invoke()
@@ -98,8 +98,8 @@ class SharedIsometricBattleGuiTests(unittest.TestCase):
                                   if isinstance(w, tk.Canvas))
                     self.assertTrue(canvas.find_withtag('actor'))
                     toggle = next(w for w in descendants(root)
-                                  if isinstance(w, ttk.Checkbutton)
-                                  and w.cget('text') == 'Vue isométrique 2.5D')
+                                  if isinstance(w, ttk.Radiobutton)
+                                  and w.cget('text') == 'Iso 2.5D')
                     toggle.invoke()
                     root.update()
                     self.assertTrue(canvas.find_withtag('iso_actor'))

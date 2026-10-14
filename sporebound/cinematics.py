@@ -7,6 +7,9 @@ from .model import RuleError, require
 KINDS = ("background", "actor", "camera", "dialogue", "fade", "sound")
 TRIGGERS = ("campaign_start", "before_mission", "after_mission", "scene", "tactical_event")
 COLORS = ("#101a2b", "#243c56", "#f3dfbf", "#000000", "#ffffff")
+EASINGS = ("linear", "ease_in", "ease_out", "ease_in_out", "step")
+SHOT_TRANSITIONS = ("cut", "dissolve", "wipe")
+EXPRESSIONS = ("neutral", "happy", "sad", "angry", "surprised", "determined")
 
 
 def _id(value):
@@ -77,11 +80,16 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
                 "fade": {"color"},
                 "sound": {"cue"},
             }
-            optional_audio = {
-                "bus", "volume", "fade_in_ms", "fade_out_ms", "loop", "duck_percent"
-            } if kind == "sound" else set()
+            optional_fields = {
+                "actor": {"easing", "keyframes"},
+                "camera": {"easing", "shot", "transition", "keyframes"},
+                "fade": {"easing"},
+                "dialogue": {"portrait", "expression", "chars_per_second"},
+                "sound": {"bus", "volume", "volume_to", "fade_in_ms",
+                          "fade_out_ms", "loop", "duck_percent"},
+            }.get(kind, set())
             required = base | (fields[kind] if kind in KINDS else set())
-            require(kind in KINDS and required <= set(event) <= required | optional_audio,
+            require(kind in KINDS and required <= set(event) <= required | optional_fields,
                     "Invalid fields for cinematic event")
             require(_id(event["id"]) and event["id"] not in event_ids,
                     "Duplicate / invalid cinematic event id")
@@ -95,23 +103,60 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
             if kind in ("actor", "camera"):
                 require(_point(event["from"]) and _point(event["to"]),
                         "Actor / camera positions must be [x,y] (normalized)")
+            if "easing" in event:
+                require(event["easing"] in EASINGS, "Unknown cinematic easing")
             if kind == "actor":
                 require(_id(event["actor"]), "Actor ID is required")
             if kind == "camera":
                 require(_number(event["zoom_from"], .25, 4.0) and
                         _number(event["zoom_to"], .25, 4.0), "Camera zoom out of range")
+                if "shot" in event:
+                    require(_id(event["shot"]), "Invalid shot ID")
+                if "transition" in event:
+                    require(event["transition"] in SHOT_TRANSITIONS,
+                            "Unknown shot transition")
+            if "keyframes" in event:
+                keys = event["keyframes"]
+                require(kind in ("actor", "camera") and isinstance(keys, list)
+                        and 1 <= len(keys) <= 32,
+                        "Actor/camera keyframes must contain 1..32 interior keys")
+                last = 0
+                for key in keys:
+                    fields = {"at_ms", "pos"}
+                    if kind == "camera":
+                        fields.add("zoom")
+                    require(isinstance(key, dict) and set(key) == fields,
+                            "Invalid motion keyframe fields")
+                    at = key["at_ms"]
+                    require(type(at) is int and last < at < duration,
+                            "Keyframe timestamps must be strictly increasing")
+                    require(_point(key["pos"]), "Invalid keyframe position")
+                    if kind == "camera":
+                        require(_number(key["zoom"], .25, 4.),
+                                "Camera keyframe zoom out of range")
+                    last = at
             if kind == "dialogue":
                 require(isinstance(event["speaker"], str) and len(event["speaker"]) <= 100
                         and isinstance(event["text"], str) and
                         0 < len(event["text"].strip()) <= 1600, "Dialogue text is required")
+                if "portrait" in event:
+                    require(_id(event["portrait"]), "Invalid dialogue portrait")
+                if "expression" in event:
+                    require(event["expression"] in EXPRESSIONS, "Unknown facial expression")
+                if "chars_per_second" in event:
+                    cps = event["chars_per_second"]
+                    require(type(cps) is int and 0 <= cps <= 120,
+                            "Dialogue pacing must be 0..120 characters/second")
             if kind == "sound":
                 require(_id(event["cue"]), "Sound cue ID is required")
                 from .audio_timeline import BUSES
                 bus = event.get("bus", "sfx")
                 require(bus in BUSES, "Unknown cinematic audio bus")
-                volume = event.get("volume", 100)
-                require(type(volume) is int and 0 <= volume <= 100,
-                        "Audio volume must be an integer 0..100")
+                for name in ("volume", "volume_to"):
+                    if name in event:
+                        volume = event[name]
+                        require(type(volume) is int and 0 <= volume <= 100,
+                                f"{name} must be an integer 0..100")
                 require(type(event.get("loop", False)) is bool,
                         "Audio loop must be boolean")
                 for name in ("fade_in_ms", "fade_out_ms"):
@@ -179,8 +224,59 @@ def _lerp(a, b, fraction):
     return a + (b - a) * fraction
 
 
+def _ease(ratio, easing):
+    if easing == "ease_in":
+        return ratio * ratio
+    if easing == "ease_out":
+        return 1 - (1 - ratio) ** 2
+    if easing == "ease_in_out":
+        return ratio * ratio * (3 - 2 * ratio)
+    if easing == "step":
+        return 1. if ratio >= 1. else 0.
+    return ratio
+
+
 def _progress(event, ms):
-    return max(0., min(1., (ms - event["start_ms"]) / event["duration_ms"]))
+    ratio = max(0., min(1., (ms - event["start_ms"]) / event["duration_ms"]))
+    return _ease(ratio, event.get("easing", "linear"))
+
+
+def motion_at(event, ms):
+    """Pure piecewise motion evaluation (also used by the visual keyframe editor).
+
+    No keyframes means exact legacy interpolation. New keys subdivide the
+    authored start/end range, preserving both boundary poses.
+    """
+    from_pos, to_pos = event["from"], event["to"]
+    zoom_from = event.get("zoom_from")
+    zoom_to = event.get("zoom_to")
+    local = max(0, min(event["duration_ms"], int(ms) - event["start_ms"]))
+    stops = [(0, from_pos, zoom_from)]
+    stops.extend((key["at_ms"], key["pos"], key.get("zoom"))
+                 for key in event.get("keyframes", ()))
+    stops.append((event["duration_ms"], to_pos, zoom_to))
+    left, right = stops[0], stops[-1]
+    for index in range(len(stops) - 1):
+        if local <= stops[index + 1][0]:
+            left, right = stops[index], stops[index + 1]
+            break
+    length = right[0] - left[0]
+    # _progress also applies the legacy easing curve; normalize to this segment.
+    ratio = _ease(max(0., min(1., (local - left[0]) / length)),
+                  event.get("easing", "linear"))
+    pos = (_lerp(left[1][0], right[1][0], ratio),
+           _lerp(left[1][1], right[1][1], ratio))
+    zoom = (_lerp(left[2], right[2], ratio)
+            if event["kind"] == "camera" else None)
+    return pos, zoom
+
+
+@dataclass(frozen=True)
+class DialoguePresentation:
+    portrait: str
+    expression: str
+    visible_text: str
+    progress: float
 
 
 @dataclass(frozen=True)
@@ -193,6 +289,9 @@ class CinematicFrame:
     dialogue: tuple | None
     fade: tuple | None
     sounds: tuple
+    dialogue_presentation: DialoguePresentation | None = None
+    shot: str | None = None
+    shot_transition: tuple | None = None
 
 
 def frame_at(clip, ms):
@@ -207,6 +306,9 @@ def frame_at(clip, ms):
     dialogue = None
     fade = None
     sounds = []
+    presentation = None
+    shot = None
+    shot_transition = None
     for _, event in events:
         start = event["start_ms"]
         end = start + event["duration_ms"]
@@ -217,18 +319,30 @@ def frame_at(clip, ms):
         if kind == "background" and ms < end:
             background = event["color"]
         elif kind == "actor":
-            actors[event["actor"]] = (
-                _lerp(event["from"][0], event["to"][0], ratio),
-                _lerp(event["from"][1], event["to"][1], ratio))
+            actors[event["actor"]] = motion_at(event, ms)[0]
         elif kind == "camera":
-            camera = (_lerp(event["from"][0], event["to"][0], ratio),
-                      _lerp(event["from"][1], event["to"][1], ratio))
-            zoom = _lerp(event["zoom_from"], event["zoom_to"], ratio)
+            camera, zoom = motion_at(event, ms)
+            shot = event.get("shot")
+            # The opening quarter of a shot may use a presentation transition.
+            # A seek projects the same visual regardless of playback history.
+            transition = event.get("transition", "cut")
+            phase = min(1., max(0., (ms - start) / max(1, event["duration_ms"] / 4)))
+            shot_transition = ((transition, phase)
+                               if transition != "cut" and ms < end and phase < 1
+                               else None)
         elif kind == "dialogue" and ms < end:
             dialogue = (event["speaker"], event["text"])
+            cps = event.get("chars_per_second", 0)
+            visible = (event["text"] if not cps else
+                       event["text"][:min(len(event["text"]),
+                                           int((ms - start) * cps / 1000))])
+            presentation = DialoguePresentation(
+                event.get("portrait", ""), event.get("expression", "neutral"),
+                visible, round((ms - start) / event["duration_ms"], 6))
         elif kind == "fade" and ms < end:
             fade = (event["color"], ratio)
         elif kind == "sound" and ms < end:
             sounds.append(event["cue"])
     return CinematicFrame(ms, background, tuple(sorted(actors.items())),
-                          camera, zoom, dialogue, fade, tuple(sounds))
+                          camera, zoom, dialogue, fade, tuple(sounds),
+                          presentation, shot, shot_transition)

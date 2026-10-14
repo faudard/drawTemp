@@ -21,6 +21,11 @@ from .iso_battle_view import IsoBattleCanvas, anchored_iso_zoom
 from .world_map import world_projection
 from .world_map_view import draw_world_map, pick_world_mission
 from .visual_motion import MotionDirector
+from .player_ux import (KeyBindings, PresentationState, combat_hud,
+                        clamp_selection, zoom_to, ZOOM_PRESETS)
+from .player_preferences import load_preferences, save_preferences
+from .player_guidance import combat_guidance
+from .player_action_preview import action_preview, preview_screen_geometry
 
 
 class PlayerApplication:
@@ -29,6 +34,7 @@ class PlayerApplication:
         from tkinter import ttk, messagebox
 
         self.tk, self.ttk, self.messagebox = tk, ttk, messagebox
+        self.presentation = PresentationState()
         content_path = Path(content_path)
         project_path = (Path(project_path) if project_path is not None
                         else content_path.with_suffix(".game.json"))
@@ -39,6 +45,8 @@ class PlayerApplication:
                    else GameProject.default(content))
         profile = (Path(profile_path) if profile_path is not None
                    else Path.home() / ".sporebound" / project_path.name)
+        preferences, self.preferences_error = load_preferences(profile)
+        self.keymap = KeyBindings(preferences["keybindings"])
         self.player = PlayerController(content, project, profile)
         # Local playtest capture is opt-in, separate from savegames.
         from .playtest_telemetry import PlaytestRecorder
@@ -55,6 +63,21 @@ class PlayerApplication:
                                 music_volume=project.options["music_volume"])
         self.root = tk.Tk()
         self.playtest_optin = tk.BooleanVar(value=False)
+        self.long_save_var = tk.BooleanVar(value=False)
+        self.text_scale = tk.IntVar(value=preferences["text_scale"])
+        self.high_contrast = tk.BooleanVar(value=preferences["high_contrast"])
+        self.compact_hud = tk.BooleanVar(value=preferences["compact_hud"])
+        self.feedback_var = tk.StringVar()
+        self.guidance_enabled = tk.BooleanVar(value=False)
+        self.guidance_var = tk.StringVar()
+        self.guide_panel = None
+        self.preview_enabled = tk.BooleanVar(value=False)
+        self.preview_var = tk.StringVar()
+        self.preview_panel = None
+        self._preview_result = None
+        self._preview_hover = None
+        self._preview_job = None
+        self._preview_paint_key = None
         self.root.title(project.title)
         self.root.geometry("1160x820")
         self.root.minsize(800, 580)
@@ -106,19 +129,30 @@ class PlayerApplication:
         self.title_screen()
 
     def _style(self):
+        """Apply high contrast and the selected text density across ttk views."""
+        scale = self.text_scale.get() / 100
+        contrast = self.high_contrast.get()
+        bg = "#000000" if contrast else "#101a2b"
+        fg = "#ffffff" if contrast else "#e8f0fa"
+        panel = "#172a3c" if contrast else "#304862"
+        self.root.configure(background=bg)
         style = self.ttk.Style(self.root)
         style.theme_use("clam")
-        style.configure(".", background="#101a2b", foreground="#e8f0fa",
-                        font=("TkDefaultFont", 11))
-        style.configure("TFrame", background="#101a2b")
-        style.configure("TLabel", background="#101a2b", foreground="#e8f0fa")
-        style.configure("TButton", padding=8, background="#304862", foreground="#ffffff")
+        style.configure(".", background=bg, foreground=fg,
+                        font=("TkDefaultFont", round(11 * scale)))
+        style.configure("TFrame", background=bg)
+        style.configure("TLabel", background=bg, foreground=fg)
+        style.configure("TButton", padding=8, background=panel, foreground="#ffffff")
         style.map("TButton", background=[("active", "#43668a")])
-        style.configure("TCombobox", fieldbackground="#f5f7fb", foreground="#152438")
-        style.configure("TLabelframe", background="#101a2b", foreground="#e8f0fa")
-        style.configure("TLabelframe.Label", background="#101a2b", foreground="#e8f0fa")
+        style.configure("TCombobox", fieldbackground="#ffffff", foreground="#152438")
+        style.configure("TLabelframe", background=bg, foreground=fg)
+        style.configure("TLabelframe.Label", background=bg, foreground=fg)
+        style.configure("TCheckbutton", background=bg, foreground=fg)
+        style.configure("TRadiobutton", background=bg, foreground=fg)
+
 
     def _clear(self):
+        self.presentation.transition(self.presentation.screen)
         if self.cinematic is not None:
             self.cinematic.close()
             self.cinematic = None
@@ -134,6 +168,12 @@ class PlayerApplication:
         if self._motion_job is not None:
             self.root.after_cancel(self._motion_job)
             self._motion_job = None
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+            self._preview_job = None
+        self._preview_result = None
+        self._preview_hover = None
+        self._preview_paint_key = None
         self._motion_frame = None
         for key in ("<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q", "e"):
             self.root.unbind(key)
@@ -147,9 +187,11 @@ class PlayerApplication:
             child.destroy()
         self.canvas = None
         self.info = None
+        self.guide_panel = None
+        self.preview_panel = None
 
     def _heading(self, text, subtitle=""):
-        self.ttk.Label(self.view, text=text, font=("TkDefaultFont", 24, "bold")).pack(
+        self.ttk.Label(self.view, text=text, font=("TkDefaultFont", round(24 * self.text_scale.get() / 100), "bold")).pack(
             anchor="w", pady=(4, 12))
         if subtitle:
             self.ttk.Label(self.view, text=subtitle).pack(anchor="w", pady=(0, 12))
@@ -201,6 +243,7 @@ class PlayerApplication:
         self._resume_world_after_scene = False
         self.audio.music_for("title")
         self._clear()
+        self.presentation.transition("title")
         self._heading(self.project.title, self.project.subtitle)
         panel = self.ttk.LabelFrame(self.view, text="Nouvelle aventure / reprendre", padding=18)
         panel.pack(anchor="center", fill="x", padx=160, pady=30)
@@ -212,16 +255,23 @@ class PlayerApplication:
         self.ttk.Combobox(panel, textvariable=self.slot_var, state="readonly",
                           values=[str(i) for i in range(1, self.project.save_slots + 1)],
                           width=26).grid(row=1, column=1, padx=15)
+        self.ttk.Checkbutton(
+            panel, text="Sessions longues (expérimental, slots séparés)",
+            variable=self.long_save_var).grid(
+                row=2, column=0, columnspan=2, sticky="w", pady=8)
         self._button(panel, "Nouvelle partie", self._new_game).grid(
-            row=2, column=0, columnspan=2, sticky="ew", pady=(20, 4))
+            row=3, column=0, columnspan=2, sticky="ew", pady=(12, 4))
         self._button(panel, "Continuer", self._load_game).grid(
-            row=3, column=0, columnspan=2, sticky="ew", pady=4)
-        self._button(panel, "Migrer une sauvegarde v1", self._migrate_game).grid(
             row=4, column=0, columnspan=2, sticky="ew", pady=4)
+        self._button(panel, "Migrer une sauvegarde v1 vers v2", self._migrate_game).grid(
+            row=5, column=0, columnspan=2, sticky="ew", pady=4)
+        self._button(panel, "Copier v1/v2 vers session longue",
+                     self._migrate_long_game).grid(
+            row=6, column=0, columnspan=2, sticky="ew", pady=4)
         # The authored castle example is a repository demo, not packaged
         # core content. Show its entry only when that source is available.
         castle_example = Path(__file__).resolve().parent.parent / "examples" / "castle_vertical_slice.py"
-        row = 5
+        row = 7
         if self.project.sieges:
             self._button(panel, "Sièges créés dans le Studio", self._authored_siege_menu).grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=4)
@@ -274,17 +324,36 @@ class PlayerApplication:
 
     def _new_game(self):
         cid, slot = self.campaign_var.get(), int(self.slot_var.get())
-        path = self.player.path_for(cid, slot)
-        exists = path.exists() or path.with_name(path.name + ".bak").exists()
-        if exists and not self.messagebox.askyesno("Nouvelle partie",
-                                                    "Recommencer cet emplacement ?"):
-            return
-        self.player.new_game(cid, slot, overwrite=exists)
+        if self.long_save_var.get():
+            # No destructive overwrite of an opt-in long-session slot.
+            self.player.new_long_game(cid, slot)
+        else:
+            path = self.player.path_for(cid, slot)
+            exists = path.exists() or path.with_name(path.name + ".bak").exists()
+            if exists and not self.messagebox.askyesno("Nouvelle partie",
+                                                        "Recommencer cet emplacement ?"):
+                return
+            self.player.new_game(cid, slot, overwrite=exists)
         self._seen_tactical_cinematics.clear()
         self._cinematic_sequence("campaign_start", cid, self.show)
 
     def _load_game(self):
-        self.player.load_game(self.campaign_var.get(), int(self.slot_var.get()))
+        cid, slot = self.campaign_var.get(), int(self.slot_var.get())
+        if self.long_save_var.get():
+            status = self.player.inspect_long_game(cid, slot)
+            if status.source == "backup" or status.degraded:
+                if not self.messagebox.askyesno(
+                        "Reprise après interruption",
+                        "Le fichier principal est endommagé. Une sauvegarde "
+                        "antérieure a été vérifiée, mais des actions récentes "
+                        "peuvent manquer.\\n\\nRestaurer explicitement cette "
+                        "version ? Le fichier principal sera conservé en .damaged."):
+                    return
+                self.player.restore_long_game(
+                    cid, slot, expected_digest=status.session.recording()["digest"])
+            self.player.load_long_game(cid, slot)
+        else:
+            self.player.load_game(cid, slot)
         self._acknowledge_loaded_tactical_cinematics()
         status = self.player.last_load_status
         if status is not None and status.source == "backup":
@@ -294,6 +363,21 @@ class PlayerApplication:
                 "chargée en mémoire, sans modifier les fichiers. "
                 "Une partie de la progression récente peut manquer.")
         self.show()
+
+    def _migrate_long_game(self):
+        if not self.messagebox.askyesno(
+                "Migration non destructive",
+                "Créer une COPIE séparée de cette sauvegarde (v1 ou v2) "
+                "au format sessions longues ? L'original reste intact et "
+                "les règles de jeu ne sont pas converties."):
+            return
+        self.player.migrate_to_long_game(
+            self.campaign_var.get(), int(self.slot_var.get()))
+        self.long_save_var.set(True)
+        self.messagebox.showinfo(
+            "Copie vérifiée", "La sauvegarde originale est conservée. "
+            "La session longue utilise un autre fichier.")
+        self._load_game()
 
     def _migrate_game(self):
         if not self.messagebox.askyesno(
@@ -334,6 +418,7 @@ class PlayerApplication:
 
     def options_screen(self):
         self._clear()
+        self.presentation.transition("options")
         self._heading("Options")
         self.ttk.Checkbutton(
             self.view, text="Enregistrer les playtests (activation volontaire)",
@@ -354,10 +439,53 @@ class PlayerApplication:
             self.ttk.Label(self.view, text=name).pack(anchor="w", pady=(8, 0))
             self.ttk.Scale(self.view, from_=0, to=100, variable=variable).pack(
                 fill="x", padx=24, pady=(2, 12))
+        if self.preferences_error:
+            self.ttk.Label(
+                self.view, text=self.preferences_error, wraplength=740
+            ).pack(anchor="w", pady=5)
+        access = self.ttk.LabelFrame(self.view, text="Accessibilité et commandes", padding=10)
+        access.pack(fill="x", pady=6)
+        self.ttk.Checkbutton(access, text="Contraste renforcé",
+                             variable=self.high_contrast).pack(anchor="w")
+        self.ttk.Checkbutton(access, text="HUD compact",
+                             variable=self.compact_hud).pack(anchor="w")
+        self.ttk.Label(access, text="Taille du texte (%)").pack(anchor="w")
+        self.ttk.Combobox(access, state="readonly", textvariable=self.text_scale,
+                          values=(100, 125, 150), width=9).pack(anchor="w")
+        self.ttk.Label(access, text="Raccourcis tactiques (uniquement lorsque la carte a le focus)").pack(
+            anchor="w", pady=(8, 2))
+        shortcuts = self.ttk.Frame(access)
+        shortcuts.pack(fill="x")
+        key_vars = {}
+        from .player_ux import KEY_CHOICES
+        for index, (action, sequence) in enumerate(self.keymap.items()):
+            variable = self.tk.StringVar(value=sequence)
+            key_vars[action] = variable
+            field = self.ttk.Frame(shortcuts)
+            field.grid(row=index // 4, column=index % 4,
+                       sticky="w", padx=5, pady=3)
+            self.ttk.Label(field, text=action).pack(anchor="w")
+            self.ttk.Combobox(field, textvariable=variable, state="readonly",
+                              values=KEY_CHOICES, width=16).pack(anchor="w")
         full = self.tk.BooleanVar(value=bool(self.root.attributes("-fullscreen")))
         self.ttk.Checkbutton(self.view, text="Plein écran", variable=full).pack(
             anchor="w", pady=10)
         def apply():
+            proposed_keys = KeyBindings({action: var.get()
+                                         for action, var in key_vars.items()})
+            settings = {
+                "version": 1,
+                "keybindings": dict(proposed_keys.items()),
+                "text_scale": self.text_scale.get(),
+                "high_contrast": self.high_contrast.get(),
+                "compact_hud": self.compact_hud.get(),
+            }
+            # Persist only after validation. Failed disk writes cannot
+            # corrupt a savegame or the previous preferences.
+            save_preferences(self.player.profile, settings)
+            self.keymap = proposed_keys
+            self.preferences_error = None
+            self._style()
             self.audio.effects_volume = effects.get() / 100
             self.audio.music_volume = music.get() / 100
             self.root.attributes("-fullscreen", full.get())
@@ -372,6 +500,7 @@ class PlayerApplication:
         elif session.tactical_story_pending:
             # Story UI is modal over the current Battle, not a campaign screen.
             self._clear()
+            self.presentation.transition("tactical_story")
             self._heading("Décision pendant la bataille")
             self._narrative_scene(
                 session.tactical_scene(), choices=session.tactical_choices(),
@@ -380,7 +509,10 @@ class PlayerApplication:
         elif session.mode == "fronts":
             self.battle_screen()
         elif session.mode == "battle":
-            self.battle_screen()
+            if session.finalized:
+                self.results_screen()
+            else:
+                self.battle_screen()
         elif (self._resume_world_after_scene and self.project.world
               and session.active_scene() is None):
             self._resume_world_after_scene = False
@@ -400,15 +532,18 @@ class PlayerApplication:
         """Shared playback for campaign, mission, scene and tactical events."""
         from .cinematic_player import CinematicPlayback
 
-        def next_clip(index=0):
+        def next_clip(index=0, revision=None):
+            if revision is not None and not self.presentation.current(revision):
+                return  # A newer screen interrupted this cinematic.
             self.cinematic = None
             if index >= len(clips):
                 finished()
                 return
             self._clear()
+            token = self.presentation.transition("cinematic")
             self.cinematic = CinematicPlayback(
                 self.view, self.tk, self.ttk, clips[index],
-                lambda: next_clip(index + 1), audio=self.audio,
+                lambda: next_clip(index + 1, token), audio=self.audio,
                 registry=self.registry, asset_root=self.asset_root)
 
         next_clip()
@@ -428,6 +563,7 @@ class PlayerApplication:
     def campaign_screen(self):
         session = self.player.session
         self._clear()
+        self.presentation.transition("campaign")
         self._heading(self.project.campaign(session.campaign_id)["name"],
                       "Or : " + str(session.progress.gold) +
                       "    Missions terminées : " + str(len(session.progress.completed)))
@@ -507,8 +643,33 @@ class PlayerApplication:
                                text="Campagne terminée : aucun objectif disponible.").pack(pady=20)
         footer = self.ttk.Frame(self.view)
         footer.pack(side="bottom", fill="x", pady=12)
+        self._button(footer, "Inspecter la campagne", self._campaign_flow_inspector).pack(side="left", padx=6)
         self._button(footer, "Sauvegarder", self.player.save).pack(side="left", padx=6)
         self._button(footer, "Menu principal", self.title_screen).pack(side="left", padx=6)
+
+    def _campaign_flow_inspector(self):
+        """Read-only campaign state panel, sourced from the live session."""
+        report = self.player.session.campaign_inspector()
+        dialog = self.tk.Toplevel(self.root)
+        dialog.title("Campaign Flow — état persistant")
+        dialog.geometry("820x590")
+        dialog.transient(self.root)
+        frame = self.ttk.Frame(dialog, padding=12)
+        frame.pack(fill="both", expand=True)
+        self.ttk.Label(frame, text="État des missions, variables, ressources et conséquences",
+                       font=("TkDefaultFont", 12, "bold")).pack(anchor="w")
+        text = self.tk.Text(frame, wrap="word", state="normal")
+        scroll = self.ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        text.pack(fill="both", expand=True, pady=10)
+        for section, values in report.items():
+            text.insert("end", section.replace("_", " ").title() + "\n", "header")
+            text.insert("end", json.dumps(values, ensure_ascii=False, indent=2,
+                                          sort_keys=True) + "\n\n")
+        text.tag_configure("header", font=("TkDefaultFont", 11, "bold"))
+        text.configure(state="disabled")
+        self._button(frame, "Fermer", dialog.destroy).pack(anchor="e")
 
     def world_screen(self):
         """Walk the canonical campaign roads; save each visible travel step."""
@@ -524,6 +685,7 @@ class PlayerApplication:
             available=session.available_missions(),
             completed=session.progress.completed)
         self._clear()
+        self.presentation.transition("world")
         self._heading("Carte du monde", "Déplacez votre groupe sur les routes. "
                       "Cliquez à nouveau sur un lieu atteint pour y combattre.")
         surface = self.ttk.Frame(self.view)
@@ -761,6 +923,7 @@ class PlayerApplication:
 
     def front_setup(self, available):
         self._clear()
+        self.presentation.transition("fronts_setup")
         self._heading("Préparer une opération multi-fronts",
                       "Choisir deux secteurs pour une timeline stratégique commune.")
         choices = [(mid, self.tk.BooleanVar(value=i < 2))
@@ -782,6 +945,7 @@ class PlayerApplication:
         session = self.player.session
         battle = session.active_battle
         self._clear()
+        self.presentation.transition("battle")
         if battle is None:
             self.strategy_screen()
             return
@@ -791,6 +955,37 @@ class PlayerApplication:
                       ("Résultat : " + battle.result if battle.result else
                        "Déploiement" if battle.deploying else
                        "Unité active : " + (battle.active.name if battle.active else "?")))
+        self.ttk.Label(
+            self.view, text="Objectif : " + str(battle.mission.objective),
+            font=("TkDefaultFont", round(12 * self.text_scale.get() / 100), "bold")
+        ).pack(anchor="w")
+        self.feedback_var.set("")
+        self.ttk.Label(self.view, textvariable=self.feedback_var,
+                       wraplength=1050).pack(anchor="w", pady=(3, 5))
+        if not self.compact_hud.get():
+            # Reuse authored portrait bindings; retain thumbnails for Tk lifetime.
+            from .tk_images import resize_photo
+            portraits = self.ttk.Frame(self.view)
+            portraits.pack(fill="x", pady=(3, 5))
+            portrait_renderer = CanvasRenderer(
+                portraits, registry=self.registry, asset_root=self.asset_root)
+            for actor in [u for u in battle.units if u.team == "player"][:6]:
+                card = self.ttk.Frame(portraits)
+                card.pack(side="left", padx=5)
+                photo = portrait_renderer.image("portrait", actor.id)
+                if photo is not None:
+                    try:
+                        thumb = resize_photo(photo, 48, 48, master=card)
+                        icon = self.ttk.Label(card, image=thumb,
+                                              text=actor.name)
+                        icon.image = thumb
+                        icon.pack(anchor="center")
+                    except (ValueError, self.tk.TclError):
+                        pass
+                self.ttk.Label(
+                    card, text=actor.name + " · PV " + str(actor.hp) +
+                    "/" + str(actor.max_hp) + " · MP " + str(actor.mp) +
+                    "/" + str(actor.max_mp)).pack(anchor="center")
         nav = self.ttk.Frame(self.view)
         nav.pack(fill="x", pady=4)
         if session.mode == "fronts":
@@ -813,6 +1008,12 @@ class PlayerApplication:
         self.ttk.Checkbutton(nav, text="Vue isométrique 2.5D",
                              variable=self.iso_view_var,
                              command=self._switch_projection).pack(side="right", padx=8)
+        self.ttk.Checkbutton(
+            nav, text="Aide tactique", variable=self.guidance_enabled,
+            command=self._toggle_guidance).pack(side="right", padx=8)
+        self.ttk.Checkbutton(
+            nav, text="Prévision d'action", variable=self.preview_enabled,
+            command=self._toggle_action_preview).pack(side="right", padx=8)
         if not session.finalized and not battle.result:
             actions = self.ttk.Frame(self.view)
             actions.pack(fill="x", pady=9)
@@ -855,17 +1056,23 @@ class PlayerApplication:
                 if self.action_var.get() not in options:
                     self.action_var.set(options[0])
                 self.ttk.Label(actions, text="Action").pack(side="left", padx=5)
-                self.ttk.Combobox(actions, textvariable=self.action_var,
-                                  values=options, state="readonly", width=23).pack(
-                                      side="left", padx=7)
+                action_box = self.ttk.Combobox(
+                    actions, textvariable=self.action_var,
+                    values=options, state="readonly", width=23)
+                action_box.pack(side="left", padx=7)
+                action_box.bind("<<ComboboxSelected>>",
+                                lambda _event: self._redraw())
                 if battle.mission.level_links:
                     self.ttk.Label(actions, text="Étage cible").pack(side="left")
-                    self.ttk.Combobox(
+                    floor_box = self.ttk.Combobox(
                         actions, textvariable=self.level_var, state="readonly",
                         values=tuple(range(0, 1+max(
                             max(row["from"][0], row["to"][0])
                             for row in battle.mission.level_links))),
-                        width=3).pack(side="left")
+                        width=3)
+                    floor_box.pack(side="left")
+                    floor_box.bind("<<ComboboxSelected>>",
+                                   lambda _event: self._redraw())
                 self.ttk.Label(actions, text="Orientation").pack(side="left")
                 self.ttk.Combobox(actions, textvariable=self.facing_var, state="readonly",
                                   values=["north", "south", "east", "west"],
@@ -873,32 +1080,325 @@ class PlayerApplication:
                 self._button(actions, "Exécuter", self._execute).pack(side="left", padx=5)
                 if not battle.deploying:
                     self._button(actions, "Fin de tour", self._end).pack(side="left", padx=5)
+        self.guide_panel = self.ttk.LabelFrame(
+            self.view, text="Aide tactique contextuelle", padding=9)
+        self.ttk.Label(
+            self.guide_panel, textvariable=self.guidance_var,
+            wraplength=970, justify="left").pack(anchor="w")
+        if self.guidance_enabled.get():
+            self.guide_panel.pack(fill="x", pady=4)
+        self.preview_panel = self.ttk.LabelFrame(
+            self.view, text="Prévision de l'action (sans l'exécuter)", padding=8)
+        self.ttk.Label(self.preview_panel, textvariable=self.preview_var,
+                       wraplength=950, justify="left").pack(anchor="w")
+        if self.preview_enabled.get():
+            self.preview_panel.pack(fill="x", pady=3)
         body = self.ttk.Frame(self.view)
         body.pack(fill="both", expand=True, pady=9)
-        self.canvas = self.tk.Canvas(body, background="#172638", highlightthickness=0,
-                                     takefocus=1)
+        self.canvas = self.tk.Canvas(
+            body, background="#172638", takefocus=1, highlightthickness=2,
+            highlightcolor="#ffeb70", highlightbackground="#446077")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.renderer = CanvasRenderer(self.canvas, registry=self.registry,
                                        asset_root=self.asset_root)
         self.iso_renderer = IsoBattleCanvas(self.canvas)
         self.canvas.bind("<Button-1>", self._select_cell)
-        self.canvas.bind("<Return>", lambda _event: self._safe(self._execute))
-        self.canvas.bind("<space>", lambda _event: self._safe(self._end))
+        self.canvas.bind("<Motion>", self._preview_motion)
+        self.canvas.bind("<Leave>", self._preview_leave)
+        self._bind_battle_keys()
         self.canvas.bind("<MouseWheel>", self._zoom)
         self.canvas.bind("<Button-4>", lambda _: self._zoom_step(1))
         self.canvas.bind("<Button-5>", lambda _: self._zoom_step(-1))
         self.canvas.bind("<ButtonPress-2>", self._pan_start)
         self.canvas.bind("<B2-Motion>", self._pan_drag)
-        self.info = self.tk.Text(body, width=37, wrap="word", fg="#e9f2fc",
-                                 bg="#182a40", relief="flat")
+        self.info = self.tk.Text(
+            body, width=29 if self.compact_hud.get() else 37, wrap="word",
+            fg="#ffffff" if self.high_contrast.get() else "#e9f2fc",
+            bg="#000000" if self.high_contrast.get() else "#182a40",
+            font=("TkDefaultFont", round(11 * self.text_scale.get() / 100)),
+            relief="flat")
         self.info.pack(side="right", fill="y", padx=(9, 0))
         self._redraw()
-        self.ttk.Label(self.view,
-                       text="Carte : Entrée = exécuter • Espace = finir le tour | "
-                            "Rouge = terrain, violet = incantation, orange = charge possible").pack(anchor="w")
+        self.canvas.focus_set()
+        self.ttk.Label(
+            self.view,
+            text="Carte : " + self.keymap.get("execute") + " = action ; " +
+            self.keymap.get("end") + " = fin de tour ; flèches = sélection ; " +
+            "Ctrl+flèches = caméra ; raccourcis modifiables dans Options. "
+            "Menaces : terrain certain, sorts programmés, réactions armées, charges possibles."
+        ).pack(anchor="w")
         if not session.finalized:
             self._button(self.view, "Abandonner l'opération",
                          self._abandon).pack(anchor="e", pady=4)
+
+
+    def _bind_battle_keys(self):
+        """Canvas-scoped shortcuts leave ttk inputs and dialogs unaffected."""
+        for action, sequence in self.keymap.items():
+            self.canvas.bind(sequence, lambda _event, name=action:
+                             self._key_action(name))
+
+    def _toggle_guidance(self):
+        if self.guide_panel is None:
+            return
+        if self.guidance_enabled.get():
+            self.guide_panel.pack(fill="x", pady=4, before=self.canvas.master)
+            self._redraw()
+        else:
+            self.guide_panel.pack_forget()
+        # The map retains keyboard navigation after toggling the help panel.
+        if self.canvas is not None:
+            self.canvas.focus_set()
+
+    def _toggle_action_preview(self):
+        if self.preview_panel is None or self.canvas is None:
+            return
+        if self.preview_enabled.get():
+            self.preview_panel.pack(fill="x", pady=3, before=self.canvas.master)
+            self._update_action_preview()
+        else:
+            self.preview_panel.pack_forget()
+            if self._preview_job is not None:
+                self.root.after_cancel(self._preview_job)
+                self._preview_job = None
+            self._preview_hover = None
+            self._preview_result = None
+            self._preview_paint_key = None
+            self.canvas.delete("player_action_preview")
+        self.canvas.focus_set()
+
+    def _preview_motion(self, event):
+        if not self.preview_enabled.get() or self.iso_renderer is None:
+            return
+        battle = self.player.session.active_battle
+        if battle is None:
+            return
+        if self.iso_view_var.get():
+            floor = (self.level_var.get()
+                     if self.action_var.get() in {"level_move", "level_attack"}
+                     else battle.unit_levels.get(battle.active_id, 0)
+                     if battle.active_id else 0)
+            cell = self.iso_renderer.hit_test(event.x, event.y, level=floor)
+        else:
+            cell = self.camera.screen_to_cell(event.x, event.y)
+        if cell is None or not battle.board.contains(cell):
+            self._preview_leave()
+            return
+        if self._preview_hover == cell:
+            return
+        self._preview_hover = cell
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+        # Avoid running Dijkstra / forecast on every mouse-motion event.
+        self._preview_job = self.root.after(90, self._flush_action_preview)
+
+    def _flush_action_preview(self):
+        self._preview_job = None
+        self._update_action_preview()
+
+    def _preview_leave(self, event=None):
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+            self._preview_job = None
+        if self._preview_hover is not None:
+            self._preview_hover = None
+            self._update_action_preview()
+
+    def _update_action_preview(self):
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+            self._preview_job = None
+        if not self.preview_enabled.get() or self.canvas is None:
+            return
+        session = self.player.session
+        battle = session.active_battle if session is not None else None
+        if battle is None:
+            return
+        cell = self._preview_hover if self._preview_hover is not None else self.selection
+        try:
+            preview = action_preview(
+                battle, self.action_var.get(), cell,
+                target_level=self.level_var.get())
+        except (RuleError, ValueError) as exc:
+            self._preview_result = None
+            self.preview_var.set("Prévision indisponible : " + str(exc))
+            self.canvas.delete("player_action_preview")
+            return
+        self._preview_result = preview
+        display = ("[" + preview.status + "] " + preview.headline +
+                   (" · " + ", ".join(map(str, preview.path)) if preview.path else "") +
+                   ("\n" + "\n".join(preview.details) if preview.details else ""))
+        self.preview_var.set(display)
+        self._draw_action_preview()
+
+    def _draw_action_preview(self):
+        if self.canvas is None:
+            return
+        preview = self._preview_result
+        if not self.preview_enabled.get() or preview is None:
+            self.canvas.delete("player_action_preview")
+            self._preview_paint_key = None
+            return
+        iso = self.iso_view_var.get()
+        geo = self.iso_renderer.geometry if iso and self.iso_renderer else None
+        if iso and geo is None:
+            self.canvas.delete("player_action_preview")
+            self._preview_paint_key = None
+            return
+        shift = self.iso_renderer.shift if geo is not None else (0, 0)
+        # Preserve Canvas items on idle animation ticks when nothing changed.
+        # If a renderer rebuilt the scene, find_withtag detects the invalidation.
+        paint_key = (preview, self.camera, iso, id(geo), shift)
+        if (paint_key == self._preview_paint_key
+                and self.canvas.find_withtag("player_action_preview")):
+            return
+        self._preview_paint_key = paint_key
+        self.canvas.delete("player_action_preview")
+        coords, destination = preview_screen_geometry(
+            preview, self.camera, iso_geometry=geo, shift=shift)
+        tags = ("player_action_preview",)
+        # Never draw an upstairs destination as a ground-plane polygon.
+        # The guidance panel retains the authoritative floor/path details.
+        session = self.player.session
+        battle = session.active_battle if session is not None else None
+        actor_floor = (battle.unit_levels.get(battle.active_id, 0)
+                       if battle is not None and battle.active_id else 0)
+        requested_floor = (self.level_var.get() if preview.action in
+                           {"level_move", "level_attack"} else actor_floor)
+        if (requested_floor > 0 or
+                preview.levels and any(level > 0 for level in preview.levels)):
+            return
+        if len(coords) > 1:
+            flat = tuple(n for xy in coords for n in xy)
+            targeting = (preview.action == "attack" or
+                         preview.action in (battle.active.skills
+                                            if battle and battle.active else ()))
+            line_color = "#ffe38d" if targeting else "#3bf1d0"
+            self.canvas.create_line(
+                *flat, fill=line_color, width=3,
+                dash=(3, 5) if targeting else (7, 4),
+                arrow="last", tags=tags)
+            if not targeting:
+                for x, y in coords[1:-1]:
+                    self.canvas.create_oval(
+                        x-3, y-3, x+3, y+3,
+                        outline=line_color, width=2, tags=tags)
+        if destination is not None:
+            if preview.status == "available":
+                color = "#3bf1d0"
+            elif preview.status == "blocked":
+                color = "#ff8888"
+            else:
+                color = "#ffe38d"
+            if geo is not None:
+                polygon = tuple(v + shift[i % 2] for point in
+                                geo.polygon(preview.destination)
+                                for i, v in enumerate(point))
+                self.canvas.create_polygon(
+                    *polygon, fill="", outline=color, width=3, tags=tags)
+            else:
+                x, y = self.camera.cell_to_screen(preview.destination)
+                size = self.camera.cell_size
+                self.canvas.create_rectangle(
+                    x+2, y+2, x+size-2, y+size-2,
+                    outline=color, width=3, tags=tags)
+
+    def _submit_tactical(self, command):
+        """Show expected engine refusal inline, without a blocking dialog.
+
+        The controller owns rollback/checkpointing; no GUI-side save on error.
+        Unexpected IO errors still propagate to the existing _safe handler.
+        """
+        try:
+            self._change(lambda: self.player.execute(command))
+        except RuleError as exc:
+            self.feedback_var.set("Action refusée par le moteur : " + str(exc))
+            if self.canvas is not None:
+                self.canvas.focus_set()
+
+    def _key_action(self, action):
+        battle = self.player.session.active_battle
+        if battle is None:
+            return "break"
+        if action in {"north", "south", "west", "east"}:
+            movement = {"north": (0, -1), "south": (0, 1),
+                        "west": (-1, 0), "east": (1, 0)}[action]
+            self.selection = clamp_selection(
+                (self.selection[0] + movement[0],
+                 self.selection[1] + movement[1]),
+                battle.board.width, battle.board.height)
+            self._redraw()
+        elif action.startswith("pan_"):
+            movement = {"pan_north": (0, 48), "pan_south": (0, -48),
+                        "pan_west": (48, 0), "pan_east": (-48, 0)}[action]
+            self.camera = self.camera.panned(*movement)
+            self._redraw()
+        elif action == "cancel":
+            self.selection = (tuple(battle.active.pos)
+                              if battle.active is not None else (0, 0))
+            self._redraw()
+        elif action in {"zoom_in", "zoom_out"}:
+            self._zoom_step(1 if action == "zoom_in" else -1,
+                            self._canvas_center())
+        elif action.startswith("zoom_"):
+            self._zoom_preset(int(action.partition("_")[2]))
+        elif action == "execute" and not battle.result:
+            if battle.deploying or battle.active and battle.active.team == "player":
+                self._safe(self._execute)
+        elif action == "end" and not battle.deploying and not battle.result:
+            if battle.active is not None and battle.active.team == "player":
+                self._safe(self._end)
+        return "break"
+
+    def _canvas_center(self):
+        return (max(1, self.canvas.winfo_width()) / 2,
+                max(1, self.canvas.winfo_height()) / 2)
+
+    def _zoom_preset(self, size):
+        """Exact 24/54/96px zoom in both projections, preserving the anchor."""
+        if size not in ZOOM_PRESETS:
+            raise ValueError("Unsupported zoom preset")
+        anchor = self._canvas_center()
+        if self.iso_view_var.get() and self.iso_renderer is not None:
+            battle = self.player.session.active_battle
+            self.camera = anchored_iso_zoom(
+                battle.board, self.camera, self.iso_renderer.viewport(),
+                0, anchor, size=size)
+        else:
+            self.camera = zoom_to(self.camera, size, anchor)
+        self._redraw()
+
+    def results_screen(self):
+        """Presentation-only results checkpoint before campaign progression."""
+        session = self.player.session
+        battle = session.active_battle
+        if battle is None or not session.finalized:
+            self.show()
+            return
+        self._clear()
+        self.presentation.transition("results")
+        self.audio.music_for("campaign")
+        self._heading("Résultats · " + battle.mission.name,
+                      "Issue : " + str(battle.result))
+        self.ttk.Label(self.view, text="Objectif : " + str(battle.mission.objective)
+                       ).pack(anchor="w", pady=5)
+        self.ttk.Label(self.view, text="Tick final : " + str(battle.tick)
+                       ).pack(anchor="w", pady=5)
+        frame = battle_frame(battle)
+        for actor in frame.actors:
+            self.ttk.Label(
+                self.view, text=actor.name + " · " + actor.team +
+                " · PV " + str(actor.hp) + "/" + str(actor.max_hp) +
+                (" · hors combat" if not actor.alive else "")
+            ).pack(anchor="w", pady=2)
+        self.ttk.Label(self.view,
+                       text="Partie enregistrée. Le retour à la campagne applique "
+                            "la progression par le contrôleur existant.").pack(
+                                anchor="w", pady=14)
+        self._button(self.view, "Voir le champ de bataille",
+                     self.battle_screen).pack(anchor="w", pady=5)
+        self._button(self.view, "Continuer vers la campagne",
+                     self._finish_mission_with_cinematic).pack(anchor="w", pady=5)
 
     def _motion_tick(self):
         self._motion_job = None
@@ -914,13 +1414,22 @@ class PlayerApplication:
             if battle is not None:
                 self.iso_renderer.draw(
                     battle, self._motion_frame, self.camera,
-                    poses=self.motion.poses(clock_ms))
-            if self.motion.active(clock_ms) and self._motion_job is None:
-                self._motion_job = self.root.after(60, self._motion_tick)
+                    poses=self.motion.poses(clock_ms),
+                    ambient_clock_ms=clock_ms)
+            self._draw_action_preview()
+            # Drive ambient iso animation using the presentation loop, even
+            # when no tactical MotionDirector animation is active.
+            moving = self.motion.active(clock_ms)
+            ambient = (battle is not None and self.iso_renderer is not None
+                       and self.iso_renderer.animates_when_idle)
+            if (moving or ambient) and self._motion_job is None:
+                self._motion_job = self.root.after(
+                    60 if moving else 125, self._motion_tick)
             return
         self.renderer.draw(
             self._motion_frame, self.camera, poses=self.motion.poses(clock_ms),
             elapsed_ms=self.motion.elapsed_ms(clock_ms), clock_ms=int(clock_ms))
+        self._draw_action_preview()
         if (self.motion.active(clock_ms) or
                 self.renderer.animates_when_idle(self._motion_frame)):
             if self._motion_job is None:
@@ -942,7 +1451,20 @@ class PlayerApplication:
         self._motion_frame = frame
         self._render_motion(clock_ms)
         self.audio.observe(battle)
-        rows = ["Case : " + str(self.selection), "", "Escouades"]
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+            self._preview_job = None
+        self._preview_hover = None
+        self._update_action_preview()
+        hud = combat_hud(frame, battle.mission.objective, self.selection)
+        self.feedback_var.set(hud.selection_summary)
+        if self.guidance_enabled.get():
+            guide = combat_guidance(frame, self.action_var.get(), self.selection)
+            self.guidance_var.set(
+                guide.title + " — " + guide.instruction +
+                ("\n" + " | ".join(guide.notes) if guide.notes else ""))
+        rows = ["Objectif : " + hud.objective, hud.headline,
+                hud.selection_summary, "", "Escouades"]
         if self.action_var.get() == 'level_attack' and battle.active is not None:
             try:
                 rows.append('Tir vertical : ' + str(battle.vertical_forecast(
@@ -952,12 +1474,24 @@ class PlayerApplication:
         if battle.mission.level_links:
             rows.insert(1, "Étage actif : N" + str(
                 battle.unit_levels.get(battle.active_id, 0) if battle.active_id else 0))
-        rows.extend(u.name + " (" + u.team + ") : PV " + str(u.hp) + "/" +
-                    str(u.max_hp) + " / MP " + str(u.mp) + "/" + str(u.max_mp)
-                    for u in frame.actors)
-        if frame.forecast:
-            rows.extend(["", "Prévisions"])
-            rows.extend(str(item) for item in frame.forecast)
+        rows.extend(hud.roster)
+        if hud.forecasts:
+            rows.extend(["", "Prévisions moteur (sans simulation cachée)"])
+            rows.extend(hud.forecasts)
+        elif skill and battle.active is not None and battle.active.team == "player":
+            # A rejected engine forecast explains LOS/range/target rules;
+            # never invent a success percentage when prediction is unavailable.
+            try:
+                battle.forecast(skill, self.selection, battle.active)
+            except RuleError as exc:
+                rows.append("Action indisponible : " + str(exc))
+        if self.action_var.get().startswith("object:"):
+            oid = self.action_var.get().split(":", 1)[1]
+            obj = next((item for item in battle.mission.objects
+                        if item["id"] == oid), None)
+            if obj is not None:
+                rows.append("Interaction : " + str(obj["kind"]) +
+                            " (" + oid + ") · conséquence déterminée à l'exécution")
         # Clarity: scheduled casts, armed reactions and hypothetical charges
         # are not equivalent to certain environmental damage.
         threats = {}
@@ -1080,11 +1614,10 @@ class PlayerApplication:
             command = tactical_command(kind, self.selection)
         else:
             command = {"kind": "act", "skill": kind, "cell": list(self.selection)}
-        self._change(lambda: self.player.execute(command))
+        self._submit_tactical(command)
 
     def _end(self):
-        self._change(lambda: self.player.execute(
-            {"kind": "end", "facing": self._facing()}))
+        self._submit_tactical({"kind": "end", "facing": self._facing()})
 
     def _abandon(self):
         if self.messagebox.askyesno("Abandonner",
@@ -1098,6 +1631,7 @@ class PlayerApplication:
             self.show()
             return
         self._clear()
+        self.presentation.transition("strategy")
         frame = strategy_frame(session.fronts)
         self._heading("Siège : " + session.siege_id
                       if session.siege_id else "Commandement des fronts",

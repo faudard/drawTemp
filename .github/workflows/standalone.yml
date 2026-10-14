@@ -49,6 +49,21 @@ jobs:
         run: python -m unittest tests_standalone.test_map_builder4_3732d -v
       - name: Verify 3.7.32E reproducible assisted quarter proposals and model safety
         run: python -m unittest tests_standalone.test_map_builder4_3732e -v
+      - name: Campaign Simulation R5.14 — forks, comparison and save isolation
+        run: python -m unittest tests_standalone.test_campaign_flow_simulation_r514 -v
+      - name: Campaign Flow R5.13 — visual authoring transactions and runtime parity
+        run: python -m unittest tests_standalone.test_campaign_flow_authoring_r513 -v
+      - name: Campaign Flow R5.B — gated progression, save identity and portable export
+        run: python -m unittest tests_standalone.test_campaign_flow_r5b -v
+      - name: Campaign Flow R5.B — checkpoint-backed branch QA report
+        run: python scripts/campaign_flow_qa.py --content sporebound/content/core.json --project sporebound/content/core.game.json --report campaign_flow_qa.json
+      - name: Preserve Campaign Flow R5.B QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: campaign-flow-r5b-${{ matrix.os }}-${{ matrix.python }}
+          path: campaign_flow_qa.json
+          if-no-files-found: warn
       - run: python -m unittest discover -s tests_standalone -v
       - name: Battle Lab 3.8 CLI report and paired deterministic replay gate
         run: |
@@ -64,6 +79,34 @@ jobs:
         run: python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 40 --report battle_diagnostics_ci.json
       - name: Human Playtest Telemetry 3.8.4 opt-in, committed events and privacy
         run: python -m unittest tests_standalone.test_playtest_384 -v
+      - name: R6 profiles, AI explainability, strict regression and campaign curves
+        run: python -m unittest tests_standalone.test_encounter_balance_r6 -v
+      - name: R6.14 tactical choice gate — real executable options and replay
+        run: python -m unittest tests_standalone.test_tactical_choice_r6 -v
+      - name: R6.14 bounded CLI report (zero optional multi-choice quota for smoke)
+        run: >-
+          python -m sporebound tactical-choices --mission garden
+          --seed 1 --limit 60 --choice-min-multi 0
+          --report tactical_choices_ci.json
+      - name: R6.14 repeat identical choices against saved reference
+        run: >-
+          python -m sporebound tactical-choices --mission garden
+          --seed 1 --limit 60 --choice-min-multi 0
+          --baseline tactical_choices_ci.json
+      - name: R6.15 one-command tactical quality and human-gate tests
+        run: python -m unittest tests_standalone.test_tactical_quality_r615 -v
+      - name: R6.15 report — automated probe is not human certification
+        run: >-
+          python -m sporebound tactical-quality --mission garden
+          --seed 1 --limit 20 --quality-min-differentiated 0
+          --quality-min-tradeoffs 0 --report tactical_quality_ci.json
+      - name: R6.16 full activation decision quality and replay
+        run: python -m unittest tests_standalone.test_full_activation_r616 -v
+      - name: R6.16 headless complete turn smoke (no design claim)
+        run: >-
+          python -m sporebound full-activation --mission garden
+          --seed 1 --limit 20 --activation-min-distinct 0
+          --activation-min-pairs 0 --report full_activation_ci.json
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
         run: python -m examples.tactical_rpg3_castle
@@ -120,6 +163,14 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_world_tactical_comparison_3724h_gui.py -v
+      - name: R1.9 GUI gate — bridge drag, entity inspector and event wizard
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_editor_r1_visual_gui -v
+      - name: R1.8 GUI gate — four edits, Undo/Redo, Save All and canonical Player
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_editor_r1_gui_gate -v
       - name: Verify 3.7.21B common undo/redo and Save All through real Tk
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -140,6 +191,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_playtest_384_gui.py -v
+      - name: R6.15 quality analysis and explicit Tk human-signoff gate
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_tactical_quality_r615_gui -v
       - name: Visual Battle Lab 3.8.3 GUI charts and seed replay
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -156,6 +211,26 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_cinematics_gui.py -v
+      - name: Verify R7.17 cinematic monotonic timing, seek, portraits and resume in Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_r7_cinematic_visual_qa_gui -v
+      - name: Verify R7.18 reviewed audiovisual goldens and transparent portraits in Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_r7_cinematic_goldens_gui -v
+      - name: Campaign Simulation R5.14 — Tk branch exploration and no writes
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_campaign_flow_simulation_r514_gui -v
+      - name: Campaign Flow R5.13 — visual Tk authoring, undo/redo and save
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_campaign_flow_authoring_r513_gui -v
+      - name: Verify R7.19 Cinematic Studio motion-keyframes, contextual UX and Undo/Redo
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_r7_cinematic_studio4_gui -v
       - name: Exercise 2.5.4 visual Campaign & Siege Studio
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -176,6 +251,12 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_workspace_editing_3733a_gui.py -v
+      - name: R2 Workspace inspector batch, explorer and dependency regression
+        run: python3 -m unittest tests_standalone.test_workspace_r2 -v
+      - name: R2 Tk Workspace mixed-value batch and global Undo
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_workspace_r2_gui -v
       - name: Verify 3.7.33B Workspace navigation synchronization and history
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -184,6 +265,44 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_map_editor_gui.py -v
+      - name: Export deterministic watercolor terrain preview (3.7.32G)
+        run: |
+          mkdir -p "$RUNNER_TEMP/terrain-watercolor-art"
+          python3 -m sporebound.terrain_watercolor --output "$RUNNER_TEMP/terrain-watercolor-art/terrain_watercolor.png"
+      - name: Preserve watercolor terrain art preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: terrain-watercolor-materials-3732g
+          path: ${{ runner.temp }}/terrain-watercolor-art/terrain_watercolor.png
+          if-no-files-found: error
+      - name: Verify animated grass, reeds, foliage and water in real Tk (3.7.32I)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_terrain_ambient_3732i_gui.py -v
+      - name: Verify painted watercolor joins, corner masks and Tk parity (3.7.32H)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_terrain_transition_masks_3732h_gui.py -v
+      - name: Export deterministic painted mask QA (3.7.32H)
+        run: python3 -m sporebound.terrain_transition_masks --output-dir "$RUNNER_TEMP/terrain-painted-masks"
+      - name: Preserve directional watercolor masks
+        uses: actions/upload-artifact@v4
+        with:
+          name: terrain-watercolor-painted-masks-3732h
+          path: ${{ runner.temp }}/terrain-painted-masks/
+          if-no-files-found: error
+      - name: Verify watercolor material atlas in real Tk (3.7.32G)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_terrain_watercolor_3732g_gui.py -v
+      - name: Verify terrain AutoBlend and dirty-tile/full-render parity (3.7.32F)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_terrain_autoblend_3732f_gui.py -v
+      - name: Verify persistent 2D/Iso viewport switching in Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_viewport_projection_ux_gui.py -v
       - name: Verify shared isometric Editor and Player in real Tk (3.7.18A)
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -359,6 +478,24 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_story_graph_navigation_362_gui.py -v
+      - name: Verify 3.6.3 Branch QA report, story probes and JSON export
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_branch_qa_363_gui.py -v
+      - name: Certify 3.6.4 real GameSession core paths and checkpoint replays
+        run: >-
+          python3 scripts/certify_gameplay_paths_364.py
+          --content sporebound/content/core.json
+          --project sporebound/content/core.game.json
+          --suite tests_standalone/fixtures/core_gameplay_certification_364.json
+          --report "${{ runner.temp }}/gameplay-certification-364.json"
+      - name: Upload 3.6.4 GameSession route certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameplay-certification-364
+          path: ${{ runner.temp }}/gameplay-certification-364.json
+          if-no-files-found: warn
       - name: Exercise full Studio to Player talent progression under Xvfb
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -371,6 +508,22 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_player_26_gui.py -v
+      - name: R7 Player UX 3.0 real Tk keyboard / zoom / HUD / results gate
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m unittest tests_standalone.test_player_ux_r7_gui -v
+      - name: R7.7 Player preferences Apply / restart / fallback gate
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_player_preferences_r7_gui -v
+      - name: R7.8 contextual combat guidance and inline refusal in Player Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_player_guidance_r7_gui -v
+      - name: R7.9 action preview engine projections, hover and 2D/iso overlays
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m unittest tests_standalone.test_player_action_preview_r7_gui -v
       - name: Exercise Jeanne atlas PNG crop in Tk (3.7.5)
         env:
           SPOREBOUND_GUI_SMOKE: '1'

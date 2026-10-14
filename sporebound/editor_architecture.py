@@ -267,6 +267,11 @@ class CommandPreview:
     mission_id: str
     based_on: str
     candidate: dict
+    # ABA defense: a matching SHA is insufficient after an intervening edit,
+    # undo, redo, reload or an edit of a separate GameProject resource.
+    document_revision: int = 0
+    source_document: object = None
+    context_revision: int = 0
 
 
 class EditingContext:
@@ -284,16 +289,29 @@ class EditingContext:
         mid = mission_id or self.mission()
         require(mid in {m['id'] for m in self.document.data['missions']},
                 'Unknown mission: ' + str(mid))
-        before = _fingerprint(self.document.data)
-        candidate = command.transform(deepcopy(self.document.data), mid)
+        source = self.document
+        before_revision = getattr(source, 'mutation_revision', 0)
+        before_context_revision = self.revision
+        before = _fingerprint(source.data)
+        candidate = command.transform(deepcopy(source.data), mid)
         # Run the exact current authored rules, including opt-in features.
         candidate = Content.from_dict(
             candidate, rules=authored_rules_for_document(candidate)).to_dict()
-        require(_fingerprint(self.document.data) == before,
+        require(self.document is source and
+                getattr(source, 'mutation_revision', 0) == before_revision and
+                self.revision == before_context_revision and
+                _fingerprint(source.data) == before,
                 'A preview must never change its source document')
-        return CommandPreview(command, mid, before, candidate)
+        return CommandPreview(command, mid, before, candidate,
+                              before_revision, source, before_context_revision)
 
     def apply(self, preview, *, publish=True):
+        require(preview.context_revision == self.revision,
+                'Studio context changed since preview; recompute before applying')
+        require(preview.source_document is self.document and
+                preview.document_revision ==
+                getattr(self.document, 'mutation_revision', 0),
+                'Editor revision changed since preview; recompute before applying')
         require(_fingerprint(self.document.data) == preview.based_on,
                 'Editor changed since preview; recompute before applying')
         require(preview.mission_id == self.mission(),
@@ -313,6 +331,12 @@ class EditingContext:
     def execute(self, command, *, mission_id=None, publish=True):
         return self.apply(self.preview(command, mission_id=mission_id),
                           publish=publish)
+
+    def invalidate(self):
+        """Revoke previews/reports after StudioHistory or project-only changes."""
+        self.revision += 1
+        self.diagnostics.cancel()
+        return self.revision
 
     def validate_incremental(self, project=None, *, on_scan=None):
         """Report canonical/cross-resource issues for the current revision."""
