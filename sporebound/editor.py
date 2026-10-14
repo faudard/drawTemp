@@ -434,6 +434,9 @@ def launch(path):
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
     mode_var = tk.StringVar(value='MODE : ÉDITION')
     building_selection_var = tk.StringVar(value='Aucun bâtiment sélectionné')
+    building_selection_actions = []
+    building_exterior_actions = []
+    building_floor_actions = []
     try:
         map_view_data = load_views(current_path)
     except RuleError as exc:
@@ -3023,6 +3026,7 @@ def launch(path):
                 structure_selection_id = None
             else:
                 structure_selection_cell = tuple(record['anchor'])
+        selected_building = None
         if structure_selection_cell is None:
             building_selection_var.set('Aucun bâtiment sélectionné. '
                                        'Utiliser Sélectionner puis cliquer '
@@ -3037,6 +3041,17 @@ def launch(path):
                     f' | {selected_building.anchor}')
             except (RuleError, KeyError):
                 building_selection_var.set('Aucun bâtiment sélectionné.')
+        available = selected_building is not None and battle is None
+        for widget in building_selection_actions:
+            widget.state(['!disabled'] if available else ['disabled'])
+        for widget in building_exterior_actions:
+            widget.state(['!disabled'] if available and
+                          selected_building.name in ('Maison', 'Tour')
+                          else ['disabled'])
+        for widget in building_floor_actions:
+            widget.state(['!disabled'] if available and
+                          selected_building.name in ('Maison', 'Tour', 'Ruines')
+                          else ['disabled'])
         content = editor_content_cache.get(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
         refresh_group_tree(content.missions[mission_var.get()])
@@ -3619,6 +3634,15 @@ def launch(path):
     ttk.Label(structure_strip, text='Façades, portes, fenêtres et étages : menu Bâtiments'
               ).pack(side='left', padx=8)
 
+    # Actor and asset workflows belong with map content, not architecture.
+    entity_strip = ttk.Frame(tools_selection)
+    entity_strip.pack(fill='x', padx=5, pady=2)
+    ttk.Button(entity_strip, text='Bibliothèque d’assets',
+               command=open_asset_palette).pack(side='left', padx=4)
+    ttk.Button(entity_strip, text='Acteurs et objets',
+               command=open_entity_palette).pack(side='left', padx=4)
+    ttk.Button(entity_strip, text='Inspecter acteur / objet',
+               command=inspect_selected_entity).pack(side='left', padx=4)
     tactical_floors = ttk.Frame(tools_selection)
     tactical_floors.pack(fill='x', padx=5, pady=2)
     ttk.Label(tactical_floors, text='Gameplay vertical :').pack(side='left',padx=3)
@@ -3757,12 +3781,6 @@ def launch(path):
     # Existing action widgets retain callbacks, variables and validations.
     structure_controls = ttk.Frame(building_general)
     structure_controls.pack(fill='x', padx=5, pady=2)
-    ttk.Button(structure_controls, text='Bibliothèque d’assets',
-               command=open_asset_palette).pack(side='left', padx=4)
-    ttk.Button(structure_controls, text='Acteurs et objets',
-               command=open_entity_palette).pack(side='left', padx=4)
-    ttk.Button(structure_controls, text='Inspecter acteur / objet',
-               command=inspect_selected_entity).pack(side='left', padx=4)
     ttk.Label(structure_controls, text='Structures multi-cases :').pack(side='left', padx=(2, 5))
     structure_box = ttk.Combobox(structure_controls, textvariable=structure_var,
                                  state='readonly', width=16, values=STRUCTURE_NAMES)
@@ -3883,6 +3901,31 @@ def launch(path):
         (floor_controls, 'Niveaux & intérieurs'),
     ):
         format_building_row(panel, title)
+
+    # Hide invalid authoring actions until the selected structure supports
+    # them; empty-map users only need placement and selection.
+    required_selection = (
+        'Supprimer structure', '↺ Bâtiment', '↻ Bâtiment',
+        'Déplacer sélection', 'Dupliquer sélection', 'Appliquer propriétés')
+    required_exterior = ('Appliquer façade/toiture',
+                         'Poser fenêtre', 'Effacer fenêtre')
+    required_floor = ('Créer', 'Supprimer', 'Peindre étage')
+    for panel in (structure_controls, structure_options,
+                  structure_edit_controls, structure_group_controls,
+                  facade_controls, floor_controls):
+        for widget in panel.winfo_children():
+            if not isinstance(widget, ttk.Button):
+                continue
+            title = widget.cget('text')
+            if title in required_selection:
+                building_selection_actions.append(widget)
+            elif title in required_exterior:
+                building_exterior_actions.append(widget)
+            elif title in required_floor:
+                building_floor_actions.append(widget)
+    for widget in (building_selection_actions + building_exterior_actions
+                   + building_floor_actions):
+        widget.state(['disabled'])
 
     def show_building_mode(enabled):
         if enabled:
