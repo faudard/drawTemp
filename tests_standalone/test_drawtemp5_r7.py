@@ -103,6 +103,8 @@ class CharacterRecipeTests(unittest.TestCase):
         doc = small_character()
         self.assertFalse([i for i in diagnostics(doc, require_outfits=True)
                           if i["severity"] == "error"])
+        self.assertIn("duplicated_keyframe",
+                      {i["code"] for i in diagnostics(doc)})
         doc["variants"]["armor"]["layers"].clear()
         self.assertIn("identical_outfits",
                       {i["code"] for i in diagnostics(doc, require_outfits=True)})
