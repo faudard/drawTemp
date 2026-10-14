@@ -110,7 +110,8 @@ class LongSessionStore:
             seen = set(obj["receipts"])
             for step in obj["entries"]:
                 require(isinstance(step, dict) and
-                        set(step) == {"request_id", "operation", "args", "kwargs", "before", "after"} and
+                        set(step) in ({"request_id", "operation", "args", "kwargs", "before", "after"},
+                                      {"request_id", "operation", "args", "kwargs", "before", "after", "snapshot"}) and
                         isinstance(step["request_id"], str) and
                         0 < len(step["request_id"]) <= 128 and
                         step["request_id"] not in seen and
@@ -135,7 +136,14 @@ class LongSessionStore:
             require(current.recording()["digest"] == step["before"],
                     f"Replay diverged before operation {index}")
             try:
-                getattr(current, step["operation"])(*step["args"], **step["kwargs"])
+                if "snapshot" in step:
+                    # Battle creation may allocate a UUID. A fully validated
+                    # canonical replay snapshot is the portable boundary for
+                    # such an operation; never fabricate an arbitrary UUID.
+                    current = GameSession.from_recording(
+                        step["snapshot"], content, project, rules=rules)
+                else:
+                    getattr(current, step["operation"])(*step["args"], **step["kwargs"])
                 record = current.recording()
                 require(record["digest"] == step["after"],
                         f"Replay diverged after operation {index}")
@@ -236,6 +244,12 @@ class LongSessionStore:
         known = set(obj["receipts"]) | {step["request_id"] for step in obj["entries"]}
         if request_id in known:
             return JournalResult(False)
+        if len(obj["entries"]) >= self.checkpoint_every:
+            # A previous compact failed after the journal commit. Never append
+            # beyond the verified bound or mutate before space is available.
+            self._compact_verified(session, obj)
+            obj = self._current_journal(self.load_with_status(
+                session.content, session.project, rules=session.rules))
         require(obj["head"] == session.recording()["digest"], "Stale journal head")
         # Explicit JSON encoding prevents an unserializable operation from
         # changing state before its arguments can be persisted.
@@ -244,6 +258,7 @@ class LongSessionStore:
                                               allow_nan=False))
         except (ValueError, TypeError, RecursionError) as exc:
             raise RuleError(f"Operation arguments are not JSON-compatible: {exc}") from exc
+        before_record = session.recording()
         before = obj["head"]
         value = getattr(session, operation)(*args, **kwargs)
         record = session.recording()
@@ -252,6 +267,17 @@ class LongSessionStore:
         step = {"request_id": request_id, "operation": operation,
                 "args": arguments[0], "kwargs": arguments[1],
                 "before": before, "after": record["digest"]}
+        # Engine Battle IDs are generated on encounter entry. Rather than
+        # assuming an equivalent random UUID on replay, record an additional
+        # replay-validated boundary only when tactical identities changed.
+        def identities(value):
+            if value["mode"] == "battle":
+                return ("battle", value["tactical"]["battle_id"])
+            if value["mode"] == "fronts":
+                return ("fronts", value.get("front_battle_ids"))
+            return ("campaign", None)
+        if identities(before_record) != identities(record):
+            step["snapshot"] = record
         updated = {**obj, "entries": obj["entries"] + [step],
                    "head": record["digest"]}
         self._publish(updated)  # Durable commit point for accepted action.
