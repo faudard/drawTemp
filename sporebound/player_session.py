@@ -8,6 +8,9 @@ from copy import deepcopy
 
 from .ai import play_activation
 from .campaign import Campaign
+from .campaign_flow import (available_missions as flow_available_missions,
+                            inspect_campaign as flow_inspect_campaign,
+                            settle as settle_campaign_flow)
 from .game_project import GameProject, load_slot, save_slot
 from .model import Content, require
 from .narrative import StoryBook
@@ -143,7 +146,11 @@ class PlayerSession:
         require(self.progress is not None, 'No campaign loaded')
         if self.progress.story_pending:
             return []
-        return [mid for mid in self.progress.unlocked if mid not in self.progress.completed]
+        return flow_available_missions(self.progress, self.project.campaign_flow)
+
+    def campaign_inspector(self):
+        require(self.progress is not None, "No campaign loaded")
+        return flow_inspect_campaign(self.progress, self.project.campaign_flow)
 
     def begin(self, mission_id):
         require(self.progress is not None and self.battle is None, 'Return to campaign before starting a mission')
@@ -198,6 +205,9 @@ class PlayerSession:
             changed = updated.finish(self.battle, unlock_next=not route_choice)
             if changed and route_choice:
                 self.story.after_victory(updated, mission_id)
+            updated = settle_campaign_flow(updated, self.project.campaign_flow,
+                                          mission_id, self.battle.result,
+                                          content=self.content)
             # Commit only if both reward and narrative state persist successfully.
             save_slot(self.profile, self.project, self.content,
                       self.campaign_id, self.slot, updated)
