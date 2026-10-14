@@ -45,24 +45,44 @@ class PlaytestStudio:
         self.summary = self.ttk.Label(self.tab, text="Aucun rapport chargé.",
                                       wraplength=920, justify="left")
         self.summary.pack(anchor="w", pady=7)
+        # The report uses a two-column analysis workbench rather than
+        # stacking three full-width widgets down the window.
+        self.report_panels = self.ttk.Panedwindow(self.tab, orient="horizontal")
+        sessions = self.ttk.LabelFrame(self.report_panels, text="Sessions")
+        chart = self.ttk.LabelFrame(self.report_panels, text="Durées réelles")
+        self.report_panels.add(sessions, weight=3)
+        self.report_panels.add(chart, weight=2)
         columns = ("mission", "outcome", "duration", "commands", "ct", "hold")
         self.rows = self.ttk.Treeview(
-            self.tab, columns=columns, show="headings", height=9)
+            sessions, columns=columns, show="headings", height=9)
         for name, title, width in zip(
                 columns,
                 ("Mission", "Résultat", "Durée réelle (min)", "Commandes",
                  "CT fin", "Progression objectif"),
-                (170, 110, 160, 115, 110, 195)):
+                (135, 90, 145, 100, 80, 150)):
             self.rows.heading(name, text=title)
-            self.rows.column(name, width=width, anchor="center")
-        # Data views start hidden. Empty report state must not consume most
-        # of the editor with blank tables and a dark, empty chart.
+            self.rows.column(name, width=width, anchor="center",
+                             stretch=True)
+        table_scroll = self.ttk.Scrollbar(
+            sessions, orient="vertical", command=self.rows.yview)
+        self.rows.configure(yscrollcommand=table_scroll.set)
+        table_scroll.pack(side="right", fill="y")
+        self.rows.pack(side="left", fill="both", expand=True,
+                       padx=(6, 0), pady=6)
         self.rows.bind("<<TreeviewSelect>>", self.select)
         self.canvas = self.tk.Canvas(
-            self.tab, height=170, background="#252b33",
+            chart, height=220, background="#252b33",
             highlightthickness=0)
-        self.detail = self.tk.Text(self.tab, height=9, state="disabled",
-                                    wrap="word")
+        self.canvas.pack(fill="both", expand=True, padx=6, pady=6)
+        self.details_panel = self.ttk.LabelFrame(
+            self.tab, text="Détails de la session sélectionnée")
+        self.detail = self.tk.Text(
+            self.details_panel, height=7, state="disabled", wrap="word")
+        details_scroll = self.ttk.Scrollbar(
+            self.details_panel, orient="vertical", command=self.detail.yview)
+        self.detail.configure(yscrollcommand=details_scroll.set)
+        details_scroll.pack(side="right", fill="y")
+        self.detail.pack(side="left", fill="both", expand=True, padx=6, pady=6)
         self.empty_state = self.ttk.Frame(self.tab, padding=24)
         self.empty_state.pack(fill="both", expand=True)
         self.ttk.Label(
@@ -119,10 +139,10 @@ class PlaytestStudio:
         self.report = validate_report(report)
         if self.empty_state.winfo_manager():
             self.empty_state.pack_forget()
-            self.rows.pack(fill="x", pady=(6, 7), before=self.status)
-            self.canvas.pack(fill="both", expand=True, before=self.status)
-            self.detail.pack(fill="both", expand=True, pady=5,
-                             before=self.status)
+            self.report_panels.pack(fill="both", expand=True,
+                                    pady=(6, 4), before=self.status)
+            self.details_panel.pack(fill="both", expand=True,
+                                    pady=(0, 6), before=self.status)
         missions = sorted({row["mission"] for row in report["sessions"]})
         self.mission_box["values"] = ["Toutes missions", *missions]
         if self.mission.get() not in self.mission_box["values"]:
