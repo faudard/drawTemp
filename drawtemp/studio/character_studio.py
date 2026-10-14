@@ -76,6 +76,8 @@ def main(argv=None):
             self.add_variant.clicked.connect(self.duplicate_variant)
             self.expression = QComboBox()
             self.expression.currentIndexChanged.connect(self.refresh_preview)
+            self.add_expression = QPushButton("Ajouter un portrait / une expression…")
+            self.add_expression.clicked.connect(self.import_expression)
 
             self.direction = QComboBox()
             for key in DIRECTIONS:
@@ -118,6 +120,8 @@ def main(argv=None):
             self.offset_y.editingFinished.connect(self.change_offset)
             self.source = QLineEdit()
             self.source.editingFinished.connect(self.change_source)
+            self.browse_source = QPushButton("Choisir PNG…")
+            self.browse_source.clicked.connect(self.select_source)
             self.region = QLineEdit()
             self.region.setPlaceholderText("x,y,largeur,hauteur ou vide")
             self.region.editingFinished.connect(self.change_region)
@@ -135,6 +139,7 @@ def main(argv=None):
             left.addWidget(self.add_variant)
             left.addWidget(QLabel("Portraits / expressions"))
             left.addWidget(self.expression)
+            left.addWidget(self.add_expression)
             left.addWidget(QLabel("Contrôle artistique"))
             left.addWidget(self.diagnostics_box)
 
@@ -164,7 +169,12 @@ def main(argv=None):
             form.addRow("Durée", self.duration)
             form.addRow("Offset X", self.offset_x)
             form.addRow("Offset Y", self.offset_y)
-            form.addRow("Fichier source", self.source)
+            source_row = QWidget()
+            source_layout = QHBoxLayout(source_row)
+            source_layout.setContentsMargins(0, 0, 0, 0)
+            source_layout.addWidget(self.source)
+            source_layout.addWidget(self.browse_source)
+            form.addRow("Fichier source", source_row)
             form.addRow("Région atlas", self.region)
             right.addLayout(form)
             right.addWidget(self.add_layer)
@@ -265,7 +275,8 @@ def main(argv=None):
             enabled = bool(frames)
             self.make_clip.setEnabled(not enabled)
             for control in (self.play, self.add_key, self.remove_key, self.duration,
-                            self.offset_x, self.offset_y, self.source, self.region):
+                            self.offset_x, self.offset_y, self.source, self.region,
+                            self.browse_source):
                 control.setEnabled(enabled)
             if enabled:
                 current = frames[self.frame_index]
@@ -387,6 +398,42 @@ def main(argv=None):
         def change_source(self):
             self.change_frame("path", self.source.text().strip())
 
+        def choose_asset(self, caption):
+            source, _ = QFileDialog.getOpenFileName(
+                self, caption, str(root), "Images PNG (*.png)")
+            if not source:
+                return None
+            try:
+                return Path(source).resolve().relative_to(root).as_posix()
+            except ValueError:
+                QMessageBox.warning(self, "Image externe",
+                                    "Importez d’abord les PNG dans le projet.")
+                return None
+
+        def select_source(self):
+            source = self.choose_asset("Choisir une pose PNG")
+            if source is not None:
+                self.change_frame("path", source)
+
+        def import_expression(self):
+            from PySide6.QtWidgets import QInputDialog
+            source = self.choose_asset("Importer un portrait PNG")
+            if source is None:
+                return
+            name, ok = QInputDialog.getText(
+                self, "Expression", "ID de l'expression (ex. determined)")
+            if not ok or not name.strip():
+                return
+            vid = self.active_variant()
+            try:
+                def transform(doc):
+                    doc["variants"][vid]["expressions"][name.strip()] = source
+                self.session.edit(transform)
+                self.refresh()
+                self.expression.setCurrentIndex(self.expression.findData(name.strip()))
+            except CharacterError as exc:
+                QMessageBox.warning(self, "Portrait", str(exc))
+
         def change_region(self):
             try:
                 value = ([int(part.strip()) for part in self.region.text().split(",")]
@@ -483,6 +530,11 @@ def main(argv=None):
                 self, "Teinte", "Hex RGB #RRGGBB", text="#ffffff")
             if not ok:
                 return
+            opacity, ok = QInputDialog.getInt(
+                self, "Opacité", "Alpha de 0 (transparent) à 255 (opaque)",
+                255, 0, 255)
+            if not ok:
+                return
             try:
                 def transform(doc):
                     layers = doc["variants"][vid]["layers"]
@@ -497,6 +549,7 @@ def main(argv=None):
                             layers.append(existing)
                         existing["paths"][self.direction.currentData()] = path.strip()
                         existing["tint"] = tint
+                        existing["opacity"] = opacity
                 self.session.edit(transform)
                 self.refresh()
             except CharacterError as exc:
