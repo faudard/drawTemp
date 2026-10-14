@@ -67,7 +67,7 @@ def main():
     write_json(args.report, payload)
     errors = [f'{row["campaign"]}: {error}' for row in reports
               for error in row["errors"]]
-    errors.extend(f\'{row["kind"]}: {row["path"]}: {row["error"]}\'
+    errors.extend(f'{row["kind"]}: {row["path"]}: {row["error"]}'
                   for row in save_checks if not row["compatible"])
     if args.require_ending_witnesses:
         errors.extend(f'{row["campaign"]}: ending {ending} not witnessed'
