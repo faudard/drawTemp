@@ -100,6 +100,13 @@ and unrestricted cross-document migrations are not supported.
    must not exist. The editor never silently migrates saved campaigns.
 8. Try introducing an opaque leftover ID or using a stale inspector:
    all documents stay unchanged and the operation fails closed.
+9. Select a linked switch **and** its door. Delete both via the
+   Resource Explorer. The batch command finds the dependency-safe order,
+   validates each step and commits **one** history entry. One Undo restores
+   both records and their links.
+10. Select an independent chest with a door still referenced by an
+    **unselected** switch. The entire batch must fail; neither the chest
+    nor the door is removed, and history remains unchanged.
 
 **Note:** with a paired-document edit the global Studio Undo/Redo is the
 authoritative history. The existing save transaction store persists the two
@@ -114,5 +121,7 @@ validated files together; no new disk format is added.
   linked by the current editor notifications, not by a second event bus.
 - Renames update known mission-local references and supported same-mission
   cinematic actor cues; unknown/cross-mission links are rejected.
-- Deletion requires a confirmation and validated absence of dangling links.
+- Single or multi-selection deletion requires explicit confirmation and
+  validated absence of dangling links; multi-deletions use one atomic
+  EditingContext command with a bounded dependency-ordering pass.
 - No tool may silently delete or rewrite third-party references.
