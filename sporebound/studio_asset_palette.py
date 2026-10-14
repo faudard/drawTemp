@@ -250,29 +250,125 @@ class AssetPalette:
         return ('jeanne' if 'jeanne' in entry.value.lower() else
                 'hero' if self.entity_team.get() == 'player' else 'guard')
 
+    def asset_family(self, entry):
+        group = (self.watercolor.lookup(entry.value).group
+                 if entry.kind == 'watercolor' else '')
+        return family_for(entry, watercolor_group=group)
+
+    def asset_bookmark(self, entry):
+        group = (self.watercolor.lookup(entry.value).group
+                 if entry.kind == 'watercolor' else '')
+        return collection_key(entry, watercolor_group=group)
+
+    def choose_collection(self, _event=None):
+        selected = self.nav.selection()
+        if not selected:
+            return
+        value = selected[0].removeprefix('browse:')
+        if value not in BROWSER_SCOPES:
+            return
+        if self.category.get() != 'Tous':
+            self.category.set('Tous')
+        self.browse_scope.set(value)
+
+    def _refresh_nav(self):
+        keys = set()
+        families = {key: set() for key, _label in FAMILIES}
+        for entry in self.entries.values():
+            key = self.asset_bookmark(entry)
+            keys.add(key)
+            families[self.asset_family(entry)].add(key)
+        labels = {'all': f'Tous les assets ({len(keys)})',
+                  'favorites': f'☆ Favoris ({len(keys & self.browser.favorites)})',
+                  'recents': f'◷ Récents ({len(keys & set(self.browser.recents))})'}
+        labels.update({key: f'{name} ({len(families[key])})'
+                       for key, name in FAMILIES})
+        for key, title in labels.items():
+            self.nav.item('browse:' + key, text=title)
+
+    def _favorite_key(self):
+        entry = self.selected()
+        return self.asset_bookmark(entry) if entry is not None else None
+
+    def _update_favorite_button(self):
+        key = self._favorite_key()
+        if key is None:
+            self.favorite_button.configure(text='☆ Ajouter aux favoris')
+            self.favorite_button.state(['disabled'])
+        else:
+            label = ('★ Retirer des favoris' if key in self.browser.favorites
+                     else '☆ Ajouter aux favoris')
+            self.favorite_button.configure(text=label)
+            self.favorite_button.state(['!disabled'])
+
+    def toggle_favorite(self, _event=None):
+        key = self._favorite_key()
+        if key is None:
+            return
+        try:
+            self.browser.toggle_favorite(key)
+        except (OSError, ValueError) as exc:
+            from tkinter import messagebox
+            messagebox.showerror('Favoris non enregistrés', str(exc),
+                                 parent=self.window)
+            return
+        if self.browse_scope.get() == 'favorites':
+            self.populate()
+        else:
+            self._refresh_nav()
+            self._update_favorite_button()
+
     def populate(self, *_args):
         old = self.tree.selection()
-        opened = {iid for iid in self.tree.get_children()
-                  if iid.startswith('watercolor-group:') and self.tree.item(iid, 'open')}
+        open_ids = set()
+        def save_expanded(parent=''):
+            for iid in self.tree.get_children(parent):
+                if self.tree.item(iid, 'open'):
+                    open_ids.add(iid)
+                save_expanded(iid)
+        save_expanded()
+        first_population = not self.tree.get_children()
         self.tree.delete(*self.tree.get_children())
         self.images.clear()
         extra = tuple(self.entities() if self.entities is not None else ())
         extra += self.watercolor_entries
         self.entries = {e.id: e for e in (*ENTRIES, *extra)}
-        rows = search_entries(self.query.get(), self.category.get(), extra)
-
-        # The registry remains flat; grouping is strictly a presentation detail.
-        # Authored animation frames are available through the frame scrubber.
-        # Exact-ID search still reveals a source frame when it is needed.
+        scope = self.browse_scope.get()
+        rows = tuple(entry for entry in search_entries(
+            self.query.get(), self.category.get(), extra)
+            if self.browser.contains(scope, self.asset_bookmark(entry),
+                                     self.asset_family(entry)))
+        if scope == 'recents':
+            index = {key: i for i, key in enumerate(self.browser.recents)}
+            rows = tuple(sorted(rows, key=lambda entry: index.get(
+                self.asset_bookmark(entry), self.browser.MAX_RECENTS)))
         animated_frames = self.watercolor.animation_frame_ids()
-        filtering = bool(self.query.get().strip())
+        searching = bool(self.query.get().strip())
+        compact = tuple(entry for entry in rows
+                        if not (entry.kind == 'watercolor' and not searching
+                                and self.watercolor.lookup(entry.value).kind == 'sprite'
+                                and entry.value in animated_frames))
+        # In the unfiltered "Tous" view, root rows are six meaningful
+        # collections. The existing entry IDs remain the selectable leaves.
+        by_family = scope == 'all' and self.category.get() == 'Tous' and not searching
+        counts = {key: 0 for key, _label in FAMILIES}
+        for entry in compact:
+            counts[self.asset_family(entry)] += 1
+        if by_family:
+            for key, label in FAMILIES:
+                if counts[key]:
+                    self.tree.insert('', 'end', iid='group:' + key,
+                                     text=f'{label} ({counts[key]})',
+                                     open=('group:' + key in open_ids or
+                                           first_population and key == 'terrain'))
+
+        def parent_of(entry):
+            return 'group:' + self.asset_family(entry) if by_family else ''
+
         grouped = {}
-        for entry in rows:
+        for entry in compact:
             if entry.kind == 'watercolor':
-                item = self.watercolor.lookup(entry.value)
-                if not filtering and item.kind == 'sprite' and item.id in animated_frames:
-                    continue
-                grouped.setdefault(item.group, []).append(entry)
+                grouped.setdefault(self.watercolor.lookup(entry.value).group, []).append(entry)
                 continue
             photo, _state, _path = self.sprite(
                 entry, 8 if entry.kind == 'structure' else 22)
@@ -280,7 +376,7 @@ class AssetPalette:
             if photo is not None:
                 self.images[entry.id] = photo
                 options['image'] = photo
-            self.tree.insert('', 'end', iid=entry.id,
+            self.tree.insert(parent_of(entry), 'end', iid=entry.id,
                              text=entry.name + (' ⚠' if photo is None and
                                   entry.kind != 'object' else ''), **options)
 
@@ -291,8 +387,6 @@ class AssetPalette:
         self.group_variants = {}
         for group, entries in grouped.items():
             group_id = 'watercolor-group:' + group
-            # Animations before individual poses; source frames do not clutter
-            # the collapsed library view.
             entries = sorted(entries, key=lambda e: (
                 0 if self.watercolor.lookup(e.value).kind == 'animation' else 1,
                 e.name.casefold()))
@@ -301,8 +395,9 @@ class AssetPalette:
             poses = len(entries) - animations
             self.group_variants[group_id] = tuple(e.id for e in entries)
             label = f"{names.get(group, group.capitalize())}  ·  {animations} animations / {poses} poses"
-            self.tree.insert('', 'end', iid=group_id, text=label,
-                             open=filtering or group_id in opened)
+            parent = parent_of(entries[0])
+            self.tree.insert(parent, 'end', iid=group_id, text=label,
+                             open=searching or group_id in open_ids)
             for entry in entries:
                 item = self.watercolor.lookup(entry.value)
                 suffix = (f" ({item.frame_count} images)"
@@ -318,28 +413,37 @@ class AssetPalette:
 
         self.count.set(f'{len(rows)} / {len(self.entries)} assets'
                        + (f' · {len(grouped)} familles' if grouped else ''))
-        if rows and self.tree.get_children():
+        self._refresh_nav()
+        if compact and self.tree.get_children():
             previous = old[0] if old else None
             if previous is not None and self.tree.exists(previous):
                 selected = previous
             elif previous and previous.startswith('watercolor:'):
-                # A searched frame can disappear from the compact view.
                 item = self.watercolor.lookup(previous[len('watercolor:'):])
                 selected = 'watercolor-group:' + item.group
                 if not self.tree.exists(selected):
                     selected = self.tree.get_children()[0]
             else:
                 selected = self.tree.get_children()[0]
+            if selected.startswith('group:'):
+                # Prefer an actual preview rather than an inert category row.
+                children = self.tree.get_children(selected)
+                if children:
+                    selected = children[0]
             self.tree.selection_set(selected)
             self.tree.focus(selected)
             self.select()
         else:
             self._group_selected = None
             self.variant_controls.pack_forget()
+            self.entity_frame.pack_forget()
             self.canvas.delete('all')
-            self.detail.set('Aucun asset ne correspond à la recherche.')
+            self.preview_image = None
+            self._preview_item_id = None
+            self.detail.set('Aucun asset ne correspond à cette collection/recherche.')
             self.use_button.state(['disabled'])
             self.rotate_button.state(['disabled'])
+            self._update_favorite_button()
 
     def choose_group_variant(self, _event=None):
         if self._group_selected is None:
