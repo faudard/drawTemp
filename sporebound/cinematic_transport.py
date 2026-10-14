@@ -24,7 +24,10 @@ class CinematicTransport:
 
     def read(self):
         if self.playing:
-            elapsed = max(0, int((self._now() - self._anchor) * 1000))
+            # Stable across Python/OS binary-float representations of exact ms.
+            # The 8-decimal rounding removes only sub-nanosecond float noise,
+            # without changing genuine fractional-millisecond truncation.
+            elapsed = max(0, int(round((self._now() - self._anchor) * 1000, 8)))
             projected = min(self.duration_ms, self._origin_position + elapsed)
             # Monotonic progress even if a platform clock is imperfect.
             self.position_ms = max(self.position_ms, projected)
