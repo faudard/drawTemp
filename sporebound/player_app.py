@@ -1186,8 +1186,6 @@ class PlayerApplication:
         self.ttk.Label(toolbar, textvariable=zoom_status, width=6).pack(side="left")
         self._button(toolbar, "Centrer", recenter,
                      state="normal" if iso_scene else "disabled").pack(side="left", padx=3)
-        self.ttk.Label(toolbar, text="Molette : zoom · bouton central : déplacer",
-                       foreground="#9eacb3").pack(side="right", padx=4)
 
         if iso_scene is not None:
             board.bind("<MouseWheel>", lambda e: zoom(1 if e.delta > 0 else -1,
