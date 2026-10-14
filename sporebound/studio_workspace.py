@@ -60,6 +60,16 @@ class ProjectWorkspaceTab:
         ttk.Entry(searchbar, textvariable=self.query).pack(
             side='left', fill='x', expand=True, padx=7)
         self.query.trace_add('write', lambda *_: self.refresh())
+        ttk.Label(searchbar, text='Famille').pack(side='left', padx=(5, 2))
+        families = ('all',) + tuple(kind for kind, _ in GROUPS)
+        ttk.Combobox(searchbar, textvariable=self.family_filter, values=families,
+                     state='readonly', width=17).pack(side='left')
+        ttk.Label(searchbar, text='Vue').pack(side='left', padx=(8, 2))
+        ttk.Combobox(searchbar, textvariable=self.scope_filter,
+                     values=('all', 'favorites', 'recents'),
+                     state='readonly', width=11).pack(side='left')
+        self.family_filter.trace_add('write', lambda *_: self.refresh())
+        self.scope_filter.trace_add('write', lambda *_: self.refresh())
         navigation_bar = ttk.Frame(root)
         navigation_bar.pack(fill='x', padx=12, pady=(0, 3))
         ttk.Button(navigation_bar, text='← Précédent',
@@ -68,6 +78,12 @@ class ProjectWorkspaceTab:
         ttk.Button(navigation_bar, text='Suivant →',
                    command=lambda: self.owner._run(
                        lambda: self.navigate_history(1))).pack(side='left', padx=(0, 9))
+        ttk.Button(navigation_bar, text='☆ Favori',
+                   command=lambda: self.owner._run(self.toggle_favorite)).pack(
+                       side='left', padx=(0, 6))
+        ttk.Button(navigation_bar, text='Impact',
+                   command=lambda: self.owner._run(self.show_impact)).pack(
+                       side='left', padx=(0, 6))
         ttk.Label(navigation_bar, textvariable=self.breadcrumb,
                   wraplength=620).pack(side='left', fill='x', expand=True)
         body = ttk.Panedwindow(root, orient='horizontal')
@@ -76,7 +92,7 @@ class ProjectWorkspaceTab:
         detail_frame = ttk.Frame(body)
         body.add(tree_frame, weight=2)
         body.add(detail_frame, weight=3)
-        self.tree = ttk.Treeview(tree_frame, show='tree', selectmode='browse')
+        self.tree = ttk.Treeview(tree_frame, show='tree', selectmode='extended')
         scroll = ttk.Scrollbar(tree_frame, orient='vertical', command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.pack(side='left', fill='both', expand=True)
@@ -84,6 +100,8 @@ class ProjectWorkspaceTab:
         self.tree.bind('<<TreeviewSelect>>', self._select)
         self.tree.bind('<Double-1>', lambda _e: self.owner._run(self.open_selected))
         self.tree.bind('<Return>', lambda _e: self.owner._run(self.open_selected))
+        self.tree.bind('<Control-d>',
+                       lambda _e: self.owner._run(self.toggle_favorite))
 
         ttk.Label(detail_frame, text='Inspecteur', font=('TkDefaultFont', 11, 'bold')).pack(
             anchor='w', padx=10, pady=8)
@@ -209,6 +227,7 @@ class ProjectWorkspaceTab:
         self.tree.see(key)
         if record:
             self.navigation.record(key)
+            self.explorer.visit(key)
         self._select()
         self.open_selected()
 
@@ -225,7 +244,9 @@ class ProjectWorkspaceTab:
         ui_started = begin_ui()
         model = self.model()
         sections = model.sections
-        shown = {node.key for node in model.search(self.query.get())}
+        shown = self.explorer.shown(
+            model, self.query.get(),
+            kind=self.family_filter.get(), scope=self.scope_filter.get())
         self._populate_tree(self.tree, sections, shown)
         if self.sidebar_tree is not None:
             self._populate_tree(self.sidebar_tree, sections, shown)
@@ -293,6 +314,7 @@ class ProjectWorkspaceTab:
         if _event is not None and node is not None and not self._navigation_busy:
             self._map_tile_key = ''
             changed = self.navigation.record(node.key)
+            self.explorer.visit(node.key)
             if changed:
                 self._preview_map_reference(node.key)
         snapshot = inspect_resource(node) if node else None
@@ -484,6 +506,35 @@ class ProjectWorkspaceTab:
         self._map_tile_key = ''
         self._explicit_tile = ''
         self.breadcrumb.set('Projet')
+
+    def toggle_favorite(self):
+        node = self._selected_node()
+        if node is None:
+            raise RuleError('Choisir une ressource pour les favoris')
+        active = self.explorer.toggle_favorite(node.key)
+        self.status.config(text=('Ajouté aux favoris : ' if active else
+                                 'Retiré des favoris : ') + node.key)
+        self.refresh()
+
+    def show_impact(self):
+        node = self._selected_node()
+        if node is None:
+            raise RuleError('Choisir une ressource à analyser')
+        report = dependency_impact(self.model(), node.key)
+        self.refs.delete(0, 'end')
+        self.ref_keys = []
+        for ref in report.incoming:
+            self.ref_keys.append(ref.source)
+            self.refs.insert('end', '← ' + ref.label + ' : ' + ref.source)
+        for ref in report.outgoing:
+            self.ref_keys.append(ref.target)
+            self.refs.insert('end', '→ ' + ref.label + ' : ' + ref.target)
+        self.status.config(text=(
+            f'Impact {node.key} : {len(report.incoming)} lien(s) entrant(s), '
+            f'{len(report.outgoing)} sortant(s). '
+            + ('Renommage/suppression nécessite une propagation contrôlée.'
+               if report.has_dependents else
+               'Aucune dépendance tierce détectée.')))
 
     def open_reference(self):
         selected = self.refs.curselection()
