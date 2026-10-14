@@ -176,8 +176,10 @@ class LongSessionStore:
             if not path.exists():
                 errors.append(f"{path.name}: missing")
                 continue
+            verified_file = False
             try:
                 _, outcome = self.store._read(path, content, project, rules=rules)
+                verified_file = True
                 require(not outcome.migrated_from_v1,
                         "Migrate legacy v1 explicitly before using long sessions")
                 record = outcome.session.recording()
@@ -201,6 +203,11 @@ class LongSessionStore:
                                              0, degraded=True)
                 raise RuleError("Journal does not belong to this checkpoint")
             except (RuleError, OSError) as exc:
+                if source == "primary" and verified_file:
+                    # A valid primary with an incompatible journal must NOT
+                    # silently fall back to an older valid backup. That could
+                    # discard a committed action while reporting success.
+                    raise
                 errors.append(str(exc))
         raise RuleError("No recoverable long-session state: " + "; ".join(errors))
 
@@ -232,6 +239,7 @@ class LongSessionStore:
         Do not share a path between independent concurrent writers.
         """
         require(isinstance(session, GameSession), "Expected GameSession")
+        require(self.journal.is_file(), "Initialize or explicitly migrate this long-session slot")
         require(isinstance(request_id, str) and 0 < len(request_id) <= 128,
                 "Invalid operation request ID")
         require(operation in OPERATIONS, "Unsupported journaled operation")
