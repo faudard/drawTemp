@@ -294,11 +294,11 @@ def launch(path):
         else:
             edit_recovery.discard()
     raw = json.loads(Path(path).read_text(encoding='utf-8'))
-    draft = recovered_work[0] if recovered_work else raw
+    # Initialize dependent Studio panels against the on-disk pair first.
+    # A draft may add/remove missions and invalidate the disk GameProject;
+    # adopting the draft before StudioPanels.reload_project would fail.
     doc = Document(Content.from_dict(
-        draft, rules=authored_rules_for_document(draft)))
-    if recovered_work:
-        doc.saved = json.dumps(raw, sort_keys=True)
+        raw, rules=authored_rules_for_document(raw)))
     current_path = Path(path)
     disk_revisions = StudioTransactionStore(current_path).revisions()
     battle = None
@@ -523,11 +523,8 @@ def launch(path):
                     next_work = next_recovery.restore()
                 else:
                     next_recovery.discard()
-            candidate_data = next_work[0] if next_work else raw
             candidate = Document(Content.from_dict(
-                candidate_data, rules=authored_rules_for_document(candidate_data)))
-            if next_work:
-                candidate.saved = json.dumps(raw, sort_keys=True)
+                raw, rules=authored_rules_for_document(raw)))
             restored_views = load_views(name)
             edit_recovery.discard()  # Explicitly accepted discard of old project.
             doc, current_path, battle = candidate, Path(name), None
@@ -541,6 +538,10 @@ def launch(path):
             if studio is not None:
                 studio.reload_project()
                 if next_work:
+                    recovered_content = next_work[0]
+                    doc.data = Content.from_dict(
+                        recovered_content,
+                        rules=authored_rules_for_document(recovered_content)).to_dict()
                     studio.restore_unsaved_project(next_work[1])
                 studio.history.on_change = schedule_work_checkpoint
             refresh_source()
@@ -3882,6 +3883,10 @@ def launch(path):
         focus_map_cell=focus_workspace_map,
         workspace_edit=commit_workspace_properties)
     if recovered_work:
+        recovered_content = recovered_work[0]
+        doc.data = Content.from_dict(
+            recovered_content,
+            rules=authored_rules_for_document(recovered_content)).to_dict()
         studio.restore_unsaved_project(recovered_work[1])
         status_var.set('Travail interrompu restauré en mémoire ; enregistrer pour le conserver.')
     studio.history.on_change = schedule_work_checkpoint
