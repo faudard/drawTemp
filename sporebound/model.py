@@ -317,8 +317,12 @@ class Content:
                 require(type(structure) is dict and
                         set(structure) in (
                             {"id", "name", "anchor", "turns", "door_slot"},
-                            {"id", "name", "anchor", "turns", "door_slot", "underlay"}),
+                            {"id", "name", "anchor", "turns", "door_slot", "underlay"},
+                            {"id", "name", "anchor", "turns", "door_slot", "appearance"},
+                            {"id", "name", "anchor", "turns", "door_slot", "underlay", "appearance"}),
                         "Invalid structure metadata fields")
+                from .building_visuals import validate_building_appearance
+                validate_building_appearance(structure)
                 sid = structure["id"]
                 require(type(sid) is str and 1 <= len(sid) <= 64
                         and sid.isascii() and sid[0].isalpha()
