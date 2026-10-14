@@ -356,6 +356,17 @@ class LongSessionStore:
         require(isinstance(status, LongSessionStatus) and
                 status.session.recording()["digest"] == expected_digest,
                 "Recovery acknowledgement mismatch")
+        # The UI's recovery preview may be stale. Re-read both candidates
+        # under the exclusive writer lock before replacing any bytes.
+        latest = self.load_with_status(status.session.content, status.session.project,
+                                       rules=status.session.rules)
+        require(latest.source == status.source and
+                latest.sequence == status.sequence and
+                latest.degraded == status.degraded and
+                latest.session.recording()["digest"] == expected_digest,
+                "Recovery selection is stale; inspect the slot again")
+        require(status.source == "backup" or status.degraded,
+                "No damaged checkpoint to restore")
         damaged = self.store.path.with_name(self.store.path.name + ".damaged")
         require(not damaged.exists(), "Damaged evidence already exists")
         if self.store.path.exists():
