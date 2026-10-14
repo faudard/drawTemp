@@ -319,10 +319,10 @@ def main(argv=None):
             eid, ok = QInputDialog.getText(self, "Nouvel événement", "Identifiant")
             if not ok or not eid.strip():
                 return
-            payload = make_condition(self.condition_kind.currentText(),
-                                     self.condition_value.text())
             self.perform(lambda: self.studio.create(
-                mid, eid.strip(), payload,
+                mid, eid.strip(),
+                make_condition(self.condition_kind.currentText(),
+                               self.condition_value.text()),
                 [action("message", text="Nouvel événement")]), selected=eid.strip())
 
         def duplicate_event(self):
