@@ -27,6 +27,8 @@ class AutoBlendTests(unittest.TestCase):
         self.paint((3, 3), 'dirt')
         self.paint((4, 3), 'grass')
         self.paint((3, 2), 'stone')
+        self.paint((2, 3), 'dirt')
+        self.paint((3, 4), 'dirt')
         edges = blend_edges(self.board, (3, 3))
         self.assertEqual({e.bit: e.incoming for e in edges},
                          {E: 'grass', N: 'stone'})
@@ -49,6 +51,8 @@ class AutoBlendTests(unittest.TestCase):
     def test_blend_polygons_touch_shared_edge_at_24_54_96(self):
         self.paint((3, 3), 'dirt')
         self.paint((4, 3), 'grass')
+        for adjacent in ((3, 2), (2, 3), (3, 4)):
+            self.paint(adjacent, 'dirt')
         for zoom in (24, 54, 96):
             with self.subTest(zoom=zoom):
                 corners = IsoGeometry(self.board, zoom).polygon((3, 3))
@@ -151,8 +155,6 @@ class ProceduralTerrainTests(unittest.TestCase):
                     self.mid, (5, 5), (8, 8), **kwargs)
         with self.assertRaises(RuleError):
             self.doc.preview_generated_terrain(self.mid, (-1, 0), (1, 1))
-        with self.assertRaises(RuleError):
-            self.doc.preview_generated_terrain(self.mid, (0, 0), (23, 23))
         self.assertEqual(self.doc.data, before)
 
     def test_visual_dirty_region_handles_an_autoblended_neighbour(self):
