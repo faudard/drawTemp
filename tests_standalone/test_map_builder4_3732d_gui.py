@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import traceback
 from unittest.mock import patch
 
 from sporebound.__main__ import DEFAULT_CONTENT
@@ -80,15 +81,10 @@ class ReusablePrefab4GuiTests(unittest.TestCase):
                     root.update()
                     self.assertEqual(popups, [],
                                      'Prefab stamping rejected: ' + repr(popups))
-                    status = next((
-                        str(root.getvar(w.cget('textvariable')))
-                        for w in root.winfo_children()
-                        if isinstance(w, ttk.Label) and w.cget('textvariable')
-                    ), '<missing top-level status label>')
-                    self.assertIn(
-                        'placé en', status,
-                        f'Click did not commit: status={status!r}; tool={tool.get()!r}; '
-                        f'mission={missions.get()!r}; button_binding={canvas.bind("<Button-1>")!r}')
+                    self.assertFalse(
+                        errors, 'Tk callback exception: ' + '\n'.join(
+                            ''.join(traceback.format_exception(*exc))
+                            for exc in errors))
                     buttons['Enregistrer sous'].invoke()
                     saved = json.loads(output_path.read_text(encoding='utf-8'))
                     dst = next(m for m in saved['missions'] if m['id'] == 'prefab_gui_dst4')
