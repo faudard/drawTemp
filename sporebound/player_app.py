@@ -9,7 +9,9 @@ from pathlib import Path
 
 from .audio_stage import AudioStage
 from .exploration_view import draw_exploration, draw_story_backdrop
+from .exploration_iso_view import IsoExplorationCanvas
 from .game_project import GameProject
+from .profile_paths import default_profile_path
 from .model import Content, RuleError
 from .player_controller import PlayerController
 from .presentation import Camera, battle_frame, strategy_frame
@@ -26,10 +28,11 @@ from .player_ux import (KeyBindings, PresentationState, combat_hud,
 from .player_preferences import load_preferences, save_preferences
 from .player_guidance import combat_guidance
 from .player_action_preview import action_preview, preview_screen_geometry
+from .player_hud_layout import combat_hud_sections
 
 
 class PlayerApplication:
-    def __init__(self, content_path, project_path=None, profile_path=None):
+    def __init__(self, content_path, project_path=None, profile_path=None, *, chapter_one=False):
         import tkinter as tk
         from tkinter import ttk, messagebox
 
@@ -43,8 +46,15 @@ class PlayerApplication:
         content = Content.from_dict(document, rules=authored_rules_for_document(document))
         project = (GameProject.load(project_path, content) if project_path.is_file()
                    else GameProject.default(content))
+        if chapter_one:
+            from .jeanne_chapter1 import chapter_one_project
+            project = chapter_one_project(content, project)
+        # The opt-in chapter never shares the original prologue's save profile.
+        profile_source = (project_path.with_name("jeanne.chapitre1.game.json")
+                          if chapter_one else project_path)
         profile = (Path(profile_path) if profile_path is not None
-                   else Path.home() / ".sporebound" / project_path.name)
+                   else default_profile_path(profile_source))
+        self.chapter_one = chapter_one
         preferences, self.preferences_error = load_preferences(profile)
         self.keymap = KeyBindings(preferences["keybindings"])
         self.player = PlayerController(content, project, profile)
@@ -71,6 +81,20 @@ class PlayerApplication:
         self.guidance_enabled = tk.BooleanVar(value=False)
         self.guidance_var = tk.StringVar()
         self.guide_panel = None
+        self.hud_log_visible = tk.BooleanVar(value=False)
+        self.hud_sidebar_visible = tk.BooleanVar(value=True)
+        self.hud_timeline_var = tk.StringVar()
+        self.hud_focus_var = tk.StringVar()
+        self.hud_objective_var = tk.StringVar()
+        self.hud_party_var = tk.StringVar()
+        self.hud_notebook = None
+        self.hud_sidebar = None
+        self.hud_panes = None
+        self.hud_journal = None
+        self.hud_party = None
+        self.hud_portrait = None
+        self.hud_portrait_renderer = None
+        self._hud_portrait_unit = None
         self.preview_enabled = tk.BooleanVar(value=False)
         self.preview_var = tk.StringVar()
         self.preview_panel = None
@@ -102,12 +126,13 @@ class PlayerApplication:
         self.logistics_y_var = tk.StringVar(value="1")
         self.convoy_var = tk.StringVar()
         self.selection = (0, 0)
-        self.iso_view_var = tk.BooleanVar(value=False)
+        self.iso_view_var = tk.BooleanVar(value=True)
         self.camera = Camera(52, 8, 8)
         self.motion = MotionDirector()
         self._motion_source = None
         self._motion_frame = None
         self._motion_job = None
+        self._hud_resize_job = None
         self.canvas = None
         self.renderer = None
         self.iso_renderer = None
@@ -168,6 +193,9 @@ class PlayerApplication:
         if self._motion_job is not None:
             self.root.after_cancel(self._motion_job)
             self._motion_job = None
+        if self._hud_resize_job is not None:
+            self.root.after_cancel(self._hud_resize_job)
+            self._hud_resize_job = None
         if self._preview_job is not None:
             self.root.after_cancel(self._preview_job)
             self._preview_job = None
@@ -189,6 +217,14 @@ class PlayerApplication:
         self.info = None
         self.guide_panel = None
         self.preview_panel = None
+        self.hud_notebook = None
+        self.hud_sidebar = None
+        self.hud_panes = None
+        self.hud_journal = None
+        self.hud_party = None
+        self.hud_portrait = None
+        self.hud_portrait_renderer = None
+        self._hud_portrait_unit = None
 
     def _heading(self, text, subtitle=""):
         self.ttk.Label(self.view, text=text, font=("TkDefaultFont", round(24 * self.text_scale.get() / 100), "bold")).pack(
@@ -247,6 +283,31 @@ class PlayerApplication:
         self._heading(self.project.title, self.project.subtitle)
         panel = self.ttk.LabelFrame(self.view, text="Nouvelle aventure / reprendre", padding=18)
         panel.pack(anchor="center", fill="x", padx=160, pady=30)
+        if self.chapter_one:
+            self.ttk.Label(
+                panel, text="CHAPITRE I  ·  LES CENDRES",
+                font=("TkDefaultFont", 16, "bold")).pack(anchor="w", pady=(0, 10))
+            self.ttk.Label(
+                panel, text="Du camp des réfugiés à Vaucouleurs : recrutez un "
+                            "compagnon, traversez le pont et choisissez entre "
+                            "archives et otages.",
+                wraplength=620, justify="left").pack(anchor="w", pady=(0, 16))
+            slot_row = self.ttk.Frame(panel)
+            slot_row.pack(fill="x", pady=(0, 12))
+            self.ttk.Label(slot_row, text="Emplacement").pack(side="left", padx=(0, 12))
+            self.ttk.Combobox(
+                slot_row, textvariable=self.slot_var, state="readonly",
+                values=[str(i) for i in range(1, self.project.save_slots + 1)],
+                width=8).pack(side="left")
+            self._button(panel, "Commencer le chapitre I", self._new_game).pack(
+                fill="x", pady=4)
+            self._button(panel, "Continuer le chapitre I", self._load_game).pack(
+                fill="x", pady=4)
+            self._button(panel, "Sauvegardes", self.save_manager_screen).pack(
+                fill="x", pady=4)
+            self._button(panel, "Options", self.options_screen).pack(fill="x", pady=4)
+            self._button(panel, "Quitter", self.close).pack(fill="x", pady=4)
+            return
         self.ttk.Label(panel, text="Campagne").grid(row=0, column=0, sticky="w", pady=9)
         self.ttk.Combobox(panel, textvariable=self.campaign_var, state="readonly",
                           values=[c["id"] for c in self.project.campaigns],
@@ -268,10 +329,13 @@ class PlayerApplication:
         self._button(panel, "Copier v1/v2 vers session longue",
                      self._migrate_long_game).grid(
             row=6, column=0, columnspan=2, sticky="ew", pady=4)
+        self._button(panel, "Gestionnaire de sauvegardes",
+                     self.save_manager_screen).grid(
+            row=7, column=0, columnspan=2, sticky="ew", pady=4)
         # The authored castle example is a repository demo, not packaged
         # core content. Show its entry only when that source is available.
         castle_example = Path(__file__).resolve().parent.parent / "examples" / "castle_vertical_slice.py"
-        row = 7
+        row = 8
         if self.project.sieges:
             self._button(panel, "Sièges créés dans le Studio", self._authored_siege_menu).grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=4)
@@ -321,6 +385,260 @@ class PlayerApplication:
             self.player.profile.stem + "_castle.json")
         return launch_castle(castle_content(), castle_blueprint(), save_path,
                              rules=tactical_rpg_rules(), master=self.root)
+
+    def save_manager_screen(self):
+        """R8.19: read-only slot browser and explicitly confirmed archive actions.
+
+        The headless SaveManagerModel is the only source of saved-state facts.
+        No file-system manipulation or replay logic is implemented in Tk.
+        """
+        from .save_manager import SaveManagerModel
+        model = SaveManagerModel(self.player)
+        self._clear()
+        self.presentation.transition("title" if self.player.session is None else "campaign")
+        self._heading("Gestionnaire de sauvegardes",
+                      "Inspecter, comparer et restaurer sans remplacer la partie actuelle")
+        toolbar = self.ttk.Frame(self.view)
+        toolbar.pack(fill="x", pady=(0, 12))
+        self.ttk.Label(toolbar, text="Campagne").pack(side="left", padx=(0, 8))
+        campaign = self.tk.StringVar(value=(
+            self.player.campaign_id or self.campaign_var.get()))
+        campaign_box = self.ttk.Combobox(
+            toolbar, textvariable=campaign, state="readonly",
+            values=[c["id"] for c in self.project.campaigns], width=24)
+        campaign_box.pack(side="left")
+        self._button(toolbar, "Retour", self.show if self.player.session
+                     is not None else self.title_screen).pack(side="right")
+        self.ttk.Label(
+            self.view, text="La restauration crée une copie sur un AUTRE slot libre."
+        ).pack(anchor="w", pady=(0, 8))
+
+        area = self.ttk.Panedwindow(self.view, orient="horizontal")
+        area.pack(fill="both", expand=True)
+        sidebar = self.ttk.Frame(area, padding=8)
+        detail = self.ttk.Frame(area, padding=8)
+        area.add(sidebar, weight=1)
+        area.add(detail, weight=2)
+
+        self.ttk.Label(sidebar, text="Emplacements · v2 et sessions longues").pack(
+            anchor="w", pady=5)
+        slots = self.ttk.Treeview(
+            sidebar, columns=("kind", "health", "history"),
+            show="tree headings", height=13, selectmode="browse")
+        slots.heading("#0", text="Slot")
+        slots.heading("kind", text="Type")
+        slots.heading("health", text="Intégrité")
+        slots.heading("history", text="Archives")
+        slots.column("#0", width=74, stretch=False)
+        slots.column("kind", width=80, stretch=False)
+        slots.column("health", width=105, stretch=False)
+        slots.column("history", width=72, anchor="center", stretch=False)
+        slots.pack(fill="both", expand=True)
+
+        self.ttk.Label(detail, text="Versions vérifiées").pack(anchor="w")
+        history = self.ttk.Treeview(
+            detail, columns=("mode", "digest", "integrity"),
+            show="tree headings", height=7, selectmode="browse")
+        history.heading("#0", text="Version")
+        history.heading("mode", text="Mode")
+        history.heading("digest", text="Empreinte")
+        history.heading("integrity", text="État")
+        history.column("#0", width=240)
+        history.column("mode", width=95, stretch=False)
+        history.column("digest", width=100, stretch=False)
+        history.column("integrity", width=75, stretch=False)
+        history.pack(fill="x", pady=(4, 6))
+
+        self.ttk.Label(detail, text="Diagnostic et comparaison").pack(anchor="w")
+        report = self.tk.Text(detail, height=11, wrap="word", borderwidth=1,
+                              relief="solid", font=("TkDefaultFont", 10))
+        report.pack(fill="both", expand=True, pady=5)
+        report.configure(state="disabled")
+
+        controls = self.ttk.Frame(detail)
+        controls.pack(fill="x", pady=(6, 0))
+        target = self.tk.StringVar(value=str(min(2, self.project.save_slots)))
+        self.ttk.Label(controls, text="Copie vers slot libre").pack(side="left")
+        self.ttk.Combobox(
+            controls, state="readonly", textvariable=target, width=5,
+            values=[str(i) for i in range(1, self.project.save_slots + 1)]
+        ).pack(side="left", padx=8)
+
+        selected = {"slot": None, "kind": None}
+
+        def info(text):
+            report.configure(state="normal")
+            report.delete("1.0", "end")
+            report.insert("1.0", str(text))
+            report.configure(state="disabled")
+
+        def row_key(slot, kind):
+            return "%s:%s" % (slot, kind)
+
+        def load_details(_event=None):
+            focused = slots.focus()
+            if not focused:
+                return
+            slot, kind = focused.split(":", 1)
+            selected.update(slot=int(slot), kind=kind)
+            state = model.inspect_slot(campaign.get(), int(slot), kind)
+            for item in history.get_children():
+                history.delete(item)
+            items = model.history(campaign.get(), int(slot), kind)
+            for item in items:
+                state_text = "OK" if item["verified"] else "INVALIDE"
+                mode = item.get("summary", {}).get("mode", "—")
+                name = ("Actuelle" if item["id"] == "current"
+                        else item["id"].replace("gen-", "")[:27])
+                history.insert(
+                    "", "end", iid=item["id"], text=name,
+                    values=(mode, item.get("digest", "")[:12], state_text))
+            problems = state.get("issues", [])
+            lines = [
+                "Campagne : %s · Emplacement %s · %s" %
+                (campaign.get(), slot, kind),
+                "Intégrité : %s" % state["status"],
+                "Source : %s · Séquence : %s" %
+                (state.get("source", "—"), state.get("sequence", "—")),
+                "Empreinte : %s" % state.get("session_digest", "—"),
+                "Archives détectées : %s" % len(state.get("archives", [])),
+            ]
+            if problems:
+                lines.extend(["", "Anomalies :"] +
+                             ["• " + message for message in problems[:8]])
+            if state.get("incomplete_archives"):
+                lines.append("Archives interrompues conservées pour diagnostic.")
+            if kind == "v2":
+                lines.append("\nLes sauvegardes v2 restent en lecture seule "
+                             "dans ce gestionnaire.")
+            info("\n".join(lines))
+            if items:
+                history.selection_set(items[0]["id"])
+                history.focus(items[0]["id"])
+
+        def refresh_slots(_event=None):
+            for item in slots.get_children():
+                slots.delete(item)
+            for row in model.list_slots(campaign.get()):
+                slots.insert("", "end", iid=row_key(row["slot"], row["kind"]),
+                             text=str(row["slot"]),
+                             values=("Longue" if row["kind"] == "long" else "v2",
+                                     row["status"], len(row.get("archives", []))))
+            preferred = row_key(int(self.slot_var.get()),
+                                "long" if self.long_save_var.get() else "v2")
+            if not slots.exists(preferred):
+                first = slots.get_children()
+                preferred = first[0] if first else None
+            if preferred:
+                slots.selection_set(preferred)
+                slots.focus(preferred)
+                load_details()
+
+        def selected_archive():
+            require_slot = selected["slot"]
+            if require_slot is None or selected["kind"] != "long":
+                raise RuleError("Choisir un emplacement de session longue.")
+            generation = history.focus()
+            if not generation or generation == "current":
+                raise RuleError("Choisir une archive historique vérifiée.")
+            matching = next((v for v in model.history(
+                campaign.get(), require_slot, "long")
+                if v["id"] == generation and v["verified"]), None)
+            if matching is None:
+                raise RuleError("Archive absente ou corrompue.")
+            return require_slot, generation
+
+        def compare():
+            slot, generation = selected_archive()
+            outcome = model.compare_archive(campaign.get(), slot, generation)
+            lines = ["Comparaison avec : " + generation,
+                     "Même état : " + ("oui" if outcome["same"] else "non"),
+                     "", outcome["warning"], ""]
+            for change in outcome["fields"]:
+                lines.append("%s : %s → %s" %
+                             (change["field"], change["current"],
+                              change["selected"]))
+            if outcome["truncated"]:
+                lines.append("D'autres écarts ne sont pas affichés.")
+            info("\n".join(lines))
+
+        def archive_current():
+            if selected["slot"] is None or selected["kind"] != "long":
+                raise RuleError("Choisir une session longue saine.")
+            if not self.messagebox.askyesno(
+                    "Créer une archive",
+                    "Créer une copie vérifiée du slot sélectionné, "
+                    "sans modifier la partie active ?"):
+                return
+            manager = model._maintenance(campaign.get(), selected["slot"])
+            copied = manager.archive_verified()
+            self.messagebox.showinfo(
+                "Archive créée", "Copie vérifiée : " + copied["name"])
+            refresh_slots()
+
+        def restore():
+            slot, generation = selected_archive()
+            destination = int(target.get())
+            preview = model.restoration_plan(
+                campaign.get(), slot, generation, destination)
+            diff = preview["comparison"]
+            count = len(diff["fields"])
+            message = (
+                "Source : slot %s / %s\n" % (slot, generation) +
+                "Destination : slot %s (doit être vide)\n" % destination +
+                "Mode : %s\n" % preview["summary"]["mode"] +
+                "Différences visibles : %s\n\n" % count +
+                diff["warning"] + "\n\n" + preview["warning"] +
+                "\n\nCréer cette copie maintenant ?")
+            if not self.messagebox.askyesno(
+                    "Confirmer la restauration", message):
+                return
+            restored = model.restore_to_free_slot(
+                campaign.get(), slot, generation, destination,
+                expected_token=preview["token"])
+            self.messagebox.showinfo(
+                "Restauration vérifiée",
+                "Copie créée au slot %s. La partie en cours est inchangée." %
+                restored["slot"])
+            self.campaign_var.set(campaign.get())
+            self.slot_var.set(str(destination))
+            self.long_save_var.set(True)
+            refresh_slots()
+
+        def retention():
+            if selected["slot"] is None or selected["kind"] != "long":
+                raise RuleError("Choisir une session longue saine.")
+            manager = model._maintenance(campaign.get(), selected["slot"])
+            plan = manager.retention_plan(keep=3)
+            if not plan["remove"]:
+                self.messagebox.showinfo(
+                    "Conservation", "Aucune archive ancienne à supprimer.")
+                return
+            if not self.messagebox.askyesno(
+                    "Conservation — suppression irréversible",
+                    "%s anciennes copies seront supprimées. "
+                    "Trois archives vérifiées seront conservées.\n\n%s\n\n"
+                    "Les sauvegardes actives et fichiers de secours "
+                    "resteront intacts. Confirmer ?" %
+                    (len(plan["remove"]), "\n".join(plan["remove"]))):
+                return
+            manager.prune_archives(keep=3, expected_token=plan["token"])
+            refresh_slots()
+
+        slots.bind("<<TreeviewSelect>>", load_details)
+        campaign_box.bind("<<ComboboxSelected>>", refresh_slots)
+        actions = self.ttk.Frame(detail)
+        actions.pack(fill="x", pady=(8, 0))
+        self._button(actions, "Comparer", compare).pack(side="left", padx=3)
+        self._button(actions, "Créer archive", archive_current).pack(
+            side="left", padx=3)
+        self._button(actions, "Restaurer vers slot libre", restore).pack(
+            side="left", padx=3)
+        self._button(actions, "Conserver 3 archives", retention).pack(
+            side="left", padx=3)
+        self._button(actions, "Actualiser", refresh_slots).pack(
+            side="right", padx=3)
+        refresh_slots()
 
     def _new_game(self):
         cid, slot = self.campaign_var.get(), int(self.slot_var.get())
@@ -567,6 +885,12 @@ class PlayerApplication:
         self._heading(self.project.campaign(session.campaign_id)["name"],
                       "Or : " + str(session.progress.gold) +
                       "    Missions terminées : " + str(len(session.progress.completed)))
+        if self.chapter_one:
+            chapter_ids = {"a1_01_route", "a1_02_pont", "a1_03_hospice",
+                           "a1_04a_archives", "a1_04b_otages", "a1_05_vaucouleurs"}
+            completed = len(set(session.progress.completed) & chapter_ids)
+            self.ttk.Label(self.view, text=f"CHAPITRE I  ·  {completed}/5 étapes").pack(
+                anchor="w", pady=(0, 10))
         # Visible roster: recruitment and equipment have actual tactical effects.
         if session.progress.heroes:
             roster = self.ttk.LabelFrame(self.view, text="Équipe et progression", padding=8)
@@ -639,11 +963,16 @@ class PlayerApplication:
                 self._button(self.view, "Commandement multi-fronts",
                              lambda: self.front_setup(available)).pack(pady=16)
             if not available:
-                self.ttk.Label(self.view,
-                               text="Campagne terminée : aucun objectif disponible.").pack(pady=20)
+                finished = (self.chapter_one and
+                            session.progress.story_flags.get("acte1_complete"))
+                message = ("Chapitre I terminé — Vaucouleurs. Votre décision "
+                           "est conservée pour la suite." if finished else
+                           "Campagne terminée : aucun objectif disponible.")
+                self.ttk.Label(self.view, text=message).pack(pady=20)
         footer = self.ttk.Frame(self.view)
         footer.pack(side="bottom", fill="x", pady=12)
         self._button(footer, "Inspecter la campagne", self._campaign_flow_inspector).pack(side="left", padx=6)
+        self._button(footer, "Sauvegardes", self.save_manager_screen).pack(side="left", padx=6)
         self._button(footer, "Sauvegarder", self.player.save).pack(side="left", padx=6)
         self._button(footer, "Menu principal", self.title_screen).pack(side="left", padx=6)
 
@@ -809,15 +1138,33 @@ class PlayerApplication:
         board = self.tk.Canvas(area, width=690, height=495,
                                highlightthickness=0, background="#314936")
         board.pack(side="left", padx=8, pady=6)
-        draw_exploration(board, stage)
+        iso_scene = None
+        if self.iso_view_var.get():
+            iso_scene = IsoExplorationCanvas(board)
+            iso_scene.draw(stage)
+            # Preserve the cached Tk PhotoImages for the lifetime of the canvas.
+            board.iso_scene = iso_scene
+        else:
+            draw_exploration(board, stage)
         def click(event):
-            x, y = int((event.x - 42) // 58), int((event.y - 25) // 58)
+            if iso_scene is not None:
+                cell = iso_scene.hit_test(event.x, event.y)
+                if cell is None:
+                    return
+                x, y = cell
+            else:
+                x, y = int((event.x - 42) // 58), int((event.y - 25) // 58)
+                if not (0 <= x < stage["width"] and 0 <= y < stage["height"]):
+                    return
             px, py = stage["position"]
             if abs(x - px) + abs(y - py) == 1:
                 self._safe(lambda: self._exploration_step(x - px, y - py))
         board.bind("<Button-1>", click)
         sidebar = self.ttk.Frame(area, padding=10)
         sidebar.pack(side="left", fill="both", expand=True)
+        self.ttk.Checkbutton(
+            sidebar, text="Vue isométrique 2.5D", variable=self.iso_view_var,
+            command=self.show).pack(anchor="w", pady=(0, 8))
         self.ttk.Label(sidebar, text="Déplacement : flèches / ZQSD (WASD)",
                        wraplength=310).pack(anchor="w", pady=(4, 8))
         self.ttk.Label(sidebar, text="Cliquer une case voisine pour marcher.",
@@ -950,11 +1297,19 @@ class PlayerApplication:
             self.strategy_screen()
             return
         self.audio.music_for(f"mission_{battle.mission.id}", "battle")
-        self._heading(battle.mission.name,
-                      "Tick " + str(battle.tick) + "    " +
-                      ("Résultat : " + battle.result if battle.result else
-                       "Déploiement" if battle.deploying else
-                       "Unité active : " + (battle.active.name if battle.active else "?")))
+        title_row = self.ttk.Frame(self.view)
+        title_row.pack(fill="x", pady=(0, 3))
+        self.ttk.Label(
+            title_row, text=battle.mission.name,
+            font=("TkDefaultFont", round(16 * self.text_scale.get() / 100),
+                  "bold")).pack(side="left")
+        self.ttk.Label(
+            title_row, text=("Tick " + str(battle.tick) + " · " +
+                 ("Résultat : " + str(battle.result) if battle.result else
+                  "Déploiement" if battle.deploying else
+                  "Actif : " + (battle.active.name if battle.active else "CT"))),
+            font=("TkDefaultFont", round(10 * self.text_scale.get() / 100))
+        ).pack(side="right")
         self.ttk.Label(
             self.view, text="Objectif : " + str(battle.mission.objective),
             font=("TkDefaultFont", round(12 * self.text_scale.get() / 100), "bold")
@@ -962,30 +1317,6 @@ class PlayerApplication:
         self.feedback_var.set("")
         self.ttk.Label(self.view, textvariable=self.feedback_var,
                        wraplength=1050).pack(anchor="w", pady=(3, 5))
-        if not self.compact_hud.get():
-            # Reuse authored portrait bindings; retain thumbnails for Tk lifetime.
-            from .tk_images import resize_photo
-            portraits = self.ttk.Frame(self.view)
-            portraits.pack(fill="x", pady=(3, 5))
-            portrait_renderer = CanvasRenderer(
-                portraits, registry=self.registry, asset_root=self.asset_root)
-            for actor in [u for u in battle.units if u.team == "player"][:6]:
-                card = self.ttk.Frame(portraits)
-                card.pack(side="left", padx=5)
-                photo = portrait_renderer.image("portrait", actor.id)
-                if photo is not None:
-                    try:
-                        thumb = resize_photo(photo, 48, 48, master=card)
-                        icon = self.ttk.Label(card, image=thumb,
-                                              text=actor.name)
-                        icon.image = thumb
-                        icon.pack(anchor="center")
-                    except (ValueError, self.tk.TclError):
-                        pass
-                self.ttk.Label(
-                    card, text=actor.name + " · PV " + str(actor.hp) +
-                    "/" + str(actor.max_hp) + " · MP " + str(actor.mp) +
-                    "/" + str(actor.max_mp)).pack(anchor="center")
         nav = self.ttk.Frame(self.view)
         nav.pack(fill="x", pady=4)
         if session.mode == "fronts":
@@ -1005,32 +1336,109 @@ class PlayerApplication:
         self.ttk.Checkbutton(nav, text="Suivi playtest",
                              variable=self.playtest_optin,
                              command=self._toggle_playtest).pack(side="right", padx=4)
-        self.ttk.Checkbutton(nav, text="Vue isométrique 2.5D",
-                             variable=self.iso_view_var,
-                             command=self._switch_projection).pack(side="right", padx=8)
+        # R7.10 shell: fixed action toolbar below a flexible battle viewport.
+        # Only three thin rows sit above the map (title, navigation, CT).
+        self.hud_footer = self.ttk.LabelFrame(
+            self.view, text="Actions tactiques", padding=(7, 4))
+        self.hud_footer.pack(side="bottom", fill="x", pady=(4, 0))
+        self.hud_workspace = self.ttk.Frame(self.view)
+        self.hud_workspace.pack(fill="both", expand=True)
+        ct_strip = self.ttk.LabelFrame(
+            self.hud_workspace, text="Ordre des activations · CT estimé", padding=(8, 3))
+        ct_strip.pack(fill="x", pady=(2, 4))
+        self.ttk.Label(ct_strip, textvariable=self.hud_timeline_var,
+                       wraplength=1000, justify="left").pack(anchor="w")
+        self.hud_panes = self.ttk.Panedwindow(
+            self.hud_workspace, orient="horizontal")
+        self.hud_panes.pack(fill="both", expand=True)
+        self.hud_map = self.ttk.Frame(self.hud_panes)
+        self.hud_sidebar = self.ttk.Frame(self.hud_panes, width=320)
+        self.hud_panes.add(self.hud_map, weight=4)
+        if self.hud_sidebar_visible.get():
+            self.hud_panes.add(self.hud_sidebar, weight=1)
+        self.hud_tools = self.ttk.Frame(self.hud_sidebar)
+        self.hud_tools.pack(fill="x", pady=(0, 4))
         self.ttk.Checkbutton(
-            nav, text="Aide tactique", variable=self.guidance_enabled,
-            command=self._toggle_guidance).pack(side="right", padx=8)
+            self.hud_tools, text="Vue 2.5D", variable=self.iso_view_var,
+            command=self._switch_projection).grid(row=0, column=0, sticky="w")
         self.ttk.Checkbutton(
-            nav, text="Prévision d'action", variable=self.preview_enabled,
-            command=self._toggle_action_preview).pack(side="right", padx=8)
+            self.hud_tools, text="Aide", variable=self.guidance_enabled,
+            command=self._toggle_guidance).grid(row=0, column=1, sticky="w")
+        self.ttk.Checkbutton(
+            self.hud_tools, text="Aperçu", variable=self.preview_enabled,
+            command=self._toggle_action_preview).grid(row=0, column=2, sticky="w")
+        self.ttk.Checkbutton(
+            self.hud_tools, text="Journal", variable=self.hud_log_visible,
+            command=self._toggle_combat_log).grid(row=1, column=0, sticky="w")
+        self.hud_tools.columnconfigure(0, weight=1)
+        self.hud_tools.columnconfigure(1, weight=1)
+        self.hud_tools.columnconfigure(2, weight=1)
+        focus = self.ttk.LabelFrame(
+            self.hud_sidebar, text="Personnage actif", padding=(6, 4))
+        focus.pack(fill="x", pady=(0, 4))
+        self.hud_portrait = self.ttk.Label(focus, width=5)
+        self.hud_portrait.pack(side="left", padx=(0, 7))
+        self.ttk.Label(
+            focus, textvariable=self.hud_focus_var, wraplength=225,
+            justify="left").pack(side="left", fill="x", expand=True)
+        self.hud_portrait_renderer = CanvasRenderer(
+            focus, registry=self.registry, asset_root=self.asset_root)
+        self.ttk.Label(
+            self.hud_sidebar, textvariable=self.hud_objective_var,
+            wraplength=285, justify="left").pack(anchor="w", pady=(0, 4))
+        self.hud_notebook = self.ttk.Notebook(self.hud_sidebar)
+        self.hud_notebook.pack(fill="both", expand=True)
+        self.hud_tactics_tab = self.ttk.Frame(self.hud_notebook)
+        self.hud_journal_tab = self.ttk.Frame(self.hud_notebook)
+        self.hud_party_tab = self.ttk.Frame(self.hud_notebook)
+        self.hud_assistance_tab = self.ttk.Frame(self.hud_notebook)
+        self.hud_notebook.add(self.hud_tactics_tab, text="Tactique")
+        self.hud_notebook.add(self.hud_journal_tab, text="Journal")
+        self.hud_notebook.add(self.hud_party_tab, text="Équipe")
+        self.hud_notebook.add(self.hud_assistance_tab, text="Assistance")
+        self.hud_journal = self.tk.Text(
+            self.hud_journal_tab, wrap="word", height=7,
+            bg="#000000" if self.high_contrast.get() else "#182a40",
+            fg="#ffffff" if self.high_contrast.get() else "#e9f2fc",
+            font=("TkDefaultFont", round(10 * self.text_scale.get() / 100)),
+            relief="flat", state="disabled")
+        self.hud_journal.pack(fill="both", expand=True)
+        self.hud_party = self.tk.Text(
+            self.hud_party_tab, wrap="word", height=6,
+            bg="#000000" if self.high_contrast.get() else "#182a40",
+            fg="#ffffff" if self.high_contrast.get() else "#e9f2fc",
+            font=("TkDefaultFont", round(10 * self.text_scale.get() / 100)),
+            relief="flat", state="disabled")
+        self.hud_party.pack(fill="both", expand=True)
+        if not self.hud_log_visible.get():
+            self.hud_notebook.hide(self.hud_journal_tab)
+        # Sidebar may be collapsed without losing the tactical action bar.
+        self._button(nav, "Panneau latéral", self._toggle_hud_sidebar).pack(
+            side="left", padx=3)
         if not session.finalized and not battle.result:
-            actions = self.ttk.Frame(self.view)
-            actions.pack(fill="x", pady=9)
+            actions = self.ttk.Frame(self.hud_footer)
+            actions.pack(fill="x", pady=1)
+            select_row = self.ttk.Frame(actions)
+            select_row.pack(fill="x")
+            commit_row = self.ttk.Frame(actions)
+            commit_row.pack(fill="x")
             if battle.deploying:
                 options = ["deploy", "start_battle"]
                 players = [u.id for u in battle.units if u.team == "player" and u.alive]
                 if self.unit_var.get() not in players:
                     self.unit_var.set(players[0] if players else "")
-                self.ttk.Label(actions, text="Héros").pack(side="left")
-                self.ttk.Combobox(actions, textvariable=self.unit_var,
-                                  values=players, state="readonly", width=11).pack(
-                                      side="left", padx=5)
+                self.ttk.Label(select_row, text="Héros").pack(side="left")
+                hero_box = self.ttk.Combobox(
+                    select_row, textvariable=self.unit_var,
+                    values=players, state="readonly", width=11)
+                hero_box.pack(side="left", padx=5)
+                hero_box.bind("<<ComboboxSelected>>",
+                              lambda _event: self._redraw())
             elif battle.active is None:
                 options = []
             elif battle.active.team == "enemy":
                 options = []
-                self._button(actions, "Jouer l'activation IA",
+                self._button(commit_row, "Jouer l'activation IA",
                              lambda: self._change(self.player.ai_turn)).pack(side="left")
             else:
                 active_level = battle.unit_levels.get(battle.active.id, 0)
@@ -1055,17 +1463,17 @@ class PlayerApplication:
             if options:
                 if self.action_var.get() not in options:
                     self.action_var.set(options[0])
-                self.ttk.Label(actions, text="Action").pack(side="left", padx=5)
+                self.ttk.Label(select_row, text="Action").pack(side="left", padx=5)
                 action_box = self.ttk.Combobox(
-                    actions, textvariable=self.action_var,
+                    select_row, textvariable=self.action_var,
                     values=options, state="readonly", width=23)
                 action_box.pack(side="left", padx=7)
                 action_box.bind("<<ComboboxSelected>>",
                                 lambda _event: self._redraw())
                 if battle.mission.level_links:
-                    self.ttk.Label(actions, text="Étage cible").pack(side="left")
+                    self.ttk.Label(select_row, text="Étage cible").pack(side="left")
                     floor_box = self.ttk.Combobox(
-                        actions, textvariable=self.level_var, state="readonly",
+                        select_row, textvariable=self.level_var, state="readonly",
                         values=tuple(range(0, 1+max(
                             max(row["from"][0], row["to"][0])
                             for row in battle.mission.level_links))),
@@ -1073,28 +1481,30 @@ class PlayerApplication:
                     floor_box.pack(side="left")
                     floor_box.bind("<<ComboboxSelected>>",
                                    lambda _event: self._redraw())
-                self.ttk.Label(actions, text="Orientation").pack(side="left")
-                self.ttk.Combobox(actions, textvariable=self.facing_var, state="readonly",
+                self.ttk.Label(commit_row, text="Orientation").pack(side="left")
+                self.ttk.Combobox(commit_row, textvariable=self.facing_var, state="readonly",
                                   values=["north", "south", "east", "west"],
                                   width=9).pack(side="left", padx=6)
-                self._button(actions, "Exécuter", self._execute).pack(side="left", padx=5)
+                self._button(commit_row, "Exécuter", self._execute).pack(side="left", padx=5)
                 if not battle.deploying:
-                    self._button(actions, "Fin de tour", self._end).pack(side="left", padx=5)
+                    self._button(commit_row, "Fin de tour", self._end).pack(side="left", padx=5)
         self.guide_panel = self.ttk.LabelFrame(
-            self.view, text="Aide tactique contextuelle", padding=9)
+            self.hud_assistance_tab, text="Aide tactique contextuelle",
+            padding=6)
         self.ttk.Label(
             self.guide_panel, textvariable=self.guidance_var,
             wraplength=970, justify="left").pack(anchor="w")
         if self.guidance_enabled.get():
             self.guide_panel.pack(fill="x", pady=4)
         self.preview_panel = self.ttk.LabelFrame(
-            self.view, text="Prévision de l'action (sans l'exécuter)", padding=8)
+            self.hud_assistance_tab, text="Prévision de l'action (sans l'exécuter)",
+            padding=6)
         self.ttk.Label(self.preview_panel, textvariable=self.preview_var,
                        wraplength=950, justify="left").pack(anchor="w")
         if self.preview_enabled.get():
             self.preview_panel.pack(fill="x", pady=3)
-        body = self.ttk.Frame(self.view)
-        body.pack(fill="both", expand=True, pady=9)
+        body = self.ttk.Frame(self.hud_map)
+        body.pack(fill="both", expand=True)
         self.canvas = self.tk.Canvas(
             body, background="#172638", takefocus=1, highlightthickness=2,
             highlightcolor="#ffeb70", highlightbackground="#446077")
@@ -1103,6 +1513,7 @@ class PlayerApplication:
                                        asset_root=self.asset_root)
         self.iso_renderer = IsoBattleCanvas(self.canvas)
         self.canvas.bind("<Button-1>", self._select_cell)
+        self.canvas.bind("<Configure>", self._on_battle_canvas_resize)
         self.canvas.bind("<Motion>", self._preview_motion)
         self.canvas.bind("<Leave>", self._preview_leave)
         self._bind_battle_keys()
@@ -1112,24 +1523,19 @@ class PlayerApplication:
         self.canvas.bind("<ButtonPress-2>", self._pan_start)
         self.canvas.bind("<B2-Motion>", self._pan_drag)
         self.info = self.tk.Text(
-            body, width=29 if self.compact_hud.get() else 37, wrap="word",
+            self.hud_tactics_tab, width=30, wrap="word",
             fg="#ffffff" if self.high_contrast.get() else "#e9f2fc",
             bg="#000000" if self.high_contrast.get() else "#182a40",
             font=("TkDefaultFont", round(11 * self.text_scale.get() / 100)),
             relief="flat")
-        self.info.pack(side="right", fill="y", padx=(9, 0))
+        self.info.pack(fill="both", expand=True)
         self._redraw()
+        # Action instructions remain in Options and Assistance; do not consume
+        # another permanent 40px row under the map.
         self.canvas.focus_set()
-        self.ttk.Label(
-            self.view,
-            text="Carte : " + self.keymap.get("execute") + " = action ; " +
-            self.keymap.get("end") + " = fin de tour ; flèches = sélection ; " +
-            "Ctrl+flèches = caméra ; raccourcis modifiables dans Options. "
-            "Menaces : terrain certain, sorts programmés, réactions armées, charges possibles."
-        ).pack(anchor="w")
         if not session.finalized:
-            self._button(self.view, "Abandonner l'opération",
-                         self._abandon).pack(anchor="e", pady=4)
+            self._button(nav, "Abandonner l'opération",
+                         self._abandon).pack(side="left", padx=3)
 
 
     def _bind_battle_keys(self):
@@ -1138,11 +1544,84 @@ class PlayerApplication:
             self.canvas.bind(sequence, lambda _event, name=action:
                              self._key_action(name))
 
+    def _update_hud_portrait(self, battle):
+        """Present the selected deploy hero or current unit, with safe fallback."""
+        if self.hud_portrait is None:
+            return
+        active = battle.active
+        if active is None and battle.deploying:
+            active = next(
+                (u for u in battle.units if u.id == self.unit_var.get()
+                 and u.team == "player"), None)
+        if active is None or self._hud_portrait_unit == active.id:
+            return
+        self._hud_portrait_unit = active.id
+        if battle.deploying:
+            self.hud_focus_var.set(
+                active.name + " · PV " + str(active.hp) + "/" + str(active.max_hp)
+                + " · MP " + str(active.mp) + "/" + str(active.max_mp))
+        image = self.hud_portrait_renderer.image("portrait", active.id)
+        if image is not None:
+            try:
+                from .tk_images import resize_photo
+                thumb = resize_photo(image, 48, 48, master=self.hud_portrait)
+                self.hud_portrait.configure(image=thumb, text="")
+                self.hud_portrait.image = thumb
+                return
+            except (ValueError, self.tk.TclError):
+                pass
+        self.hud_portrait.configure(image="", text=active.name[:1].upper())
+        self.hud_portrait.image = None
+
+    def _on_battle_canvas_resize(self, event):
+        """Refresh renderer cache and isometric centering after a resize."""
+        if self.canvas is not None and event.widget is self.canvas:
+            self._schedule_battle_viewport_refresh()
+
+    def _schedule_battle_viewport_refresh(self):
+        if self._hud_resize_job is not None:
+            return
+        revision = self.presentation.revision
+        def refresh():
+            self._hud_resize_job = None
+            if (self.presentation.current(revision)
+                    and self.presentation.screen == "battle"
+                    and self.canvas is not None):
+                self._redraw()
+        self._hud_resize_job = self.root.after_idle(refresh)
+
+    def _toggle_hud_sidebar(self):
+        if self.hud_panes is None or self.hud_sidebar is None:
+            return
+        if self.hud_sidebar_visible.get():
+            self.hud_panes.forget(self.hud_sidebar)
+            self.hud_sidebar_visible.set(False)
+        else:
+            self.hud_panes.add(self.hud_sidebar, weight=1)
+            self.hud_sidebar_visible.set(True)
+        if self.canvas is not None:
+            self.canvas.focus_set()
+            self._schedule_battle_viewport_refresh()
+
+    def _toggle_combat_log(self):
+        if self.hud_notebook is None:
+            return
+        if self.hud_log_visible.get():
+            self.hud_notebook.add(self.hud_journal_tab, text="Journal")
+            self.hud_notebook.select(self.hud_journal_tab)
+        else:
+            self.hud_notebook.select(self.hud_tactics_tab)
+            self.hud_notebook.hide(self.hud_journal_tab)
+        if self.canvas is not None:
+            self.canvas.focus_set()
+
     def _toggle_guidance(self):
         if self.guide_panel is None:
             return
         if self.guidance_enabled.get():
-            self.guide_panel.pack(fill="x", pady=4, before=self.canvas.master)
+            self.guide_panel.pack(fill="x", pady=4)
+            if self.hud_notebook is not None:
+                self.hud_notebook.select(self.hud_assistance_tab)
             self._redraw()
         else:
             self.guide_panel.pack_forget()
@@ -1154,7 +1633,9 @@ class PlayerApplication:
         if self.preview_panel is None or self.canvas is None:
             return
         if self.preview_enabled.get():
-            self.preview_panel.pack(fill="x", pady=3, before=self.canvas.master)
+            self.preview_panel.pack(fill="x", pady=3)
+            if self.hud_notebook is not None:
+                self.hud_notebook.select(self.hud_assistance_tab)
             self._update_action_preview()
         else:
             self.preview_panel.pack_forget()
@@ -1457,6 +1938,24 @@ class PlayerApplication:
         self._preview_hover = None
         self._update_action_preview()
         hud = combat_hud(frame, battle.mission.objective, self.selection)
+        sections = combat_hud_sections(
+            frame, battle.mission.objective, compact=self.compact_hud.get())
+        self.hud_timeline_var.set(
+            "  |  ".join(sections.timeline) if sections.timeline
+            else "Aucune activation CT actuellement disponible")
+        self.hud_focus_var.set(sections.focus)
+        self._update_hud_portrait(battle)
+        self.hud_objective_var.set("Objectif : " + sections.objective)
+        self.hud_party_var.set("\n".join(sections.party))
+        for widget, content in ((self.hud_journal,
+                                  "\n".join(sections.journal)
+                                  if sections.journal else "Aucun événement récent"),
+                                 (self.hud_party, self.hud_party_var.get())):
+            if widget is not None:
+                widget.configure(state="normal")
+                widget.delete("1.0", "end")
+                widget.insert("1.0", content)
+                widget.configure(state="disabled")
         self.feedback_var.set(hud.selection_summary)
         if self.guidance_enabled.get():
             guide = combat_guidance(frame, self.action_var.get(), self.selection)
@@ -1517,11 +2016,7 @@ class PlayerApplication:
                    if tuple(self.selection) in threats.get(kind, set())]
         rows.append("Case sélectionnée : " +
                     (", ".join(on_cell) if on_cell else "aucune menace signalée"))
-        rows.extend(["", "Prochaines activations (CT estimé)"])
-        rows.extend(f"{entry['unit']} : " +
-                    ("actif" if entry["active"] else
-                     "bloqué" if entry["eta_ticks"] is None else
-                     "t+" + str(entry["eta_ticks"])) for entry in frame.timeline)
+        # CT has its own persistent top strip; don't duplicate it in the sidebar.
         if frame.casts:
             rows.extend(["", "Incantations annoncées"])
             rows.extend(f"{cast['unit']} : {cast['skill']} dans {cast['remaining_ticks']} ticks"
@@ -1529,8 +2024,7 @@ class PlayerApplication:
         if frame.charges:
             rows.extend(["", "Charges possibles (non garanties)"])
             rows.extend(f"{charge['unit']} → {charge['target']}" for charge in frame.charges)
-        rows.extend(["", "Journal"])
-        rows.extend(str(event) for event in frame.events[-15:])
+        # Journal has a dedicated, collapsible notebook tab.
         self.info.configure(state="normal")
         self.info.delete("1.0", "end")
         self.info.insert("1.0", "\n".join(rows))
@@ -1896,5 +2390,6 @@ class PlayerApplication:
         self.root.mainloop()
 
 
-def launch(content_path, project_path=None, profile_path=None):
-    PlayerApplication(content_path, project_path, profile_path).run()
+def launch(content_path, project_path=None, profile_path=None, *, chapter_one=False):
+    PlayerApplication(content_path, project_path, profile_path,
+                      chapter_one=chapter_one).run()

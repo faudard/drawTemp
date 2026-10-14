@@ -1,0 +1,44 @@
+name: Player Save Manager R8.19
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/save_manager.py'
+      - 'sporebound/player_app.py'
+      - 'tests_standalone/test_save_manager_r819.py'
+      - 'tests_standalone/test_save_manager_r819_gui.py'
+      - 'docs/PLAYER_SAVE_MANAGER_R819.md'
+      - '.github/workflows/player-save-manager-r819.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  save-manager:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.11']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Headless Save Manager contracts
+        run: python -m unittest discover -s tests_standalone -p test_save_manager_r819.py -v
+      - name: Prior Save Integrity and Player compatibility
+        run: |
+          python -m unittest discover -s tests_standalone -p test_save_maintenance_r818.py -v
+          python -m unittest discover -s tests_standalone -p test_long_session_player_r8.py -v
+          python -m unittest discover -s tests_standalone -p test_persistence_fault_r817.py -v
+          python -m unittest discover -s tests_standalone -p test_save_contract.py -v
+      - name: Compile headless and Tk presentation
+        run: |
+          python -m compileall -q sporebound/save_manager.py sporebound/player_app.py
+      - name: Real Tk Save Manager smoke (Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a env SPOREBOUND_GUI_SMOKE=1 python -m unittest discover -s tests_standalone -p test_save_manager_r819_gui.py -v

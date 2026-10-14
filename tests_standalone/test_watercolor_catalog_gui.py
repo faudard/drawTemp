@@ -19,7 +19,7 @@ from sporebound.watercolor_catalog import (
 @unittest.skipUnless(os.environ.get("SPOREBOUND_GUI_SMOKE") == "1",
                      "Requires a real Tk display")
 class WatercolorCatalogGuiTests(unittest.TestCase):
-    def test_88_sprites_15_animations_and_certified_preview(self):
+    def test_99_sprites_15_animations_and_certified_preview(self):
         import tkinter as tk
         root = tk.Tk()
         try:
@@ -65,7 +65,7 @@ class WatercolorCatalogGuiTests(unittest.TestCase):
 
             palette.tree.selection_set("watercolor:jeanne_idle")
             palette.select()
-            self.assertIn("PNG absent", palette.detail.get())
+            self.assertIn("Sprite V3 vérifié", palette.detail.get())
             self.assertTrue(palette.use_button.instate(["disabled"]))
             palette.use()
             self.assertEqual(chosen, [])
@@ -74,15 +74,15 @@ class WatercolorCatalogGuiTests(unittest.TestCase):
             palette.select()
             self.assertTrue(palette.watercolor_animation_controls.winfo_manager())
             self.assertEqual(tuple(palette.watercolor_frame_selector["values"]),
-                             ("0", "1"))
-            palette.watercolor_frame.set("1")
+                             tuple(str(i) for i in range(8)))
+            palette.watercolor_frame.set("4")
             palette.preview()
             self.assertIn("jeanne_walk_b", palette.detail.get())
             palette.play_watercolor()
             self.assertIsNotNone(palette._watercolor_timer)
             palette.stop_watercolor()
             self.assertIsNone(palette._watercolor_timer)
-            palette.watercolor_frame.set("1")
+            palette.watercolor_frame.set("4")
             palette.preview()
 
             # Publish one matching preview sprite in an isolated temp gallery.

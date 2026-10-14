@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.editor import launch
@@ -66,7 +67,7 @@ class MapBuilder4GUITests(unittest.TestCase):
                     root.update()
                     buttons['Remplir sélection'].invoke()
                     root.update()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = json.loads(output.read_text(encoding='utf-8'))
                     tiles = {tuple(t['pos']): t
                              for t in saved['missions'][0]['board']['tiles']}

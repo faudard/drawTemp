@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -76,7 +77,7 @@ class QuarterGeneratorGUITests(unittest.TestCase):
                     self.assertTrue(list((Path(folder) / 'prefabs').glob('*.json')))
                     buttons['Confirmer placement'].invoke()
                     root.update()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     result = json.loads(saved.read_text(encoding='utf-8'))
                     scene = next(m for m in result['missions']
                                  if m['id'] == 'quarter_gui_3732e')
@@ -84,7 +85,7 @@ class QuarterGeneratorGUITests(unittest.TestCase):
                     self.assertEqual(len(scene['objects']), 1)
                     self.assertTrue(Content.from_dict(result))
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     undone = json.loads(saved.read_text(encoding='utf-8'))
                     scene = next(m for m in undone['missions']
                                  if m['id'] == 'quarter_gui_3732e')

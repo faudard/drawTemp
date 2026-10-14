@@ -1,4 +1,4 @@
-"""python -m sporebound: validate, simulate, replay, play or edit."""
+"""DrawTemp tactical CLI (legacy sporebound import path retained)."""
 import argparse
 from dataclasses import asdict
 import json
@@ -11,17 +11,19 @@ from .engine import Battle
 from .model import Content, RuleError
 from .storage import load_battle, save_battle
 
+# Legacy test fixture constant, intentionally preserved.
 DEFAULT_CONTENT = Path(__file__).parent / 'content' / 'core.json'
+DEFAULT_GAME_CONTENT = Path(__file__).parent / 'content' / 'jeanne.json'
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Sporebound standalone gameplay workbench')
-    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','tactical-choices','tactical-quality','full-activation','export'])
-    parser.add_argument('--content', type=Path, default=DEFAULT_CONTENT)
+    parser = argparse.ArgumentParser(description="DrawTemp — Jeanne d'Arc RPG and Game Studio")
+    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','jeanne-chapter1','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','tactical-choices','tactical-quality','full-activation','export'])
+    parser.add_argument('--content', type=Path, default=DEFAULT_GAME_CONTENT)
     parser.add_argument('--project', type=Path, help='Game presentation manifest for player')
     parser.add_argument('--output', type=Path, help='Destination ZIP for export')
     parser.add_argument('--profile', type=Path, help='Writable player profile path')
-    parser.add_argument('--mission', default='garden')
+    parser.add_argument('--mission', help='Mission ID (default: first mission of selected content)')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--limit', type=int, default=1000)
     parser.add_argument('--runs', type=int, default=20, help='Number of deterministic balance seeds')
@@ -61,6 +63,12 @@ def main(argv=None):
     parser.add_argument('--unequip', choices=['weapon','armor','accessory'])
     args = parser.parse_args(argv)
     try:
+        if args.command == 'jeanne-chapter1':
+            from .player_app import launch as launch_player
+            launch_player(DEFAULT_GAME_CONTENT,
+                          DEFAULT_GAME_CONTENT.with_suffix(".game.json"),
+                          args.profile, chapter_one=True)
+            return 0
         if args.command == 'player':
             from .player_app import launch as launch_player
             launch_player(args.content, args.project, args.profile)
@@ -76,6 +84,8 @@ def main(argv=None):
             print(json.dumps({'verified':True,'digest':battle.digest(),'result':battle.result}))
             return 0
         content = Content.load(args.content)
+        if args.mission is None:
+            args.mission = next(iter(content.missions))
         if args.command == 'export':
             if args.project is None or args.output is None:
                 parser.error('export requires --project and --output')

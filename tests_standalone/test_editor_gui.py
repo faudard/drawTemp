@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.editor import launch
@@ -35,7 +36,7 @@ class EditorGUITests(unittest.TestCase):
                     root.update()
                     buttons['Annuler'].invoke()
                     buttons['Rétablir'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertTrue(output.exists())
                     data = json.loads(output.read_text(encoding='utf-8'))
                     self.assertTrue(next(t for t in data['missions'][0]['board']['tiles'] if t['pos']==[0,0])['blocked'])

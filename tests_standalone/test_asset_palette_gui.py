@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -69,6 +70,71 @@ class AssetPaletteGUITests(unittest.TestCase):
                 self.assertEqual(len(selected), 1)
         finally:
             root.destroy()
+
+    def test_browser_collections_favorites_and_recents_survive_reopen(self):
+        import tkinter as tk
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'scene.asset-browser.json'
+            root = tk.Tk()
+            try:
+                canvas = tk.Canvas(root)
+                chosen = []
+                palette = AssetPalette(
+                    root, terrain=IsoTerrainAtlas(canvas),
+                    props=IsoPropAtlas(canvas),
+                    buildings=IsoBuildingAtlas(canvas),
+                    fortifications=IsoFortificationAtlas(canvas),
+                    choose=lambda e, t: chosen.append(e.id) or True,
+                    cell_size=lambda: 54,
+                    preferences_path=lambda: path)
+                root.update()
+                self.assertTrue(palette.tree.exists('group:terrain'))
+                self.assertTrue(palette.tree.exists('group:characters'))
+                self.assertTrue(palette.tree.exists('watercolor-group:jeanne'))
+                self.assertTrue(palette.tree.exists('feature:tree'))
+
+                # The family sidebar is functional, not just a label.
+                palette.nav.selection_set('browse:terrain')
+                root.update()
+                self.assertEqual(palette.browse_scope.get(), 'terrain')
+                self.assertEqual(len(palette.tree.get_children()), 8)
+                self.assertFalse(palette.tree.exists('feature:tree'))
+                palette.tree.selection_set('surface:grass')
+                palette.select()
+                palette.favorite_button.invoke()
+                self.assertIn('surface:grass', palette.browser.favorites)
+                palette.nav.selection_set('browse:favorites')
+                root.update()
+                self.assertEqual(tuple(palette.tree.get_children()), ('surface:grass',))
+                self.assertTrue(palette.use_button.instate(['!disabled']))
+
+                # A successfully chosen map asset becomes a recent entry.
+                palette.use_button.invoke()
+                self.assertEqual(chosen, ['surface:grass'])
+                self.assertEqual(palette.browser.recents[0], 'surface:grass')
+                palette.show()
+                palette.nav.selection_set('browse:recents')
+                root.update()
+                self.assertEqual(tuple(palette.tree.get_children()), ('surface:grass',))
+                self.assertIn('surface:grass', path.read_text(encoding='utf-8'))
+                # A new palette instance loads the same per-project bookmarks.
+                from sporebound.asset_browser_state import AssetBrowserState
+                reloaded = AssetBrowserState.load(path)
+                self.assertIn('surface:grass', reloaded.favorites)
+                self.assertEqual(reloaded.recents[0], 'surface:grass')
+
+                palette.nav.selection_set('browse:characters')
+                root.update()
+                self.assertTrue(palette.tree.exists('watercolor-group:jeanne'))
+                self.assertFalse(palette.tree.exists('surface:grass'))
+                palette.tree.selection_set('watercolor-group:jeanne')
+                palette.select()
+                palette.favorite_button.invoke()
+                self.assertIn('watercolor-group:jeanne', palette.browser.favorites)
+                self.assertTrue(palette.use_button.instate(['disabled']))
+                self.assertEqual(chosen, ['surface:grass'])
+            finally:
+                root.destroy()
 
     def test_all_iso_loaders_keep_lower_right_frame_pixels_at_palette_and_map_scales(self):
         import tkinter as tk
@@ -168,7 +234,7 @@ class AssetPaletteGUITests(unittest.TestCase):
                     paint('surface:water', (2, 4))
                     paint('feature:tree', (3, 2))
                     paint('structure:Pont', (6, 6), turns=1)
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     first = Content.load(target)
                     board = first.missions['palette'].board
                     self.assertEqual(board.tile((2, 2)).surface, 'cobble')
@@ -177,19 +243,19 @@ class AssetPaletteGUITests(unittest.TestCase):
                     bridge = next(b for b in architecture_instances(board) if b.name == 'Pont')
                     self.assertEqual((bridge.width, bridge.height), (2, 3))
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertFalse(architecture_instances(Content.load(target).missions['palette'].board))
                     buttons['Rétablir'].invoke()
                     paint('structure:Maison', (9, 9))
                     paint('structure:Rempart', (3, 11))
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = Content.load(target)
                     self.assertEqual({b.name for b in architecture_instances(saved.missions['palette'].board)},
                                      {'Maison', 'Pont', 'Rempart'})
                     # Actual reopen path, not only a decoder assertion.
                     buttons['Ouvrir'].invoke()
                     root.update()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(Content.load(target).to_dict(), saved.to_dict())
                     buttons['Playtest'].invoke()
                     palette.show()

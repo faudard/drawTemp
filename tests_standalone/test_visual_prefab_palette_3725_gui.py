@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -98,7 +99,7 @@ class VisualPrefabPaletteTests(unittest.TestCase):
                     picture.event_generate('<ButtonRelease-1>', x=20, y=20,
                                            rootx=tx, rooty=ty)
                     root.update()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     groups = saved().get('editor_groups', [])
                     self.assertEqual(len(groups), 1)
                     self.assertEqual(groups[0]['cells'], [[5, 6]])
@@ -106,7 +107,7 @@ class VisualPrefabPaletteTests(unittest.TestCase):
                         Content.from_dict(json.loads(out.read_text()))
                         .missions[dest_id].board.tile((5, 6)).feature, 'tree')
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(saved().get('editor_groups', []), [])
                     self.assertEqual(errors, [])
                 finally:

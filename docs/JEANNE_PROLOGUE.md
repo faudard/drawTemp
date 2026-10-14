@@ -4,6 +4,36 @@
 
 L'objectif est de commencer une histoire de Jeanne d'Arc **uchronique** dans le Player existant, sans casser les tests et les scénarios historiques de Sporebound. Le moteur de combat et les sauvegardes restent identiques.
 
+## Présentation du prologue — vue 2.5D par défaut
+
+Le Player lance maintenant **les champs de Domrémy** et **les ruines** en vue
+isométrique, comme les missions tactiques. Le contrôle « Vue isométrique 2.5D »
+dans la colonne de droite permet de repasser en vue orthogonale sans toucher à
+la progression. Le même choix s'applique ensuite à la présentation des combats.
+
+Les cases d'exploration sont toujours une grille logique à quatre voisins :
+flèches / ZQSD / WASD et clic sur le losange adjacent. Le moteur de
+`GameSession.exploration_state()`, les points d'intérêt, délais de secours,
+conditions de sortie et sauvegardes ne changent pas. Un adaptateur convertit
+uniquement les cases narratives en terrains **temporaires** et les affiche par
+`iso_map.render_isometric`, avec l'atlas de Jeanne ; il ne crée pas un modèle
+de carte ni un format de sauvegarde parallèle.
+
+Validation ciblée :
+
+```bash
+python -m unittest tests_standalone.test_exploration_iso_view -v
+python -m unittest tests_standalone.test_exploration_stage -v
+python -m unittest tests_standalone.test_jeanne_prologue -v
+```
+
+Gate manuel : lancer une nouvelle campagne Jeanne, vérifier Jeanne et les
+points d'intérêt en 2.5D, cliquer une case adjacente et examiner un souvenir,
+basculer en 2D, sauvegarder/recharger, puis entrer dans la première mission
+tactique en 2.5D. La représentation de l'exploration conserve des marqueurs
+vectoriels pour les habitants et interactions : une finition artistique dédiée
+de leurs sprites et de leurs animations reste à réaliser.
+
 ## 3.0.3.2 — Le village vivant
 
 Cette étape enrichit l'exploration de Domrémy avec **quatre habitants** :

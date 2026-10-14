@@ -10,6 +10,7 @@ import unicodedata
 
 SECTIONS = (
     "Carte & monde",
+    "Bâtiments",
     "Contenu",
     "Événements",
     "Campagne",
@@ -32,6 +33,8 @@ def section_for(title):
     name = _fold(title)
     if name == "carte et combat" or name.startswith("monde"):
         return "Carte & monde"
+    if name.startswith("editeur de batiment"):
+        return "Bâtiments"
     if name.startswith(("personnages", "bibliotheque d'acte")):
         return "Contenu"
     if any(term in name for term in (
@@ -61,10 +64,14 @@ class StudioNavigation:
     selection events, and all cross-editor links stay unchanged.
     """
 
-    def __init__(self, parent, notebook, tools, map_tab, tk, ttk):
+    def __init__(self, parent, notebook, tools, map_tab, tk, ttk,
+                 building_mode_change=None):
         self.notebook = notebook
         self.tools = tools
         self.map_tab = str(map_tab)
+        self.building_mode_change = building_mode_change
+        self.building_mode = False
+        self._tab_count = 0
         self.tk, self.ttk = tk, ttk
         self.section = tk.StringVar(value="Carte & monde")
         self.view = tk.StringVar()
@@ -151,7 +158,12 @@ class StudioNavigation:
         for tab in self.notebook.tabs():
             title = self.notebook.tab(tab, "text")
             groups[section_for(title)].append((title, tab))
+        # The Building workspace is a mode of the existing map canvas,
+        # not a duplicate editor tab with a second rendering/saving path.
+        if self.map_tab in self.notebook.tabs():
+            groups["Bâtiments"].append(("Éditeur de bâtiments", self.map_tab))
         self.group_tabs = groups
+        self._tab_count = len(self.notebook.tabs())
         for name, button in self.buttons.items():
             if groups[name]:
                 button.state(["!disabled"])
@@ -162,6 +174,11 @@ class StudioNavigation:
         options = self.group_tabs.get(name, ())
         if not options:
             return
+        entering = name == "Bâtiments"
+        if entering != self.building_mode:
+            self.building_mode = entering
+            if self.building_mode_change is not None:
+                self.building_mode_change(entering)
         remembered = self.history.get(name)
         tab = next((tab for _, tab in options if tab == remembered),
                    options[0][1])
@@ -170,6 +187,9 @@ class StudioNavigation:
 
     def choose_view(self, _event=None):
         name = self.view.get()
+        if name == "Éditeur de bâtiments":
+            self.choose_section("Bâtiments")
+            return
         for title, tab in self.group_tabs.get(self.section.get(), ()):
             if title == name:
                 self.notebook.select(tab)
@@ -177,7 +197,7 @@ class StudioNavigation:
 
     def sync(self, _event=None):
         # An editor may register an additional page after shell creation.
-        if sum(map(len, self.group_tabs.values())) != len(self.notebook.tabs()):
+        if self._tab_count != len(self.notebook.tabs()):
             self.rebuild()
         # External navigation (Workspace, Problems, shortcut, restore_layout,
         # or a specialised editor) is reflected in this bar.
@@ -185,7 +205,14 @@ class StudioNavigation:
         if not selected:
             return
         title = self.notebook.tab(selected, "text")
+        if selected != self.map_tab and self.building_mode:
+            self.building_mode = False
+            if self.building_mode_change is not None:
+                self.building_mode_change(False)
         group = section_for(title)
+        if selected == self.map_tab and self.building_mode:
+            group = "Bâtiments"
+            title = "Éditeur de bâtiments"
         self.history[group] = selected
         self.section.set(group)
         self.view_box.configure(

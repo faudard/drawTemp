@@ -15,7 +15,7 @@ from .storage import write_json
 
 @dataclass
 class GameProject:
-    title: str = 'Sporebound'
+    title: str = 'DrawTemp — RPG tactique'
     subtitle: str = 'Une aventure tactique'
     campaigns: list[dict] = field(default_factory=list)
     options: dict = field(default_factory=lambda: {

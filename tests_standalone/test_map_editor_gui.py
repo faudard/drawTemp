@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.editor import launch
@@ -59,13 +60,13 @@ class MapEditorGUITests(unittest.TestCase):
                     canvas.event_generate('<Button-1>', x=232, y=286)
                     canvas.event_generate('<ButtonRelease-1>', x=232, y=286)
                     root.update()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = json.loads(target.read_text(encoding='utf-8'))
                     tiles = {tuple(t['pos']): t for t in saved['missions'][0]['board']['tiles']}
                     self.assertTrue(tiles[(4, 5)]['blocked'])
                     self.assertFalse(tiles.get((5, 5), {}).get('blocked', False))
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     undone = json.loads(target.read_text(encoding='utf-8'))
                     tiles = {tuple(t['pos']): t for t in undone['missions'][0]['board']['tiles']}
                     self.assertFalse(tiles.get((4, 5), {}).get('blocked', False))
@@ -105,7 +106,7 @@ class MapEditorGUITests(unittest.TestCase):
                     brush.set('zone+')
                     canvas.event_generate('<Button-1>', x=20, y=20)
                     canvas.event_generate('<ButtonRelease-1>', x=20, y=20)
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = json.loads(target.read_text(encoding='utf-8'))
                     zone = saved['missions'][0]['deployment'][0]
                     self.assertEqual(zone['id'], 'attackers')
@@ -173,7 +174,7 @@ class MapEditorGUITests(unittest.TestCase):
                     main_canvas.event_generate('<ButtonRelease-1>', x=128, y=20)
                     root.update()
                     buttons['→'].invoke()  # Move chest without changing its ID.
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = json.loads(target.read_text(encoding='utf-8'))
                     mission = saved['missions'][0]
                     tiles = {tuple(t['pos']): t for t in mission['board']['tiles']}
@@ -251,7 +252,7 @@ class MapEditorGUITests(unittest.TestCase):
                     canvas.event_generate('<ButtonRelease-1>', x=x, y=y)
                     root.update()
                     self.assertTrue(canvas.find_withtag('decor_sprite'))
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = json.loads(output.read_text(encoding='utf-8'))
                     tile = next(t for t in saved['missions'][0]['board']['tiles']
                                 if t['pos'] == [3, 3])
@@ -343,7 +344,7 @@ class MapEditorGUITests(unittest.TestCase):
                     buttons['Pipette sol'].invoke()
                     click(int(px-canvas.canvasx(0)), int(py-canvas.canvasy(0)))
                     self.assertEqual(brush.get(), 'surface:dirt')
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = json.loads(output.read_text(encoding='utf-8'))
                     tiles = {tuple(t['pos']): t
                              for t in saved['missions'][0]['board']['tiles']}
@@ -420,17 +421,17 @@ class MapEditorGUITests(unittest.TestCase):
                     self.assertEqual(canvas.itemcget(preview[0], 'outline'),
                                      '#36a16c')
                     click(x, y)
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     first = Content.load(saved_path).missions[mid].board
                     # A 4x3 maison is now a 3x4 rotated footprint.
                     self.assertTrue(first.tile((3, 3)).blocked)
                     self.assertFalse(first.tile((6, 4)).blocked)
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     undone = Content.load(saved_path).missions[mid].board
                     self.assertFalse(undone.tile((3, 3)).blocked)
                     buttons['Rétablir'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     restored = Content.load(saved_path).missions[mid].board
                     self.assertTrue(restored.tile((3, 3)).blocked)
 
@@ -454,7 +455,7 @@ class MapEditorGUITests(unittest.TestCase):
                     root.update()
                     self.assertTrue(canvas.find_withtag('structure_preview'))
                     click(x, y)
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     final = Content.load(saved_path).missions[mid].board
                     self.assertEqual(final.tile((7, 7)).surface, 'bridge')
                     self.assertEqual(final.tile((8, 9)).surface, 'bridge')
@@ -521,7 +522,7 @@ class MapEditorGUITests(unittest.TestCase):
                         root.update()
 
                     click(4*54+12, 4*54+12)
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     board = Content.load(saved).missions[mid].board
                     self.assertTrue(board.tile((3, 3)).blocked)
                     self.assertEqual(board.tile((5, 5)).surface, 'cobble')

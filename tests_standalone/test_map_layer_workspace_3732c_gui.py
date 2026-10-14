@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -81,7 +82,7 @@ class LayerWorkspaceGuiTests(unittest.TestCase):
                     levels.set('1')
                     levels.event_generate('<<ComboboxSelected>>')
                     root.update()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = json.loads(path.read_text(encoding='utf-8'))
                     tiles = {tuple(t['pos']): t for t in
                              saved['missions'][-1]['board']['tiles']}

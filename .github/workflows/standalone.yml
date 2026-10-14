@@ -67,16 +67,16 @@ jobs:
       - run: python -m unittest discover -s tests_standalone -v
       - name: Battle Lab 3.8 CLI report and paired deterministic replay gate
         run: |
-          python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --report battle_lab_ci.json
-          python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --baseline battle_lab_ci.json
+          python -m sporebound battle-lab --content sporebound/content/core.json --mission garden --seed 1 --runs 2 --limit 40 --report battle_lab_ci.json
+          python -m sporebound battle-lab --content sporebound/content/core.json --mission garden --seed 1 --runs 2 --limit 40 --baseline battle_lab_ci.json
       - name: Balance Matrix 3.8.2 paired missions, rules and replay smoke
         run: |
-          python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --report matrix_382_ci.json > matrix_382_console.json
-          python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --baseline matrix_382_ci.json > matrix_382_compare.json
+          python -m sporebound balance-matrix --content sporebound/content/core.json --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --report matrix_382_ci.json > matrix_382_console.json
+          python -m sporebound balance-matrix --content sporebound/content/core.json --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --baseline matrix_382_ci.json > matrix_382_compare.json
       - name: Visual Battle Lab 3.8.3 deterministic figures and CT replay
         run: python -m unittest tests_standalone.test_battle_visual_383 -v
       - name: Combat Diagnostics 3.8.1 canonical trace and CLI replay evidence
-        run: python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 40 --report battle_diagnostics_ci.json
+        run: python -m sporebound battle-diagnostics --content sporebound/content/core.json --mission garden --seed 42 --limit 40 --report battle_diagnostics_ci.json
       - name: Human Playtest Telemetry 3.8.4 opt-in, committed events and privacy
         run: python -m unittest tests_standalone.test_playtest_384 -v
       - name: R6 profiles, AI explainability, strict regression and campaign curves
@@ -85,26 +85,26 @@ jobs:
         run: python -m unittest tests_standalone.test_tactical_choice_r6 -v
       - name: R6.14 bounded CLI report (zero optional multi-choice quota for smoke)
         run: >-
-          python -m sporebound tactical-choices --mission garden
+          python -m sporebound tactical-choices --content sporebound/content/core.json --mission garden
           --seed 1 --limit 60 --choice-min-multi 0
           --report tactical_choices_ci.json
       - name: R6.14 repeat identical choices against saved reference
         run: >-
-          python -m sporebound tactical-choices --mission garden
+          python -m sporebound tactical-choices --content sporebound/content/core.json --mission garden
           --seed 1 --limit 60 --choice-min-multi 0
           --baseline tactical_choices_ci.json
       - name: R6.15 one-command tactical quality and human-gate tests
         run: python -m unittest tests_standalone.test_tactical_quality_r615 -v
       - name: R6.15 report — automated probe is not human certification
         run: >-
-          python -m sporebound tactical-quality --mission garden
+          python -m sporebound tactical-quality --content sporebound/content/core.json --mission garden
           --seed 1 --limit 20 --quality-min-differentiated 0
           --quality-min-tradeoffs 0 --report tactical_quality_ci.json
       - name: R6.16 full activation decision quality and replay
         run: python -m unittest tests_standalone.test_full_activation_r616 -v
       - name: R6.16 headless complete turn smoke (no design claim)
         run: >-
-          python -m sporebound full-activation --mission garden
+          python -m sporebound full-activation --content sporebound/content/core.json --mission garden
           --seed 1 --limit 20 --activation-min-distinct 0
           --activation-min-pairs 0 --report full_activation_ci.json
       - run: python -m sporebound validate
@@ -113,7 +113,7 @@ jobs:
       - name: Validate portable asset example
         run: |
           python examples/asset_pipeline.py --output "${{ runner.temp }}/asset-demo"
-          python -m sporebound validate --project "${{ runner.temp }}/asset-demo/game.json"
+          python -m sporebound validate --content sporebound/content/core.json --project "${{ runner.temp }}/asset-demo/game.json"
       - name: Verify complete campaigns and resumed replays
         run: python -m examples.reliability_gate --seeds 1 7 42 99 --output reliability.json
       - name: Preserve reliability measurements
@@ -122,11 +122,31 @@ jobs:
           name: reliability-${{ matrix.os }}-${{ matrix.python }}
           path: reliability.json
           if-no-files-found: error
-      - run: python -m sporebound simulate --mission garden --seed 42 --save battle.json
+      - run: python -m sporebound simulate --content sporebound/content/core.json --mission garden --seed 42 --save battle.json
       - run: python -m sporebound replay --load battle.json
       - name: Installed package and bundled content outside checkout
         working-directory: ${{ runner.temp }}
         run: sporebound validate
+  campaign-path-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: R5.15 — actual Battle replay, forged path rejection, save isolation
+        run: python -m unittest tests_standalone.test_campaign_path_certification_r515 -v
+      - name: R5.15 — prove both castle endings using real campaigns and checkpoints
+        run: python -m examples.campaign_certification_r515 --report campaign_paths_r515.json
+      - name: Keep R5.15 certificate or failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: campaign-path-certification-r515
+          path: campaign_paths_r515.json
+          if-no-files-found: warn
   editor:
     runs-on: ubuntu-latest
     steps:
@@ -138,7 +158,11 @@ jobs:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest tests_standalone.test_map_builder4_3732d_gui -v
       - name: Development-only watercolor metadata check (NOT release certification)
-        run: python3 scripts/verify_watercolor_release.py --root assets/watercolor --allow-missing
+        run: python3 -m scripts.verify_watercolor_release --root assets/watercolor --allow-missing
+      - name: Jeanne narrative exploration uses real 2.5D PNG and diamond picking
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_exploration_iso_view_gui -v
       - name: Exercise the real editor
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -223,6 +247,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest tests_standalone.test_r7_cinematic_goldens_gui -v
+      - name: Campaign Certification R5.15 — Tk verified-result wiring
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_campaign_path_certification_r515_gui -v
       - name: Campaign Simulation R5.14 — Tk branch exploration and no writes
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -235,6 +263,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest tests_standalone.test_r7_cinematic_studio4_gui -v
+      - name: Verify R7.20 cinematic group authoring, cross-clip paste and Studio history
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_r7_cinematic_batch_gui -v
       - name: Exercise 2.5.4 visual Campaign & Siege Studio
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -278,6 +310,18 @@ jobs:
         with:
           name: terrain-watercolor-materials-3732g
           path: ${{ runner.temp }}/terrain-watercolor-art/terrain_watercolor.png
+          if-no-files-found: error
+      - name: Verify cached animated environment sprite sheets in real Tk (3.7.32J)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_environment_atlases_3732j_gui.py -v
+      - name: Export deterministic animated environment atlas strips (3.7.32J)
+        run: python3 -m sporebound.environment_atlas --output-dir "$RUNNER_TEMP/environment-atlases"
+      - name: Preserve 4 watercolor environment sheets and pivots
+        uses: actions/upload-artifact@v4
+        with:
+          name: animated-environment-atlases-3732j
+          path: ${{ runner.temp }}/environment-atlases/
           if-no-files-found: error
       - name: Verify animated grass, reeds, foliage and water in real Tk (3.7.32I)
         env:
@@ -528,6 +572,22 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m unittest tests_standalone.test_player_action_preview_r7_gui -v
+      - name: R7.10 responsive Combat HUD panes, CT, toolbar, keyboard and high contrast
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m unittest tests_standalone.test_player_hud_layout_r710_gui -v
+      - name: R7.10 visual matrix — real Player screenshots and viewport checks
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+          SPOREBOUND_HUD_VISUAL_DIR: ${{ runner.temp }}/hud-r710-visual
+        run: xvfb-run -a -s "-screen 0 2400x1600x24" python3 -m unittest tests_standalone.test_player_hud_visual_r710_gui -v
+      - name: Upload real Player Combat HUD screenshots and layout measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-hud-r710-visual
+          path: ${{ runner.temp }}/hud-r710-visual/
+          if-no-files-found: warn
       - name: Exercise Jeanne atlas PNG crop in Tk (3.7.5)
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -667,7 +727,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Gate 3.8 difficulty, duration and determinism against pinned garden baseline
-        run: python -m sporebound battle-lab --mission garden --seed 1 --runs 8 --limit 500 --baseline docs/evidence/battle_lab_garden_38.json --max-victory-drop 0.20 --max-p95-growth 0.30 --max-new-limits 0 --report battle_lab_garden_38.json
+        run: python -m sporebound battle-lab --content sporebound/content/core.json --mission garden --seed 1 --runs 8 --limit 500 --baseline docs/evidence/battle_lab_garden_38.json --max-victory-drop 0.20 --max-p95-growth 0.30 --max-new-limits 0 --report battle_lab_garden_38.json
       - name: Preserve balance evidence
         uses: actions/upload-artifact@v4
         with:
