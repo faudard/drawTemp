@@ -46,7 +46,9 @@ class R1StudioGuiGate(unittest.TestCase):
             [action('message', text='Défendez le pont')])
         game = GameProject.default(Content.from_dict(content)).to_dict()
         game['campaigns'][0]['start_mission'] = self.MID
-        return content, game
+        # Content.to_dict may contain tuple coordinates; the actual Tk JSON
+        # pane and persisted files expose JSON arrays, not Python tuples.
+        return json.loads(json.dumps(content)), json.loads(json.dumps(game))
 
     @staticmethod
     def walk(widget):
@@ -124,7 +126,7 @@ class R1StudioGuiGate(unittest.TestCase):
                             candidate, indent=2, ensure_ascii=False))
                         buttons['Valider et appliquer'].invoke()
                         root.update()
-                        self.assertEqual(current(), candidate)
+                        self.assertEqual(current(), json.loads(json.dumps(candidate)))
                         snapshots.append(deepcopy(current()))
 
                     edited = deepcopy(current())
