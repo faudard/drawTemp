@@ -485,8 +485,13 @@ class CinematicStudio:
         if not 0 < local < event["duration_ms"]:
             local = int(self.vars["key_time"].get())
         replacement = add_motion_keyframe(event, local)
+        prior = self.selected_key_ms
         self.selected_key_ms = local
-        self._update_selected_event(replacement)
+        try:
+            self._update_selected_event(replacement)
+        except Exception:
+            self.selected_key_ms = prior
+            raise
 
     def update_key(self):
         event = self._event()
@@ -497,14 +502,24 @@ class CinematicStudio:
                 if event["kind"] == "camera" else None)
         replacement = update_motion_keyframe(
             event, self.selected_key_ms, at_ms=at, pos=pos, zoom=zoom)
+        prior = self.selected_key_ms
         self.selected_key_ms = at
-        self._update_selected_event(replacement)
+        try:
+            self._update_selected_event(replacement)
+        except Exception:
+            self.selected_key_ms = prior
+            raise
 
     def delete_key(self):
         require(self.selected_key_ms is not None, "Sélectionner une keyframe")
         result = remove_motion_keyframe(self._event(), self.selected_key_ms)
+        prior = self.selected_key_ms
         self.selected_key_ms = None
-        self._update_selected_event(result)
+        try:
+            self._update_selected_event(result)
+        except Exception:
+            self.selected_key_ms = prior
+            raise
 
     def duplicate_event(self):
         event, clip = self._event(), self._clip()
@@ -811,7 +826,9 @@ class CinematicStudio:
                 coords.extend([78+span*j/60, y+5-level*13])
             canvas.create_line(*coords, fill=color, width=2)
         now = max(0, min(clip["duration_ms"], round(self.cursor.get())))
-        levels = {track.bus: track.level for track in mix_at(clip, now)}
+        levels = {}
+        for track in mix_at(clip, now):
+            levels[track.bus] = min(1., levels.get(track.bus, 0.) + track.level)
         self.audio_caption.set(
             "Mixage à %.2fs : %s" % (
                 now/1000, " · ".join(
