@@ -95,5 +95,64 @@ class StudioThemeTkTests(unittest.TestCase):
             root.destroy()
 
 
+@unittest.skipUnless(os.environ.get("SPOREBOUND_GUI_SMOKE") == "1",
+                     "Real Tk display / Xvfb required")
+class StudioEditorAppearanceSmoke(unittest.TestCase):
+    def test_live_studio_switches_theme_without_recreating_map(self):
+        from unittest.mock import patch
+        import tkinter as tk
+        from tkinter import ttk
+        from sporebound.__main__ import DEFAULT_CONTENT
+        from sporebound.editor import launch
+
+        caught = []
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        def drive(root):
+            try:
+                root.report_callback_exception = lambda *args: caught.append(args)
+                root.update()
+                menu_button = next(
+                    w for w in descendants(root)
+                    if isinstance(w, ttk.Menubutton)
+                    and w.cget("text") == "Affichage ▾")
+                menu = root.nametowidget(menu_button.cget("menu"))
+                dark_index = next(
+                    i for i in range(menu.index("end") + 1)
+                    if menu.type(i) == "radiobutton"
+                    and menu.entrycget(i, "label") == "Thème sombre")
+                light_index = next(
+                    i for i in range(menu.index("end") + 1)
+                    if menu.type(i) == "radiobutton"
+                    and menu.entrycget(i, "label") == "Thème clair")
+                canvas = next(
+                    w for w in descendants(root)
+                    if isinstance(w, tk.Canvas) and
+                    ("<Button-1>" in w.bind() or
+                     "<B1-Motion>" in w.bind()))
+                original = str(canvas)
+                menu.invoke(dark_index)
+                root.update()
+                self.assertEqual(root._studio_palette, PALETTES["dark"])
+                self.assertEqual(root.cget("background"),
+                                 PALETTES["dark"].background)
+                menu.invoke(light_index)
+                root.update()
+                self.assertEqual(root._studio_palette, PALETTES["light"])
+                self.assertEqual(str(canvas), original)
+                self.assertFalse(caught)
+            finally:
+                root.destroy()
+
+        with patch.object(tk.Tk, "mainloop", drive), \\
+             patch("tkinter.messagebox.showerror") as dialogs:
+            launch(DEFAULT_CONTENT)
+            dialogs.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
