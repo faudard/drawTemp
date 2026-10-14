@@ -153,3 +153,44 @@ class DeleteMapResourceCommand:
                 'Suppression refusée : référence Content restante')
         return Content.from_dict(
             candidate, rules=authored_rules_for_document(candidate)).to_dict()
+
+
+
+def plan_coordinated_rename(data, project, key, baseline, new_id):
+    """Plan a validated two-document rename without committing either document.
+
+    An actor cue in a cinematic explicitly triggered by the same mission is
+    the only supported cross-document actor reference. Arbitrary scene,
+    campaign, narration and foreign-mission cues remain ambiguous and block.
+    The caller commits both snapshots through the existing StudioHistory.
+    """
+    from .game_project import GameProject
+
+    category, mid, old, _mission, _row = _locate(data, key)
+    require(category in ('map_actor', 'map_object'),
+            'Migration réservée aux ressources placées')
+    original = project.to_dict() if isinstance(project, GameProject) else project
+    updated = deepcopy(original)
+    if category == 'map_actor':
+        for clip in updated.get('cinematics', ()):
+            trigger = clip['trigger']
+            for event in clip['events']:
+                if event.get('kind') != 'actor' or event.get('actor') != old:
+                    continue
+                kind = trigger['kind']
+                target = trigger['target']
+                same_mission = (
+                    kind in ('before_mission', 'after_mission') and target == mid
+                    or kind == 'tactical_event' and target.startswith(mid + '/'))
+                require(same_mission,
+                        'Cinématique non rattachée à cette mission : migration refusée')
+                event['actor'] = new_id
+
+    require(not _mentions(updated, old),
+            'GameProject contient des références non prises en charge')
+    command = RenameMapResourceCommand(key, baseline, new_id, updated)
+    candidate = command.transform(data, mid)
+    validated_content = Content.from_dict(
+        candidate, rules=authored_rules_for_document(candidate))
+    validated_project = GameProject.from_dict(updated, validated_content)
+    return candidate, validated_project
