@@ -303,7 +303,6 @@ class CinematicFrame:
     dialogue_presentation: DialoguePresentation | None = None
     shot: str | None = None
     shot_transition: tuple | None = None
-    effects: tuple = ()
 
 
 def frame_at(clip, ms):
@@ -321,7 +320,6 @@ def frame_at(clip, ms):
     presentation = None
     shot = None
     shot_transition = None
-    effects = []
     for _, event in events:
         start = event["start_ms"]
         end = start + event["duration_ms"]
@@ -356,10 +354,23 @@ def frame_at(clip, ms):
             fade = (event["color"], ratio)
         elif kind == "sound" and ms < end:
             sounds.append(event["cue"])
-        elif kind == "fx" and ms < end:
-            effects.append((event["effect"], event["intensity"], event["seed"],
-                            tuple(event["at"]),
-                            round((ms - start) / event["duration_ms"], 6)))
     return CinematicFrame(ms, background, tuple(sorted(actors.items())),
                           camera, zoom, dialogue, fade, tuple(sounds),
-                          presentation, shot, shot_transition, tuple(effects))
+                          presentation, shot, shot_transition)
+
+
+def effects_at(clip, ms):
+    """Deterministic optional FX projection without changing legacy frame hashes.
+
+    FX belong to the presentation plane. Old CinematicFrame fields and
+    canonical signature remain untouched, including for old save/replay QA.
+    """
+    ms = max(0, min(clip["duration_ms"], int(ms)))
+    return tuple(
+        (event["effect"], event["intensity"], event["seed"],
+         tuple(event["at"]),
+         round((ms - event["start_ms"]) / event["duration_ms"], 6))
+        for event in clip["events"]
+        if event["kind"] == "fx" and
+        event["start_ms"] <= ms < event["start_ms"] + event["duration_ms"]
+    )
