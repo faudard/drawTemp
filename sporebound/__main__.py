@@ -18,7 +18,7 @@ DEFAULT_GAME_CONTENT = Path(__file__).parent / 'content' / 'jeanne.json'
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="DrawTemp — Jeanne d'Arc RPG and Game Studio")
-    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','tactical-choices','tactical-quality','full-activation','export'])
+    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','jeanne-chapter1','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','tactical-choices','tactical-quality','full-activation','export'])
     parser.add_argument('--content', type=Path, default=DEFAULT_GAME_CONTENT)
     parser.add_argument('--project', type=Path, help='Game presentation manifest for player')
     parser.add_argument('--output', type=Path, help='Destination ZIP for export')
@@ -63,6 +63,12 @@ def main(argv=None):
     parser.add_argument('--unequip', choices=['weapon','armor','accessory'])
     args = parser.parse_args(argv)
     try:
+        if args.command == 'jeanne-chapter1':
+            from .player_app import launch as launch_player
+            launch_player(DEFAULT_GAME_CONTENT,
+                          DEFAULT_GAME_CONTENT.with_suffix(".game.json"),
+                          args.profile, chapter_one=True)
+            return 0
         if args.command == 'player':
             from .player_app import launch as launch_player
             launch_player(args.content, args.project, args.profile)
