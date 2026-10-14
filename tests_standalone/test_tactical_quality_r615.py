@@ -41,7 +41,7 @@ class TacticalQualityR615Tests(unittest.TestCase):
         self.assertEqual(battle.active.id, "hero")
         before_digest = battle.digest()
         before_commands = deepcopy(battle.recording())
-        attack = {"kind": "act", "skill": "attack", "cell": [1, 0]}
+        attack = {"kind": "act", "skill": "attack", "cell": [2, 0]}
         potion = {"kind": "item", "item": "potion", "cell": [0, 1]}
         attack_effect = immediate_effect(battle, attack)
         potion_effect = immediate_effect(battle, potion)
