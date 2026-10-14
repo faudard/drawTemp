@@ -526,7 +526,8 @@ def launch(path):
             candidate = Document(Content.from_dict(
                 raw, rules=authored_rules_for_document(raw)))
             restored_views = load_views(name)
-            edit_recovery.discard()  # Explicitly accepted discard of old project.
+            if current_path.resolve() != Path(name).resolve():
+                edit_recovery.discard()  # User accepted leaving old project.
             doc, current_path, battle = candidate, Path(name), None
             edit_recovery = next_recovery
             map_view_data = restored_views
@@ -550,7 +551,7 @@ def launch(path):
 
     @guarded
     def save_doc():
-        nonlocal current_path, disk_revisions
+        nonlocal current_path, disk_revisions, edit_recovery
         if StudioTransactionStore(current_path).pending:
             raise RuleError('Récupérer la sauvegarde Studio interrompue avant toute écriture')
         if source_pending():
@@ -569,6 +570,9 @@ def launch(path):
                               disk_revisions[1] if current_path.resolve() ==
                               original_path.resolve() else None)
             if current_path.resolve() != original_path.resolve():
+                # Save As is a new recovery identity and a new disk baseline.
+                edit_recovery.discard()
+                edit_recovery = EditRecoveryJournal(current_path)
                 save_views(current_path, map_view_data)
             refresh_source()
             refresh_group_prefabs()
