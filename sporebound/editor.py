@@ -22,7 +22,7 @@ from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
                             transform_terrain)
 from .map_builder4 import smart_brush_cells, surface_region
 from .terrain_autoblend import (REGION_STYLES, plan_terrain_region,
-                                apply_terrain_plan)
+                                apply_terrain_plan, terrain_variant)
 from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, SURFACE_COLORS, IsoTerrainAtlas)
@@ -2243,7 +2243,7 @@ def launch(path):
             cx, cy = iso_geometry.center(cell)
             if brush.startswith('surface:'):
                 surface = brush.partition(':')[2]
-                variant = (cell[0]*37 + cell[1]*19) % 2
+                variant = terrain_variant(cell)
                 photo = iso_atlas.tile(surface, tile_size, variant=variant)
                 if photo is not None:
                     canvas.create_image(cx-tile_size, cy-tile_size/2,
