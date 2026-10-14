@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -75,10 +76,10 @@ class GroupPrefabGUITests(unittest.TestCase):
                     canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
                     self.assertTrue(canvas.find_withtag('editor_group_preview'))
                     buttons['Placer préfab'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(len(saved_group_count()), 1)
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     self.assertEqual(len(saved_group_count()), 0)
                     self.assertEqual(errors, [])
                 finally:
