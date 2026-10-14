@@ -55,6 +55,7 @@ class PlayerApplication:
                                 music_volume=project.options["music_volume"])
         self.root = tk.Tk()
         self.playtest_optin = tk.BooleanVar(value=False)
+        self.long_save_var = tk.BooleanVar(value=False)
         self.root.title(project.title)
         self.root.geometry("1160x820")
         self.root.minsize(800, 580)
@@ -212,16 +213,23 @@ class PlayerApplication:
         self.ttk.Combobox(panel, textvariable=self.slot_var, state="readonly",
                           values=[str(i) for i in range(1, self.project.save_slots + 1)],
                           width=26).grid(row=1, column=1, padx=15)
+        self.ttk.Checkbutton(
+            panel, text="Sessions longues (expérimental, slots séparés)",
+            variable=self.long_save_var).grid(
+                row=2, column=0, columnspan=2, sticky="w", pady=8)
         self._button(panel, "Nouvelle partie", self._new_game).grid(
-            row=2, column=0, columnspan=2, sticky="ew", pady=(20, 4))
+            row=3, column=0, columnspan=2, sticky="ew", pady=(12, 4))
         self._button(panel, "Continuer", self._load_game).grid(
-            row=3, column=0, columnspan=2, sticky="ew", pady=4)
-        self._button(panel, "Migrer une sauvegarde v1", self._migrate_game).grid(
             row=4, column=0, columnspan=2, sticky="ew", pady=4)
+        self._button(panel, "Migrer une sauvegarde v1 vers v2", self._migrate_game).grid(
+            row=5, column=0, columnspan=2, sticky="ew", pady=4)
+        self._button(panel, "Copier v1/v2 vers session longue",
+                     self._migrate_long_game).grid(
+            row=6, column=0, columnspan=2, sticky="ew", pady=4)
         # The authored castle example is a repository demo, not packaged
         # core content. Show its entry only when that source is available.
         castle_example = Path(__file__).resolve().parent.parent / "examples" / "castle_vertical_slice.py"
-        row = 5
+        row = 7
         if self.project.sieges:
             self._button(panel, "Sièges créés dans le Studio", self._authored_siege_menu).grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=4)
@@ -274,17 +282,36 @@ class PlayerApplication:
 
     def _new_game(self):
         cid, slot = self.campaign_var.get(), int(self.slot_var.get())
-        path = self.player.path_for(cid, slot)
-        exists = path.exists() or path.with_name(path.name + ".bak").exists()
-        if exists and not self.messagebox.askyesno("Nouvelle partie",
-                                                    "Recommencer cet emplacement ?"):
-            return
-        self.player.new_game(cid, slot, overwrite=exists)
+        if self.long_save_var.get():
+            # No destructive overwrite of an opt-in long-session slot.
+            self.player.new_long_game(cid, slot)
+        else:
+            path = self.player.path_for(cid, slot)
+            exists = path.exists() or path.with_name(path.name + ".bak").exists()
+            if exists and not self.messagebox.askyesno("Nouvelle partie",
+                                                        "Recommencer cet emplacement ?"):
+                return
+            self.player.new_game(cid, slot, overwrite=exists)
         self._seen_tactical_cinematics.clear()
         self._cinematic_sequence("campaign_start", cid, self.show)
 
     def _load_game(self):
-        self.player.load_game(self.campaign_var.get(), int(self.slot_var.get()))
+        cid, slot = self.campaign_var.get(), int(self.slot_var.get())
+        if self.long_save_var.get():
+            status = self.player.inspect_long_game(cid, slot)
+            if status.source == "backup" or status.degraded:
+                if not self.messagebox.askyesno(
+                        "Reprise après interruption",
+                        "Le fichier principal est endommagé. Une sauvegarde "
+                        "antérieure a été vérifiée, mais des actions récentes "
+                        "peuvent manquer.\\n\\nRestaurer explicitement cette "
+                        "version ? Le fichier principal sera conservé en .damaged."):
+                    return
+                self.player.restore_long_game(
+                    cid, slot, expected_digest=status.session.recording()["digest"])
+            self.player.load_long_game(cid, slot)
+        else:
+            self.player.load_game(cid, slot)
         self._acknowledge_loaded_tactical_cinematics()
         status = self.player.last_load_status
         if status is not None and status.source == "backup":
@@ -294,6 +321,21 @@ class PlayerApplication:
                 "chargée en mémoire, sans modifier les fichiers. "
                 "Une partie de la progression récente peut manquer.")
         self.show()
+
+    def _migrate_long_game(self):
+        if not self.messagebox.askyesno(
+                "Migration non destructive",
+                "Créer une COPIE séparée de cette sauvegarde (v1 ou v2) "
+                "au format sessions longues ? L'original reste intact et "
+                "les règles de jeu ne sont pas converties."):
+            return
+        self.player.migrate_to_long_game(
+            self.campaign_var.get(), int(self.slot_var.get()))
+        self.long_save_var.set(True)
+        self.messagebox.showinfo(
+            "Copie vérifiée", "La sauvegarde originale est conservée. "
+            "La session longue utilise un autre fichier.")
+        self._load_game()
 
     def _migrate_game(self):
         if not self.messagebox.askyesno(
