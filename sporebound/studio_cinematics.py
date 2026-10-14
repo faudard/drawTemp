@@ -5,6 +5,8 @@ from .cinematics import (KINDS, TRIGGERS, EASINGS, EXPRESSIONS, SHOT_TRANSITIONS
                          cinematic_template, event_template, matching_cinematics)
 from .event_cinematic_qa import audit_event_cinematic_path
 from .audio_timeline import mix_at
+from .cinematic_batch import (
+    copy_events, paste_events, shift_events, delete_events)
 from .cinematic_authoring4 import (
     add_motion_keyframe, update_motion_keyframe, remove_motion_keyframe,
     move_event, resize_event, clone_event)
@@ -19,6 +21,8 @@ class CinematicStudio:
         self.owner, self.tk, self.ttk = owner, owner.tk, owner.ttk
         self.clip_id = ""
         self.event_id = ""
+        self.selected_event_ids = ()
+        self.clipboard = None
         self.undo_stack = []
         self.redo_stack = []
         self._refreshing = False
@@ -40,6 +44,7 @@ class CinematicStudio:
             "x1": "0.65", "y1": "0.65", "zoom0": "1", "zoom1": "1",
             "key_time": "500", "key_x": "0.5", "key_y": "0.5",
             "key_zoom": "1", "copy_id": "event_copy",
+            "group_shift": "100",
         }.items()}
         self.qa_status = self.tk.StringVar(value="")
         self.audio_loop = self.tk.BooleanVar(value=False)
@@ -107,7 +112,8 @@ class CinematicStudio:
 
         middle = ttk.LabelFrame(main, text="Pistes / événements")
         middle.pack(side="left", fill="both", expand=True, padx=4)
-        self.events = self.tk.Listbox(middle, height=9, exportselection=False)
+        self.events = self.tk.Listbox(
+            middle, height=9, exportselection=False, selectmode="extended")
         self.events.pack(fill="x", padx=5, pady=5)
         self.events.bind("<<ListboxSelect>>", self._on_event)
         # Contextual tabs replace the long all-properties-at-once column.
@@ -174,6 +180,18 @@ class CinematicStudio:
         self._button(buttons, "Dupliquer", self.duplicate_event)
         self._button(buttons, "Supprimer événement", self.delete_event)
         self._button(buttons, "Ajuster durée", self.resize_selected)
+        selection_bar = ttk.Frame(middle)
+        selection_bar.pack(fill="x", padx=4, pady=2)
+        self._button(selection_bar, "Copier sélection", self.copy_selected)
+        self._button(selection_bar, "Couper sélection", self.cut_selected)
+        self._button(selection_bar, "Coller au curseur", self.paste_selected)
+        self._button(selection_bar, "Supprimer groupe", self.delete_selected)
+        group = ttk.Frame(middle)
+        group.pack(fill="x", padx=4, pady=2)
+        ttk.Label(group, text="Décalage groupe (ms)").pack(side="left")
+        ttk.Entry(group, textvariable=self.vars["group_shift"], width=9).pack(
+            side="left", padx=3)
+        self._button(group, "Décaler sélection", self.shift_selected)
         ttk.Label(middle, textvariable=self.qa_status, wraplength=460).pack(
             fill="x", padx=5, pady=3)
         side = ttk.LabelFrame(main, text="Aperçu instantané")
@@ -217,6 +235,100 @@ class CinematicStudio:
         self.timeline.bind("<ButtonRelease-1>", self._release)
         self.timeline.bind("<B1-Motion>", self._drag_motion)
         self.timeline.bind("<Escape>", lambda _: self.cancel_drag())
+        self._bind_editor_shortcuts(self.events)
+        self._bind_editor_shortcuts(self.timeline)
+        self.events.bind("<Escape>",
+                         lambda _: self._keyboard_action(self.clear_selection))
+
+    def _bind_editor_shortcuts(self, widget):
+        """Scope shortcuts to timeline/list; never steal Ctrl+C from text inputs."""
+        actions = (
+            ("c", self.copy_selected), ("v", self.paste_selected),
+            ("x", self.cut_selected), ("z", self.undo), ("y", self.redo),
+            ("a", self.select_all_events),
+        )
+        for modifier in ("Control", "Command"):
+            for key, action in actions:
+                widget.bind(f"<{modifier}-KeyPress-{key}>",
+                            lambda _event, action=action:
+                            self._keyboard_action(action))
+        widget.bind("<Delete>",
+                    lambda _event: self._keyboard_action(self.delete_selected))
+
+    def _keyboard_action(self, action):
+        self.owner._run(action)
+        return "break"
+
+    def _selected_ids(self):
+        ids = self.selected_event_ids or (
+            (self.event_id,) if self.event_id else ())
+        require(bool(ids), "Sélectionner un ou plusieurs événements")
+        # Resolve against the latest project, not a cached event selection.
+        from .cinematic_batch import selected_events
+        selected_events(self._clip(), ids)
+        return ids
+
+    def _replace_clip_events(self, new_clip):
+        cid = self.clip_id
+        require(new_clip["id"] == cid, "Mauvaise cinématique de destination")
+        def commit(data):
+            target = next(c for c in data["cinematics"] if c["id"] == cid)
+            target["events"] = deepcopy(new_clip["events"])
+        self._apply(commit)
+
+    def _selection_after_edit(self, ids):
+        self.selected_event_ids = tuple(ids)
+        self.event_id = ids[-1] if ids else ""
+        self.selected_key_ms = None
+        self.refresh()
+
+    def clear_selection(self):
+        self._selection_after_edit(())
+
+    def select_all_events(self):
+        ids = tuple(event["id"] for event in sorted(
+            self._clip()["events"], key=lambda e: (e["start_ms"], e["id"])))
+        if ids:
+            self._selection_after_edit(ids)
+            self.qa_status.set(f"{len(ids)} événement(s) sélectionnés.")
+
+    def copy_selected(self):
+        self.clipboard = copy_events(self._clip(), self._selected_ids())
+        self.qa_status.set(f"{len(self.clipboard['events'])} événement(s) copiés.")
+
+    def paste_selected(self):
+        require(self.clipboard is not None, "Copier des événements avant collage")
+        clip = self._clip()
+        at = int(round(self.cursor.get()))
+        proposed, ids = paste_events(clip, self.clipboard, at)
+        self._replace_clip_events(proposed)
+        self._selection_after_edit(ids)
+        self.qa_status.set(f"{len(ids)} événement(s) collés.")
+
+    def cut_selected(self):
+        clip, ids = self._clip(), self._selected_ids()
+        staged_clipboard = copy_events(clip, ids)
+        proposed = delete_events(clip, ids)
+        self._replace_clip_events(proposed)
+        # The clipboard is only replaced if the validated commit succeeded.
+        self.clipboard = staged_clipboard
+        self._selection_after_edit(())
+        self.qa_status.set(f"{len(ids)} événement(s) coupés.")
+
+    def delete_selected(self):
+        clip, ids = self._clip(), self._selected_ids()
+        self._replace_clip_events(delete_events(clip, ids))
+        self._selection_after_edit(())
+        self.qa_status.set(f"{len(ids)} événement(s) supprimés.")
+
+    def shift_selected(self):
+        ids = self._selected_ids()
+        delta = int(self.vars["group_shift"].get())
+        proposed = shift_events(self._clip(), ids, delta)
+        self._replace_clip_events(proposed)
+        self._selection_after_edit(ids)
+        self.qa_status.set(
+            f"{len(ids)} événement(s) déplacés de {delta:+d} ms.")
 
     def _project(self):
         return self.owner.project
@@ -238,6 +350,8 @@ class CinematicStudio:
         updated = deepcopy(before)
         mutate(updated)
         candidate = GameProject.from_dict(updated, self.owner._content())
+        if candidate.to_dict() == before:
+            return  # No-op edits must not consume undo history.
         self.undo_stack.append(before)
         self.undo_stack = self.undo_stack[-50:]
         self.redo_stack.clear()
@@ -249,19 +363,31 @@ class CinematicStudio:
         self.refresh()
 
     def undo(self):
+        # Full Studio owns Content+GameProject history. Never restore only the
+        # project while leaving a newer global document/history snapshot live.
+        if hasattr(self.owner, "undo_global") and self.owner.history is not None:
+            self.owner.undo_global()
+            return
         if not self.undo_stack:
             return
+        candidate = GameProject.from_dict(
+            self.undo_stack[-1], self.owner._content())
         self.redo_stack.append(self._project().to_dict())
-        self.owner.project = GameProject.from_dict(
-            self.undo_stack.pop(), self.owner._content())
+        self.undo_stack.pop()
+        self.owner.project = candidate
         self.refresh()
 
     def redo(self):
+        if hasattr(self.owner, "redo_global") and self.owner.history is not None:
+            self.owner.redo_global()
+            return
         if not self.redo_stack:
             return
+        candidate = GameProject.from_dict(
+            self.redo_stack[-1], self.owner._content())
         self.undo_stack.append(self._project().to_dict())
-        self.owner.project = GameProject.from_dict(
-            self.redo_stack.pop(), self.owner._content())
+        self.redo_stack.pop()
+        self.owner.project = candidate
         self.refresh()
 
     def reset_project(self):
@@ -271,6 +397,8 @@ class CinematicStudio:
             self.preview_canvas, registry=self.owner.project.asset_registry(),
             asset_root=self.owner.project_path.parent)
         self.clip_id = self.event_id = ""
+        self.selected_event_ids = ()
+        self.cancel_drag()
         self.undo_stack.clear()
         self.redo_stack.clear()
         self.refresh()
@@ -297,12 +425,21 @@ class CinematicStudio:
             return
         self.clip_id = self._clip_ids[self.clips.curselection()[0]]
         self.event_id = ""
+        self.selected_event_ids = ()
         self.refresh()
 
     def _on_event(self, _event=None):
-        if self._refreshing or not self.events.curselection():
+        if self._refreshing:
             return
-        self.event_id = self._event_ids[self.events.curselection()[0]]
+        rows = self.events.curselection()
+        selected = tuple(self._event_ids[i] for i in rows)
+        self.selected_event_ids = selected
+        if not selected:
+            self.event_id = ""
+            self._timeline()
+            return
+        self.event_id = selected[-1]
+        self.selected_key_ms = None
         self._load_event()
         self._timeline()
         self.cursor.set(self._event()["start_ms"])
@@ -641,11 +778,16 @@ class CinematicStudio:
         self.events.delete(0, "end")
         events = sorted(clip["events"], key=lambda e: (e["start_ms"], e["id"])) if clip else []
         self._event_ids = [e["id"] for e in events]
+        # Drop stale IDs after a remove/undo/clip switch. Multi-selection is
+        # *always* resolved by stable event IDs, not stale listbox row indexes.
+        self.selected_event_ids = tuple(
+            eid for eid in self.selected_event_ids if eid in self._event_ids)
         for i, event in enumerate(events):
             display_kind = (f"son:{event.get('bus', 'sfx')}"
                             if event["kind"] == "sound" else event["kind"])
             self.events.insert("end", f"{event['start_ms']:>6}  {display_kind} — {event['id']}")
-            if event["id"] == self.event_id:
+            if event["id"] in self.selected_event_ids or (
+                    not self.selected_event_ids and event["id"] == self.event_id):
                 self.events.selection_set(i)
         if clip:
             self.preview_scale.configure(to=clip["duration_ms"])
@@ -705,7 +847,8 @@ class CinematicStudio:
             canvas.create_rectangle(x0, y, max(x0+5, x1), y+21,
                                     fill=colors[lane],
                                     outline="#ffffff"
-                                    if event["id"] == self.event_id else "")
+                                    if event["id"] in self.selected_event_ids
+                                    or event["id"] == self.event_id else "")
             canvas.create_text(x0+4, y+10, anchor="w",
                                text=event["id"][:22], fill="#081626")
             self._positions.append((x0, x1, y, y+21, event["id"]))
@@ -722,9 +865,11 @@ class CinematicStudio:
         playhead = origin + span * self.cursor.get() / duration
         canvas.create_line(playhead, 18, playhead, height,
                            fill="#f5ead5", width=2)
-        canvas.focus_set()
+        # A repaint must never steal keyboard focus from Listbox selection
+        # or a property Entry: otherwise Shift-click/shortcuts become unreliable.
 
     def _press(self, event):
+        self.timeline.focus_set()
         canvas_y = self.timeline.canvasy(event.y)
         self._drag = None
         # Keyframe handles take priority over their containing clip.
@@ -732,12 +877,26 @@ class CinematicStudio:
             if abs(event.x-kx) <= 8 and abs(canvas_y-ky) <= 9:
                 self._drag = ("key", event.x, eid, at)
                 self.event_id, self.selected_key_ms = eid, at
+                self.selected_event_ids = (eid,)
                 self.refresh()
                 self._select_key()
                 return
         for x0, x1, y0, y1, eid in reversed(self._positions):
             if x0 <= event.x <= max(x0+5, x1) and y0 <= canvas_y <= y1:
+                if getattr(event, "state", 0) & 0x0004:
+                    # Ctrl-click toggles timeline selection; no drag on toggle.
+                    updated = set(self.selected_event_ids)
+                    if eid in updated:
+                        updated.remove(eid)
+                    else:
+                        updated.add(eid)
+                    ordered = [row["id"] for row in self._clip()["events"]
+                               if row["id"] in updated]
+                    self._selection_after_edit(ordered)
+                    return
                 self._drag = ("event", event.x, eid, None)
+                if eid not in self.selected_event_ids:
+                    self.selected_event_ids = (eid,)
                 self.event_id = eid
                 self.selected_key_ms = None
                 self.refresh()
@@ -756,10 +915,13 @@ class CinematicStudio:
         if row is None:
             return
         if kind == "event":
-            x0, x1, y0, y1, _ = row
-            self.timeline.create_rectangle(x0+dx, y0, x1+dx, y1,
-                                           outline="#ffffff", width=2,
-                                           dash=(3, 2), tags="drag-preview")
+            moving = set(self.selected_event_ids or (eid,))
+            for x0, x1, y0, y1, target_id in self._positions:
+                if target_id in moving:
+                    self.timeline.create_rectangle(
+                        x0+dx, y0, x1+dx, y1,
+                        outline="#ffffff", width=2, dash=(3, 2),
+                        tags="drag-preview")
         else:
             handle = next(((x, y) for x, y, event_id, at
                            in self._key_handles
@@ -801,9 +963,12 @@ class CinematicStudio:
                     clip["duration_ms"]-current["duration_ms"],
                     round((current["start_ms"]+offset_ms)/100)*100))
                 if new_start != current["start_ms"]:
-                    replacement = move_event(current, new_start,
-                                             clip["duration_ms"])
-                    self.owner._run(lambda: self._update_selected_event(replacement))
+                    ids = (self.selected_event_ids if eid in self.selected_event_ids
+                           else (eid,))
+                    delta = new_start - current["start_ms"]
+                    proposed = shift_events(clip, ids, delta)
+                    self.owner._run(
+                        lambda: self._replace_clip_events(proposed))
         self._timeline()
         self._preview()
 
