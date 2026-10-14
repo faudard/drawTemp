@@ -9,6 +9,8 @@ from .branch_qa_363 import (
     audit_branch_coverage, probe_story_choices, probe_tactical_branches,
     format_branch_qa)
 from .model import require
+from .gameplay_certification_364 import (
+    certify_gameplay_paths, format_certification)
 
 
 class StoryGraphQAControls:
@@ -39,6 +41,7 @@ class StoryGraphQAControls:
         self._button(bar, 'Auditer la structure', self._qa_audit)
         self._button(bar, 'Simuler les dialogues', self._qa_simulate)
         self._button(bar, 'Prévisualiser événements', self._qa_events)
+        self._button(bar, 'Certifier GameSession…', self._qa_certify)
         self._button(bar, 'Exporter JSON', self._qa_export)
         ttk.Label(
             window, text=(
@@ -82,11 +85,22 @@ class StoryGraphQAControls:
         self.qa_last_report = report
         self.qa_text.configure(state='normal')
         self.qa_text.delete('1.0', 'end')
-        self.qa_text.insert('1.0', '\n'.join(format_branch_qa(report)))
+        lines = (format_certification(report)
+                 if report['kind'] == 'game_session_path_certification'
+                 else format_branch_qa(report))
+        self.qa_text.insert('1.0', '\n'.join(lines))
         self.qa_text.configure(state='disabled')
         for row in self.qa_tree.get_children():
             self.qa_tree.delete(row)
         self.qa_issue_refs = {}
+        if report['kind'] == 'game_session_path_certification':
+            for row in report['paths']:
+                self.qa_tree.insert(
+                    '', 'end', values=(
+                        'PASS' if row['passed'] else 'FAIL',
+                        row['id'], '',
+                        ' · '.join(row['errors'][:2]) or
+                        'Chaque checkpoint a été restauré et vérifié'))
         if report['kind'] == 'structural':
             for i, issue in enumerate(report['issues'][:300]):
                 ref = self.qa_tree.insert(
@@ -118,6 +132,25 @@ class StoryGraphQAControls:
             self.owner.doc().data, self.owner.project,
             self._visual_mission_id(), max_events=8)
         self._qa_update(report)
+        return report
+
+    def _qa_certify(self):
+        from pathlib import Path
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(
+            parent=self.qa_window, title='Sélectionner le contrat GameSession',
+            filetypes=[('Certification de parcours', '*.json')])
+        if not path:
+            return None
+        suite = json.loads(Path(path).read_text(encoding='utf-8'))
+        report = certify_gameplay_paths(
+            self.owner.doc().data, self.owner.project, suite)
+        self._qa_update(report)
+        self.status.set(
+            'GameSession QA : '+('CERTIFIÉ' if report['passed']
+                                else 'ÉCHEC — voir le rapport') +
+            ' · '+str(report['passed_paths'])+'/'+str(report['total_paths'])+
+            ' parcours')
         return report
 
     def _qa_focus_issue(self):
