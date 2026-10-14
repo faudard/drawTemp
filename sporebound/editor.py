@@ -4134,8 +4134,13 @@ def launch(path):
 
     def apply_studio_theme(mode, *, save=True):
         palette = studio_appearance.apply(mode)
+        root._studio_palette = palette
         appearance_var.set(mode)
         studio.playtest_studio.set_appearance(palette)
+        prefab_gallery.apply_appearance(palette)
+        for floating_palette in (asset_palette, entity_palette):
+            if floating_palette is not None and floating_palette.window.winfo_exists():
+                floating_palette.apply_appearance(palette)
         for menu in (file_menu, view_menu):
             try:
                 menu.configure(background=palette.surface,
