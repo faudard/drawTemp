@@ -153,6 +153,24 @@ class CampaignPathCertificationTests(unittest.TestCase):
                          ["occupation"])
         self.assertFalse(suite["coverage"]["complete_for_required_cases"])
 
+    def test_corrupted_or_unreadable_checkpoint_never_produces_certificate(self):
+        from sporebound.persistence import SessionStore
+        with patch.object(SessionStore, "load",
+                          side_effect=RuleError("injected broken checkpoint")):
+            with self.assertRaisesRegex(RuleError, "broken checkpoint"):
+                certify_path(self.content, self.project, self.plan("spare"),
+                             max_commands=800)
+
+    def test_coverage_rejects_duplicate_certificates_and_invented_endings(self):
+        sample = {"id": "castle_spare", "status": "CERTIFIED",
+                  "observed": {"endings": ["mercy"]}}
+        with self.assertRaisesRegex(RuleError, "Duplicate"):
+            certificate_coverage(self.project, [sample, deepcopy(sample)])
+        coverage = certificate_coverage(
+            self.project, [sample], required_ids=("castle_spare", "castle_occupation"))
+        self.assertFalse(coverage["complete_for_required_cases"])
+        self.assertEqual(coverage["uncertified_endings"], ["occupation"])
+
     def test_existing_slot_is_never_written_when_a_route_is_certified(self):
         from sporebound.game_project import save_slot
         with TemporaryDirectory() as folder:
