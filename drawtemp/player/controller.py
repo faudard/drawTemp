@@ -169,6 +169,45 @@ class PlayerController:
         self.session.execute(command, expected_revision=state.revision)
         return self._changed()
 
+    def use_skill(self, skill_id):
+        state = self._current()
+        battle = state.battle
+        if battle is None or battle["result"]:
+            raise ValueError("No active combat")
+        active = next((u for u in battle["units"]
+                       if u["id"] == battle["active"]), None)
+        if (active is None or active["team"] != "player" or
+                skill_id not in active.get("skills", ())):
+            raise ValueError("Skill is unavailable to the active unit")
+        self.session.execute({"kind": "act", "skill": skill_id,
+                              "cell": list(self.selected)},
+                             expected_revision=state.revision)
+        return self._changed()
+
+    def use_item(self, item_id):
+        state = self._current()
+        battle = state.battle
+        if battle is None or battle["result"]:
+            raise ValueError("No active combat")
+        items = battle["inventory"].get("player", {})
+        if item_id not in items or items[item_id] < 1:
+            raise ValueError("Item unavailable")
+        self.session.execute({"kind": "item", "item": item_id,
+                              "cell": list(self.selected)},
+                             expected_revision=state.revision)
+        return self._changed()
+
+    def interact_object(self, object_id):
+        state = self._current()
+        battle = state.battle
+        if battle is None or battle["result"]:
+            raise ValueError("No active combat")
+        if object_id not in {obj["id"] for obj in battle["objects"]}:
+            raise ValueError("Unknown tactical object")
+        self.session.execute({"kind": "interact", "object": object_id},
+                             expected_revision=state.revision)
+        return self._changed()
+
     def preview(self, kind):
         state = self._current()
         if not state.battle or state.battle["result"]:
