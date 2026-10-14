@@ -19,10 +19,10 @@ def copied_metadata(directory):
 
 
 class WatercolorCatalogTests(unittest.TestCase):
-    def test_real_manifest_catalogues_88_original_and_12_derived_png(self):
+    def test_real_manifest_catalogues_88_original_and_11_derived_png(self):
         catalog = WatercolorCatalog()
         self.assertTrue(catalog.has_metadata())
-        self.assertEqual(sum(i.kind == "sprite" for i in catalog.entries), 100)
+        self.assertEqual(sum(i.kind == "sprite" for i in catalog.entries), 99)
         self.assertEqual(sum(i.kind == "animation" for i in catalog.entries), 15)
         self.assertEqual(catalog.lookup("jeanne_idle").group, "jeanne")
         self.assertEqual(catalog.lookup("anim_jeanne_attack").frame_count, 12)
