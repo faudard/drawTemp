@@ -95,7 +95,7 @@ class PlayerHudLayoutR710GuiTests(unittest.TestCase):
                 self.assertEqual(app.info.cget("bg"), "#000000")
                 self.assertEqual(app.hud_journal.cget("bg"), "#000000")
                 self.assertEqual(app.hud_party.cget("bg"), "#000000")
-                self.assertIn("PV", app.hud_focus_var.get())
+                self.assertIn("PV", app.hud_party_var.get())
                 self.assertTrue(app.canvas.bind(app.keymap.get("execute")))
             finally:
                 app.close()
