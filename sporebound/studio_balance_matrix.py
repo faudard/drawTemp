@@ -9,7 +9,9 @@ from __future__ import annotations
 from queue import Queue, Empty
 from threading import Thread
 
-from .balance_matrix import run_matrix, compare_matrices, save_matrix
+from .balance_matrix import run_matrix, compare_matrices, save_matrix, scenario_content
+from .encounter_balance6 import (encounter_profile, strict_regression_gate,
+                                trace_encounter_ai)
 from .model import RuleError
 from .tactical_rpg3 import authored_rules_for_document
 
@@ -22,6 +24,10 @@ PRESETS = (
     "Ennemis -1 attaque",
     "Retirer unité sélectionnée",
     "Unité choisie +2 attaque",
+    "Déplacer unité vers X,Y",
+    "Dupliquer unité en X,Y",
+    "Équiper unité : arc",
+    "Inventaire : potions personnalisées",
 )
 
 
@@ -35,6 +41,7 @@ class BalanceMatrixStudio:
         self._run_snapshot = None
         self.baseline = None
         self.comparison = None
+        self.last_ai = None
         self.busy = False
         self.mailbox = Queue()
         self.frame = self.ttk.Frame(notebook, padding=10)
@@ -79,6 +86,23 @@ class BalanceMatrixStudio:
         for col in range(5):
             options.columnconfigure(col, weight=1)
 
+        tuning = self.ttk.Frame(self.frame)
+        tuning.pack(fill="x", pady=3)
+        self.pos_x = self.tk.StringVar(value="0")
+        self.pos_y = self.tk.StringVar(value="0")
+        self.attack_delta = self.tk.StringVar(value="2")
+        self.potions = self.tk.StringVar(value="4")
+        for col, (label, var) in enumerate((
+                ("Position X", self.pos_x), ("Position Y", self.pos_y),
+                ("Bonus attaque", self.attack_delta),
+                ("Potions joueur", self.potions))):
+            self.ttk.Label(tuning, text=label).grid(row=0, column=col, sticky="w")
+            self.ttk.Entry(tuning, textvariable=var, width=13).grid(
+                row=1, column=col, sticky="w", padx=(0, 12))
+        self.profile_status = self.ttk.Label(
+            self.frame, text="Profil d'affrontement R6 : chargement…")
+        self.profile_status.pack(anchor="w", pady=2)
+
         actions = self.ttk.Frame(self.frame)
         actions.pack(fill="x", pady=4)
         self.ttk.Button(actions, text="Ajouter scénario",
@@ -90,6 +114,8 @@ class BalanceMatrixStudio:
         self.run_button = self.ttk.Button(actions, text="Comparer les scénarios",
                                           command=self.start)
         self.run_button.pack(side="left", padx=3)
+        self.ttk.Button(actions, text="Analyser décisions IA",
+                        command=self.analyze_ai).pack(side="left", padx=3)
 
         self.scenarios = self.ttk.Treeview(
             self.frame, columns=("id", "mission", "preset", "target"),
@@ -144,6 +170,18 @@ class BalanceMatrixStudio:
         self.unit_box["values"] = ids
         if self.unit.get() not in ids:
             self.unit.set(ids[0] if ids else "")
+        if record:
+            try:
+                p = encounter_profile(self.owner._content(), self.mission.get())
+                self.profile_status.configure(
+                    text="R6.8 · {} héros / {} ennemis · carte {}×{} · "
+                         "objectif {} · cible 4–6 / 5–10 : {}".format(
+                         p["player_count"], p["enemy_count"],
+                         p["map"]["width"], p["map"]["height"],
+                         p["objective"],
+                         "OK" if p["target_roster_met"] else "à évaluer"))
+            except (RuleError, ValueError, KeyError):
+                self.profile_status.configure(text="Profil non disponible.")
 
     def _case(self, mid, preset, uid, ordinal):
         result = {"id": "{}::case{:02d}".format(mid, ordinal),
@@ -159,7 +197,21 @@ class BalanceMatrixStudio:
         elif preset == PRESETS[5]:
             result["remove_units"] = [uid]
         elif preset == PRESETS[6]:
-            result["unit_deltas"] = {uid: {"attack": 2}}
+            result["unit_deltas"] = {uid: {"attack": int(self.attack_delta.get())}}
+        elif preset == PRESETS[7]:
+            result["unit_positions"] = {
+                uid: [int(self.pos_x.get()), int(self.pos_y.get())]}
+        elif preset == PRESETS[8]:
+            result["clone_units"] = [{
+                "id": "{}_r6_{}".format(uid, ordinal),
+                "template_id": uid,
+                "pos": [int(self.pos_x.get()), int(self.pos_y.get())]}]
+        elif preset == PRESETS[9]:
+            result["unit_overrides"] = {
+                uid: {"weapon": "ranged", "attack_range": 3}}
+        elif preset == PRESETS[10]:
+            result["inventory"] = {"potion": int(self.potions.get()),
+                                   "ether": 2, "phoenix": 1}
         return result
 
     def _add(self, mid, preset, uid=""):
@@ -177,13 +229,16 @@ class BalanceMatrixStudio:
         if self.busy:
             return
         mid, preset, uid = self.mission.get(), self.preset.get(), self.unit.get()
-        if preset in (PRESETS[5], PRESETS[6]) and not uid:
+        if preset in PRESETS[5:10] and not uid:
             self.owner.dialogs.showerror("Balance Matrix", "Choisir une unité cible.")
             return
         if len(self.cases) >= 24:
             self.owner.dialogs.showerror("Balance Matrix", "Maximum 24 scénarios.")
             return
-        self._add(mid, preset, uid)
+        try:
+            self._add(mid, preset, uid)
+        except (ValueError, RuleError) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
 
     def add_all_missions(self):
         if self.busy:
@@ -245,8 +300,23 @@ class BalanceMatrixStudio:
         self.busy = False
         self.run_button.configure(state="normal")
         if kind == "error":
-            self.status.configure(text="Échec matrice")
+            self.status.configure(text="Échec analyse")
             self.owner.dialogs.showerror("Balance Matrix", data)
+        elif kind == "ai":
+            self.last_ai = data["analytics"]
+            summary = self.last_ai
+            self.output.configure(state="normal")
+            self.output.delete("1.0", "end")
+            self.output.insert("end", "R6.9 · décisions IA réelles (replay vérifié)\n"
+                + "Actions : " + str(summary["team_decisions"]) + "\n"
+                + "Signaux : " + str(summary["signals"]) + "\n"
+                + "Protection d'alliés : " + str(summary["protective_reactions"])
+                + " · contrôles de zone : " +
+                  str(summary["player_goal_occupied_commands"]) + "\n"
+                + "Déplacements aller-retour et attentes sont des signaux "
+                  "heuristiques, jamais des erreurs IA prouvées.")
+            self.output.configure(state="disabled")
+            self.status.configure(text="R6.9 · trace vérifiée, analyse terminée.")
         else:
             self.current = data
             self._render()
@@ -274,11 +344,12 @@ class BalanceMatrixStudio:
         self.comparison = None
         if self.baseline is not None:
             try:
-                self.comparison = compare_matrices(self.baseline, self.current)
-                lines.append("Gate inter-versions : " +
+                self.comparison = strict_regression_gate(self.baseline, self.current)
+                lines.append("R6.10 · Gate strict (scénarios, seeds, règles) : " +
                              self.comparison["status"].upper())
                 lines.append("Scénarios KO : " + ", ".join(
-                    self.comparison["failures"]))
+                    self.comparison["regressions"]))
+                lines.extend(self.comparison["incompatible_inputs"])
             except (RuleError, ValueError, KeyError) as exc:
                 lines.append("Référence incompatible : " + str(exc))
         self.output.configure(state="normal")
@@ -286,6 +357,40 @@ class BalanceMatrixStudio:
         self.output.insert("end", "\n".join(lines))
         self.output.configure(state="disabled")
         self.status.configure(text="Terminé · matrice reproductible.")
+
+    def analyze_ai(self):
+        if self.busy or self.current is None:
+            return
+        selected = self.rows.selection()
+        if not selected:
+            self.owner.dialogs.showerror(
+                "Balance Matrix", "Sélectionner une rencontre déjà simulée.")
+            return
+        try:
+            row = next(row for row in self.current["cases"]
+                       if row["id"] == selected[0])
+            content = self.owner._content()
+            rules = authored_rules_for_document(self.owner.doc().data)
+            if row["id"] != row["mission"] + "::baseline":
+                content = scenario_content(content, row["spec"], rules=rules)
+            seed = self.current["seeds"][0]
+            cap = min(self.current["max_commands"], 5000)
+        except (RuleError, ValueError, KeyError, StopIteration) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
+            return
+        self.busy = True
+        self.run_button.configure(state="disabled")
+        self.status.configure(text="Analyse IA R6.9 en cours…")
+
+        def worker():
+            try:
+                report = trace_encounter_ai(content, row["mission"],
+                                            seed=seed, max_commands=cap, rules=rules)
+                self.mailbox.put(("ai", report))
+            except Exception as exc:
+                self.mailbox.put(("error", str(exc)))
+        Thread(target=worker, daemon=True).start()
+        self.tab.after(80, self._poll)
 
     def set_baseline(self):
         if self.current is None:
