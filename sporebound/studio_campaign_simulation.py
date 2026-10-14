@@ -377,6 +377,7 @@ class CampaignSimulationStudio:
         content = self.owner._content()
         identity = self._source_identity()
         generation = self._generation
+        node_id = self.sandbox.cursor
         self._certifying = True
         self._set_text(self.certificate_text,
                        "CERTIFICATION EN COURS\n\n"
@@ -390,22 +391,23 @@ class CampaignSimulationStudio:
                 certificate = certify_path(
                     content, project, plan, max_commands=800,
                     checkpoint_every=7)
-                self._certificate_queue.put((identity, generation, certificate, None))
+                self._certificate_queue.put((identity, generation, node_id, certificate, None))
             except Exception as exc:
-                self._certificate_queue.put((identity, generation, None, str(exc)))
+                self._certificate_queue.put((identity, generation, node_id, None, str(exc)))
 
         Thread(target=work, name="CampaignR515", daemon=True).start()
         self.tab.after(100, self._poll_certificate)
 
     def _poll_certificate(self):
         try:
-            identity, generation, certificate, error = self._certificate_queue.get_nowait()
+            identity, generation, node_id, certificate, error = self._certificate_queue.get_nowait()
         except Empty:
             if self._certifying:
                 self.tab.after(100, self._poll_certificate)
             return
         self._certifying = False
-        if generation != self._generation or identity != self._source_identity():
+        if (generation != self._generation or identity != self._source_identity()
+                or self.sandbox is None or self.sandbox.cursor != node_id):
             self._set_text(self.certificate_text,
                            "REJETÉ : le projet ou le parcours a changé pendant le calcul.")
             self.status.set("Certification obsolète : refaire la simulation.")
