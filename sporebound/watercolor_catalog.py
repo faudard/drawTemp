@@ -82,6 +82,19 @@ class WatercolorCatalog:
                 raise ValueError('Invalid watercolor provenance index')
             self._sha256 = hashes
 
+    def animation_frame_ids(self):
+        """Sprite IDs already reachable through an authored animation.
+
+        A palette can collapse these frames without dropping them from the
+        registry or losing exact-ID search and frame stepping.
+        """
+        if self.registry is None:
+            return frozenset()
+        animations = (item for item in self.registry.to_dict()['entries']
+                      if item['kind'] == 'animation')
+        return frozenset(frame['sprite'] for animation in animations
+                         for frame in animation['frames'])
+
     def has_metadata(self):
         return self.registry is not None
 

@@ -30,6 +30,10 @@ class AssetPalette:
             for item in self.watercolor.entries)
         self.entries = {e.id: e for e in (*ENTRIES, *self.watercolor_entries)}
         self.images = {}
+        self.group_variants = {}
+        self._group_selected = None
+        self._group_active_id = None
+        self._group_option_lookup = {}
         self.turns = 0
         self.query = tk.StringVar(self.window)
         self.category = tk.StringVar(self.window, value='Tous')
@@ -42,6 +46,7 @@ class AssetPalette:
         self.entity_facing = tk.StringVar(self.window, value='south')
         self.entity_pose = tk.StringVar(self.window, value='idle')
         self.watercolor_frame = tk.StringVar(self.window, value='0')
+        self.watercolor_variant = tk.StringVar(self.window)
         self._watercolor_timer = None
         self.entity_link = tk.StringVar(self.window)
         self.entity_destination = tk.StringVar(self.window)
@@ -59,7 +64,7 @@ class AssetPalette:
         body.add(listing, weight=1)
         body.add(preview, weight=1)
         style = ttk.Style(self.window)
-        style.configure('AssetPalette.Treeview', rowheight=64)
+        style.configure('AssetPalette.Treeview', rowheight=48)
         self.tree = ttk.Treeview(listing, show='tree', selectmode='browse',
                                  style='AssetPalette.Treeview')
         self.tree.column('#0', width=280, minwidth=210)
@@ -71,6 +76,9 @@ class AssetPalette:
         image_frame.pack(fill='both', expand=True)
         self.canvas = tk.Canvas(image_frame, width=390, height=280,
                                 background='#e5e0d4', highlightthickness=0)
+        self.preview_image = None
+        self._preview_item_id = None
+        self.canvas.bind('<Configure>', self._center_preview)
         ys = ttk.Scrollbar(image_frame, orient='vertical', command=self.canvas.yview)
         ys.pack(side='right', fill='y')
         self.canvas.configure(yscrollcommand=ys.set)
@@ -78,8 +86,16 @@ class AssetPalette:
         xs = ttk.Scrollbar(preview, orient='horizontal', command=self.canvas.xview)
         xs.pack(fill='x')
         self.canvas.configure(xscrollcommand=xs.set)
-        ttk.Label(preview, textvariable=self.detail, wraplength=345,
-                  justify='left').pack(fill='x', padx=8, pady=8)
+        self.variant_controls = ttk.Frame(preview)
+        ttk.Label(self.variant_controls, text='Pose / animation').pack(side='left')
+        self.variant_selector = ttk.Combobox(
+            self.variant_controls, textvariable=self.watercolor_variant,
+            state='readonly', width=28)
+        self.variant_selector.pack(side='left', fill='x', expand=True, padx=(8, 0))
+        self.variant_selector.bind('<<ComboboxSelected>>', self.choose_group_variant)
+        self.detail_label = ttk.Label(preview, textvariable=self.detail,
+                                      wraplength=345, justify='left')
+        self.detail_label.pack(fill='x', padx=8, pady=6)
         opts = ttk.Frame(preview)
         opts.pack(fill='x', padx=8)
         self.rotate_button = ttk.Button(opts, text='Rotation 90°', command=self.rotate)
@@ -209,41 +225,123 @@ class AssetPalette:
 
     def populate(self, *_args):
         old = self.tree.selection()
+        opened = {iid for iid in self.tree.get_children()
+                  if iid.startswith('watercolor-group:') and self.tree.item(iid, 'open')}
         self.tree.delete(*self.tree.get_children())
+        self.images.clear()
         extra = tuple(self.entities() if self.entities is not None else ())
         extra += self.watercolor_entries
         self.entries = {e.id: e for e in (*ENTRIES, *extra)}
         rows = search_entries(self.query.get(), self.category.get(), extra)
 
+        # The registry remains flat; grouping is strictly a presentation detail.
+        # Authored animation frames are available through the frame scrubber.
+        # Exact-ID search still reveals a source frame when it is needed.
+        animated_frames = self.watercolor.animation_frame_ids()
+        filtering = bool(self.query.get().strip())
+        grouped = {}
         for entry in rows:
             if entry.kind == 'watercolor':
                 item = self.watercolor.lookup(entry.value)
-                sprite_id, _duration = self.watercolor.frame(entry.value)
-                available, _path = self.watercolor.status(sprite_id)
-                suffix = (' (' + str(item.frame_count) + ' frames)'
-                          if item.kind == 'animation' else '')
-                self.tree.insert('', 'end', iid=entry.id,
-                                 text=entry.name + suffix +
-                                 (' ⚠ PNG absent' if available != 'ready' else ''))
+                if not filtering and item.kind == 'sprite' and item.id in animated_frames:
+                    continue
+                grouped.setdefault(item.group, []).append(entry)
                 continue
-            photo, state, _path = self.sprite(entry, 8 if entry.kind == 'structure' else 22)
+            photo, _state, _path = self.sprite(
+                entry, 8 if entry.kind == 'structure' else 22)
             options = {}
             if photo is not None:
                 self.images[entry.id] = photo
                 options['image'] = photo
             self.tree.insert('', 'end', iid=entry.id,
-                             text=entry.name + (' ⚠' if photo is None and entry.kind != 'object' else ''), **options)
-        self.count.set(f'{len(rows)} / {len(self.entries)}')
-        if rows:
-            selected = old[0] if old and any(e.id == old[0] for e in rows) else rows[0].id
+                             text=entry.name + (' ⚠' if photo is None and
+                                  entry.kind != 'object' else ''), **options)
+
+        names = {'jeanne': 'Jeanne', 'wolf': 'Loup', 'spearman': 'Lancier',
+                 'vfx': 'Effets visuels', 'props': 'Objets et décors',
+                 'townfolk': 'Villageois', 'soldiers': 'Soldats',
+                 'bestiary': 'Bestiaire', 'heroes': 'Héros'}
+        self.group_variants = {}
+        for group, entries in grouped.items():
+            group_id = 'watercolor-group:' + group
+            # Animations before individual poses; source frames do not clutter
+            # the collapsed library view.
+            entries = sorted(entries, key=lambda e: (
+                0 if self.watercolor.lookup(e.value).kind == 'animation' else 1,
+                e.name.casefold()))
+            animations = sum(self.watercolor.lookup(e.value).kind == 'animation'
+                             for e in entries)
+            poses = len(entries) - animations
+            self.group_variants[group_id] = tuple(e.id for e in entries)
+            label = f"{names.get(group, group.capitalize())}  ·  {animations} animations / {poses} poses"
+            self.tree.insert('', 'end', iid=group_id, text=label,
+                             open=filtering or group_id in opened)
+            for entry in entries:
+                item = self.watercolor.lookup(entry.value)
+                suffix = (f" ({item.frame_count} images)"
+                          if item.kind == 'animation' else '')
+                sprite_id, _duration = self.watercolor.frame(entry.value)
+                available, _path = self.watercolor.status(sprite_id)
+                title = entry.value.removeprefix('anim_' + group + '_')
+                title = title.removeprefix(group + '_').replace('_', ' ').capitalize()
+                prefix = '▶ ' if item.kind == 'animation' else '• '
+                self.tree.insert(group_id, 'end', iid=entry.id,
+                                 text=prefix + title + suffix +
+                                 (' ⚠ PNG absent' if available != 'ready' else ''))
+
+        self.count.set(f'{len(rows)} / {len(self.entries)} assets'
+                       + (f' · {len(grouped)} familles' if grouped else ''))
+        if rows and self.tree.get_children():
+            previous = old[0] if old else None
+            if previous is not None and self.tree.exists(previous):
+                selected = previous
+            elif previous and previous.startswith('watercolor:'):
+                # A searched frame can disappear from the compact view.
+                item = self.watercolor.lookup(previous[len('watercolor:'):])
+                selected = 'watercolor-group:' + item.group
+                if not self.tree.exists(selected):
+                    selected = self.tree.get_children()[0]
+            else:
+                selected = self.tree.get_children()[0]
             self.tree.selection_set(selected)
             self.tree.focus(selected)
             self.select()
         else:
+            self._group_selected = None
+            self.variant_controls.pack_forget()
             self.canvas.delete('all')
             self.detail.set('Aucun asset ne correspond à la recherche.')
             self.use_button.state(['disabled'])
             self.rotate_button.state(['disabled'])
+
+    def choose_group_variant(self, _event=None):
+        if self._group_selected is None:
+            return
+        selected_id = self._group_option_lookup.get(self.watercolor_variant.get())
+        if selected_id is None:
+            return
+        self._group_active_id = selected_id
+        self.stop_watercolor()
+        self.watercolor_frame.set('0')
+        self._configure_watercolor_controls(self.selected())
+        self.preview()
+
+    def _configure_watercolor_controls(self, entry):
+        self.watercolor_animation_controls.pack_forget()
+        if entry is not None and entry.kind == 'watercolor':
+            item = self.watercolor.lookup(entry.value)
+            if item.kind == 'animation':
+                self.watercolor_frame_selector['values'] = tuple(
+                    str(i) for i in range(item.frame_count))
+                self.watercolor_animation_controls.pack(side='left', padx=8)
+
+    def _center_preview(self, _event=None):
+        if self._preview_item_id is None or self.preview_image is None:
+            return
+        width = max(self.canvas.winfo_width(), self.preview_image.width() + 24)
+        height = max(self.canvas.winfo_height(), self.preview_image.height() + 24)
+        self.canvas.coords(self._preview_item_id, width / 2, height / 2)
+        self.canvas.configure(scrollregion=(0, 0, width, height))
 
     def stop_watercolor(self):
         if self._watercolor_timer is not None:
@@ -290,22 +388,53 @@ class AssetPalette:
         self._queue_watercolor_frame()
 
     def selected(self):
-        selected = self.tree.selection()
-        return self.entries[selected[0]] if selected else None
+        selection = self.tree.selection()
+        if not selection:
+            return None
+        key = selection[0]
+        if key == self._group_selected and key in self.group_variants:
+            return self.entries.get(self._group_active_id)
+        return self.entries.get(key)
 
     def select(self, _event=None):
         self.turns = 0
         self.stop_watercolor()
-        entry = self.selected()
-        self.watercolor_animation_controls.pack_forget()
-        if entry is not None:
-            if entry.kind == 'watercolor':
-                item = self.watercolor.lookup(entry.value)
-                self.watercolor_frame.set('0')
+        selection = self.tree.selection()
+        key = selection[0] if selection else None
+        if key in self.group_variants:
+            values = self.group_variants[key]
+            if key != self._group_selected or self._group_active_id not in values:
+                # Choose idle first for a stable character preview; use the
+                # first authored animation if no standalone idle exists.
+                self._group_active_id = next(
+                    (eid for eid in values if eid.endswith('_idle')), values[0])
+            self._group_selected = key
+            group = key.split(':', 1)[1]
+            options = {}
+            for eid in values:
+                item = self.watercolor.lookup(self.entries[eid].value)
+                label = item.id.removeprefix('anim_' + group + '_')
+                label = label.removeprefix(group + '_').replace('_', ' ').capitalize()
+                label = ('Animation · ' if item.kind == 'animation' else 'Pose · ') + label
                 if item.kind == 'animation':
-                    self.watercolor_frame_selector['values'] = tuple(
-                        str(i) for i in range(item.frame_count))
-                    self.watercolor_animation_controls.pack(side='left', padx=8)
+                    label += f' ({item.frame_count} images)'
+                options[label] = eid
+            self._group_option_lookup = options
+            self.variant_selector['values'] = tuple(options)
+            selected_label = next(label for label, eid in options.items()
+                                  if eid == self._group_active_id)
+            self.watercolor_variant.set(selected_label)
+            self.variant_controls.pack(fill='x', padx=8, pady=(6, 0),
+                                       before=self.detail_label)
+        else:
+            self._group_selected = None
+            self._group_active_id = None
+            self.variant_controls.pack_forget()
+
+        entry = self.selected()
+        self.watercolor_frame.set('0')
+        self._configure_watercolor_controls(entry)
+        if entry is not None:
             self.entity_id.set('')
             self.entity_destination.set('')
             if self.content is not None and self.mission is not None:
@@ -353,11 +482,13 @@ class AssetPalette:
                               else ['!disabled'])
         self.rotate_button.state(['!disabled'] if entry.kind == 'structure' else ['disabled'])
         self.canvas.delete('all')
+        self._preview_item_id = None
         photo, state, path = self.sprite(entry, self.scale.get(), self.turns)
         self.preview_image = photo
         if photo is not None:
-            self.canvas.create_image(12, 12, anchor='nw', image=photo)
-            self.canvas.configure(scrollregion=(0, 0, photo.width()+24, photo.height()+24))
+            self._preview_item_id = self.canvas.create_image(
+                0, 0, anchor='center', image=photo)
+            self._center_preview()
         elif entry.kind == 'object':
             self.canvas.create_rectangle(80, 50, 220, 140, fill='#9264ab',
                                          outline='#3d2554', width=3)
@@ -372,9 +503,8 @@ class AssetPalette:
         w, h = entry.footprint(self.turns)
         rotation = (f'\nRotation du terrain : {self.turns*90}° ; 2 vues PNG partagées.'
                     if entry.kind == 'structure' else '')
-        effect = ('Galerie artistique uniquement : les PNG ne remplacent pas les '
-                  'acteurs ou objets placés tant que leurs bindings Player ne '
-                  'sont pas configurés.' if entry.kind == 'watercolor' else entry.effect)
+        effect = ('Illustration seule : non liée aux acteurs/objets du Player.'
+                  if entry.kind == 'watercolor' else entry.effect)
         self.detail.set(f'{entry.name} — {entry.category}\n{entry.id}\n'
                         f'Emprise : {w} × {h} case(s) · {path}\n{state}'
                         f'{rotation}\n{effect}')
