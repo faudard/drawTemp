@@ -5,6 +5,7 @@ on:
       - 'drawtemp/sdk/campaign_studio.py'
       - 'drawtemp/studio/campaign_window.py'
       - 'tests_standalone/test_drawtemp5_r10.py'
+      - 'tests_standalone/test_drawtemp5_r10_gui.py'
       - 'docs/drawtemp5/R10_CAMPAIGN_WORLD_SIEGE.md'
       - 'pyproject.toml'
       - '.github/workflows/drawtemp5-r10.yml'
@@ -50,3 +51,8 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: python -m drawtemp.studio.campaign_window --smoke
+      - name: Click Qt campaign authoring controls in offscreen mode
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_drawtemp5_r10_gui -v
