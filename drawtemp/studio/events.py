@@ -53,7 +53,7 @@ class EventStudio:
         plan = self.session.preview_pair(
             lambda content, project: (transform(content), project),
             kind="event." + kind, mission_id=mission_id,
-            views=("workspace", "inspector", "map", "narrative"))
+            views=("renderer", "minimap", "inspector", "workspace"))
         return self.session.apply(plan)
 
     def create(self, mission_id, event_id, condition, actions):
@@ -145,7 +145,7 @@ class EventStudio:
             return new_content, new_project
         return self.session.apply(self.session.preview_pair(
             transform, kind="event." + kind, mission_id=mission_id,
-            views=("workspace", "inspector", "map", "narrative")))
+            views=("renderer", "minimap", "inspector", "workspace")))
 
     def create_scene(self, mission_id, scene_id, title, text, *, speaker=""):
         """A scene is stored only in GameProject.story; event references remain canonical."""
