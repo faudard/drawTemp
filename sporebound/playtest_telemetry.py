@@ -75,6 +75,7 @@ class PlaytestRecorder:
                                if content is not None else None)
         self.rules_manifest = rules.manifest() if rules is not None else None
         self.enabled = False
+        self.revision = 0
         self.sessions = []
         self.active = None
         self.error = None
@@ -95,6 +96,7 @@ class PlaytestRecorder:
         start = self.clock()
         require(isinstance(start, (float, int)) and math.isfinite(start),
                 "Invalid monotonic clock")
+        self.revision += 1
         self.active = {
             "started_monotonic": start,
             "mission": frame["mission"],
@@ -167,6 +169,7 @@ class PlaytestRecorder:
             current["events"].append(row)
         else:
             current["truncated_events"] += 1
+        self.revision += 1
         current["last_tick"] = after["tick"]
         current["last_hp"] = after["hp"]
         current["last_survival"] = after["survival"]
@@ -182,6 +185,7 @@ class PlaytestRecorder:
             return
         record = self._report_active(reason)
         self.sessions.append(record)
+        self.revision += 1
         self.active = None
 
     def _report_active(self, result):
@@ -304,5 +308,9 @@ def analyze_playtests(report, *, mission=None, ai_report=None):
             "ct_p95": ai_report["ticks_p95"],
             "commands_p95": ai_report["commands_p95"],
             "note": "AI CT/commands are not human minutes",
+            "matching_content": (
+                report.get("content_sha256") == ai_report.get("content_sha256")
+                if report.get("content_sha256") and ai_report.get("content_sha256")
+                else None),
         }
     return result
