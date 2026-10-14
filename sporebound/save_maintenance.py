@@ -140,7 +140,12 @@ class LongSessionMaintenance:
             issues.append("writer lock present; no automatic stale-lock takeover")
         if temps:
             issues.append("temporary files present; manual quarantine only")
-        archived = []
+        archived, incomplete = [], []
+        if self.history.exists() and self.history.is_dir() and not self.history.is_symlink():
+            for path in self.history.iterdir():
+                if path.name.startswith(".staging-"):
+                    incomplete.append(path.name)
+                    issues.append("incomplete archive staging retained for investigation")
         try:
             for path in self._archive_dirs():
                 try:
@@ -155,7 +160,8 @@ class LongSessionMaintenance:
                 "slot": str(self.path), "status": status, "source": source,
                 "sequence": sequence, "replayed": replayed,
                 "session_digest": game_digest, "assets": items,
-                "temporary": temps, "archives": archived, "issues": issues}
+                "temporary": temps, "archives": archived,
+                "incomplete_archives": incomplete, "issues": issues}
 
     def _archive_dirs(self):
         if not self.history.exists():
@@ -245,6 +251,8 @@ class LongSessionMaintenance:
                         if item["role"] in ("primary", "backup", "journal")),
                     "Refusing to archive unverified or degraded live state")
             self._ensure_history()
+            require(len(self._archive_dirs()) < _MAX_ARCHIVES,
+                    "Archive limit reached; confirm a retention plan first")
             name = (f"gen-{time.time_ns():020d}-"
                     f"{inventory['session_digest'][:12]}")
             target = self.history / name
