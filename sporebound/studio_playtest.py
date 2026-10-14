@@ -129,6 +129,10 @@ class PlaytestStudio:
             label += ("\nIA séparée : victoire {:.1%}, CT p95 {}, "
                       "commandes p95 {}. Aucune conversion CT→minutes.").format(
                 ai["victory_rate"], ai["ticks_p95"], ai["commands_p95"])
+        if ai and summary["ai_reference"]["matching_content"] is False:
+            label += "\nAttention : la référence IA a un contenu authored différent."
+        label += ("\nActions joueur : {} · actions IA : {}").format(
+            summary["player_commands"], summary["enemy_commands"])
         self.summary.configure(text=label)
         self.rows.delete(*self.rows.get_children())
         chosen = [(i, row) for i, row in enumerate(self.report["sessions"])
