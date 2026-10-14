@@ -32,6 +32,12 @@ la progression narrative, les reçus d'identifiants d'opérations, et la
 convergence après un retry avec le même identifiant. Les replays
 multi-fronts et longs combats restent validés par les tests R8 précédents.
 
+Un contrôle multi-fronts tue également le processus pendant le
+checkpoint suivant un premier changement de focus. Il compare l'état
+`GameSession` complet, l'historique stratégique, l'état des secteurs hors
+focus et le rejeu d'un même ID de requête, y compris les identités des
+batailles nouvellement créées.
+
 Un test séparé altère volontairement la chaîne de checksum d'un journal.
 Le chargeur doit échouer et **ne peut pas** prendre silencieusement
 un ancien checkpoint. Une coupure laisse potentiellement un
