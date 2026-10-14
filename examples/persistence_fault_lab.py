@@ -210,21 +210,30 @@ def run_multifront_crash_gate():
         session.set_doctrine("walls", "assault")
         session.advance_fronts()
         before = session.recording()
-        expected = GameSession.from_recording(before, content, project)
-        expected.switch_front("walls")
-        expected_recording = expected.recording()
+        # Switching focus can allocate a Battle UUID. Compare the recovered
+        # recording with the UUID-bearing snapshot published by the worker,
+        # and compare the UUID-independent strategic state with an independent
+        # uninterrupted control run from the exact original checkpoint.
+        control = GameSession.from_recording(before, content, project)
+        control.switch_front("walls")
         store.initialize(session)
         _invoke_worker(path, ("checkpoint", 1, "before"),
                        operation="switch_front")
         lock = path.with_name(path.name + ".lock")
         require(lock.is_file(), "Multi-front crash left no writer evidence")
+        journal = store._read_journal()
+        require(len(journal["entries"]) == 1 and
+                "snapshot" in journal["entries"][0],
+                "First-time front switch must preserve its verified UUID boundary")
+        expected_recording = journal["entries"][0]["snapshot"]
+        expected = GameSession.from_recording(expected_recording, content, project)
         loaded = store.load_with_status(content, project)
         require(loaded.session.recording() == expected_recording,
                 "Focused and offscreen fronts diverged after crash")
-        require(loaded.session.fronts.history == expected.fronts.history,
+        require(loaded.session.fronts.history == control.fronts.history,
                 "Strategic history diverged after crash")
         require(loaded.session.fronts.timeline.state() ==
-                expected.fronts.timeline.state(),
+                control.fronts.timeline.state(),
                 "Offscreen front state diverged after crash")
         lock.unlink()  # the child has terminated and was reaped
         retry = store.perform(loaded.session, _REQUEST, "switch_front", "walls")
