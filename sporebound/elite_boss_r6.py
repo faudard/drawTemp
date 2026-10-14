@@ -53,8 +53,17 @@ def adaptive_boss_command(battle):
     if phase <= 1:
         return phase_boss_command(battle)
     baseline = coordinated_command(battle)
-    if baseline["kind"] in {"act", "level_attack", "interact", "siege_attack",
+    if baseline["kind"] in {"level_attack", "interact", "siege_attack",
                             "repair_siege", "item", "formation", "prepare"}:
+        return baseline
+    # A multi-tick telegraph is an ordinary authored cast. Only begin one
+    # when it does not displace an already legal immediate attack or heal.
+    if baseline["kind"] != "act":
+        from .boss_encounter_r6b import telegraphed_cast_command
+        cast = telegraphed_cast_command(battle, actor)
+        if cast is not None:
+            return cast
+    if baseline["kind"] == "act":
         return baseline
     opponents = sorted((u for u in battle.units if u.alive
                         and u.team != actor.team
@@ -91,6 +100,10 @@ def adaptive_boss_command(battle):
     current_tile = battle.board.tile(actor.pos)
     options = []
     reachable = battle.reachable(actor)
+    # No wave is predicted: the only coordination bonus comes from teammates
+    # already spawned into the live roster via EncounterDirector.
+    from .boss_encounter_r6b import arrived_reinforcements, reinforcement_pressure
+    reinforcements = arrived_reinforcements(battle, actor)
     for anchor, (cost, path) in sorted(reachable.items()):
         if anchor == actor.pos:
             continue
@@ -106,9 +119,12 @@ def adaptive_boss_command(battle):
         height = min(battle.board.tile(cell).height for cell in footprint)
         # Route cost and cover are tie-breakers, not replacements for
         # geometric pressure or risk. Both are evaluated on real tiles.
+        supported = max((reinforcement_pressure(
+            battle, actor, anchor, foe, reinforcements)
+            for foe in opponents), default=0)
         score = (progress * 10 + (cover - current_tile.cover) * .1
                  + (height - current_tile.height) * 2
-                 - exposure - cost * .3)
+                 + supported * 6 - exposure - cost * .3)
         if score > 0:
             options.append((-score, exposure, cost, anchor))
     if options:
@@ -132,12 +148,16 @@ def boss_r6_telegraph(battle, boss_id):
     from .bosses3 import boss_intent_preview
     actor = battle.unit(boss_id)
     view = boss_intent_preview(battle, boss_id)
+    from .boss_encounter_r6b import arrived_reinforcements
     result = {
         **view, "behavior": actor.behavior,
         "occupied_cells": [list(cell) for cell in sorted(actor.occupied_cells())],
         "certainty": "conditional" if view["ready"] else "unknown",
         "threat_cells": [], "destination_cells": [], "path": [],
         "reinforcements": [], "queued_waves": [],
+        "arrived_reinforcements": [
+            {"unit": ally.id, "cell": list(ally.pos), "certainty": "observed"}
+            for ally in arrived_reinforcements(battle, actor)],
     }
     for wave in battle.encounter.pending:
         result["queued_waves"].append({
