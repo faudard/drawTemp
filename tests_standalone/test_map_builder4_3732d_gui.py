@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 import traceback
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -85,7 +86,7 @@ class ReusablePrefab4GuiTests(unittest.TestCase):
                         errors, 'Tk callback exception: ' + '\n'.join(
                             ''.join(traceback.format_exception(*exc))
                             for exc in errors))
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = json.loads(output_path.read_text(encoding='utf-8'))
                     dst = next(m for m in saved['missions'] if m['id'] == 'prefab_gui_dst4')
                     group = dst['editor_groups'][0]
@@ -94,7 +95,7 @@ class ReusablePrefab4GuiTests(unittest.TestCase):
                     self.assertEqual(Content.from_dict(saved).missions['prefab_gui_dst4']
                                      .board.tile((8, 8)).surface, 'cobble')
                     buttons['Annuler'].invoke()
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     undo = json.loads(output_path.read_text(encoding='utf-8'))
                     self.assertFalse(next(m for m in undo['missions']
                                           if m['id'] == 'prefab_gui_dst4'
