@@ -122,6 +122,20 @@ python -m sporebound tactical-choices --mission garden --seed 1 \
   --report tactical-choices.json
 ```
 
+Use the same mission, seed, sample stride and command cap when
+comparing two versions. `compare_choice_reports` flags disappearance
+of formerly available category pairs, excessive loss of multi-category
+opportunities, and digest drift with unchanged authored inputs. Changes in
+content/rules are disclosed; sampled decision states do not necessarily
+represent identical tactical situations.
+
+```sh
+python -m sporebound tactical-choices --mission garden --seed 1 \
+  --limit 120 --choice-min-multi 0 --report before.json
+python -m sporebound tactical-choices --mission garden --seed 1 \
+  --limit 120 --choice-min-multi 0 --baseline before.json
+```
+
 CLI exit codes: **0** for a passed coverage gate, **2** for an unmet
 coverage gate, **1** for invalid arguments or source content. CI includes
 a non-policy smoke check with `--choice-min-multi 0`; this does NOT
