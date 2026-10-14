@@ -220,6 +220,7 @@ enter the exact label in the review dialog; an unannotated report uses the
 
 ```sh
 python -m unittest tests_standalone.test_tactical_quality_r615 -v
+python -m unittest tests_standalone.test_full_activation_r616 -v
 python -m sporebound tactical-quality --mission garden --seed 1 \
   --limit 120 --quality-min-differentiated 1 \
   --quality-min-tradeoffs 1 --report quality.json
@@ -240,6 +241,66 @@ The **automated-only** CLI returns 0 if technical checks pass, but its output
 explicitly says `not_certified_without_human_review`. When human evidence
 is provided, it returns **2** if the release gate is incomplete.
 CI uses a non-policy smoke sample and does **not** claim a human signoff.
+
+## R6.16 — Full Activation Evaluation
+
+R6.15 compares single legal commands. **R6.16** compares the consequences
+of a **complete player activation**, using only the existing engine's
+`Battle.execute`, `choose_command` and `End` boundary:
+
+- real AI-selected reference activation (bounded to five commands);
+- immediate `End`, attack/support/item/defense then `End`;
+- cover/objective/approach move then `End`;
+- move then a freshly legal attack/support/interaction then `End`;
+- attack then move then `End` when both actions remain legal.
+
+Every candidate starts from a **deep copy of the same live tactical state**
+and independent, identically initialized random generator. Paths, reactions,
+terrain, delayed effects, resources and CT are resolved by canonical rules.
+The `end_turn` event is the authoritative boundary: a fast hero may become
+active again after automatic CT advancement, but that is not an additional
+command in the measured turn. The metric `ct_end_cost` is the actual cost
+recorded by the rules, not a wall-clock estimate.
+
+Candidate generation is intentionally **bounded** to 12 valid plans and
+three movement anchors per decision, with a maximum of six sampled
+activations per simulation. It does not prove that all moves, skills or
+multi-front consequences were explored. Terminal branches keep an explicit
+result and are **not** compared against nonterminal branches using an
+arbitrary victory-to-damage conversion.
+
+For nonterminal branches, the report contains after-End HP, heals, resource
+consumption, cover, hazard, goal distance and CT cost. It describes the
+**Pareto frontier**: an alternative is dominated only when another is no
+worse on all measured dimensions and strictly better on at least one.
+The report also counts non-dominated pairs that actually differ; it never
+manufactures a single tactical quality score. This does not predict how
+the enemy will behave during subsequent turns.
+
+### Studio workflow
+
+In **Balance Matrix**, run the baseline/variants, select a case and use
+**R6.16 · Tours complets**. The analysis uses the **same immutable authoring
+snapshot, rules, initial inventory and seed as the selected Matrix case**,
+not a later modified Studio document. The panel presents the sampled
+`Move → Act → End` and `Act → Move → End` sequences, CT end costs and
+measured consequences. **Exporter tours R6.16** writes the complete
+reproducible JSON.
+
+### Headless gate
+
+```sh
+python -m unittest tests_standalone.test_full_activation_r616 -v
+python -m sporebound full-activation --mission garden --seed 1 \
+  --limit 120 --activation-min-distinct 1 \
+  --activation-min-pairs 1 --report full_activation.json
+```
+
+Exit code 0 means *technical sample coverage achieved*; 2 means an
+unmet automated gate, 1 indicates malformed inputs. The CLI explicitly
+states `human_certified: false`, and the opt-in human review criteria from
+R6.15 remain mandatory for release. CI runs a limited technical smoke
+with zero optional coverage thresholds and does not claim player quality.
 
 ## R6 design gate — tactical choices, not merely DPS
 

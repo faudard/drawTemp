@@ -62,16 +62,25 @@ def execute_activation(battle, commands, *, ai_continuation=False):
         replica.execute(deepcopy(command))
         require(len(replica.commands) == before + 1, "Uncommitted activation command")
         steps.append(deepcopy(command))
-        if replica.result or replica.active_id != actor.id:
+        # End can immediately re-activate the *same* fast actor because CT
+        # advances until the next ready unit. The committed end_turn event is
+        # the turn boundary, not active_id inequality.
+        if (replica.result or
+                any(row["kind"] == "end_turn" and row["unit"] == actor.id
+                    for row in replica.events[start_events:]) or
+                not replica.unit(actor.id).alive):
             break
-    require(replica.result or replica.active_id != actor.id,
-            "Incomplete tactical activation")
-    require(ai_continuation or replica.result or
-            (steps and steps[-1].get("kind") == "end"),
-            "Explicit activation did not finish with End")
+        require(replica.active_id == actor.id,
+                "Actor activation switched without End")
     events = replica.events[start_events:]
     end_events = [row for row in events if row["kind"] == "end_turn"
                   and row["unit"] == actor.id]
+    interrupted = replica.result is not None or not replica.unit(actor.id).alive
+    require(bool(end_events) or interrupted,
+            "Incomplete tactical activation")
+    require(ai_continuation or interrupted or
+            (steps and steps[-1].get("kind") == "end"),
+            "Explicit activation did not finish with End")
     cost = end_events[-1]["cost"] if end_events else None
     after = _snapshot(replica, actor.id, actor.team)
     return {
