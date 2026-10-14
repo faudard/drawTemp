@@ -124,6 +124,7 @@ class PlayerApplication:
         self._motion_source = None
         self._motion_frame = None
         self._motion_job = None
+        self._hud_resize_job = None
         self.canvas = None
         self.renderer = None
         self.iso_renderer = None
@@ -184,6 +185,9 @@ class PlayerApplication:
         if self._motion_job is not None:
             self.root.after_cancel(self._motion_job)
             self._motion_job = None
+        if self._hud_resize_job is not None:
+            self.root.after_cancel(self._hud_resize_job)
+            self._hud_resize_job = None
         if self._preview_job is not None:
             self.root.after_cancel(self._preview_job)
             self._preview_job = None
@@ -1514,13 +1518,16 @@ class PlayerApplication:
             self._schedule_battle_viewport_refresh()
 
     def _schedule_battle_viewport_refresh(self):
+        if self._hud_resize_job is not None:
+            return
         revision = self.presentation.revision
         def refresh():
+            self._hud_resize_job = None
             if (self.presentation.current(revision)
                     and self.presentation.screen == "battle"
                     and self.canvas is not None):
                 self._redraw()
-        self.root.after_idle(refresh)
+        self._hud_resize_job = self.root.after_idle(refresh)
 
     def _toggle_hud_sidebar(self):
         if self.hud_panes is None or self.hud_sidebar is None:
