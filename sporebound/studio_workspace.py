@@ -732,11 +732,10 @@ class ProjectWorkspaceTab:
         if not selected:
             raise RuleError('Choisir un diagnostic dans la liste.')
         key = self.problem_targets[selected[0]]
+        # Preserve the 3.7.31 navigation contract: the target is revealed
+        # on the tactical canvas. open_key synchronizes the shared Workspace
+        # inspector behind the map without changing the selected map tab.
         self.open_key(key)
-        # Open the canonical inspector, while the live map has been focused by
-        # open_selected(). Authors can now fix the resource without reloading.
-        self.notebook.select(self.tab)
-        self.tree.focus_set()
 
     def new_mission(self):
         dialogs = self.owner.dialogs
