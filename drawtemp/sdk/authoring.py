@@ -14,7 +14,7 @@ from pathlib import Path
 
 from drawtemp.core import GameProject, RuleError
 from drawtemp.sdk.simulation import freeze, thaw
-from sporebound.editor_architecture import ALL_VIEWS
+from sporebound.editor_views import ALL_VIEWS
 from sporebound.studio_transaction import (
     StudioHistory, StudioTransactionStore, validate_pair,
 )
