@@ -29,9 +29,12 @@ from .player_preferences import load_preferences, save_preferences
 from .player_guidance import combat_guidance
 from .player_action_preview import action_preview, preview_screen_geometry
 from .player_hud_layout import combat_hud_sections
+from .jeanne_chapter_ui import JeanneChapterUiMixin
+from .jeanne_chapter1 import (CHAPTER_SCENE_KICKERS, chapter_mission_card,
+                             chapter_progress)
 
 
-class PlayerApplication:
+class PlayerApplication(JeanneChapterUiMixin):
     def __init__(self, content_path, project_path=None, profile_path=None, *, chapter_one=False):
         import tkinter as tk
         from tkinter import ttk, messagebox
@@ -78,7 +81,7 @@ class PlayerApplication:
         self.high_contrast = tk.BooleanVar(value=preferences["high_contrast"])
         self.compact_hud = tk.BooleanVar(value=preferences["compact_hud"])
         self.feedback_var = tk.StringVar()
-        self.guidance_enabled = tk.BooleanVar(value=False)
+        self.guidance_enabled = tk.BooleanVar(value=chapter_one)
         self.guidance_var = tk.StringVar()
         self.guide_panel = None
         self.hud_log_visible = tk.BooleanVar(value=False)
@@ -95,7 +98,7 @@ class PlayerApplication:
         self.hud_portrait = None
         self.hud_portrait_renderer = None
         self._hud_portrait_unit = None
-        self.preview_enabled = tk.BooleanVar(value=False)
+        self.preview_enabled = tk.BooleanVar(value=chapter_one)
         self.preview_var = tk.StringVar()
         self.preview_panel = None
         self._preview_result = None
@@ -144,6 +147,8 @@ class PlayerApplication:
         self._typewriter_job = None
         self._stage_job = None
         self._world_job = None
+        self._chapter_enemy_job = None
+        self.chapter_auto_ai = tk.BooleanVar(value=chapter_one)
         self._resume_world_after_scene = False
         self._explore_feedback = ""
         self._explore_scene_id = None
@@ -190,6 +195,9 @@ class PlayerApplication:
         if self._world_job is not None:
             self.root.after_cancel(self._world_job)
             self._world_job = None
+        if self._chapter_enemy_job is not None:
+            self.root.after_cancel(self._chapter_enemy_job)
+            self._chapter_enemy_job = None
         if self._motion_job is not None:
             self.root.after_cancel(self._motion_job)
             self._motion_job = None
@@ -284,6 +292,7 @@ class PlayerApplication:
         panel = self.ttk.LabelFrame(self.view, text="Nouvelle aventure / reprendre", padding=18)
         panel.pack(anchor="center", fill="x", padx=160, pady=30)
         if self.chapter_one:
+            self._chapter_cover(panel)
             self.ttk.Label(
                 panel, text="CHAPITRE I  ·  LES CENDRES",
                 font=("TkDefaultFont", 16, "bold")).pack(anchor="w", pady=(0, 10))
@@ -299,8 +308,9 @@ class PlayerApplication:
                 slot_row, textvariable=self.slot_var, state="readonly",
                 values=[str(i) for i in range(1, self.project.save_slots + 1)],
                 width=8).pack(side="left")
-            self._button(panel, "Commencer le chapitre I", self._new_game).pack(
-                fill="x", pady=4)
+            start = self._button(panel, "Commencer le chapitre I", self._new_game)
+            start.pack(fill="x", pady=4)
+            start.focus_set()
             self._button(panel, "Continuer le chapitre I", self._load_game).pack(
                 fill="x", pady=4)
             self._button(panel, "Sauvegardes", self.save_manager_screen).pack(
@@ -867,6 +877,11 @@ class PlayerApplication:
         next_clip()
 
     def _start_mission_with_cinematic(self, mission_id):
+        if self.chapter_one:
+            return self._chapter_briefing(mission_id)
+        return self._launch_mission(mission_id)
+
+    def _launch_mission(self, mission_id):
         self._cinematic_sequence(
             "before_mission", mission_id,
             lambda: self._safe(lambda: self._change(
@@ -886,11 +901,12 @@ class PlayerApplication:
                       "Or : " + str(session.progress.gold) +
                       "    Missions terminées : " + str(len(session.progress.completed)))
         if self.chapter_one:
-            chapter_ids = {"a1_01_route", "a1_02_pont", "a1_03_hospice",
-                           "a1_04a_archives", "a1_04b_otages", "a1_05_vaucouleurs"}
-            completed = len(set(session.progress.completed) & chapter_ids)
-            self.ttk.Label(self.view, text=f"CHAPITRE I  ·  {completed}/5 étapes").pack(
-                anchor="w", pady=(0, 10))
+            progress = chapter_progress(session.progress)
+            self.ttk.Label(
+                self.view, text=f"CHAPITRE I  ·  {progress['completed']}/5 étapes "
+                                f"· Compagnon : {progress['companion']}",
+                font=("TkDefaultFont", 12, "bold")
+            ).pack(anchor="w", pady=(0, 10))
         # Visible roster: recruitment and equipment have actual tactical effects.
         if session.progress.heroes:
             roster = self.ttk.LabelFrame(self.view, text="Équipe et progression", padding=8)
@@ -923,7 +939,10 @@ class PlayerApplication:
             if self.project.world:
                 self._button(self.view, "Carte du monde",
                              self.world_screen).pack(fill="x", padx=80, pady=(3, 9))
-            self.ttk.Label(self.view, text="Choisir une mission :").pack(anchor="w", pady=8)
+            self.ttk.Label(
+                self.view, text=("PROCHAINE ÉTAPE" if self.chapter_one
+                                 else "Choisir une mission :")
+            ).pack(anchor="w", pady=8)
             journey = session.world_state() if self.project.world else None
             world_missions = ({node["mission"] for node in self.project.world["nodes"]}
                               if self.project.world else set())
@@ -935,7 +954,11 @@ class PlayerApplication:
                                  self.world_screen).pack(fill="x", padx=80, pady=5)
                 else:
                     self._button(
-                        self.view, mission.name + " — " + mission.objective,
+                        self.view,
+                        ("Étape " + chapter_mission_card(mission_id)["ordinal"] +
+                         " · " + chapter_mission_card(mission_id)["chapter"] +
+                         "  →  Préparer" if self.chapter_one else
+                         mission.name + " — " + mission.objective),
                         lambda mid=mission_id: self._start_mission_with_cinematic(mid)
                     ).pack(fill="x", padx=80, pady=5)
             # Studio blueprints are distinct from ad-hoc multi-front battles.
@@ -968,7 +991,10 @@ class PlayerApplication:
                 message = ("Chapitre I terminé — Vaucouleurs. Votre décision "
                            "est conservée pour la suite." if finished else
                            "Campagne terminée : aucun objectif disponible.")
-                self.ttk.Label(self.view, text=message).pack(pady=20)
+                if finished:
+                    self._chapter_ending_panel(session.progress)
+                else:
+                    self.ttk.Label(self.view, text=message).pack(pady=20)
         footer = self.ttk.Frame(self.view)
         footer.pack(side="bottom", fill="x", pady=12)
         self._button(footer, "Inspecter la campagne", self._campaign_flow_inspector).pack(side="left", padx=6)
@@ -1225,6 +1251,8 @@ class PlayerApplication:
     def _narrative_scene(self, scene, *, choices=None, on_choice=None):
         panel = self.ttk.LabelFrame(self.view, text=scene["title"], padding=20)
         panel.pack(fill="both", expand=True, padx=60, pady=16)
+        if self.chapter_one and scene["id"] in CHAPTER_SCENE_KICKERS:
+            self._chapter_scene_header(panel, scene)
         if scene["id"].startswith("sc_p0_"):
             art = self.tk.Canvas(panel, width=860, height=210, highlightthickness=0)
             art.pack(pady=4)
@@ -1310,8 +1338,10 @@ class PlayerApplication:
                   "Actif : " + (battle.active.name if battle.active else "CT"))),
             font=("TkDefaultFont", round(10 * self.text_scale.get() / 100))
         ).pack(side="right")
+        objective = (chapter_mission_card(battle.mission.id)["objective"]
+                     if self.chapter_one else str(battle.mission.objective))
         self.ttk.Label(
-            self.view, text="Objectif : " + str(battle.mission.objective),
+            self.view, text="Objectif : " + objective,
             font=("TkDefaultFont", round(12 * self.text_scale.get() / 100), "bold")
         ).pack(anchor="w")
         self.feedback_var.set("")
@@ -1319,6 +1349,11 @@ class PlayerApplication:
                        wraplength=1050).pack(anchor="w", pady=(3, 5))
         nav = self.ttk.Frame(self.view)
         nav.pack(fill="x", pady=4)
+        if self.chapter_one and not session.finalized:
+            self.ttk.Checkbutton(
+                nav, text="Tours ennemis automatiques",
+                variable=self.chapter_auto_ai,
+                command=self._chapter_schedule_ai).pack(side="left", padx=3)
         if session.mode == "fronts":
             self._button(nav, "Timeline / Fronts", self.strategy_screen).pack(side="left", padx=4)
             if session.fronts.recovery_battles:
@@ -1533,6 +1568,8 @@ class PlayerApplication:
         # Action instructions remain in Options and Assistance; do not consume
         # another permanent 40px row under the map.
         self.canvas.focus_set()
+        if self.chapter_one:
+            self._chapter_schedule_ai()
         if not session.finalized:
             self._button(nav, "Abandonner l'opération",
                          self._abandon).pack(side="left", padx=3)
@@ -1861,8 +1898,20 @@ class PlayerApplication:
         self.audio.music_for("campaign")
         self._heading("Résultats · " + battle.mission.name,
                       "Issue : " + str(battle.result))
-        self.ttk.Label(self.view, text="Objectif : " + str(battle.mission.objective)
-                       ).pack(anchor="w", pady=5)
+        if self.chapter_one:
+            card = chapter_mission_card(battle.mission.id)
+            self.ttk.Label(
+                self.view, text=("VICTOIRE — " + card["victory"] if
+                                 battle.result == "victory" else
+                                 "Défaite — vous pouvez reprendre votre "
+                                 "partie depuis une sauvegarde."),
+                font=("TkDefaultFont", 14, "bold"),
+                wraplength=780).pack(anchor="w", pady=(6, 14))
+        self.ttk.Label(
+            self.view, text="Objectif : " +
+                            (chapter_mission_card(battle.mission.id)["objective"]
+                             if self.chapter_one else str(battle.mission.objective))
+        ).pack(anchor="w", pady=5)
         self.ttk.Label(self.view, text="Tick final : " + str(battle.tick)
                        ).pack(anchor="w", pady=5)
         frame = battle_frame(battle)
