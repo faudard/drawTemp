@@ -14,7 +14,7 @@ from drawtemp.sdk.construction import (
 from drawtemp.sdk.reference import MISSION, reference_project
 from sporebound.iso_structures import structure_template, validate_structure_placement
 from sporebound.building_visuals import exterior_wall_cells
-from sporebound.model import Content, GameProject, RuleError
+from drawtemp.core import Content, GameProject, RuleError
 
 
 def available_anchor(content, name="Maison"):
