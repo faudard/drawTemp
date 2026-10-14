@@ -75,6 +75,12 @@ def install_objectives(rules):
     return rules.with_family("objectives", registry)
 
 
+def tactical_r6_rules(base=None):
+    """Explicit opt-in that preserves previous Tactical RPG 3.0 manifests."""
+    from .tactical_rpg3 import tactical_rpg_rules
+    return install_objectives(tactical_rpg_rules(base))
+
+
 def objective_progress(battle):
     """Actual objective facts, never a prediction of success or AI behavior."""
     mission = battle.mission
