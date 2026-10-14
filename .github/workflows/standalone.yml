@@ -153,6 +153,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Tk and virtual display
         run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb python3-pil
+      - name: Jeanne Chapter I demo — real Tk title to isometric combat
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_jeanne_chapter_demo_gui -v
       - name: Verify Map Builder 4.0D visual prefab palette and click-to-stamp
         env:
           SPOREBOUND_GUI_SMOKE: '1'

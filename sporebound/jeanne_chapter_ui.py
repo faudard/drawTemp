@@ -18,7 +18,7 @@ class JeanneChapterUiMixin:
         hero.pack(fill="x", pady=(0, 12))
         portrait = CanvasRenderer(
             hero, registry=self.registry,
-            asset_root=self.asset_root).image("portrait", "jeanne")
+            asset_root=self.asset_root).image("portrait", "Jeanne")
         if portrait is not None:
             from .tk_images import resize_photo
             try:
