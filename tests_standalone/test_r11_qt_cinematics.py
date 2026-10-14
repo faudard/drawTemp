@@ -80,6 +80,35 @@ class R11DocumentTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             self.doc.edit_event(self.cid, "smoke", {"intensity": True})
 
+    def test_authored_actor_animation_selects_same_sprite_at_any_seek(self):
+        from sporebound.assets import AssetRegistry
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "walk_0.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+            (root / "walk_1.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+            registry = AssetRegistry({
+                "version": 1,
+                "entries": [
+                    {"id": "walk_0", "kind": "sprite", "path": "walk_0.png"},
+                    {"id": "walk_1", "kind": "sprite", "path": "walk_1.png"},
+                    {"id": "jeanne_walk", "kind": "animation", "loop": True,
+                     "frames": [{"sprite": "walk_0", "duration_ms": 100},
+                                {"sprite": "walk_1", "duration_ms": 100}]},
+                ],
+                "bindings": {"animation": {"jeanne_walk": "jeanne_walk"}},
+            })
+            self.doc.edit_event(self.cid, "jeanne", {"animation": "jeanne_walk",
+                                                     "pose": "paysan"})
+            clip = self.doc.clip(self.cid)
+            first = frame_payload(clip, 710, registry=registry, asset_root=root)
+            second = frame_payload(clip, 850, registry=registry, asset_root=root)
+            self.assertTrue(first["actors"][0]["image"].endswith("walk_0.png"))
+            self.assertTrue(second["actors"][0]["image"].endswith("walk_1.png"))
+            self.assertEqual(first, frame_payload(clip, 710, registry=registry,
+                                                   asset_root=root))
+            with self.assertRaises(RuleError):
+                self.doc.edit_event(self.cid, "jeanne", {"pose": "bad pose"})
+
     def test_manifest_roundtrip_and_stale_disk_guard(self):
         with TemporaryDirectory() as folder:
             path = Path(folder) / "jeanne.game.json"
