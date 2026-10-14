@@ -85,6 +85,13 @@ jobs:
           python -m sporebound tactical-quality --mission garden
           --seed 1 --limit 20 --quality-min-differentiated 0
           --quality-min-tradeoffs 0 --report tactical_quality_ci.json
+      - name: R6.16 full activation decision quality and replay
+        run: python -m unittest tests_standalone.test_full_activation_r616 -v
+      - name: R6.16 headless complete turn smoke (no design claim)
+        run: >-
+          python -m sporebound full-activation --mission garden
+          --seed 1 --limit 20 --activation-min-distinct 0
+          --activation-min-pairs 0 --report full_activation_ci.json
       - run: python -m sporebound validate
       - name: Verify 2.7 advanced castle phase and replay
         run: python -m examples.tactical_rpg3_castle
