@@ -159,9 +159,17 @@ def assert_golden_matches(clips, fixture):
         current = golden_at(clip, sample["expected"]["ms"],
                             viewport=sample["expected"]["viewport"],
                             portrait=sample.get("portrait", False))
-        require(current == sample["expected"],
-                "Golden changed for %s at %d ms; inspect the diff before "
-                "explicitly updating the reference" %
-                (sample["clip"], sample["expected"]["ms"]))
+        expected = sample["expected"]
+        required_keys = {"ms", "viewport", "background", "actor_centers",
+                         "camera", "zoom", "shot", "transition", "dialogue",
+                         "dialogue_boxes", "portrait_images", "labels", "fade", "mix"}
+        require(required_keys <= set(expected),
+                "Golden missing required structural fields")
+        for field, value in expected.items():
+            require(field in current and current[field] == value,
+                    "Golden changed for %s at %d ms (%s): expected %r, got %r. "
+                    "Review the difference before updating the reference" %
+                    (sample["clip"], expected["ms"], field, value,
+                     current.get(field)))
         results.append(current)
     return golden_sha256(results)
