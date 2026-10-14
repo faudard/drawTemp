@@ -53,12 +53,21 @@ def exploration_iso_pick(geometry, shift, x, y):
     return geometry.hit_test(x - shift[0], y - shift[1])
 
 
+def exploration_iso_cell_size(stage, viewport):
+    """Fit the small narrative map inside the available fullscreen viewport."""
+    extent = max(1, stage["width"] + stage["height"])
+    return max(CELL_SIZE, min(88, int(min(
+        viewport[0] * .82 / extent,
+        viewport[1] * 1.30 / extent))))
+
+
 class IsoExplorationCanvas:
     """Disposable view adapter. Keep image atlases alive while Canvas exists."""
 
-    def __init__(self, canvas, *, viewport=(690, 495)):
+    def __init__(self, canvas, *, viewport=(690, 495), adaptive=False):
         self.canvas = canvas
         self.viewport = viewport
+        self.adaptive = adaptive
         self.terrain = IsoTerrainAtlas(canvas)
         self.props = IsoPropAtlas(canvas)
         self.environment = IsoEnvironmentAtlas(canvas)
@@ -73,8 +82,10 @@ class IsoExplorationCanvas:
         scene = Mission("exploration_visual", stage["title"], board, [])
         hero = Unit("jeanne", "Jeanne", "player", tuple(stage["position"]))
         self.canvas.configure(background="#22372f")
+        size = (exploration_iso_cell_size(stage, self.viewport)
+                if self.adaptive else CELL_SIZE)
         self.geometry = render_isometric(
-            self.canvas, board, scene, [hero], cell_size=CELL_SIZE,
+            self.canvas, board, scene, [hero], cell_size=size,
             layers={"Terrain": True, "Relief": True, "Décors": True,
                     "Bâtiments": False, "Toitures": False, "Unités": True,
                     "Objets": False, "Objectifs": False, "Déploiement": False,
