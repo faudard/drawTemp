@@ -168,6 +168,10 @@ class IsoBattleCanvas:
             and actor_state == self._unit_state
             and self._level_map == battle.unit_levels
             and self._cutaways == self._cutaway_flags(frame, units, poses)
+            # The 2D Player renderer may have taken the *same* Canvas
+            # between two ISO ticks. Never animate stale/destroyed item IDs.
+            and (not hasattr(self.canvas, 'find_withtag')
+                 or bool(self.canvas.find_withtag('iso_tile_0_0')))
         )
         if reusable:
             moved = False
