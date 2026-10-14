@@ -27,6 +27,17 @@ class WatercolorCatalogTests(unittest.TestCase):
         self.assertEqual(catalog.lookup("jeanne_idle").group, "jeanne")
         self.assertEqual(catalog.lookup("anim_jeanne_attack").frame_count, 3)
 
+    def test_frames_already_exposed_by_animations_remain_addressable(self):
+        catalog = WatercolorCatalog()
+        frames = catalog.animation_frame_ids()
+        self.assertIn("jeanne_walk_b", frames)
+        self.assertIn("jeanne_slash", frames)
+        self.assertNotIn("jeanne_idle", frames)
+        self.assertEqual(catalog.lookup("jeanne_walk_b").kind, "sprite")
+        with TemporaryDirectory() as tmp:
+            self.assertEqual(WatercolorCatalog(tmp).animation_frame_ids(),
+                             frozenset())
+
     def test_authored_animation_timing_and_terminal_frames(self):
         catalog = WatercolorCatalog()
         self.assertEqual(catalog.frame("anim_jeanne_walk", 0),
