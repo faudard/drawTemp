@@ -596,15 +596,18 @@ class ProjectWorkspaceTab:
 
     def rename_selected_id(self):
         if len(self.tree.selection()) != 1:
-            raise RuleError('Renommer un seul acteur ou objet à la fois')
+            raise RuleError('Renommer une seule ressource à la fois')
         node = self._selected_node()
-        if node is None or node.kind not in ('map_actor', 'map_object'):
-            raise RuleError('Choisir un acteur ou objet placé')
+        allowed = ('map_actor', 'map_object', 'scene', 'campaign')
+        if node is None or node.kind not in allowed:
+            raise RuleError('Choisir un acteur, objet, scène ou campagne')
         if self.owner.workspace_rename is None:
             raise RuleError('Renommage indisponible')
         new_id = self.owner.dialogs.askstring(
             'Renommer un identifiant', 'Nouvel identifiant :',
-            initialvalue=node.id.split('/', 1)[1])
+            initialvalue=(node.id.split('/', 1)[1]
+                          if node.kind in ('map_actor', 'map_object')
+                          else node.id))
         if new_id is None:
             return
         new_id = new_id.strip()
@@ -615,10 +618,15 @@ class ProjectWorkspaceTab:
                 'Vérifier et réécrire les références reconnues dans une '
                 'transaction unique ? Les références inconnues bloqueront l’opération.'):
             return
-        form = editable_form(self.owner.doc().data, node.key)
-        self.owner.workspace_rename(node.key, form.baseline, new_id)
-        new_key = node.kind + ':' + node.id.split('/', 1)[0] + '/' + new_id
-        self.open_key(new_key)
+        if node.kind in ('scene', 'campaign'):
+            from .workspace_story_refactoring import story_baseline
+            fingerprint = story_baseline(self.owner.project, node.key)
+            next_key = node.kind + ':' + new_id
+        else:
+            fingerprint = editable_form(self.owner.doc().data, node.key).baseline
+            next_key = node.kind + ':' + node.id.split('/', 1)[0] + '/' + new_id
+        self.owner.workspace_rename(node.key, fingerprint, new_id)
+        self.open_key(next_key)
 
     def toggle_favorite(self):
         node = self._selected_node()
