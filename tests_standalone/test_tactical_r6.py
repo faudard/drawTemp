@@ -48,10 +48,10 @@ class ObjectiveTests(unittest.TestCase):
         battle.unit("enemy").pos = (2, 1)
         self.assertTrue(rules.objectives.get("capture").achieved(battle))
         battle.unit("enemy").team = "enemy"
+        battle.unit("enemy").pos = (5, 4)
         self.assertFalse(rules.objectives.get("capture").achieved(battle))
-        self.assertEqual(Battle.replay(battle.recording(), rules=rules).digest(),
-                         Battle(content, "arena", seed=4, rules=rules).digest()
-                         if False else Battle.replay(battle.recording(), rules=rules).digest())
+        self.assertEqual(battle.digest(), Battle.replay(
+            battle.recording(), rules=rules).digest())
 
     def test_capture_single_zone_ends_via_actual_command(self):
         rules = tactical_rpg_rules()
