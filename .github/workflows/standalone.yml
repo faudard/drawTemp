@@ -285,6 +285,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_visual_branch_graph_36_gui.py -v
+      - name: Verify 3.6.1 compact grouping and A/B Story Graph paths
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_story_graph_scale_361_gui.py -v
       - name: Exercise full Studio to Player talent progression under Xvfb
         env:
           SPOREBOUND_GUI_SMOKE: '1'
