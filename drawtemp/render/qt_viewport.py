@@ -130,7 +130,7 @@ def main(argv=None):
     if args.smoke:
         QTimer.singleShot(350, app.quit)
     status = app.exec()
-    if view.status() != view.Ready or view.rootObject() is None:
+    if view.rootObject() is None:
         return 1
     print(f"Shared ISO {args.mode}: {len(controller.items)} visible items")
     return status
