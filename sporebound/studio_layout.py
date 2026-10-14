@@ -103,8 +103,13 @@ class StudioNavigation:
         # A Notebook remains the only owner of the editor frames. The empty
         # tab layout removes the unreadable row of dozens of truncated labels.
         # Users can restore native tabs with the explicit "Onglets" option.
-        style.layout("Studio.TNotebook.Tab", [])
-        self.toggle_tabs()
+        try:
+            style.layout("Studio.TNotebook.Tab", [])
+            self.toggle_tabs()
+        except tk.TclError:
+            # On unsupported platform themes the native tabs remain usable.
+            self.show_tabs.set(True)
+            self.notebook.configure(style="TNotebook")
         self.rebuild()
         notebook.bind("<<NotebookTabChanged>>", self.sync, add="+")
         self.sync()
@@ -144,6 +149,9 @@ class StudioNavigation:
                 return
 
     def sync(self, _event=None):
+        # An editor may register an additional page after shell creation.
+        if sum(map(len, self.group_tabs.values())) != len(self.notebook.tabs()):
+            self.rebuild()
         # External navigation (Workspace, Problems, shortcut, restore_layout,
         # or a specialised editor) is reflected in this bar.
         selected = self.notebook.select()
