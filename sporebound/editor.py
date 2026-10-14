@@ -317,6 +317,7 @@ def launch(path):
     tile_size = 54
     iso_geometry = None
     iso_var = tk.BooleanVar(value=False)
+    projection_choice = tk.StringVar(value='2d')
     interior_var = tk.BooleanVar(value=False)  # Editor visibility only.
     floor_var = tk.IntVar(value=1)  # Selected visual deck (ground always 0).
     travel_level_var = tk.IntVar(value=0)  # Combat target includes ground floor.
@@ -416,6 +417,8 @@ def launch(path):
             layer_lock_vars[name].set(current['locked'][name])
         active_layer_level.set(current['active_level'])
         interior_var.set(current['interiors'])
+        iso_var.set(current['projection'] == 'iso')
+        projection_choice.set(current['projection'])
 
     def persist_map_view():
         nonlocal map_view_data
@@ -424,7 +427,8 @@ def launch(path):
             map_view_data, mid,
             visible={name: var.get() for name, var in layer_vars.items()},
             locked={name: var.get() for name, var in layer_lock_vars.items()},
-            active_level=active_layer_level.get(), interiors=interior_var.get())
+            active_level=active_layer_level.get(), interiors=interior_var.get(),
+            projection='iso' if iso_var.get() else '2d')
         save_views(current_path, updated)
         map_view_data = updated
         status_var.set('Vue de carte enregistrée (préférences du Studio).')
@@ -433,6 +437,55 @@ def launch(path):
     def view_options_changed():
         persist_map_view()
         refresh()
+
+    @guarded
+    def switch_projection(projection):
+        """Change only the viewport projection; keep zoom, selection and focus cell."""
+        previous = 'iso' if iso_var.get() else '2d'
+        if projection not in ('2d', 'iso'):
+            raise RuleError('Projection inconnue : ' + str(projection))
+        if projection == previous:
+            projection_choice.set(previous)
+            return
+        width, height = max(canvas.winfo_width(), 1), max(canvas.winfo_height(), 1)
+        px = canvas.canvasx(width / 2)
+        py = canvas.canvasy(height / 2)
+        board = (battle.board if battle else
+                 editor_content_cache.get(doc.data).missions[mission_var.get()].board)
+        if previous == 'iso' and iso_geometry is not None:
+            focal_cell = iso_geometry.hit_test(px, py)
+        else:
+            focal_cell = (int(px // tile_size), int(py // tile_size))
+        if focal_cell is None or not board.contains(focal_cell):
+            focal_cell = selected_cell if board.contains(selected_cell) else (0, 0)
+        iso_var.set(projection == 'iso')
+        projection_choice.set(projection)
+        try:
+            persist_map_view()
+            refresh()
+        except Exception:
+            # Keep the selector and renderer in sync if persisting fails.
+            iso_var.set(previous == 'iso')
+            projection_choice.set(previous)
+            raise
+        if iso_var.get() and iso_geometry is not None:
+            center_x, center_y = iso_geometry.center(focal_cell)
+        else:
+            center_x = (focal_cell[0] + .5) * tile_size
+            center_y = (focal_cell[1] + .5) * tile_size
+        canvas.update_idletasks()
+        bounds = canvas.cget('scrollregion').split()
+        if len(bounds) == 4:
+            left, top, right, bottom = map(float, bounds)
+            total_w, total_h = right - left, bottom - top
+            canvas.xview_moveto(
+                max(0.0, min(1.0, (center_x - width / 2 - left) / total_w))
+                if total_w > width else 0.0)
+            canvas.yview_moveto(
+                max(0.0, min(1.0, (center_y - height / 2 - top) / total_h))
+                if total_h > height else 0.0)
+        canvas.focus_set()
+        status_var.set('Vue de carte : ' + ('Iso 2.5D' if iso_var.get() else '2D'))
 
     @guarded
     def active_level_changed(_event=None):
@@ -2865,6 +2918,7 @@ def launch(path):
             cancel_structure_drag()
             entity_passage_entry = None
             selection_mission = mission_var.get()
+        projection_choice.set('iso' if iso_var.get() else '2d')
         if structure_selection_id is not None:
             mission_row = next(m for m in doc.data['missions']
                                if m['id'] == mission_var.get())
@@ -3214,9 +3268,7 @@ def launch(path):
     active_combo.bind('<<ComboboxSelected>>', active_level_changed)
     scenery_controls = ttk.Frame(tools_terrain)
     scenery_controls.pack(fill='x', padx=5, pady=2)
-    ttk.Checkbutton(scenery_controls, text='Vue isométrique 2.5D',
-                    variable=iso_var, command=refresh).pack(side='left', padx=4)
-    ttk.Label(scenery_controls, text='Sol :').pack(side='left', padx=(10,2))
+    ttk.Label(scenery_controls, text='Sol :').pack(side='left', padx=(4,2))
     surface_box = ttk.Combobox(scenery_controls, textvariable=surface_var,
                                state='readonly', width=12, values=sorted(SURFACES))
     surface_box.pack(side='left')
@@ -3277,6 +3329,7 @@ def launch(path):
             brush_var.set(entry.id)
             tool_var.set('Pinceau')
         iso_var.set(True)
+        persist_map_view()
         notebook.select(work)
         refresh()
         status_var.set(entry.name + ' : cliquer sur la carte. ' + entry.effect)
@@ -3293,6 +3346,7 @@ def launch(path):
         entity_passage_entry = None
         tool_var.set('Entité')
         iso_var.set(True)
+        persist_map_view()
         notebook.select(work)
         refresh()
         status_var.set(entry.label + ' : cliquer sur la carte pour placer une copie.')
@@ -3529,6 +3583,16 @@ def launch(path):
     work.add(side_panel, weight=2)
     canvas_frame = ttk.Frame(canvas_region)
     canvas_region.add(canvas_frame, weight=4)
+    viewport_bar = ttk.Frame(canvas_frame)
+    viewport_bar.pack(fill='x', padx=8, pady=(4, 3))
+    ttk.Label(viewport_bar, text='VUE DE LA CARTE').pack(
+        side='left', padx=(0, 12))
+    for label, projection in (('2D', '2d'), ('Iso 2.5D', 'iso')):
+        ttk.Radiobutton(
+            viewport_bar, text=label, variable=projection_choice,
+            value=projection,
+            command=lambda selected=projection: switch_projection(selected),
+        ).pack(side='left', padx=(0, 10))
     canvas = tk.Canvas(canvas_frame,background='#eeeeee',takefocus=1)
     editor_renderer = EditorRenderCache(canvas)
     iso_atlas = IsoTerrainAtlas(canvas)
