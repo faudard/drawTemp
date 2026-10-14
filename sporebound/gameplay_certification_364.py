@@ -215,7 +215,7 @@ def execute_certified_path(content, project, spec, *, rules=None):
             observed = _observe(restored, hazards)
             failed = _assert_expected(observed, step['expect'])
             fired_seen.update(observed['fired'])
-             evidence.append({
+            evidence.append({
                 'index': index, 'kind': step['kind'],
                 'choice_id': selected,
                 'replay_verified': True,
