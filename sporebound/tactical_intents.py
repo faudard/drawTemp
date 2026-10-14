@@ -82,7 +82,8 @@ def tactical_intents(battle, *, max_cells=1024):
                 ally.id == escort_target and ally.alive and ally.team == actor.team
                 and distance(ally.pos, actor.pos) == 1 for ally in battle.units))
             objective = battle.mission.objective
-            contest = objective in {"extract", "hold", "crown"} and bool(battle.mission.goal)
+            contest = objective in {"extract", "hold", "crown", "capture",
+                                    "escort", "retreat"} and bool(battle.mission.goal)
             result["squads"].append({
                 "unit": actor.id, "role": role_name or "protector",
                 "formation": stance["mode"],
