@@ -102,11 +102,101 @@ class CampaignSimulationStudio:
         scrollbar.configure(command=view.yview)
         return view
 
-    def _set_text(self, view, payload):
+    @staticmethod
+    def _value(item):
+        if isinstance(item, str):
+            return item
+        return json.dumps(item, ensure_ascii=False, sort_keys=True)
+
+    def _state_report(self, row):
+        def summary(items):
+            return ", ".join(items) if items else "—"
+        missions = row["missions"]
+        lines = [
+            "ÉTAT DE CAMPAGNE · POINT " + str(row["node"]),
+            "Simulation uniquement — pas de combat certifié",
+            "",
+            "MISSIONS",
+            "  Disponibles : " + summary(missions["available"]),
+            "  Terminées : " + summary(missions["completed"]),
+            "  Bloquées : " + summary(missions["blocked"]),
+            "",
+            "NARRATION",
+            "  Scène active : " + (row["story_pending"] or "aucune"),
+            "  Choix : " + summary(row["choices"]),
+            "  Fins satisfaites : " + summary(row["endings"]),
+            "",
+            "RESSOURCES",
+            "  Or : " + str(row["resources"]["gold"]),
+        ]
+        for key, value in sorted(row["resources"]["inventory"].items()):
+            lines.append("  Inventaire · " + key + " : " + str(value))
+        lines += ["", "VARIABLES PERSISTANTES"]
+        for key, value in sorted(row["variables"].items()):
+            lines.append("  " + key + " = " + self._value(value))
+        if not row["variables"]:
+            lines.append("  —")
+        lines += ["", "COMPAGNONS"]
+        for uid, hero in sorted(row["companions"].items()):
+            lines.append("  " + uid + " · " + hero["job"]
+                         + " · moral " + hero["morale"]
+                         + " · blessures : " + summary(hero["wounds"]))
+        if not row["companions"]:
+            lines.append("  —")
+        lines += ["", "CONSÉQUENCES APPLIQUÉES"]
+        lines += ["  " + entry for entry in row["consequences"]] or ["  —"]
+        return "\n".join(lines)
+
+    def _comparison_report(self, row):
+        lines = [
+            f"COMPARAISON A = {row['left']}   /   B = {row['right']}",
+            f"Plus proche ancêtre commun : {row['common_ancestor']}",
+            "",
+            "PARCOURS A",
+            *["  " + event for event in row["left_path"]],
+            "",
+            "PARCOURS B",
+            *["  " + event for event in row["right_path"]],
+            "",
+            "FINS SATISFAITES",
+            "  A : " + (", ".join(row["left_endings"]) or "—"),
+            "  B : " + (", ".join(row["right_endings"]) or "—"),
+            "",
+            "DIFFÉRENCES",
+        ]
+        if row["changed"]:
+            for change in row["changed"]:
+                lines.append("  " + change["path"])
+                lines.append("      A : " + self._value(change["before"]))
+                lines.append("      B : " + self._value(change["after"]))
+        else:
+            lines.append("  Aucun écart de progression")
+        lines += ["", "Résultats de mission fictifs — aucune preuve de combat."]
+        return "\n".join(lines)
+
+    @staticmethod
+    def _coverage_report(row):
+        return "\n".join([
+            "COUVERTURE OBSERVÉE (NON EXHAUSTIVE)",
+            "",
+            "Nombre de points : " + str(row["nodes"]),
+            "Missions terminées dans les simulations :",
+            "  " + (", ".join(row["missions_completed_in_preview"]) or "—"),
+            "Scènes choisies :",
+            "  " + (", ".join(row["scenes_chosen_in_preview"]) or "—"),
+            "Fins rencontrées :",
+            "  " + (", ".join(row["endings_witnessed"]) or "—"),
+            "Fins encore non observées :",
+            "  " + (", ".join(row["endings_not_witnessed"]) or "—"),
+            "",
+            "Un parcours non observé n'est pas nécessairement impossible.",
+            "Pour certifier une victoire : exécuter un vrai GameSession/Battle.",
+        ])
+
+    def _set_text(self, view, text):
         view.configure(state="normal")
         view.delete("1.0", "end")
-        view.insert("end", json.dumps(payload, ensure_ascii=False,
-                                      indent=2, sort_keys=True))
+        view.insert("end", text)
         view.configure(state="disabled")
 
     def _source_identity(self):
@@ -162,7 +252,7 @@ class CampaignSimulationStudio:
         self.tree.delete(*self.tree.get_children())
         self.action_list.delete(0, "end")
         for text in (self.state_text, self.compare_text, self.coverage_text):
-            self._set_text(text, {})
+            self._set_text(text, "")
         self._loading = False
 
     def draw(self):
@@ -189,10 +279,12 @@ class CampaignSimulationStudio:
                 title = ("Victoire supposée" if action["outcome"] == "victory"
                          else "Défaite supposée")
                 self.action_list.insert("end", title + " : " + action["id"])
-        self._set_text(self.state_text, self.sandbox.inspect())
-        self._set_text(self.coverage_text, self.sandbox.coverage())
+        self._set_text(self.state_text, self._state_report(self.sandbox.inspect()))
+        self._set_text(self.coverage_text,
+                       self._coverage_report(self.sandbox.coverage()))
         self._set_text(self.compare_text,
-                       self.sandbox.compare(self.compare_a, self.compare_b))
+                       self._comparison_report(
+                           self.sandbox.compare(self.compare_a, self.compare_b)))
         self.status.set(
             f"Point {self.sandbox.cursor} · {self.sandbox.size} états · "
             f"comparaison A={self.compare_a}, B={self.compare_b} · "
