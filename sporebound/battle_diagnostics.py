@@ -125,7 +125,7 @@ def diagnose_trace(steps, outcome, *, stall_window=20, idle_activations=4):
 
 
 def trace_seed(content, mission_id, *, seed=42, max_commands=500, rules=None,
-               stall_window=20):
+               stall_window=20, initial_state=None):
     """Re-simulate one seed, capture every executed command, validate full replay.
 
     The trace is a separate export, not embedded into the existing 3.8 balance
@@ -139,7 +139,10 @@ def trace_seed(content, mission_id, *, seed=42, max_commands=500, rules=None,
             "Diagnostic trace command cap must be 1..5000")
     require(type(stall_window) is int and 2 <= stall_window <= MAX_TRACE_COMMANDS,
             "Invalid no-progress threshold")
-    battle = Battle(content, mission_id, seed=seed, rules=rules)
+    require(initial_state is None or type(initial_state) is dict,
+            "Invalid diagnostic initial state")
+    battle = Battle(content, mission_id, seed=seed, rules=rules,
+                    initial_state=initial_state)
     initial = _frame(battle)
     steps = []
     before = None
@@ -197,6 +200,8 @@ def trace_seed(content, mission_id, *, seed=42, max_commands=500, rules=None,
                   "goals": [list(c) for c in mission.goal]},
         "initial": initial, "steps": steps, "diagnostics": diagnostics,
     }
+    if initial_state is not None:
+        payload["initial_state"] = deepcopy(initial_state)
     return json.loads(json.dumps(payload, sort_keys=True, ensure_ascii=False))
 
 
