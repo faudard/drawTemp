@@ -176,6 +176,31 @@ class WorkspaceR2Tests(unittest.TestCase):
                          'r2_renamed_scene')
         self.assertEqual(undo_content, redo_content)
 
+    def test_scene_rename_updates_content_choice_guards_and_story_links(self):
+        doc = deepcopy(self.doc.data)
+        first = next(m for m in doc['missions'] if m['id'] == 'garden')
+        trigger = first['triggers'][0]
+        trigger['after_choice'] = {
+            'scene': 'r2_old_scene', 'choice': 'continue'}
+        content = Content.from_dict(doc)
+        project_data = self._linked_story_project(content).to_dict()
+        project_data['story']['during_tactical_event'] = {
+            'garden/' + trigger['id']: 'r2_old_scene'}
+        project = GameProject.from_dict(project_data, content)
+        result, updated = plan_story_rename(
+            doc, project, 'scene:r2_old_scene',
+            story_baseline(project, 'scene:r2_old_scene'), 'r2_new_scene')
+        changed = next(m for m in result['missions'] if m['id'] == 'garden')
+        self.assertEqual(changed['triggers'][0]['after_choice']['scene'],
+                         'r2_new_scene')
+        self.assertEqual(
+            updated.story['during_tactical_event']['garden/' + trigger['id']],
+            'r2_new_scene')
+        index = StudioIndex(Content.from_dict(result), updated)
+        sources = {link.source for link in index.incoming('scene:r2_new_scene')}
+        self.assertIn('tactical_event:garden/' + trigger['id'], sources)
+        self.assertIn('mission:garden', sources)
+
     def test_scene_rename_rejects_stale_and_unknown_project_refs(self):
         project = self._linked_story_project(self.content)
         before = project.to_dict()
