@@ -125,6 +125,9 @@ class StudioIndex:
         for reference, scene_id in story.get('after_strategic_event', {}).items():
             add('strategic_event:' + reference,
                 'scene:' + scene_id, 'Scène après événement authentifié')
+        for ref, sid in story.get('during_tactical_event', {}).items():
+            add('tactical_event:' + ref, 'scene:' + sid,
+                'Scène pendant événement tactique')
         for cid, sid in story.get('entry_scenes', {}).items():
             add('campaign:' + cid, 'scene:' + sid, 'Introduction')
         for mid, sid in story.get('after_mission', {}).items():
@@ -134,12 +137,18 @@ class StudioIndex:
                 if 'next_scene' in choice:
                     add('scene:' + scene['id'], 'scene:' + choice['next_scene'],
                         'Choix ' + choice['id'])
+        for event in self.project.world.get('events', ()):
+            add('mission:' + event['from'], 'scene:' + event['scene'],
+                'Événement sur route')
+            add('mission:' + event['to'], 'scene:' + event['scene'],
+                'Événement sur route')
         bindings = self.project.asset_registry().to_dict()['bindings'].get('sound', {})
         for clip in self.project.cinematics:
             kind = clip['trigger']['kind']
             source = (('campaign:' if kind == 'campaign_start'
-                       else 'scene:' if kind == 'scene' else 'mission:')
-                      + clip['trigger']['target'])
+                       else 'scene:' if kind == 'scene'
+                       else 'tactical_event:' if kind == 'tactical_event'
+                       else 'mission:') + clip['trigger']['target'])
             add(source, 'cinematic:' + clip['id'], 'Déclenchement cinématique')
             for event in clip['events']:
                 if event['kind'] == 'sound':
