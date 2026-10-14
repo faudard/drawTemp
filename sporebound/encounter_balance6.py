@@ -68,6 +68,7 @@ def ai_decision_analytics(trace):
     evidence = []
     controlled = 0
     protections = 0
+    reactions_total = 0
     for step in trace["steps"]:
         actor = step["actor"]
         team = step["team"]
@@ -76,10 +77,10 @@ def ai_decision_analytics(trace):
         by_team[team + ":" + kind] += 1
         frame = {u["id"]: u for u in step["after"]["units"]}
         events = step["events"]
-        protected = sum(e["kind"] in ("intercept", "prepared_triggered",
-                                      "counter", "opportunity")
-                        for e in events)
-        protections += protected
+        protections += sum(e.get("kind") == "intercept" for e in events)
+        reactions_total += sum(e.get("kind") in (
+            "intercept", "prepared_triggered", "counter", "opportunity")
+            for e in events)
         goal = trace["board"]["goals"]
         if team == "player" and any(
                 u["alive"] and u["team"] == "player" and u["pos"] in goal
@@ -110,6 +111,7 @@ def ai_decision_analytics(trace):
         "team_findings": dict(sorted(findings_by_team.items())),
         "signals": dict(sorted(findings.items())),
         "protective_reactions": protections,
+        "all_reactions_observed": reactions_total,
         "player_goal_occupied_commands": controlled,
         "objective_hold_ticks_end": (
             trace["steps"][-1]["after"]["hold_ticks"]
