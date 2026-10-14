@@ -66,6 +66,8 @@ class CampaignSimulation:
         self.content = deepcopy(content)
         self.project = deepcopy(project)
         self.campaign_id = campaign_id
+        # Paths from a loaded slot cannot be certified by replaying a new game.
+        self._started_from_progress = progress is not None
         self.story = StoryBook(self.project.story, self.content,
                                self.project.campaigns)
         self.flow = self.project.campaign_flow
@@ -217,6 +219,39 @@ class CampaignSimulation:
                 "right_endings": after["endings"],
                 "symbolic_only": True,
                 "scope": "No Battle replay, tactical XP, loot or world travel certification"}
+
+    def certification_plan(self, node_id=None, *, seed=7):
+        """Convert a *candidate* route to replay instructions, not evidence.
+
+        The R5.15 runner must still execute all Battle commands, match expected
+        outcomes and independently verify checkpoints before certifying.
+        """
+        require(not self._started_from_progress,
+                "Cannot certify a partial loaded save from a fresh-game root")
+        require(type(seed) is int and 0 <= seed <= 2147483647,
+                "Invalid certification seed")
+        destination = self._node_raw(node_id)
+        steps = []
+        for nid in self.path(destination.id)[1:]:
+            action = self._nodes[nid].action
+            if action.startswith("fork:"):
+                continue
+            if action.startswith("choice:"):
+                require("/" in action, "Malformed branch choice identity")
+                steps.append({"kind": "choice", "id": action.rsplit("/", 1)[1]})
+            elif action.startswith("mission:") and action.endswith(" (symbolic)"):
+                mid, outcome = action[len("mission:"):-len(" (symbolic)")].rsplit(":", 1)
+                steps.append({"kind": "mission", "id": mid, "outcome": outcome})
+            else:
+                raise RuleError("Unrecognized branch action in certification plan")
+        require(any(step["kind"] == "mission" for step in steps),
+                "Certification requires an actual tactical battle")
+        preview = inspect_campaign(destination.progress, self.flow)
+        return {"id": "route_" + str(destination.id),
+                "campaign": self.campaign_id, "seed": seed,
+                "steps": steps,
+                "expect": {"completed": list(preview["missions"]["completed"]),
+                           "endings": list(preview["endings"])}}
 
     def coverage(self):
         """Observed paths in THIS interactive sandbox only, never exhaustive QA."""

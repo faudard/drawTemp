@@ -6,6 +6,14 @@ exploring alternatives and comparing branches cannot publish any game save.
 from __future__ import annotations
 
 import json
+from copy import deepcopy
+from queue import Empty, Queue
+from threading import Thread
+from pathlib import Path
+
+from .storage import write_json
+
+from .campaign_path_certification import certify_path
 
 from .campaign_flow_simulation import CampaignSimulation
 from .model import RuleError, require
@@ -21,6 +29,9 @@ class CampaignSimulationStudio:
         self._loading = False
         self.compare_a = 0
         self.compare_b = 0
+        self._certificate_queue = Queue()
+        self._certifying = False
+        self._generation = 0
         self._build(notebook)
 
     def _button(self, parent, label, operation):
@@ -47,6 +58,12 @@ class CampaignSimulationStudio:
         self._button(controls, "Depuis partie chargée (copie)", self.start_from_loaded)
         self._button(controls, "Revenir au parent", self.parent)
         self._button(controls, "Créer une bifurcation", self.fork)
+        self.ttk.Label(controls, text="Seed").pack(side="left", padx=(12, 3))
+        self.cert_seed = tk.StringVar(value="7")
+        self.ttk.Entry(controls, textvariable=self.cert_seed, width=7).pack(
+            side="left", padx=3)
+        self._button(controls, "Certifier ce parcours R5.15", self.certify_selected)
+        self._button(controls, "Exporter plan R5.15", self.export_certificate_plan)
 
         panels = ttk.Panedwindow(root, orient="horizontal")
         panels.pack(fill="both", expand=True, padx=10, pady=5)
@@ -89,6 +106,9 @@ class CampaignSimulationStudio:
         coverage_frame = ttk.Frame(self.details)
         self.details.add(coverage_frame, text="Couverture explorée")
         self.coverage_text = self._readonly_text(coverage_frame)
+        certificate_frame = ttk.Frame(self.details)
+        self.details.add(certificate_frame, text="Certification R5.15")
+        self.certificate_text = self._readonly_text(certificate_frame)
         self.status = tk.StringVar(value="Créer une simulation pour explorer la campagne.")
         ttk.Label(root, textvariable=self.status, wraplength=1100
                   ).pack(fill="x", padx=10, pady=(3, 8))
@@ -232,7 +252,10 @@ class CampaignSimulationStudio:
                                        progress=progress)
         # Swap sandbox only after successful construction/compatibility checks.
         self.sandbox = candidate
+        self._generation += 1
         self._identity = self._source_identity()
+        self._set_text(self.certificate_text,
+                       "Aucun résultat. Sélectionner un parcours et demander un replay réel.")
         self.compare_a = self.compare_b = 0
         self.draw()
         self.status.set("Copie d'une partie chargée : aucune modification de sauvegarde."
@@ -242,6 +265,7 @@ class CampaignSimulationStudio:
     def refresh(self):
         if self.sandbox is not None and self._identity != self._source_identity():
             self.sandbox = None
+            self._generation += 1
             self._identity = None
             self.compare_a = self.compare_b = 0
             self._clear()
@@ -251,7 +275,8 @@ class CampaignSimulationStudio:
         self._loading = True
         self.tree.delete(*self.tree.get_children())
         self.action_list.delete(0, "end")
-        for text in (self.state_text, self.compare_text, self.coverage_text):
+        for text in (self.state_text, self.compare_text, self.coverage_text,
+                     self.certificate_text):
             self._set_text(text, "")
         self._loading = False
 
@@ -342,3 +367,102 @@ class CampaignSimulationStudio:
             self.compare_b = self.sandbox.cursor
         self.draw()
         self.details.select(1)
+
+    def export_certificate_plan(self):
+        """User-initiated plan export, not a certification or gameplay save."""
+        self._ensure_current()
+        try:
+            seed = int(self.cert_seed.get())
+        except ValueError as exc:
+            raise RuleError("Seed de certification invalide") from exc
+        plan = self.sandbox.certification_plan(seed=seed)
+        path = self.owner.dialogs.asksaveasfilename(
+            initialfile=plan["id"] + "_r515.json",
+            defaultextension=".json",
+            filetypes=[("Plans de certification JSON", "*.json")])
+        if not path:
+            return
+        destination = Path(path).resolve()
+        content_path = Path(self.owner.content_path()).resolve()
+        project_path = self.owner.project_path.resolve()
+        require(destination not in {content_path, project_path},
+                "Un plan de certification ne peut écraser le Content ou le GameProject")
+        write_json(destination, {"version": 1, "cases": [plan]})
+        self.status.set("Plan candidat exporté : exécuter R5.15 pour le certifier.")
+        
+    def certify_selected(self):
+        """Run real Battle replay off the Tk thread, with stale-result rejection."""
+        self._ensure_current()
+        require(not self._certifying, "Une certification est déjà en cours")
+        try:
+            seed = int(self.cert_seed.get())
+        except ValueError as exc:
+            raise RuleError("Seed de certification invalide") from exc
+        plan = self.sandbox.certification_plan(seed=seed)
+        project = deepcopy(self.owner.project)
+        content = self.owner._content()
+        identity = self._source_identity()
+        generation = self._generation
+        node_id = self.sandbox.cursor
+        self._certifying = True
+        self._set_text(self.certificate_text,
+                       "CERTIFICATION EN COURS\n\n"
+                       "Exécution de vrais combats, replays, et checkpoints "
+                       "temporaires vérifiés. Aucun slot joueur modifié.")
+        self.details.select(3)
+        self.status.set("Certification en cours · progression tactique authentique")
+
+        def work():
+            try:
+                certificate = certify_path(
+                    content, project, plan, max_commands=800,
+                    checkpoint_every=7)
+                self._certificate_queue.put((identity, generation, node_id, certificate, None))
+            except Exception as exc:
+                self._certificate_queue.put((identity, generation, node_id, None, str(exc)))
+
+        Thread(target=work, name="CampaignR515", daemon=True).start()
+        self.tab.after(100, self._poll_certificate)
+
+    def _poll_certificate(self):
+        try:
+            identity, generation, node_id, certificate, error = self._certificate_queue.get_nowait()
+        except Empty:
+            if self._certifying:
+                self.tab.after(100, self._poll_certificate)
+            return
+        self._certifying = False
+        if (generation != self._generation or identity != self._source_identity()
+                or self.sandbox is None or self.sandbox.cursor != node_id):
+            self._set_text(self.certificate_text,
+                           "REJETÉ : le projet ou le parcours a changé pendant le calcul.")
+            self.status.set("Certification obsolète : refaire la simulation.")
+            return
+        if error is not None:
+            self._set_text(self.certificate_text,
+                           "NON CERTIFIÉ\n\n" + error
+                           + "\n\nAucun résultat hypothétique ne valide une victoire.")
+            self.status.set("Le chemin réel ne valide pas le parcours simulé.")
+            return
+        evidence = certificate["evidence"]
+        observed = certificate["observed"]
+        report = [
+            "CERTIFIÉ PAR REPLAY GAMESESSION",
+            "",
+            "Parcours : " + certificate["id"],
+            "Seed : " + str(certificate["seed"]),
+            "Combats exécutés : " + str(evidence["tactical_battles"]),
+            "Commandes tactiques : " + str(evidence["commands"]),
+            "Checkpoints relus : " + str(evidence["checkpoints"]),
+            "Identité reprise/sans interruption : OUI",
+            "Preuve SHA-256 : " + evidence["proof_digest"],
+            "",
+            "Missions terminées : " + ", ".join(observed["completed"]),
+            "Fins prouvées : " + (", ".join(observed["endings"]) or "—"),
+            "Conséquences : " + (", ".join(observed["consequences"]) or "—"),
+            "",
+            "Certification valable UNIQUEMENT pour ce parcours et cette seed.",
+            "Les autres parcours et fins ne sont pas automatiquement certifiés.",
+        ]
+        self._set_text(self.certificate_text, "\n".join(report))
+        self.status.set("Parcours certifié : vrais combats et checkpoints concordants.")
