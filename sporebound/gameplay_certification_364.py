@@ -118,6 +118,9 @@ def _observe(session, tracked_hazards=()):
         'gold': session.progress.gold,
         'inventory': deepcopy(session.progress.inventory),
         'battle_result': battle.result if battle is not None else None,
+        # Battle.state excludes its random UUID; its digest captures the
+        # full deterministic tactical state, including tiles, units and RNG.
+        'battle_digest': battle.digest() if battle is not None else None,
         'hazards': cells,
     }
 
