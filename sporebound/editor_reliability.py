@@ -99,7 +99,8 @@ class IncrementalValidator:
                     'warning', f'map_object:{mid}/{obj["id"]}',
                     'Porte sans levier ou engin associé', 'object.unlinked-door'))
         for event in mission.get('triggers', ()):
-            for predecessor in event.get('after', ()) + event.get('after_any', ()):
+            for predecessor in (tuple(event.get('after', ())) +
+                                tuple(event.get('after_any', ()))):
                 if predecessor not in triggers:
                     issues.append(Diagnostic(
                         'error', f'event:{mid}/{event["id"]}',
