@@ -852,9 +852,11 @@ class CinematicStudio:
         playhead = origin + span * self.cursor.get() / duration
         canvas.create_line(playhead, 18, playhead, height,
                            fill="#f5ead5", width=2)
-        canvas.focus_set()
+        # A repaint must never steal keyboard focus from Listbox selection
+        # or a property Entry: otherwise Shift-click/shortcuts become unreliable.
 
     def _press(self, event):
+        self.timeline.focus_set()
         canvas_y = self.timeline.canvasy(event.y)
         self._drag = None
         # Keyframe handles take priority over their containing clip.
