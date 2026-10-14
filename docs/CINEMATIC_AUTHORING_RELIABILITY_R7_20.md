@@ -20,6 +20,7 @@ R7.20 adds no new GameProject fields or alternate gameplay data model.
    Alternatively drag any selected timeline block; the preview moves all
    selected blocks and commits **one** transaction on release.
 5. **Supprimer groupe** / Delete removes all selected events as one action.
+   Ctrl+A / Cmd+A selects all events; Escape clears the selection in the list.
    Undo/Redo restores the entire validated state.
 
 | Shortcut, in event list or timeline | Operation |
@@ -30,6 +31,8 @@ R7.20 adds no new GameProject fields or alternate gameplay data model.
 | Delete | Remove selected events |
 | Ctrl+Z / Cmd+Z | Undo |
 | Ctrl+Y / Cmd+Y | Redo |
+| Ctrl+A / Cmd+A | Select all cinematic events |
+| Escape (event list) | Clear selection |
 
 Shortcuts are deliberately bound **only** to the event Listbox and timeline,
 not global widget/key bindings. Ordinary text Entry keyboard copy/paste works
