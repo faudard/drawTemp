@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import traceback
 from unittest.mock import patch
 
 from sporebound.__main__ import DEFAULT_CONTENT
@@ -80,6 +81,10 @@ class ReusablePrefab4GuiTests(unittest.TestCase):
                     root.update()
                     self.assertEqual(popups, [],
                                      'Prefab stamping rejected: ' + repr(popups))
+                    self.assertFalse(
+                        errors, 'Tk callback exception: ' + '\n'.join(
+                            ''.join(traceback.format_exception(*exc))
+                            for exc in errors))
                     status = next((
                         str(root.getvar(w.cget('textvariable')))
                         for w in root.winfo_children()
