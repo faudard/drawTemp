@@ -19,6 +19,7 @@ from sporebound.encounter_balance6 import (
     human_variant_breakdown,
 )
 from sporebound.engine import Battle
+from sporebound.elite_boss_r6 import boss_r6_telegraph
 from sporebound.model import Content, require
 from sporebound.tactical_intents import tactical_intents
 
@@ -39,6 +40,11 @@ def inspect_encounter(content, mission_id, *, seed=1, rules=None, max_cells=1024
     battle = Battle(content, mission_id, seed=seed, rules=rules)
     before = battle.digest()
     intents = tactical_intents(battle, max_cells=max_cells)
+    bosses = [
+        boss_r6_telegraph(battle, actor.id)
+        for actor in sorted(battle.units, key=lambda item: item.id)
+        if actor.alive and actor.behavior in {"phase_boss", "adaptive_boss"}
+    ]
     require(battle.digest() == before, "Tactical inspection changed the battle")
     mission = battle.mission
     return {
@@ -54,7 +60,7 @@ def inspect_encounter(content, mission_id, *, seed=1, rules=None, max_cells=1024
              "blocked": tile.blocked}
             for cell, tile in sorted(mission.board.tiles.items())
         ],
-        "intent": intents,
+        "intent": intents, "bosses": bosses,
         "note": "AI telegraphs describe known or possible threats, not predicted commands",
     }
 
