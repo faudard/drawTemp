@@ -12,8 +12,9 @@ In **Campaign Simulation**:
 
 1. Create a new simulation (not from an existing loaded save).
 2. Follow mission/choice candidates in the R5.14 tree.
-3. Select the terminal node, choose a fixed integer seed, then click
-   **Certifier ce parcours R5.15**.
+3. Select the terminal node and choose a fixed integer seed. Click
+   **Exporter plan R5.15** to save a reusable candidate suite for CI, or
+   **Certifier ce parcours R5.15** to run the proof directly in Studio.
 4. A worker executes the route twice: uninterrupted and with authentic
    `SessionStore` writes/reads in a private temporary directory. The Tk
    interface remains responsive.
