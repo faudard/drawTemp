@@ -44,12 +44,13 @@ IDs selon le contrat anim_<character>_<outfit>_<action>_<direction>.
    Remplacer les sprites ou calques : un renommage seul ne valide pas la
    distinction des deux tenues.
 3. Choisir orientation et animation. Modifier les images clés dans la
-   timeline : source PNG, région, durée et offset. Lecture temps réel avec
+   timeline : source PNG (avec sélecteur de fichiers), région, durée et offset. Créer une animation ou orientation manquante depuis une pose provisoire. Lecture temps réel avec
    boucle ou arrêt selon les métadonnées du clip.
 4. Configurer les calques modulaires directionnels (cheveux, cape, vêtements,
    arme...), couleur et alpha ; l'aperçu et l'export emploient le même
    compositeur RGBA.
-5. Enregistrer la recette, inspecter la QA, exporter le pack. Undo/Redo
+5. Ajouter des portraits/expressions avec le sélecteur de fichiers.
+   Enregistrer la recette, inspecter la QA, exporter le pack. Undo/Redo
    disponibles (Ctrl+Z / Ctrl+Shift+Z).
 
 ## Modèle, compatibilité et sécurité
@@ -75,13 +76,13 @@ Aucune dépendance Qt/Tk dans le module modèle.
 | R7.3 Color Customization | RGB et opacité ; palettes avancées encore à faire |
 | R7.4 Directional Compositor | S/N/E/O avec alignement sur pivot commun |
 | R7.5 Outfit Variants | Variantes d'une identité ; art final encore à créer |
-| R7.6 Animation Editor | Timeline, durée, duplication, playback ; onion skin restant |
+| R7.6 Animation Editor | Timeline, durée, duplication, playback, pelure d’oignon ; easing avancé restant |
 | R7.7 Combat Animation Set | Contrat de 9 actions, manquants diagnostiqués |
 | R7.8 Sprite Sheet Export | Atlas RGBA, frames, timings et AssetRegistry v1 |
 | R7.9 Portrait & Expressions | Expressions existantes prévisualisées et exportées |
 | R7.10 Equipment Visualization | Slots weapon/clothing/cape ; liaison R8 restante |
-| R7.11 Animation Consistency QA | Chemins, dimensions, couverture, tenue distincte |
-| R7.12 Character Library | Jeanne, villageois, chevalier et archer ; bestiaire restant |
+| R7.11 Animation Consistency QA | Chemins, dimensions, couverture, tenues distinctes, répétitions et sauts de pivots |
+| R7.12 Character Library | Jeanne, villageois, chevalier, archer + références aquarelle loup, lancier et ogre (une vue seulement) |
 
 ## Gates de sortie
 
