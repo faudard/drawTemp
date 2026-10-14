@@ -18,6 +18,7 @@ from sporebound.workspace_r2 import (
 from sporebound.workspace_shell import map_reference_problems, problem_delta
 from sporebound.workspace_refactoring import (RenameMapResourceCommand,
                                               DeleteMapResourceCommand,
+                                              DeleteMapResourcesCommand,
                                               plan_coordinated_rename)
 from sporebound.cinematics import cinematic_template, event_template
 from sporebound.studio_transaction import StudioHistory
@@ -297,6 +298,72 @@ class WorkspaceR2Tests(unittest.TestCase):
                 editable_form(original, 'map_actor:garden/ziggy').baseline,
                 'ziggy_r2')
         self.assertEqual(self.doc.data, original)
+        self.assertFalse(self.doc.undo_stack)
+
+    def test_batch_delete_linked_switch_and_door_single_undo(self):
+        first, second = self.free_tiles(2)
+        content = add_object(self.doc.data, 'garden', 'r2_batch_door',
+                             'door', first)
+        content = add_object(content, 'garden', 'r2_batch_switch',
+                             'switch', second, link='r2_batch_door')
+        self.doc.replace(content)
+        # Deliberately request the target before its referencing switch.
+        keys = ('map_object:garden/r2_batch_door',
+                'map_object:garden/r2_batch_switch')
+        baselines = tuple(editable_form(self.doc.data, key).baseline
+                          for key in keys)
+        count = len(self.doc.undo_stack)
+        self.context.execute(DeleteMapResourcesCommand(
+            keys, baselines, self.project.to_dict()))
+        self.assertEqual(len(self.doc.undo_stack), count + 1)
+        mission = next(row for row in self.doc.data['missions']
+                       if row['id'] == 'garden')
+        self.assertNotIn('r2_batch_door',
+                         {obj['id'] for obj in mission['objects']})
+        self.assertNotIn('r2_batch_switch',
+                         {obj['id'] for obj in mission['objects']})
+        self.doc.undo()
+        mission = next(row for row in self.doc.data['missions']
+                       if row['id'] == 'garden')
+        self.assertIn('r2_batch_door',
+                      {obj['id'] for obj in mission['objects']})
+        self.assertIn('r2_batch_switch',
+                      {obj['id'] for obj in mission['objects']})
+
+    def test_batch_delete_external_reference_refuses_all_changes(self):
+        first, second, third = self.free_tiles(3)
+        data = add_object(self.doc.data, 'garden', 'r2_batch_guarded_door',
+                          'door', first)
+        data = add_object(data, 'garden', 'r2_external_switch',
+                          'switch', second, link='r2_batch_guarded_door')
+        data = add_object(data, 'garden', 'r2_batch_chest',
+                          'chest', third)
+        self.doc.replace(data)
+        keys = ('map_object:garden/r2_batch_guarded_door',
+                'map_object:garden/r2_batch_chest')
+        baselines = tuple(editable_form(self.doc.data, key).baseline
+                          for key in keys)
+        before = self.doc.data
+        count = len(self.doc.undo_stack)
+        with self.assertRaises(RuleError):
+            self.context.execute(DeleteMapResourcesCommand(
+                keys, baselines, self.project.to_dict()))
+        self.assertEqual(self.doc.data, before)
+        self.assertEqual(len(self.doc.undo_stack), count)
+
+    def test_batch_delete_rejects_invalid_and_stale_selections(self):
+        key = 'map_actor:garden/ziggy'
+        form = editable_form(self.doc.data, key)
+        before = self.doc.data
+        for keys, baselines in [
+            ((key, key), (form.baseline, form.baseline)),
+            ((key, 'map_actor:escape/invalid'), (form.baseline, '{}')),
+            ((key, 'map_object:garden/gate'), ('{}', '{}')),
+        ]:
+            with self.assertRaises(RuleError):
+                self.context.execute(DeleteMapResourcesCommand(
+                    keys, baselines, self.project.to_dict()))
+        self.assertEqual(self.doc.data, before)
         self.assertFalse(self.doc.undo_stack)
 
     def test_delete_independent_object_is_atomic_and_undoable(self):
