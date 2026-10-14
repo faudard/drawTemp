@@ -83,7 +83,7 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
                 "fx": {"effect", "intensity", "seed", "at"},
             }
             optional_fields = {
-                "actor": {"easing", "keyframes"},
+                "actor": {"easing", "keyframes", "pose", "animation"},
                 "camera": {"easing", "shot", "transition", "keyframes"},
                 "fade": {"easing"},
                 "dialogue": {"portrait", "expression", "chars_per_second"},
@@ -109,6 +109,10 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
                 require(event["easing"] in EASINGS, "Unknown cinematic easing")
             if kind == "actor":
                 require(_id(event["actor"]), "Actor ID is required")
+                if "pose" in event:
+                    require(_id(event["pose"]), "Invalid actor pose ID")
+                if "animation" in event:
+                    require(_id(event["animation"]), "Invalid actor animation binding")
             if kind == "camera":
                 require(_number(event["zoom_from"], .25, 4.0) and
                         _number(event["zoom_to"], .25, 4.0), "Camera zoom out of range")
