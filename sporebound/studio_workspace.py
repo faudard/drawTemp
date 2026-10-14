@@ -573,26 +573,33 @@ class ProjectWorkspaceTab:
         self._show_tab('Personnages et événements')
 
     def delete_selected_resource(self):
-        if len(self.tree.selection()) != 1:
-            raise RuleError('Sélectionner un seul acteur ou objet à supprimer')
-        node = self._selected_node()
-        if node is None or node.kind not in ('map_actor', 'map_object'):
-            raise RuleError('Choisir un acteur ou objet placé')
+        keys = tuple(self.tree.selection())
+        if not keys:
+            raise RuleError('Sélectionner un ou plusieurs acteurs ou objets')
         if self.owner.workspace_delete is None:
             raise RuleError('Suppression indisponible')
-        impact = dependency_impact(self.model(), node.key)
-        label = node.label
+        model = self.model()
+        if any(key not in model.nodes or
+               model.nodes[key].kind not in ('map_actor', 'map_object')
+               for key in keys):
+            raise RuleError('Sélection limitée aux acteurs/objets placés')
+        impact_count = sum(len(dependency_impact(model, key).incoming)
+                           for key in keys)
         if not self.owner.dialogs.askyesno(
                 'Suppression contrôlée',
-                f'Supprimer {label} ?\\n'
-                f'{len(impact.incoming)} référence(s) entrante(s), '
-                f'{len(impact.outgoing)} sortante(s).\\n'
-                'Les liens non pris en charge interdiront la suppression. '
-                'L’opération reste annulable.'):
+                f'Supprimer {len(keys)} ressource(s) ?\\n'
+                f'{impact_count} référence(s) entrante(s) détectée(s).\\n'
+                'Les dépendances internes à la sélection sont traitées '
+                'dans le bon ordre; toute référence restante bloque '
+                'toute la transaction (Undo/Redo global).'):
             return
-        form = editable_form(self.owner.doc().data, node.key)
-        self.owner.workspace_delete(node.key, form.baseline)
-        self.status.config(text='Suppression effectuée : ' + node.key)
+        forms = tuple(editable_form(self.owner.doc().data, key).baseline
+                      for key in keys)
+        if len(keys) == 1:
+            self.owner.workspace_delete(keys[0], forms[0])
+        else:
+            self.owner.workspace_delete(keys, forms)
+        self.status.config(text=f'{len(keys)} ressource(s) supprimée(s).')
 
     def rename_selected_id(self):
         if len(self.tree.selection()) != 1:

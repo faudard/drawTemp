@@ -77,8 +77,8 @@ from .workspace_shell import inspect_map, LayoutStore, palette_source_for_tree
 from .workspace_editing import WorkspacePropertyCommand, editable_form
 from .workspace_r2 import BatchPropertyCommand, batch_form
 from .workspace_refactoring import (RenameMapResourceCommand,
-                                    DeleteMapResourceCommand, _mentions,
-                                    plan_coordinated_rename)
+                                    DeleteMapResourceCommand, DeleteMapResourcesCommand,
+                                    _mentions, plan_coordinated_rename)
 from .workspace_story_refactoring import plan_story_rename
 
 
@@ -4113,16 +4113,23 @@ def launch(path):
         return True
 
     def delete_workspace_resource(key, baseline):
-        """Use the existing Editor preview gate; refusal leaves history intact."""
+        """One canonical history entry even for dependent multi-selections."""
         if battle is not None or source_pending():
             raise RuleError('Terminer le playtest et appliquer le JSON.')
-        mid = key.partition(':')[2].split('/', 1)[0]
+        if isinstance(key, tuple):
+            if not key:
+                raise RuleError('Sélectionner au moins une ressource')
+            mid = key[0].partition(':')[2].split('/', 1)[0]
+            command = DeleteMapResourcesCommand(
+                key, tuple(baseline), studio.project.to_dict())
+        else:
+            mid = key.partition(':')[2].split('/', 1)[0]
+            command = DeleteMapResourceCommand(
+                key, baseline, studio.project.to_dict())
         if mid != mission_var.get():
             select_workspace_mission(mid)
-        command = DeleteMapResourceCommand(
-            key, baseline, studio.project.to_dict())
         design_change(lambda: editing_context.execute(command, publish=False))
-        status_var.set('Ressource supprimée (Annuler/Rétablir disponibles).')
+        status_var.set('Suppression validée (Annuler/Rétablir disponibles).')
         return True
 
     studio = StudioPanels(
