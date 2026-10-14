@@ -73,7 +73,8 @@ from .performance_trace import begin_ui, finish_ui
 from .workspace_shell import inspect_map, LayoutStore, palette_source_for_tree
 from .workspace_editing import WorkspacePropertyCommand, editable_form
 from .workspace_r2 import BatchPropertyCommand, batch_form
-from .workspace_refactoring import RenameMapResourceCommand
+from .workspace_refactoring import (RenameMapResourceCommand,
+                                    DeleteMapResourceCommand)
 
 
 class Document:
@@ -3816,6 +3817,19 @@ def launch(path):
         status_var.set('Identifiant renommé avec propagation validée (Annuler/Rétablir).')
         return True
 
+    def delete_workspace_resource(key, baseline):
+        """Use the existing Editor preview gate; refusal leaves history intact."""
+        if battle is not None or source_pending():
+            raise RuleError('Terminer le playtest et appliquer le JSON.')
+        mid = key.partition(':')[2].split('/', 1)[0]
+        if mid != mission_var.get():
+            select_workspace_mission(mid)
+        command = DeleteMapResourceCommand(
+            key, baseline, studio.project.to_dict())
+        design_change(lambda: editing_context.execute(command, publish=False))
+        status_var.set('Ressource supprimée (Annuler/Rétablir disponibles).')
+        return True
+
     studio = StudioPanels(
         notebook, tk, ttk,
         SimpleNamespace(showerror=messagebox.showerror,
@@ -3830,7 +3844,8 @@ def launch(path):
         on_project_saved=on_project_saved, set_active_mission=mission_var.set,
         focus_map_cell=focus_workspace_map,
         workspace_edit=commit_workspace_properties,
-        workspace_rename=rename_workspace_resource)
+        workspace_rename=rename_workspace_resource,
+        workspace_delete=delete_workspace_resource)
     studio.workspace.attach_navigator(sidebar)
     studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
