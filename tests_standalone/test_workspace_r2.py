@@ -265,7 +265,7 @@ class WorkspaceR2Tests(unittest.TestCase):
             self.doc.data, project, key, baseline, 'ziggy_r2')
         Content.from_dict(candidate)
         self.assertEqual(updated.cinematics[0]['events'][0]['actor'], 'ziggy_r2')
-        self.assertTrue(any(actor['id'] == 'ziggy_r2'
+        self.assertTrue(any(actor.id == 'ziggy_r2'
                             for actor in Content.from_dict(
                                 candidate).missions[self.mid].units))
         history = StudioHistory(self.doc.data, project)
@@ -278,7 +278,7 @@ class WorkspaceR2Tests(unittest.TestCase):
         self.assertEqual(old_project.cinematics[0]['events'][0]['actor'], 'ziggy')
         new_content, new_project = history.redo()
         self.assertEqual(new_project.cinematics[0]['events'][0]['actor'], 'ziggy_r2')
-        self.assertTrue(any(actor['id'] == 'ziggy_r2'
+        self.assertTrue(any(actor.id == 'ziggy_r2'
                             for actor in Content.from_dict(
                                 new_content).missions[self.mid].units))
 
