@@ -182,8 +182,10 @@ class CinematicStudio:
                                              background="#101a2b", highlightthickness=0)
         self.preview_canvas.pack(fill="both", expand=True, padx=4, pady=4)
         self.preview_canvas.bind("<Configure>", lambda _: self._preview())
-        ttk.Scale(side, from_=0, to=8000, variable=self.cursor,
-                  command=lambda _: self._preview()).pack(fill="x", padx=8, pady=4)
+        self.preview_scale = ttk.Scale(side, from_=0, to=8000,
+                                       variable=self.cursor,
+                                       command=lambda _: self._preview())
+        self.preview_scale.pack(fill="x", padx=8, pady=4)
         controls = ttk.Frame(side)
         controls.pack(fill="x")
         self._button(controls, "Lecture complète", self.preview)
@@ -213,6 +215,7 @@ class CinematicStudio:
         self.timeline.bind("<Configure>", lambda _: self._timeline())
         self.timeline.bind("<ButtonPress-1>", self._press)
         self.timeline.bind("<ButtonRelease-1>", self._release)
+        self.timeline.bind("<B1-Motion>", self._drag_motion)
         self.timeline.bind("<Escape>", lambda _: self.cancel_drag())
 
     def _project(self):
@@ -630,6 +633,7 @@ class CinematicStudio:
             if event["id"] == self.event_id:
                 self.events.selection_set(i)
         if clip:
+            self.preview_scale.configure(to=clip["duration_ms"])
             self.cursor.set(min(self.cursor.get(), clip["duration_ms"]))
             if self.event_id in self._event_ids:
                 self._load_event()
@@ -638,76 +642,183 @@ class CinematicStudio:
         self._preview()
 
     def _timeline(self):
+        """Lane-based storyboard with keyframe handles and a live playhead."""
         canvas = self.timeline
         canvas.delete("all")
-        self._positions = []
+        self._positions, self._key_handles = [], []
         if self._project() is None:
             return
-        clip = next((c for c in self._project().cinematics if c["id"] == self.clip_id), None)
+        clip = next((c for c in self._project().cinematics
+                     if c["id"] == self.clip_id), None)
         if clip is None:
             return
-        width = max(400, canvas.winfo_width())
         duration = clip["duration_ms"]
-        height = max(175, 26 * len(clip["events"]) + 48)
+        width = max(460, canvas.winfo_width())
+        origin, span = 112, width - 128
+        lanes = [
+            ("background", "Décor"), ("camera", "Caméra"),
+            ("actor", "Acteurs"), ("dialogue", "Dialogues"),
+            ("fade", "Fondus"), ("music", "Musique"),
+            ("ambience", "Ambiance"), ("voice", "Voix"),
+            ("sfx", "Effets"),
+        ]
+        rows = {kind: 31 + i * 32 for i, (kind, _) in enumerate(lanes)}
+        height = 42 + 32 * len(lanes)
         canvas.configure(scrollregion=(0, 0, width, height))
+        for lane, name in lanes:
+            y = rows[lane]
+            canvas.create_line(0, y+23, width, y+23, fill="#344660")
+            canvas.create_text(5, y+10, anchor="w", text=name,
+                               fill="#cbd9e6")
         for index in range(6):
-            x = 80 + (width - 100) * index / 5
-            canvas.create_line(x, 10, x, height, fill="#344660")
-            canvas.create_text(x, 8, text=f"{duration * index / 5000:.1f}s",
+            x = origin + span * index / 5
+            canvas.create_line(x, 16, x, height, fill="#344660")
+            canvas.create_text(x, 14, text=f"{duration*index/5000:.1f}s",
                                anchor="s", fill="#a9bcd2")
-        colors = {"background": "#506d93", "actor": "#c2a06e", "camera": "#78b99b",
-                  "dialogue": "#9b8ad0", "fade": "#da8b8b", "sound": "#66bace"}
-        buses = {"music": "#3fbd9c", "ambience": "#65a1d3",
-                 "voice": "#e4b75e", "sfx": "#b48fca"}
-        for i, event in enumerate(sorted(clip["events"], key=lambda e: (e["start_ms"], e["id"]))):
-            y = 26 + i * 26
-            x0 = 80 + (width - 100) * event["start_ms"] / duration
-            x1 = 80 + (width - 100) * (event["start_ms"] + event["duration_ms"]) / duration
-            canvas.create_rectangle(x0, y, max(x0+5, x1), y+20,
-                                    fill=(buses.get(event.get("bus", "sfx"), "#66bace")
-                                          if event["kind"] == "sound"
-                                          else colors[event["kind"]]),
-                                    outline="white" if event["id"] == self.event_id else "")
-            label = (f"{event.get('bus', 'sfx')}:{event['id']}"
-                     if event["kind"] == "sound" else event["id"])
-            canvas.create_text(x0+3, y+10, anchor="w", text=label[:20],
-                               fill="#081626")
-            self._positions.append((x0, x1, y, y+20, event["id"]))
-        playhead = 80 + (width - 100) * self.cursor.get() / duration
-        canvas.create_line(playhead, 16, playhead, height, fill="#f5ead5", width=2)
+        colors = {"background": "#506d93", "actor": "#c2a06e",
+                  "camera": "#78b99b", "dialogue": "#9b8ad0",
+                  "fade": "#da8b8b", "music": "#3fbd9c",
+                  "ambience": "#65a1d3", "voice": "#e4b75e",
+                  "sfx": "#b48fca"}
+        for event in sorted(clip["events"],
+                            key=lambda e: (e["start_ms"], e["id"])):
+            lane = (event.get("bus", "sfx") if event["kind"] == "sound"
+                    else event["kind"])
+            y = rows[lane]
+            x0 = origin + span * event["start_ms"] / duration
+            x1 = origin + span * (event["start_ms"]+event["duration_ms"]) / duration
+            canvas.create_rectangle(x0, y, max(x0+5, x1), y+21,
+                                    fill=colors[lane],
+                                    outline="#ffffff"
+                                    if event["id"] == self.event_id else "")
+            canvas.create_text(x0+4, y+10, anchor="w",
+                               text=event["id"][:22], fill="#081626")
+            self._positions.append((x0, x1, y, y+21, event["id"]))
+            for key in event.get("keyframes", ()):
+                kx = origin + span * (event["start_ms"]+key["at_ms"]) / duration
+                ky = y + 11
+                canvas.create_polygon(kx, ky-7, kx+6, ky, kx, ky+7,
+                                      kx-6, ky,
+                                      fill=("#fef08a" if event["id"] == self.event_id
+                                            and key["at_ms"] == self.selected_key_ms
+                                            else "#ffffff"),
+                                      outline="#172535")
+                self._key_handles.append((kx, ky, event["id"], key["at_ms"]))
+        playhead = origin + span * self.cursor.get() / duration
+        canvas.create_line(playhead, 18, playhead, height,
+                           fill="#f5ead5", width=2)
+        canvas.focus_set()
 
     def _press(self, event):
-        y = self.timeline.canvasy(event.y)
-        self._drag = (event.x, y, None)
-        for x0, x1, y0, y1, eid in self._positions:
-            if x0 <= event.x <= max(x0+5, x1) and y0 <= y <= y1:
-                self._drag = (event.x, y, eid)
-                self.event_id = eid
+        canvas_y = self.timeline.canvasy(event.y)
+        self._drag = None
+        # Keyframe handles take priority over their containing clip.
+        for kx, ky, eid, at in reversed(self._key_handles):
+            if abs(event.x-kx) <= 8 and abs(canvas_y-ky) <= 9:
+                self._drag = ("key", event.x, eid, at)
+                self.event_id, self.selected_key_ms = eid, at
                 self.refresh()
-                break
+                self._select_key()
+                return
+        for x0, x1, y0, y1, eid in reversed(self._positions):
+            if x0 <= event.x <= max(x0+5, x1) and y0 <= canvas_y <= y1:
+                self._drag = ("event", event.x, eid, None)
+                self.event_id = eid
+                self.selected_key_ms = None
+                self.refresh()
+                return
+        self._drag = ("seek", event.x, None, None)
+
+    def _drag_motion(self, event):
+        if self._drag is None:
+            return
+        kind, start_x, eid, old_key = self._drag
+        self.timeline.delete("drag-preview")
+        if kind == "seek":
+            return
+        dx = event.x - start_x
+        row = next((pos for pos in self._positions if pos[4] == eid), None)
+        if row is None:
+            return
+        if kind == "event":
+            x0, x1, y0, y1, _ = row
+            self.timeline.create_rectangle(x0+dx, y0, x1+dx, y1,
+                                           outline="#ffffff", width=2,
+                                           dash=(3, 2), tags="drag-preview")
+        else:
+            handle = next(((x, y) for x, y, event_id, at
+                           in self._key_handles
+                           if event_id == eid and at == old_key), None)
+            if handle:
+                x, y = handle
+                self.timeline.create_polygon(x+dx, y-8, x+dx+7, y,
+                                             x+dx, y+8, x+dx-7, y,
+                                             outline="#ffffff", fill="",
+                                             tags="drag-preview")
+
+    def cancel_drag(self):
+        self._drag = None
+        self.timeline.delete("drag-preview")
 
     def _release(self, event):
-        if not self._drag:
+        if self._drag is None:
             return
-        x0, _, eid = self._drag
-        self._drag = None
+        kind, initial_x, eid, old_key = self._drag
+        self.cancel_drag()
         clip = self._clip()
-        width = max(400, self.timeline.winfo_width()) - 100
-        if eid and abs(event.x - x0) > 5:
-            current = next(e for e in clip["events"] if e["id"] == eid)
-            new_start = int(round((current["start_ms"] +
-                                   (event.x - x0) * clip["duration_ms"] / width) / 100) * 100)
-            new_start = max(0, min(clip["duration_ms"] - current["duration_ms"], new_start))
-            cid = self.clip_id
-            def edit(data):
-                events = next(c for c in data["cinematics"] if c["id"] == cid)["events"]
-                next(e for e in events if e["id"] == eid)["start_ms"] = new_start
-            self._apply(edit)
-        else:
-            ms = (event.x - 80) * clip["duration_ms"] / width
+        width = max(460, self.timeline.winfo_width()) - 128
+        offset_ms = (event.x-initial_x) * clip["duration_ms"] / width
+        if kind == "seek":
+            ms = (event.x-112) * clip["duration_ms"] / width
             self.cursor.set(max(0, min(clip["duration_ms"], ms)))
+        elif abs(event.x-initial_x) > 5:
+            current = next(e for e in clip["events"] if e["id"] == eid)
+            if kind == "key":
+                local = max(1, min(current["duration_ms"]-1,
+                                  round(old_key+offset_ms)))
+                if local != old_key:
+                    replacement = update_motion_keyframe(
+                        current, old_key, at_ms=local)
+                    self.selected_key_ms = local
+                    self.owner._run(lambda: self._update_selected_event(replacement))
+            else:
+                new_start = max(0, min(
+                    clip["duration_ms"]-current["duration_ms"],
+                    round((current["start_ms"]+offset_ms)/100)*100))
+                if new_start != current["start_ms"]:
+                    replacement = move_event(current, new_start,
+                                             clip["duration_ms"])
+                    self.owner._run(lambda: self._update_selected_event(replacement))
         self._timeline()
         self._preview()
+
+    def _draw_audio(self, clip):
+        canvas = self.audio_canvas
+        canvas.delete("all")
+        width = max(320, canvas.winfo_width())
+        span = width - 90
+        buses = (("music", "#3fbd9c"), ("ambience", "#65a1d3"),
+                 ("voice", "#e4b75e"), ("sfx", "#b48fca"))
+        for i, (bus, color) in enumerate(buses):
+            y = 12 + i*21
+            canvas.create_text(3, y, anchor="w", text=bus, fill="#d7e5f0")
+            canvas.create_line(78, y+5, width-4, y+5, fill="#344660")
+            coords = []
+            for j in range(61):
+                ms = round(clip["duration_ms"]*j/60)
+                level = min(1., sum(track.level for track in mix_at(clip, ms)
+                                   if track.bus == bus))
+                coords.extend([78+span*j/60, y+5-level*13])
+            canvas.create_line(*coords, fill=color, width=2)
+        now = max(0, min(clip["duration_ms"], round(self.cursor.get())))
+        levels = {track.bus: track.level for track in mix_at(clip, now)}
+        self.audio_caption.set(
+            "Mixage à %.2fs : %s" % (
+                now/1000, " · ".join(
+                    f"{bus} {levels.get(bus, 0):.0%}" for bus, _ in buses)))
+        canvas.create_line(78+span*now/clip["duration_ms"], 0,
+                           78+span*now/clip["duration_ms"], 96,
+                           fill="#ffffff", dash=(2, 2))
 
     def _preview(self):
         if self._project() is None:
@@ -717,6 +828,7 @@ class CinematicStudio:
             draw_frame(self.preview_canvas, clip, self.cursor.get(),
                        self.preview_renderer)
             self._timeline()
+            self._draw_audio(clip)
 
     def preview(self):
         clip = deepcopy(self._clip())
