@@ -74,7 +74,8 @@ from .workspace_shell import inspect_map, LayoutStore, palette_source_for_tree
 from .workspace_editing import WorkspacePropertyCommand, editable_form
 from .workspace_r2 import BatchPropertyCommand, batch_form
 from .workspace_refactoring import (RenameMapResourceCommand,
-                                    DeleteMapResourceCommand)
+                                    DeleteMapResourceCommand, _mentions,
+                                    plan_coordinated_rename)
 
 
 class Document:
@@ -3811,9 +3812,25 @@ def launch(path):
         mid = key.partition(':')[2].split('/', 1)[0]
         if mid != mission_var.get():
             select_workspace_mission(mid)
-        command = RenameMapResourceCommand(
-            key, baseline, new_id, studio.project.to_dict())
-        design_change(lambda: editing_context.execute(command, publish=False))
+        project_before = studio.project.to_dict()
+        old = key.partition(':')[2].split('/', 1)[1]
+        if _mentions(project_before, old):
+            # Pre-validate both snapshots. Commit inside the existing Studio
+            # history timeline so a single global Undo restores both files.
+            next_content, next_project = plan_coordinated_rename(
+                doc.data, studio.project, key, baseline, new_id)
+
+            def commit_joint_rename():
+                if studio.project.to_dict() != project_before:
+                    raise RuleError('GameProject modifié depuis la prévisualisation')
+                doc.replace(next_content)
+                studio.project = next_project
+
+            design_change(commit_joint_rename)
+        else:
+            command = RenameMapResourceCommand(
+                key, baseline, new_id, project_before)
+            design_change(lambda: editing_context.execute(command, publish=False))
         status_var.set('Identifiant renommé avec propagation validée (Annuler/Rétablir).')
         return True
 
