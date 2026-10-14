@@ -108,3 +108,40 @@ spawns, waves and their expiry remain in the existing trigger dispatcher.
 python -m unittest -v tests_standalone.test_elite_boss_r6
 python -m unittest -v tests_standalone.test_class_ai_authoring
 ```
+
+## R6.6B — Boss Encounter Intelligence (live decisions)
+
+The **opt-in** `adaptive_boss` now consults the real combat state on **every
+activation**. The existing `Battle.reachable()` and movement-threat queries
+already reflect new `hazard` triggers, opened/closed doors, terrain height and
+live occupancy. Safe multi-cell paths are recomputed; no plan from an older
+terrain revision is reused.
+
+**Arrived reinforcements only.** A reinforcement counts as supporting a boss
+only after a real `actor_spawned` event from `spawn`, `wave` or
+`EncounterDirector.dispatch()`, while it is still alive, allied, on the
+same level, able to act, and able to attack the chosen opposing unit. The
+bounded support bonus changes the score of normal reachable positions, never
+teleports actors or guarantees follow-up attacks. Queued waves and predicted
+HP-threshold reinforcements do **not** contribute support. The boss UI returns
+`arrived_reinforcements` as observed facts alongside the existing queued and
+possible waves.
+
+**Multi-CT attack telegraphs.** An authored boss skill with `cast_ticks >= 2`,
+an area radius and a valid target may be selected when no immediate attack
+or interaction is already legal. It is started with the ordinary `act`
+command. `Battle._advance()` remains the only countdown/impact authority.
+The existing `cast` state appears in `tactical_intents` and
+`boss_r6_telegraph`, marked **scheduled**. `lock: cell` attacks can be
+dodged by moving out of the painted zone before the timer expires; `lock:
+unit` uses existing real-game target tracking. No guaranteed hit is implied.
+
+This tranche does **not** add an artificial second CT clock, new JSON
+fields, boss script interpreter, wave scheduler, direct damage mutation, or
+legacy ruleset changes.
+
+```bash
+python -m unittest -v tests_standalone.test_boss_encounter_r6b
+python -m unittest -v tests_standalone.test_elite_boss_r6
+python -m unittest -v tests_standalone.test_tactical_r6
+```
