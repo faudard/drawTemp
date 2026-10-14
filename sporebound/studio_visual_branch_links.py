@@ -265,12 +265,19 @@ class VisualBranchInteractions:
             lambda: self._visual_commit(source, target))
 
     def _visual_publish(self, data, project, source, target):
-        if data != self.owner.doc().data:
-            self.owner.design_change(lambda: self.owner.doc().replace(data))
-            require(self.owner.doc().data == data,
-                    'Enregistrement Content annulé : projet inchangé')
-        if project.to_dict() != self.owner.project.to_dict():
+        previous_project = self.owner.project
+        project_changed = project.to_dict() != previous_project.to_dict()
+        if project_changed:
             self.owner.project = project
+        try:
+            if data != self.owner.doc().data:
+                self.owner.design_change(lambda: self.owner.doc().replace(data))
+                require(self.owner.doc().data == data,
+                        'Enregistrement Content annulé : projet inchangé')
+        except Exception:
+            self.owner.project = previous_project
+            raise
+        if project_changed:
             self.editor.reset_project()
         self.owner.refresh()
         self.status.set('Liaison validée : ' + source['id'] +

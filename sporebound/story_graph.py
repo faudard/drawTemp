@@ -43,7 +43,8 @@ def effects_label(effects):
     return ' · '.join(parts) if parts else 'aucun effet'
 
 
-def build_story_tree(story, root_scene, *, collapsed=(), max_depth=24, max_nodes=300):
+def build_story_tree(story, root_scene, *, collapsed=(), max_depth=24,
+                     max_nodes=300, density='normal'):
     """Return a deterministic, per-edge-expanded tree for drawing.
 
     Each node has a unique occurrence tuple (root ID + choice IDs). Two nodes
@@ -52,6 +53,9 @@ def build_story_tree(story, root_scene, *, collapsed=(), max_depth=24, max_nodes
     """
     require(type(max_depth) is int and 1 <= max_depth <= 64, 'Invalid maximum depth')
     require(type(max_nodes) is int and 1 <= max_nodes <= 2000, 'Invalid node budget')
+    require(density in ('normal', 'compact'), 'Unknown story tree density')
+    horizontal_step, vertical_step = (
+        (260, 94) if density == 'compact' else (320, 125))
     scenes={scene['id']:scene for scene in story.get('scenes',[])}
     require(root_scene in scenes, 'Choose an existing story scene')
     counts=Counter(choice.get('next_scene') for scene in scenes.values()
@@ -120,12 +124,12 @@ def build_story_tree(story, root_scene, *, collapsed=(), max_depth=24, max_nodes
     def place(path):
         children=child_paths[path]
         if not children:
-            y=90+next_y[0]*125
+            y=90+next_y[0]*vertical_step
             next_y[0]+=1
         else:
             rows=[place(child) for child in children]
             y=(rows[0]+rows[-1])/2
-        positions[path]=(90+depth_by_path[path]*320,y)
+        positions[path]=(90+depth_by_path[path]*horizontal_step,y)
         return y
     place(root_path)
     width=max((x for x,y in positions.values()),default=90)+270
@@ -133,4 +137,5 @@ def build_story_tree(story, root_scene, *, collapsed=(), max_depth=24, max_nodes
     return {'root':root_scene,'nodes':nodes,'edges':edges,
             'positions':positions,'truncated':truncated,
             'width':width,'height':height,
-            'shared_scenes':sorted(sid for sid,n in counts.items() if n>1)}
+            'shared_scenes':sorted(sid for sid,n in counts.items() if n>1),
+            'density': density}

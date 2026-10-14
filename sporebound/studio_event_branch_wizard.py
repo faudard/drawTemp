@@ -166,10 +166,18 @@ class VisualChoiceWizard:
 
     def commit(self):
         data, project = self._plan()
-        self.owner.design_change(lambda: self.owner.doc().replace(data))
-        require(self.owner.doc().data == data,
-                'Enregistrement de Content annulé ; projet inchangé.')
+        # Publish both sides before design_change triggers the global Studio
+        # refresh/history. A temporary Content-only state is invalid once a
+        # trigger references a newly created narrative choice.
+        previous_project = self.owner.project
         self.owner.project = project
+        try:
+            self.owner.design_change(lambda: self.owner.doc().replace(data))
+            require(self.owner.doc().data == data,
+                    'Enregistrement de Content annulé ; projet inchangé.')
+        except Exception:
+            self.owner.project = previous_project
+            raise
         self.owner.story_editor.reset_project()
         self.owner.refresh()
         self.graph.event_id.set(self.vars['origin'].get().strip())
