@@ -11,6 +11,7 @@ import json
 from typing import Callable, Optional, Protocol, Tuple
 
 from .model import Content, RuleError, require
+from .editor_reliability import IncrementalValidator
 from .tactical_rpg3 import authored_rules_for_document
 
 RENDERER = 'renderer'
@@ -277,6 +278,7 @@ class EditingContext:
         self.selection = SelectionController(self.notifications)
         self.tools = ToolController(self.notifications)
         self.revision = 0
+        self.diagnostics = IncrementalValidator()
 
     def preview(self, command, *, mission_id=None):
         mid = mission_id or self.mission()
@@ -299,6 +301,8 @@ class EditingContext:
         # One Document.replace: existing validation, one undo entry.
         self.document.replace(preview.candidate)
         self.revision += 1
+        # Invalidate even a still-running report before notifying consumers.
+        self.diagnostics.cancel()
         notice = EditorChange(
             preview.command.kind, preview.mission_id,
             tuple(preview.command.views), self.revision)
@@ -309,6 +313,11 @@ class EditingContext:
     def execute(self, command, *, mission_id=None, publish=True):
         return self.apply(self.preview(command, mission_id=mission_id),
                           publish=publish)
+
+    def validate_incremental(self, project=None, *, on_scan=None):
+        """Report canonical/cross-resource issues for the current revision."""
+        return self.diagnostics.validate(
+            self.document.data, project, on_scan=on_scan)
 
     def notify(self, change):
         self.notifications.publish(change)

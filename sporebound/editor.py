@@ -69,6 +69,7 @@ from .siege import available_operations
 from .storage import load_battle, save_battle, write_json
 from .tactical_rpg3 import authored_rules_for_document
 from .studio_transaction import StudioTransactionStore
+from .editor_reliability import EditRecoveryJournal
 from .performance_trace import begin_ui, finish_ui
 from .workspace_shell import inspect_map, LayoutStore, palette_source_for_tree
 from .workspace_editing import WorkspacePropertyCommand, editable_form
@@ -271,8 +272,33 @@ def launch(path):
         messagebox.showerror('Récupération refusée', str(exc))
         root.destroy()
         return
+    edit_recovery = EditRecoveryJournal(path)
+    recovered_work = None
+    if edit_recovery.pending:
+        choice = messagebox.askyesnocancel(
+            'Travail Studio interrompu',
+            'Des modifications non enregistrées sont disponibles.\n'
+            'Oui : récupérer en mémoire (sans écraser les fichiers).\n'
+            'Non : abandonner ce brouillon.\n'
+            'Annuler : conserver le brouillon et quitter.')
+        if choice is None:
+            root.destroy()
+            return
+        if choice:
+            try:
+                recovered_work = edit_recovery.restore()
+            except (RuleError, OSError, ValueError) as exc:
+                messagebox.showerror('Restauration refusée', str(exc))
+                root.destroy()
+                return
+        else:
+            edit_recovery.discard()
     raw = json.loads(Path(path).read_text(encoding='utf-8'))
-    doc = Document(Content.from_dict(raw, rules=authored_rules_for_document(raw)))
+    # Initialize dependent Studio panels against the on-disk pair first.
+    # A draft may add/remove missions and invalidate the disk GameProject;
+    # adopting the draft before StudioPanels.reload_project would fail.
+    doc = Document(Content.from_dict(
+        raw, rules=authored_rules_for_document(raw)))
     current_path = Path(path)
     disk_revisions = StudioTransactionStore(current_path).revisions()
     battle = None
@@ -434,6 +460,30 @@ def launch(path):
         source.delete('1.0', 'end')
         source.insert('1.0', json.dumps(doc.data, indent=2, ensure_ascii=False))
 
+    work_checkpoint_job = None
+
+    def checkpoint_work():
+        nonlocal work_checkpoint_job
+        work_checkpoint_job = None
+        if studio is None:
+            return
+        project_dirty = (json.dumps(studio.project.to_dict(), sort_keys=True)
+                         != studio.project_saved)
+        try:
+            edit_recovery.checkpoint(
+                doc.data, studio.project, expected_disk=disk_revisions,
+                dirty=(doc.dirty, project_dirty))
+        except (RuleError, OSError, ValueError) as exc:
+            # Sidecar failures must never corrupt or block editor commands.
+            status_var.set('Récupération de travail non actualisée : ' + str(exc))
+
+    def schedule_work_checkpoint():
+        nonlocal work_checkpoint_job
+        editing_context.diagnostics.cancel()
+        if work_checkpoint_job is not None:
+            root.after_cancel(work_checkpoint_job)
+        work_checkpoint_job = root.after(350, checkpoint_work)
+
     def design_change(fn, *, board_only=False):
         nonlocal battle
         if source_pending() and not messagebox.askyesno('JSON non appliqué', 'Abandonner les modifications JSON non appliquées ?'):
@@ -452,7 +502,7 @@ def launch(path):
     @guarded
     def open_doc():
         nonlocal doc, current_path, battle, disk_revisions, map_view_data
-        nonlocal selection_mission
+        nonlocal selection_mission, edit_recovery
         if not discard_ok():
             return
         name = filedialog.askopenfilename(filetypes=[('Projet Sporebound', '*.json')])
@@ -460,10 +510,26 @@ def launch(path):
             if not recover_if_pending(StudioTransactionStore(name)):
                 return
             raw = json.loads(Path(name).read_text(encoding='utf-8'))
+            next_recovery = EditRecoveryJournal(name)
+            next_work = None
+            if next_recovery.pending:
+                decision = messagebox.askyesnocancel(
+                    'Travail Studio interrompu',
+                    'Récupérer les modifications non enregistrées de ce projet ?\n'
+                    'Non abandonne le brouillon, Annuler conserve le projet actuel.')
+                if decision is None:
+                    return
+                if decision:
+                    next_work = next_recovery.restore()
+                else:
+                    next_recovery.discard()
             candidate = Document(Content.from_dict(
                 raw, rules=authored_rules_for_document(raw)))
             restored_views = load_views(name)
+            if current_path.resolve() != Path(name).resolve():
+                edit_recovery.discard()  # User accepted leaving old project.
             doc, current_path, battle = candidate, Path(name), None
+            edit_recovery = next_recovery
             map_view_data = restored_views
             doc.edit_policy = lambda before, after: ensure_unlocked(before, after, map_view_data)
             selection_mission = ''  # A different file may reuse the mission ID.
@@ -472,13 +538,23 @@ def launch(path):
             mission_var.set(doc.data['missions'][0]['id'])
             if studio is not None:
                 studio.reload_project()
+                if next_work:
+                    recovered_content = next_work[0]
+                    doc.data = Content.from_dict(
+                        recovered_content,
+                        rules=authored_rules_for_document(recovered_content)).to_dict()
+                    if mission_var.get() not in {
+                            m['id'] for m in doc.data['missions']}:
+                        mission_var.set(doc.data['missions'][0]['id'])
+                    studio.restore_unsaved_project(next_work[1])
+                studio.history.on_change = schedule_work_checkpoint
             refresh_source()
             refresh()
             refresh_group_prefabs()
 
     @guarded
     def save_doc():
-        nonlocal current_path, disk_revisions
+        nonlocal current_path, disk_revisions, edit_recovery
         if StudioTransactionStore(current_path).pending:
             raise RuleError('Récupérer la sauvegarde Studio interrompue avant toute écriture')
         if source_pending():
@@ -497,10 +573,14 @@ def launch(path):
                               disk_revisions[1] if current_path.resolve() ==
                               original_path.resolve() else None)
             if current_path.resolve() != original_path.resolve():
+                # Save As is a new recovery identity and a new disk baseline.
+                edit_recovery.discard()
+                edit_recovery = EditRecoveryJournal(current_path)
                 save_views(current_path, map_view_data)
             refresh_source()
             refresh_group_prefabs()
             status_var.set(f'Projet enregistré : {name}')
+            schedule_work_checkpoint()
 
     @guarded
     def save_all():
@@ -537,6 +617,7 @@ def launch(path):
         refresh_source()
         refresh()
         status_var.set('Contenu et projet enregistrés ensemble (récupération activée).')
+        schedule_work_checkpoint()
 
     @guarded
     def undo_global():
@@ -3780,6 +3861,7 @@ def launch(path):
         if Path(path).resolve() == canonical:
             disk_revisions = (disk_revisions[0],
                               StudioTransactionStore(current_path).revisions()[1])
+            schedule_work_checkpoint()
 
     def commit_workspace_properties(key, baseline, values):
         """One typed, validated edit with Editor undo and Studio history."""
@@ -3807,6 +3889,17 @@ def launch(path):
         on_project_saved=on_project_saved, set_active_mission=mission_var.set,
         focus_map_cell=focus_workspace_map,
         workspace_edit=commit_workspace_properties)
+    if recovered_work:
+        recovered_content = recovered_work[0]
+        doc.data = Content.from_dict(
+            recovered_content,
+            rules=authored_rules_for_document(recovered_content)).to_dict()
+        if mission_var.get() not in {m['id'] for m in doc.data['missions']}:
+            mission_var.set(doc.data['missions'][0]['id'])
+        studio.restore_unsaved_project(recovered_work[1])
+        status_var.set('Travail interrompu restauré en mémoire ; enregistrer pour le conserver.')
+    studio.history.on_change = schedule_work_checkpoint
+    studio.workspace.incremental_validator = editing_context.diagnostics
     studio.workspace.attach_navigator(sidebar)
     studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
@@ -3949,6 +4042,9 @@ def launch(path):
     root.after_idle(restore_layout)
     def close_editor():
         if discard_ok():
+            if work_checkpoint_job is not None:
+                root.after_cancel(work_checkpoint_job)
+            edit_recovery.discard()
             save_layout()
             root.destroy()
     root.protocol('WM_DELETE_WINDOW', close_editor)
