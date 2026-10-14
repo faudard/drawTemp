@@ -61,8 +61,7 @@ class R11DocumentTests(unittest.TestCase):
         self.assertEqual(self.doc.clip(self.cid)["events"][2]["keyframes"][0]["at_ms"], 1100)
         self.assertTrue(self.doc.redo())
         self.assertEqual(self.doc.clip(self.cid)["events"][2]["keyframes"][0]["at_ms"], 1200)
-        self.assertEqual(self.project.to_dict(), original if not self.project.cinematics else
-                         self.project.to_dict())  # never mutates the input project
+        self.assertEqual(self.project.cinematics, [])  # never mutates input project
 
     def test_fx_schema_seed_strict_and_seek_determinism(self):
         fx = event_template("fx", "smoke", 1000, 4000)
