@@ -11,7 +11,8 @@ from threading import Thread
 
 from .balance_matrix import run_matrix, compare_matrices, save_matrix, scenario_content
 from .encounter_balance6 import (encounter_profile, strict_regression_gate,
-                                trace_encounter_ai)
+                                trace_encounter_ai, campaign_balance_curve,
+                                campaign_curve_review)
 from .model import RuleError
 from .tactical_rpg3 import authored_rules_for_document
 
@@ -42,6 +43,7 @@ class BalanceMatrixStudio:
         self.baseline = None
         self.comparison = None
         self.last_ai = None
+        self.current_campaign = None
         self.busy = False
         self.mailbox = Queue()
         self.frame = self.ttk.Frame(notebook, padding=10)
@@ -116,6 +118,8 @@ class BalanceMatrixStudio:
         self.run_button.pack(side="left", padx=3)
         self.ttk.Button(actions, text="Analyser décisions IA",
                         command=self.analyze_ai).pack(side="left", padx=3)
+        self.ttk.Button(actions, text="Parcours campagne R6",
+                        command=self.analyze_campaign).pack(side="left", padx=3)
 
         self.scenarios = self.ttk.Treeview(
             self.frame, columns=("id", "mission", "preset", "target"),
@@ -138,6 +142,8 @@ class BalanceMatrixStudio:
                         command=self.inspect_mission).pack(side="left", padx=3)
         self.ttk.Button(results, text="Visualiser scénario",
                         command=self.visualize_selected).pack(side="left", padx=3)
+        self.ttk.Button(results, text="Exporter bilan campagne",
+                        command=self.export_campaign).pack(side="left", padx=3)
         self.status = self.ttk.Label(self.frame, text="Prêt · aucun scénario exécuté.")
         self.status.pack(anchor="w", pady=2)
         self.rows = self.ttk.Treeview(
@@ -302,6 +308,25 @@ class BalanceMatrixStudio:
         if kind == "error":
             self.status.configure(text="Échec analyse")
             self.owner.dialogs.showerror("Balance Matrix", data)
+        elif kind == "campaign":
+            self.current_campaign = data
+            review = campaign_curve_review(data)
+            lines = ["R6.13 · parcours de campagne simulé (Battle réel)"]
+            lines.extend("{} · {} · CT {} · commandes {} · XP {} · or +{} · "
+                         "ratio budget ennemi/héros {}".format(
+                         row["mission"], row["status"],
+                         row.get("ticks_ct", "n.d."),
+                         row.get("commands", "n.d."),
+                         row.get("xp_delta", {}), row.get("gold_delta", 0),
+                         row.get("enemy_to_player_budget", "n.d."))
+                         for row in data["rows"])
+            lines.append("À revoir : " + str(review["warnings"]))
+            lines.append("Les ratios sont des indicateurs, pas une durée humaine.")
+            self.output.configure(state="normal")
+            self.output.delete("1.0", "end")
+            self.output.insert("end", "\n".join(lines))
+            self.output.configure(state="disabled")
+            self.status.configure(text="R6.13 · parcours terminé, replays vérifiés.")
         elif kind == "ai":
             self.last_ai = data["analytics"]
             summary = self.last_ai
@@ -391,6 +416,76 @@ class BalanceMatrixStudio:
                 self.mailbox.put(("error", str(exc)))
         Thread(target=worker, daemon=True).start()
         self.tab.after(80, self._poll)
+
+    def analyze_campaign(self):
+        """Analyze the authored next_missions chain from the selected mission.
+
+        Read an existing save to respect unlocks/equipment, or start a fresh
+        default profile; neither document nor save is ever overwritten.
+        """
+        if self.busy:
+            return
+        from tkinter import filedialog
+        from .campaign import Campaign
+        try:
+            content = self.owner._content()
+            rules = authored_rules_for_document(self.owner.doc().data)
+            start = self.mission.get()
+            if start not in content.missions:
+                raise RuleError("Sélectionner une mission.")
+            saved = filedialog.askopenfilename(
+                parent=self.tab, title="Sauvegarde campagne (Annuler = nouvelle campagne)",
+                filetypes=[("JSON", "*.json")])
+            campaign = (Campaign.load(saved, ruleset=rules) if saved
+                        else Campaign(unlocked=[start]))
+            route, visited = [], set()
+            mid = start
+            while mid and mid not in visited and len(route) < 8:
+                route.append(mid)
+                visited.add(mid)
+                following = content.missions[mid].next_missions
+                mid = next((n for n in following
+                            if n in content.missions and n not in visited), None)
+            if not route:
+                raise RuleError("Aucun parcours de campagne trouvé.")
+            first = int(self.seeds.get().split(",")[0])
+            seeds = [(first + i) % (2**32) for i in range(len(route))]
+            cap = int(self.limit.get())
+        except (RuleError, ValueError, OSError, TypeError) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
+            return
+        self.busy = True
+        self.run_button.configure(state="disabled")
+        self.status.configure(text="Simulation campagne R6.13 en cours…")
+
+        def worker():
+            try:
+                report = campaign_balance_curve(
+                    content, campaign, route, seeds=seeds,
+                    max_commands=cap, rules=rules)
+                self.mailbox.put(("campaign", report))
+            except Exception as exc:
+                self.mailbox.put(("error", str(exc)))
+        Thread(target=worker, daemon=True).start()
+        self.tab.after(80, self._poll)
+
+    def export_campaign(self):
+        from tkinter import filedialog
+        import json
+        if self.current_campaign is None:
+            self.owner.dialogs.showerror("Balance Matrix",
+                                         "Analyser un parcours d'abord.")
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.tab, defaultextension=".json",
+            filetypes=[("JSON", "*.json")])
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as stream:
+                    json.dump(self.current_campaign, stream, ensure_ascii=False,
+                              sort_keys=True, indent=2)
+            except (OSError, TypeError) as exc:
+                self.owner.dialogs.showerror("Balance Matrix", str(exc))
 
     def set_baseline(self):
         if self.current is None:
