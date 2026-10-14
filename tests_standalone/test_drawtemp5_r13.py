@@ -110,6 +110,26 @@ class R13CombatLabTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             compare_encounters(baseline, changed)
 
+    def test_cli_cannot_overwrite_authored_content_or_reference(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from drawtemp.sdk.r13_cli import main
+        with TemporaryDirectory() as folder:
+            content_path = Path(folder) / "authored.json"
+            baseline = Path(folder) / "baseline.json"
+            content_path.write_text(json.dumps(arena().to_dict()), encoding="utf-8")
+            baseline.write_text('{"reference": true}', encoding="utf-8")
+            for protected, extra in (
+                (content_path, []),
+                (baseline, ["--baseline", str(baseline)]),
+            ):
+                with self.subTest(protected=protected), self.assertRaises(SystemExit):
+                    main(["--content", str(content_path),
+                          "--mission", "r13", "--runs", "1",
+                          "--report", str(protected), *extra])
+            self.assertEqual(json.loads(content_path.read_text())["version"], 1)
+            self.assertEqual(json.loads(baseline.read_text()), {"reference": True})
+
     def test_versioned_json_export_and_no_qt_dependency_for_core(self):
         content = arena()
         payload = simulate_encounter(content, "r13",
