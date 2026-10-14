@@ -68,8 +68,12 @@ def _safe_engine_events(events):
 class PlaytestRecorder:
     """In-memory, off by default; clock injected for repeatable tests."""
 
-    def __init__(self, *, clock=None):
+    def __init__(self, *, clock=None, content=None, rules=None):
         self.clock = clock if clock is not None else time.monotonic
+        from .battle_lab import _fingerprint
+        self.content_sha256 = (_fingerprint(content.to_dict())
+                               if content is not None else None)
+        self.rules_manifest = rules.manifest() if rules is not None else None
         self.enabled = False
         self.sessions = []
         self.active = None
@@ -212,6 +216,8 @@ class PlaytestRecorder:
             "kind": "human_playtest", "schema": SCHEMA,
             "opt_in": True,
             "privacy": "local_export_only_no_personal_identifiers",
+            "content_sha256": self.content_sha256,
+            "rules_manifest": self.rules_manifest,
             "sessions": sessions,
         }
 
@@ -270,6 +276,16 @@ def analyze_playtests(report, *, mission=None, ai_report=None):
         if durations else None,
         "commands": dict(sorted(sum((Counter(s["command_kinds"]) for s in rows),
                                      Counter()).items())),
+        "player_commands": dict(sorted(sum((
+            Counter(event["command"].get("kind") for event in s["events"]
+                    if event["event"] == "combat_command"
+                    and event["team"] == "player" and event["command"])
+            for s in rows), Counter()).items())),
+        "enemy_commands": dict(sorted(sum((
+            Counter(event["command"].get("kind") for event in s["events"]
+                    if event["event"] == "combat_command"
+                    and event["team"] == "enemy" and event["command"])
+            for s in rows), Counter()).items())),
         "damage_observed": sum(s["damage_observed"] for s in rows),
         "healing_observed": sum(s["healing_observed"] for s in rows),
         "partial_or_incomplete": sum(
