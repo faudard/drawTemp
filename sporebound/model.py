@@ -405,6 +405,13 @@ class Content:
             require(any(u.team == "player" for u in m.units), "Mission needs a player")
             require(any(u.team == "enemy" for u in m.units), "Mission needs an enemy")
             require(not m.protected_id or m.protected_id in ids, "Unknown protected unit")
+            if m.objective in {"escort", "defend"}:
+                require(m.protected_id and any(
+                    unit.id == m.protected_id and unit.team == "player"
+                    for unit in m.units), "Objective needs a protected player unit")
+            if m.objective == "sabotage":
+                require(any(obj["kind"] == "defense" and obj.get("team") == "enemy"
+                            for obj in m.objects), "Sabotage needs an enemy defense")
             require(all(n in self.missions for n in m.next_missions), "Unknown next mission")
             from .deployment import validate as validate_deployment
             validate_deployment(m)
