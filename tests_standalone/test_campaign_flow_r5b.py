@@ -18,6 +18,8 @@ from sporebound.game_project import GameProject, load_slot, save_slot
 from sporebound.game_session import GameSession
 from sporebound.model import Content, RuleError
 from sporebound.player_session import PlayerSession
+from sporebound.studio_campaign_flow import studio_campaign_snapshot, studio_campaign_qa
+from sporebound.studio_panels import StudioPanels
 
 
 class CampaignFlowR5BTests(unittest.TestCase):
@@ -146,6 +148,51 @@ class CampaignFlowR5BTests(unittest.TestCase):
                          ["garden"])
         self.assertEqual(inspect_campaign(progress, self.project.campaign_flow)
                          ["missions"]["blocked"], ["hold"])
+
+    def test_studio_snapshot_and_qa_are_read_only(self):
+        class Stub:
+            def __init__(self, content, project):
+                self.project = project
+                self.content = content
+                self.campaign_id = type("Var", (), {"get": lambda self: "main"})()
+                self.session = None
+                self.session_campaign = ""
+            def _content(self):
+                return self.content
+
+        stub = Stub(self.content, self.project)
+        before = deepcopy(self.project.to_dict())
+        view = studio_campaign_snapshot(stub)
+        self.assertEqual(view["missions"]["unlocked"], ["garden"])
+        self.assertEqual(view["missions"]["available"], ["garden"])
+        report = studio_campaign_qa(stub)
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(before, self.project.to_dict())
+
+    def test_studio_launch_must_not_bypass_campaign_gate(self):
+        class Stub:
+            def __init__(self, content, project):
+                self.project = project
+                self.content = content
+                self.campaign_id = type("Var", (), {"get": lambda self: "main"})()
+                self.session = project.new_game("main", content)
+                self.session_campaign = "main"
+                self.started = []
+            def apply_project(self):
+                pass
+            def _content(self):
+                return self.content
+            def play_campaign(self, progress, mid):
+                self.started.append(mid)
+
+        stub = Stub(self.content, self.project)
+        stub.session.unlocked = ["hold"]
+        with self.assertRaisesRegex(RuleError, "Aucune mission jouable"):
+            StudioPanels.start_game(stub)
+        self.assertEqual(stub.started, [])
+        stub.session.unlocked = ["garden", "hold"]
+        StudioPanels.start_game(stub)
+        self.assertEqual(stub.started, ["garden"])
 
     def test_portable_export_contains_verified_qa_and_playable_runtime(self):
         report = audit_campaign(self.content, self.project, "main")
