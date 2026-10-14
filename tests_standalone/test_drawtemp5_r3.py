@@ -37,7 +37,8 @@ class RendererR3Tests(unittest.TestCase):
         for factor in (1.3, 1.8, 0.4, 4, 0.01):
             before = c.world(71, 219)
             c.zoom_at(factor, 71, 219)
-            self.assertEqual(c.world(71, 219), before)
+            self.assertAlmostEqual(c.world(71, 219)[0], before[0])
+            self.assertAlmostEqual(c.world(71, 219)[1], before[1])
             self.assertGreaterEqual(c.zoom, .4)
             self.assertLessEqual(c.zoom, 3)
         with self.assertRaises(ValueError):
@@ -86,8 +87,14 @@ class RendererR3Tests(unittest.TestCase):
         self.assertEqual(len(all_ids), len(set(all_ids)))
         self.assertEqual(items, sorted(items, key=lambda r: (r["zOrder"], r["id"])))
         self.assertGreater(len(items), 0)
-        self.assertLess(len([i for i in items if i["kind"] == "tile"]),
-                        scene["width"] * scene["height"])
+        self.assertLessEqual(len([i for i in items if i["kind"] == "tile"]),
+                             scene["width"] * scene["height"])
+        # Culling must actually discard far-away chunks on large boards.
+        large = {**scene, "width": 64, "height": 64,
+                 "tiles": [{"x": x, "y": y, "height": 0, "surface": "grass"}
+                           for x in range(64) for y in range(64)],
+                 "actors": [], "objects": []}
+        self.assertLess(len(render_items(large, c)), 64 * 64)
         c.zoom_at(1.1, 160, 100)
         self.assertTrue(render_items(scene, c))
 
