@@ -3,6 +3,7 @@
 Gameplay remains in the R1 SDK. All coordinates refer to tile centres.
 """
 from dataclasses import dataclass
+from collections.abc import Mapping
 from math import floor
 import hashlib
 import json
@@ -89,7 +90,7 @@ def scene_from_mission(mission, snapshot=None):
     actors = []
     levels = battle.get("unit_levels", {}) if battle else mission.unit_levels
     for u in (battle["units"] if battle else mission.units):
-        field = (lambda k: u[k]) if isinstance(u, dict) else (lambda k: getattr(u, k))
+        field = (lambda k: u[k]) if isinstance(u, Mapping) else (lambda k: getattr(u, k))
         actors.append({"id": str(field("id")), "x": float(field("pos")[0]),
                        "y": float(field("pos")[1]), "team": str(field("team")),
                        "alive": field("hp") > 0, "level": int(levels.get(field("id"), 0))})
