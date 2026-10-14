@@ -127,13 +127,16 @@ def action_preview(battle, action, cell, *, target_level=0):
         if action == "attack" or action in unit.skills:
             rows = battle.forecast(action, cell, unit)
             skill = battle._skill(unit, action)
+            line = (tuple(unit.pos), cell) if skill.los else ()
             return _preview(
                 action, "available",
                 "Cible validée · coût " + str(skill.cost) + " MP",
                 _forecast_details(rows) +
-                ("Portée, LOS, cible et ressources validées par Battle.forecast.",
+                (("Portée, cible, ressources et LOS validées par Battle.forecast."
+                  if skill.los else
+                  "Portée, cible et ressources validées ; LOS non exigée pour ce sort."),
                  "Dégâts et effets restent soumis à l'exécution."),
-                destination=cell)
+                path=line, destination=cell)
         if action.startswith("object:"):
             ident = action.split(":", 1)[1]
             obj = next((obj for obj in battle.mission.objects
