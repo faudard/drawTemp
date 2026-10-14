@@ -156,7 +156,7 @@ class R1StudioGuiGate(unittest.TestCase):
                 finally:
                     root.destroy()
 
-            with patch.object(tk.Tk, 'mainloop', drive), \\
+            with patch.object(tk.Tk, 'mainloop', drive), \
                  patch('tkinter.messagebox.showerror') as showerror:
                 launch(path)
                 showerror.assert_not_called()
