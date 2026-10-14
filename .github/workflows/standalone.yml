@@ -420,6 +420,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_player_26_gui.py -v
+      - name: R7 Player UX 3.0 real Tk keyboard / zoom / HUD / results gate
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m unittest tests_standalone.test_player_ux_r7_gui -v
       - name: Exercise Jeanne atlas PNG crop in Tk (3.7.5)
         env:
           SPOREBOUND_GUI_SMOKE: '1'

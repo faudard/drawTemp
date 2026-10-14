@@ -39,13 +39,13 @@ def hit_test_battle(board, camera, viewport, screen):
     return geo.hit_test(screen[0] - dx, screen[1] - dy)
 
 
-def anchored_iso_zoom(board, camera, viewport, steps, point):
-    """Keep the pointed *tile center* stable when changing isometric zoom."""
+def anchored_iso_zoom(board, camera, viewport, steps, point, *, size=None):
+    """Keep the pointed *tile center* stable at incremental or exact zoom."""
     from .presentation import Camera
     geo = IsoGeometry(board, camera.cell_size)
     old_dx, old_dy = viewport_shift(geo, camera, viewport)
     cell = geo.hit_test(point[0]-old_dx, point[1]-old_dy)
-    size = max(16, min(128, camera.cell_size + 8*steps))
+    size = max(16, min(128, camera.cell_size + 8*steps if size is None else size))
     if size == camera.cell_size:
         return camera
     updated = Camera(size, camera.offset_x, camera.offset_y)
