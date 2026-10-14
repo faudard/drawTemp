@@ -96,6 +96,18 @@ class StudioIndex:
                     add(key, 'map_object:' + mission.id + '/' + obj['link'],
                         'Porte associée')
         for mission in self.content.missions.values():
+            for trigger in mission.triggers:
+                source = 'tactical_event:' + mission.id + '/' + trigger['id']
+                add('mission:' + mission.id, source, 'Événement tactique')
+                condition = trigger.get('condition')
+                if condition in ('defeated', 'hp_below') and trigger.get('unit'):
+                    add(source, 'map_actor:' + mission.id + '/' + trigger['unit'],
+                        'Acteur déclencheur')
+                for action in trigger.get('actions', ()):
+                    if action.get('kind') in ('despawn', 'status') and action.get('unit'):
+                        add(source, 'map_actor:' + mission.id + '/' + action['unit'],
+                            'Acteur ciblé')
+        for mission in self.content.missions.values():
             source = 'mission:' + mission.id
             for group in mission.editor_groups:
                 key = 'editor_group:' + mission.id + '/' + group['id']
@@ -163,6 +175,18 @@ class StudioIndex:
             if not clip['events']:
                 issues.append(('warning', 'cinematic:' + clip['id'],
                                'Cinématique vide'))
+        for mission in self.content.missions.values():
+            known = {unit.id for unit in mission.units}
+            for trigger in mission.triggers:
+                for number, action in enumerate(trigger.get('actions', ())):
+                    if (action.get('kind') == 'despawn' and
+                            action.get('unit') not in known):
+                        issues.append((
+                            'warning',
+                            'tactical_event:' + mission.id + '/' + trigger['id'],
+                            'Référence d’acteur absente : ' + str(action.get('unit')) +
+                            ' (despawn #' + str(number + 1) + '). '
+                            'Corriger depuis l’inspecteur de cet événement.'))
         if map_warnings:
             from .workspace_shell import map_reference_problems
             issues.extend(map_reference_problems(self.content))
