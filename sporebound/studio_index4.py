@@ -176,7 +176,15 @@ class StudioIndex:
                 issues.append(('warning', 'cinematic:' + clip['id'],
                                'Cinématique vide'))
         for mission in self.content.missions.values():
+            # A despawn can legitimately target an authored future spawn;
+            # do not flag targets present in wave/spawn action definitions.
             known = {unit.id for unit in mission.units}
+            for trigger in mission.triggers:
+                for action in trigger.get('actions', ()):
+                    if action.get('kind') == 'spawn':
+                        known.add(action.get('actor', {}).get('id'))
+                    elif action.get('kind') in ('wave', 'queue_wave'):
+                        known.update(actor.get('id') for actor in action.get('actors', ()))
             for trigger in mission.triggers:
                 for number, action in enumerate(trigger.get('actions', ())):
                     if (action.get('kind') == 'despawn' and
