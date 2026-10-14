@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 
 from .campaign_flow_simulation import CampaignSimulation
-from .model import RuleError
+from .model import RuleError, require
 
 
 class CampaignSimulationStudio:
@@ -118,8 +118,6 @@ class CampaignSimulationStudio:
                           sort_keys=True, ensure_ascii=False)
 
     def _ensure_current(self):
-        require = lambda condition, message: (_ for _ in ()).throw(
-            RuleError(message)) if not condition else None
         require(self.sandbox is not None, "Créer une simulation d'abord")
         require(self._identity == self._source_identity(),
                 "La campagne a changé : réinitialiser la simulation")
@@ -208,7 +206,10 @@ class CampaignSimulationStudio:
             return
         try:
             self._ensure_current()
-            self.sandbox.select(int(chosen[0][1:]))
+            selected_id = int(chosen[0][1:])
+            if selected_id == self.sandbox.cursor:
+                return
+            self.sandbox.select(selected_id)
             self.draw()
         except RuleError as exc:
             self.status.set(str(exc))
