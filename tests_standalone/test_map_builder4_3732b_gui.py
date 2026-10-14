@@ -58,6 +58,15 @@ class VisualArchitectureGuiTests(unittest.TestCase):
                     mission.set('facade_smoke')
                     mission.event_generate('<<ComboboxSelected>>')
                     root.update()
+                    # Architectural controls live in the Building dock,
+                    # never in the map's permanent tool strip.
+                    self.assertFalse(buttons['Poser fenêtre'].winfo_ismapped())
+                    building_nav = next(
+                        w for w in widgets if isinstance(w, ttk.Radiobutton)
+                        and w.cget('text') == 'Bâtiments')
+                    building_nav.invoke()
+                    root.update()
+                    self.assertTrue(building_nav.instate(['selected']))
                     tool.set('Sélection structure')
                     click(4*54+10, 4*54+10)
                     facade.set('brique')
