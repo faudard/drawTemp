@@ -15,10 +15,10 @@ def arena():
     board.tiles[(1, 1)] = Tile(cover=50)
     units = [
         Unit("hero", "Hero", "player", (0, 0), speed=35,
-             max_hp=48, hp=48),
+             max_hp=48, hp=48, weapon="ranged", attack_range=3),
         Unit("ally", "Ally", "player", (0, 1), speed=5,
              max_hp=40, hp=20),
-        Unit("enemy", "Enemy", "enemy", (1, 0), speed=5),
+        Unit("enemy", "Enemy", "enemy", (2, 0), speed=5),
         Unit("guard", "Guard", "enemy", (6, 3), speed=5),
     ]
     return Content({}, {"arena": Mission("arena", "Arena", board, units)})
