@@ -25,7 +25,8 @@ DELTA_STATS = {"max_hp", "max_mp", "attack", "magic", "defense",
 EQUIPMENT_FIELDS = {"weapon", "attack_range", "min_range", "reaction",
                     "support", "movement", "behavior", "skills", "tactics"}
 FIELDS = {"id", "mission", "remove_units", "team_deltas",
-          "unit_deltas", "unit_overrides", "ruleset"}
+          "unit_deltas", "unit_overrides", "ruleset",
+          "unit_positions", "clone_units", "inventory"}
 
 
 def _check_deltas(value, label):
@@ -79,7 +80,41 @@ def _spec(raw, content, rulesets):
                 require(type(value) is int, "Invalid attack range override")
             else:
                 require(type(value) is str, "Invalid equipment override")
+    # R6 tuning: only alter cloned authored content. Content.validate checks
+    # blocked tiles, footprints, heights, unit ids and actual rule constraints.
+    positions = raw.get("unit_positions", {})
+    require(type(positions) is dict and set(positions) <= set(units)
+            and not set(positions).intersection(removed)
+            and all(type(pos) in (tuple, list) and len(pos) == 2
+                    and all(type(c) is int for c in pos)
+                    for pos in positions.values()),
+            "Invalid unit placement changes")
+    clones = raw.get("clone_units", [])
+    require(type(clones) is list and len(clones) <= 10
+            and all(type(row) is dict
+                    and set(row) == {"id", "template_id", "pos"}
+                    and type(row["id"]) is str and 1 <= len(row["id"]) <= 64
+                    and row["id"] not in units
+                    and type(row["template_id"]) is str
+                    and row["template_id"] in units
+                    and row["template_id"] not in removed
+                    and type(row["pos"]) in (tuple, list)
+                    and len(row["pos"]) == 2
+                    and all(type(c) is int for c in row["pos"])
+                    for row in clones)
+            and len({row["id"] for row in clones}) == len(clones),
+            "Invalid cloned unit composition")
+    inventory = raw.get("inventory")
+    require(inventory is None or (
+            type(inventory) is dict
+            and set(inventory) == {"potion", "ether", "phoenix"}
+            and all(type(n) is int and 0 <= n <= 1000
+                    for n in inventory.values())),
+            "Invalid initial inventory for player team")
     return {"id": raw["id"], "mission": raw["mission"],
+            "unit_positions": deepcopy(positions),
+            "clone_units": deepcopy(clones),
+            "inventory": deepcopy(inventory),
             "remove_units": list(removed),
             "team_deltas": deepcopy(team_deltas),
             "unit_deltas": deepcopy(unit_deltas),
@@ -108,12 +143,22 @@ def scenario_content(content, spec, *, rules=None):
     mission.units = [u for u in mission.units
                      if u.id not in spec["remove_units"]]
     for unit in mission.units:
+        if unit.id in spec.get("unit_positions", {}):
+            unit.pos = tuple(spec["unit_positions"][unit.id])
         for stat, delta in sorted(spec["team_deltas"].get(unit.team, {}).items()):
             _apply_delta(unit, stat, delta)
         for stat, delta in sorted(spec["unit_deltas"].get(unit.id, {}).items()):
             _apply_delta(unit, stat, delta)
         for key, value in sorted(spec["unit_overrides"].get(unit.id, {}).items()):
             setattr(unit, key, deepcopy(value))
+    templates = {unit.id: unit for unit in content.missions[spec["mission"]].units}
+    for entry in spec.get("clone_units", []):
+        source = deepcopy(templates[entry["template_id"]])
+        source.id = entry["id"]
+        source.pos = tuple(entry["pos"])
+        mission.units.append(source)
+        if entry["template_id"] in mission.unit_levels:
+            mission.unit_levels[entry["id"]] = mission.unit_levels[entry["template_id"]]
     clone.validate(rules=rules)
     return clone
 
@@ -181,8 +226,11 @@ def run_matrix(content, cases, *, seeds=(1, 7, 42, 99),
     for spec in specs:
         rules = rulesets[spec["ruleset"]]
         variant = scenario_content(content, spec, rules=rules)
+        setup = ({"inventory": spec["inventory"]}
+                 if spec.get("inventory") is not None else None)
         report = run_lab(variant, spec["mission"], seeds=seeds,
-                         max_commands=max_commands, rules=rules)
+                         max_commands=max_commands, rules=rules,
+                         initial_state=setup)
         rows.append(_row(spec["id"], spec["mission"], spec, report,
                          base[spec["mission"]]))
     return {
