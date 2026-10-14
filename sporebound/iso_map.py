@@ -8,8 +8,10 @@ from pathlib import Path
 
 from .tk_images import crop_scaled
 from .iso_depth import visual_center
-from .terrain_autoblend import (LAND_COLORS, blend_edges, blend_polygon,
-                                terrain_variant)
+from .terrain_autoblend import (LAND_COLORS, LAND_PRIORITY, blend_edges,
+                                blend_polygon, terrain_variant)
+from .terrain_transition_masks import (ordered_blend_masks,
+                                      painted_mask_key, painted_mask_png)
 
 from .iso_connections import (shoreline_mask, waterfall_mask, bridge_axis,
                               transition_segments, bridge_rails)
@@ -45,6 +47,9 @@ class IsoTerrainAtlas:
         self.path = DEFAULT_TERRAIN_ATLAS if path is None else Path(path)
         self._source = None
         self._tiles = {}
+        self._mask_sources = {}
+        self._mask_tiles = {}
+        self._mask_unavailable = False
         self._unavailable = False
 
     def tile(self, surface, cell_size, variant=0):
@@ -93,6 +98,41 @@ class IsoTerrainAtlas:
         except (OSError, ValueError, RuntimeError, ImportError, tk.TclError):
             self._unavailable = True
             return None
+
+    def blend_tile(self, material, bit, variant, cell_size):
+        """A shared painterly RGBA stamp; never one new image per map cell.
+
+        Every image stays referenced for the lifetime of this atlas/Canvas.
+        Evicting a PhotoImage still used by Tk would blank retained tiles.
+        """
+        if not self._watercolor or self._unavailable or self._mask_unavailable:
+            return None
+        if type(cell_size) is not int or cell_size < 1:
+            return None
+        key = material, bit, variant
+        scaled_key = (*key, cell_size)
+        if scaled_key in self._mask_tiles:
+            return self._mask_tiles[scaled_key]
+        try:
+            import tkinter as tk
+        except ImportError:
+            self._mask_unavailable = True
+            return None
+        try:
+            import base64
+            if key not in self._mask_sources:
+                png = base64.b64encode(painted_mask_png(*key)).decode('ascii')
+                self._mask_sources[key] = tk.PhotoImage(
+                    data=png, format='png', master=self.canvas)
+            photo = crop_scaled(self._mask_sources[key],
+                                (0, 0, ATLAS_TILE_SIZE[0], ATLAS_TILE_SIZE[1]),
+                                (2*cell_size, cell_size), master=self.canvas)
+            self._mask_tiles[scaled_key] = photo
+            return photo
+        except (OSError, ValueError, RuntimeError, ImportError, tk.TclError):
+            self._mask_unavailable = True
+            return None
+
 
 class _TaggedFeatureCanvas:
     """Attach a depth group to all vector prop primitives (also in retained mode)."""
@@ -276,11 +316,21 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         # receiving side of each shared edge. This belongs to the common
         # Studio/Player renderer and is recomputed for dirty tiles as well.
         if layers.get('Terrain', True) and layers.get('AutoBlend', True):
-            for blend in blend_edges(board, c):
-                tile_canvas.create_polygon(
-                    *blend_polygon(corners, blend),
-                    fill=LAND_COLORS[blend.incoming], outline='',
-                    tags=('terrain_autoblend',))
+            for blend in ordered_blend_masks(blend_edges(board, c),
+                                            LAND_PRIORITY):
+                mask = (atlas.blend_tile(*painted_mask_key(blend), cell_size)
+                        if atlas is not None and hasattr(atlas, 'blend_tile')
+                        else None)
+                if mask is not None:
+                    tile_canvas.create_image(
+                        cx-cell_size, cy-cell_size/2, image=mask, anchor='nw',
+                        tags=('terrain_autoblend', 'painted_transition'))
+                else:
+                    # Historical vector renderer (no atlas / Tk PNG support).
+                    tile_canvas.create_polygon(
+                        *blend_polygon(corners, blend),
+                        fill=LAND_COLORS[blend.incoming], outline='',
+                        tags=('terrain_autoblend',))
         if surface == 'water' and layers.get('Terrain', True):
             # Stable, neighbour-aware banks; no seams between water cells.
             mask = shoreline_mask(board, c)
