@@ -611,6 +611,7 @@ def launch(path):
                 edited, rules=authored_rules_for_document(edited)).to_dict()
             ensure_unlocked(doc.data, new_data, map_view_data)
             doc.data = new_data
+            doc.mutation_revision += 1
             studio.apply_project()
             store.save(doc.data, studio.project.to_dict(),
                        expected_previous=disk_revisions)
@@ -619,6 +620,7 @@ def launch(path):
             # half an in-memory transaction. Inputs remain in their widgets
             # so the designer can fix the issue and retry after recovery.
             doc.data = original
+            doc.mutation_revision += 1
             studio.project = original_project
             raise
         doc.saved = json.dumps(doc.data, sort_keys=True)
@@ -2728,6 +2730,7 @@ def launch(path):
                     temporary.paint_many(mission_var.get(), stroke_cells, brush)
             except (RuleError, ValueError, KeyError):
                 doc.data = stroke_before
+                doc.mutation_revision += 1
                 if doc.undo_stack:
                     doc.undo_stack.pop()
                 doc.redo_stack = stroke_redo
@@ -2737,6 +2740,7 @@ def launch(path):
             else:
                 ensure_unlocked(stroke_before, temporary.data, map_view_data)
                 doc.data = temporary.data
+                doc.mutation_revision += 1
                 refresh_source()
                 refresh(board_only=brush not in ('erase', 'goal'))
         if stroke_before is not None and studio is not None:
