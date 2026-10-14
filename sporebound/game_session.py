@@ -751,5 +751,7 @@ class GameSession:
         try:
             data = json.loads(Path(path).read_text(encoding="utf-8"))
             return cls.from_recording(data, content, project, rules=rules)
+        except IncompatibleSaveError:
+            raise
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             raise RuleError(f"Invalid game session: {exc}") from exc

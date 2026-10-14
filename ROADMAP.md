@@ -3,6 +3,7 @@
 La cible est désormais Studio Qt Widgets/PySide6, Player Qt Quick/PySide6,
 renderer partagé et Tactical Core Python indépendant.
 Voir [R0 : fondation, décisions, migration et gates](docs/drawtemp5/R0_FOUNDATION.md).
+Suite livrée pour revue : [R1.A — cœur indépendant et API de simulation](docs/drawtemp5/R1_SDK.md).
 Les sections ci-dessous conservent l’historique du runtime et des chantiers réutilisables.
 
 # Roadmap — priorité gameplay, sans dépendance à Godot

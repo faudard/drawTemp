@@ -86,12 +86,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--check', action='store_true')
+    parser.add_argument('--strict', action='store_true', help='Also reject deferred UI paths')
     args = parser.parse_args()
     report = inventory()
     if args.report:
         args.report.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({k: v for k, v in report.items() if k != 'imports'}, indent=2))
-    return 1 if args.check and report['headless_violations'] else 0
+    blocked = report['headless_violations'] or (args.strict and report['deferred_ui_paths_to_extract_in_r1'])
+    return 1 if (args.check or args.strict) and blocked else 0
 
 
 if __name__ == '__main__':

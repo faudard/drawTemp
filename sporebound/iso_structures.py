@@ -223,7 +223,7 @@ def remove_structure(data, mission_id, cell):
     A normal paint brush never removes an identity. Use this explicit
     operation to delete the visual instance together with its footprint.
     """
-    from .iso_architecture import architecture_instances
+    from .architecture_model import architecture_instances
     target = _cell(_mission(data, mission_id), cell)
     content = Content.from_dict(data)
     mission_obj = content.missions[mission_id]
@@ -257,7 +257,7 @@ def remove_structure(data, mission_id, cell):
 
 def structure_at(data, mission_id, cell):
     """Find an authored or inferred legacy structure covering a clicked cell."""
-    from .iso_architecture import architecture_instances, _stored_instance
+    from .architecture_model import architecture_instances, _stored_instance
     mission_row = _mission(data, mission_id)
     target = _cell(mission_row, cell)
     # Most structures now have persistent records. Avoid parsing the entire
@@ -314,7 +314,7 @@ def _structure_edit_plan(data, mission_id, cell, *, anchor=None,
                                      ignore_unit_ids=occupants if not duplicate else ())
         # Legacy stamps also reserve real ground. Do not overwrite them
         # merely because they have no authored identity record yet.
-        from .iso_architecture import architecture_instances
+        from .architecture_model import architecture_instances
         # The detached intermediate is not a valid Content document when
         # its old stair links or upper spawns still refer to this building.
         # Inspect the valid original, excluding the structure being moved.

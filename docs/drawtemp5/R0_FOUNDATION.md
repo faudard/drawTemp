@@ -188,3 +188,9 @@ des éditeurs, de toutes les anciennes sauvegardes ni de l'extraction complète 
   voir les nombres et identifiants exacts dans `baseline.json`.
 
 Les validations locales n'attestent pas les jobs GitHub ni le rendu GPU réel.
+
+## Suite R1.A
+
+La [première tranche SDK R1](R1_SDK.md) sépare les données de bâtiments du rendu,
+active le gate statique strict et ajoute l’API de simulation à snapshots immuables.
+Le rapport `dependency-audit.json` ci-dessus reste le constat historique de R0.

@@ -6,7 +6,7 @@ No Tk import, no new serialization schema and no duplicate tactical renderer.
 """
 from copy import deepcopy
 
-from .iso_architecture import architecture_instances
+from .architecture_model import architecture_instances
 from .iso_structures import (place_structure, structure_template,
                              structure_footprint, validate_structure_placement)
 from .map_authoring import _mission, selected_cells
