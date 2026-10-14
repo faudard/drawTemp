@@ -1,0 +1,52 @@
+name: Persistence R8 reliability
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/long_session.py'
+      - 'sporebound/persistence.py'
+      - 'sporebound/game_session.py'
+      - 'examples/persistence_soak.py'
+      - 'tests_standalone/test_long_session_r8.py'
+      - 'docs/LONG_SESSION_R8.md'
+      - '.github/workflows/persistence-r8.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'sporebound/long_session.py'
+      - 'sporebound/persistence.py'
+      - 'examples/persistence_soak.py'
+      - 'tests_standalone/test_long_session_r8.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  persistence:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.11']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: R8 long-session tests
+        run: python -m unittest discover -s tests_standalone -p test_long_session_r8.py -v
+      - name: Existing checkpoint and reliability contracts
+        run: |
+          python -m unittest discover -s tests_standalone -p test_persistence_v2.py -v
+          python -m unittest discover -s tests_standalone -p test_reliability.py -v
+      - name: Reproducible stress report
+        run: python -m examples.persistence_soak --iterations 2 --commands 24 --output persistence-r8-report.json
+      - name: Upload R8 report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: persistence-r8-${{ matrix.os }}
+          path: persistence-r8-report.json
+          if-no-files-found: ignore
