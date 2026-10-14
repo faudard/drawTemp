@@ -14,32 +14,64 @@ CELL_SIZE = 28
 
 
 def exploration_visual_board(stage):
-    """Convert the existing narrative grid into presentation-only terrain."""
+    """Paint narrative scenes without changing their pathfinding or save data.
+
+    Deliberately deterministic: a redraw, resize or reopened save always
+    produces the same scene. Terrain features are decorative, not blockers.
+    """
     blocked = {tuple(cell) for cell in stage["blocked"]}
-    theme = stage["theme"]
+    occupied = {tuple(stage["position"])}
+    occupied.update(tuple(point["pos"]) for point in stage["interactions"])
+    occupied.update(tuple(actor["pos"]) for actor in stage.get("actors", ()))
+    width, height, theme = stage["width"], stage["height"], stage["theme"]
     tiles = {}
-    for y in range(stage["height"]):
-        for x in range(stage["width"]):
+    for y in range(height):
+        for x in range(width):
             cell = (x, y)
             solid = cell in blocked
+            edge = min(x, y, width - 1 - x, height - 1 - y)
+            # Small variations create continuous, recognizable landscape
+            # shapes rather than random, disconnected chessboard tiles.
+            variation = (x * 17 + y * 29 + x * y * 7) % 19
             if solid:
                 surface = "stone" if theme in ("village", "stone") else "rock"
                 feature = "ruin" if theme == "village" else "boulder"
             elif theme == "fields":
-                surface = "dirt" if y == 3 and x in (1, 2, 3) else "grass"
-                feature = "reeds" if (x * 3 + y) % 4 == 0 else ""
+                trail = (y == min(3, height - 1) and 1 <= x < width - 1)
+                surface = "dirt" if trail and cell not in occupied else "grass"
+                feature = ("bush" if edge == 0 and variation in (0, 3, 7)
+                           else "reeds" if variation in (2, 11, 13) else "")
             elif theme == "village":
-                surface = "cobble" if (x + y) % 4 == 0 else "dirt"
+                street = abs(y - (height // 2)) <= 1
+                surface = ("cobble" if street and variation % 4 != 0
+                           else "dirt" if variation % 5 else "stone")
                 feature = ("ruin" if cell in {(2, 1), (5, 2), (7, 4)}
+                           else "lantern" if edge > 0 and variation == 0
+                           else "bush" if edge == 0 and variation in (3, 9)
                            else "")
             elif theme == "forest":
-                surface = "grass"
-                feature = "tree" if (x * 3 + y) % 5 == 0 else ""
+                surface = "grass" if variation != 0 else "dirt"
+                feature = ("tree" if (edge == 0 or variation in (2, 5))
+                           else "bush" if variation in (10, 12) else "")
             else:
-                surface = "stone" if (x + y) % 3 else "cobble"
-                feature = ""
+                surface = "cobble" if variation in (1, 3, 5, 7) else "stone"
+                feature = "boulder" if edge == 0 and variation == 4 else ""
+            if cell in occupied and not solid:
+                feature = ""  # Keep Jeanne, civilians and story goals visible.
             tiles[cell] = Tile(blocked=solid, surface=surface, feature=feature)
-    return Board(stage["width"], stage["height"], tiles)
+    return Board(width, height, tiles)
+
+
+def exploration_visual_cast(stage):
+    """Presentation-only extras drawn by the real isometric actor pipeline."""
+    cast = [Unit("jeanne", "Jeanne", "player", tuple(stage["position"]))]
+    for actor in stage.get("actors", ()):
+        if actor["status"] != "active":
+            continue
+        cast.append(Unit(
+            "story_" + str(actor["id"]), actor["name"], "player",
+            tuple(actor["pos"])))
+    return cast
 
 
 def exploration_iso_shift(geometry, viewport):
@@ -75,17 +107,98 @@ class IsoExplorationCanvas:
         self.geometry = None
         self.shift = (0, 0)
 
+    def _paint_atmosphere(self, theme):
+        """Quiet painted backdrop around the diamond, behind every sprite."""
+        gradients = {
+            "fields": ("#1d3431", "#426044"),
+            "village": ("#302a2a", "#61463a"),
+            "forest": ("#142c30", "#395747"),
+            "stone": ("#252c35", "#4a4d52"),
+        }
+        top, bottom = gradients.get(theme, gradients["stone"])
+        def rgb(value):
+            return tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))
+        a, b = rgb(top), rgb(bottom)
+        width, height = self.viewport
+        for index in range(28):
+            t = index / 27
+            color = "#" + "".join(
+                format(round(a[i] * (1 - t) + b[i] * t), "02x")
+                for i in range(3))
+            self.canvas.create_rectangle(
+                0, height * index / 28, width, height * (index + 1) / 28 + 1,
+                fill=color, outline="", tags=("exploration_atmosphere",))
+        self.canvas.tag_lower("exploration_atmosphere")
+
+    def _draw_story_markers(self, stage, size):
+        """Gold/blue wayfinding symbols; actors are PNGs, not colored discs."""
+        for point in stage["interactions"]:
+            cx, cy = self._center(point["pos"])
+            visited = point["visited"]
+            color = ("#8ac7ad" if visited else
+                     "#98c6d8" if point["exit"] else "#f4ca7f")
+            tip_y = cy - max(24, size * .55)
+            r = max(6, min(11, size * .14))
+            # A hollow ground ring leaves the hand-painted terrain visible.
+            self.canvas.create_oval(
+                cx - r * 1.7, cy - r * .55, cx + r * 1.7, cy + r * .55,
+                fill="", outline=color, width=2,
+                tags=("exploration_hotspot",))
+            self.canvas.create_polygon(
+                cx, tip_y - r, cx + r, tip_y, cx, tip_y + r,
+                cx - r, tip_y, fill="#243338", outline=color, width=2,
+                tags=("exploration_hotspot",))
+            self.canvas.create_text(
+                cx, tip_y, text="✓" if visited else "!",
+                fill=color, font=("Segoe UI", max(9, round(size * .17)), "bold"),
+                tags=("exploration_hotspot",))
+            label = point["title"][:22]
+            self.canvas.create_text(
+                cx + 1, cy + max(15, size * .28) + 1, text=label,
+                fill="#192527", font=("Segoe UI", 9, "bold"),
+                tags=("exploration_hotspot",))
+            self.canvas.create_text(
+                cx, cy + max(15, size * .28), text=label, fill="#fff0cd",
+                font=("Segoe UI", 9, "bold"),
+                tags=("exploration_hotspot",))
+        for actor in stage.get("actors", ()):
+            if actor["status"] == "rescued":
+                continue
+            cx, cy = self._center(actor["pos"])
+            if actor["status"] == "lost":
+                # An unresolved civilian is still locatable, but never a
+                # living chibi unit or an invented tactical combatant.
+                self.canvas.create_oval(
+                    cx - 9, cy - 7, cx + 9, cy + 6,
+                    fill="#53545a", outline="#a3a4a5", width=2,
+                    tags=("exploration_npc",))
+                self.canvas.create_text(
+                    cx, cy - 18, text=actor["name"][:15],
+                    fill="#d9cebf", font=("Segoe UI", 9),
+                    tags=("exploration_npc",))
+                continue
+            tint = "#edbd77" if actor["kind"] == "civilian" else "#b0c7d9"
+            self.canvas.create_oval(
+                cx - 12, cy - 5, cx + 12, cy + 7,
+                fill="", outline=tint, width=2,
+                tags=("exploration_npc",))
+        # A subtle hero locator; does not steal a cell from hit-testing.
+        hx, hy = self._center(stage["position"])
+        self.canvas.create_oval(
+            hx - 16, hy - 7, hx + 16, hy + 8, fill="",
+            outline="#f5d39b", width=2, tags=("exploration_hero_focus",))
+
     def draw(self, stage):
         board = exploration_visual_board(stage)
         # This ephemeral Mission is for the renderer only. It never enters
         # Battle, campaign progression, serialization or the command bus.
         scene = Mission("exploration_visual", stage["title"], board, [])
-        hero = Unit("jeanne", "Jeanne", "player", tuple(stage["position"]))
-        self.canvas.configure(background="#22372f")
+        self.canvas.configure(background="#1d3431")
         size = (exploration_iso_cell_size(stage, self.viewport)
                 if self.adaptive else CELL_SIZE)
         self.geometry = render_isometric(
-            self.canvas, board, scene, [hero], cell_size=size,
+            self.canvas, board, scene, exploration_visual_cast(stage),
+            cell_size=size,
             layers={"Terrain": True, "Relief": True, "Décors": True,
                     "Bâtiments": False, "Toitures": False, "Unités": True,
                     "Objets": False, "Objectifs": False, "Déploiement": False,
@@ -96,38 +209,8 @@ class IsoExplorationCanvas:
             omit_architecture=True, draw_selection=False)
         self.shift = exploration_iso_shift(self.geometry, self.viewport)
         self.canvas.move("all", *self.shift)
-
-        # Read-only story overlays: do not turn hotspots/civilians into
-        # tactical units or change their movement, deadlines or rewards.
-        for point in stage["interactions"]:
-            cx, cy = self._center(point["pos"])
-            color = ("#79bea2" if point["visited"] else
-                     "#87bde2" if point["exit"] else "#e1c878")
-            self.canvas.create_oval(cx - 11, cy - 28, cx + 11, cy - 6,
-                                    fill=color, outline="#17232b", width=2,
-                                    tags=("exploration_hotspot",))
-            self.canvas.create_text(cx, cy - 17,
-                                    text="✓" if point["visited"] else "?",
-                                    fill="#17232b", font=("TkDefaultFont", 11, "bold"),
-                                    tags=("exploration_hotspot",))
-            self.canvas.create_text(cx, cy + 14, text=point["title"][:14],
-                                    fill="#fff3c8", font=("TkDefaultFont", 8, "bold"),
-                                    tags=("exploration_hotspot",))
-        for actor in stage.get("actors", ()):
-            if actor["status"] == "rescued":
-                continue
-            cx, cy = self._center(actor["pos"])
-            color = ("#82919a" if actor["status"] == "lost" else
-                     "#f8c16f" if actor["kind"] == "civilian" else "#c5a6db")
-            self.canvas.create_oval(cx - 10, cy - 26, cx + 10, cy - 6,
-                                    fill=color, outline="#172d36", width=2,
-                                    tags=("exploration_npc",))
-            self.canvas.create_text(cx, cy - 16, text=actor["name"][:1],
-                                    fill="#24302b", font=("TkDefaultFont", 9, "bold"),
-                                    tags=("exploration_npc",))
-            self.canvas.create_text(cx, cy + 15, text=actor["name"][:12],
-                                    fill="#fff6dc", font=("TkDefaultFont", 8, "bold"),
-                                    tags=("exploration_npc",))
+        self._paint_atmosphere(stage["theme"])
+        self._draw_story_markers(stage, size)
         return self.geometry
 
     def _center(self, cell):
