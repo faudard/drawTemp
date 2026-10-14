@@ -129,6 +129,9 @@ class ProjectWorkspaceTab:
         ttk.Button(controls, text='Visual Battle Lab · graphiques et replay',
                    command=lambda: self.notebook.select(self.owner.visual_battle_lab.tab)).pack(
                        fill='x', padx=8, pady=4)
+        ttk.Button(controls, text='Human Playtest Lab · durée et décisions réelles',
+                   command=lambda: self.notebook.select(self.owner.playtest_studio.tab)).pack(
+                       fill='x', padx=8, pady=4)
         ttk.Button(controls, text='Vérifier projet et assets',
                    command=lambda: self.owner._run(self.validate_all)).pack(
                        fill='x', padx=8, pady=4)
