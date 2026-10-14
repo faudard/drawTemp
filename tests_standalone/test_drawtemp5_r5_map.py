@@ -117,7 +117,7 @@ class Block:
 sys.meta_path.insert(0, Block())
 from drawtemp.studio.map_authoring import MapStudio
 studio = MapStudio.reference()
-studio.paint([(2, 2)], 'surface:grass')
+studio.paint([(2, 2)], 'surface:stone')
 """
         subprocess.run([sys.executable, "-c", code], check=True,
                        cwd=Path(__file__).resolve().parents[1], capture_output=True,
