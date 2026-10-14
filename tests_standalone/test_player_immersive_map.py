@@ -75,7 +75,7 @@ class ImmersiveExplorationGuiTests(TestCase):
                 app.root.update()
                 self.assertEqual(app.presentation.screen, "campaign")
                 self.assertIsInstance(app.canvas, tk.Canvas)
-                self.assertEqual(app.view.cget("padding"), (0, 0, 0, 0))
+                self.assertIn(str(app.view.cget("padding")), ("0", "0 0 0 0"))
                 self.assertFalse(any(isinstance(widget, ttk.Button)
                                      for widget in app.view.winfo_children()))
                 self.assertIsNotNone(app.canvas.iso_scene)
