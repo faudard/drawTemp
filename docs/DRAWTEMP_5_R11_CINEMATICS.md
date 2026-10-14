@@ -53,6 +53,11 @@ Audio tracks use canonical sound cue bindings from the project asset registry:
 music, ambience, voice and SFX with loop, gain automation, fades and ducking.
 If a file/device/codec is missing, playback is silent rather than mutating
 gameplay or failing the cinematic. A silent demo does not certify audio output.
+Actor tracks may reference an existing pose slot (actor_pose) or a validated
+AssetRegistry animation binding. The stage picks the correct atlas sprite by
+authored event time, including backward seeks and loops. This does not add a
+new animation schema or copy the PNGs into the game project.
+
 The existing Audio Studio remains responsible for importing WAV/OGG and
 binding sound assets.
 
@@ -62,7 +67,7 @@ binding sound assets.
 | --- | --- | --- |
 | R11.1 | Qt timeline lanes, clips, typed editor, Undo/Redo | Headless transaction tests; visual/manual gate outstanding |
 | R11.2 | Canonical camera motion, keyframes, zoom, easing, shot transition | Deterministic frame sampling |
-| R11.3 | Actor trajectories, keyed poses and asset sprite lookup | Deterministic frame sampling; animation atlas handoff to R3/R7 |
+| R11.3 | Actor trajectories, keyframes, poses and sampled AssetRegistry animations | Deterministic animation-frame and pose tests; R3 GPU integration pending |
 | R11.4 | Speaker, progressive text, portrait, expression | Existing StoryBook alone owns decisions and effects |
 | R11.5 | Four audio buses with optional QtMultimedia stage | Deterministic mix and silent-device fallback; device QA outstanding |
 | R11.6 | Seeded FX tracks for fire/smoke/rain/fog/light/camera shake | Seek-deterministic metadata; production GPU effects deferred to R3 |
