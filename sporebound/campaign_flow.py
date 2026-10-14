@@ -178,35 +178,143 @@ def inspect_campaign(progress, flow):
     }
 
 
-def audit_campaign(content, project, campaign_id):
-    """Deterministic structural gate, not a claim of exhaustive choice coverage.
+def audit_campaign(content, project, campaign_id, *, max_states=384, max_depth=32):
+    """Explore *candidate* mission/story branches with bounded symbolic victories.
 
-    Choice outcomes and story flags may change during dialogue. Those pathways
-    need the runtime save/replay tests; this audit reports them as limitations.
+    This is not tactical verification: only an actual recorded GameSession
+    replay proves a victory, trigger or offscreen multi-front resolution.
+    Every report explicitly states this coverage boundary.
     """
+    from collections import deque
+    from dataclasses import asdict
+    from .campaign import Campaign
     from .campaign_graph import inspect_graph
+    from .model import RuleError
+    from .narrative import StoryBook
+
     project.validate(content)
     campaign = project.campaign(campaign_id)
     require(campaign is not None, "Unknown campaign")
+    require(type(max_states) is int and 1 <= max_states <= 4096 and
+            type(max_depth) is int and 1 <= max_depth <= 128,
+            "Invalid campaign QA search limits")
     graph = inspect_graph(content, [campaign["start_mission"]])
     flow = project.campaign_flow
     reachable = set(graph["reachable"])
-    gated = sorted(set(flow.get("gates", {})) & reachable)
+    gates = flow.get("gates", {})
+    gated = sorted(set(gates) & reachable)
+    endings = flow.get("endings", {})
+    # This particular gate can never open until its own locked mission is done.
     impossible = sorted(mid for mid in gated
-                        if (flow["gates"][mid].get("completed_mission") == mid))
-    missing = sorted(set(flow.get("gates", {})) - reachable)
-    endings = sorted(flow.get("endings", {}))
-    warnings = ([f"Graph-unreachable gated mission: {mid}" for mid in missing]
-                + ["Conditional dialogue effects require runtime scenario certification"]
-                if gated else [])
+                        if gates[mid].get("completed_mission") == mid)
     errors = [f"Mission requires its own completion: {mid}" for mid in impossible]
-    if endings and not reachable:
-        errors.append("No reachable mission for authored campaign endings")
+    warnings = [f"Graph-unreachable gated mission: {mid}"
+                for mid in sorted(set(gates) - reachable)]
+    initial = project.new_game(campaign_id, content)
+    Campaign.from_dict({"version": 1, **asdict(initial)})
+    story = StoryBook(project.story, content, project.campaigns)
+    queue = deque([(initial, [])])
+    explored = set()
+    possible_missions = set()
+    possible_unlocks = set(initial.unlocked)
+    ending_paths = {}
+    duplicate_rewards = []
+    truncated = False
+    blocked_effects = set()
+
+    def fingerprint(progress):
+        # No random IDs, timestamps or non-gameplay history.
+        values = {
+            "unlocked": progress.unlocked, "completed": progress.completed,
+            "flags": progress.story_flags, "pending": progress.story_pending,
+            "gold": progress.gold, "inventory": progress.inventory,
+            "ledger": progress.flow_ledger,
+            "wounds": {uid: hero.wounds for uid, hero in progress.heroes.items()},
+        }
+        return json.dumps(values, ensure_ascii=False, sort_keys=True)
+
+    while queue:
+        if len(explored) >= max_states:
+            truncated = True
+            break
+        progress, path = queue.popleft()
+        identity = fingerprint(progress)
+        if identity in explored:
+            continue
+        explored.add(identity)
+        possible_unlocks.update(progress.unlocked)
+        for ending, condition in endings.items():
+            if ending not in ending_paths and matches(condition, progress):
+                ending_paths[ending] = path
+        if len(path) >= max_depth:
+            truncated = truncated or bool(available_missions(progress, flow) or
+                                          progress.story_pending)
+            continue
+        if progress.story_pending:
+            for choice in story.choices(progress):
+                try:
+                    updated = story.choose(progress, choice["id"])
+                except RuleError as exc:
+                    blocked_effects.add(str(exc))
+                    continue
+                queue.append((updated, path + [
+                    "choice:" + progress.story_pending + "/" + choice["id"]]))
+            continue
+        for mid in available_missions(progress, flow):
+            possible_missions.add(mid)
+            updated = deepcopy(progress)
+            updated.completed.append(mid)
+            updated.gold += content.missions[mid].reward  # Symbolic victory; loot unknown.
+            if mid in story.after:
+                story.after_victory(updated, mid)
+            else:
+                for successor in content.missions[mid].next_missions:
+                    if successor not in updated.unlocked:
+                        updated.unlocked.append(successor)
+            try:
+                updated = settle(updated, flow, mid, "victory", content=content)
+                twice = settle(updated, flow, mid, "victory", content=content)
+                if twice != updated:
+                    duplicate_rewards.append(mid)
+            except RuleError as exc:
+                blocked_effects.add(str(exc))
+                continue
+            queue.append((updated, path + [mid + ":victory"]))
+            if flow.get("outcomes", {}).get(mid, {}).get("defeat"):
+                try:
+                    defeated = settle(progress, flow, mid, "defeat", content=content)
+                    if defeated != progress:
+                        queue.append((defeated, path + [mid + ":defeat"]))
+                except RuleError as exc:
+                    blocked_effects.add(str(exc))
+
+    never_unlocked = sorted(set(content.missions) - possible_unlocks)
+    unplayed = sorted(possible_unlocks - possible_missions)
+    unreachable_endings = sorted(set(endings) - set(ending_paths))
+    if truncated:
+        warnings.append("Exploration bounded; missing paths are not certified unreachable")
+    if unreachable_endings:
+        warnings.append("Endings not witnessed by symbolic routes: " +
+                        ", ".join(unreachable_endings))
+    if blocked_effects:
+        warnings.append("Some symbolic effects require runtime setup: " +
+                        "; ".join(sorted(blocked_effects)[:4]))
+    if duplicate_rewards:
+        errors.append("Repeated consequence rewards: " + ", ".join(duplicate_rewards))
     return {
         "campaign": campaign_id, "start": campaign["start_mission"],
         "reachable": sorted(reachable), "unreachable": graph["unreachable"],
         "terminal": [mid for mid in graph["terminal"] if mid in reachable],
-        "cycles": graph["cycles"], "gated": gated, "endings": endings,
+        "cycles": graph["cycles"], "gated": gated, "endings": sorted(endings),
+        "possible_missions": sorted(possible_missions),
+        "never_unlocked_in_preview": never_unlocked,
+        "unplayed_in_preview": unplayed,
+        "ending_witnesses": ending_paths,
+        "unreachable_endings_in_preview": unreachable_endings,
+        "duplicated_outcomes": duplicate_rewards,
+        "states_explored": len(explored),
+        "truncated": truncated,
+        "save_contract": "campaign flow fingerprint + verified once-only ledger",
         "errors": errors, "warnings": warnings,
-        "scope": "Structural reachability only; interactive paths need GameSession replay",
+        "scope": "Bounded symbolic routes, not tactical victory or full GameSession replay",
     }
