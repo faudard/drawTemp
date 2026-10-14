@@ -255,7 +255,8 @@ def squad_objective_guard_move(battle, actor):
     if (actor.team != "enemy" or actor.moved
             or battle.status_blocks(actor, "move")
             or "move" not in battle.rules.commands
-            or battle.mission.objective not in {"extract", "hold", "crown"}
+            or battle.mission.objective not in {"extract", "hold", "crown",
+                                               "capture", "escort", "retreat"}
             or not battle.mission.goal):
         return None
     goals = tuple(sorted(battle.mission.goal))
