@@ -29,6 +29,18 @@ CT times are estimates and may change if speed or status changes.
 The Player does **not** fabricate LOS, damage probabilities, movement costs or
 future AI decisions. If the engine cannot calculate a forecast, none is shown.
 
+## CI acceptance evidence
+
+The `standalone.yml` workflow runs the headless `test_player_ux_r7`
+cases on Linux/macOS/Windows Python 3.10/3.12/3.14. It now **also** runs
+`test_player_ux_r7_gui` explicitly under Xvfb on Linux instead of relying
+on `unittest discover`, where display-dependent cases would be skipped.
+The GUI smoke exercises 2D/isometric zoom, focus-bound remapped shortcuts,
+contrast, HUD density, results rendering and transition invalidation.
+The terminal result in that test is an **in-memory UI fixture only** and
+must never be saved; separate GameSession tests exercise replay-valid
+campaign progression and persistence.
+
 ## Verification commands
 
 ```sh
