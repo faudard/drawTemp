@@ -207,6 +207,7 @@ def dispatch(battle, *, observer=None, before_fire=None, fire_limit=None):
     require(fire_limit is None or
             (type(fire_limit) is int and 1 <= fire_limit <= 200),
             'Invalid event-debug step limit')
+    from ..temporal_events import temporal_status
     events = battle.mission.triggers
     cascades = any('after' in row for row in events)
     fired_now = 0
@@ -223,6 +224,15 @@ def dispatch(battle, *, observer=None, before_fire=None, fire_limit=None):
                     observer({'event_id': eid, 'state': 'waiting',
                               'missing': blocked, 'pass': pass_number})
                 continue
+            if any(key in trigger for key in (
+                    'cancel_after', 'delay_ticks', 'delay_activations',
+                    'expire_after_ticks', 'expire_after_activations')):
+                temporal = temporal_status(battle, trigger)
+                if temporal['state'] != 'ready':
+                    if observer is not None:
+                        observer({'event_id': eid, 'state': temporal['state'],
+                                  'pass': pass_number})
+                    continue
             if not battle.rules.trigger_conditions.get(
                     trigger['condition']).matches(battle, trigger):
                 if observer is not None:

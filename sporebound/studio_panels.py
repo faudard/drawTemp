@@ -549,6 +549,9 @@ class StudioPanels:
             self.cstart.set(camp['start_mission'])
 
     def reload_project(self):
+        # A different project may reuse mission/entity IDs; navigation
+        # positions belong to the current editor session, not saved content.
+        self.workspace.clear_navigation()
         content=self._content()
         self.project_path=Path(self.content_path()).with_suffix('.game.json')
         self.project=(GameProject.load(self.project_path,content) if self.project_path.exists()

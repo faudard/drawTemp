@@ -44,6 +44,9 @@ from .iso_structures import (STRUCTURE_NAMES, door_slots, structure_template,
 from .iso_architecture import (PIVOTS, ARCHITECTURE_NAMES, placement_origin,
                                preview_structure_sprite_position)
 from .structure_groups import selected_structures, transform_structure_group
+from .building_visuals import (FACADES, ROOFS, DEFAULT_APPEARANCE,
+                               building_appearance, exterior_wall_cells,
+                               edit_building_appearance, set_building_window)
 from .map_layer_workspace import (LAYERS as EDITOR_LAYERS, empty_views,
                                   load_views, save_views, view_for, update_view,
                                   ensure_unlocked)
@@ -296,6 +299,9 @@ def launch(path):
     structure_var = tk.StringVar(value='Maison')
     structure_pivot_var = tk.StringVar(value='Coin')
     structure_door_var = tk.StringVar(value='Entrée A')
+    facade_var = tk.StringVar(value='pierre')
+    roof_var = tk.StringVar(value='tuiles')
+    window_present_var = tk.BooleanVar(value=True)
     structure_turns = 0
     structure_group_dx = tk.IntVar(value=1)
     structure_group_dy = tk.IntVar(value=0)
@@ -1312,6 +1318,9 @@ def launch(path):
             selected_cell = min(selected_tiles, key=lambda p: (p[1], p[0]))
         tool_var.set('Sélection')
         refresh()
+        if studio is not None:
+            studio.workspace.sync_map_selection(
+                mission_var.get(), selected_cell, group_id=selected_group_id)
         status_var.set(f'{len(groups)} groupe(s) sélectionné(s) : '
                        f'{len(selected_tiles)} case(s) et emprises.')
 
@@ -1565,6 +1574,24 @@ def launch(path):
         status_var.set('Propriétés de structure appliquées (Undo disponible).')
 
     @guarded
+    def apply_building_style():
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        building = selected_structure()
+        if not building.id:
+            raise RuleError('Utiliser une maison ou tour avec identité persistante.')
+        design_change(lambda: doc.replace(edit_building_appearance(
+            doc.data, mission_var.get(), building.id,
+            facade=facade_var.get(), roof=roof_var.get())))
+        status_var.set('Façade et toiture modifiées : Undo/Redo disponibles.')
+
+    def choose_window_mode(present):
+        window_present_var.set(present)
+        tool_var.set('Fenêtre façade')
+        status_var.set(('Poser' if present else 'Effacer') +
+                       ' une fenêtre : cliquer une case de mur extérieur.')
+
+    @guarded
     def begin_structure_edit(duplicate):
         if battle is not None or source_pending():
             raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
@@ -1582,6 +1609,11 @@ def launch(path):
 
     def structure_anchor(cursor):
         return placement_origin(structure_clip(), cursor, structure_pivot_var.get())
+
+    def _mission_visual_records():
+        mission = next(m for m in doc.data['missions']
+                       if m['id'] == mission_var.get())
+        return mission.get('structures', ())
 
     def authored_building_at(cell):
         scene = Content.from_dict(doc.data).missions[mission_var.get()]
@@ -1867,6 +1899,22 @@ def launch(path):
                 status_var.set(entry.label + ' : emplacement valide, cliquer pour poser.')
             return
         clear_placement_preview()
+        if tool_var.get() == 'Fenêtre façade':
+            cell = event_cell(event)
+            if cell is not None:
+                try:
+                    building = structure_at(doc.data, mission_var.get(), cell)
+                    row = next((r for r in _mission_visual_records()
+                                if r['id'] == building.id), None)
+                    allowed = (row is not None
+                               and (cell[0]-building.anchor[0],
+                                    cell[1]-building.anchor[1])
+                               in exterior_wall_cells(row))
+                except RuleError:
+                    allowed = False
+                preview_cells([cell], tag='brush_preview',
+                              color='#36a16c' if allowed else '#e05252')
+            return
         if tool_var.get() == 'Étage intérieur':
             cursor = event_cell(event)
             if cursor is not None and iso_geometry is not None:
@@ -2047,6 +2095,11 @@ def launch(path):
             structure_var.set(current.name)
             structure_turns = current.turns
             structure_door_var.set('Entrée B' if current.door_slot else 'Entrée A')
+            row = next((r for r in _mission_visual_records()
+                        if r['id'] == current.id), None)
+            settings = building_appearance(row) if row is not None else DEFAULT_APPEARANCE
+            facade_var.set(settings['facade'])
+            roof_var.set(settings['roof'])
             structure_drag_from = selected_cell
             structure_drag_anchor = None
             structure_drag_duplicate = bool(event.state & 0x0001)
@@ -2072,6 +2125,14 @@ def launch(path):
             status_var.set(('Structure dupliquée' if duplicate else 'Structure déplacée')
                            + f' en {anchor}. Annuler/Rétablir disponibles.')
             refresh()
+        elif tool == 'Fenêtre façade':
+            if source_pending():
+                raise RuleError('Appliquer ou abandonner le JSON avant édition.')
+            sid = authored_building_at(selected_cell)
+            design_change(lambda: doc.replace(set_building_window(
+                doc.data, mission_var.get(), sid, selected_cell,
+                present=window_present_var.get())))
+            status_var.set('Ouverture de façade enregistrée (visuelle uniquement).')
         elif tool == 'Inspecter entité':
             open_entity_inspector(selected_cell)
             return
@@ -2306,6 +2367,9 @@ def launch(path):
             selected_tiles = selected_tiles | set(cells) if selection_additive else set(cells)
             selected_cell = stroke_cells[-1]
             refresh(selection_only=True)
+            if studio is not None:
+                studio.workspace.sync_map_selection(
+                    mission_var.get(), selected_cell, cells=selected_tiles)
         elif not battle and tool == 'Rectangle' and rectangle_anchor is not None and stroke_cells and brush not in ('unit', 'object'):
             end = stroke_cells[-1]
             selected_cell = end
@@ -2774,7 +2838,8 @@ def launch(path):
                          'Structure','Sélection structure',
                          'Déplacer structure','Dupliquer structure',
                          'Entité','Inspecter entité','Déplacer entité',
-                         'Dupliquer entité','Étage intérieur']).pack(side='left')
+                         'Dupliquer entité','Étage intérieur',
+                         'Fenêtre façade']).pack(side='left')
     ttk.Label(controls,text='Terrain').pack(side='left')
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
@@ -3061,6 +3126,23 @@ def launch(path):
                command=lambda: apply_structure_group(False)).pack(side='left',padx=3)
     ttk.Button(structure_group_controls, text='Dupliquer groupe',
                command=lambda: apply_structure_group(True)).pack(side='left',padx=3)
+    facade_controls = ttk.Frame(tools_structure)
+    facade_controls.pack(fill='x', padx=5, pady=3)
+    ttk.Label(facade_controls, text='Façade :').pack(side='left', padx=(2, 3))
+    ttk.Combobox(facade_controls, textvariable=facade_var, state='readonly',
+                 width=9, values=FACADES).pack(side='left')
+    ttk.Label(facade_controls, text='Toiture :').pack(side='left', padx=(10, 3))
+    ttk.Combobox(facade_controls, textvariable=roof_var, state='readonly',
+                 width=9, values=ROOFS).pack(side='left')
+    ttk.Button(facade_controls, text='Appliquer façade/toiture',
+               command=apply_building_style).pack(side='left', padx=5)
+    ttk.Button(facade_controls, text='Poser fenêtre',
+               command=lambda: choose_window_mode(True)).pack(side='left', padx=3)
+    ttk.Button(facade_controls, text='Effacer fenêtre',
+               command=lambda: choose_window_mode(False)).pack(side='left', padx=3)
+    ttk.Label(facade_controls,
+              text='Maison/Tour · Fenêtres décoratives sur murs extérieurs').pack(
+                  side='left', padx=5)
     floor_controls = ttk.Frame(root)
     floor_controls.pack(fill='x', padx=5)
     ttk.Label(floor_controls, text='Étage supérieur (visuel) :').pack(side='left',padx=3)
@@ -3348,17 +3430,33 @@ def launch(path):
         mission_var.set(mid)
         stop()
 
-    def focus_workspace_map(mid, cell):
-        nonlocal selected_cell
-        select_workspace_mission(mid)
+    def focus_workspace_map(mid, cell, *, show_map=True, group_id=None):
+        nonlocal selected_cell, selected_group_id
+        if not show_map and battle is not None:
+            return  # Inspecting a project reference never cancels playtest.
+        if mid != mission_var.get() or show_map and battle is not None:
+            select_workspace_mission(mid)
         validate_selection(doc.data, mid, [tuple(cell)])
-        # Navigating a diagnostic must replace, not compound, an old
-        # multi-selection or hierarchical group brush selection.
+        # Map and project tree share the exact same persistent group identity.
+        # Do not treat a group as merely its first tile.
         selected_tiles.clear()
+        selected_group_id = None
+        if group_id is not None:
+            group_mission = next(m for m in doc.data['missions']
+                                 if m['id'] == mid)
+            descendants = descendant_groups(group_mission, group_id)
+            if not descendants:
+                raise RuleError('Groupe introuvable : ' + group_id)
+            selected_group_id = group_id
+            selected_tiles.update(group_display_cells(group_mission, group_id))
         selected_cell = tuple(cell)
-        editing_context.selection.set(mid, selected_cell, publish=False)
-        notebook.select(work)
-        refresh()
+        editing_context.selection.set(mid, selected_cell, selected_tiles,
+                                      publish=False)
+        if show_map:
+            notebook.select(work)
+        refresh(selection_only=True)
+        if group_id is not None and group_tree.exists('g:' + group_id):
+            group_tree.selection_set('g:' + group_id)
         # A diagnostic must reveal the object, not just update its ID.
         # Use the same coordinate projection as the active map renderer.
         if iso_var.get() and iso_geometry is not None:
@@ -3379,7 +3477,8 @@ def launch(path):
                 canvas.yview_moveto(max(0.0, min(
                     (cy - top - height/2) / (bottom-top),
                     1 - height/(bottom-top))))
-        canvas.focus_set()
+        if show_map:
+            canvas.focus_set()
 
     def on_project_saved(path):
         nonlocal disk_revisions

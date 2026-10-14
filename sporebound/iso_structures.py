@@ -170,7 +170,7 @@ def _floor_owners(mission, instance):
     return floors, occupants
 
 
-def _move_authored_decks(prepared, mission_id, instance, requested):
+def _move_authored_decks(prepared, mission_id, instance, requested, *, appearance=None):
     """Restamp and translate an authored interior as ONE validated transaction.
 
     Never parse an intermediate document with orphaned floors or stair links.
@@ -196,6 +196,8 @@ def _move_authored_decks(prepared, mission_id, instance, requested):
     mission.setdefault('structures', []).append({
         'id': instance.id, 'name': name, 'anchor': list(anchor),
         'turns': turns, 'door_slot': door_slot, 'underlay': underlay})
+    if appearance is not None:
+        mission['structures'][-1]['appearance'] = appearance
     for unit in mission['units']:
         if unit['id'] in occupants:
             unit['pos'] = [unit['pos'][0]+dx, unit['pos'][1]+dy]
@@ -351,16 +353,27 @@ def edit_structure(data, mission_id, cell, *, anchor=None, name=None,
         duplicate=duplicate)
     if not duplicate and requested == original and instance.id:
         return deepcopy(data)
+    chosen_name, chosen_anchor, chosen_turns, chosen_door = requested
+    appearance = None
+    if instance.id:
+        source = next((row for row in _mission(data, mission_id).get('structures', ())
+                       if row['id'] == instance.id), None)
+        if source is not None and 'appearance' in source:
+            from .building_visuals import rotated_appearance
+            appearance = rotated_appearance(
+                source, chosen_name, chosen_turns, chosen_door)
     if not duplicate and instance.id and _floor_owners(
             _mission(data, mission_id), instance)[0]:
-        return _move_authored_decks(prepared, mission_id, instance, requested)
-    chosen_name, chosen_anchor, chosen_turns, chosen_door = requested
+        return _move_authored_decks(prepared, mission_id, instance, requested,
+                                    appearance=appearance)
     result = place_structure(prepared, mission_id, chosen_name,
                              chosen_anchor, chosen_turns, door_slot=chosen_door)
+    record = _mission(result, mission_id)['structures'][-1]
     if not duplicate and instance.id:
-        # The new record is last; its automatically chosen ID is replaced
-        # with the old persistent ID without touching any other record.
-        _mission(result, mission_id)['structures'][-1]['id'] = instance.id
+        # Keep the original persistent identity when moving a building.
+        record['id'] = instance.id
+    if appearance is not None:
+        record['appearance'] = appearance
     prior_groups = _mission(data, mission_id).get('editor_groups')
     if prior_groups is not None:
         _mission(result, mission_id)['editor_groups'] = deepcopy(prior_groups)
