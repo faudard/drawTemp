@@ -16,7 +16,7 @@ DEFAULT_CONTENT = Path(__file__).parent / 'content' / 'core.json'
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Sporebound standalone gameplay workbench')
-    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','tactical-choices','tactical-quality','export'])
+    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','tactical-choices','tactical-quality','full-activation','export'])
     parser.add_argument('--content', type=Path, default=DEFAULT_CONTENT)
     parser.add_argument('--project', type=Path, help='Game presentation manifest for player')
     parser.add_argument('--output', type=Path, help='Destination ZIP for export')
@@ -31,6 +31,10 @@ def main(argv=None):
     parser.add_argument('--max-victory-drop', type=float, default=0.25)
     parser.add_argument('--max-p95-growth', type=float, default=0.30)
     parser.add_argument('--max-new-limits', type=int, default=0)
+    parser.add_argument('--activation-min-distinct', type=int, default=1,
+                        help='Minimum R6.16 player states with distinct full-turn outcomes')
+    parser.add_argument('--activation-min-pairs', type=int, default=0,
+                        help='Minimum R6.16 states with non-dominated full-turn options')
     parser.add_argument('--quality-min-differentiated', type=int, default=1)
     parser.add_argument('--quality-min-tradeoffs', type=int, default=0)
     parser.add_argument('--human-playtest', type=Path,
@@ -143,6 +147,35 @@ def main(argv=None):
             print(json.dumps({'matrix': matrix, 'comparison': comparison},
                              ensure_ascii=False, sort_keys=True))
             return 2 if comparison is not None and not comparison['passed'] else 0
+        if args.command == 'full-activation':
+            from .full_activation_r616 import (
+                run_activation_lab, evaluate_activation_gate)
+            from .tactical_rpg3 import authored_rules_for_document
+            if args.baseline is not None:
+                parser.error(
+                    'full-activation does not implement paired baseline review; '
+                    'use independently exported reports to inspect changes')
+            report = run_activation_lab(
+                content, args.mission, seed=args.seed,
+                max_commands=args.limit,
+                rules=authored_rules_for_document(content.to_dict()))
+            gate = evaluate_activation_gate(
+                report, min_distinct=args.activation_min_distinct,
+                min_non_dominated=args.activation_min_pairs)
+            report["gate"] = gate
+            if args.report:
+                args.report.write_text(
+                    json.dumps(report, sort_keys=True, ensure_ascii=False,
+                               indent=2) + "\n", encoding='utf-8')
+            print(json.dumps({
+                'mission': report['mission'], 'seed': report['seed'],
+                'digest': report['digest'],
+                'replay_verified': report['replay_verified'],
+                'gate': gate,
+                'human_certified': False,
+                'report': str(args.report) if args.report else None,
+            }, ensure_ascii=False, sort_keys=True))
+            return 0 if gate['passed'] else 2
         if args.command == 'tactical-quality':
             from .tactical_quality_r6 import (
                 run_quality_lab, evaluate_quality_gate, release_quality_review)
