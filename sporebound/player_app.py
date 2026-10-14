@@ -856,6 +856,30 @@ class PlayerApplication:
         self.feedback_var.set("")
         self.ttk.Label(self.view, textvariable=self.feedback_var,
                        wraplength=1050).pack(anchor="w", pady=(3, 5))
+        if not self.compact_hud.get():
+            # Reuse authored portrait bindings; retain thumbnails for Tk lifetime.
+            from .tk_images import resize_photo
+            portraits = self.ttk.Frame(self.view)
+            portraits.pack(fill="x", pady=(3, 5))
+            portrait_renderer = CanvasRenderer(
+                portraits, registry=self.registry, asset_root=self.asset_root)
+            for actor in [u for u in battle.units if u.team == "player"][:6]:
+                card = self.ttk.Frame(portraits)
+                card.pack(side="left", padx=5)
+                photo = portrait_renderer.image("portrait", actor.id)
+                if photo is not None:
+                    try:
+                        thumb = resize_photo(photo, 48, 48, master=card)
+                        icon = self.ttk.Label(card, image=thumb,
+                                              text=actor.name)
+                        icon.image = thumb
+                        icon.pack(anchor="center")
+                    except (ValueError, self.tk.TclError):
+                        pass
+                self.ttk.Label(
+                    card, text=actor.name + " · PV " + str(actor.hp) +
+                    "/" + str(actor.max_hp) + " · MP " + str(actor.mp) +
+                    "/" + str(actor.max_mp)).pack(anchor="center")
         nav = self.ttk.Frame(self.view)
         nav.pack(fill="x", pady=4)
         if session.mode == "fronts":
@@ -1124,6 +1148,20 @@ class PlayerApplication:
         if hud.forecasts:
             rows.extend(["", "Prévisions moteur (sans simulation cachée)"])
             rows.extend(hud.forecasts)
+        elif skill and battle.active is not None and battle.active.team == "player":
+            # A rejected engine forecast explains LOS/range/target rules;
+            # never invent a success percentage when prediction is unavailable.
+            try:
+                battle.forecast(skill, self.selection, battle.active)
+            except RuleError as exc:
+                rows.append("Action indisponible : " + str(exc))
+        if self.action_var.get().startswith("object:"):
+            oid = self.action_var.get().split(":", 1)[1]
+            obj = next((item for item in battle.mission.objects
+                        if item["id"] == oid), None)
+            if obj is not None:
+                rows.append("Interaction : " + str(obj["kind"]) +
+                            " (" + oid + ") · conséquence déterminée à l'exécution")
         # Clarity: scheduled casts, armed reactions and hypothetical charges
         # are not equivalent to certain environmental damage.
         threats = {}
