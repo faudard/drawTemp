@@ -20,7 +20,6 @@ def tactical_rpg_rules(base=None):
     from .bosses3 import install_bosses, phase_boss_command
     from .doctrines31 import doctrine, doctrine_command, install_doctrines
     from .morale31 import install_morale
-    from .tactical_r6 import install_objectives
 
     rules = base if base is not None else default_rules()
     original_tactical = rules.behaviors.get("tactical").choose
@@ -50,7 +49,6 @@ def tactical_rpg_rules(base=None):
     rules = install_bosses(rules)
     rules = install_doctrines(rules)
     rules = install_morale(rules)
-    rules = install_objectives(rules)
     return rules
 
 
@@ -63,8 +61,9 @@ def authored_rules_for_document(data):
     missions = data.get("missions", []) if isinstance(data, dict) else []
     unlocks = data.get("tactic_unlocks", []) if isinstance(data, dict) else []
     from .tactical_r6 import ADVANCED_OBJECTIVES
-    advanced = any(mission.get("objective") in ADVANCED_OBJECTIVES
-                   for mission in missions) or any(
+    r6_objective = any(mission.get("objective") in ADVANCED_OBJECTIVES
+                       for mission in missions)
+    advanced = r6_objective or any(
         unit.get("behavior") in {"coordinated", "phase_boss"}
         or any(t in {"chain_strike", "trio_burst"} for t in unit.get("tactics", []))
         or any(t in {"medic", "healer", "protector"}
@@ -80,4 +79,8 @@ def authored_rules_for_document(data):
     ) or any(row.get("id") in {"chain_strike", "trio_burst"}
              for row in unlocks)
     from .rules import default_rules
-    return tactical_rpg_rules() if advanced else default_rules()
+    rules = tactical_rpg_rules() if advanced else default_rules()
+    if r6_objective:
+        from .tactical_r6 import install_objectives
+        rules = install_objectives(rules)
+    return rules
