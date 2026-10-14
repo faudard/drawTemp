@@ -180,10 +180,11 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                      atlas=None, prop_atlas=None,
                      building_atlas=None, fortification_atlas=None,
                      actor_atlas=None, poses=None, object_atlas=None,
-                     geometry=None, retained=False, unit_levels=None):
+                     geometry=None, retained=False, unit_levels=None,
+                     tile_subset=None, omit_architecture=False):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = geometry if geometry is not None else IsoGeometry(board, cell_size)
-    if not retained:
+    if not retained and tile_subset is None:
         canvas.delete('all')
     canvas.configure(scrollregion=(0, 0, geo.width, geo.height))
     goals = set(mission.goal)
@@ -209,9 +210,14 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 danger_priority[kind] > danger_priority[threats[cell]]):
             threats[cell] = kind
 
-    for c in geo.draw_order:
+    order = (geo.draw_order if tile_subset is None else
+             (c for c in geo.draw_order if c in tile_subset))
+    for c in order:
         if retained:
             canvas.begin_group(c)
+        # Stable per-cell Canvas ownership enables selective deletion/reorder.
+        tile_canvas = _TaggedFeatureCanvas(
+            canvas, 'iso_tile_' + str(c[0]) + '_' + str(c[1]))
         tile = board.tile(c)
         corners = geo.polygon(c)
         north, east, south, west = corners
@@ -234,70 +240,70 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 if tile.height > neighbour:
                     drop = (tile.height - max(-1, neighbour)) * geo.step
                     p, q = edge
-                    canvas.create_polygon(*_flatten((p, q, (q[0], q[1]+drop),
+                    tile_canvas.create_polygon(*_flatten((p, q, (q[0], q[1]+drop),
                                                     (p[0], p[1]+drop))),
                                           fill=shade, outline='#615d52', width=1)
-        canvas.create_polygon(*_flatten(corners), fill=top, outline='#777c6f', width=1)
+        tile_canvas.create_polygon(*_flatten(corners), fill=top, outline='#777c6f', width=1)
         photo = None
         if atlas is not None and layers.get('Terrain', True):
             photo = atlas.tile(surface, cell_size,
                                variant=(c[0]*37 + c[1]*19) % ATLAS_VARIANTS)
         if photo is not None:
-            canvas.create_image(cx-cell_size, cy-cell_size/2,
+            tile_canvas.create_image(cx-cell_size, cy-cell_size/2,
                                 image=photo, anchor='nw')
         if surface == 'water' and layers.get('Terrain', True):
             # Stable, neighbour-aware banks; no seams between water cells.
             mask = shoreline_mask(board, c)
             for p, q in transition_segments(corners, mask):
-                canvas.create_line(*p, *q, fill='#335e68',
+                tile_canvas.create_line(*p, *q, fill='#335e68',
                                    width=max(2,cell_size//13))
-                canvas.create_line(p[0]*.78+q[0]*.22,
+                tile_canvas.create_line(p[0]*.78+q[0]*.22,
                                    p[1]*.78+q[1]*.22,
                                    p[0]*.22+q[0]*.78,
                                    p[1]*.22+q[1]*.78,
                                    fill='#c2e4dc', width=max(1,cell_size//25))
-            canvas.create_line(cx-cell_size*.28,cy-2, cx,cy-2-cell_size*.13,
+            tile_canvas.create_line(cx-cell_size*.28,cy-2, cx,cy-2-cell_size*.13,
                                fill='#b3dadd', width=2)
-            canvas.create_line(cx,cy+cell_size*.15, cx+cell_size*.28,cy,
+            tile_canvas.create_line(cx,cy+cell_size*.15, cx+cell_size*.28,cy,
                                fill='#81c2ce', width=2)
             # A descending water-to-water edge becomes a visible waterfall.
             for p, q in transition_segments(corners, waterfall_mask(board, c)):
                 # The drop is equal to the neighbouring tactical elevation.
                 dx, dy = ((1, 0) if (p, q) == (east, south) else (0, 1))
                 drop = (tile.height - board.tile((c[0]+dx,c[1]+dy)).height)*geo.step
-                canvas.create_polygon(*_flatten(
+                tile_canvas.create_polygon(*_flatten(
                     (p,q,(q[0],q[1]+drop),(p[0],p[1]+drop))),
                     fill='#71b3cc', outline='#acdfe6', width=1)
-                canvas.create_line((p[0]*.65+q[0]*.35), (p[1]*.65+q[1]*.35),
+                tile_canvas.create_line((p[0]*.65+q[0]*.35), (p[1]*.65+q[1]*.35),
                                    (p[0]*.65+q[0]*.35), (p[1]*.65+q[1]*.35+drop),
                                    fill='#e2f7ef', width=max(1,cell_size//24))
         elif surface in ('bridge', 'cobble', 'stone') and layers.get('Terrain', True):
             for fraction in (-.35, 0, .35):
                 px = cx + fraction*cell_size
-                canvas.create_line(px-cell_size*.15,cy+cell_size*.2,
+                tile_canvas.create_line(px-cell_size*.15,cy+cell_size*.2,
                                    px+cell_size*.15,cy-cell_size*.2,
                                    fill='#918b7d', width=1)
             if surface == 'bridge':
                 # Rails follow the local channel direction, even on a rotated river.
                 for p, q in bridge_rails(corners, bridge_axis(board, c)):
-                    canvas.create_line(*p, *q,fill='#73604b',width=max(3,cell_size//10))
+                    tile_canvas.create_line(*p, *q,fill='#73604b',width=max(3,cell_size//10))
                     raise_by = max(5, cell_size//7)
-                    canvas.create_line(p[0],p[1]-raise_by,q[0],q[1]-raise_by,
+                    tile_canvas.create_line(p[0],p[1]-raise_by,q[0],q[1]-raise_by,
                                        fill='#ead6aa',width=max(2,cell_size//13))
                     for r in (p,q):
-                        canvas.create_line(r[0],r[1],r[0],r[1]-raise_by,
+                        tile_canvas.create_line(r[0],r[1],r[0],r[1]-raise_by,
                                            fill='#a69070',width=max(2,cell_size//15))
         if c in deploy and layers.get('Déploiement', True):
-            canvas.create_polygon(*_flatten(corners), outline='#3b9ec0', fill='',
+            tile_canvas.create_polygon(*_flatten(corners), outline='#3b9ec0', fill='',
                                   width=3)
         if c in goals and layers.get('Objectifs', True):
-            canvas.create_oval(cx-8, cy-6, cx+8, cy+6, fill='#eec65a', outline='')
+            tile_canvas.create_oval(cx-8, cy-6, cx+8, cy+6, fill='#eec65a', outline='')
         if c in reachable:
-            canvas.create_polygon(*_flatten(corners), outline='#25a885', fill='',
+            tile_canvas.create_polygon(*_flatten(corners), outline='#25a885', fill='',
                                   width=2, tags='iso_reachable')
         if c in threats:
             kind = threats[c]
-            canvas.create_polygon(*_flatten(corners),
+            tile_canvas.create_polygon(*_flatten(corners),
                                   outline=danger_colors[kind], fill='', width=3,
                                   dash=(5, 3) if kind == 'charge' else (2, 3),
                                   tags=('iso_danger', 'iso_danger_' + kind))
@@ -307,10 +313,10 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
             sprite = (prop_atlas.sprite(tile.feature, cell_size)
                       if prop_atlas is not None else None)
             if sprite is not None:
-                canvas.create_image(cx, cy + cell_size*18/54, image=sprite,
+                tile_canvas.create_image(cx, cy + cell_size*18/54, image=sprite,
                                     anchor='s', tags=('decor_sprite', decor_tag))
             else:
-                _draw_feature(_TaggedFeatureCanvas(canvas, decor_tag),
+                _draw_feature(_TaggedFeatureCanvas(tile_canvas, decor_tag),
                               tile.feature, cx, cy, cell_size)
         if layers.get('Objets', True):
             for obj in objects.get(c, ()):
@@ -318,13 +324,13 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                          if object_atlas is not None else None)
                 tags = ('iso_object', 'iso_object_' + str(obj['id']))
                 if photo is not None:
-                    canvas.create_image(cx, cy + cell_size*5/54, image=photo,
+                    tile_canvas.create_image(cx, cy + cell_size*5/54, image=photo,
                                         anchor='s', tags=tags + ('iso_object_sprite',))
                 else:
-                    canvas.create_rectangle(cx-9,cy-18,cx+9,cy-4,
+                    tile_canvas.create_rectangle(cx-9,cy-18,cx+9,cy-4,
                                             fill='#9264ab',outline='#3d2554',
                                             tags=tags)
-                    canvas.create_text(cx,cy-22,text=obj['kind'][:4],
+                    tile_canvas.create_text(cx,cy-22,text=obj['kind'][:4],
                                        font=('TkDefaultFont',8),tags=tags)
         if layers.get('Unités', True):
             for actor_index, actor in actors.get(c, ()):
@@ -352,15 +358,15 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                     # The avatar foot (lower image edge) follows the SAME
                     # interpolated cell projection as the legacy oval.
                     from .iso_actor_atlas import actor_foot_point
-                    canvas.create_image(*actor_foot_point(ax, ay, cell_size),
+                    tile_canvas.create_image(*actor_foot_point(ax, ay, cell_size),
                                         image=photo, anchor='s',
                                         tags=actor_tags + ('iso_actor_sprite',))
                     if active:
-                        canvas.create_oval(ax-12, ay-6, ax+12, ay+5,
+                        tile_canvas.create_oval(ax-12, ay-6, ax+12, ay+5,
                                           outline='#ffe78a', width=2,
                                           tags=actor_tags)
                 else:
-                    canvas.create_oval(ax-10,ay-24,ax+10,ay-5,fill=color,
+                    tile_canvas.create_oval(ax-10,ay-24,ax+10,ay-5,fill=color,
                                        outline='#ffe78a' if active else '#323441',
                                        width=3 if active else 1, tags=actor_tags)
                 # Labels sit above the entire scaled 64px frame, not over
@@ -368,21 +374,23 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                 label_y = (ay + cell_size*5/54
                            - max(1, round(64*cell_size/54)) - 9
                            if photo is not None else ay-28)
-                canvas.create_text(ax, label_y, text=actor.name[:6],
+                tile_canvas.create_text(ax, label_y, text=actor.name[:6],
                                    font=('TkDefaultFont',8,'bold'),
                                    fill='#18202f', tags=actor_tags)
                 if active_id is not None:
-                    canvas.create_text(ax,ay+2,text=f'{actor.hp} PV',
+                    tile_canvas.create_text(ax,ay+2,text=f'{actor.hp} PV',
                                        font=('TkDefaultFont',8,'bold'),
                                        fill='#ffffff',tags=actor_tags)
         if c in selected_tiles:
-            canvas.create_polygon(*_flatten(corners),outline='#23689e',fill='',width=3,
+            tile_canvas.create_polygon(*_flatten(corners),outline='#23689e',fill='',width=3,
                                   tags='selection')
         if c == selected_cell:
-            canvas.create_polygon(*_flatten(corners),outline='#2361ff',fill='',width=3,
+            tile_canvas.create_polygon(*_flatten(corners),outline='#2361ff',fill='',width=3,
                                   tags='selection')
     # Prefer authored visual identities; infer legacy stamps as a fallback.
     # Board is always the tactical source of truth for height and collisions.
+    if omit_architecture:
+        return geo
     from .iso_architecture import draw_architecture
     if retained:
         canvas.begin_group('architecture')
