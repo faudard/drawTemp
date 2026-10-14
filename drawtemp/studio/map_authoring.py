@@ -222,6 +222,9 @@ class MapStudio:
     def paint(self, cells, brush="surface:grass"):
         return self.commit(self.preview(cells, brush))
 
+    def rectangle_cells(self, a, b):
+        return cells_in_rectangle(self.snapshot()["content"], self.mission_id, a, b)
+
     def rectangle(self, a, b, brush):
         return self.paint(cells_in_rectangle(self.snapshot()["content"], self.mission_id, a, b),
                           brush)
