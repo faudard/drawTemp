@@ -3041,7 +3041,10 @@ def launch(path):
                     f' | {selected_building.anchor}')
             except (RuleError, KeyError):
                 building_selection_var.set('Aucun bâtiment sélectionné.')
-        available = selected_building is not None and battle is None
+        # Do not offer mutations while gameplay or the JSON source editor
+        # owns the document. The command callbacks still enforce the rules.
+        available = (selected_building is not None and battle is None
+                     and not source_pending())
         for widget in building_selection_actions:
             widget.state(['!disabled'] if available else ['disabled'])
         for widget in building_exterior_actions:
@@ -4382,9 +4385,16 @@ def launch(path):
     studio.history.on_change = schedule_work_checkpoint
     studio.workspace.incremental_validator = editing_context.diagnostics
     from .studio_layout import StudioNavigation
+    def building_mode_allowed():
+        if battle is not None:
+            status_var.set('Quitter le playtest avant de modifier un bâtiment.')
+            return False
+        return True
+
     studio_navigation = StudioNavigation(
         section_bar, notebook, tool_tabs, work, tk, ttk,
-        building_mode_change=show_building_mode)
+        building_mode_change=show_building_mode,
+        building_mode_allowed=building_mode_allowed)
     from .studio_docks import StudioDocks, DockPreferences
     studio_docks = StudioDocks(
         root, work, canvas_region, sidebar, side_panel, bottom_panel, tk)
