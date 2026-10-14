@@ -12,3 +12,6 @@ saves/
 # UI-only Workspace splitter and tab preferences
 *.workspace.layout.json
 *.workspace.layout.json.tmp
+
+# Unsaved editor crash-recovery draft (never source content)
+*.studio-work.json

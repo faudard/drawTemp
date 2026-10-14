@@ -560,6 +560,27 @@ class StudioPanels:
             self.cdesc.set(camp['description'])
             self.cstart.set(camp['start_mission'])
 
+    def restore_unsaved_project(self, raw):
+        """Adopt an explicitly recovered GameProject without saving to disk."""
+        self.project = GameProject.from_dict(raw, self._content())
+        self.history.reset(self.doc().data, self.project)
+        self.title.set(self.project.title)
+        self.subtitle.set(self.project.subtitle)
+        self.language.set(self.project.options['language'])
+        self.music.set(str(self.project.options['music_volume']))
+        self.effects.set(str(self.project.options['effects_volume']))
+        self.fullscreen.set(self.project.options['fullscreen'])
+        self.slots.set(str(self.project.save_slots))
+        self.campaign_id.set(self.project.campaigns[0]['id'])
+        self._show_campaign()
+        self.story_editor.reset_project()
+        self.cinematic_studio.reset_project()
+        self.audio_studio.stop()
+        self.audio_studio.refresh()
+        self._last_mission_signature = None
+        self.project_status.config(text='Travail récupéré : enregistrer pour conserver.')
+        self.refresh()
+
     def reload_project(self):
         # A different project may reuse mission/entity IDs; navigation
         # positions belong to the current editor session, not saved content.

@@ -36,6 +36,7 @@ class StudioHistory:
     def __init__(self, content_data, project, *, limit=50):
         require(type(limit) is int and 1 <= limit <= 500, "Invalid history limit")
         self.limit = limit
+        self.on_change = None  # Optional authoring-only recovery checkpoint hook.
         self.reset(content_data, project)
 
     @staticmethod
@@ -64,13 +65,18 @@ class StudioHistory:
         if len(self._states) > self.limit + 1:
             del self._states[0]
         self._cursor = len(self._states) - 1
+        if self.on_change is not None:
+            self.on_change()
         return True
 
     def _restore(self, cursor):
         content, project = validate_pair(*self._states[cursor])
-        self._cursor = cursor
-        return content, GameProject.from_dict(
+        restored_project = GameProject.from_dict(
             project, Content.from_dict(content, rules=authored_rules_for_document(content)))
+        self._cursor = cursor
+        if self.on_change is not None:
+            self.on_change()
+        return content, restored_project
 
     def undo(self):
         require(self.can_undo, "Aucune modification à annuler")

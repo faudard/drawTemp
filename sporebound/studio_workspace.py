@@ -762,6 +762,16 @@ class ProjectWorkspaceTab:
     def _refresh_problems(self, model):
         root = self.owner.project_path.parent
         current = model.diagnostics(root, map_warnings=True)
+        validator = getattr(self, 'incremental_validator', None)
+        if validator is not None:
+            # Enrich the existing Problems panel; the canonical model still
+            # validates every commit. Stale reports are never displayed.
+            report = validator.validate(self.owner.doc().data, self.owner.project)
+            if validator.is_current(report, self.owner.doc().data,
+                                    self.owner.project):
+                current = tuple(sorted(set(current) | {
+                    (issue.severity, issue.resource, issue.message)
+                    for issue in report.issues}))
         added, resolved = problem_delta(self.problem_snapshot, current)
         if not added and not resolved and self.problem_targets:
             return
