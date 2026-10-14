@@ -166,10 +166,16 @@ class VisualChoiceWizard:
 
     def commit(self):
         data, project = self._plan()
-        self.owner.design_change(lambda: self.owner.doc().replace(data))
-        require(self.owner.doc().data == data,
-                'Enregistrement de Content annulé ; projet inchangé.')
-        self.owner.project = project
+        # Publish Content and the validated GameProject before design_change
+        # refreshes any Studio views. A choice-guarded Content is invalid when
+        # paired with the previous project, so never expose that intermediate
+        # state to StoryBook validation or the global history.
+        def apply_pair():
+            self.owner.doc().replace(data)
+            require(self.owner.doc().data == data,
+                    'Enregistrement de Content annulé ; projet inchangé.')
+            self.owner.project = project
+        self.owner.design_change(apply_pair)
         self.owner.story_editor.reset_project()
         self.owner.refresh()
         self.graph.event_id.set(self.vars['origin'].get().strip())
