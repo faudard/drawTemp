@@ -217,6 +217,28 @@ def _fingerprint(data):
                              ensure_ascii=False).encode('utf-8')).hexdigest()
 
 
+def _reserved_cells(mission):
+    """Reserve full tactical footprints and authored architectural footprints."""
+    reserved = set()
+    for unit in mission.get('units', ()):
+        x, y = unit['pos']
+        width, height = unit.get('footprint', (1, 1))
+        reserved.update((x + dx, y + dy) for dy in range(height)
+                        for dx in range(width))
+    reserved.update(tuple(obj['pos']) for obj in mission.get('objects', ()))
+    reserved.update(tuple(cell) for cell in mission.get('goal', ()))
+    if mission.get('relic') is not None:
+        reserved.add(tuple(mission['relic']))
+    if mission.get('structures'):
+        from .iso_structures import structure_template, structure_footprint
+        for structure in mission['structures']:
+            clip = structure_template(
+                structure['name'], structure.get('turns', 0),
+                door_slot=structure.get('door_slot', 0))
+            reserved.update(structure_footprint(clip, structure['anchor']))
+    return reserved
+
+
 def plan_terrain_region(data, mission_id, start, end, *, seed=1, style='prairie',
                         vegetation=0):
     """Pure, inspectable region preview with no document or RNG mutation."""
@@ -229,9 +251,7 @@ def plan_terrain_region(data, mission_id, start, end, *, seed=1, style='prairie'
     cells = cells_in_rectangle(data, mission_id, start, end)
     require(len(cells) <= _MAX_REGION, 'Terrain region exceeds 4096 cells')
     tiles = {tuple(tile['pos']): tile for tile in mission['board']['tiles']}
-    occupied = {tuple(u['pos']) for u in mission['units']}
-    occupied.update(tuple(obj['pos']) for obj in mission['objects'])
-    occupied.update(tuple(goal) for goal in mission.get('goal', ()))
+    occupied = _reserved_cells(mission)
     changed = []
     decorations = []
     for x, y in cells:
@@ -239,7 +259,7 @@ def plan_terrain_region(data, mission_id, start, end, *, seed=1, style='prairie'
         # Keep authored structures, meaningful props, tactical objectives and
         # rivers untouched. Layout planning never silently removes them.
         if ((x, y) in occupied or old.get('feature') or old.get('blocked')
-                or old.get('surface') in ('water', 'bridge')
+                or old.get('surface') in ('water', 'bridge', 'cobble')
                 or old.get('height', 0) or old.get('hazard', 0)
                 or old.get('cover', 0) or old.get('cost', 1) != 1):
             continue
@@ -277,9 +297,7 @@ def apply_terrain_plan(data, plan):
     target = _mission(updated, plan.mission_id)
     tiles = {tuple(tile['pos']): tile for tile in target['board']['tiles']}
     original_tiles = {point: dict(tile) for point, tile in tiles.items()}
-    occupied = {tuple(unit['pos']) for unit in target['units']}
-    occupied.update(tuple(obj['pos']) for obj in target['objects'])
-    occupied.update(tuple(goal) for goal in target.get('goal', ()))
+    occupied = _reserved_cells(target)
     seen = set()
     for x, y, material in plan.changes:
         require(type(x) is int and type(y) is int and
@@ -297,7 +315,7 @@ def apply_terrain_plan(data, plan):
                 not old.get('feature') and not old.get('blocked') and
                 not old.get('height') and not old.get('hazard') and
                 not old.get('cover') and old.get('cost', 1) == 1 and
-                old.get('surface') not in ('water', 'bridge'),
+                old.get('surface') not in ('water', 'bridge', 'cobble'),
                 'Cannot overwrite authored terrain')
         tiles[(x, y)] = {**old, 'surface': material}
     decorated = set()
@@ -321,7 +339,7 @@ def apply_terrain_plan(data, plan):
                 not previous.get('blocked') and not previous.get('height') and
                 not previous.get('hazard') and not previous.get('cover') and
                 previous.get('cost', 1) == 1 and
-                previous.get('surface') not in ('water', 'bridge'),
+                previous.get('surface') not in ('water', 'bridge', 'cobble'),
                 'Invalid or protected vegetation preview')
         tiles[(x, y)] = {**tile, 'feature': feature}
     target['board']['tiles'] = list(tiles.values())
