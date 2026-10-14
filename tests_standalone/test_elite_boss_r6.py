@@ -5,6 +5,8 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from sporebound.ai import choose_command
+from sporebound.class_ai_authoring import ai_preview, set_unit_ai
+from sporebound.editor import Document
 from sporebound.bosses3 import boss_intent_preview
 from sporebound.elite_boss_r6 import boss_r6_telegraph
 from sporebound.engine import Battle
@@ -129,6 +131,32 @@ class EliteBossR6Tests(unittest.TestCase):
         queued = boss_r6_telegraph(battle, "warden")
         self.assertEqual(queued["queued_waves"][0]["certainty"], "queued")
         self.assertIsNone(queued["command"])
+
+    def test_studio_can_author_adaptive_boss_and_undo_without_json_schema_change(self):
+        content = encounter()
+        content.missions["throne"].units[1].behavior = "tactical"
+        doc = Document(content)
+        before = deepcopy(doc.data)
+        updated = set_unit_ai(doc.data, "throne", "warden",
+                              behavior="adaptive_boss")
+        self.assertEqual(updated["version"], 1)
+        self.assertEqual(ai_preview(updated, "throne", "warden")["ruleset"], "r6")
+        doc.replace(updated)
+        self.assertEqual(doc.data["missions"][0]["units"][1]["behavior"],
+                         "adaptive_boss")
+        self.assertIn("adaptive_boss",
+                      authored_rules_for_document(doc.data).behaviors)
+        doc.undo()
+        self.assertEqual(doc.data, before)
+        doc.redo()
+        self.assertEqual(doc.data, updated)
+        with self.assertRaises(RuleError):
+            set_unit_ai(before, "throne", "warden",
+                        behavior="adaptive_boss", route=[(1, 1), (1, 2)])
+        with self.assertRaises(RuleError):
+            set_unit_ai(before, "throne", "hero",
+                        behavior="adaptive_boss")
+        self.assertEqual(content.to_dict(), before)
 
     def test_phase_one_retains_legacy_guard_and_not_premature_charge(self):
         content = encounter(hero=(3, 1), boss=(1, 1),
