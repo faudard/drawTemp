@@ -6,6 +6,7 @@ The caller executes WorkspacePropertyCommand with EditingContext: one
 Document.replace, one history entry and the same authored Content rules.
 """
 from dataclasses import dataclass
+from copy import deepcopy
 import json
 from types import SimpleNamespace
 
@@ -34,7 +35,8 @@ def _locate(data, key):
     if ':' not in key:
         raise RuleError('Ressource Workspace invalide : ' + key)
     kind, identifier = key.split(':', 1)
-    if kind not in ('map_actor', 'map_object', 'editor_group', 'map_tile'):
+    if kind not in ('map_actor', 'map_object', 'editor_group', 'map_tile',
+                    'tactical_event'):
         raise RuleError('Ressource non éditable dans cet inspecteur : ' + key)
     if '/' not in identifier:
         raise RuleError('Identifiant Workspace invalide : ' + key)
@@ -54,7 +56,8 @@ def _locate(data, key):
                        if tuple(row['pos']) == (x, y)), {'pos': [x, y]})
         return kind, mid, (x, y), mission, entity
     source = ('units' if kind == 'map_actor' else
-              'objects' if kind == 'map_object' else 'editor_groups')
+              'objects' if kind == 'map_object' else
+              'triggers' if kind == 'tactical_event' else 'editor_groups')
     entity = next((row for row in mission.get(source, ())
                    if row['id'] == entity_id), None)
     if entity is None:
@@ -97,6 +100,16 @@ def editable_form(data, key):
                           'choice' if choices else 'text')
             fields.append(EditableField(name, FIELD_LABELS[name], value,
                                         field_kind, choices))
+    elif kind == 'tactical_event':
+        # Only single-despawn event references are editable inline. Complex
+        # multi-action events retain their existing specialized graph editor.
+        despawns = [action for action in row.get('actions', ())
+                    if action.get('kind') == 'despawn']
+        if len(despawns) == 1:
+            choices = tuple(actor['id'] for actor in mission['units'])
+            fields.append(EditableField(
+                'despawn_unit', 'Référence acteur (despawn)',
+                despawns[0].get('unit', ''), 'choice', choices))
     elif kind == 'editor_group':
         fields.append(EditableField('name', 'Nom du groupe', row['name']))
     elif kind == 'map_tile':
@@ -160,6 +173,15 @@ class WorkspacePropertyCommand:
             from .entity_editing import edit_entity
             return edit_entity(data, mid, 'actor' if category == 'map_actor'
                                else 'object', identity, **changed)
+        if category == 'tactical_event':
+            result = deepcopy(data)
+            mission = next(m for m in result['missions'] if m['id'] == mid)
+            trigger = next(t for t in mission['triggers'] if t['id'] == identity)
+            matches = [a for a in trigger['actions'] if a.get('kind') == 'despawn']
+            if set(changed) != {'despawn_unit'} or len(matches) != 1:
+                raise RuleError('Édition spécialisée requise pour cet événement')
+            matches[0]['unit'] = changed['despawn_unit']
+            return result
         if category == 'editor_group':
             from .editor_groups import rename_editor_group
             return rename_editor_group(data, mid, identity, changed['name'])
