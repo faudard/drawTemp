@@ -5,6 +5,8 @@ metadata: no image files, asset-library duplication, external DnD extensions
 or changes to the Map Editor document format.
 """
 
+from .studio_theme import palette_for
+
 
 class VisualPrefabPalette:
     def __init__(self, parent, tk, ttk, *, on_select, on_preview,
@@ -19,6 +21,7 @@ class VisualPrefabPalette:
         self.entries = {}
         self.cards = ()
         self.selected = ''
+        self.palette = palette_for('light')
         self.drag = None
         self.query = tk.StringVar(value='')
         self.category = tk.StringVar(value='Tous')
@@ -37,7 +40,7 @@ class VisualPrefabPalette:
                                   state='readonly', width=24)
         categories.pack(fill='x', padx=5, pady=(0, 3))
         self.categories_box = categories
-        self.gallery = tk.Canvas(self.frame, background='#f6f7f8',
+        self.gallery = tk.Canvas(self.frame, background=self.palette.background,
                                  height=248, highlightthickness=0)
         scroll = ttk.Scrollbar(self.frame, orient='vertical',
                                command=self.gallery.yview)
@@ -77,6 +80,12 @@ class VisualPrefabPalette:
         self.on_select(filename)
         self.render()
 
+    def apply_appearance(self, palette):
+        """Theme cards without changing selection, filtering or placement."""
+        self.palette = palette
+        self.gallery.configure(background=palette.background)
+        self.render()
+
     def render(self):
         from .prefab_catalog import filter_prefab_cards, thumbnail_rectangles
         for child in self.grid.winfo_children():
@@ -93,15 +102,17 @@ class VisualPrefabPalette:
         for index, card in enumerate(visible):
             col, row = index % 2, index // 2
             selected = card.filename == self.selected
-            bg = '#dceafc' if selected else '#ffffff'
+            bg = self.palette.selected if selected else self.palette.surface
+            fg = (self.palette.selected_text if selected
+                  else self.palette.text)
             tile = self.tk.Frame(self.grid, background=bg,
                                  highlightthickness=2 if selected else 1,
-                                 highlightbackground=('#3c77bf' if selected
-                                                      else '#d3dce3'),
+                                 highlightbackground=(self.palette.accent if selected
+                                                      else self.palette.border),
                                  cursor='hand2')
             tile.grid(row=row, column=col, sticky='nw', padx=3, pady=3)
             picture = self.tk.Canvas(tile, width=132, height=78,
-                                     background='#f1f5f4',
+                                     background=self.palette.canvas,
                                      highlightthickness=0,
                                      cursor='hand2')
             picture.pack(padx=3, pady=(3, 1))
@@ -112,18 +123,18 @@ class VisualPrefabPalette:
             # Reference grid and accent are meaningful even when the selected
             # tiles represent a completely empty/free-standing terrain patch.
             picture.create_rectangle(4, 4, 128, 74,
-                                     outline='#c3cdd1', width=1)
+                                     outline=self.palette.border, width=1)
             if card.error:
-                picture.create_text(66, 39, text='!', fill='#b64242',
+                picture.create_text(66, 39, text='!', fill=self.palette.danger,
                                     font=('TkDefaultFont', 20, 'bold'))
             label = self.tk.Label(
                 tile, text=card.name[:21], background=bg,
-                foreground='#223348', width=19, anchor='w')
+                foreground=fg, width=19, anchor='w')
             label.pack(anchor='w', padx=4)
             detail = (f'{card.category}  ·  {card.width}×{card.height}'
                       if not card.error else 'JSON invalide')
             small = self.tk.Label(tile, text=detail,
-                                  background=bg, foreground='#5b6976',
+                                  background=bg, foreground=self.palette.muted,
                                   width=19, anchor='w',
                                   font=('TkDefaultFont', 8))
             small.pack(anchor='w', padx=4, pady=(0, 4))

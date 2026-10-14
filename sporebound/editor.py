@@ -233,10 +233,12 @@ class Document:
         self.paint_many(mid, cells, brush)
         return len(cells)
 
-    def preview_generated_terrain(self, mid, start, end, *, seed=1, style='prairie'):
+    def preview_generated_terrain(self, mid, start, end, *, seed=1, style='prairie',
+                                  vegetation=0):
         """Pure proposal. The user must confirm against the current revision."""
         return plan_terrain_region(self.data, mid, start, end,
-                                   seed=seed, style=style)
+                                   seed=seed, style=style,
+                                   vegetation=vegetation)
 
     def confirm_generated_terrain(self, plan):
         """One atomic, validated Undo; stale proposals are rejected."""
@@ -244,7 +246,7 @@ class Document:
         if data == self.data:
             return 0
         self.replace(data)
-        return len(plan.changes)
+        return len({(x, y) for x, y, _ in (*plan.changes, *plan.decorations)})
 
     def flood_surface(self, mid, start, surface, *, allowed_cells=None):
         """Existing four-neighbour fill, optionally restricted to a selection."""
@@ -285,6 +287,9 @@ def launch(path):
     root = tk.Tk()
     root.title('DrawTemp — Game Studio')
     root.geometry('1280x850')
+    from .studio_theme import StudioAppearance, AppearancePreferences
+    studio_appearance = StudioAppearance(root, ttk)
+    appearance_var = tk.StringVar(value='light')
     def recover_if_pending(store):
         if not store.pending:
             return True
@@ -385,6 +390,7 @@ def launch(path):
     quarter_status_var = tk.StringVar(value='Choisir un style puis proposer trois variantes.')
     terrain_style_var = tk.StringVar(value='prairie')
     terrain_seed_var = tk.IntVar(value=1)
+    terrain_vegetation_var = tk.IntVar(value=2)
     terrain_status_var = tk.StringVar(value='Sélectionner une zone rectangulaire.')
     terrain_pending = None
     quarter_choices = ()
@@ -2460,14 +2466,19 @@ def launch(path):
             raise RuleError('Limiter la sélection visuelle à 512 cases.')
         terrain_pending = None
         canvas.delete('terrain_generation_preview')
+        canvas.delete('terrain_vegetation_preview')
         plan = doc.preview_generated_terrain(
             mission_var.get(), start, end, seed=terrain_seed_var.get(),
-            style=terrain_style_var.get())
+            style=terrain_style_var.get(),
+            vegetation=terrain_vegetation_var.get())
         terrain_pending = plan
         preview_cells(((x, y) for x, y, material in plan.changes),
                       tag='terrain_generation_preview', color='#36a16c')
-        terrain_status_var.set(f'{len(plan.changes)} cases à modifier · '
-                               'aperçu sans écriture · confirmer pour appliquer')
+        preview_cells(((x, y) for x, y, feature in plan.decorations),
+                      tag='terrain_vegetation_preview', color='#c79a43')
+        terrain_status_var.set(
+            f'{len(plan.changes)} sols · {len(plan.decorations)} décors · '
+            'vert = matière, ocre = végétation · confirmer pour appliquer')
         status_var.set(terrain_status_var.get())
 
     @guarded
@@ -2478,9 +2489,10 @@ def launch(path):
             raise RuleError('Prévisualiser le terrain avant confirmation.')
         if battle is not None or source_pending():
             raise RuleError('Quitter le playtest et appliquer le JSON.')
-        if not plan.changes:
+        if not plan.changes and not plan.decorations:
             terrain_pending = None
             canvas.delete('terrain_generation_preview')
+            canvas.delete('terrain_vegetation_preview')
             terrain_status_var.set('Aucun changement nécessaire.')
             return
         count = 0
@@ -2490,6 +2502,7 @@ def launch(path):
         design_change(apply, board_only=True)
         terrain_pending = None
         canvas.delete('terrain_generation_preview')
+        canvas.delete('terrain_vegetation_preview')
         terrain_status_var.set(f'{count} cases générées en une opération Undo.')
         status_var.set(terrain_status_var.get())
 
@@ -3311,11 +3324,10 @@ def launch(path):
 
     # A single application header replaces the eleven equally prominent
     # buttons. Common actions stay one click away; the others live in menus.
-    header = ttk.Frame(root, padding=(9, 5))
+    header = ttk.Frame(root, padding=(14, 8), style='Studio.Header.TFrame')
     header.pack(fill='x')
-    ttk.Label(header, text='SPOREBOUND  /  STUDIO',
-              font=('TkDefaultFont', 11, 'bold')).pack(
-                  side='left', padx=(0, 18))
+    ttk.Label(header, text='GAME STUDIO', style='Studio.Header.TLabel').pack(
+        side='left', padx=(0, 22))
     file_button = ttk.Menubutton(header, text='Fichier ▾')
     file_button.pack(side='left', padx=(0, 5))
     file_menu = tk.Menu(file_button, tearoff=False)
@@ -3336,10 +3348,11 @@ def launch(path):
                width=3).pack(side='left', padx=2)
     ttk.Button(header, text='Éditer', command=stop).pack(
         side='right', padx=(4, 0))
-    ttk.Button(header, text='▶ Playtest', command=start).pack(
+    ttk.Button(header, text='▶ Playtest', command=start,
+               style='Studio.Primary.TButton').pack(
         side='right', padx=(4, 0))
-    section_bar = ttk.Frame(root)
-    section_bar.pack(fill='x')
+    section_bar = ttk.Frame(root, style='Studio.Section.TFrame')
+    section_bar.pack(fill='x', pady=(0, 5))
     # A compact tool notebook replaces the seven permanent toolbar rows.
     # Keep the existing action callbacks/variables; only presentation changes.
     tool_tabs = ttk.Notebook(root)
@@ -3472,12 +3485,18 @@ def launch(path):
     procedural_row.pack(fill='x', padx=5, pady=2)
     ttk.Label(procedural_row, text='Terrain auto').pack(side='left', padx=2)
     ttk.Combobox(procedural_row, textvariable=terrain_style_var,
-                 values=REGION_STYLES, state='readonly', width=9).pack(side='left', padx=2)
+                 values=REGION_STYLES, state='readonly', width=10).pack(side='left', padx=2)
     ttk.Label(procedural_row, text='Seed').pack(side='left', padx=2)
     ttk.Entry(procedural_row, textvariable=terrain_seed_var, width=7).pack(side='left', padx=2)
-    ttk.Button(procedural_row, text='Aperçu',
+    procedural_actions = ttk.Frame(tools_terrain)
+    procedural_actions.pack(fill='x', padx=5, pady=2)
+    ttk.Label(procedural_actions, text='Végétation (0–3)').pack(side='left', padx=2)
+    ttk.Combobox(procedural_actions, textvariable=terrain_vegetation_var,
+                 state='readonly', width=3, values=(0, 1, 2, 3)).pack(
+                     side='left', padx=2)
+    ttk.Button(procedural_actions, text='Aperçu',
                command=preview_procedural_terrain).pack(side='left', padx=2)
-    ttk.Button(procedural_row, text='Appliquer',
+    ttk.Button(procedural_actions, text='Appliquer',
                command=confirm_procedural_terrain).pack(side='left', padx=2)
     ttk.Label(tools_terrain, textvariable=terrain_status_var,
               wraplength=360).pack(fill='x', padx=5, pady=2)
@@ -3736,8 +3755,8 @@ def launch(path):
     canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
     # Right dock: separate inspector, group tools and prefab authoring.
     # In the old layout these were one long, mostly inaccessible column.
-    side_tabs = ttk.Notebook(side_panel)
-    side_tabs.pack(fill='both', expand=True)
+    side_tabs = ttk.Notebook(side_panel, style='Studio.Dock.TNotebook')
+    side_tabs.pack(fill='both', expand=True, padx=5, pady=6)
     inspector_page = ttk.Frame(side_tabs)
     groups_page = ttk.Frame(side_tabs)
     prefabs_page = ttk.Frame(side_tabs)
@@ -3960,8 +3979,9 @@ def launch(path):
     ttk.Button(prefabs_body, text='Ouvrir la palette visuelle de préfabs',
                command=open_visual_prefab_palette).pack(
                    fill='x', padx=6, pady=(4, 0))
-    ttk.Label(inspector_page, text='INSPECTEUR', font=('TkDefaultFont', 11, 'bold')).pack(
-        anchor='w', padx=6, pady=(8, 3))
+    ttk.Label(inspector_page, text='SÉLECTION',
+              style='Studio.Section.TLabel').pack(
+        anchor='w', padx=10, pady=(12, 5))
     ttk.Label(inspector_page, textvariable=mode_var).pack(anchor='w', padx=6)
     ttk.Label(inspector_page,text='Vue tactique').pack(anchor='w',padx=6,pady=(7,0))
     mini_canvas = tk.Canvas(inspector_page,width=184,height=184,
@@ -3969,7 +3989,8 @@ def launch(path):
     mini_canvas.pack(anchor='w',padx=3,pady=3)
     mini_canvas.bind('<Button-1>', minimap_navigate)
     ttk.Label(groups_page, text='GROUPES ET APPARTENANCES',
-              font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=6)
+              style='Studio.Section.TLabel').pack(
+                  anchor='w', padx=10, pady=(10, 5))
     tree_box = ttk.Frame(groups_page)
     tree_box.pack(fill='x', padx=6, pady=3)
     group_tree = ttk.Treeview(tree_box, show='tree', height=8, selectmode='extended')
@@ -4026,7 +4047,8 @@ def launch(path):
     ttk.Label(group_clone_controls, text='Ctrl/Maj : sélection multiple'
               ).pack(side='left',padx=3)
     ttk.Label(prefabs_body, text='BIBLIOTHÈQUE DE PRÉFABS',
-              font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=6)
+              style='Studio.Section.TLabel').pack(
+                  anchor='w', padx=10, pady=(10, 5))
     group_prefab_box = ttk.Combobox(prefabs_body,
                                    textvariable=group_prefab_var,
                                    state='readonly')
@@ -4104,8 +4126,8 @@ def launch(path):
     ttk.Label(quarter_frame, textvariable=quarter_status_var,
               wraplength=278).pack(anchor='w', padx=3, pady=3)
     ttk.Label(prefabs_body, text='PALETTE VISUELLE · GLISSER SUR LA CARTE',
-              font=('TkDefaultFont', 9, 'bold')).pack(anchor='w', padx=6,
-                                                     pady=(3, 2))
+              style='Studio.Section.TLabel').pack(
+                  anchor='w', padx=10, pady=(10, 5))
     prefab_gallery = VisualPrefabPalette(
         prefabs_body, tk, ttk,
         on_select=group_prefab_var.set,
@@ -4404,6 +4426,13 @@ def launch(path):
         label='Carte plein espace  ·  F11',
         variable=studio_docks.focus_var,
         command=lambda: set_studio_focus(studio_docks.focus_var.get()))
+    view_menu.add_separator()
+    view_menu.add_radiobutton(
+        label='Thème clair', value='light', variable=appearance_var,
+        command=lambda: apply_studio_theme(appearance_var.get()))
+    view_menu.add_radiobutton(
+        label='Thème sombre', value='dark', variable=appearance_var,
+        command=lambda: apply_studio_theme(appearance_var.get()))
     studio.workspace.attach_navigator(sidebar)
     studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
@@ -4567,13 +4596,53 @@ def launch(path):
     root.bind('<Alt-KeyPress-1>', lambda _event: notebook.select(work))
     root.bind('<Alt-KeyPress-2>',
               lambda _event: notebook.select(studio.workspace.tab))
-    ttk.Label(root,textvariable=status_var).pack(fill='x')
+    ttk.Label(root, textvariable=status_var,
+              style='Studio.Status.TLabel').pack(fill='x')
 
     def layout_store():
         return LayoutStore(current_path.with_suffix('.workspace.layout.json'))
 
     def docks_store():
         return DockPreferences(current_path.with_suffix('.workspace.docks.json'))
+
+    def appearance_store():
+        return AppearancePreferences(
+            current_path.with_suffix('.workspace.appearance.json'))
+
+    # Style the existing controls in place: no reconstruction or repaint
+    # of tactical data, no new editor model.
+    for text_widget in (inspector, journal, console_view, source,
+                        studio.playtest_studio.detail):
+        studio_appearance.register_text(text_widget)
+    studio_appearance.register_canvas(canvas)
+    studio_appearance.register_canvas(prefab_canvas, background='surface')
+    studio_appearance.register_canvas(mini_canvas)
+    studio_appearance.register_canvas(prefab_thumbnail)
+
+    def apply_studio_theme(mode, *, save=True):
+        palette = studio_appearance.apply(mode)
+        root._studio_palette = palette
+        appearance_var.set(mode)
+        studio.playtest_studio.set_appearance(palette)
+        prefab_gallery.apply_appearance(palette)
+        for floating in (asset_palette, entity_palette):
+            if floating is not None and floating.window.winfo_exists():
+                floating.apply_appearance(palette)
+        for menu in (file_menu, view_menu):
+            try:
+                menu.configure(background=palette.surface,
+                               foreground=palette.text,
+                               activebackground=palette.selected,
+                               activeforeground=palette.selected_text)
+            except tk.TclError:
+                pass
+        if save:
+            try:
+                appearance_store().save(mode)
+            except OSError:
+                pass
+
+    apply_studio_theme('light', save=False)
 
     def save_layout(_event=None):
         try:
@@ -4634,6 +4703,7 @@ def launch(path):
                     notebook.select(tab)
                     break
             studio_docks.restore(docks_store().load())
+            apply_studio_theme(appearance_store().load(), save=False)
         except (OSError, ValueError, tk.TclError):
             pass
 

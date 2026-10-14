@@ -219,6 +219,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest tests_standalone.test_tactical_quality_r615_gui -v
+      - name: Studio visual appearance and contrast GUI smoke
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_studio_theme_2026 -v
       - name: Visual Battle Lab 3.8.3 GUI charts and seed replay
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -339,6 +343,8 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_terrain_watercolor_3732g_gui.py -v
+      - name: Verify painterly biome generation and safe flora (3.7.32K)
+        run: python3 -m unittest tests_standalone.test_terrain_biomes_3732k -v
       - name: Verify terrain AutoBlend and dirty-tile/full-render parity (3.7.32F)
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -486,6 +492,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_character_rules_gui.py -v
+      - name: Verify Player cinematic title, save selection and advanced menu
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_title_menu -v
       - name: Exercise advanced graph and standalone player UI
         env:
           SPOREBOUND_GUI_SMOKE: '1'

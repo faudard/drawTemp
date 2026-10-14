@@ -14,7 +14,11 @@ class EntityPalette:
         self.objects = objects
         self.tree_images = {}
         self.choose, self.cell_size = choose, cell_size
+        from .studio_theme import palette_for
+        self.appearance = getattr(parent.winfo_toplevel(),
+                                  '_studio_palette', palette_for('light'))
         self.window = tk.Toplevel(parent)
+        self.window.configure(background=self.appearance.background)
         self.window.title('Acteurs et objets — palette de mission')
         self.window.geometry('720x510')
         self.window.minsize(560, 420)
@@ -51,7 +55,7 @@ class EntityPalette:
         scrollbar.pack(side='right', fill='y')
         self.tree.pack(fill='both', expand=True)
         self.canvas = tk.Canvas(right, width=230, height=170,
-                                background='#e6e1d7', highlightthickness=0)
+                                background=self.appearance.canvas, highlightthickness=0)
         self.canvas.pack(fill='x')
         ttk.Label(right, textvariable=self.detail, wraplength=270).pack(
             fill='x', pady=8)
@@ -76,7 +80,9 @@ class EntityPalette:
         ttk.Label(right, text='Passage : cliquer l’entrée puis la sortie '
                   'directement sur la carte. Échap pour annuler.',
                   wraplength=275).pack(anchor='w', pady=(6, 0))
-        self.use_button = ttk.Button(right, text='Placer sur la carte', command=self.use)
+        self.use_button = ttk.Button(
+            right, text='Placer sur la carte', command=self.use,
+            style='Studio.Primary.TButton')
         self.use_button.pack(fill='x', pady=12)
         ttk.Label(self.window, text='Utiliser → cliquer sur la carte ; '
                   'la pose est validée par les règles et annulable.').pack(pady=6)
@@ -88,6 +94,11 @@ class EntityPalette:
         self.team.trace_add('write', self.preview)
         self.moving.trace_add('write', self.preview)
         self.refresh()
+
+    def apply_appearance(self, palette):
+        self.appearance = palette
+        self.window.configure(background=palette.background)
+        self.canvas.configure(background=palette.canvas)
 
     def show(self):
         self.refresh()

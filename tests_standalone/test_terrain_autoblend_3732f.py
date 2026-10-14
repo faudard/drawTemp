@@ -74,7 +74,7 @@ class AutoBlendTests(unittest.TestCase):
         for cell in ((0, 0), (2, 6), (999, -14)):
             self.assertEqual(terrain_variant(cell), terrain_variant(cell))
             self.assertIn(terrain_variant(cell), (0, 1))
-        self.assertEqual(set(REGION_STYLES), {'prairie', 'aride', 'rocaille'})
+        self.assertTrue({'prairie', 'aride', 'rocaille'} <= set(REGION_STYLES))
         self.assertEqual(len(LAND_COLORS), 6)
 
 
