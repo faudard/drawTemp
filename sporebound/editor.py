@@ -494,7 +494,7 @@ def launch(path):
 
     def schedule_work_checkpoint():
         nonlocal work_checkpoint_job
-        editing_context.diagnostics.cancel()
+        editing_context.invalidate()
         if work_checkpoint_job is not None:
             root.after_cancel(work_checkpoint_job)
         work_checkpoint_job = root.after(350, checkpoint_work)
