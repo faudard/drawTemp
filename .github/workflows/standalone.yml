@@ -495,7 +495,7 @@ jobs:
       - name: Verify Player cinematic title, save selection and advanced menu
         env:
           SPOREBOUND_GUI_SMOKE: '1'
-        run: xvfb-run -a python3 -m unittest tests_standalone.test_title_menu -v
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_title_menu tests_standalone.test_title_menu_cinematic -v
       - name: Exercise advanced graph and standalone player UI
         env:
           SPOREBOUND_GUI_SMOKE: '1'
