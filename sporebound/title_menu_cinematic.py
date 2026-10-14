@@ -186,7 +186,7 @@ class CinematicTitleMenu(TitleMenu):
 
     def _paint_stage(self, width, height, layout):
         c = self.canvas
-        c.create_rectangle(0, 0, width, height, fill="#101b2a", outline="", tags="art")
+        c.create_rectangle(0, 0, width, height, fill="#000000" if self.contrast else "#101b2a", outline="", tags="art")
         if self.contrast:
             return
         scenic_width = min(width, round(width * (.73 if not layout["compact"] else .69)))
@@ -317,7 +317,7 @@ class CinematicTitleMenu(TitleMenu):
                                fill="#203249",outline="",tags=("art",tag))
             self._icon(icon,x0+icon_width/2,y0+h/2,min(h*.29,26),tag)
             tx=x0+icon_width+13
-            title_size=max(14,min(23,round(h*.285)))
+            title_size=max(13,min(round(22*self.scale),round(h*.33)))
             c.create_text(tx,y0+h*(.33 if h>66 else .34),text=label,anchor="w",
                           fill=IVORY if not disabled else "#94a1ae",
                           font=("Georgia",title_size,"bold"),tags=("art",tag))
