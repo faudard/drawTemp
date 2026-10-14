@@ -120,6 +120,18 @@ class NaturalMapTests(unittest.TestCase):
             self.doc.confirm_natural_map(plan)
         self.assertEqual(self.doc.data, after)
 
+    def test_identical_bytes_after_undo_cannot_reuse_old_preview(self):
+        plan = self.preview()
+        original = deepcopy(self.doc.data)
+        self.doc.paint_many(self.mid, [(0, 0)], 'surface:dirt')
+        self.doc.undo()
+        self.assertEqual(self.doc.data, original)
+        with self.assertRaises(RuleError):
+            self.doc.confirm_natural_map(plan)
+        self.assertEqual(self.doc.data, original)
+        fresh = self.preview()
+        self.assertGreater(self.doc.confirm_natural_map(fresh), 0)
+
     def test_invalid_inputs_and_all_preset_biomes(self):
         for seed in (True, -1, 0x80000000):
             with self.subTest(seed=seed), self.assertRaises(RuleError):
