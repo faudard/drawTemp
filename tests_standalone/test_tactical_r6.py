@@ -192,13 +192,13 @@ class BuildsTests(unittest.TestCase):
         content.jobs["brave"] = {
             "bonuses": {"defense": 2},
             "talents": {"fortify": {"jp": 1, "bonuses": {"defense": 4}}}}
-        content.equipment["helm"] = {"bonuses": {"defense": 3}}
+        content.equipment["helm"] = {"slot": "armor", "bonuses": {"defense": 3}}
         campaign = Campaign(unlocked=["arena"])
         hero = campaign.hero("hero")
         hero.job_xp["brave"] = 100
         hero.learned_talents["brave"] = ["fortify"]
         hero.spent_jp["brave"] = 1
-        hero.equipment["head"] = "helm"
+        hero.equipment["armor"] = "helm"
         before = deepcopy(campaign)
         view = party_build_preview(content, campaign, "arena",
                                    ruleset=tactical_rpg_rules())
