@@ -53,6 +53,10 @@ class VisualCampaignAuthoringTests(unittest.TestCase):
         self.assertIn("hold", session.available_missions())
         self.assertFalse(preview_condition(q, "ending", "peace",
                                            session.progress)["matches"])
+        self.assertFalse(preview_condition(q, "ending", "unwritten",
+                                           session.progress)["matches"])
+        self.assertTrue(preview_condition(q, "gate", "escape",
+                                          session.progress)["matches"])
         session.progress.story_flags["truce_signed"] = True
         self.assertIn("peace", session.campaign_inspector()["endings"])
         self.assertEqual(self.project.to_dict(), self.initial)
