@@ -3204,7 +3204,16 @@ def launch(path):
                                             active_layer_level.get()
                                             if interior_var.get()
                                             and layer_vars['Étages'].get() else 0)},
-                    selected_cell=selected_cell, selected_tiles=selected_tiles,
+                    # A selected facade/roof must remain rendered while
+                    # editing. The Player's tactical cutaway rule is unchanged;
+                    # only the Building workspace suppresses automatic roof
+                    # removal caused by its own selection cursor.
+                    selected_cell=(
+                        (-1, -1) if studio_navigation.building_mode and
+                        building_part_target is not None and
+                        not interior_var.get() and battle is None
+                        else selected_cell),
+                    selected_tiles=selected_tiles,
                     reachable=live.reachable if live else (),
                     danger=live.danger if live else (),
                     active_id=live.active_id if live else None,
