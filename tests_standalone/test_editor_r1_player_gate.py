@@ -118,8 +118,9 @@ class RevisionLeaseTests(unittest.TestCase):
             'edit', 'actor', self.actor_id, fields=(('name', 'obsolete'),)))
         initial = deepcopy(self.doc.data)
         first_revision = self.doc.mutation_revision
-        self.doc.replace(place_structure(self.doc.data, self.MID,
-                                         'Tour', (11, 11)))
+        self.doc.replace(EntityCommand(
+            'edit', 'actor', self.actor_id,
+            fields=(('name', 'temporary'),)).transform(self.doc.data, self.MID))
         self.doc.undo()
         self.assertEqual(self.doc.data, initial)
         self.assertGreater(self.doc.mutation_revision, first_revision)
@@ -169,8 +170,9 @@ class RevisionLeaseTests(unittest.TestCase):
         pending = self.context.preview(EntityCommand(
             'edit', 'actor', self.actor_id, fields=(('name', 'obsolete'),)))
         initial = deepcopy(self.doc.data)
-        self.doc.replace(place_structure(self.doc.data, self.MID,
-                                         'Tour', (11, 11)))
+        self.doc.replace(EntityCommand(
+            'edit', 'actor', self.actor_id,
+            fields=(('name', 'temporary'),)).transform(self.doc.data, self.MID))
         self.doc.undo()
         self.assertEqual(self.doc.data, initial)
         before = self._observed(self._player(self.doc.data, self.original_project))
