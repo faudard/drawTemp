@@ -223,6 +223,10 @@ class ProjectWorkspaceTab:
         self._explicit_tile = ''
         if self.query.get():
             self.query.set('')
+        if self.family_filter.get() != 'all':
+            self.family_filter.set('all')
+        if self.scope_filter.get() != 'all':
+            self.scope_filter.set('all')
         if not self.tree.exists(key):
             raise RuleError('Ressource introuvable : ' + key)
         self._map_tile_key = ''
