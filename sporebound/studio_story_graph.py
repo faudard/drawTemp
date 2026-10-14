@@ -8,10 +8,13 @@ import json
 from . import story_authoring as edit
 from .story_graph import build_story_tree
 from .studio_visual_branch_links import VisualBranchInteractions
+from .studio_story_scale import StoryGraphScaleControls
+from .studio_story_navigation import StoryGraphNavigationControls
 from .performance_trace import begin_ui, finish_ui
 
 
-class StoryGraphEditor(VisualBranchInteractions):
+class StoryGraphEditor(StoryGraphNavigationControls, StoryGraphScaleControls,
+                       VisualBranchInteractions):
     def __init__(self, editor, notebook):
         self.editor=editor
         self.owner=editor.owner
@@ -25,6 +28,8 @@ class StoryGraphEditor(VisualBranchInteractions):
         self._fingerprint=None
         self._build(notebook)
         self._visual_setup()
+        self._scale_setup()
+        self._navigation_setup()
 
     def _button(self,parent,label,fn):
         self.ttk.Button(parent,text=label,command=lambda:self.owner._run(fn)).pack(
@@ -50,6 +55,8 @@ class StoryGraphEditor(VisualBranchInteractions):
         self.zoom_box.bind('<<ComboboxSelected>>',lambda event:self.draw())
         self._button(header,'Tout déplier',self.expand_all)
         self._button(header,'Recentrer',self.recenter)
+        self.nav_bar = ttk.Frame(page)
+        self.nav_bar.pack(fill='x', padx=8, pady=(0, 4))
 
         main=ttk.Frame(page)
         main.pack(fill='both',expand=True,padx=8,pady=4)
@@ -133,12 +140,16 @@ class StoryGraphEditor(VisualBranchInteractions):
         self.selected_path=None
         self.selected_choice=''
         self.collapsed.clear()
+        self._scale_reset()
         self.draw()
 
     def _model(self):
         story=self.owner.project.story
-        return build_story_tree(story,self.current_root,collapsed=self.collapsed,
-                                max_depth=24,max_nodes=350)
+        return build_story_tree(
+            story, self.current_root, collapsed=self.collapsed,
+            max_depth=24, max_nodes=350,
+            density='compact' if self.scale_density.get() == 'Compact'
+            else 'normal')
 
     def refresh(self):
         if self.owner.project is None:
@@ -161,6 +172,8 @@ class StoryGraphEditor(VisualBranchInteractions):
                                 ensure_ascii=False),self.current_root)
         if fingerprint!=self._fingerprint:
             self._fingerprint=fingerprint
+            if hasattr(self, 'nav_rows'):
+                self._navigation_refresh_index()
             self.draw()
         else:
             self._details()
@@ -226,6 +239,7 @@ class StoryGraphEditor(VisualBranchInteractions):
                   '#f1f5f9' if node['kind']=='end' else '#dcfce7'
                   if node['path']==(self.current_root,) else '#ffffff')
             tag='node_'+str(index)
+            fill = self._scale_style(node['path']) or fill
             canvas.create_rectangle(x,y-height//2,x+width,y+height//2,
                                     fill=fill,outline='#2563eb' if selected else '#94a3b8',
                                     width=3 if selected else 2,tags=(tag,))
@@ -259,6 +273,7 @@ class StoryGraphEditor(VisualBranchInteractions):
              else 'clic = sélectionner · double-clic = éditer'))
         self._details()
         self._visual_draw(layout, scale, width, height)
+        self._scale_after_draw()
         if self.selected_event:
             self._visual_details_event()
         finish_ui("story_graph.draw", ui_started, canvas, counts={

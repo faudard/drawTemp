@@ -60,9 +60,27 @@ class VisualBranchInteractions:
     def _visual_palette(self, layout):
         present = {row['scene_id'] for row in layout['nodes']
                    if row['scene_id']}
-        return visual_target_palette(
+        result = visual_target_palette(
             self.owner.doc().data, self.owner.project,
             self._visual_mission_id(), present, max_scenes=25, max_events=60)
+        # A search result may be beyond the original 60-event visual budget.
+        # Pin only the selected event into the bounded projection, never
+        # expand the Canvas to thousands of items or alter authored order.
+        selected = self.selected_event
+        if selected and not any(row['id'] == selected
+                                for row in result['events']):
+            mission = next(m for m in self.owner.doc().data['missions']
+                           if m['id'] == self._visual_mission_id())
+            event = next((e for e in mission.get('triggers', [])
+                          if e['id'] == selected), None)
+            if event is not None:
+                from .event_graph import condition_summary
+                result['events'] = result['events'][:59] + [{
+                    'kind': 'event', 'id': selected,
+                    'title': condition_summary(event),
+                }]
+                result['events_truncated'] = True
+        return result
 
     def _visual_target(self, kind, identifier, x, y, width, height):
         self._visual_targets.append({
@@ -265,12 +283,19 @@ class VisualBranchInteractions:
             lambda: self._visual_commit(source, target))
 
     def _visual_publish(self, data, project, source, target):
-        if data != self.owner.doc().data:
-            self.owner.design_change(lambda: self.owner.doc().replace(data))
-            require(self.owner.doc().data == data,
-                    'Enregistrement Content annulé : projet inchangé')
-        if project.to_dict() != self.owner.project.to_dict():
+        previous_project = self.owner.project
+        project_changed = project.to_dict() != previous_project.to_dict()
+        if project_changed:
             self.owner.project = project
+        try:
+            if data != self.owner.doc().data:
+                self.owner.design_change(lambda: self.owner.doc().replace(data))
+                require(self.owner.doc().data == data,
+                        'Enregistrement Content annulé : projet inchangé')
+        except Exception:
+            self.owner.project = previous_project
+            raise
+        if project_changed:
             self.editor.reset_project()
         self.owner.refresh()
         self.status.set('Liaison validée : ' + source['id'] +
