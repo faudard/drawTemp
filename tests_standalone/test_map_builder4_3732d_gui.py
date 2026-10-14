@@ -74,6 +74,8 @@ class ReusablePrefab4GuiTests(unittest.TestCase):
                     canvas.event_generate('<Button-1>', x=8*54+8, y=8*54+8)
                     canvas.event_generate('<ButtonRelease-1>', x=8*54+8, y=8*54+8)
                     root.update()
+                    self.assertEqual(popups, [],
+                                     'Prefab stamping rejected: ' + repr(popups))
                     buttons['Enregistrer sous'].invoke()
                     saved = json.loads(output_path.read_text(encoding='utf-8'))
                     dst = next(m for m in saved['missions'] if m['id'] == 'prefab_gui_dst4')
