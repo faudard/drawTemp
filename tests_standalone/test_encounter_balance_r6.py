@@ -57,6 +57,7 @@ class R6BalanceTests(unittest.TestCase):
             "unit_overrides": {"e2": {"weapon": "ranged",
                                       "attack_range": 3}},
             "inventory": {"potion": 4, "ether": 2, "phoenix": 1},
+            "tile_changes": [{"pos": [3, 2], "cover": 60}],
         }
         report = run_matrix(content, [proposed], seeds=[1], max_commands=16)
         tuned = next(r for r in report["cases"] if r["id"] == "first/tuned")
@@ -70,6 +71,7 @@ class R6BalanceTests(unittest.TestCase):
                               if u.id == "h1"), (1, 0))
         self.assertEqual(next(u.pos for u in variant.missions["first"].units
                               if u.id == "e3"), (7, 0))
+        self.assertEqual(variant.missions["first"].board.tile((3, 2)).cover, 60)
         self.assertEqual(run_matrix(content, [proposed], seeds=[1],
                                     max_commands=16), report)
 
@@ -84,6 +86,8 @@ class R6BalanceTests(unittest.TestCase):
                               "pos": [4, 4]}]},
             {"inventory": {"potion": -1, "ether": 0, "phoenix": 0}},
             {"inventory": {"potion": 1}},
+            {"tile_changes": [{"pos": [100, 100], "cover": 10}]},
+            {"tile_changes": [{"pos": [3, 2], "cover": 101}]},
         ]
         for changed in invalid:
             with self.subTest(changed=changed), self.assertRaises(RuleError):
