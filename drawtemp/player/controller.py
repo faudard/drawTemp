@@ -4,6 +4,7 @@ All commands, previews, story choices and persistence run through Simulation.
 This module never imports Qt or Tk and never edits the GameSession directly.
 """
 from pathlib import Path
+import os
 import shutil
 
 from drawtemp.sdk.simulation import Simulation, SimulationError, thaw
@@ -32,6 +33,27 @@ class PlayerController:
     def slots(self):
         return [slot for slot in range(1, self.project.save_slots + 1)
                 if self._path(slot).is_file()]
+
+    def backups(self):
+        return [slot for slot in range(1, self.project.save_slots + 1)
+                if self._path(slot).with_suffix(".json.bak").is_file()]
+
+    def restore_backup(self, slot=1):
+        backup = self._path(slot).with_suffix(".json.bak")
+        if not backup.is_file():
+            raise ValueError("Aucune sauvegarde de secours")
+        verified = Simulation.load(backup, self.content, self.project)
+        path = self._path(slot)
+        temporary = path.with_suffix(".json.recovering")
+        try:
+            shutil.copy2(backup, temporary)
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        self.session = verified
+        self.show_title = False
+        self.message = "Sauvegarde de secours restaurée"
+        return self.state()
 
     def new_game(self):
         self.session = Simulation.new(self.content, self.project, self.campaign_id,
@@ -204,6 +226,7 @@ class PlayerController:
     def state(self):
         base = {"screen": "title", "title": self.project.title,
                 "subtitle": self.project.subtitle, "slots": self.slots(),
+                "backups": self.backups(),
                 "message": self.message, "forecast": self.forecast,
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
