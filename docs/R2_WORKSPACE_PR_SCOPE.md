@@ -14,7 +14,7 @@ alternative undo/event engine.
 | R2.4 | From Problèmes, navigate to the indexed resource **and** the existing editable inspector. Clearing text/family/favorites filters prevents deep links from becoming unreachable. Live `WorkspaceModelCache` diagnostics and deltas still drive automatic disappearance. | Does not suppress invalid Content or introduce an alternative validator. |
 | R2.5 | Existing docking, tab layout, shortcuts and navigation remain unchanged; explorer state is now saved with the UI layout. Ctrl+D toggles the selected favorite while the tree has focus. | DPI/focus behavior remains owned by ttk/Tk. |
 | R2.6 | From a selected door or linked lever, launch the existing **Personnages et événements** contextual gate authoring flow (condition, lever, tactical effect, scene/cinematic and preview). | Reuses `focus_gate_event`/`author_gate_sequence`; no custom JSON or parallel event graph. |
-| R2.7 | Canonical incoming/outgoing impact graph, guarded actor/object ID renaming, safe deletion and validated paired Content/GameProject cinematic actor-cue migration. | Only known typed links are propagated; ambiguous narrative/foreign-mission cues and unknown references reject the operation. Arbitrary family-wide renames and batch deletion remain unsupported. |
+| R2.7 | Canonical dependency graph, guarded actor/object ID refactors, safe deletion, paired cinematic actor-cue migration and scene/campaign ID migration. | Unknown references reject the operation. Campaign renames require a known project path and no existing old-ID save-slot directory; batch deletion and arbitrary family renames remain unsupported. |
 
 ## Automated regression gates
 
@@ -65,7 +65,8 @@ validation still cannot be stored as authorable documents.
 **Remaining scope:** the actor-reference warning above covers a concrete
 authorable `despawn` case. Global authoring-reference diagnostics still need
 broader field coverage. Renaming actors/objects is supported with guarded
-mission-local propagation. A known actor cue in a `before_mission`,
+mission-local propagation, and scenes/campaigns with validated typed
+cross-document propagation. A known actor cue in a `before_mission`,
 `after_mission` or same-mission `tactical_event` cinematic can be
 migrated alongside Content through the existing `StudioHistory`. Unknown
 GameProject/opaque references and ambiguous cross-mission cues are *refused*.
@@ -87,6 +88,18 @@ and unrestricted cross-document migrations are not supported.
    leaving both the Content and history unchanged.
 5. Changing a resource after opening the inspector invalidates the baseline;
    stale renames/deletions cannot proceed.
+
+6. Rename a **scene** from the Workspace: propagate all incoming
+   `next_scene` choices, `entry_scenes`, `after_mission`,
+   `after_strategic_event`, `during_tactical_event`, world-road
+   events, cinematic triggers and Content `after_choice.scene` guards.
+   Validate both documents before a single global Undo/Redo checkpoint.
+7. Rename a **campaign**: propagate `entry_scenes` keys,
+   `siege.campaign_id` and `campaign_start` cinematic targets. The
+   old save slot namespace `<project-stem>_saves/<old-campaign-id>`
+   must not exist. The editor never silently migrates saved campaigns.
+8. Try introducing an opaque leftover ID or using a stale inspector:
+   all documents stay unchanged and the operation fails closed.
 
 **Note:** with a paired-document edit the global Studio Undo/Redo is the
 authoritative history. The existing save transaction store persists the two
