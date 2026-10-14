@@ -10,7 +10,11 @@ from .iso_props import IsoPropAtlas
 from .model import Board, Mission, Tile, Unit
 
 
-CELL_SIZE = 28
+# Exploration uses the same scalable 2.5D tiles as tactical battles.
+CELL_SIZE = 48
+MIN_CELL_SIZE = 20
+MAX_CELL_SIZE = 96
+ZOOM_STEP = 8
 
 
 def exploration_visual_board(stage):
@@ -53,12 +57,36 @@ def exploration_iso_pick(geometry, shift, x, y):
     return geometry.hit_test(x - shift[0], y - shift[1])
 
 
+def anchored_exploration_zoom(board, old_size, new_size, viewport, pan, anchor):
+    """Keep the hovered logical tile under the cursor during zoom.
+
+    The camera is presentation-only: the board and saved player position are
+    never scaled or rewritten.
+    """
+    before = IsoGeometry(board, old_size)
+    after = IsoGeometry(board, new_size)
+    old_shift = exploration_iso_shift(before, viewport)
+    new_shift = exploration_iso_shift(after, viewport)
+    current = (old_shift[0] + pan[0], old_shift[1] + pan[1])
+    cell = exploration_iso_pick(before, current, *anchor)
+    if cell is None:
+        return pan
+    bx, by = before.center(cell)
+    ax, ay = after.center(cell)
+    return (current[0] + bx - new_shift[0] - ax,
+            current[1] + by - new_shift[1] - ay)
+
+
 class IsoExplorationCanvas:
     """Disposable view adapter. Keep image atlases alive while Canvas exists."""
 
-    def __init__(self, canvas, *, viewport=(690, 495)):
+    def __init__(self, canvas, *, viewport=(690, 495),
+                 cell_size=CELL_SIZE, pan=(0, 0)):
         self.canvas = canvas
         self.viewport = viewport
+        self.cell_size = cell_size
+        self.pan = pan
+        self.board = None
         self.terrain = IsoTerrainAtlas(canvas)
         self.props = IsoPropAtlas(canvas)
         self.environment = IsoEnvironmentAtlas(canvas)
@@ -67,14 +95,18 @@ class IsoExplorationCanvas:
         self.shift = (0, 0)
 
     def draw(self, stage):
+        width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
+        if width > 1 and height > 1:
+            self.viewport = (width, height)
         board = exploration_visual_board(stage)
+        self.board = board
         # This ephemeral Mission is for the renderer only. It never enters
         # Battle, campaign progression, serialization or the command bus.
         scene = Mission("exploration_visual", stage["title"], board, [])
         hero = Unit("jeanne", "Jeanne", "player", tuple(stage["position"]))
         self.canvas.configure(background="#22372f")
         self.geometry = render_isometric(
-            self.canvas, board, scene, [hero], cell_size=CELL_SIZE,
+            self.canvas, board, scene, [hero], cell_size=self.cell_size,
             layers={"Terrain": True, "Relief": True, "Décors": True,
                     "Bâtiments": False, "Toitures": False, "Unités": True,
                     "Objets": False, "Objectifs": False, "Déploiement": False,
@@ -83,7 +115,8 @@ class IsoExplorationCanvas:
             active_id=None, atlas=self.terrain, prop_atlas=self.props,
             actor_atlas=self.actors, ambient_atlas=self.environment,
             omit_architecture=True, draw_selection=False)
-        self.shift = exploration_iso_shift(self.geometry, self.viewport)
+        center = exploration_iso_shift(self.geometry, self.viewport)
+        self.shift = (center[0] + self.pan[0], center[1] + self.pan[1])
         self.canvas.move("all", *self.shift)
 
         # Read-only story overlays: do not turn hotspots/civilians into
@@ -127,3 +160,29 @@ class IsoExplorationCanvas:
         if self.geometry is None:
             return None
         return exploration_iso_pick(self.geometry, self.shift, x, y)
+
+    def zoom_at(self, direction, stage, anchor=None):
+        """Zoom around a tile, preserving selection and hotspot picking."""
+        size = max(MIN_CELL_SIZE, min(MAX_CELL_SIZE,
+                                      self.cell_size + direction * ZOOM_STEP))
+        if size == self.cell_size:
+            return False
+        if anchor is None:
+            anchor = (self.viewport[0] / 2, self.viewport[1] / 2)
+        if self.board is not None:
+            self.pan = anchored_exploration_zoom(
+                self.board, self.cell_size, size, self.viewport, self.pan, anchor)
+        self.cell_size = size
+        self.draw(stage)
+        return True
+
+    def pan_by(self, dx, dy):
+        """Pan the view without recalculating gameplay or rebuilding sprites."""
+        self.pan = (self.pan[0] + dx, self.pan[1] + dy)
+        self.shift = (self.shift[0] + dx, self.shift[1] + dy)
+        self.canvas.move("all", dx, dy)
+
+    def recenter(self, stage):
+        self.cell_size = CELL_SIZE
+        self.pan = (0, 0)
+        self.draw(stage)
