@@ -74,13 +74,16 @@ class WatercolorCatalog:
         provenance_file = self.root / 'provenance.json'
         if provenance_file.is_file():
             provenance = json.loads(provenance_file.read_text(encoding='utf-8'))
-            hashes = provenance.get('sprite_hashes', {})
-            if (not isinstance(hashes, dict) or
-                    set(hashes) != {item['path'] for item in sprites} or
+            original = provenance.get('sprite_hashes', {})
+            derived = provenance.get('derived_hashes', {})
+            if (not isinstance(original, dict) or len(original) != 88 or
+                    not isinstance(derived, dict) or
+                    bool(set(original) & set(derived)) or
+                    set(original) | set(derived) != {item['path'] for item in sprites} or
                     any(not isinstance(v, str) or len(v) != 64
-                        for v in hashes.values())):
-                raise ValueError('Invalid watercolor provenance index')
-            self._sha256 = hashes
+                        for v in list(original.values()) + list(derived.values()))):
+                raise ValueError('Invalid watercolor original/derived provenance index')
+            self._sha256 = {**original, **derived}
 
     def animation_frame_ids(self):
         """Sprite IDs already reachable through an authored animation.
@@ -107,7 +110,7 @@ class WatercolorCatalog:
     def frame(self, asset_id, frame_index=0):
         """Return a real sprite ID and its authored frame duration.
 
-        No synthesis of missing direction or animation frames.
+        No runtime synthesis: every frame must resolve to a generated or original PNG.
         """
         item = self.lookup(asset_id)
         if item.kind == 'sprite':
