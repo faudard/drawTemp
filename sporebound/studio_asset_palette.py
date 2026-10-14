@@ -93,8 +93,9 @@ class AssetPalette:
             state='readonly', width=28)
         self.variant_selector.pack(side='left', fill='x', expand=True, padx=(8, 0))
         self.variant_selector.bind('<<ComboboxSelected>>', self.choose_group_variant)
-        ttk.Label(preview, textvariable=self.detail, wraplength=345,
-                  justify='left').pack(fill='x', padx=8, pady=6)
+        self.detail_label = ttk.Label(preview, textvariable=self.detail,
+                                      wraplength=345, justify='left')
+        self.detail_label.pack(fill='x', padx=8, pady=6)
         opts = ttk.Frame(preview)
         opts.pack(fill='x', padx=8)
         self.rotate_button = ttk.Button(opts, text='Rotation 90°', command=self.rotate)
@@ -423,7 +424,8 @@ class AssetPalette:
             selected_label = next(label for label, eid in options.items()
                                   if eid == self._group_active_id)
             self.watercolor_variant.set(selected_label)
-            self.variant_controls.pack(fill='x', padx=8, pady=(6, 0))
+            self.variant_controls.pack(fill='x', padx=8, pady=(6, 0),
+                                       before=self.detail_label)
         else:
             self._group_selected = None
             self._group_active_id = None
