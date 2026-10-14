@@ -175,6 +175,11 @@ ApplicationWindow {
                     enabled: root.playerData.slots.indexOf(root.currentSlot) !== -1
                     onClicked: player.loadGame(root.currentSlot)
                 }
+                Button {
+                    text: "Restaurer secours"
+                    enabled: root.playerData.backups.indexOf(root.currentSlot) !== -1
+                    onClicked: player.restoreBackup(root.currentSlot)
+                }
             }
             Button {
                 text: "Quitter"
