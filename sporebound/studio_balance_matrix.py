@@ -6,6 +6,7 @@ thread; the worker communicates only through Queue.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from queue import Queue, Empty
 from threading import Thread
 
@@ -487,8 +488,12 @@ class BalanceMatrixStudio:
         try:
             row = next(item for item in self.current["cases"]
                        if item["id"] == selected[0])
-            content = self.owner._content()
-            rules = authored_rules_for_document(self.owner.doc().data)
+            # Use the exact immutable snapshot that produced the Matrix row.
+            # Later Studio edits must not silently change measured scenarios.
+            if self._run_snapshot is None:
+                raise RuleError("Matrice sans instantané de référence.")
+            content = deepcopy(self._run_snapshot[0])
+            rules = self._run_snapshot[1]
             if row["id"] != row["mission"] + "::baseline":
                 content = scenario_content(content, row["spec"], rules=rules)
             setup = ({"inventory": row["spec"]["inventory"]}
@@ -637,8 +642,12 @@ class BalanceMatrixStudio:
         try:
             row = next(item for item in self.current["cases"]
                        if item["id"] == selected[0])
-            content = self.owner._content()
-            rules = authored_rules_for_document(self.owner.doc().data)
+            # Use the exact immutable snapshot that produced the Matrix row.
+            # Later Studio edits must not silently change measured scenarios.
+            if self._run_snapshot is None:
+                raise RuleError("Matrice sans instantané de référence.")
+            content = deepcopy(self._run_snapshot[0])
+            rules = self._run_snapshot[1]
             if row["id"] != row["mission"] + "::baseline":
                 content = scenario_content(content, row["spec"], rules=rules)
             setup = ({"inventory": row["spec"]["inventory"]}
@@ -692,8 +701,12 @@ class BalanceMatrixStudio:
         try:
             row = next(row for row in self.current["cases"]
                        if row["id"] == selected[0])
-            content = self.owner._content()
-            rules = authored_rules_for_document(self.owner.doc().data)
+            # Use the exact immutable snapshot that produced the Matrix row.
+            # Later Studio edits must not silently change measured scenarios.
+            if self._run_snapshot is None:
+                raise RuleError("Matrice sans instantané de référence.")
+            content = deepcopy(self._run_snapshot[0])
+            rules = self._run_snapshot[1]
             if row["id"] != row["mission"] + "::baseline":
                 content = scenario_content(content, row["spec"], rules=rules)
             seed = self.current["seeds"][0]
