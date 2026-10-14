@@ -72,6 +72,7 @@ from .studio_transaction import StudioTransactionStore
 from .performance_trace import begin_ui, finish_ui
 from .workspace_shell import inspect_map, LayoutStore, palette_source_for_tree
 from .workspace_editing import WorkspacePropertyCommand, editable_form
+from .workspace_r2 import BatchPropertyCommand, batch_form
 
 
 class Document:
@@ -3782,14 +3783,21 @@ def launch(path):
                               StudioTransactionStore(current_path).revisions()[1])
 
     def commit_workspace_properties(key, baseline, values):
-        """One typed, validated edit with Editor undo and Studio history."""
+        """Single canonical EditingContext transaction for one or many resources."""
         if battle is not None or source_pending():
             raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
-        form = editable_form(doc.data, key)
-        if form.mission_id != mission_var.get():
-            select_workspace_mission(form.mission_id)
-        command = WorkspacePropertyCommand(
-            key, baseline, tuple(values.items()))
+        if isinstance(key, tuple):
+            form = batch_form(doc.data, key)
+            if form.mission_id != mission_var.get():
+                select_workspace_mission(form.mission_id)
+            command = BatchPropertyCommand(
+                key, tuple(baseline), tuple(values.items()))
+        else:
+            form = editable_form(doc.data, key)
+            if form.mission_id != mission_var.get():
+                select_workspace_mission(form.mission_id)
+            command = WorkspacePropertyCommand(
+                key, baseline, tuple(values.items()))
         design_change(lambda: editing_context.execute(command, publish=False))
         status_var.set('Propriétés Workspace enregistrées (Annuler/Rétablir).')
         return True
