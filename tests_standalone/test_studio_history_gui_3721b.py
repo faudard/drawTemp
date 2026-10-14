@@ -87,7 +87,19 @@ class StudioHistoryGuiTests(unittest.TestCase):
                     title_entry = label.master.grid_slaves(row=0, column=1)[0]
                     previous_title = title_entry.get()
 
-                    buttons["Nouvelle mission"].invoke()
+                    # File actions moved from the old button row into
+                    # the Studio's real "Fichier" menu. Exercise that UI.
+                    file_button = next(
+                        w for w in widgets if isinstance(w, ttk.Menubutton)
+                        and w.cget("text") == "Fichier ▾")
+                    file_menu = root.nametowidget(file_button.cget("menu"))
+                    entries = {
+                        file_menu.entrycget(i, "label"): i
+                        for i in range(file_menu.index("end") + 1)
+                        if file_menu.type(i) == "command"
+                    }
+                    self.assertIn("Nouvelle mission", entries)
+                    file_menu.invoke(entries["Nouvelle mission"])
                     root.update()
                     title_entry.delete(0, "end")
                     title_entry.insert(0, "Jeanne — Studio 3.7.21B")
