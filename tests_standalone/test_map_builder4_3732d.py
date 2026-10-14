@@ -74,8 +74,8 @@ class ReusablePrefab4Tests(unittest.TestCase):
         objs = self.mission(imported, self.DST)['objects']
         door = next(o for o in objs if o['kind'] == 'door')
         lever = next(o for o in objs if o['kind'] == 'switch')
-        self.assertEqual(door['pos'], [18, 10])
-        self.assertEqual(lever['pos'], [18, 12])
+        self.assertEqual(tuple(door['pos']), (18, 10))
+        self.assertEqual(tuple(lever['pos']), (18, 12))
         self.assertEqual(lever['link'], door['id'])
         groups = self.mission(imported, self.DST)['editor_groups']
         self.assertEqual(groups[1]['parent'], groups[0]['id'])

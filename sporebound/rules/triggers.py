@@ -225,7 +225,8 @@ def dispatch(battle, *, observer=None, before_fire=None, fire_limit=None):
                               'missing': blocked, 'pass': pass_number})
                 continue
             if any(key in trigger for key in (
-                    'cancel_after', 'delay_ticks', 'delay_activations')):
+                    'cancel_after', 'delay_ticks', 'delay_activations',
+                    'expire_after_ticks', 'expire_after_activations')):
                 temporal = temporal_status(battle, trigger)
                 if temporal['state'] != 'ready':
                     if observer is not None:

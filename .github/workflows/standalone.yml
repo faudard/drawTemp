@@ -54,6 +54,10 @@ jobs:
         run: |
           python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --report battle_lab_ci.json
           python -m sporebound battle-lab --mission garden --seed 1 --runs 2 --limit 40 --baseline battle_lab_ci.json
+      - name: Balance Matrix 3.8.2 paired missions, rules and replay smoke
+        run: |
+          python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --report matrix_382_ci.json > matrix_382_console.json
+          python -m sporebound balance-matrix --matrix-cases examples/balance_matrix_382_cases.json --seed 1 --runs 2 --limit 40 --baseline matrix_382_ci.json > matrix_382_compare.json
       - name: Combat Diagnostics 3.8.1 canonical trace and CLI replay evidence
         run: python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 40 --report battle_diagnostics_ci.json
       - run: python -m sporebound validate
@@ -120,6 +124,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_battle_lab_38_gui.py -v
+      - name: Balance Matrix 3.8.2 Tk scenario editor and simulated rows
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_balance_matrix_382_gui.py -v
       - name: Combat Diagnostics 3.8.1 selected-seed replay GUI
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -219,6 +227,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_structure_groups_3719b_gui.py -v
+      - name: Verify 3.7.32B facade roof and window editing in Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_map_builder4_3732b_gui.py -v
       - name: Exercise Map Builder 4.0C visibility, locks and active floors in Tk
         env:
           SPOREBOUND_GUI_SMOKE: '1'

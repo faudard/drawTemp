@@ -40,7 +40,8 @@ def update_condition(data, mission_id, event_id, condition):
     # Editing the primary condition must not silently erase secondary predicates.
     extras = {key: deepcopy(event[key]) for key in (
         'when', 'after', 'after_any', 'after_choice',
-        'delay_ticks', 'delay_activations', 'cancel_after')
+        'delay_ticks', 'delay_activations',
+        'expire_after_ticks', 'expire_after_activations', 'cancel_after')
               if key in event and key not in condition}
     event = {'id': event_id, **deepcopy(condition), **extras,
              'actions': event['actions']}
@@ -264,6 +265,7 @@ def edit_composite_node(data, mission_id, event_id, path, *,
 
 def configure_schedule(data, mission_id, event_id, *,
                        delay_ticks=None, delay_activations=None,
+                       expire_after_ticks=None, expire_after_activations=None,
                        cancel_after=None):
     """Atomically update a canonical event's delays and cancellation guards.
 
@@ -273,7 +275,9 @@ def configure_schedule(data, mission_id, event_id, *,
     """
     event = deepcopy(_find_event(data, mission_id, event_id))
     for key, value in (('delay_ticks', delay_ticks),
-                       ('delay_activations', delay_activations)):
+                       ('delay_activations', delay_activations),
+                       ('expire_after_ticks', expire_after_ticks),
+                       ('expire_after_activations', expire_after_activations)):
         if value is None:
             continue
         require(type(value) is int and 0 <= value <= 10000,
@@ -305,6 +309,13 @@ def condition_summary(event):
         wait.append(str(event['delay_activations']) + ' activations')
     if wait:
         root += ' ATTENDRE ' + ' ET '.join(wait)
+    expire = []
+    if event.get('expire_after_ticks'):
+        expire.append(str(event['expire_after_ticks']) + ' ticks')
+    if event.get('expire_after_activations'):
+        expire.append(str(event['expire_after_activations']) + ' activations')
+    if expire:
+        root += ' EXPIRE À ' + ' OU '.join(expire)
     if event.get('cancel_after'):
         root += ' ANNULÉ APRÈS ' + ', '.join(event['cancel_after'])
     return root
