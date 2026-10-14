@@ -183,6 +183,11 @@ class AssetPalette:
         self.window.withdraw()
 
     def show(self):
+        # Keep bookmarks with the edited project when using Enregistrer sous.
+        new_path = (self._preferences_path() if callable(self._preferences_path)
+                    else self._preferences_path)
+        if new_path is not None and self.browser.path != __import__('pathlib').Path(new_path):
+            self.browser.path = __import__('pathlib').Path(new_path)
         self.populate()
         self.window.deiconify()
         self.window.lift()
@@ -595,6 +600,7 @@ class AssetPalette:
                         row.pack_forget()
             else:
                 self.entity_frame.pack_forget()
+        self._update_favorite_button()
         self.preview()
 
     def map_scale(self):
@@ -608,6 +614,13 @@ class AssetPalette:
     def preview(self, _event=None):
         entry = self.selected()
         if entry is None:
+            self.canvas.delete('all')
+            self.preview_image = None
+            self._preview_item_id = None
+            self.detail.set('Sélectionner un asset pour afficher son aperçu.')
+            self.use_button.state(['disabled'])
+            self.rotate_button.state(['disabled'])
+            self._update_favorite_button()
             return
         self.use_button.state(['disabled'] if entry.kind == 'watercolor'
                               else ['!disabled'])
@@ -663,4 +676,10 @@ class AssetPalette:
                     self.detail.set(str(exc))
                     return
         if self.choose(entry, self.turns):
+            try:
+                self.browser.touch(self.asset_bookmark(entry))
+            except (OSError, ValueError):
+                # The map tool has already been selected; UI preferences are
+                # optional and must never invalidate placement.
+                pass
             self.hide()
