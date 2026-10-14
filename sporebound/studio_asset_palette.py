@@ -16,7 +16,11 @@ class AssetPalette:
                  mission=None, preferences_path=None):
         import tkinter as tk
         from tkinter import ttk
+        from .studio_theme import palette_for
+        self.appearance = getattr(parent.winfo_toplevel(),
+                                  '_studio_palette', palette_for('light'))
         self.window = tk.Toplevel(parent)
+        self.window.configure(background=self.appearance.background)
         self.window.title('Bibliothèque d’assets — Carte')
         self.window.geometry('1100x720')
         self.window.minsize(850, 580)
@@ -97,7 +101,7 @@ class AssetPalette:
         image_frame = ttk.Frame(preview)
         image_frame.pack(fill='both', expand=True)
         self.canvas = tk.Canvas(image_frame, width=390, height=280,
-                                background='#e5e0d4', highlightthickness=0)
+                                background=self.appearance.canvas, highlightthickness=0)
         self.preview_image = None
         self._preview_item_id = None
         self.canvas.bind('<Configure>', self._center_preview)
@@ -164,7 +168,9 @@ class AssetPalette:
         self.favorite_button = ttk.Button(preview, text='☆ Ajouter aux favoris',
                                           command=self.toggle_favorite)
         self.favorite_button.pack(fill='x', padx=8, pady=(4, 0))
-        self.use_button = ttk.Button(preview, text='Utiliser sur la carte', command=self.use)
+        self.use_button = ttk.Button(
+            preview, text='Utiliser sur la carte', command=self.use,
+            style='Studio.Primary.TButton')
         self.use_button.pack(fill='x', padx=8, pady=8)
         ttk.Label(self.window, text='Choisir → Utiliser → cliquer sur la carte. '
                   'Annuler/Rétablir restent disponibles dans l’éditeur.').pack(pady=8)
@@ -182,6 +188,12 @@ class AssetPalette:
     def hide(self):
         self.stop_watercolor()
         self.window.withdraw()
+
+    def apply_appearance(self, palette):
+        """Adopt the Studio palette without resetting asset collections."""
+        self.appearance = palette
+        self.window.configure(background=palette.background)
+        self.canvas.configure(background=palette.canvas)
 
     def show(self):
         # Keep bookmarks with the edited project when using Enregistrer sous.
