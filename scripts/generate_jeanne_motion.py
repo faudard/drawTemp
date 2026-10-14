@@ -24,7 +24,7 @@ TRANSITIONS = {
     "walk": (("walk_a", "idle", 1), ("idle", "walk_b", 1),
              ("walk_b", "idle", 1), ("idle", "walk_a", 1)),
     "attack": (("ready", "windup", 2), ("windup", "slash", 2),
-               ("slash", "followthrough", 2), ("followthrough", "guard", 2)),
+               ("slash", "followthrough", 2), ("followthrough", "guard", 1)),
 }
 DURATIONS = {"walk": 75, "attack": 36}
 
@@ -139,6 +139,9 @@ def build(root):
                     "id": frame_id, "kind": "sprite", "path": relative})
                 frames.append({
                     "sprite": frame_id, "duration_ms": DURATIONS[action]})
+        if action == "attack":
+            frames.append({"sprite": "jeanne_guard",
+                           "duration_ms": DURATIONS[action]})
         expected = 8 if action == "walk" else 12
         if len(frames) != expected:
             raise AssertionError(f"{action}: expected {expected} cels")
