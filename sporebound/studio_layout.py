@@ -65,11 +65,12 @@ class StudioNavigation:
     """
 
     def __init__(self, parent, notebook, tools, map_tab, tk, ttk,
-                 building_mode_change=None):
+                 building_mode_change=None, building_mode_allowed=None):
         self.notebook = notebook
         self.tools = tools
         self.map_tab = str(map_tab)
         self.building_mode_change = building_mode_change
+        self.building_mode_allowed = building_mode_allowed or (lambda: True)
         self.building_mode = False
         self._tab_count = 0
         self.tk, self.ttk = tk, ttk
@@ -173,6 +174,11 @@ class StudioNavigation:
         if not options:
             return
         entering = name == "Bâtiments"
+        if entering and not self.building_mode and not self.building_mode_allowed():
+            # A playtest must retain its combat toolbar and active session.
+            # Restore the actual Notebook selection after a radio/combobox click.
+            self.sync()
+            return
         if entering != self.building_mode:
             self.building_mode = entering
             if self.building_mode_change is not None:
