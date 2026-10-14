@@ -8,7 +8,8 @@ from pathlib import Path
 
 from .tk_images import crop_scaled
 from .iso_depth import visual_center
-from .terrain_ambient import strokes_for_cell, stroke_tag
+from .terrain_ambient import (ambient_kind, sprite_origin, sprite_tag,
+                              strokes_for_cell, stroke_tag)
 from .terrain_autoblend import (LAND_COLORS, LAND_PRIORITY, blend_edges,
                                 blend_polygon, terrain_variant)
 from .terrain_transition_masks import (ordered_blend_masks,
@@ -235,6 +236,7 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                      atlas=None, prop_atlas=None,
                      building_atlas=None, fortification_atlas=None,
                      actor_atlas=None, poses=None, object_atlas=None,
+                     ambient_atlas=None,
                      geometry=None, retained=False, unit_levels=None,
                      tile_subset=None, omit_architecture=False,
                      draw_selection=True):
@@ -378,16 +380,30 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
         # per-tile Canvas items. The owning UI animates just their coordinates,
         # not the board, render stack, actors, camera or gameplay clock.
         if layers.get('Terrain', True) and layers.get('Ambiance', True):
-            for accent in strokes_for_cell(board, c, (cx, cy), cell_size):
-                method = (tile_canvas.create_oval if accent.shape == 'oval'
-                          else tile_canvas.create_line)
-                options = dict(width=max(1, round(cell_size / 52)),
-                               tags=('iso_ambient', stroke_tag(accent)))
-                if accent.shape == 'oval':
-                    method(*accent.coords, fill='', outline=accent.color,
-                           **options)
-                else:
-                    method(*accent.coords, fill=accent.color, **options)
+            kind = ambient_kind(board, c)
+            # Generated 8-frame watercolor raster art is the default when
+            # the hosting UI supplies its shared sprite-sheet atlas.
+            # No frame is generated here: only an already cached PhotoImage.
+            image = (ambient_atlas.frame(kind, cell_size, 0)
+                     if ambient_atlas is not None and kind is not None else None)
+            if image is not None:
+                origin = sprite_origin(board, c, (cx, cy), cell_size)
+                tile_canvas.create_image(
+                    *origin, image=image, anchor='nw',
+                    tags=('iso_ambient', sprite_tag(kind, c)))
+            elif kind is not None:
+                # Headless environments, legacy tools and invalid PNG decoders
+                # keep the previous vector illustration contract unchanged.
+                for accent in strokes_for_cell(board, c, (cx, cy), cell_size):
+                    method = (tile_canvas.create_oval if accent.shape == 'oval'
+                              else tile_canvas.create_line)
+                    options = dict(width=max(1, round(cell_size / 52)),
+                                   tags=('iso_ambient', stroke_tag(accent)))
+                    if accent.shape == 'oval':
+                        method(*accent.coords, fill='', outline=accent.color,
+                               **options)
+                    else:
+                        method(*accent.coords, fill=accent.color, **options)
         if c in deploy and layers.get('Déploiement', True):
             tile_canvas.create_polygon(*_flatten(corners), outline='#3b9ec0', fill='',
                                   width=3)
