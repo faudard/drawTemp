@@ -72,6 +72,7 @@ class MapWindow(QMainWindow):
         self.stroke = []
         self.bridge = MapBridge(self)
         self.selected = None
+        self.selection = []
 
         toolbar = QToolBar("Carte", self)
         self.addToolBar(toolbar)
@@ -83,13 +84,16 @@ class MapWindow(QMainWindow):
             ("Enregistrer", self.save_map),
             ("Annuler", self.undo),
             ("Rétablir", self.redo),
+            ("Copier", self.copy_selection),
+            ("Coller", self.paste_selection),
+            ("Test IA", self.playtest),
         ):
             action = toolbar.addAction(name)
             action.triggered.connect(func)
 
         self.tools = QComboBox()
         self.tools.addItems([
-            "Pinceau", "Rectangle", "Ligne", "Remplissage", "Pipette",
+            "Pinceau", "Rectangle", "Ligne", "Remplissage", "Pipette", "Sélection",
             "Gomme", "Objectif", "Mur", "Couvert", "Danger",
             "Hauteur +", "Hauteur -", "Maison", "Pont", "Tour",
         ])
@@ -244,6 +248,26 @@ class MapWindow(QMainWindow):
         self._safe(self.studio.redo)
         self.refresh_maps()
 
+    def playtest(self):
+        result = self._safe(lambda: self.studio.playtest(max_steps=100))
+        if result:
+            QMessageBox.information(
+                self, "Playtest headless R5",
+                "Mission : {}\nSeed : {}\nPhase : {} → {}\nIssue : {}\n\n"
+                "Simulation déterministe ; Player Qt interactif prévu en R12.".format(
+                    result["mission"], result["seed"], result["initial_mode"],
+                    result["final_mode"], result["result"] or "En cours"))
+
+    def copy_selection(self):
+        if not self.selection:
+            QMessageBox.information(self, "Copie", "Choisissez Sélection et tracez une zone.")
+            return
+        self._safe(lambda: self.studio.copy(self.selection))
+
+    def paste_selection(self):
+        if self.selected is not None:
+            self._safe(lambda: self.studio.paste(self.selected))
+
     def change_objective(self):
         self._safe(lambda: self.studio.set_objective(self.objective.currentText()))
 
@@ -275,6 +299,11 @@ class MapWindow(QMainWindow):
         tool = self._tool()
         first, last = cells[0], cells[-1]
         def apply():
+            if tool == "Sélection":
+                self.selection = list(self.studio.rectangle_cells(first, last))
+                self.statusBar().showMessage(
+                    "{} cases sélectionnées — Copier puis Coller".format(len(self.selection)))
+                return None
             if tool in ("Maison", "Pont", "Tour"):
                 return self.studio.structure(tool, last)
             if tool == "Pipette":
