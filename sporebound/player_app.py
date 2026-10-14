@@ -1083,21 +1083,25 @@ class PlayerApplication:
             side="left", padx=3)
         if not session.finalized and not battle.result:
             actions = self.ttk.Frame(self.hud_footer)
-            actions.pack(fill="x", pady=2)
+            actions.pack(fill="x", pady=1)
+            select_row = self.ttk.Frame(actions)
+            select_row.pack(fill="x")
+            commit_row = self.ttk.Frame(actions)
+            commit_row.pack(fill="x")
             if battle.deploying:
                 options = ["deploy", "start_battle"]
                 players = [u.id for u in battle.units if u.team == "player" and u.alive]
                 if self.unit_var.get() not in players:
                     self.unit_var.set(players[0] if players else "")
-                self.ttk.Label(actions, text="Héros").pack(side="left")
-                self.ttk.Combobox(actions, textvariable=self.unit_var,
+                self.ttk.Label(select_row, text="Héros").pack(side="left")
+                self.ttk.Combobox(select_row, textvariable=self.unit_var,
                                   values=players, state="readonly", width=11).pack(
                                       side="left", padx=5)
             elif battle.active is None:
                 options = []
             elif battle.active.team == "enemy":
                 options = []
-                self._button(actions, "Jouer l'activation IA",
+                self._button(commit_row, "Jouer l'activation IA",
                              lambda: self._change(self.player.ai_turn)).pack(side="left")
             else:
                 active_level = battle.unit_levels.get(battle.active.id, 0)
@@ -1122,17 +1126,17 @@ class PlayerApplication:
             if options:
                 if self.action_var.get() not in options:
                     self.action_var.set(options[0])
-                self.ttk.Label(actions, text="Action").pack(side="left", padx=5)
+                self.ttk.Label(select_row, text="Action").pack(side="left", padx=5)
                 action_box = self.ttk.Combobox(
-                    actions, textvariable=self.action_var,
+                    select_row, textvariable=self.action_var,
                     values=options, state="readonly", width=23)
                 action_box.pack(side="left", padx=7)
                 action_box.bind("<<ComboboxSelected>>",
                                 lambda _event: self._redraw())
                 if battle.mission.level_links:
-                    self.ttk.Label(actions, text="Étage cible").pack(side="left")
+                    self.ttk.Label(select_row, text="Étage cible").pack(side="left")
                     floor_box = self.ttk.Combobox(
-                        actions, textvariable=self.level_var, state="readonly",
+                        select_row, textvariable=self.level_var, state="readonly",
                         values=tuple(range(0, 1+max(
                             max(row["from"][0], row["to"][0])
                             for row in battle.mission.level_links))),
@@ -1140,13 +1144,13 @@ class PlayerApplication:
                     floor_box.pack(side="left")
                     floor_box.bind("<<ComboboxSelected>>",
                                    lambda _event: self._redraw())
-                self.ttk.Label(actions, text="Orientation").pack(side="left")
-                self.ttk.Combobox(actions, textvariable=self.facing_var, state="readonly",
+                self.ttk.Label(commit_row, text="Orientation").pack(side="left")
+                self.ttk.Combobox(commit_row, textvariable=self.facing_var, state="readonly",
                                   values=["north", "south", "east", "west"],
                                   width=9).pack(side="left", padx=6)
-                self._button(actions, "Exécuter", self._execute).pack(side="left", padx=5)
+                self._button(commit_row, "Exécuter", self._execute).pack(side="left", padx=5)
                 if not battle.deploying:
-                    self._button(actions, "Fin de tour", self._end).pack(side="left", padx=5)
+                    self._button(commit_row, "Fin de tour", self._end).pack(side="left", padx=5)
         self.guide_panel = self.ttk.LabelFrame(
             self.hud_assistance_tab, text="Aide tactique contextuelle",
             padding=6)
@@ -1193,8 +1197,8 @@ class PlayerApplication:
         # another permanent 40px row under the map.
         self.canvas.focus_set()
         if not session.finalized:
-            self._button(self.hud_footer, "Abandonner l'opération",
-                         self._abandon).pack(anchor="e", pady=1)
+            self._button(nav, "Abandonner l'opération",
+                         self._abandon).pack(side="left", padx=3)
 
 
     def _bind_battle_keys(self):
