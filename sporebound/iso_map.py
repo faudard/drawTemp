@@ -181,7 +181,8 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                      building_atlas=None, fortification_atlas=None,
                      actor_atlas=None, poses=None, object_atlas=None,
                      geometry=None, retained=False, unit_levels=None,
-                     tile_subset=None, omit_architecture=False):
+                     tile_subset=None, omit_architecture=False,
+                     draw_selection=True):
     """Draw walkable 2.5D blocks, water, bridges and decorative props on Tk Canvas."""
     geo = geometry if geometry is not None else IsoGeometry(board, cell_size)
     if not retained and tile_subset is None:
@@ -381,10 +382,10 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                     tile_canvas.create_text(ax,ay+2,text=f'{actor.hp} PV',
                                        font=('TkDefaultFont',8,'bold'),
                                        fill='#ffffff',tags=actor_tags)
-        if c in selected_tiles:
+        if draw_selection and c in selected_tiles:
             tile_canvas.create_polygon(*_flatten(corners),outline='#23689e',fill='',width=3,
                                   tags='selection')
-        if c == selected_cell:
+        if draw_selection and c == selected_cell:
             tile_canvas.create_polygon(*_flatten(corners),outline='#2361ff',fill='',width=3,
                                   tags='selection')
     # Prefer authored visual identities; infer legacy stamps as a fallback.
