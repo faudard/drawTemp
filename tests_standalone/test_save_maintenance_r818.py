@@ -117,6 +117,20 @@ class SaveMaintenanceTests(unittest.TestCase):
             self.assertEqual(damaged.read_bytes(), b"keep damaged generation")
             self.assertEqual(len(generations), 4)
 
+    def test_unknown_archive_generation_blocks_retention_without_deleting_it(self):
+        with TemporaryDirectory() as root:
+            _, _, manager = self.make(root)
+            [manager.archive_verified() for _ in range(3)]
+            foreign = manager.history / "gen-unrecognized"
+            foreign.mkdir()
+            (foreign / "evidence").write_bytes(b"unknown archive format")
+            with self.assertRaisesRegex(RuleError, "Unrecognized"):
+                manager.retention_plan(keep=2)
+            self.assertEqual((foreign / "evidence").read_bytes(),
+                             b"unknown archive format")
+            self.assertEqual(len([p for p in manager.history.iterdir()
+                                  if p.name.startswith("gen-")]), 4)
+
     def test_stale_temp_quarantine_only_after_explicit_confirm(self):
         with TemporaryDirectory() as root:
             store, _, manager = self.make(root)
