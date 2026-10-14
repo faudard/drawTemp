@@ -2,10 +2,14 @@
 from copy import deepcopy
 from dataclasses import asdict
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from sporebound.ai import choose_command
 from sporebound.campaign import Campaign
 from sporebound.engine import Battle
+from sporebound.game_project import GameProject
+from sporebound.player_session import PlayerSession
 from sporebound.model import Board, Content, Mission, RuleError, Unit
 from sporebound.rules import default_rules
 from sporebound.tactical_r6 import (
@@ -101,6 +105,21 @@ class ObjectiveTests(unittest.TestCase):
         self.assertTrue(objective_progress(battle)["defenses"][0]["disabled"])
         self.assertEqual(battle.digest(), Battle.replay(
             battle.recording(), rules=rules).digest())
+
+    def test_player_campaign_uses_r6_rules_and_party_view(self):
+        content = fixture("capture", goal=[(1, 1)])
+        project = GameProject.default(content)
+        with TemporaryDirectory() as folder:
+            session = PlayerSession(content, project, Path(folder) / "saves.json")
+            session.new_game("main", 1)
+            preview = session.party_build_preview("arena")
+            self.assertEqual(preview["party_size"], 1)
+            self.assertIsNone(session.battle)
+            battle = session.begin("arena")
+            self.assertIn("capture", battle.rules.objectives)
+            session.command({"kind": "move", "cell": [1, 1]})
+            self.assertEqual(battle.result, "victory")
+            self.assertTrue(session.finalized)
 
     def test_authored_missions_select_enhanced_objective_rules(self):
         content = fixture("escort", goal=[(1, 1)], protected="hero")
