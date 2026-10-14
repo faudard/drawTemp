@@ -255,6 +255,8 @@ class CampaignFlowEditor:
                     if self.owner.session is not None and
                     self.owner.session_campaign == self.owner.campaign_id.get()
                     else self._project().new_game(self.owner.campaign_id.get(), self._content()))
+        from .campaign_flow import verify_save
+        verify_save(progress, self._project().campaign_flow)
         report = commands.preview_condition(self._project(), target, name, progress)
         self.status.set(("SATISFAITE" if report["matches"] else "NON SATISFAITE")
                         + (" (condition définie)" if report["defined"] else " (sans condition)")
