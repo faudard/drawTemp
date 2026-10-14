@@ -73,11 +73,22 @@ Wounds use existing `HeroProgress.wounds` and affect `Campaign.prepare`.
    missions, flags, gold, inventory, companions, wounds, consequences and
    satisfied endings. The Player exposes a **Inspecter la campagne** panel.
 
+## Studio inspection
+
+From **Jeu, campagnes et sauvegardes**, select a campaign, then use
+**Inspecter état R5.8** to view its live persistent state (or the new-game
+state when no save is loaded). **Analyser parcours R5.11** presents a
+read-only bounded route report with potential ending witnesses and blocked
+missions. These actions do not mutate campaign, project or document data;
+authoring remains the responsibility of the existing Story and mission tools.
+The Studio launch control enforces the same campaign flow gates as the Player,
+instead of launching a locked mission by reading `Campaign.unlocked` directly.
+
 ## Quality gate and standalone export
 
 ```bash
 python -m unittest tests_standalone.test_campaign_flow_r5b -v
-python scripts/campaign_flow_qa.py \
+# Includes a three-mission Python/Tk source export playthrough, replays and ending.\npython scripts/campaign_flow_qa.py \
   --content sporebound/content/core.json \
   --project sporebound/content/core.game.json \
   --report /tmp/campaign-flow-r5b.json
