@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from examples.persistence_fault_lab import (
-    CUTS, run_concurrent_lock_gate, run_matrix,
+    CUTS, run_concurrent_lock_gate, run_matrix, run_multifront_crash_gate,
 )
 from examples.reliability_gate import fixture
 from sporebound.game_session import GameSession
@@ -36,6 +36,11 @@ class PersistenceFaultLabTests(unittest.TestCase):
         outcome = run_concurrent_lock_gate()
         self.assertTrue(outcome["verified"])
         self.assertTrue(outcome["concurrent_writer_rejected"])
+
+    def test_multifront_focus_transition_survives_process_death(self):
+        outcome = run_multifront_crash_gate()
+        self.assertTrue(outcome["verified"])
+        self.assertEqual(outcome["mode"], "fronts")
 
     def test_tampered_journal_cannot_silently_fall_back_to_old_snapshot(self):
         content, project = fixture()
