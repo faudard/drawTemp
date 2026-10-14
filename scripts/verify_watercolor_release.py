@@ -65,12 +65,18 @@ def validate(index, registry, read_file, available, *, provenance=None):
     AssetRegistry(registry)  # Validate unique IDs and animation references.
     if not isinstance(index, dict) or index.get("schema_version") != 1:
         raise ValueError("Wrong watercolor index schema")
+    # The certified 88-source baseline is immutable; an optional Jeanne
+    # motion extension adds derived, separately hashed in-between sprites.
+    derived = provenance.get("derived_hashes", {}) if provenance is not None else {}
+    if not isinstance(derived, dict):
+        raise ValueError("Invalid derived art provenance")
+    expected_count = 88 + len(derived)
     sprites = index.get("sprites")
-    if not isinstance(sprites, list) or len(sprites) != 88:
-        raise ValueError("Expected 88 indexed sprites")
+    if not isinstance(sprites, list) or len(sprites) != expected_count:
+        raise ValueError(f"Expected {expected_count} indexed sprites")
     counts = Counter(entry["kind"] for entry in registry["entries"])
-    if counts != {"sprite": 88, "animation": 15}:
-        raise ValueError("Expected 88 sprites and 15 animations")
+    if counts != {"sprite": expected_count, "animation": 15}:
+        raise ValueError("Watercolor sprite/animation counts mismatch")
     registered = {entry["id"]: entry for entry in registry["entries"]
                   if entry["kind"] == "sprite"}
     hashes = None
@@ -81,10 +87,15 @@ def validate(index, registry, read_file, available, *, provenance=None):
                 not re.fullmatch(r'[a-f0-9]{64}',
                                  str(provenance.get('archive_sha256', '')))):
             raise ValueError('Invalid watercolor provenance manifest')
-        hashes = provenance['sprite_hashes']
+        original_hashes = provenance['sprite_hashes']
+        if len(original_hashes) != 88:
+            raise ValueError('Watercolor provenance must cover exactly 88 original sprites')
+        hashes = {**original_hashes, **derived}
         expected_paths = {item['path'] for item in sprites}
-        if set(hashes) != expected_paths or len(hashes) != 88:
-            raise ValueError('Watercolor provenance must cover exactly 88 sprites')
+        if (set(original_hashes) & set(derived)
+                or set(hashes) != expected_paths
+                or len(hashes) != expected_count):
+            raise ValueError('Watercolor provenance must cover all original and derived sprites')
         if any(not isinstance(value, str) or
                re.fullmatch(r'[a-f0-9]{64}', value) is None
                for value in hashes.values()):
@@ -125,7 +136,7 @@ def validate(index, registry, read_file, available, *, provenance=None):
         total_bytes += len(data)
     if set(registered) != {sprite["id"] for sprite in sprites}:
         raise ValueError("Manifest contains unindexed sprite references")
-    return {"schema_version": 1, "sprites": 88, "animations": 15,
+    return {"schema_version": 1, "sprites": expected_count, "animations": 15,
             "groups": dict(sorted(groups.items())), "png_bytes": total_bytes}
 
 
@@ -138,7 +149,10 @@ def verify_archive(bundle):
         registry = json.loads(archive.read(PREFIX + "registry.json"))
         provenance = (json.loads(archive.read(PREFIX + 'provenance.json'))
                       if PREFIX + 'provenance.json' in names else None)
-        if provenance is not None and sha256(Path(bundle).read_bytes()).hexdigest() != provenance['archive_sha256']:
+        # The original 88-PNG zip is signed by archive_sha256. A derived
+        # extension is a new archive; every image is checked by its own hash.
+        if (provenance is not None and not provenance.get('derived_hashes')
+                and sha256(Path(bundle).read_bytes()).hexdigest() != provenance['archive_sha256']):
             raise ValueError('Watercolor archive SHA-256 mismatch')
         return validate(index, registry, archive.read, set(names), provenance=provenance)
 
@@ -165,10 +179,10 @@ def verify_directory(root, *, allow_missing=False):
             raise ValueError("Invalid source path")
         return (root / rel).read_bytes()
     report = validate(index, registry, read_file, paths, provenance=provenance)
-    if len(images) != 88:
+    if len(images) != report['sprites']:
         raise ValueError("Extra or missing PNG files")
     if provenance is not None:
-        report['provenance_sha256_verified'] = 88
+        report['provenance_sha256_verified'] = report['sprites']
     return report
 
 
