@@ -253,8 +253,8 @@ class MapWindow(QMainWindow):
         if result:
             QMessageBox.information(
                 self, "Playtest headless R5",
-                "Mission : {}\nSeed : {}\nPhase : {} → {}\nIssue : {}\n\n"
-                "Simulation déterministe ; Player Qt interactif prévu en R12.".format(
+                ("Mission : {}\nSeed : {}\nPhase : {} → {}\nIssue : {}\n\n"
+                 "Simulation déterministe ; Player Qt interactif prévu en R12.").format(
                     result["mission"], result["seed"], result["initial_mode"],
                     result["final_mode"], result["result"] or "En cours"))
 
