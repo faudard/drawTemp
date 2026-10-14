@@ -79,6 +79,19 @@ def used_flags(project):
 def referrers(content, project, family, identifier):
     """Find direct semantic references used for safe deletion and inspection."""
     results = []
+    if family == "flags":
+        def visit(node, path):
+            if isinstance(node, dict):
+                if node.get("flag") == identifier:
+                    results.append(path)
+                for key, value in node.items():
+                    visit(value, path + "/" + str(key))
+            elif isinstance(node, (list, tuple)):
+                for index, value in enumerate(node):
+                    visit(value, path + "/" + str(index))
+        for field in ("story", "campaign_flow", "battle_support"):
+            visit(project.get(field, {}), "project/" + field)
+        return tuple(results)
     for mission in content["missions"]:
         mid = mission["id"]
         for unit in mission["units"]:
