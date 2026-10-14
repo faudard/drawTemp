@@ -81,8 +81,8 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
                 "sound": {"cue"},
             }
             optional_fields = {
-                "actor": {"easing"},
-                "camera": {"easing", "shot", "transition"},
+                "actor": {"easing", "keyframes"},
+                "camera": {"easing", "shot", "transition", "keyframes"},
                 "fade": {"easing"},
                 "dialogue": {"portrait", "expression", "chars_per_second"},
                 "sound": {"bus", "volume", "volume_to", "fade_in_ms",
@@ -115,6 +115,26 @@ def validate_cinematics(clips, content, campaigns, scenes=None):
                 if "transition" in event:
                     require(event["transition"] in SHOT_TRANSITIONS,
                             "Unknown shot transition")
+            if "keyframes" in event:
+                keys = event["keyframes"]
+                require(kind in ("actor", "camera") and isinstance(keys, list)
+                        and 1 <= len(keys) <= 32,
+                        "Actor/camera keyframes must contain 1..32 interior keys")
+                last = 0
+                for key in keys:
+                    fields = {"at_ms", "pos"}
+                    if kind == "camera":
+                        fields.add("zoom")
+                    require(isinstance(key, dict) and set(key) == fields,
+                            "Invalid motion keyframe fields")
+                    at = key["at_ms"]
+                    require(type(at) is int and last < at < duration,
+                            "Keyframe timestamps must be strictly increasing")
+                    require(_point(key["pos"]), "Invalid keyframe position")
+                    if kind == "camera":
+                        require(_number(key["zoom"], .25, 4.),
+                                "Camera keyframe zoom out of range")
+                    last = at
             if kind == "dialogue":
                 require(isinstance(event["speaker"], str) and len(event["speaker"]) <= 100
                         and isinstance(event["text"], str) and
@@ -204,9 +224,7 @@ def _lerp(a, b, fraction):
     return a + (b - a) * fraction
 
 
-def _progress(event, ms):
-    ratio = max(0., min(1., (ms - event["start_ms"]) / event["duration_ms"]))
-    easing = event.get("easing", "linear")
+def _ease(ratio, easing):
     if easing == "ease_in":
         return ratio * ratio
     if easing == "ease_out":
@@ -216,6 +234,41 @@ def _progress(event, ms):
     if easing == "step":
         return 1. if ratio >= 1. else 0.
     return ratio
+
+
+def _progress(event, ms):
+    ratio = max(0., min(1., (ms - event["start_ms"]) / event["duration_ms"]))
+    return _ease(ratio, event.get("easing", "linear"))
+
+
+def motion_at(event, ms):
+    """Pure piecewise motion evaluation (also used by the visual keyframe editor).
+
+    No keyframes means exact legacy interpolation. New keys subdivide the
+    authored start/end range, preserving both boundary poses.
+    """
+    from_pos, to_pos = event["from"], event["to"]
+    zoom_from = event.get("zoom_from")
+    zoom_to = event.get("zoom_to")
+    local = max(0, min(event["duration_ms"], int(ms) - event["start_ms"]))
+    stops = [(0, from_pos, zoom_from)]
+    stops.extend((key["at_ms"], key["pos"], key.get("zoom"))
+                 for key in event.get("keyframes", ()))
+    stops.append((event["duration_ms"], to_pos, zoom_to))
+    left, right = stops[0], stops[-1]
+    for index in range(len(stops) - 1):
+        if local <= stops[index + 1][0]:
+            left, right = stops[index], stops[index + 1]
+            break
+    length = right[0] - left[0]
+    # _progress also applies the legacy easing curve; normalize to this segment.
+    ratio = _ease(max(0., min(1., (local - left[0]) / length)),
+                  event.get("easing", "linear"))
+    pos = (_lerp(left[1][0], right[1][0], ratio),
+           _lerp(left[1][1], right[1][1], ratio))
+    zoom = (_lerp(left[2], right[2], ratio)
+            if event["kind"] == "camera" else None)
+    return pos, zoom
 
 
 @dataclass(frozen=True)
@@ -266,13 +319,9 @@ def frame_at(clip, ms):
         if kind == "background" and ms < end:
             background = event["color"]
         elif kind == "actor":
-            actors[event["actor"]] = (
-                _lerp(event["from"][0], event["to"][0], ratio),
-                _lerp(event["from"][1], event["to"][1], ratio))
+            actors[event["actor"]] = motion_at(event, ms)[0]
         elif kind == "camera":
-            camera = (_lerp(event["from"][0], event["to"][0], ratio),
-                      _lerp(event["from"][1], event["to"][1], ratio))
-            zoom = _lerp(event["zoom_from"], event["zoom_to"], ratio)
+            camera, zoom = motion_at(event, ms)
             shot = event.get("shot")
             # The opening quarter of a shot may use a presentation transition.
             # A seek projects the same visual regardless of playback history.
