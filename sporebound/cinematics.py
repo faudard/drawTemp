@@ -221,6 +221,11 @@ def event_template(kind, eid, start_ms=0, duration_ms=1000):
 
 
 def _lerp(a, b, fraction):
+    # An authored keyframe boundary is an exact pose, not a rounded blend.
+    if fraction <= 0:
+        return a
+    if fraction >= 1:
+        return b
     return a + (b - a) * fraction
 
 
