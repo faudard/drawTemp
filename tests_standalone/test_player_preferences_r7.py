@@ -35,6 +35,19 @@ class PlayerPreferencesR7Tests(unittest.TestCase):
             self.assertIsNone(warning)
             self.assertEqual(loaded, expected)
 
+    def test_letters_persist_without_preferences_migration(self):
+        with TemporaryDirectory() as tmp:
+            profile = Path(tmp) / "player.profile"
+            prefs = default_preferences()
+            prefs["keybindings"]["north"] = "<Key-w>"
+            prefs["keybindings"]["west"] = "<Key-a>"
+            save_preferences(profile, prefs)
+            actual, warning = load_preferences(profile)
+            self.assertIsNone(warning)
+            self.assertEqual(actual["version"], 1)
+            self.assertEqual(actual["keybindings"]["north"], "<Key-w>")
+            self.assertEqual(actual["keybindings"]["west"], "<Key-a>")
+
     def test_invalid_values_rejected_without_touching_existing_file(self):
         with TemporaryDirectory() as tmp:
             profile = Path(tmp) / "player.profile"
