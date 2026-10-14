@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PySide6.QtWidgets import QApplication
-except ImportError:
+except ModuleNotFoundError:
     QApplication = None
 
 
