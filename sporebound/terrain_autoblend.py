@@ -194,6 +194,9 @@ def apply_terrain_plan(data, plan):
     updated = deepcopy(data)
     target = _mission(updated, plan.mission_id)
     tiles = {tuple(tile['pos']): tile for tile in target['board']['tiles']}
+    occupied = {tuple(unit['pos']) for unit in target['units']}
+    occupied.update(tuple(obj['pos']) for obj in target['objects'])
+    occupied.update(tuple(goal) for goal in target.get('goal', ()))
     seen = set()
     for x, y, material in plan.changes:
         require(type(x) is int and type(y) is int and
@@ -207,7 +210,8 @@ def apply_terrain_plan(data, plan):
                                        style=plan.style),
                 'Invalid terrain preview material')
         old = tiles.get((x, y), {'pos': [x, y]})
-        require(not old.get('feature') and not old.get('blocked') and
+        require((x, y) not in occupied and
+                not old.get('feature') and not old.get('blocked') and
                 not old.get('height') and
                 old.get('surface') not in ('water', 'bridge'),
                 'Cannot overwrite authored terrain')
