@@ -106,6 +106,7 @@ class ConstructionWorkspace:
         self.authoring = authoring
         self.mission_id = mission_id
         self._pick = None
+        self._last_pick = None
         self._selection_revision = None
         self._level = 0
         self._cutaway = False
@@ -142,6 +143,7 @@ class ConstructionWorkspace:
 
     def clear_selection(self):
         self._pick = None
+        self._last_pick = None
         self._selection_revision = None
         self._level = 0
 
@@ -171,6 +173,7 @@ class ConstructionWorkspace:
             if (hit.cell[0]-x0, hit.cell[1]-y0) not in {tuple(c) for c in visual["windows"]}:
                 raise AuthoringError("invalid_pick", "select", "No window at this wall")
         self._pick = hit
+        self._last_pick = hit
         self._selection_revision = self.authoring.revision
         self._level = 0
         return self.inspect()
@@ -299,6 +302,8 @@ class ConstructionWorkspace:
         return transition
 
     def _refresh(self, hit, previous_ids, kind):
+        if hit is None and kind in ("undo", "redo"):
+            hit = self._last_pick
         records = {row["id"]: row for row in _mission(
             self._content(), self.mission_id).get("structures", ())}
         if kind == "construction:place":
@@ -312,6 +317,7 @@ class ConstructionWorkspace:
             anchor = tuple(row["anchor"])
             candidate = ConstructionPick(hit.structure_id, anchor, anchor, "building")
             self._pick = candidate
+            self._last_pick = candidate
             self._selection_revision = self.authoring.revision
             if self._level not in tuple(
                 floor["level"] for floor in _mission(self._content(), self.mission_id)
@@ -320,3 +326,5 @@ class ConstructionWorkspace:
                 self._level = 0
         else:
             self.clear_selection()
+            if hit and kind in ("undo", "redo", "construction:remove"):
+                self._last_pick = hit
