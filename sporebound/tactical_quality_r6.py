@@ -40,6 +40,7 @@ def _snapshot(battle, actor_id, team):
     pos = actor.pos
     return {
         "friend": friend, "hostile": hostile,
+        "actor_slots": {"move": bool(actor.moved), "action": bool(actor.acted)},
         "inventory": deepcopy(battle.inventory[team]),
         "cover": battle.board.tile(pos).cover,
         "hazard": battle.board.tile(pos).hazard,
@@ -97,6 +98,10 @@ def immediate_effect(battle, command, *, actor_id=None):
     final = _snapshot(sandbox, actor.id, actor.team)
     return {
         "metrics": _delta(initial, final),
+        "spent_slots": sorted(
+            slot for slot in ("move", "action")
+            if not initial["actor_slots"][slot]
+            and final["actor_slots"][slot]),
         "event_kinds": dict(sorted(Counter(
             row["kind"] for row in sandbox.events[events_before:]).items())),
         "result_after_one_command": sandbox.result,
@@ -143,10 +148,16 @@ def measure_decision(battle, chosen):
     tradeoffs = []
     for i, left in enumerate(candidate_rows):
         for right in candidate_rows[i + 1:]:
-            if _tradeoff(left["immediate"]["metrics"],
-                         right["immediate"]["metrics"]):
+            # A move and an attack are often composable in one activation.
+            # Only count a genuine local opportunity-cost when the two
+            # commands consume at least one identical exclusive actor slot.
+            common = sorted(set(left["immediate"]["spent_slots"])
+                            & set(right["immediate"]["spent_slots"]))
+            if common and _tradeoff(left["immediate"]["metrics"],
+                                    right["immediate"]["metrics"]):
                 tradeoffs.append({
                     "categories": sorted((left["category"], right["category"])),
+                    "shared_spent_slots": common,
                     "commands": [left["command"], right["command"]]})
     require(battle.digest() == before_digest
             and len(battle.commands) == original_commands,
@@ -159,7 +170,8 @@ def measure_decision(battle, chosen):
         "distinct_immediate_footprints": len(signatures),
         "has_differentiation": contrasting,
         "tradeoffs": tradeoffs,
-        "note": "One-command effects; selected AI action may not be among sampled options",
+        "note": ("One-command effects; distinct prefixes can be composable. "
+                 "Only shared exclusive move/action slots count as local tradeoffs."),
     }
 
 
