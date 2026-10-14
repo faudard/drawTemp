@@ -29,7 +29,7 @@ def main(argv=None):
         from PySide6.QtCore import Qt, QTimer
         from PySide6.QtGui import QAction, QKeySequence, QPixmap
         from PySide6.QtWidgets import (
-            QApplication, QComboBox, QDockWidget, QFileDialog, QFormLayout,
+            QApplication, QCheckBox, QComboBox, QDockWidget, QFileDialog, QFormLayout,
             QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
             QMainWindow, QMessageBox, QPushButton, QSpinBox, QSplitter,
             QVBoxLayout, QWidget,
@@ -102,6 +102,10 @@ def main(argv=None):
             self.add_key.clicked.connect(self.add_frame)
             self.remove_key = QPushButton("− Supprimer image-clé")
             self.remove_key.clicked.connect(self.remove_frame)
+            self.make_clip = QPushButton("Créer cette animation / direction")
+            self.make_clip.clicked.connect(self.create_clip)
+            self.onion = QCheckBox("Pelure d’oignon (image précédente)")
+            self.onion.toggled.connect(self.refresh_preview)
             self.duration = QSpinBox()
             self.duration.setRange(16, 60000)
             self.duration.setSuffix(" ms")
@@ -144,12 +148,14 @@ def main(argv=None):
             middle.addLayout(toolbar)
             middle.addWidget(self.canvas, 1)
             middle.addWidget(self.status)
+            middle.addWidget(self.onion)
             middle.addWidget(self.play)
 
             edit_box = QWidget()
             right = QVBoxLayout(edit_box)
             right.addWidget(QLabel("Timeline — sélectionnez une image"))
             right.addWidget(self.timeline, 1)
+            right.addWidget(self.make_clip)
             buttons = QHBoxLayout()
             buttons.addWidget(self.add_key)
             buttons.addWidget(self.remove_key)
@@ -257,6 +263,7 @@ def main(argv=None):
             self.timeline.setCurrentRow(self.frame_index if frames else -1)
             self.timeline.blockSignals(False)
             enabled = bool(frames)
+            self.make_clip.setEnabled(not enabled)
             for control in (self.play, self.add_key, self.remove_key, self.duration,
                             self.offset_x, self.offset_y, self.source, self.region):
                 control.setEnabled(enabled)
@@ -300,6 +307,14 @@ def main(argv=None):
                     self.session.document, self.active_variant(),
                     self.action.currentData(), self.direction.currentData(),
                     self.frame_index, root)
+                if self.onion.isChecked() and self.frame_index > 0:
+                    ghost = render_frame(
+                        self.session.document, self.active_variant(),
+                        self.action.currentData(), self.direction.currentData(),
+                        self.frame_index - 1, root)
+                    ghost.putalpha(ghost.getchannel("A").point(lambda a: a // 4))
+                    ghost.alpha_composite(image)
+                    image = ghost
                 memory = io.BytesIO()
                 image.save(memory, format="PNG")
                 pixmap = QPixmap()
@@ -380,6 +395,33 @@ def main(argv=None):
                 self.statusBar().showMessage("Région : 4 entiers attendus")
                 return
             self.change_frame("region", value)
+
+        def create_clip(self):
+            vid, action, direction = (self.active_variant(),
+                                      self.action.currentData(),
+                                      self.direction.currentData())
+            outfit = self.session.document["variants"][vid]
+            donor = outfit["clips"].get("idle", {}).get("directions", {}).get(direction)
+            if not donor:
+                donor = next((frames for clip in outfit["clips"].values()
+                              for frames in clip["directions"].values() if frames), None)
+            if not donor:
+                self.statusBar().showMessage("Aucune pose source disponible pour créer le clip")
+                return
+            from copy import deepcopy
+            try:
+                def transform(doc):
+                    clips = doc["variants"][vid]["clips"]
+                    if action not in clips:
+                        clips[action] = {"loop": action in ("idle", "walk", "run"),
+                                         "directions": {}}
+                    clips[action]["directions"][direction] = [deepcopy(donor[0])]
+                self.session.edit(transform)
+                self.refresh()
+                self.statusBar().showMessage(
+                    "Pose provisoire créée : remplacez sa source pour éviter le recyclage d’art.")
+            except CharacterError as exc:
+                QMessageBox.warning(self, "Animation", str(exc))
 
         def add_frame(self):
             vid, action, direction, index = (
