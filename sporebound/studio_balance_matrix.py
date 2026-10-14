@@ -13,6 +13,7 @@ from .balance_matrix import run_matrix, compare_matrices, save_matrix, scenario_
 from .encounter_balance6 import (encounter_profile, strict_regression_gate,
                                 trace_encounter_ai, campaign_balance_curve,
                                 campaign_curve_review)
+from .tactical_choice_lab_r6 import run_choice_lab, evaluate_choice_gate
 from .model import RuleError
 from .tactical_rpg3 import authored_rules_for_document
 
@@ -46,6 +47,7 @@ class BalanceMatrixStudio:
         self.baseline = None
         self.comparison = None
         self.last_ai = None
+        self.current_choices = None
         self.current_campaign = None
         self.busy = False
         self.mailbox = Queue()
@@ -126,6 +128,8 @@ class BalanceMatrixStudio:
         self.run_button.pack(side="left", padx=3)
         self.ttk.Button(actions, text="Analyser décisions IA",
                         command=self.analyze_ai).pack(side="left", padx=3)
+        self.ttk.Button(actions, text="Tester alternatives tactiques",
+                        command=self.analyze_choices).pack(side="left", padx=3)
         self.ttk.Button(actions, text="Parcours campagne R6",
                         command=self.analyze_campaign).pack(side="left", padx=3)
 
@@ -152,6 +156,8 @@ class BalanceMatrixStudio:
                         command=self.visualize_selected).pack(side="left", padx=3)
         self.ttk.Button(results, text="Exporter bilan campagne",
                         command=self.export_campaign).pack(side="left", padx=3)
+        self.ttk.Button(results, text="Exporter choix R6",
+                        command=self.export_choices).pack(side="left", padx=3)
         self.status = self.ttk.Label(self.frame, text="Prêt · aucun scénario exécuté.")
         self.status.pack(anchor="w", pady=2)
         self.rows = self.ttk.Treeview(
@@ -327,6 +333,33 @@ class BalanceMatrixStudio:
         if kind == "error":
             self.status.configure(text="Échec analyse")
             self.owner.dialogs.showerror("Balance Matrix", data)
+        elif kind == "choices":
+            self.current_choices = data
+            basic = data["gate"]
+            strict = evaluate_choice_gate(
+                data, min_decisions=1, min_multi=1,
+                required_pairs=("positioning+damage", "positioning+protection",
+                                "positioning+resources"))
+            lines = [
+                "R6.14 · options légalement exécutables (Battle réel)",
+                "Mission {} · seed {} · replay vérifié {}".format(
+                    data["mission"], data["seed"], data["replay_verified"]),
+                "Activations observées {} · multichoix {}".format(
+                    basic["sampled_player_decisions"],
+                    basic["multi_category_decisions"]),
+                "Catégories : " + str(basic["choice_categories"]),
+                "Paires alternatives : " + str(basic["pair_occurrences"]),
+                "Gate observatoire : " + basic["status"].upper(),
+                "Gate ambitieux (position/dégâts, protection, ressources) : "
+                    + strict["status"].upper(),
+                "Non couvert : " + str(strict["issues"]),
+                "Sondes bornées : options échantillonnées, pas un solveur de combat.",
+                "Les décisions doivent encore être validées en playtests humains."]
+            self.output.configure(state="normal")
+            self.output.delete("1.0", "end")
+            self.output.insert("end", "\n".join(lines))
+            self.output.configure(state="disabled")
+            self.status.configure(text="R6.14 · options testées, replay vérifié.")
         elif kind == "campaign":
             self.current_campaign = data
             review = campaign_curve_review(data)
@@ -401,6 +434,62 @@ class BalanceMatrixStudio:
         self.output.insert("end", "\n".join(lines))
         self.output.configure(state="disabled")
         self.status.configure(text="Terminé · matrice reproductible.")
+
+    def analyze_choices(self):
+        """Try executable alternatives for a selected verified matrix case."""
+        if self.busy or self.current is None:
+            return
+        selected = self.rows.selection()
+        if not selected:
+            self.owner.dialogs.showerror(
+                "Balance Matrix", "Sélectionner une rencontre simulée.")
+            return
+        try:
+            row = next(item for item in self.current["cases"]
+                       if item["id"] == selected[0])
+            content = self.owner._content()
+            rules = authored_rules_for_document(self.owner.doc().data)
+            if row["id"] != row["mission"] + "::baseline":
+                content = scenario_content(content, row["spec"], rules=rules)
+            setup = ({"inventory": row["spec"]["inventory"]}
+                     if row["spec"].get("inventory") is not None else None)
+            seed = self.current["seeds"][0]
+            cap = min(self.current["max_commands"], 5000)
+        except (RuleError, ValueError, KeyError, StopIteration) as exc:
+            self.owner.dialogs.showerror("Balance Matrix", str(exc))
+            return
+        self.busy = True
+        self.run_button.configure(state="disabled")
+        self.status.configure(text="R6.14 · vérification des options en cours…")
+
+        def worker():
+            try:
+                report = run_choice_lab(
+                    content, row["mission"], seed=seed, max_commands=cap,
+                    rules=rules, initial_state=setup)
+                self.mailbox.put(("choices", report))
+            except Exception as exc:
+                self.mailbox.put(("error", str(exc)))
+        Thread(target=worker, daemon=True).start()
+        self.tab.after(80, self._poll)
+
+    def export_choices(self):
+        from tkinter import filedialog
+        import json
+        if self.current_choices is None:
+            self.owner.dialogs.showerror("Balance Matrix",
+                                         "Analyser les alternatives d'abord.")
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.tab, defaultextension=".json",
+            filetypes=[("JSON", "*.json")])
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as stream:
+                    json.dump(self.current_choices, stream, ensure_ascii=False,
+                              sort_keys=True, indent=2)
+            except (OSError, TypeError) as exc:
+                self.owner.dialogs.showerror("Balance Matrix", str(exc))
 
     def analyze_ai(self):
         if self.busy or self.current is None:
