@@ -75,15 +75,16 @@ class StudioNavigation:
         self.compact_choice = tk.StringVar(value="Carte & monde")
         self._compact = None
 
-        shell = ttk.Frame(parent, padding=(6, 5, 6, 3))
+        shell = ttk.Frame(parent, padding=(10, 6, 10, 6),
+                          style="Studio.Section.TFrame")
         shell.pack(fill="x")
-        sections = ttk.Frame(shell)
+        sections = ttk.Frame(shell, style="Studio.Section.TFrame")
         sections.pack(side="left", fill="x", expand=True)
         self.sections = sections
         for category in SECTIONS:
             widget = ttk.Radiobutton(
                 sections, text=category, value=category,
-                variable=self.section, style="Toolbutton",
+                variable=self.section, style="Studio.Nav.Toolbutton",
                 command=lambda value=category: self.choose_section(value),
             )
             widget.pack(side="left", padx=(0, 3))
@@ -95,9 +96,10 @@ class StudioNavigation:
             "<<ComboboxSelected>>",
             lambda _e: self.choose_section(self.compact_choice.get()))
 
-        chooser = ttk.Frame(shell)
+        chooser = ttk.Frame(shell, style="Studio.Section.TFrame")
         chooser.pack(side="right", padx=(10, 0))
-        ttk.Label(chooser, text="Vue").pack(side="left", padx=(0, 5))
+        ttk.Label(chooser, text="Éditeur", style="Studio.Section.TLabel").pack(
+            side="left", padx=(0, 7))
         self.view_box = ttk.Combobox(
             chooser, textvariable=self.view, state="readonly", width=27
         )
