@@ -3192,6 +3192,9 @@ def launch(path):
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
                          'cover','goal','unit','object','zone+','zone-']).pack(side='left')
+    ttk.Checkbutton(controls, text='Vue iso 2.5D',
+                    variable=iso_var, command=refresh).pack(
+                        side='left', padx=(12, 2))
     ttk.Label(battle_controls, text='Unité').pack(side='left')
     unit_box = ttk.Combobox(battle_controls,textvariable=unit_var,state='readonly',width=12)
     unit_box.pack(side='left')
@@ -3206,6 +3209,18 @@ def launch(path):
     ttk.Combobox(battle_controls,textvariable=facing_var,state='readonly',width=6,values=['north','south','east','west']).pack(side='left')
     ttk.Button(battle_controls,text='Fin',command=end_turn).pack(side='left')
     ttk.Button(battle_controls,text='IA : 1 tour',command=ai_turn).pack(side='left')
+
+    def sync_mode_toolbar(*_args):
+        # Map paint tools must not be stacked with inapplicable battle orders.
+        active, inactive = ((battle_controls, controls) if battle is not None
+                            else (controls, battle_controls))
+        if inactive.winfo_manager():
+            inactive.pack_forget()
+        if not active.winfo_manager():
+            active.pack(fill='x', padx=5, pady=2)
+
+    mode_var.trace_add('write', sync_mode_toolbar)
+    sync_mode_toolbar()
     authoring_controls = ttk.Frame(tools_terrain)
     authoring_controls.pack(fill='x', padx=5, pady=2)
     ttk.Button(authoring_controls, text='Copier cases', command=copy_selection).pack(side='left',padx=2)
