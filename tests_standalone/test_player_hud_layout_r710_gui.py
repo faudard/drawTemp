@@ -30,6 +30,9 @@ class PlayerHudLayoutR710GuiTests(unittest.TestCase):
                 self.assertIn("Objectif :", app.hud_objective_var.get())
                 self.assertTrue(app.hud_focus_var.get())
                 self.assertTrue(app.hud_party_var.get())
+                self.assertEqual(app.hud_portrait.winfo_manager(), "pack")
+                self.assertTrue(
+                    app.hud_portrait.cget("text") or app.hud_portrait.cget("image"))
                 self.assertIn("PV", app.info.get("1.0", "end"))
                 self.assertEqual(app.hud_notebook.tab(
                     app.hud_journal_tab, "state"), "hidden")
