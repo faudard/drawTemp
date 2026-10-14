@@ -3834,7 +3834,62 @@ def launch(path):
             if row and not row.startswith('group:'):
                 gesture.update(row=row, x=event.x_root, y=event.y_root)
 
+        def drag_preview(event):
+            row = gesture.get('row')
+            sx, sy = gesture.get('x'), gesture.get('y')
+            canvas.delete('workspace_drop_preview')
+            if (not row or sx is None or
+                    abs(event.x_root - sx) + abs(event.y_root - sy) < 12):
+                return
+            x = event.x_root - canvas.winfo_rootx()
+            y = event.y_root - canvas.winfo_rooty()
+            if not (0 <= x < canvas.winfo_width() and
+                    0 <= y < canvas.winfo_height()):
+                return
+            from types import SimpleNamespace
+            cell = event_cell(SimpleNamespace(x=int(x), y=int(y), state=0))
+            if cell is None:
+                return
+            try:
+                if kind == 'asset':
+                    # Asset placement still validates through choose_palette_asset.
+                    preview_cells((cell,), tag='workspace_drop_preview',
+                                  color='#c58d36')
+                    return
+                if kind == 'workspace':
+                    entry = palette_source_for_tree(row, doc.data, mission_var.get())
+                    link, destination = '', ''
+                    if row.startswith('map_object:'):
+                        source_mid, eid = row.partition(':')[2].split('/', 1)
+                        original = next(o for m in doc.data['missions']
+                                        if m['id'] == source_mid
+                                        for o in m['objects'] if o['id'] == eid)
+                        link = original.get('link', '')
+                        destination = original.get('destination', '')
+                else:
+                    entry = entity_palette.entries.get(row)
+                    if entry is None:
+                        return
+                    link, destination = (entity_palette.link.get(),
+                                         entity_palette.destination.get())
+                cells, valid = preview_entity_cells(
+                    doc.data, mission_var.get(), entry, cell,
+                    link=link, destination=destination)
+                if battle or source_pending():
+                    valid = False
+                mission = next(m for m in doc.data['missions']
+                               if m['id'] == mission_var.get())
+                inside = (pos for pos in cells
+                          if 0 <= pos[0] < mission['board']['width']
+                          and 0 <= pos[1] < mission['board']['height'])
+                preview_cells(inside, tag='workspace_drop_preview',
+                              color='#36a16c' if valid else '#e05252')
+            except (RuleError, ValueError, KeyError, StopIteration, TypeError):
+                preview_cells((cell,), tag='workspace_drop_preview',
+                              color='#e05252')
+
         def finish(event):
+            canvas.delete('workspace_drop_preview')
             row = gesture.get('row')
             start_x, start_y = gesture.get('x'), gesture.get('y')
             gesture.clear()
@@ -3890,6 +3945,10 @@ def launch(path):
                 messagebox.showerror('Dépôt refusé', str(exc))
 
         tree.bind('<ButtonPress-1>', start, add='+')
+        tree.bind('<B1-Motion>', drag_preview, add='+')
+        tree.bind('<Escape>',
+                  lambda _event: (gesture.clear(),
+                                  canvas.delete('workspace_drop_preview')), add='+')
         tree.bind('<ButtonRelease-1>', finish, add='+')
 
     wire_drop(studio.workspace.tree, 'workspace')
