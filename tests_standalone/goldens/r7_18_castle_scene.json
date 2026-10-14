@@ -54,7 +54,17 @@
             0.8,
             true
           ]
-        ]
+        ],
+        "portrait_centers": [],
+        "transition_rects": [
+          [
+            0,
+            0,
+            800,
+            500
+          ]
+        ],
+        "fade_rects": []
       }
     },
     {
@@ -109,7 +119,17 @@
             0.75,
             true
           ]
-        ]
+        ],
+        "portrait_centers": [],
+        "transition_rects": [
+          [
+            0,
+            0,
+            400,
+            500
+          ]
+        ],
+        "fade_rects": []
       }
     },
     {
@@ -177,7 +197,15 @@
             0.7,
             true
           ]
-        ]
+        ],
+        "portrait_centers": [
+          [
+            74,
+            420
+          ]
+        ],
+        "transition_rects": [],
+        "fade_rects": []
       }
     },
     {
@@ -245,7 +273,15 @@
             0.6,
             true
           ]
-        ]
+        ],
+        "portrait_centers": [
+          [
+            74,
+            420
+          ]
+        ],
+        "transition_rects": [],
+        "fade_rects": []
       }
     },
     {
@@ -299,6 +335,16 @@
             "music",
             0.45,
             true
+          ]
+        ],
+        "portrait_centers": [],
+        "transition_rects": [],
+        "fade_rects": [
+          [
+            0,
+            0,
+            800,
+            500
           ]
         ]
       }
@@ -368,7 +414,15 @@
             0.6,
             true
           ]
-        ]
+        ],
+        "portrait_centers": [
+          [
+            74,
+            840
+          ]
+        ],
+        "transition_rects": [],
+        "fade_rects": []
       }
     }
   ]
