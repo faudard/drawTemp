@@ -72,6 +72,30 @@ class VisualBuildingPickerTests(unittest.TestCase):
         result = pick_building_part(canvas, geo, x, y-48)
         self.assertEqual((result.part, result.cell), ('facade', (4, 5)))
 
+    def test_single_sprite_click_on_door_uses_projected_entry(self):
+        instance = _house()
+        geo = _Geo((instance,))
+        dx, dy = instance.entry
+        x = geo.origin_x + (dx-dy) * geo.half_width
+        y = geo.origin_y + (dx+dy) * geo.half_height - geo.cell_size*.2
+        canvas = _Canvas({1: ('architecture', 'architecture_sprite',
+                              'architecture_instance_0')})
+        selected = pick_building_part(canvas, geo, x, y)
+        self.assertEqual((selected.part, selected.cell),
+                         ('door', instance.entry))
+
+    def test_single_sprite_click_on_roof_selects_roof(self):
+        from sporebound.iso_architecture import architecture_outline
+        instance = _house()
+        geo = _Geo((instance,))
+        roof, _ = architecture_outline(geo, instance)
+        px = sum(p[0] for p in roof) / 4
+        py = sum(p[1] for p in roof) / 4
+        canvas = _Canvas({1: ('architecture', 'architecture_sprite',
+                              'architecture_instance_0')})
+        selected = pick_building_part(canvas, geo, px, py)
+        self.assertEqual(selected.part, 'roof')
+
     def test_door_selects_existing_entry_not_new_passage(self):
         instance = _house()
         canvas = _Canvas({1: ('architecture', 'architecture_door',
