@@ -115,12 +115,6 @@ class DirtyTilesGuiTests(unittest.TestCase):
             draw()
             self.assertEqual(renderer.stats['fast_path'], 'dirty_tiles')
             self.assertEqual(len(canvas.find_withtag('selection')), 1)
-            scene = next(m for m in doc.data['missions']
-                         if m['id'] == 'dirty_map')
-            scene['units'] = [Content.load(DEFAULT_CONTENT).
-                              missions['garden'].units[0].__dict__.copy()]
-            # No actor-contract rewriting in fast path: if invalid, reject.
-            # The planner contract is tested headless with a real Unit.
         finally:
             root.destroy()
 
