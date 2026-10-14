@@ -269,10 +269,13 @@ class PlayerApplication:
         self._button(panel, "Copier v1/v2 vers session longue",
                      self._migrate_long_game).grid(
             row=6, column=0, columnspan=2, sticky="ew", pady=4)
+        self._button(panel, "Gestionnaire de sauvegardes",
+                     self.save_manager_screen).grid(
+            row=7, column=0, columnspan=2, sticky="ew", pady=4)
         # The authored castle example is a repository demo, not packaged
         # core content. Show its entry only when that source is available.
         castle_example = Path(__file__).resolve().parent.parent / "examples" / "castle_vertical_slice.py"
-        row = 7
+        row = 8
         if self.project.sieges:
             self._button(panel, "Sièges créés dans le Studio", self._authored_siege_menu).grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=4)
@@ -322,6 +325,260 @@ class PlayerApplication:
             self.player.profile.stem + "_castle.json")
         return launch_castle(castle_content(), castle_blueprint(), save_path,
                              rules=tactical_rpg_rules(), master=self.root)
+
+    def save_manager_screen(self):
+        """R8.19: read-only slot browser and explicitly confirmed archive actions.
+
+        The headless SaveManagerModel is the only source of saved-state facts.
+        No file-system manipulation or replay logic is implemented in Tk.
+        """
+        from .save_manager import SaveManagerModel
+        model = SaveManagerModel(self.player)
+        self._clear()
+        self.presentation.transition("title" if self.player.session is None else "campaign")
+        self._heading("Gestionnaire de sauvegardes",
+                      "Inspecter, comparer et restaurer sans remplacer la partie actuelle")
+        toolbar = self.ttk.Frame(self.view)
+        toolbar.pack(fill="x", pady=(0, 12))
+        self.ttk.Label(toolbar, text="Campagne").pack(side="left", padx=(0, 8))
+        campaign = self.tk.StringVar(value=(
+            self.player.campaign_id or self.campaign_var.get()))
+        campaign_box = self.ttk.Combobox(
+            toolbar, textvariable=campaign, state="readonly",
+            values=[c["id"] for c in self.project.campaigns], width=24)
+        campaign_box.pack(side="left")
+        self._button(toolbar, "Retour", self.show if self.player.session
+                     is not None else self.title_screen).pack(side="right")
+        self.ttk.Label(
+            self.view, text="La restauration crée une copie sur un AUTRE slot libre."
+        ).pack(anchor="w", pady=(0, 8))
+
+        area = self.ttk.Panedwindow(self.view, orient="horizontal")
+        area.pack(fill="both", expand=True)
+        sidebar = self.ttk.Frame(area, padding=8)
+        detail = self.ttk.Frame(area, padding=8)
+        area.add(sidebar, weight=1)
+        area.add(detail, weight=2)
+
+        self.ttk.Label(sidebar, text="Emplacements · v2 et sessions longues").pack(
+            anchor="w", pady=5)
+        slots = self.ttk.Treeview(
+            sidebar, columns=("kind", "health", "history"),
+            show="tree headings", height=13, selectmode="browse")
+        slots.heading("#0", text="Slot")
+        slots.heading("kind", text="Type")
+        slots.heading("health", text="Intégrité")
+        slots.heading("history", text="Archives")
+        slots.column("#0", width=74, stretch=False)
+        slots.column("kind", width=80, stretch=False)
+        slots.column("health", width=105, stretch=False)
+        slots.column("history", width=72, anchor="center", stretch=False)
+        slots.pack(fill="both", expand=True)
+
+        self.ttk.Label(detail, text="Versions vérifiées").pack(anchor="w")
+        history = self.ttk.Treeview(
+            detail, columns=("mode", "digest", "integrity"),
+            show="tree headings", height=7, selectmode="browse")
+        history.heading("#0", text="Version")
+        history.heading("mode", text="Mode")
+        history.heading("digest", text="Empreinte")
+        history.heading("integrity", text="État")
+        history.column("#0", width=240)
+        history.column("mode", width=95, stretch=False)
+        history.column("digest", width=100, stretch=False)
+        history.column("integrity", width=75, stretch=False)
+        history.pack(fill="x", pady=(4, 6))
+
+        self.ttk.Label(detail, text="Diagnostic et comparaison").pack(anchor="w")
+        report = self.tk.Text(detail, height=11, wrap="word", borderwidth=1,
+                              relief="solid", font=("TkDefaultFont", 10))
+        report.pack(fill="both", expand=True, pady=5)
+        report.configure(state="disabled")
+
+        controls = self.ttk.Frame(detail)
+        controls.pack(fill="x", pady=(6, 0))
+        target = self.tk.StringVar(value=str(min(2, self.project.save_slots)))
+        self.ttk.Label(controls, text="Copie vers slot libre").pack(side="left")
+        self.ttk.Combobox(
+            controls, state="readonly", textvariable=target, width=5,
+            values=[str(i) for i in range(1, self.project.save_slots + 1)]
+        ).pack(side="left", padx=8)
+
+        selected = {"slot": None, "kind": None}
+
+        def info(text):
+            report.configure(state="normal")
+            report.delete("1.0", "end")
+            report.insert("1.0", str(text))
+            report.configure(state="disabled")
+
+        def row_key(slot, kind):
+            return "%s:%s" % (slot, kind)
+
+        def load_details(_event=None):
+            focused = slots.focus()
+            if not focused:
+                return
+            slot, kind = focused.split(":", 1)
+            selected.update(slot=int(slot), kind=kind)
+            state = model.inspect_slot(campaign.get(), int(slot), kind)
+            for item in history.get_children():
+                history.delete(item)
+            items = model.history(campaign.get(), int(slot), kind)
+            for item in items:
+                state_text = "OK" if item["verified"] else "INVALIDE"
+                mode = item.get("summary", {}).get("mode", "—")
+                name = ("Actuelle" if item["id"] == "current"
+                        else item["id"].replace("gen-", "")[:27])
+                history.insert(
+                    "", "end", iid=item["id"], text=name,
+                    values=(mode, item.get("digest", "")[:12], state_text))
+            problems = state.get("issues", [])
+            lines = [
+                "Campagne : %s · Emplacement %s · %s" %
+                (campaign.get(), slot, kind),
+                "Intégrité : %s" % state["status"],
+                "Source : %s · Séquence : %s" %
+                (state.get("source", "—"), state.get("sequence", "—")),
+                "Empreinte : %s" % state.get("session_digest", "—"),
+                "Archives détectées : %s" % len(state.get("archives", [])),
+            ]
+            if problems:
+                lines.extend(["", "Anomalies :"] +
+                             ["• " + message for message in problems[:8]])
+            if state.get("incomplete_archives"):
+                lines.append("Archives interrompues conservées pour diagnostic.")
+            if kind == "v2":
+                lines.append("\nLes sauvegardes v2 restent en lecture seule "
+                             "dans ce gestionnaire.")
+            info("\n".join(lines))
+            if items:
+                history.selection_set(items[0]["id"])
+                history.focus(items[0]["id"])
+
+        def refresh_slots(_event=None):
+            for item in slots.get_children():
+                slots.delete(item)
+            for row in model.list_slots(campaign.get()):
+                slots.insert("", "end", iid=row_key(row["slot"], row["kind"]),
+                             text=str(row["slot"]),
+                             values=("Longue" if row["kind"] == "long" else "v2",
+                                     row["status"], len(row.get("archives", []))))
+            preferred = row_key(int(self.slot_var.get()),
+                                "long" if self.long_save_var.get() else "v2")
+            if not slots.exists(preferred):
+                first = slots.get_children()
+                preferred = first[0] if first else None
+            if preferred:
+                slots.selection_set(preferred)
+                slots.focus(preferred)
+                load_details()
+
+        def selected_archive():
+            require_slot = selected["slot"]
+            if require_slot is None or selected["kind"] != "long":
+                raise RuleError("Choisir un emplacement de session longue.")
+            generation = history.focus()
+            if not generation or generation == "current":
+                raise RuleError("Choisir une archive historique vérifiée.")
+            matching = next((v for v in model.history(
+                campaign.get(), require_slot, "long")
+                if v["id"] == generation and v["verified"]), None)
+            if matching is None:
+                raise RuleError("Archive absente ou corrompue.")
+            return require_slot, generation
+
+        def compare():
+            slot, generation = selected_archive()
+            outcome = model.compare_archive(campaign.get(), slot, generation)
+            lines = ["Comparaison avec : " + generation,
+                     "Même état : " + ("oui" if outcome["same"] else "non"),
+                     "", outcome["warning"], ""]
+            for change in outcome["fields"]:
+                lines.append("%s : %s → %s" %
+                             (change["field"], change["current"],
+                              change["selected"]))
+            if outcome["truncated"]:
+                lines.append("D'autres écarts ne sont pas affichés.")
+            info("\n".join(lines))
+
+        def archive_current():
+            if selected["slot"] is None or selected["kind"] != "long":
+                raise RuleError("Choisir une session longue saine.")
+            if not self.messagebox.askyesno(
+                    "Créer une archive",
+                    "Créer une copie vérifiée du slot sélectionné, "
+                    "sans modifier la partie active ?"):
+                return
+            manager = model._maintenance(campaign.get(), selected["slot"])
+            copied = manager.archive_verified()
+            self.messagebox.showinfo(
+                "Archive créée", "Copie vérifiée : " + copied["name"])
+            refresh_slots()
+
+        def restore():
+            slot, generation = selected_archive()
+            destination = int(target.get())
+            preview = model.restoration_plan(
+                campaign.get(), slot, generation, destination)
+            diff = preview["comparison"]
+            count = len(diff["fields"])
+            message = (
+                "Source : slot %s / %s\n" % (slot, generation) +
+                "Destination : slot %s (doit être vide)\n" % destination +
+                "Mode : %s\n" % preview["summary"]["mode"] +
+                "Différences visibles : %s\n\n" % count +
+                diff["warning"] + "\n\n" + preview["warning"] +
+                "\n\nCréer cette copie maintenant ?")
+            if not self.messagebox.askyesno(
+                    "Confirmer la restauration", message):
+                return
+            restored = model.restore_to_free_slot(
+                campaign.get(), slot, generation, destination,
+                expected_token=preview["token"])
+            self.messagebox.showinfo(
+                "Restauration vérifiée",
+                "Copie créée au slot %s. La partie en cours est inchangée." %
+                restored["slot"])
+            self.campaign_var.set(campaign.get())
+            self.slot_var.set(str(destination))
+            self.long_save_var.set(True)
+            refresh_slots()
+
+        def retention():
+            if selected["slot"] is None or selected["kind"] != "long":
+                raise RuleError("Choisir une session longue saine.")
+            manager = model._maintenance(campaign.get(), selected["slot"])
+            plan = manager.retention_plan(keep=3)
+            if not plan["remove"]:
+                self.messagebox.showinfo(
+                    "Conservation", "Aucune archive ancienne à supprimer.")
+                return
+            if not self.messagebox.askyesno(
+                    "Conservation — suppression irréversible",
+                    "%s anciennes copies seront supprimées. "
+                    "Trois archives vérifiées seront conservées.\n\n%s\n\n"
+                    "Les sauvegardes actives et fichiers de secours "
+                    "resteront intacts. Confirmer ?" %
+                    (len(plan["remove"]), "\n".join(plan["remove"]))):
+                return
+            manager.prune_archives(keep=3, expected_token=plan["token"])
+            refresh_slots()
+
+        slots.bind("<<TreeviewSelect>>", load_details)
+        campaign_box.bind("<<ComboboxSelected>>", refresh_slots)
+        actions = self.ttk.Frame(detail)
+        actions.pack(fill="x", pady=(8, 0))
+        self._button(actions, "Comparer", compare).pack(side="left", padx=3)
+        self._button(actions, "Créer archive", archive_current).pack(
+            side="left", padx=3)
+        self._button(actions, "Restaurer vers slot libre", restore).pack(
+            side="left", padx=3)
+        self._button(actions, "Conserver 3 archives", retention).pack(
+            side="left", padx=3)
+        self._button(actions, "Actualiser", refresh_slots).pack(
+            side="right", padx=3)
+        refresh_slots()
 
     def _new_game(self):
         cid, slot = self.campaign_var.get(), int(self.slot_var.get())
@@ -645,6 +902,7 @@ class PlayerApplication:
         footer = self.ttk.Frame(self.view)
         footer.pack(side="bottom", fill="x", pady=12)
         self._button(footer, "Inspecter la campagne", self._campaign_flow_inspector).pack(side="left", padx=6)
+        self._button(footer, "Sauvegardes", self.save_manager_screen).pack(side="left", padx=6)
         self._button(footer, "Sauvegarder", self.player.save).pack(side="left", padx=6)
         self._button(footer, "Menu principal", self.title_screen).pack(side="left", padx=6)
 
