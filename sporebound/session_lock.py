@@ -36,6 +36,7 @@ def session_writer_lock(path):
     except FileExistsError as exc:
         raise RuleError(f"Concurrent/stale session writer lock: {lock}. "
                         "Inspect the original process and lock before manual recovery.") from exc
+    ownership = os.fstat(handle)
     try:
         try:
             data = json.dumps({"pid": os.getpid(), "created_epoch": time.time()},
@@ -49,6 +50,10 @@ def session_writer_lock(path):
         # Only the context that created the lock removes it. Do not clear a
         # replaced/missing file blindly (manual cleanup is required then).
         try:
-            lock.unlink()
+            current = lock.stat()
         except FileNotFoundError:
-            pass
+            current = None
+        if current is not None:
+            if (current.st_dev, current.st_ino) != (ownership.st_dev, ownership.st_ino):
+                raise RuleError("Writer lock identity changed; refusing to delete another owner's lock")
+            lock.unlink()
