@@ -16,7 +16,10 @@ from sporebound.workspace_r2 import (
 )
 from sporebound.workspace_shell import map_reference_problems, problem_delta
 from sporebound.workspace_refactoring import (RenameMapResourceCommand,
-                                              DeleteMapResourceCommand)
+                                              DeleteMapResourceCommand,
+                                              plan_coordinated_rename)
+from sporebound.cinematics import cinematic_template, event_template
+from sporebound.studio_transaction import StudioHistory
 
 
 class WorkspaceR2Tests(unittest.TestCase):
@@ -121,6 +124,56 @@ class WorkspaceR2Tests(unittest.TestCase):
             dependency_impact(index, 'map_actor:garden:deleted')
         with self.assertRaises(RuleError):
             validate_drop(self.doc.data, self.mid, 'asset:missing')
+
+    def test_known_cinematic_actor_reference_migrates_both_documents(self):
+        clip = cinematic_template(
+            'r2_cast', 'Acteur R2', 'before_mission', self.mid)
+        cue = event_template('actor', 'r2_cue')
+        cue['actor'] = 'ziggy'
+        clip['events'].append(cue)
+        project_data = self.project.to_dict()
+        project_data['cinematics'] = [clip]
+        project = GameProject.from_dict(project_data, self.content)
+        key = 'map_actor:garden/ziggy'
+        baseline = editable_form(self.doc.data, key).baseline
+        candidate, updated = plan_coordinated_rename(
+            self.doc.data, project, key, baseline, 'ziggy_r2')
+        Content.from_dict(candidate)
+        self.assertEqual(updated.cinematics[0]['events'][0]['actor'], 'ziggy_r2')
+        self.assertTrue(any(actor['id'] == 'ziggy_r2'
+                            for actor in Content.from_dict(
+                                candidate).missions[self.mid].units))
+        history = StudioHistory(self.doc.data, project)
+        self.doc.replace(candidate)
+        self.assertTrue(history.record(self.doc.data, updated))
+        old_content, old_project = history.undo()
+        self.assertTrue(any(actor['id'] == 'ziggy'
+                            for actor in Content.from_dict(
+                                old_content).missions[self.mid].units))
+        self.assertEqual(old_project.cinematics[0]['events'][0]['actor'], 'ziggy')
+        new_content, new_project = history.redo()
+        self.assertEqual(new_project.cinematics[0]['events'][0]['actor'], 'ziggy_r2')
+        self.assertTrue(any(actor['id'] == 'ziggy_r2'
+                            for actor in Content.from_dict(
+                                new_content).missions[self.mid].units))
+
+    def test_ambiguous_foreign_mission_cinematic_blocks_migration(self):
+        clip = cinematic_template(
+            'r2_foreign', 'Autre mission', 'before_mission', 'escape')
+        cue = event_template('actor', 'r2_other_cue')
+        cue['actor'] = 'ziggy'
+        clip['events'].append(cue)
+        project_data = self.project.to_dict()
+        project_data['cinematics'] = [clip]
+        project = GameProject.from_dict(project_data, self.content)
+        original = self.doc.data
+        with self.assertRaises(RuleError):
+            plan_coordinated_rename(
+                original, project, 'map_actor:garden/ziggy',
+                editable_form(original, 'map_actor:garden/ziggy').baseline,
+                'ziggy_r2')
+        self.assertEqual(self.doc.data, original)
+        self.assertFalse(self.doc.undo_stack)
 
     def test_delete_independent_object_is_atomic_and_undoable(self):
         mid = self.mid
