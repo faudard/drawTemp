@@ -205,6 +205,15 @@ class EditorRenderCache:
                 canvas.tag_lower(tag, self._tile_tag(order[index+1]))
             else:
                 canvas.tag_raise(tag)
+        # Rebuild only the comparatively small architecture overlay
+        # (never all 16k terrain cells). The canonical painter re-applies
+        # depth_order for EVERY actor/object/prop/building, including the
+        # unchanged items outside this patch.
+        canvas.delete('architecture')
+        render_isometric(
+            canvas, board, mission, units, geometry=geo,
+            tile_subset=frozenset(), omit_architecture=False,
+            draw_selection=False, **options)
         self._redraw_large_selection(
             options.get('selected_cell'), options.get('selected_tiles', ()))
 
@@ -255,7 +264,8 @@ class EditorRenderCache:
                     overlays.remove(None)
                 partial_changed = partial
                 partial = frozenset(set(partial) | overlays)
-                if len(partial) > 160:
+                if (len(partial) > 160 or
+                        not self._large_selection_safe(previous[0], current[0])):
                     partial = None
         if partial is not None:
             self._geometry_key = key
@@ -303,6 +313,8 @@ class EditorRenderCache:
                     fast_path='dirty_tiles',
                     dirty_cells=len(partial_changed),
                     affected_cells=len(partial),
+                    architecture_instances=len(
+                        getattr(self.geometry, 'architecture_instances', ())),
                     render_ms=(perf_counter() - start) * 1000)
                 return self.geometry
             can_reuse = (not rebuilt and self.stats.get('mode') == 'geometry'
