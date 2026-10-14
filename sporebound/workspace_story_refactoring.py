@@ -34,17 +34,6 @@ def _retarget_map_values(mapping, old, new):
             mapping[key] = new
 
 
-def _retarget_actor_guard(condition, old, new):
-    if isinstance(condition, dict):
-        if condition.get('scene') == old:
-            condition['scene'] = new
-        for node in condition.values():
-            _retarget_actor_guard(node, old, new)
-    elif isinstance(condition, list):
-        for node in condition:
-            _retarget_actor_guard(node, old, new)
-
-
 def plan_story_rename(data, project, key, baseline, new_id, *,
                       project_path=None):
     """Return validated Content and GameProject without mutating either.
@@ -62,7 +51,6 @@ def plan_story_rename(data, project, key, baseline, new_id, *,
     _identifier(new_id, 'Nouvel identifiant')
     require(new_id != old, 'Identifiant inchangé')
 
-    before = deepcopy(data)
     candidate = deepcopy(data)
     updated = deepcopy(current)
     rows = (updated.get('story', {}).get('scenes', ()) if kind == 'scene'
