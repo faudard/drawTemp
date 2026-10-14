@@ -10,7 +10,7 @@ from sporebound.campaign import Campaign
 from sporebound.engine import Battle
 from sporebound.game_project import GameProject
 from sporebound.player_session import PlayerSession
-from sporebound.model import Board, Content, Mission, RuleError, Unit
+from sporebound.model import Board, Content, Mission, RuleError, Tile, Unit
 from sporebound.rules import default_rules
 from sporebound.tactical_r6 import (
     ADVANCED_OBJECTIVES, active_enemy_plan, objective_progress,
@@ -167,6 +167,60 @@ class IntelligenceTests(unittest.TestCase):
         self.assertEqual(goal["kind"], "move")
         self.assertGreater(goal["cell"][0], 3)
         self.assertNotEqual(goal, baseline)
+
+    def test_archer_chooses_safe_higher_cover_before_flat_tile(self):
+        archer = Unit("archer", "Archer", "enemy", (1, 1),
+                      weapon="ranged", attack_range=3, min_range=2,
+                      jump=1, move=2, behavior="coordinated",
+                      tags=["squad:archer"])
+        hero = Unit("hero", "Hero", "player", (5, 1), move=0)
+        board = Board(7, 4, {(2, 1): Tile(height=1, cover=40)})
+        content = Content({}, {"v": Mission("v", "V", board, [archer, hero])})
+        battle = Battle(content, "v", seed=11, rules=tactical_r6_rules())
+        battle.active_id = "archer"
+        battle.unit("archer").ct = 100
+        before = battle.digest()
+        command = choose_command(battle)
+        self.assertEqual(command, {"kind": "move", "cell": [2, 1]})
+        self.assertEqual(battle.digest(), before)
+        battle.execute(command)
+        self.assertEqual(battle.unit("archer").pos, (2, 1))
+
+    def test_ground_medic_cannot_heal_ally_on_other_floor(self):
+        from sporebound.coordinated_ai import _healing_command
+        from sporebound.model import Effect, Skill
+        medic = Unit("medic", "Medic", "enemy", (2, 2),
+                     skills=["heal"], tags=["squad:medic"],
+                     behavior="coordinated")
+        ally = Unit("ally", "Ally", "enemy", (2, 3),
+                    hp=5, max_hp=40)
+        hero = Unit("hero", "Hero", "player", (5, 4))
+        heal = Skill("heal", "Heal", [Effect("heal", 20)],
+                     target="ally", range=3)
+        content = Content({"heal": heal}, {
+            "v": Mission("v", "V", Board(7, 6), [medic, ally, hero])})
+        battle = Battle(content, "v", rules=tactical_r6_rules())
+        self.assertEqual(_healing_command(battle, battle.unit("medic")),
+                         {"kind": "act", "skill": "heal", "cell": [2, 3]})
+        battle.unit_levels["ally"] = 1
+        before = battle.digest()
+        self.assertIsNone(_healing_command(battle, battle.unit("medic")))
+        self.assertEqual(before, battle.digest())
+
+    def test_upper_floor_squad_uses_existing_layered_policy(self):
+        from sporebound.ai import _choose_tactical_command
+        from tests_standalone.test_tactical_levels_3720c import TacticalFloorTests
+        floors = TacticalFloorTests()
+        floors.setUp()
+        battle = floors.battle()
+        boss = battle.unit(floors.enemy)
+        boss.behavior = "coordinated"
+        boss.tags = ["squad:archer", "squad:medic"]
+        battle.active_id = boss.id
+        boss.ct = 100
+        before = battle.digest()
+        self.assertEqual(choose_command(battle), _choose_tactical_command(battle))
+        self.assertEqual(before, battle.digest())
 
     def test_active_formation_changes_real_ai_choice(self):
         def command(with_partner):
