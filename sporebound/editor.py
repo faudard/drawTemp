@@ -543,6 +543,9 @@ def launch(path):
                     doc.data = Content.from_dict(
                         recovered_content,
                         rules=authored_rules_for_document(recovered_content)).to_dict()
+                    if mission_var.get() not in {
+                            m['id'] for m in doc.data['missions']}:
+                        mission_var.set(doc.data['missions'][0]['id'])
                     studio.restore_unsaved_project(next_work[1])
                 studio.history.on_change = schedule_work_checkpoint
             refresh_source()
@@ -3891,6 +3894,8 @@ def launch(path):
         doc.data = Content.from_dict(
             recovered_content,
             rules=authored_rules_for_document(recovered_content)).to_dict()
+        if mission_var.get() not in {m['id'] for m in doc.data['missions']}:
+            mission_var.set(doc.data['missions'][0]['id'])
         studio.restore_unsaved_project(recovered_work[1])
         status_var.set('Travail interrompu restauré en mémoire ; enregistrer pour le conserver.')
     studio.history.on_change = schedule_work_checkpoint
