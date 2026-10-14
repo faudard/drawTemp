@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from tests_standalone.studio_gui_actions import save_as
 
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
@@ -75,7 +76,7 @@ class VisualArchitectureGuiTests(unittest.TestCase):
                     root.update()
                     buttons['Poser fenêtre'].invoke()
                     click(4*54+10, 5*54+10)
-                    buttons['Enregistrer sous'].invoke()
+                    save_as(root)
                     saved = json.loads(path.read_text(encoding='utf-8'))
                     authored = next(m for m in saved['missions']
                                     if m['id'] == 'facade_smoke')
