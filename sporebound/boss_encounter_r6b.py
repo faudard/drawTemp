@@ -51,7 +51,7 @@ def reinforcement_pressure(battle, boss, destination, target, allies=None):
 
 
 def telegraphed_cast_command(battle, boss):
-    """One actual mult-tick area skill; no speculative CT or new damage model.
+    """One actual multi-tick area skill; no speculative CT or new damage model.
 
     A candidate must have authored cast_ticks and a non-zero AoE radius.
     The engine's forecast scores direct enemy/friendly collateral. The hero
