@@ -56,6 +56,8 @@ class Campaign:
     reward_ledger: dict[str, dict] = field(default_factory=dict)
     prisoners: dict[str, dict] = field(default_factory=dict)
     recruits: dict[str, dict] = field(default_factory=dict)
+    flow_digest: str = ""
+    flow_ledger: list[str] = field(default_factory=list)
 
     def hero(self, uid):
         return self.heroes.setdefault(uid, HeroProgress())
@@ -385,6 +387,19 @@ class Campaign:
                         and all(isinstance(value, str) and 0 < len(value) <= 64
                                 for value in row.values())
                         for row in result.story_history), 'Invalid narrative choice history')
+        require(isinstance(result.flow_digest, str) and
+                (not result.flow_digest or (len(result.flow_digest) == 64 and
+                 all(ch in "0123456789abcdef" for ch in result.flow_digest))),
+                "Invalid campaign flow digest")
+        require(isinstance(result.flow_ledger, list)
+                and len(result.flow_ledger) <= 512
+                and all(isinstance(entry, str) for entry in result.flow_ledger)
+                and len(set(result.flow_ledger)) == len(result.flow_ledger)
+                and all(entry.count(":") == 1
+                        and entry.rsplit(":", 1)[1] in {"victory", "defeat"}
+                        and 0 < len(entry.split(":", 1)[0]) <= 64
+                        for entry in result.flow_ledger),
+                "Invalid campaign consequence ledger")
         require(result.reward_policy in {"classic", "contribution"}, "Invalid reward policy")
         require(result.wound_policy in {"off", "light", "serious"}, "Invalid wound policy")
         require(isinstance(result.reward_ledger, dict) and all(

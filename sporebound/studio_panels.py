@@ -10,6 +10,8 @@ from . import authoring
 from .entity_event_studio import author_gate_sequence, gate_context, probe_gate_sequence
 from .event_context import format_preview_report
 from .game_project import GameProject, load_slot, save_slot
+from .campaign_flow import available_missions as flow_available_missions
+from .studio_campaign_flow import open_campaign_inspector, open_campaign_qa
 from .model import Content, RuleError
 from .tactical_rpg3 import authored_rules_for_document
 from .studio_transaction import StudioHistory, StudioTransactionStore
@@ -540,6 +542,10 @@ class StudioPanels:
         ttk.Button(right,text='Charger partie',command=lambda: self._run(self.load_game)).grid(row=7,column=1,pady=5)
         ttk.Button(right,text='Enregistrer partie',command=lambda: self._run(self.save_game)).grid(row=8,column=0,pady=5)
         ttk.Button(right,text='Jouer campagne',command=lambda: self._run(self.start_game)).grid(row=8,column=1,pady=5)
+        ttk.Button(right,text='Inspecter état R5.8',
+                   command=lambda: self._run(lambda: open_campaign_inspector(self))).grid(row=10,column=0,pady=5)
+        ttk.Button(right,text='Analyser parcours R5.11',
+                   command=lambda: self._run(lambda: open_campaign_qa(self))).grid(row=10,column=1,pady=5)
         self.project_status=ttk.Label(right,text='',wraplength=450)
         self.project_status.grid(row=9,column=0,columnspan=2,sticky='w',padx=8,pady=12)
         right.columnconfigure(1,weight=1)
@@ -704,9 +710,10 @@ class StudioPanels:
             self.new_game()
         if self.session.story_pending:
             raise RuleError('Un dialogue narratif est en attente : utiliser le client joueur pour répondre.')
-        mid=next((m for m in self.session.unlocked if m not in self.session.completed),
-                 self.project.campaign(self.campaign_id.get())['start_mission'])
-        self.play_campaign(self.session,mid)
+        available = flow_available_missions(self.session, self.project.campaign_flow)
+        if not available:
+            raise RuleError('Aucune mission jouable : résoudre les conditions ou dialogues dans le Player')
+        self.play_campaign(self.session, available[0])
 
     def preview(self):
         self.apply_project()

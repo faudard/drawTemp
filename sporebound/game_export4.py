@@ -11,6 +11,7 @@ import tempfile
 from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 
 from .model import RuleError, require
+from .campaign_flow import audit_campaign
 from .studio_index4 import StudioIndex
 
 
@@ -41,7 +42,12 @@ def _bundle(content, project, root):
     errors = [message for severity, _, message in source.diagnostics(root)
               if severity == 'error']
     require(not errors, 'Export refusé : ' + '; '.join(errors[:5]))
+    reports = [audit_campaign(content, project, row['id'])
+               for row in project.campaigns]
+    failures = [message for row in reports for message in row['errors']]
+    require(not failures, 'Campaign export gate: ' + '; '.join(failures[:5]))
     entries = {
+        'game/campaign_qa.json': _json({'version': 1, 'reports': reports}),
         'README.txt': README.encode('utf-8'),
         'run_game.py': LAUNCHER.encode('utf-8'),
         'game/content.json': _json(content.to_dict()),

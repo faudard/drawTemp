@@ -507,8 +507,33 @@ class PlayerApplication:
                                text="Campagne terminée : aucun objectif disponible.").pack(pady=20)
         footer = self.ttk.Frame(self.view)
         footer.pack(side="bottom", fill="x", pady=12)
+        self._button(footer, "Inspecter la campagne", self._campaign_flow_inspector).pack(side="left", padx=6)
         self._button(footer, "Sauvegarder", self.player.save).pack(side="left", padx=6)
         self._button(footer, "Menu principal", self.title_screen).pack(side="left", padx=6)
+
+    def _campaign_flow_inspector(self):
+        """Read-only campaign state panel, sourced from the live session."""
+        report = self.player.session.campaign_inspector()
+        dialog = self.tk.Toplevel(self.root)
+        dialog.title("Campaign Flow — état persistant")
+        dialog.geometry("820x590")
+        dialog.transient(self.root)
+        frame = self.ttk.Frame(dialog, padding=12)
+        frame.pack(fill="both", expand=True)
+        self.ttk.Label(frame, text="État des missions, variables, ressources et conséquences",
+                       font=("TkDefaultFont", 12, "bold")).pack(anchor="w")
+        text = self.tk.Text(frame, wrap="word", state="normal")
+        scroll = self.ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        text.pack(fill="both", expand=True, pady=10)
+        for section, values in report.items():
+            text.insert("end", section.replace("_", " ").title() + "\n", "header")
+            text.insert("end", json.dumps(values, ensure_ascii=False, indent=2,
+                                          sort_keys=True) + "\n\n")
+        text.tag_configure("header", font=("TkDefaultFont", 11, "bold"))
+        text.configure(state="disabled")
+        self._button(frame, "Fermer", dialog.destroy).pack(anchor="e")
 
     def world_screen(self):
         """Walk the canonical campaign roads; save each visible travel step."""

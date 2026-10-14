@@ -31,6 +31,7 @@ class GameProject:
     exploration: dict = field(default_factory=dict)
     battle_support: list[dict] = field(default_factory=list)
     world: dict = field(default_factory=dict)
+    campaign_flow: dict = field(default_factory=dict)
 
     @classmethod
     def default(cls, content):
@@ -62,7 +63,8 @@ class GameProject:
                 **({'cinematics': deepcopy(self.cinematics)} if self.cinematics else {}),
                 **({'exploration': deepcopy(self.exploration)} if self.exploration else {}),
                 **({'world': deepcopy(self.world)} if self.world else {}),
-                **({'battle_support': deepcopy(self.battle_support)} if self.battle_support else {})}
+                **({'battle_support': deepcopy(self.battle_support)} if self.battle_support else {}),
+                **({'campaign_flow': deepcopy(self.campaign_flow)} if self.campaign_flow else {})}
 
     def asset_registry(self):
         from .assets import AssetRegistry
@@ -104,6 +106,8 @@ class GameProject:
                     'Campaign description too long')
             require(campaign['start_mission'] in content.missions,
                     f'Unknown starting mission: {campaign["start_mission"]}')
+        from .campaign_flow import validate_flow
+        validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
         validate_all(self.sieges, content, self.campaigns)
         from .cinematics import validate_cinematics
@@ -150,7 +154,9 @@ class GameProject:
         self.validate(content)
         campaign = self.campaign(campaign_id)
         require(campaign is not None, 'Unknown campaign')
-        progress = Campaign(unlocked=[campaign['start_mission']])
+        from .campaign_flow import definition_digest
+        progress = Campaign(unlocked=[campaign['start_mission']],
+                            flow_digest=definition_digest(self.campaign_flow))
         from .narrative import StoryBook
         StoryBook(self.story, content, self.campaigns).initialize(progress, campaign_id)
         return progress
@@ -171,6 +177,8 @@ def save_slot(project_path, project, content, campaign_id, slot, progress):
             'Campaign references a mission that no longer exists')
     path = _slot_path(project_path, project, campaign_id, slot)
     from .narrative import StoryBook
+    from .campaign_flow import verify_save
+    verify_save(progress, project.campaign_flow)
     StoryBook(project.story, content, project.campaigns).initialize(progress, campaign_id)
     progress.save(path)
     return path
@@ -180,6 +188,8 @@ def load_slot(project_path, project, content, campaign_id, slot):
     project.validate(content)
     path = _slot_path(project_path, project, campaign_id, slot)
     progress = Campaign.load(path)
+    from .campaign_flow import verify_save
+    verify_save(progress, project.campaign_flow)
     from .narrative import StoryBook
     StoryBook(project.story, content, project.campaigns).initialize(progress, campaign_id)
     require(set(progress.unlocked + progress.completed) <= set(content.missions),

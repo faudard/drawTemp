@@ -49,6 +49,17 @@ jobs:
         run: python -m unittest tests_standalone.test_map_builder4_3732d -v
       - name: Verify 3.7.32E reproducible assisted quarter proposals and model safety
         run: python -m unittest tests_standalone.test_map_builder4_3732e -v
+      - name: Campaign Flow R5.B — gated progression, save identity and portable export
+        run: python -m unittest tests_standalone.test_campaign_flow_r5b -v
+      - name: Campaign Flow R5.B — checkpoint-backed branch QA report
+        run: python scripts/campaign_flow_qa.py --content sporebound/content/core.json --project sporebound/content/core.game.json --report campaign_flow_qa.json
+      - name: Preserve Campaign Flow R5.B QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: campaign-flow-r5b-${{ matrix.os }}-${{ matrix.python }}
+          path: campaign_flow_qa.json
+          if-no-files-found: warn
       - run: python -m unittest discover -s tests_standalone -v
       - name: Battle Lab 3.8 CLI report and paired deterministic replay gate
         run: |

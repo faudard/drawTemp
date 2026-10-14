@@ -9,6 +9,9 @@ import json
 
 from .ai import play_activation
 from .campaign import Campaign
+from .campaign_flow import (available_missions as flow_available_missions,
+                            inspect_campaign as flow_inspect_campaign,
+                            settle as settle_campaign_flow, verify_save as verify_flow_save)
 from .engine import Battle
 from .exploration import Exploration
 from .world_travel import PENDING, WorldJourney
@@ -250,7 +253,11 @@ class GameSession:
     def available_missions(self):
         if self.progress.story_pending:
             return []
-        return [m for m in self.progress.unlocked if m not in self.progress.completed]
+        return flow_available_missions(self.progress, self.project.campaign_flow)
+
+    def campaign_inspector(self):
+        """Read-only persistent variables, companions, gates and endings."""
+        return flow_inspect_campaign(self.progress, self.project.campaign_flow)
 
     def choose_story_option(self, choice_id):
         require(self.active_battle is None or self.active_battle.result is not None,
@@ -380,6 +387,9 @@ class GameSession:
         changed = updated.finish(battle, unlock_next=not route)
         if changed and route:
             self.story.after_victory(updated, battle.mission.id)
+        updated = settle_campaign_flow(updated, self.project.campaign_flow,
+                                      battle.mission.id, battle.result,
+                                      content=self.content)
         self.progress = updated
 
     def _settle(self):
@@ -605,6 +615,7 @@ class GameSession:
         session = cls(content, project, data["campaign_id"],
                       seed=data["seed"], rules=rules)
         session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
+        verify_flow_save(session.progress, project.campaign_flow)
         session.story.initialize(session.progress, session.campaign_id)
         require(set(session.progress.unlocked + session.progress.completed)
                 <= set(session.content.missions), "Unknown campaign mission")
