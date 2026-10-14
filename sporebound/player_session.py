@@ -151,7 +151,8 @@ class PlayerSession:
         from .tactical_r6 import ADVANCED_OBJECTIVES, tactical_r6_rules
         from .tactical_rpg3 import tactical_rpg_rules
 
-        r6 = mission.objective in ADVANCED_OBJECTIVES
+        r6 = (mission.objective in ADVANCED_OBJECTIVES
+              or any(unit.behavior == "adaptive_boss" for unit in mission.units))
         advanced = (
             any(unit.behavior in {"coordinated", "phase_boss"}
                 or any(tactic in {"chain_strike", "trio_burst"}
