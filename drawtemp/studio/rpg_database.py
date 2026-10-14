@@ -150,12 +150,24 @@ def _transform(content, family, operation, identifier, mission_id="", **kwargs):
             return actors.place_archetype(content, mission_id,
                                           kwargs["archetype"], identifier,
                                           kwargs["name"], kwargs["team"], kwargs["pos"])
+    if family == "skills" and operation == "effect":
+        return rules.set_skill_effect(content, identifier, kwargs["index"],
+                                      kwargs["effect"], insert=kwargs.get("insert", False))
+    if family == "skills" and operation == "remove_effect":
+        return rules.remove_skill_effect(content, identifier, kwargs["index"])
+    if family == "skills" and operation == "move_effect":
+        return rules.move_skill_effect(content, identifier, kwargs["index"], kwargs["direction"])
     if operation == "update":
         if family == "archetypes":
             return rules.update_archetype(content, identifier, **kwargs)
         if family == "actors":
             return rules.update_mission_unit(content, mission_id, identifier, **kwargs)
         if family == "jobs":
+            if "requires" in kwargs or "requires_level" in kwargs:
+                row = content["jobs"][identifier]
+                content = progress.link_job(content, identifier,
+                    kwargs.get("requires", row.get("requires", "")),
+                    kwargs.get("requires_level", row.get("requires_level", 1)))
             return rules.update_job(content, identifier, **kwargs)
         if family == "skills":
             return rules.update_skill(content, identifier, **kwargs)
@@ -265,12 +277,30 @@ class DatabaseEditor:
                       "effect": deepcopy(row["effects"][0]),
                       "target": row["target"], "range": row["range"],
                       "cost": row["cost"]}
+            actions = [("skills", "create", new_id, "", fields)]
+            for index, effect in enumerate(row["effects"][1:], start=1):
+                actions.append(("skills", "effect", new_id, "",
+                                {"index": index, "effect": deepcopy(effect),
+                                 "insert": True}))
+            extras = {key: deepcopy(value) for key, value in row.items()
+                      if key not in {"id", "name", "effects", "target", "range", "cost"}}
+            if extras:
+                actions.append(("skills", "update", new_id, "", extras))
+            return self.apply_many(actions)
         return self.create(family, new_id, **fields)
 
     def set_effect(self, skill_id, index, effect, *, insert=False):
-        return self._content_command(
-            lambda content: rules.set_skill_effect(content, skill_id, index,
-                                                    effect, insert=insert))
+        return self.apply_many((("skills", "effect", skill_id, "",
+                                 {"index": index, "effect": effect,
+                                  "insert": insert}),))
+
+    def remove_effect(self, skill_id, index):
+        return self.apply_many((("skills", "remove_effect", skill_id, "",
+                                 {"index": index}),))
+
+    def move_effect(self, skill_id, index, direction):
+        return self.apply_many((("skills", "move_effect", skill_id, "",
+                                 {"index": index, "direction": direction}),))
 
     def _content_command(self, change: Callable):
         return self.session.apply(self.session.preview_pair(
