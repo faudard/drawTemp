@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .audio_stage import AudioStage
 from .exploration_view import draw_exploration, draw_story_backdrop
+from .exploration_iso_view import IsoExplorationCanvas
 from .game_project import GameProject
 from .profile_paths import default_profile_path
 from .model import Content, RuleError
@@ -118,7 +119,7 @@ class PlayerApplication:
         self.logistics_y_var = tk.StringVar(value="1")
         self.convoy_var = tk.StringVar()
         self.selection = (0, 0)
-        self.iso_view_var = tk.BooleanVar(value=False)
+        self.iso_view_var = tk.BooleanVar(value=True)
         self.camera = Camera(52, 8, 8)
         self.motion = MotionDirector()
         self._motion_source = None
@@ -1091,15 +1092,33 @@ class PlayerApplication:
         board = self.tk.Canvas(area, width=690, height=495,
                                highlightthickness=0, background="#314936")
         board.pack(side="left", padx=8, pady=6)
-        draw_exploration(board, stage)
+        iso_scene = None
+        if self.iso_view_var.get():
+            iso_scene = IsoExplorationCanvas(board)
+            iso_scene.draw(stage)
+            # Preserve the cached Tk PhotoImages for the lifetime of the canvas.
+            board.iso_scene = iso_scene
+        else:
+            draw_exploration(board, stage)
         def click(event):
-            x, y = int((event.x - 42) // 58), int((event.y - 25) // 58)
+            if iso_scene is not None:
+                cell = iso_scene.hit_test(event.x, event.y)
+                if cell is None:
+                    return
+                x, y = cell
+            else:
+                x, y = int((event.x - 42) // 58), int((event.y - 25) // 58)
+                if not (0 <= x < stage["width"] and 0 <= y < stage["height"]):
+                    return
             px, py = stage["position"]
             if abs(x - px) + abs(y - py) == 1:
                 self._safe(lambda: self._exploration_step(x - px, y - py))
         board.bind("<Button-1>", click)
         sidebar = self.ttk.Frame(area, padding=10)
         sidebar.pack(side="left", fill="both", expand=True)
+        self.ttk.Checkbutton(
+            sidebar, text="Vue isométrique 2.5D", variable=self.iso_view_var,
+            command=self.show).pack(anchor="w", pady=(0, 8))
         self.ttk.Label(sidebar, text="Déplacement : flèches / ZQSD (WASD)",
                        wraplength=310).pack(anchor="w", pady=(4, 8))
         self.ttk.Label(sidebar, text="Cliquer une case voisine pour marcher.",
