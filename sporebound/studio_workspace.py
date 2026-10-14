@@ -4,6 +4,7 @@ Only this module creates widgets; the index and game engine remain headless.
 """
 from .model import RuleError
 from .workspace_editing import editable_form
+from .workspace_r2 import ExplorerState, batch_form, MIXED, dependency_impact
 from .workspace_navigation import (NavigationHistory, map_selection_key,
                                    navigation_target)
 from .workspace_shell import (inspect_resource, inspect_map,
@@ -26,6 +27,9 @@ class ProjectWorkspaceTab:
         self.sidebar_search = None
         self._sidebar_mission = None
         self._model_cache = WorkspaceModelCache()
+        self.explorer = ExplorerState()
+        self.family_filter = owner.tk.StringVar(value='all')
+        self.scope_filter = owner.tk.StringVar(value='all')
         self.problem_tree = None
         self.problem_targets = {}
         self.problem_snapshot = ()
