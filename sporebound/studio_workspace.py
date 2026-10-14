@@ -85,6 +85,9 @@ class ProjectWorkspaceTab:
         ttk.Button(navigation_bar, text='Impact',
                    command=lambda: self.owner._run(self.show_impact)).pack(
                        side='left', padx=(0, 6))
+        ttk.Button(navigation_bar, text='Renommer ID',
+                   command=lambda: self.owner._run(self.rename_selected_id)).pack(
+                       side='left', padx=(0, 6))
         ttk.Label(navigation_bar, textvariable=self.breadcrumb,
                   wraplength=620).pack(side='left', fill='x', expand=True)
         body = ttk.Panedwindow(root, orient='horizontal')
@@ -565,6 +568,32 @@ class ProjectWorkspaceTab:
             self.owner.select_mission(mid)
         self.owner.focus_gate_event(door)
         self._show_tab('Personnages et événements')
+
+    def rename_selected_id(self):
+        if len(self.tree.selection()) != 1:
+            raise RuleError('Renommer un seul acteur ou objet à la fois')
+        node = self._selected_node()
+        if node is None or node.kind not in ('map_actor', 'map_object'):
+            raise RuleError('Choisir un acteur ou objet placé')
+        if self.owner.workspace_rename is None:
+            raise RuleError('Renommage indisponible')
+        new_id = self.owner.dialogs.askstring(
+            'Renommer un identifiant', 'Nouvel identifiant :',
+            initialvalue=node.id.split('/', 1)[1])
+        if new_id is None:
+            return
+        new_id = new_id.strip()
+        impact = dependency_impact(self.model(), node.key)
+        if impact.has_dependents and not self.owner.dialogs.askyesno(
+                'Propagation contrôlée',
+                f'{len(impact.incoming)} lien(s) entrant(s) détecté(s). '
+                'Vérifier et réécrire les références reconnues dans une '
+                'transaction unique ? Les références inconnues bloqueront l’opération.'):
+            return
+        form = editable_form(self.owner.doc().data, node.key)
+        self.owner.workspace_rename(node.key, form.baseline, new_id)
+        new_key = node.kind + ':' + node.id.split('/', 1)[0] + '/' + new_id
+        self.open_key(new_key)
 
     def toggle_favorite(self):
         node = self._selected_node()
