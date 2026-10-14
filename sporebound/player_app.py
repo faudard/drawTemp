@@ -914,9 +914,16 @@ class PlayerApplication:
             if battle is not None:
                 self.iso_renderer.draw(
                     battle, self._motion_frame, self.camera,
-                    poses=self.motion.poses(clock_ms))
-            if self.motion.active(clock_ms) and self._motion_job is None:
-                self._motion_job = self.root.after(60, self._motion_tick)
+                    poses=self.motion.poses(clock_ms),
+                    ambient_clock_ms=clock_ms)
+            # Existing Player motion loop also runs idle ambience. Neither
+            # Battle nor MotionDirector receives an ambient activation.
+            moving = self.motion.active(clock_ms)
+            ambient = (battle is not None and self.iso_renderer is not None
+                       and self.iso_renderer.animates_when_idle)
+            if (moving or ambient) and self._motion_job is None:
+                self._motion_job = self.root.after(
+                    60 if moving else 125, self._motion_tick)
             return
         self.renderer.draw(
             self._motion_frame, self.camera, poses=self.motion.poses(clock_ms),
