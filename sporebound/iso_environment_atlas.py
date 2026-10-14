@@ -29,8 +29,12 @@ class IsoEnvironmentAtlas:
         if key in self._frames:
             return self._frames[key]
         try:
-            import base64
             import tkinter as tk
+        except ImportError:
+            self._unavailable = True
+            return None
+        try:
+            import base64
             if kind not in self._sources:
                 self._sources[kind] = tk.PhotoImage(
                     data=base64.b64encode(environment_strip_png(kind)).decode('ascii'),
