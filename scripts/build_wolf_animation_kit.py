@@ -71,12 +71,14 @@ def render_frame(source, dx, dy, scale):
     return canvas
 
 def build(source_dir: Path, output_dir: Path):
-    from PIL import Image
+    # Validate the source contract before loading the optional Pillow backend.
+    # A missing source must report FileNotFoundError on every CI platform.
     missing = [name for name in SOURCE_NAMES if not (source_dir / (name + ".png")).is_file()]
     if missing:
         raise FileNotFoundError("Missing original wolf poses: " + ", ".join(missing))
     if source_dir.resolve() == output_dir.resolve():
         raise ValueError("Never overwrite the authored watercolor source poses")
+    from PIL import Image
     originals = {}
     for name in SOURCE_NAMES:
         with Image.open(source_dir / (name + ".png")) as image:
