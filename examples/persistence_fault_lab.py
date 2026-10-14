@@ -18,7 +18,7 @@ import time
 from tempfile import TemporaryDirectory
 
 from examples.reliability_gate import fixture
-from sporebound.game_session import GameSession
+from sporebound.game_session import GameSession, digest
 from sporebound.long_session import LongSessionStore
 from sporebound.model import RuleError, require
 from sporebound.session_lock import session_writer_lock
@@ -69,6 +69,11 @@ def worker(path, cut, *, operation="choose_story_option"):
             def __enter__(self):
                 self.file.__enter__()
                 return self
+
+            def __getattr__(self, name):
+                # Atomic storage reads .name before it writes and may access
+                # regular file methods; the fault proxy must forward them.
+                return getattr(self.file, name)
 
             def __exit__(self, *args):
                 return self.file.__exit__(*args)
@@ -228,7 +233,10 @@ def run_multifront_crash_gate():
         expected_recording = journal["entries"][0]["snapshot"]
         expected = GameSession.from_recording(expected_recording, content, project)
         loaded = store.load_with_status(content, project)
-        require(loaded.session.recording() == expected_recording,
+        # Recordings are portable JSON objects. Python may distinguish a
+        # recovered dictionary's numeric keys from their JSON string keys;
+        # compare the complete canonical serialized state, not object types.
+        require(digest(loaded.session.recording()) == digest(expected_recording),
                 "Focused and offscreen fronts diverged after crash")
         require(loaded.session.fronts.history == control.fronts.history,
                 "Strategic history diverged after crash")
@@ -238,7 +246,8 @@ def run_multifront_crash_gate():
         lock.unlink()  # the child has terminated and was reaped
         retry = store.perform(loaded.session, _REQUEST, "switch_front", "walls")
         require(not retry.applied, "A committed multi-front switch replayed twice")
-        require(store.load(content, project).recording() == expected_recording,
+        require(digest(store.load(content, project).recording()) ==
+                digest(expected_recording),
                 "Retry changed verified multi-front state")
         return {"verified": True, "mode": "fronts", "cut": "checkpoint.1.before",
                 "final_digest": expected_recording["digest"],
