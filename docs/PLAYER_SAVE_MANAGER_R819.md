@@ -79,8 +79,11 @@ python -m unittest discover -s tests_standalone -p test_long_session_player_r8.p
 python -m unittest discover -s tests_standalone -p test_persistence_fault_r817.py -v
 ```
 
-CI on Ubuntu, Windows, macOS. No Tk GUI tests require a display; all
-safety gates run against the real headless game/persistence contracts.
+CI on Ubuntu, Windows, macOS. The safety gates run headlessly against
+the real gameplay/persistence contracts. An additional Linux Xvfb smoke test
+opens the actual Tk Save Manager, selects an archived version, previews a
+comparison, navigates back and asserts that the save bytes remain unchanged.
+The GUI smoke requires the `SPOREBOUND_GUI_SMOKE=1` opt-in and a display.
 
 ## Out of scope
 
