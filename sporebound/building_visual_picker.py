@@ -120,10 +120,13 @@ def pick_building_part(canvas, geo, px, py, *, fallback_cell=None):
         if part is None:
             continue
         if part == 'building':
-            if _on_roof(geo, instance, px, py):
-                part = 'roof'
-            elif _on_door(geo, instance, px, py):
+            # A projected roof's bounding diamond may overlap the doorway.
+            # Prefer the smaller, intentional door hotspot over the broad
+            # roof polygon when a single atlas PNG contains both.
+            if _on_door(geo, instance, px, py):
                 part = 'door'
+            elif _on_roof(geo, instance, px, py):
+                part = 'roof'
             else:
                 part = 'facade'
         if part == 'window':
