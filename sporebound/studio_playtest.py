@@ -117,8 +117,9 @@ class PlaytestStudio:
             self.ai_report.get("mission") == mission) else None
         summary = analyze_playtests(self.report, mission=mission,
                                     ai_report=ai)
-        label = ("Observations : {} · complètes : {} · abandons : {} · "
+        label = ("Mission : {} · observations : {} · complètes : {} · abandons : {} · "
                  "durée humaine p50/p95 : {} / {} min").format(
+            mission or "Toutes missions",
             summary["sessions"], summary["complete_observations"],
             ("{:.1%}".format(summary["abandonment_rate"])
              if summary["abandonment_rate"] is not None else "n.d."),
