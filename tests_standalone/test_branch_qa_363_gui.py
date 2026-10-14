@@ -79,6 +79,39 @@ class BranchQAGUITests(unittest.TestCase):
             self.assertFalse(tactical['replay_verified'])
             self.assertIn('BATTLE ISOLÉS',
                           graph.qa_text.get('1.0','end'))
+            # 3.6.4: certify real GameSession commands from the same Studio
+            # window, not the preview's disposable Battle state.
+            contract = {
+                'version': 1, 'min_passed_paths': 1,
+                'required_choices': ['v36_dialogue/assault'],
+                'required_events': [
+                    'v36_origin', 'v36_assault', 'v36_join'],
+                'cases': [{
+                    'id': 'gui_real_assault', 'campaign': 'main', 'seed': 17,
+                    'steps': [
+                        {'kind': 'start_mission', 'mission': 'garden',
+                         'expect': {
+                             'pending_tactical': 'v36_dialogue',
+                             'fired': ['v36_origin']}},
+                        {'kind': 'tactical_choice', 'choice': 'assault',
+                         'expect': {
+                             'pending_tactical': 'v36_assault_scene',
+                             'fired': ['v36_assault', 'v36_join'],
+                             'not_fired': ['v36_parley']}},
+                    ],
+                }],
+            }
+            with TemporaryDirectory() as folder:
+                script_path = Path(folder)/'certification.json'
+                script_path.write_text(
+                    json.dumps(contract), encoding='utf-8')
+                with patch('tkinter.filedialog.askopenfilename',
+                           return_value=str(script_path)):
+                    certified = graph._qa_certify()
+                self.assertTrue(certified['passed'], certified['gate_errors'])
+                self.assertTrue(certified['replay_verified'])
+                self.assertIn('Gate : PASS',
+                              graph.qa_text.get('1.0','end'))
             with TemporaryDirectory() as folder:
                 target = Path(folder)/'qa-report.json'
                 with patch('tkinter.filedialog.asksaveasfilename',
