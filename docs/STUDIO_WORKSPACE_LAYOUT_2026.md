@@ -26,7 +26,9 @@ editing surface competed with controls from unrelated workflows.
   selection details), **Groupes**, **Préfabs** (scrollable, includes assisted
   quarter generation). No authoring action or command has changed.
 - Human **Playtest Lab** starts with import guidance instead of empty table,
-  graph and detail areas; all existing analyses appear after a valid import.
+  graph and detail areas. Once imported, sessions and duration chart sit side by
+  side above a resizable inspection area; chart redraw on resize preserves
+  the selected session.
 
 ## Functional constraints
 
