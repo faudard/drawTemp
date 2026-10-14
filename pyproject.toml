@@ -3,17 +3,18 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sporebound-tactics"
+name = "drawtemp-tactics"
 version = "2.0.0a1"
-description = "Standalone Python tactical gameplay engine and mission workbench"
+description = "Jeanne d Arc tactical RPG, player and Game Studio (DrawTemp)"
 requires-python = ">=3.10"
 dependencies = []
 
 [project.scripts]
+drawtemp = "sporebound.__main__:main"
 sporebound = "sporebound.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["sporebound*"]
+include = ["sporebound*", "drawtemp*"]
 
 [tool.setuptools.package-data]
 sporebound = ["content/*.json", "content/art/jeanne/*.png", "content/art/iso/*.png"]

@@ -56,6 +56,11 @@ def _json_from_zip(archive, name):
 
 
 def _validated_bundle(archive):
+    # ZipFile.getinfo() silently selects a later duplicate: fail closed.
+    names = archive.namelist()
+    if len(names) != len(set(names)):
+        raise ValueError("Duplicate ZIP member")
+    from scripts.verify_watercolor_release import png_dimensions
     index = _json_from_zip(archive, PREFIX + "index.json")
     manifest = _json_from_zip(archive, PREFIX + "registry.json")
     if index.get("schema_version") != 1 or manifest.get("version") != 1:
@@ -83,8 +88,9 @@ def _validated_bundle(archive):
         if info.file_size <= 24 or info.file_size > 15_000_000:
             raise ValueError(f"Unexpected PNG size: {name}")
         with archive.open(info) as image:
-            if image.read(8) != b"\x89PNG\r\n\x1a\n":
-                raise ValueError(f"Not PNG: {name}")
+            width, height = png_dimensions(image.read(), name)
+        if "frame_size" in item and item["frame_size"] != [width, height]:
+            raise ValueError(f"PNG/index dimensions mismatch: {item['id']}")
         members.append(name)
     from_manifest = {e["id"]: e for e in entries if e["kind"] == "sprite"}
     if len(from_manifest) != 88:
@@ -114,9 +120,15 @@ def install(bundle, content, project, output):
     existing = game.get("assets") or {"version": 1, "entries": [], "bindings": {}}
     if existing.get("version") != 1:
         raise ValueError("Unsupported existing asset manifest")
+    from sporebound.assets import AssetRegistry
+    original_registry = AssetRegistry(existing)
+    # Resolve every original asset BEFORE creating an output destination.
+    # This rejects missing originals and symlink escapes as RuleError.
+    originals = [(entry["path"], original_registry.resolve(entry["id"], project.parent))
+                 for entry in existing["entries"] if entry["kind"] != "animation"]
     with zipfile.ZipFile(bundle) as archive:
         entries, members = _validated_bundle(archive)
-        reserved = {entry["id"].casefold() for entry in existing["entries"]}
+        reserved = {entry["id"].casefold() for entry in existing["entries"]]
         if reserved & {entry["id"].casefold() for entry in entries}:
             raise ValueError("Conflicting asset IDs in existing project")
         merged = deepcopy(existing)
@@ -131,11 +143,20 @@ def install(bundle, content, project, output):
         animation = bindings.setdefault("animation", {})
         for actor, aid in ACTORS.items():
             if actor in actor_ids:
-                static.setdefault(actor, aid)
+                # Preview artwork takes precedence over old authored bindings;
+                # the original registry entries themselves remain available.
+                static[actor] = aid
         for actor, moves in MOTION.items():
             if actor in actor_ids:
+                # New pack has no idle animation. Do not use a stale original
+                # slot when the preview is rendering the new character sprites.
+                for slot in list(animation):
+                    if slot == f"{actor}_idle" or slot.startswith(f"{actor}_idle_"):
+                        del animation[slot]
                 for action, aid in moves.items():
-                    animation.setdefault(f"{actor}_{action}", aid)
+                    animation[f"{actor}_{action}"] = aid
+                    for direction in ("north", "south", "east", "west"):
+                        animation[f"{actor}_{action}_{direction}"] = aid
         game["assets"] = merged
         # Validate the schema before writing a project on disk.
         from sporebound.assets import AssetRegistry
@@ -145,7 +166,15 @@ def install(bundle, content, project, output):
         with TemporaryDirectory(prefix=".jeanne-art-", dir=output.parent) as folder:
             stage = Path(folder) / "project"
             stage.mkdir()
+            # Preserve existing portraits, atlas regions, and audio referenced
+            # by the project; the new demo must be independently relocatable.
+            for relative, original in originals:
+                dest = stage / relative
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(original, dest)
             for name in members:
+                if (stage / name).exists():
+                    raise ValueError(f"Watercolor asset would overwrite existing art: {name}")
                 dest = stage / name
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 with archive.open(name) as source, dest.open("wb") as target:

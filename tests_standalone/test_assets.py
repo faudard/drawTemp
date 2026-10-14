@@ -163,12 +163,12 @@ class ProjectAssetTests(unittest.TestCase):
             self.project.save(path, self.content)
             populate(root)
             with redirect_stdout(StringIO()):
-                self.assertEqual(main(['validate', '--project', str(path)]), 0)
+                self.assertEqual(main(['validate', '--content', str(DEFAULT_CONTENT), '--project', str(path)]), 0)
             (root / 'art/hero.png').unlink()
             (root / 'audio/hit.wav').write_bytes(b'broken')
             output = StringIO()
             with redirect_stdout(output):
-                self.assertEqual(main(['validate', '--project', str(path)]), 1)
+                self.assertEqual(main(['validate', '--content', str(DEFAULT_CONTENT), '--project', str(path)]), 1)
             errors = json.loads(output.getvalue())
             self.assertFalse(errors['valid'])
             self.assertEqual([i['asset_id'] for i in errors['assets']], ['hero', 'hit'])

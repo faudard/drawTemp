@@ -5,6 +5,7 @@ All game mechanics still run through Battle/Campaign; only UI state lives here.
 from pathlib import Path
 
 from .game_project import GameProject
+from .profile_paths import default_profile_path
 from .model import Content, RuleError
 from .player_session import PlayerSession
 from .siege import available_operations
@@ -23,7 +24,7 @@ def launch(content_path, project_path=None, profile_path=None):
     project=(GameProject.load(project_path,content) if project_path.is_file()
              else GameProject.default(content))
     profile_path=Path(profile_path) if profile_path else (
-        Path.home()/'.sporebound'/project_path.name)
+        default_profile_path(project_path))
     session=PlayerSession(content,project,profile_path)
     root=tk.Tk()
     root.title(project.title)

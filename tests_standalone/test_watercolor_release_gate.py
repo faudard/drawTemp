@@ -31,7 +31,7 @@ def fixture():
                 "path": f"sprites/{group}/{pose}.png",
                 "frame_size": [1, 1]}
                for group, _, _, _, poses in SHEETS
-               for pose in poses.split()]
+               for pose in (poses.split() if isinstance(poses, str) else poses)]
     return {"schema_version": 1, "sprites": sprites}, build_registry(sprites)
 
 

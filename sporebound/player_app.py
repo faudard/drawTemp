@@ -10,6 +10,7 @@ from pathlib import Path
 from .audio_stage import AudioStage
 from .exploration_view import draw_exploration, draw_story_backdrop
 from .game_project import GameProject
+from .profile_paths import default_profile_path
 from .model import Content, RuleError
 from .player_controller import PlayerController
 from .presentation import Camera, battle_frame, strategy_frame
@@ -44,7 +45,7 @@ class PlayerApplication:
         project = (GameProject.load(project_path, content) if project_path.is_file()
                    else GameProject.default(content))
         profile = (Path(profile_path) if profile_path is not None
-                   else Path.home() / ".sporebound" / project_path.name)
+                   else default_profile_path(project_path))
         preferences, self.preferences_error = load_preferences(profile)
         self.keymap = KeyBindings(preferences["keybindings"])
         self.player = PlayerController(content, project, profile)
