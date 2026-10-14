@@ -105,7 +105,7 @@ Rectangle {
                     ctx.fillStyle = "#4b3529"
                     ctx.fillRect(p.x-3, p.y-h*.45-elev, 6, h*.40)
                     ctx.beginPath()
-                    ctx.ellipse(p.x,p.y-h*.58-elev,w*.2,h*.42,0,0,Math.PI*2)
+                    ctx.arc(p.x,p.y-h*.58-elev,h*.32,0,Math.PI*2)
                     ctx.fillStyle = "#3f7558"
                     ctx.fill()
                 } else if (t.feature === "stone_wall") {
@@ -141,7 +141,7 @@ Rectangle {
                 const p = root.point(u.pos[0],u.pos[1])
                 ctx.fillStyle = "rgba(0,0,0,.3)"
                 ctx.beginPath()
-                ctx.ellipse(p.x,p.y+4,9,4,0,0,Math.PI*2)
+                ctx.arc(p.x,p.y+4,6,0,Math.PI*2)
                 ctx.fill()
                 ctx.fillStyle = u.team === "player" ? "#e0d2a2" : "#ce776c"
                 ctx.beginPath()
