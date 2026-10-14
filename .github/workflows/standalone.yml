@@ -239,6 +239,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest tests_standalone.test_r7_cinematic_goldens_gui -v
+      - name: Campaign Certification R5.15 — Tk verified-result wiring
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_campaign_path_certification_r515_gui -v
       - name: Campaign Simulation R5.14 — Tk branch exploration and no writes
         env:
           SPOREBOUND_GUI_SMOKE: '1'
