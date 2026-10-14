@@ -73,6 +73,7 @@ from .performance_trace import begin_ui, finish_ui
 from .workspace_shell import inspect_map, LayoutStore, palette_source_for_tree
 from .workspace_editing import WorkspacePropertyCommand, editable_form
 from .workspace_r2 import BatchPropertyCommand, batch_form
+from .workspace_refactoring import RenameMapResourceCommand
 
 
 class Document:
@@ -3802,10 +3803,24 @@ def launch(path):
         status_var.set('Propriétés Workspace enregistrées (Annuler/Rétablir).')
         return True
 
+    def rename_workspace_resource(key, baseline, new_id):
+        """Content-only refactor through the same preview/commit and history."""
+        if battle is not None or source_pending():
+            raise RuleError('Terminer le playtest et appliquer le JSON.')
+        mid = key.partition(':')[2].split('/', 1)[0]
+        if mid != mission_var.get():
+            select_workspace_mission(mid)
+        command = RenameMapResourceCommand(
+            key, baseline, new_id, studio.project.to_dict())
+        design_change(lambda: editing_context.execute(command, publish=False))
+        status_var.set('Identifiant renommé avec propagation validée (Annuler/Rétablir).')
+        return True
+
     studio = StudioPanels(
         notebook, tk, ttk,
         SimpleNamespace(showerror=messagebox.showerror,
                         askstring=simpledialog.askstring,
+                        askyesno=messagebox.askyesno,
                         asksaveasfilename=filedialog.asksaveasfilename),
         doc=lambda: doc, content_path=lambda: current_path,
         mission=mission_var.get, selection=lambda: selected_cell,
@@ -3814,7 +3829,8 @@ def launch(path):
         select_mission=select_workspace_mission,
         on_project_saved=on_project_saved, set_active_mission=mission_var.set,
         focus_map_cell=focus_workspace_map,
-        workspace_edit=commit_workspace_properties)
+        workspace_edit=commit_workspace_properties,
+        workspace_rename=rename_workspace_resource)
     studio.workspace.attach_navigator(sidebar)
     studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
