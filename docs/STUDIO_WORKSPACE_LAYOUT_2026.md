@@ -93,3 +93,46 @@ At 1280x800 ensure the category selector appears and at 1662x896 the
 category strip reappears. Toggle each dock and F11 repeatedly, then reopen
 the Studio and verify sizes and visibility. Start/stop a playtest and confirm
 that battle commands replace map-brush controls rather than stacking.
+
+## Visual polish pass — ttk design system (2026-10-14)
+
+- `studio_theme.py` defines two fixed and validated palettes. **Clair**
+  (neutral off-white surfaces and cobalt action) is the default; **Sombre**
+  (navy surfaces, brighter blue focus) is available under
+  **Affichage → Thème sombre**. Both variants share a single token vocabulary
+  for surfaces, borders, text, focus/selection and semantic states.
+- The Studio changes `ttk` styles once at startup and updates style
+  configuration on theme change; it never rebuilds a Notebook page, renderer,
+  Canvas model or GameSession. Individual Tk `Text` and `Canvas` widgets are
+  registered with the palette controller explicitly.
+- The header uses a restrained title, contextual toolbar and prominent
+  Playtest action. Navigator sections have an active state; the inspector and
+  prefab panes reuse the same surfaces and typographic hierarchy. Trees have
+  consistent row heights and selection/focus colours.
+- Prefab cards (including invalid states) and the asset/actor preview popups
+  follow the selected theme. The Playtest chart no longer uses a fixed dark
+  canvas against the surrounding workspace.
+- The appearance preference is saved atomically in a project-local
+  `*.workspace.appearance.json` sidecar. Unknown keys and invalid modes fall
+  back to **Clair**. No Content, GameProject or save schema changes.
+
+### Validation and accessibility
+
+    python -m unittest tests_standalone.test_studio_theme_2026 -v
+    SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python3 -m unittest \
+        tests_standalone.test_studio_theme_2026 \
+        tests_standalone.test_studio_layout_2026 \
+        tests_standalone.test_studio_docks_2026 -v
+
+The shared foreground/background, action, muted and selected combinations
+are gated at 4.5:1 or greater (main text at 7:1). Run manual Windows checks at
+100/125/150% DPI, 1280x800 and 1662x896 and confirm font clipping, keyboard
+focus, tab navigation and palette image transparency. Theme switching must
+preserve the map Canvas identity, session data, drag/drop behaviour and Undo.
+
+### Integration warning
+
+PR #192 consolidated an **earlier** snapshot of PR #180. New work on #180
+after that integration is *not automatically present in #192*. Synchronise
+the integration branch with the latest #180 and re-run the GUI CI before
+merging #192 into master.
