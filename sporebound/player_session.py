@@ -145,11 +145,13 @@ class PlayerSession:
             return []
         return [mid for mid in self.progress.unlocked if mid not in self.progress.completed]
 
-    def begin(self, mission_id):
-        require(self.progress is not None and self.battle is None, 'Return to campaign before starting a mission')
-        require(not self.progress.story_pending, 'Resolve the pending dialogue first')
-        require(mission_id in self.available_missions(), 'Mission is not currently available')
-        mission = self.content.missions[mission_id]
+    def _rules_for_mission(self, mission):
+        """Keep original manifests for non-R6 missions and saved encounters."""
+        from .rules import default_rules
+        from .tactical_r6 import ADVANCED_OBJECTIVES, tactical_r6_rules
+        from .tactical_rpg3 import tactical_rpg_rules
+
+        r6 = mission.objective in ADVANCED_OBJECTIVES
         advanced = (
             any(unit.behavior in {"coordinated", "phase_boss"}
                 or any(tactic in {"chain_strike", "trio_burst"}
@@ -166,12 +168,28 @@ class PlayerSession:
             or any(tactic in {"chain_strike", "trio_burst"}
                    for prepared in self.progress.prepared_tactics.values()
                    for tactic in prepared))
-        if advanced:
-            from .tactical_rpg3 import tactical_rpg_rules
-            self.battle = self.progress.prepare(
-                self.content, mission_id, ruleset=tactical_rpg_rules())
-        else:
-            self.battle = self.progress.prepare(self.content, mission_id)
+        if r6:
+            return tactical_r6_rules()
+        return tactical_rpg_rules() if advanced else default_rules()
+
+    def party_build_preview(self, mission_id):
+        """Read-only roster projection for the campaign preparation screen."""
+        require(self.progress is not None and self.battle is None,
+                "Party preview is available between battles")
+        require(mission_id in self.available_missions(), "Mission not available")
+        from .tactical_r6 import party_build_preview
+        return party_build_preview(
+            self.content, self.progress, mission_id,
+            ruleset=self._rules_for_mission(self.content.missions[mission_id]))
+
+    def begin(self, mission_id):
+        require(self.progress is not None and self.battle is None, 'Return to campaign before starting a mission')
+        require(not self.progress.story_pending, 'Resolve the pending dialogue first')
+        require(mission_id in self.available_missions(), 'Mission is not currently available')
+        mission = self.content.missions[mission_id]
+        ruleset = self._rules_for_mission(mission)
+        self.battle = self.progress.prepare(
+            self.content, mission_id, ruleset=ruleset)
         self.finalized=False
         self._finish_if_done()
         return self.battle
