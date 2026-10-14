@@ -258,6 +258,8 @@ class CinematicStudio:
         updated = deepcopy(before)
         mutate(updated)
         candidate = GameProject.from_dict(updated, self.owner._content())
+        if candidate.to_dict() == before:
+            return  # No-op edits must not consume undo history.
         self.undo_stack.append(before)
         self.undo_stack = self.undo_stack[-50:]
         self.redo_stack.clear()
@@ -269,19 +271,31 @@ class CinematicStudio:
         self.refresh()
 
     def undo(self):
+        # Full Studio owns Content+GameProject history. Never restore only the
+        # project while leaving a newer global document/history snapshot live.
+        if hasattr(self.owner, "undo_global") and self.owner.history is not None:
+            self.owner.undo_global()
+            return
         if not self.undo_stack:
             return
+        candidate = GameProject.from_dict(
+            self.undo_stack[-1], self.owner._content())
         self.redo_stack.append(self._project().to_dict())
-        self.owner.project = GameProject.from_dict(
-            self.undo_stack.pop(), self.owner._content())
+        self.undo_stack.pop()
+        self.owner.project = candidate
         self.refresh()
 
     def redo(self):
+        if hasattr(self.owner, "redo_global") and self.owner.history is not None:
+            self.owner.redo_global()
+            return
         if not self.redo_stack:
             return
+        candidate = GameProject.from_dict(
+            self.redo_stack[-1], self.owner._content())
         self.undo_stack.append(self._project().to_dict())
-        self.owner.project = GameProject.from_dict(
-            self.redo_stack.pop(), self.owner._content())
+        self.redo_stack.pop()
+        self.owner.project = candidate
         self.refresh()
 
     def reset_project(self):
@@ -291,6 +305,8 @@ class CinematicStudio:
             self.preview_canvas, registry=self.owner.project.asset_registry(),
             asset_root=self.owner.project_path.parent)
         self.clip_id = self.event_id = ""
+        self.selected_event_ids = ()
+        self.cancel_drag()
         self.undo_stack.clear()
         self.redo_stack.clear()
         self.refresh()
@@ -317,12 +333,21 @@ class CinematicStudio:
             return
         self.clip_id = self._clip_ids[self.clips.curselection()[0]]
         self.event_id = ""
+        self.selected_event_ids = ()
         self.refresh()
 
     def _on_event(self, _event=None):
-        if self._refreshing or not self.events.curselection():
+        if self._refreshing:
             return
-        self.event_id = self._event_ids[self.events.curselection()[0]]
+        rows = self.events.curselection()
+        selected = tuple(self._event_ids[i] for i in rows)
+        self.selected_event_ids = selected
+        if not selected:
+            self.event_id = ""
+            self._timeline()
+            return
+        self.event_id = selected[-1]
+        self.selected_key_ms = None
         self._load_event()
         self._timeline()
         self.cursor.set(self._event()["start_ms"])
@@ -661,11 +686,16 @@ class CinematicStudio:
         self.events.delete(0, "end")
         events = sorted(clip["events"], key=lambda e: (e["start_ms"], e["id"])) if clip else []
         self._event_ids = [e["id"] for e in events]
+        # Drop stale IDs after a remove/undo/clip switch. Multi-selection is
+        # *always* resolved by stable event IDs, not stale listbox row indexes.
+        self.selected_event_ids = tuple(
+            eid for eid in self.selected_event_ids if eid in self._event_ids)
         for i, event in enumerate(events):
             display_kind = (f"son:{event.get('bus', 'sfx')}"
                             if event["kind"] == "sound" else event["kind"])
             self.events.insert("end", f"{event['start_ms']:>6}  {display_kind} — {event['id']}")
-            if event["id"] == self.event_id:
+            if event["id"] in self.selected_event_ids or (
+                    not self.selected_event_ids and event["id"] == self.event_id):
                 self.events.selection_set(i)
         if clip:
             self.preview_scale.configure(to=clip["duration_ms"])
