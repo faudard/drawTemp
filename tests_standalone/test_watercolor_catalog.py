@@ -50,7 +50,7 @@ class WatercolorCatalogTests(unittest.TestCase):
         self.assertEqual(catalog.sample("anim_jeanne_walk", 600),
                          ("jeanne_walk_a", 0))
         self.assertEqual(catalog.sample("anim_jeanne_attack", 9999),
-                         ("jeanne_motion_attack_03_02", 11))
+                         ("jeanne_guard", 11))
         with self.assertRaises(IndexError):
             catalog.frame("anim_jeanne_walk", 8)
         with self.assertRaises(KeyError):
