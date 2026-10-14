@@ -1,6 +1,7 @@
 """R13 Qt smoke: real Widgets composition, independent of the legacy Tk UI."""
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -8,6 +9,8 @@ import unittest
 from sporebound.model import Board, Content, Mission, Unit
 
 
+@unittest.skipUnless(importlib.util.find_spec("PySide6") is not None,
+                     "Qt6 optional dependency not installed")
 class R13QtSmoke(unittest.TestCase):
     def test_encounter_window_opens_and_shows_authored_roster(self):
         from PySide6.QtCore import QTimer
