@@ -11,6 +11,7 @@ from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission
 from sporebound.editor import launch
 from sporebound.iso_structures import place_structure
+from sporebound.building_visuals import edit_building_appearance
 from sporebound.model import Content
 
 
@@ -32,6 +33,13 @@ class BuildingVisualGuiTests(unittest.TestCase):
             raw = add_blank_mission(raw, 'building_visual_b12',
                                     'Building direct selection', 16, 16)
             raw = place_structure(raw, 'building_visual_b12', 'Maison', (4, 4))
+            sid = next(m['structures'][0]['id'] for m in raw['missions']
+                       if m['id'] == 'building_visual_b12')
+            # Authored appearance forces the editable vector facade/roof,
+            # whereas unmodified buildings may use a single atlas PNG.
+            raw = edit_building_appearance(
+                raw, 'building_visual_b12', sid, facade='pierre',
+                roof='tuiles')
             path.write_text(json.dumps(raw), encoding='utf-8')
             errors = []
 
