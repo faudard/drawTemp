@@ -115,5 +115,60 @@ class JeanneChapterOneMVPTests(unittest.TestCase):
                 CONTENT_FILE, PROJECT_FILE, None, chapter_one=True)
 
 
+    def test_briefings_cover_all_real_missions_and_no_other_games(self):
+        from sporebound.jeanne_chapter1 import (
+            CHAPTER_MISSIONS, chapter_mission_card, CHAPTER_BEATS)
+        self.assertEqual(set(CHAPTER_MISSIONS), set(CHAPTER_BEATS))
+        for mid in CHAPTER_MISSIONS:
+            with self.subTest(mission=mid):
+                card = chapter_mission_card(mid)
+                self.assertIn(card["ordinal"], ("01", "02", "03", "04", "05"))
+                self.assertTrue(card["context"] and card["objective"]
+                                and card["tip"] and card["victory"])
+                self.assertIn(mid, self.content.missions)
+        with self.assertRaises(RuleError):
+            chapter_mission_card("p0_01_lame")
+
+    def test_demo_progress_preserves_actual_choices(self):
+        from sporebound.jeanne_chapter1 import chapter_progress
+        session = self.new_session()
+        beginning = chapter_progress(session.progress)
+        self.assertEqual(beginning["completed"], 0)
+        self.assertEqual(beginning["companion"], "À recruter")
+        self.assertFalse(beginning["finished"])
+        session.choose_story_option("engager_etienne")
+        self.assertEqual(chapter_progress(session.progress)["companion"], "Étienne")
+        self.win(session, "a1_01_route")
+        self.assertEqual(chapter_progress(session.progress)["completed"], 1)
+        self.assertFalse(chapter_progress(session.progress)["finished"])
+
+    def test_auto_enemy_only_in_enemy_turn_not_in_story_or_results(self):
+        from types import SimpleNamespace
+        from sporebound.jeanne_chapter1 import chapter_auto_enemy
+
+        enemy = SimpleNamespace(team="enemy")
+        battle = SimpleNamespace(active=enemy, deploying=False, result=None)
+        session = SimpleNamespace(
+            mode="battle", active_battle=battle, finalized=False,
+            tactical_story_pending="",
+            progress=SimpleNamespace(story_pending=""))
+        self.assertTrue(chapter_auto_enemy(session))
+        self.assertFalse(chapter_auto_enemy(session, enabled=False))
+        session.tactical_story_pending = "sc_warning"
+        self.assertFalse(chapter_auto_enemy(session))
+        session.tactical_story_pending = ""
+        battle.deploying = True
+        self.assertFalse(chapter_auto_enemy(session))
+        battle.deploying = False
+        battle.result = "victory"
+        self.assertFalse(chapter_auto_enemy(session))
+        battle.result = None
+        battle.active = SimpleNamespace(team="player")
+        self.assertFalse(chapter_auto_enemy(session))
+        battle.active = enemy
+        session.mode = "campaign"
+        self.assertFalse(chapter_auto_enemy(session))
+
+
 if __name__ == "__main__":
     unittest.main()

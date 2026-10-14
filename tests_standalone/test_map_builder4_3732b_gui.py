@@ -48,6 +48,17 @@ class VisualArchitectureGuiTests(unittest.TestCase):
                                 and 'ardoise' in w.cget('values'))
                     buttons = {w.cget('text'): w for w in widgets
                                if isinstance(w, ttk.Button)}
+                    building_tabs = next(
+                        w for w in widgets if isinstance(w, ttk.Notebook)
+                        and 'Extérieur' in [w.tab(t, 'text') for t in w.tabs()]
+                        and 'Intérieur' in [w.tab(t, 'text') for t in w.tabs()])
+                    # Resolve building actions from their owning dock,
+                    # not from other Studio editors sharing the same labels.
+                    building_widgets = list(descendants(building_tabs))
+                    buttons.update({
+                        w.cget('text'): w for w in building_widgets
+                        if isinstance(w, ttk.Button)
+                    })
 
                     def click(x, y):
                         canvas.event_generate('<Button-1>', x=x, y=y)
@@ -61,15 +72,25 @@ class VisualArchitectureGuiTests(unittest.TestCase):
                     root.update()
                     # Architectural controls live in the Building dock,
                     # never in the map's permanent tool strip.
-                    self.assertFalse(buttons['Poser fenêtre'].winfo_ismapped())
+                    self.assertIn(buttons['Poser fenêtre'], building_widgets)
+                    self.assertTrue(buttons['Poser fenêtre'].instate(['disabled']))
+                    self.assertTrue(buttons['Appliquer façade/toiture'].instate(['disabled']))
                     building_nav = next(
                         w for w in widgets if isinstance(w, ttk.Radiobutton)
                         and w.cget('text') == 'Bâtiments')
                     building_nav.invoke()
                     root.update()
                     self.assertTrue(building_nav.instate(['selected']))
+                    self.assertTrue(canvas.winfo_ismapped())
                     tool.set('Sélection structure')
                     click(4*54+10, 4*54+10)
+                    self.assertFalse(buttons['Poser fenêtre'].instate(['disabled']))
+                    self.assertFalse(buttons['Appliquer façade/toiture'].instate(['disabled']))
+                    exterior = next(t for t in building_tabs.tabs()
+                                    if building_tabs.tab(t, 'text') == 'Extérieur')
+                    building_tabs.select(exterior)
+                    root.update()
+                    self.assertTrue(buttons['Poser fenêtre'].winfo_ismapped())
                     facade.set('brique')
                     roof.set('plat')
                     buttons['Appliquer façade/toiture'].invoke()

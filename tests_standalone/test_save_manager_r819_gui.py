@@ -51,6 +51,17 @@ class SaveManagerGuiTests(unittest.TestCase):
                                     if isinstance(w, ttk.Button) and
                                     w.cget("text") == label)
 
+                    # The real cinematic title now exposes maintenance
+                    # through the painted "Outils avancés" action.
+                    title = next(w for w in children(root)
+                                 if isinstance(w, tk.Canvas) and
+                                 w.find_withtag("title_footer_advanced"))
+                    box = title.bbox("title_footer_advanced")
+                    x = (box[0] + box[2]) // 2
+                    y = (box[1] + box[3]) // 2
+                    title.event_generate("<Motion>", x=x, y=y)
+                    title.event_generate("<Button-1>", x=x, y=y)
+                    root.update()
                     button("Gestionnaire de sauvegardes").invoke()
                     root.update()
                     trees = [w for w in children(root)
@@ -71,9 +82,10 @@ class SaveManagerGuiTests(unittest.TestCase):
                     self.assertIn("Comparaison", report.get("1.0", "end"))
                     button("Retour").invoke()
                     root.update()
-                    self.assertTrue(any(w.cget("text") == "Gestionnaire de sauvegardes"
-                                        for w in children(root)
-                                        if isinstance(w, ttk.Button)))
+                    self.assertTrue(any(
+                        isinstance(w, tk.Canvas) and
+                        w.find_withtag("title_footer_advanced")
+                        for w in children(root)))
                     self.assertEqual(errors, [])
                 finally:
                     root.destroy()

@@ -25,6 +25,7 @@ from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
 from .map_builder4 import smart_brush_cells, surface_region
 from .terrain_autoblend import (REGION_STYLES, plan_terrain_region,
                                 apply_terrain_plan, terrain_variant)
+from .terrain_landscape import plan_natural_map, apply_natural_map
 from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, SURFACE_COLORS, IsoTerrainAtlas)
@@ -52,6 +53,7 @@ from .structure_groups import selected_structures, transform_structure_group
 from .building_visuals import (FACADES, ROOFS, DEFAULT_APPEARANCE,
                                building_appearance, exterior_wall_cells,
                                edit_building_appearance, set_building_window)
+from .building_visual_picker import (BuildingPartPick, pick_building_part)
 from .map_layer_workspace import (LAYERS as EDITOR_LAYERS, empty_views,
                                   load_views, save_views, view_for, update_view,
                                   ensure_unlocked)
@@ -95,6 +97,7 @@ class Document:
         # Monotonic lease: unlike a content hash this rejects an ABA edit
         # (edit -> undo -> identical bytes) and direct history restorations.
         self.mutation_revision = 0
+        self._natural_map_lease = None
 
     @property
     def dirty(self):
@@ -248,6 +251,28 @@ class Document:
         self.replace(data)
         return len({(x, y) for x, y, _ in (*plan.changes, *plan.decorations)})
 
+    def preview_natural_map(self, mid, start, end, *, seed=1,
+                            style='bocage', vegetation=2):
+        """Connected waterways, crossings and clearings; no source mutation."""
+        plan = plan_natural_map(self.data, mid, start, end, seed=seed,
+                                style=style, vegetation=vegetation)
+        self._natural_map_lease = (plan, self.mutation_revision)
+        return plan
+
+    def confirm_natural_map(self, plan):
+        """Commit only the exact plan from the current monotonic revision."""
+        lease = self._natural_map_lease
+        if (lease is None or lease[0] is not plan or
+                lease[1] != self.mutation_revision):
+            raise RuleError('Aperçu de carte périmé : régénérer la proposition.')
+        data = apply_natural_map(self.data, plan)
+        if data == self.data:
+            self._natural_map_lease = None
+            return 0
+        self.replace(data)
+        self._natural_map_lease = None
+        return len(plan.changes)
+
     def flood_surface(self, mid, start, surface, *, allowed_cells=None):
         """Existing four-neighbour fill, optionally restricted to a selection."""
         if surface not in SURFACES:
@@ -393,6 +418,7 @@ def launch(path):
     terrain_vegetation_var = tk.IntVar(value=2)
     terrain_status_var = tk.StringVar(value='Sélectionner une zone rectangulaire.')
     terrain_pending = None
+    landscape_pending = None
     quarter_choices = ()
     quarter_pending = None
     group_prefab_preview_key = None
@@ -440,6 +466,10 @@ def launch(path):
     status_var = tk.StringVar(value='Édition : choisir un pinceau puis cliquer sur une case.')
     mode_var = tk.StringVar(value='MODE : ÉDITION')
     building_selection_var = tk.StringVar(value='Aucun bâtiment sélectionné')
+    building_part_var = tk.StringVar(
+        value='Cliquer une toiture, un mur, une fenêtre ou une porte.')
+    building_part_target = None
+    building_part_actions = {}
     building_selection_actions = []
     building_exterior_actions = []
     building_floor_actions = []
@@ -1992,6 +2022,51 @@ def launch(path):
             facade=facade_var.get(), roof=roof_var.get())))
         status_var.set('Façade et toiture modifiées : Undo/Redo disponibles.')
 
+    @guarded
+    def edit_visual_window(present):
+        nonlocal building_part_target
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        building = selected_structure()
+        picked = building_part_target
+        if (picked is None or picked.structure_id != building.id or
+                picked.part not in ('facade', 'window')):
+            raise RuleError('Cliquer un mur extérieur ou une fenêtre du bâtiment.')
+        row = next((r for r in _mission_visual_records()
+                    if r['id'] == building.id), None)
+        if row is None:
+            raise RuleError('La structure doit avoir une identité persistante.')
+        offset = (picked.cell[0] - building.anchor[0],
+                  picked.cell[1] - building.anchor[1])
+        if offset not in exterior_wall_cells(row):
+            raise RuleError('Ce mur ne peut pas recevoir de fenêtre.')
+        design_change(lambda: doc.replace(set_building_window(
+            doc.data, mission_var.get(), building.id, picked.cell,
+            present=present)))
+        building_part_target = BuildingPartPick(
+            building.id, building.anchor, picked.cell,
+            'window' if present else 'facade')
+        building_part_var.set(
+            ('Fenêtre' if present else 'Mur extérieur') +
+            f' · case {picked.cell}. Action annulable.')
+        refresh()
+
+    @guarded
+    def switch_visual_door():
+        nonlocal building_part_target
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
+        building = selected_structure()
+        if (building_part_target is None or
+                building_part_target.structure_id != building.id or
+                building_part_target.part != 'door' or
+                len(door_slots(building.name)) < 2):
+            raise RuleError('Sélectionner la porte d’une maison ou de ruines.')
+        building_part_target = None
+        structure_door_var.set('Entrée A' if building.door_slot else 'Entrée B')
+        apply_structure_properties()
+        building_part_var.set('Porte déplacée sur l’entrée autorisée du plan.')
+
     def choose_window_mode(present):
         window_present_var.set(present)
         tool_var.set('Fenêtre façade')
@@ -2507,6 +2582,70 @@ def launch(path):
         status_var.set(terrain_status_var.get())
 
     @guarded
+    def preview_natural_landscape():
+        nonlocal landscape_pending
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON.')
+        if not selected_tiles:
+            raise RuleError('Sélectionner la région à générer.')
+        xs = [p[0] for p in selected_tiles]
+        ys = [p[1] for p in selected_tiles]
+        start, end = (min(xs), min(ys)), (max(xs), max(ys))
+        if len(selected_tiles) != (end[0]-start[0]+1)*(end[1]-start[1]+1):
+            raise RuleError('Sélectionner un rectangle continu.')
+        if len(selected_tiles) > 4096:
+            raise RuleError('La limite est 4096 cases.')
+        landscape_pending = None
+        for tag in ('landscape_preview_ground', 'landscape_preview_river',
+                    'landscape_preview_road', 'landscape_preview_relief',
+                    'landscape_preview_flora'):
+            canvas.delete(tag)
+        plan = doc.preview_natural_map(
+            mission_var.get(), start, end,
+            seed=terrain_seed_var.get(), style=terrain_style_var.get(),
+            vegetation=terrain_vegetation_var.get())
+        landscape_pending = plan
+        preview_cells(((x, y) for x, y, *_ in plan.changes),
+                      tag='landscape_preview_ground', color='#80a774')
+        preview_cells(((x, y) for x, y, _, height, _, _ in plan.changes
+                       if height > 0),
+                      tag='landscape_preview_relief', color='#a187cf')
+        preview_cells(((x, y) for x, y, _, _, _, feature in plan.changes
+                       if feature),
+                      tag='landscape_preview_flora', color='#d9a451')
+        preview_cells(plan.river, tag='landscape_preview_river',
+                      color='#4da9cc')
+        preview_cells(plan.road, tag='landscape_preview_road',
+                      color='#c29a58')
+        terrain_status_var.set(
+            f'Carte: {len(plan.changes)} cases · '
+            f'{len(plan.river)} rivière · {len(plan.road)} route · '
+            f'{len(plan.clearings)} clairières. Aperçu sans écriture.')
+        status_var.set(terrain_status_var.get())
+
+    @guarded
+    def confirm_natural_landscape():
+        nonlocal landscape_pending
+        plan = landscape_pending
+        if plan is None or plan.mission_id != mission_var.get():
+            raise RuleError('Prévisualiser la carte naturelle avant confirmation.')
+        if battle is not None or source_pending():
+            raise RuleError('Quitter le playtest et appliquer le JSON.')
+        count = 0
+        def apply():
+            nonlocal count
+            count = doc.confirm_natural_map(plan)
+        design_change(apply, board_only=True)
+        landscape_pending = None
+        for tag in ('landscape_preview_ground', 'landscape_preview_river',
+                    'landscape_preview_road', 'landscape_preview_relief',
+                    'landscape_preview_flora'):
+            canvas.delete(tag)
+        terrain_status_var.set(
+            f'{count} cases de paysage appliquées en une opération Undo.')
+        status_var.set(terrain_status_var.get())
+
+    @guarded
     def fill_selection():
         if battle or source_pending():
             raise RuleError('Terminer le combat et appliquer le JSON avant édition.')
@@ -2550,11 +2689,20 @@ def launch(path):
         nonlocal selected_cell, stroke_cells, stroke_before, stroke_redo, rectangle_anchor, selection_additive, entity_target
         nonlocal structure_turns, structure_selection_cell, structure_selection_id
         nonlocal structure_drag_from, structure_drag_anchor, structure_drag_duplicate
-        nonlocal entity_passage_entry
+        nonlocal entity_passage_entry, building_part_target
         cancel_structure_drag()
         canvas.focus_set()
         stroke_cells = []
-        selected_cell = event_cell(event)
+        visual_pick = None
+        in_building_mode = studio_navigation.building_mode and battle is None
+        if (in_building_mode and tool_var.get() == 'Sélection structure'
+                and iso_var.get() and iso_geometry is not None):
+            px, py = canvas.canvasx(event.x), canvas.canvasy(event.y)
+            visual_pick = pick_building_part(
+                canvas, iso_geometry, px, py,
+                fallback_cell=iso_geometry.hit_test(px, py))
+        selected_cell = (visual_pick.cell if visual_pick is not None
+                         else event_cell(event))
         if selected_cell is None:
             return
         validate_selection(doc.data, mission_var.get(), [selected_cell])
@@ -2571,7 +2719,18 @@ def launch(path):
         elif tool == 'Sélection structure':
             if source_pending():
                 raise RuleError('Appliquer ou abandonner le JSON avant édition.')
-            current = structure_at(doc.data, mission_var.get(), selected_cell)
+            try:
+                current = structure_at(doc.data, mission_var.get(), selected_cell)
+            except RuleError:
+                if not in_building_mode:
+                    raise
+                structure_selection_cell = None
+                structure_selection_id = None
+                building_part_target = None
+                building_part_var.set(
+                    'Aucun élément sélectionné. Cliquer sur un bâtiment.')
+                refresh()
+                return
             structure_selection_cell = current.anchor
             structure_selection_id = current.id or None
             structure_var.set(current.name)
@@ -2582,7 +2741,23 @@ def launch(path):
             settings = building_appearance(row) if row is not None else DEFAULT_APPEARANCE
             facade_var.set(settings['facade'])
             roof_var.set(settings['roof'])
-            structure_drag_from = selected_cell
+            building_part_target = (
+                visual_pick if visual_pick is not None and
+                visual_pick.structure_id == current.id else None)
+            names = {'roof': 'Toiture', 'facade': 'Mur extérieur',
+                     'window': 'Fenêtre', 'door': 'Porte',
+                     'building': 'Bâtiment'}
+            building_part_var.set(
+                f'{names.get(visual_pick.part, "Élément")} · case '
+                f'{visual_pick.cell}' if building_part_target is not None
+                else 'Bâtiment sélectionné : cliquer un de ses éléments en 2.5D.')
+            if building_part_target is not None:
+                building_tabs.select(building_tabs.tabs()[
+                    0 if building_part_target.part == 'door' else 1])
+            # Dragging a roof/window must not accidentally move the building.
+            structure_drag_from = (
+                selected_cell if building_part_target is None or
+                building_part_target.part == 'building' else None)
             structure_drag_anchor = None
             structure_drag_duplicate = bool(event.state & 0x0001)
             status_var.set(f'{current.name} sélectionnée : {current.id or "ancienne structure"}'
@@ -2999,7 +3174,7 @@ def launch(path):
         nonlocal selected_cell, campaign_battle, selection_mission, selected_tiles, iso_geometry
         nonlocal selected_group_id, group_tree_signature
         nonlocal structure_selection_cell, structure_selection_id, structure_preview_key
-        nonlocal entity_hover_key, entity_passage_entry
+        nonlocal entity_hover_key, entity_passage_entry, building_part_target
         ui_started = begin_ui()
         structure_preview_key = None
         entity_hover_key = None
@@ -3018,6 +3193,8 @@ def launch(path):
         if mission_var.get() not in mids:
             mission_var.set(mids[0])
         if selection_mission != mission_var.get():
+            building_part_target = None
+            building_part_var.set('Cliquer un élément du nouveau bâtiment.')
             apply_saved_map_view()
             selected_tiles.clear()
             tree_drag_cancel()
@@ -3037,6 +3214,7 @@ def launch(path):
             if record is None:
                 structure_selection_cell = None
                 structure_selection_id = None
+                building_part_target = None
             else:
                 structure_selection_cell = tuple(record['anchor'])
         selected_building = None
@@ -3054,7 +3232,18 @@ def launch(path):
                     f' | {selected_building.anchor}')
             except (RuleError, KeyError):
                 building_selection_var.set('Aucun bâtiment sélectionné.')
-        available = selected_building is not None and battle is None
+        # The part selection is revision-safe: removed, moved or replaced
+        # buildings cannot retain a stale clickable wall reference.
+        if (building_part_target is not None and
+                (selected_building is None or
+                 building_part_target.structure_id != selected_building.id or
+                 building_part_target.anchor != selected_building.anchor)):
+            building_part_target = None
+            building_part_var.set('Sélectionner un élément du bâtiment.')
+        # Do not offer mutations while gameplay or the JSON source editor
+        # owns the document. The command callbacks still enforce the rules.
+        available = (selected_building is not None and battle is None
+                     and not source_pending())
         for widget in building_selection_actions:
             widget.state(['!disabled'] if available else ['disabled'])
         for widget in building_exterior_actions:
@@ -3065,6 +3254,31 @@ def launch(path):
             widget.state(['!disabled'] if available and
                           selected_building.name in ('Maison', 'Tour', 'Ruines')
                           else ['disabled'])
+        part_is_valid = (available and building_part_target is not None and
+                         building_part_target.structure_id == selected_building.id)
+        for name, widget in building_part_actions.items():
+            supported = False
+            if part_is_valid and name in ('add_window', 'remove_window'):
+                if selected_building.name in ('Maison', 'Tour') and (
+                        building_part_target.part in ('facade', 'window')):
+                    record = next((row for row in _mission_visual_records()
+                                   if row['id'] == selected_building.id), None)
+                    if record is not None:
+                        ox = building_part_target.cell[0] - selected_building.anchor[0]
+                        oy = building_part_target.cell[1] - selected_building.anchor[1]
+                        valid_wall = (ox, oy) in exterior_wall_cells(record)
+                        existing = {
+                            tuple(cell) for cell in
+                            building_appearance(record)['windows']}
+                        supported = (valid_wall and
+                                     ((name == 'add_window' and
+                                       (ox, oy) not in existing) or
+                                      (name == 'remove_window' and
+                                       (ox, oy) in existing)))
+            elif part_is_valid and name == 'move_door':
+                supported = (building_part_target.part == 'door' and
+                             len(door_slots(selected_building.name)) > 1)
+            widget.state(['!disabled'] if supported else ['disabled'])
         content = editor_content_cache.get(doc.data)
         mission = battle.mission if battle else content.missions[mission_var.get()]
         refresh_group_tree(content.missions[mission_var.get()])
@@ -3100,7 +3314,16 @@ def launch(path):
                                             active_layer_level.get()
                                             if interior_var.get()
                                             and layer_vars['Étages'].get() else 0)},
-                    selected_cell=selected_cell, selected_tiles=selected_tiles,
+                    # A selected facade/roof must remain rendered while
+                    # editing. The Player's tactical cutaway rule is unchanged;
+                    # only the Building workspace suppresses automatic roof
+                    # removal caused by its own selection cursor.
+                    selected_cell=(
+                        (-1, -1) if studio_navigation.building_mode and
+                        building_part_target is not None and
+                        not interior_var.get() and battle is None
+                        else selected_cell),
+                    selected_tiles=selected_tiles,
                     reachable=live.reachable if live else (),
                     danger=live.danger if live else (),
                     active_id=live.active_id if live else None,
@@ -3173,6 +3396,32 @@ def launch(path):
                                             outline='#1f6e9a', width=3, tags='selection')
                 x,y = (v*tile_size for v in selected_cell)
                 canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
+        if views is None or RENDERER in views:
+            # Stable overlay on the exact rendered piece. The selection is
+            # decorative and never intercepts or changes tactical picking.
+            canvas.delete('building_component_selection')
+            if (studio_navigation.building_mode and battle is None and
+                    building_part_target is not None and
+                    selected_building is not None):
+                if (building_part_target.part == 'roof' and iso_geometry is not None):
+                    from .iso_architecture import architecture_outline
+                    instance = next((
+                        row for row in getattr(
+                            iso_geometry, 'architecture_instances', ())
+                        if row.id == building_part_target.structure_id), None)
+                    if instance is not None:
+                        roof_outline, _ = architecture_outline(
+                            iso_geometry, instance)
+                        canvas.create_polygon(
+                            *[v for point in roof_outline for v in point],
+                            outline='#1597dd', fill='', width=4,
+                            tags='building_component_selection')
+                else:
+                    preview_cells(
+                        (building_part_target.cell,),
+                        tag='building_component_selection',
+                        color='#1597dd')
+            canvas.tag_raise('building_component_selection')
         if views is None or INSPECTOR in views:
             inspected_tile = board.tile(selected_cell) if board.contains(selected_cell) else None
             mode_var.set('MODE : PLAYTEST (édition verrouillée)' if battle else 'MODE : ÉDITION')
@@ -3498,6 +3747,13 @@ def launch(path):
                command=preview_procedural_terrain).pack(side='left', padx=2)
     ttk.Button(procedural_actions, text='Appliquer',
                command=confirm_procedural_terrain).pack(side='left', padx=2)
+    landscape_row = ttk.Frame(tools_terrain)
+    landscape_row.pack(fill='x', padx=5, pady=2)
+    ttk.Label(landscape_row, text='Carte naturelle').pack(side='left', padx=2)
+    ttk.Button(landscape_row, text='Aperçu carte',
+               command=preview_natural_landscape).pack(side='left', padx=2)
+    ttk.Button(landscape_row, text='Créer carte',
+               command=confirm_natural_landscape).pack(side='left', padx=2)
     ttk.Label(tools_terrain, textvariable=terrain_status_var,
               wraplength=360).pack(fill='x', padx=5, pady=2)
     for label, tool in [('Remplir sol', 'Remplissage'),
@@ -3776,6 +4032,30 @@ def launch(path):
                ).pack(side='right')
     ttk.Label(buildings_page, textvariable=building_selection_var,
               wraplength=260, justify='left').pack(fill='x', padx=8, pady=(0, 6))
+    selected_part_panel = ttk.LabelFrame(
+        buildings_page, text='ÉLÉMENT SÉLECTIONNÉ · MODE VISUEL 2.5D')
+    selected_part_panel.pack(fill='x', padx=7, pady=(0, 7))
+    ttk.Label(selected_part_panel, textvariable=building_part_var,
+              wraplength=245, justify='left').pack(fill='x', padx=8, pady=5)
+    for name, label, action in (
+        ('add_window', 'Ajouter une fenêtre à ce mur',
+         lambda: edit_visual_window(True)),
+        ('remove_window', 'Supprimer cette fenêtre',
+         lambda: edit_visual_window(False)),
+        ('move_door', 'Basculer la porte (entrée A / B)',
+         switch_visual_door),
+    ):
+        button = ttk.Button(selected_part_panel, text=label, command=action)
+        button.pack(fill='x', padx=7, pady=(0, 3))
+        button.state(['disabled'])
+        building_part_actions[name] = button
+    ttk.Label(
+        selected_part_panel,
+        text='Cliquer le bâtiment dans la carte : toiture = matériaux, '
+             'mur = fenêtre, porte = emplacement autorisé. '
+             'Aucun effet sur les collisions tactiques.',
+        wraplength=248, justify='left').pack(
+            anchor='w', padx=8, pady=(4, 6))
     building_tabs = ttk.Notebook(buildings_page)
     building_tabs.pack(fill='both', expand=True, padx=5, pady=(0, 5))
 
@@ -4404,9 +4684,16 @@ def launch(path):
     studio.history.on_change = schedule_work_checkpoint
     studio.workspace.incremental_validator = editing_context.diagnostics
     from .studio_layout import StudioNavigation
+    def building_mode_allowed():
+        if battle is not None:
+            status_var.set('Quitter le playtest avant de modifier un bâtiment.')
+            return False
+        return True
+
     studio_navigation = StudioNavigation(
         section_bar, notebook, tool_tabs, work, tk, ttk,
-        building_mode_change=show_building_mode)
+        building_mode_change=show_building_mode,
+        building_mode_allowed=building_mode_allowed)
     from .studio_docks import StudioDocks, DockPreferences
     studio_docks = StudioDocks(
         root, work, canvas_region, sidebar, side_panel, bottom_panel, tk)

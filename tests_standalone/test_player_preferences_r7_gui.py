@@ -29,9 +29,13 @@ class PlayerPreferencesR7GUI(unittest.TestCase):
                         yield from descendants(child)
                 mappings = [w for w in descendants(app.root)
                             if isinstance(w, ttk.Combobox)
-                            and w.get() == "<Return>"]
+                            and w.get() == "Entrée"]
                 self.assertEqual(len(mappings), 1)
-                mappings[0].set("<F1>")
+                self.assertFalse(any(
+                    isinstance(w, ttk.Checkbutton) and
+                    "playtests" in w.cget("text").lower()
+                    for w in descendants(app.root)))
+                mappings[0].set("F1")
                 apply = next(w for w in descendants(app.root)
                              if isinstance(w, ttk.Button)
                              and w.cget("text") == "Appliquer")

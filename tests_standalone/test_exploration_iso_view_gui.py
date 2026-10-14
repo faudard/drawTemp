@@ -36,8 +36,10 @@ class ExplorationIsoGUITests(unittest.TestCase):
             self.assertTrue(canvas.find_withtag("iso_tile_0_0"))
             self.assertTrue(canvas.find_withtag("iso_actor_sprite"))
             self.assertTrue(canvas.find_withtag("exploration_hotspot"))
-            self.assertEqual(len(canvas.find_withtag("exploration_hotspot")), 
-                             3 * len(stage["interactions"]))
+            self.assertEqual(len(canvas.find_withtag("exploration_hotspot")),
+                             5 * len(stage["interactions"]))
+            self.assertEqual(len(canvas.find_withtag("exploration_atmosphere")), 28)
+            self.assertTrue(canvas.find_withtag("exploration_hero_focus"))
             x, y = stage["position"]
             neighbor = (x + 1, y)
             self.assertFalse(view.geometry.board.tile(neighbor).blocked)

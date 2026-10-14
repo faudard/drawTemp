@@ -153,6 +153,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Tk and virtual display
         run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb python3-pil
+      - name: Jeanne Chapter I demo — real Tk title to isometric combat
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_jeanne_chapter_demo_gui -v
+      - name: B1.1 Building Editor — navigation, selection and authoring GUI gate
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: >-
+          xvfb-run -a -s "-screen 0 1600x900x24" python3 -m unittest
+          tests_standalone.test_studio_layout_2026
+          tests_standalone.test_map_builder4_3732b_gui -v
+      - name: B1.2 — headless isometric building component picking
+        run: python3 -m unittest tests_standalone.test_building_visual_picker_b12 -v
+      - name: B1.2 — direct roof, facade and window editing in real Tk
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: >-
+          xvfb-run -a -s "-screen 0 1600x900x24" python3 -m unittest
+          tests_standalone.test_building_visual_b12_gui -v
       - name: Verify Map Builder 4.0D visual prefab palette and click-to-stamp
         env:
           SPOREBOUND_GUI_SMOKE: '1'
@@ -343,6 +362,12 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_terrain_watercolor_3732g_gui.py -v
+      - name: Verify connected natural maps, bridges and protected authoring (3.7.32L)
+        run: python3 -m unittest tests_standalone.test_terrain_landscape_3732l -v
+      - name: Verify natural landscape parity in real Tk (3.7.32L)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_terrain_landscape_3732l_gui -v
       - name: Verify painterly biome generation and safe flora (3.7.32K)
         run: python3 -m unittest tests_standalone.test_terrain_biomes_3732k -v
       - name: Verify terrain AutoBlend and dirty-tile/full-render parity (3.7.32F)
@@ -495,7 +520,7 @@ jobs:
       - name: Verify Player cinematic title, save selection and advanced menu
         env:
           SPOREBOUND_GUI_SMOKE: '1'
-        run: xvfb-run -a python3 -m unittest tests_standalone.test_title_menu -v
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_title_menu tests_standalone.test_title_menu_cinematic -v
       - name: Exercise advanced graph and standalone player UI
         env:
           SPOREBOUND_GUI_SMOKE: '1'

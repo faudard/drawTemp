@@ -60,3 +60,47 @@ python -m sporebound player --content sporebound/content/jeanne.json --project s
 le focus clavier et la fermeture des panneaux, puis créer/charger une partie,
 inspecter un slot avec sauvegarde de secours, tester un slot libre et valider
 que les actions avancées ne se déclenchent jamais sans clic explicite.
+
+
+## R7 — mise en page fidèle au visuel de référence
+
+`sporebound/title_menu_cinematic.py` remplace le montage vertical gauche
+par une interface **entièrement interactive en Canvas Tk** :
+
+- Titre de Jeanne en haut à droite, suivi d'une pile de **six cartes** :
+  Continuer, Nouvelle partie, Charger une partie, Campagnes, Options, Quitter.
+- Icônes vectorielles et textes dessinés à l'exécution : ils ne sont **pas**
+  imprimés dans l'illustration et les fonctions sont reliées aux actions
+  existantes du Player.
+- Encart Campagne actuelle à gauche, avec nom et description et commande
+  « Changer de campagne ».
+- Barre inférieure Outils avancés, Crédits et Aide, chacun ouvrant un vrai
+  panneau utilisable, sans commandes factices.
+- Illustration `jeanne_menu_stage.jpg` embarquée et estompée vers la zone
+  droite sans afficher les textes/boutons de la maquette. Le JPEG est
+  déclaré dans `pyproject.toml` pour rester présent hors du dépôt source.
+- Dimensions calculées via `title_geometry()` ; contrôle explicite des
+  800×580, 1160×820, 1672×914 et 1920×1080. À petite taille,
+  les sous-titres et pictogrammes se compactent plutôt que se superposer.
+- Focalisation Canvas, navigation ↑/↓, Début/Fin et Entrée/Espace ;
+  Échap ferme les panneaux. Une partie absente reste inchargeable.
+- Le titre et le contenu de campagne viennent du projet ; seules les
+  formulations purement décoratives du menu Jeanne sont adaptées à son
+  univers. Toutes les mutations de jeu restent dans `PlayerController`.
+
+Le rendu illustré utilise Pillow quand il est présent. Sans Pillow, le
+fond PNG antérieur ou le décor vectoriel restent disponibles et le jeu est
+pleinement utilisable. Le contraste renforcé masque les fonds illustrés.
+
+### Vérification
+
+```sh
+python -m unittest tests_standalone.test_title_menu_cinematic -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest \
+  tests_standalone.test_title_menu \
+  tests_standalone.test_title_menu_cinematic -v
+```
+
+Gate visuel non automatisé : vérifier le menu dans la vraie fenêtre du
+Player aux trois tailles de texte, les interactions des dix zones actives,
+les états de sauvegarde, la navigation clavier et le fond sans Pillow.
