@@ -1,0 +1,41 @@
+name: Persistence R8.17 crash/fault matrix
+
+on:
+  pull_request:
+    paths:
+      - 'examples/persistence_fault_lab.py'
+      - 'tests_standalone/test_persistence_fault_r817.py'
+      - 'docs/PERSISTENCE_FAULT_R817.md'
+      - '.github/workflows/persistence-fault-r817.yml'
+      - 'sporebound/session_lock.py'
+      - 'sporebound/long_session.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  crash-matrix:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.11']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Hard-crash and writer-concurrency gates
+        run: python -m unittest discover -s tests_standalone -p test_persistence_fault_r817.py -v
+      - name: Machine-readable crash evidence
+        run: python -m examples.persistence_fault_lab --seeds 1 7 --output persistence-fault-r817.json
+      - name: Preserve report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: persistence-fault-r817-${{ matrix.os }}
+          path: persistence-fault-r817.json
+          if-no-files-found: ignore
