@@ -386,12 +386,12 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
             # No frame is generated here: only an already cached PhotoImage.
             image = (ambient_atlas.frame(kind, cell_size, 0)
                      if ambient_atlas is not None and kind is not None else None)
-            if image is not None:
+            if image is not None and kind != 'leaves':
                 origin = sprite_origin(board, c, (cx, cy), cell_size)
                 tile_canvas.create_image(
                     *origin, image=image, anchor='nw',
                     tags=('iso_ambient', sprite_tag(kind, c)))
-            elif kind is not None:
+            elif kind is not None and kind != 'leaves':
                 # Headless environments, legacy tools and invalid PNG decoders
                 # keep the previous vector illustration contract unchanged.
                 for accent in strokes_for_cell(board, c, (cx, cy), cell_size):
@@ -429,6 +429,26 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
             else:
                 _draw_feature(_TaggedFeatureCanvas(tile_canvas, decor_tag),
                               tile.feature, cx, cy, cell_size)
+        # Tree/bush foliage must be above the static prop canopy while
+        # remaining below actors and objects; otherwise opaque PNG foliage
+        # hides the animated watercolor stamp. Grass and water stay under
+        # tactical overlays in the earlier terrain pass.
+        if (layers.get('Terrain', True) and layers.get('Ambiance', True)
+                and layers.get('Décors', True)
+                and ambient_kind(board, c) == 'leaves'):
+            foliage = (ambient_atlas.frame('leaves', cell_size, 0)
+                       if ambient_atlas is not None else None)
+            if foliage is not None:
+                tile_canvas.create_image(
+                    *sprite_origin(board, c, (cx, cy), cell_size),
+                    image=foliage, anchor='nw',
+                    tags=('iso_ambient', sprite_tag('leaves', c)))
+            else:
+                for accent in strokes_for_cell(board, c, (cx, cy), cell_size):
+                    tile_canvas.create_line(
+                        *accent.coords, fill=accent.color,
+                        width=max(1, round(cell_size/52)),
+                        tags=('iso_ambient', stroke_tag(accent)))
         if layers.get('Objets', True):
             for obj in objects.get(c, ()):
                 photo = (object_atlas.sprite(obj['kind'], cell_size)
