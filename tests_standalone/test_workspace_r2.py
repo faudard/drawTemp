@@ -120,6 +120,38 @@ class WorkspaceR2Tests(unittest.TestCase):
         with self.assertRaises(RuleError):
             validate_drop(self.doc.data, self.mid, 'asset:missing')
 
+    def test_actor_reference_warning_is_repairable_by_existing_inspector(self):
+        """An authored despawn action can reference an unknown actor ID."""
+        source = self.doc.data
+        source['missions'][0]['triggers'][0]['actions'].append({
+            'kind': 'despawn', 'unit': 'unknown_actor_r2'})
+        # Input is still valid authored Content; the reference is an editor
+        # warning, not a new alternative validation rule.
+        self.doc.replace(source)
+        before = StudioIndex(Content.from_dict(self.doc.data), self.project)
+        trigger = self.doc.data['missions'][0]['triggers'][0]
+        key = f'tactical_event:{self.mid}/{trigger["id"]}'
+        problems = before.diagnostics('.', map_warnings=True)
+        self.assertTrue(any(ref == key for _, ref, _ in problems))
+        self.assertIn(key, before.nodes)
+        form = editable_form(self.doc.data, key)
+        self.assertEqual(tuple(f.name for f in form.fields), ('despawn_unit',))
+        target = self.content.missions[self.mid].units[0].id
+        original_undo_count = len(self.doc.undo_stack)
+        self.context.execute(WorkspacePropertyCommand(
+            key, form.baseline, (('despawn_unit', target),)))
+        self.assertEqual(len(self.doc.undo_stack), original_undo_count + 1)
+        after = StudioIndex(Content.from_dict(self.doc.data), self.project)
+        self.assertFalse(any(ref == key for _, ref, _ in
+                             after.diagnostics('.', map_warnings=True)))
+        self.assertIn(key, {ref.source for ref in after.incoming(
+            f'map_actor:{self.mid}/{target}')})
+        self.doc.undo()
+        self.assertTrue(any(ref == key for _, ref, _ in
+                            StudioIndex(Content.from_dict(self.doc.data),
+                                        self.project).diagnostics(
+                                            '.', map_warnings=True)))
+
     def test_problem_to_inspector_fix_to_map_without_manual_refresh(self):
         door_id = 'r2_unlinked_door'
         self.doc.replace(add_object(self.doc.data, self.mid,
