@@ -83,6 +83,37 @@ class NavigationWidgetTests(unittest.TestCase):
             self.assertEqual(switched, [True, False])
             self.assertEqual(len(notebook.tabs()), 3)
 
+            # External navigation closes Building mode, preserving the
+            # existing map tab and restoring the normal return path.
+            nav.choose_section("Bâtiments")
+            root.update()
+            notebook.select(project_tab)
+            root.update()
+            self.assertFalse(nav.building_mode)
+            self.assertEqual(nav.section.get(), "Projet")
+            self.assertEqual(switched[-2:], [True, False])
+            notebook.select(map_tab)
+            root.update()
+            self.assertEqual(nav.section.get(), "Carte & monde")
+            self.assertEqual(nav.view.get(), "Carte et combat")
+            self.assertEqual(len(notebook.tabs()), 3)
+
+            # Active playtests must not switch away from combat controls.
+            nav.building_mode_allowed = lambda: False
+            nav.section.set("Bâtiments")  # Simulates the radiobutton input.
+            nav.choose_section("Bâtiments")
+            root.update()
+            self.assertFalse(nav.building_mode)
+            self.assertEqual(nav.section.get(), "Carte & monde")
+            self.assertEqual(nav.view.get(), "Carte et combat")
+            self.assertEqual(switched[-1], False)
+            nav.building_mode_allowed = lambda: True
+            nav.choose_section("Bâtiments")
+            root.update()
+            self.assertTrue(nav.building_mode)
+            nav.choose_section("Carte & monde")
+            root.update()
+
             # Cross-editor navigation is still just notebook.select().
             notebook.select(play_tab)
             root.update()
