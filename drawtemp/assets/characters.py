@@ -200,6 +200,35 @@ def starter_library():
             "variants": {"default": {
                 "name": "Base", "clips": clips, "layers": [], "expressions": {}}}
         })
+    # Watercolor sources were painted from a single camera angle. They are
+    # useful as templates but NOT certified 4-directional sprites.
+    for key, title, poses, size, pivot in (
+        ("wolf", "Loup gris — aquarelle (vue unique)",
+         {"idle": ("idle",), "walk": ("walk_a", "walk_b"),
+          "attack": ("crouch", "pounce", "leap"), "hit": ("hit",),
+          "death": ("ko",)}, (384, 341), (192, 306)),
+        ("spearman", "Lancier — aquarelle (vue unique)",
+         {"idle": ("idle",), "walk": ("walk_a", "walk_b"),
+          "attack": ("windup", "thrust", "recover"),
+          "block": ("guard", "block"), "hit": ("hit",), "death": ("ko",)},
+         (384, 341), (192, 306)),
+        ("ogre", "Ogre — bestiaire (vue unique)",
+         {"idle": ("ogre",)}, (512, 512), (256, 460)),
+    ):
+        folder = "bestiary" if key == "ogre" else key
+        clips = {
+            action: {"loop": action in ("idle", "walk"),
+                     "directions": {"south": [
+                         frame(f"assets/watercolor/sprites/{folder}/{pose}.png",
+                               duration_ms=170) for pose in sequence]}}
+            for action, sequence in poses.items()
+        }
+        library[key] = validate({
+            "version": 1, "id": key, "name": title,
+            "size": list(size), "pivot": list(pivot),
+            "variants": {"default": {"name": "Base", "clips": clips,
+                                     "layers": [], "expressions": {}}}
+        })
     return library
 
 
