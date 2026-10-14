@@ -121,3 +121,38 @@ class StudioDocks:
         for name in DOCKS:
             if name in prefs and type(prefs[name]) is bool:
                 self.set_visible(name, prefs[name])
+
+
+class DockPreferences:
+    """Atomic, UI-only sidecar for dock visibility, independent from Content."""
+
+    def __init__(self, path):
+        from pathlib import Path
+        self.path = Path(path)
+
+    def load(self):
+        import json
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        return {
+            key: raw[key] for key in DOCKS
+            if key in raw and type(raw[key]) is bool
+        }
+
+    def save(self, state):
+        import json
+        clean = {
+            key: state[key] for key in DOCKS
+            if key in state and type(state[key]) is bool
+        }
+        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(
+            json.dumps(clean, ensure_ascii=False, sort_keys=True),
+            encoding="utf-8",
+        )
+        temporary.replace(self.path)
