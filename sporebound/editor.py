@@ -77,6 +77,7 @@ from .workspace_r2 import BatchPropertyCommand, batch_form
 from .workspace_refactoring import (RenameMapResourceCommand,
                                     DeleteMapResourceCommand, _mentions,
                                     plan_coordinated_rename)
+from .workspace_story_refactoring import plan_story_rename
 
 
 class Document:
@@ -3888,14 +3889,39 @@ def launch(path):
         return True
 
     def rename_workspace_resource(key, baseline, new_id):
-        """Content-only refactor through the same preview/commit and history."""
+        """Typed, stale-safe rename using the existing Studio history."""
         if battle is not None or source_pending():
             raise RuleError('Terminer le playtest et appliquer le JSON.')
-        mid = key.partition(':')[2].split('/', 1)[0]
+        category, _, identity = key.partition(':')
+        if category in ('scene', 'campaign'):
+            project_before = studio.project.to_dict()
+            content_before = json.dumps(doc.data, sort_keys=True)
+            candidate, updated_project = plan_story_rename(
+                doc.data, studio.project, key, baseline, new_id,
+                project_path=studio.project_path)
+
+            def commit_story_rename():
+                if (studio.project.to_dict() != project_before or
+                        json.dumps(doc.data, sort_keys=True) != content_before):
+                    raise RuleError('Documents modifiés depuis la prévisualisation')
+                if candidate != doc.data:
+                    doc.replace(candidate)
+                studio.project = updated_project
+                if category == 'scene' and studio.story_editor.scene_id == identity:
+                    studio.story_editor.scene_id = new_id
+                if category == 'campaign' and studio.campaign_id.get() == identity:
+                    studio.campaign_id.set(new_id)
+                    studio._show_campaign()
+                editing_context.revision += 1
+
+            design_change(commit_story_rename)
+            status_var.set('Références du scénario/campagne migrées (Undo global).')
+            return True
+        mid = identity.split('/', 1)[0]
         if mid != mission_var.get():
             select_workspace_mission(mid)
         project_before = studio.project.to_dict()
-        old = key.partition(':')[2].split('/', 1)[1]
+        old = identity.split('/', 1)[1]
         if _mentions(project_before, old):
             content_before = json.dumps(doc.data, sort_keys=True)
             # Pre-validate both snapshots. Commit inside the existing Studio
