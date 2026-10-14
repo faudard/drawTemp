@@ -16,7 +16,7 @@ DEFAULT_CONTENT = Path(__file__).parent / 'content' / 'core.json'
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Sporebound standalone gameplay workbench')
-    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','export'])
+    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','tactical-choices','export'])
     parser.add_argument('--content', type=Path, default=DEFAULT_CONTENT)
     parser.add_argument('--project', type=Path, help='Game presentation manifest for player')
     parser.add_argument('--output', type=Path, help='Destination ZIP for export')
@@ -31,6 +31,10 @@ def main(argv=None):
     parser.add_argument('--max-victory-drop', type=float, default=0.25)
     parser.add_argument('--max-p95-growth', type=float, default=0.30)
     parser.add_argument('--max-new-limits', type=int, default=0)
+    parser.add_argument('--choice-min-multi', type=int, default=1,
+                        help='Minimum sampled multi-category player decisions')
+    parser.add_argument('--choice-required-pair', action='append', default=[],
+                        help='Pair required in tactical-choices (e.g. positioning+damage)')
     parser.add_argument('--save', type=Path)
     parser.add_argument('--load', type=Path)
     parser.add_argument('--campaign-file', type=Path, default=Path('saves/campaign.json'))
@@ -128,6 +132,27 @@ def main(argv=None):
             print(json.dumps({'matrix': matrix, 'comparison': comparison},
                              ensure_ascii=False, sort_keys=True))
             return 2 if comparison is not None and not comparison['passed'] else 0
+        if args.command == 'tactical-choices':
+            from .tactical_choice_lab_r6 import run_choice_lab, evaluate_choice_gate
+            from .tactical_rpg3 import authored_rules_for_document
+            report = run_choice_lab(
+                content, args.mission, seed=args.seed, max_commands=args.limit,
+                rules=authored_rules_for_document(content.to_dict()))
+            gate = evaluate_choice_gate(
+                report, min_multi=args.choice_min_multi,
+                required_pairs=args.choice_required_pair)
+            report["gate"] = gate
+            if args.report:
+                args.report.write_text(
+                    json.dumps(report, sort_keys=True, ensure_ascii=False,
+                               indent=2) + "\n", encoding='utf-8')
+            print(json.dumps({
+                'mission': report['mission'], 'seed': report['seed'],
+                'digest': report['digest'],
+                'replay_verified': report['replay_verified'],
+                'gate': gate, 'report': str(args.report) if args.report else None,
+            }, ensure_ascii=False, sort_keys=True))
+            return 0 if gate['passed'] else 2
         if args.command == 'battle-lab':
             from .battle_lab import compare_reports, run_lab, save_report
             from .tactical_rpg3 import authored_rules_for_document
