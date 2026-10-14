@@ -38,7 +38,14 @@ class JeanneChapterDemoGuiTests(unittest.TestCase):
                             if isinstance(w, ttk.Button)
                             and w.cget("text").startswith(prefix))
 
-                    button("Commencer le chapitre I").invoke()
+                    # The production title screen uses a Canvas action card,
+                    # not the legacy ttk.Button labelled "Commencer le chapitre I".
+                    # Exercise its accessible keyboard activation instead.
+                    title = next(w for w in descendants(root)
+                                 if isinstance(w, tk.Canvas))
+                    title.focus_set()
+                    title.event_generate("<Home>")
+                    title.event_generate("<Return>")
                     root.update()
                     self.assertTrue(any(
                         isinstance(w, ttk.LabelFrame)
