@@ -78,6 +78,8 @@ class ActionPreviewR7Tests(unittest.TestCase):
             p = action_preview(self.battle, "attack", self.cell)
         forecast.assert_called_once_with("attack", self.cell, self.actor)
         self.assertEqual(p.status, "available")
+        self.assertEqual(p.path, (self.cell, self.cell))
+        self.assertIn("LOS", " ".join(p.details))
         self.assertIn("65%", " ".join(p.details))
         self.assertIn("12", " ".join(p.details))
         self.assertIn("guard", " ".join(p.details))
