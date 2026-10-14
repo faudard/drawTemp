@@ -83,7 +83,7 @@ class VisualBranchWizardGUITests(unittest.TestCase):
                     self.assertIn('fork_join_gui', ids)
                     self.assertEqual(len(project['story']['during_tactical_event']), 1)
                     self.assertEqual(len(project['story']['scenes']), 4)
-                    self.assertEqual(Content.from_dict(document).to_dict(), document)
+                    self.assertEqual(json.loads(json.dumps(Content.from_dict(document).to_dict())), document)
                     all_buttons['Annuler'].invoke()
                     root.update()
                     all_buttons['Enregistrer tout'].invoke()

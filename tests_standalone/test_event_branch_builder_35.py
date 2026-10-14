@@ -138,7 +138,7 @@ class VisualChoiceBuilderTests(unittest.TestCase):
         source, project = self.build(reunion='')
         next_data, next_project = author_choice_fork(
             source, project, self.mid, origin_event_id='second_origin',
-            origin_cell=[6, 7], scene_id='second_choice',
+            origin_cell=[7, 6], scene_id='second_choice',
             title='Seconde décision', text='Que faire ?',
             branches=[
                 {**self.branches[0], 'event_id': 'second_assault'},
