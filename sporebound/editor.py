@@ -21,6 +21,8 @@ from .map_authoring import (cells_in_rectangle, copy_terrain, move_object,
 from .map_transform import (group_entities, load_stamp, move_group, save_stamp,
                             transform_terrain)
 from .map_builder4 import smart_brush_cells, surface_region
+from .terrain_autoblend import (REGION_STYLES, plan_terrain_region,
+                                apply_terrain_plan)
 from .presentation import battle_frame
 from .iso_map import (FEATURES, SURFACES, IsoGeometry, _flatten,
                       _line_cells, SURFACE_COLORS, IsoTerrainAtlas)
@@ -207,6 +209,19 @@ class Document:
         cells = smart_brush_cells(self.data, mid, anchors, radius=radius, shape=shape)
         self.paint_many(mid, cells, brush)
         return len(cells)
+
+    def preview_generated_terrain(self, mid, start, end, *, seed=1, style='prairie'):
+        """Pure proposal. The user must confirm against the current revision."""
+        return plan_terrain_region(self.data, mid, start, end,
+                                   seed=seed, style=style)
+
+    def confirm_generated_terrain(self, plan):
+        """One atomic, validated Undo; stale proposals are rejected."""
+        data = apply_terrain_plan(self.data, plan)
+        if data == self.data:
+            return 0
+        self.replace(data)
+        return len(plan.changes)
 
     def flood_surface(self, mid, start, surface, *, allowed_cells=None):
         """Existing four-neighbour fill, optionally restricted to a selection."""
