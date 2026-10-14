@@ -289,8 +289,8 @@ class PlayerApplication:
         self._clear()
         self.presentation.transition("title")
         self.view.configure(padding=0)
-        from .title_menu import TitleMenu
-        self._title_menu = TitleMenu(self)
+        from .title_menu_cinematic import CinematicTitleMenu
+        self._title_menu = CinematicTitleMenu(self)
 
     def _authored_siege_menu(self):
         self._clear()
