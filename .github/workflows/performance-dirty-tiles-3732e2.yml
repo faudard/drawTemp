@@ -8,6 +8,7 @@ on:
       - 'tests_standalone/test_dirty_tiles_3732e2.py'
       - 'tests_standalone/test_dirty_tiles_3732e2_gui.py'
       - 'tests_standalone/test_dirty_tiles_3732e.py'
+      - 'scripts/benchmark_dirty_occlusion_3732e2.py'
       - '.github/workflows/performance-dirty-tiles-3732e2.yml'
   workflow_dispatch:
 permissions:
@@ -33,14 +34,20 @@ jobs:
           tests_standalone.test_dirty_tiles_3732e2_gui
           tests_standalone.test_dirty_tiles_3732e_gui
           tests_standalone.test_editor_render_cache_3718d_gui
-      - name: Measure retained large terrain with mixed sprites
+      - name: Maintain 3.7.32E terrain-only reference benchmark
         run: >-
           xvfb-run -a python3 scripts/benchmark_dirty_tiles_3732e.py
           --quick --output dirty-tiles-e2-smoke.json
+      - name: Paired house / roof / tall-prop benchmark
+        run: >-
+          xvfb-run -a python3 scripts/benchmark_dirty_occlusion_3732e2.py
+          --quick --output dirty-occlusion-e2-smoke.json
       - name: Archive benchmark
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dirty-tiles-occlusion-e2
-          path: dirty-tiles-e2-smoke.json
+          path: |
+            dirty-tiles-e2-smoke.json
+            dirty-occlusion-e2-smoke.json
           if-no-files-found: warn
