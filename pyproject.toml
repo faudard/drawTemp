@@ -17,4 +17,4 @@ sporebound = "sporebound.__main__:main"
 include = ["sporebound*", "drawtemp*"]
 
 [tool.setuptools.package-data]
-sporebound = ["content/*.json", "content/art/jeanne/*.png", "content/art/iso/*.png"]
+sporebound = ["content/*.json", "content/art/jeanne/*.png", "content/art/jeanne/*.jpg", "content/art/iso/*.png"]
