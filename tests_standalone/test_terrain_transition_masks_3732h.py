@@ -89,17 +89,13 @@ class PaintedTransitionMasksTests(unittest.TestCase):
 
     def test_rejects_bad_material_direction_variant_and_coordinates(self):
         for args in (('water', N, 0, 48, 24),
+                     ('bridge', S, 0, 48, 24),
                      ('grass', 16, 0, 48, 24),
                      ('grass', N, 4, 48, 24),
                      ('grass', N, True, 48, 24),
                      ('grass', N, 0, -1, 24),
                      ('grass', N, 0, 96, 24),
                      ('grass', N, 0, 48, 48)):
-            # water is a valid palette material, but not a usable land edge;
-            # masks are usable only after headless blend_edges filters it out.
-            if args[0] == 'water':
-                self.assertEqual(painted_mask_pixel(*args)[3], 0)
-                continue
             with self.subTest(args=args), self.assertRaises(ValueError):
                 painted_mask_pixel(*args)
 
