@@ -2284,7 +2284,6 @@ def launch(path):
                       color='#36a16c' if all(map(inside,cells)) else '#e05252')
 
     @guarded
-    @guarded
     def preview_procedural_terrain():
         nonlocal terrain_pending
         if battle is not None or source_pending():
