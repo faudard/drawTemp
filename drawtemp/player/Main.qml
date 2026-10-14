@@ -20,6 +20,15 @@ ApplicationWindow {
     property color muted: highContrast ? "#f3ead6" : "#b2b8b8"
     property color gold: "#e7c78b"
 
+    function activeSkills() {
+        var units = (playerData.battle && playerData.battle.units) || []
+        for (var i = 0; i < units.length; ++i)
+            if (units[i].id === playerData.battle.active &&
+                units[i].team === "player")
+                return units[i].skills || []
+        return []
+    }
+
     Connections {
         target: player
         function onStateChanged() { root.playerData = player.view }
@@ -383,6 +392,62 @@ ApplicationWindow {
                                 text: (modelData.visited ? "✓ " : "◇ ") + modelData.title
                                 enabled: !modelData.visited
                                 onClicked: player.exploreInteract(modelData.id)
+                            }
+                        }
+                        Repeater {
+                            model: root.playerData.screen === "exploration" ?
+                                   (root.playerData.exploration.actors || []) : []
+                            Button {
+                                Layout.fillWidth: true
+                                text: modelData.kind === "civilian" ?
+                                      "Secourir · " + modelData.name :
+                                      "Parler · " + modelData.name
+                                enabled: modelData.status === "active"
+                                onClicked: player.exploreActor(modelData.id,
+                                              modelData.kind === "civilian" ? "rescue" : "talk")
+                            }
+                        }
+                        Label {
+                            visible: root.playerData.screen === "battle"
+                            text: "COMPÉTENCES"
+                            color: root.gold
+                        }
+                        Repeater {
+                            model: root.playerData.screen === "battle" ?
+                                   root.activeSkills() : []
+                            Button {
+                                Layout.fillWidth: true
+                                text: "Utiliser · " + modelData
+                                onClicked: player.useSkill(modelData)
+                            }
+                        }
+                        Label {
+                            visible: root.playerData.screen === "battle"
+                            text: "OBJETS"
+                            color: root.gold
+                        }
+                        Repeater {
+                            model: root.playerData.screen === "battle" ?
+                                   Object.keys((root.playerData.battle.inventory || {}).player || {}) : []
+                            Button {
+                                Layout.fillWidth: true
+                                text: modelData + " ×" + root.playerData.battle.inventory.player[modelData]
+                                enabled: root.playerData.battle.inventory.player[modelData] > 0
+                                onClicked: player.useItem(modelData)
+                            }
+                        }
+                        Label {
+                            visible: root.playerData.screen === "battle"
+                            text: "INTERACTIONS"
+                            color: root.gold
+                        }
+                        Repeater {
+                            model: root.playerData.screen === "battle" ?
+                                   (root.playerData.battle.objects || []) : []
+                            Button {
+                                Layout.fillWidth: true
+                                text: modelData.kind + " · " + modelData.id
+                                onClicked: player.interactObject(modelData.id)
                             }
                         }
                         Repeater {
