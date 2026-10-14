@@ -1,7 +1,7 @@
 """Stable Qt-friendly projection of the legacy Player's cinematic state."""
 from pathlib import Path
 
-from sporebound.cinematics import frame_at
+from sporebound.cinematics import frame_at, effects_at
 from sporebound.audio_timeline import mix_at
 from sporebound.model import RuleError
 
@@ -48,7 +48,7 @@ def frame_payload(clip, time_ms, *, registry=None, asset_root=None):
         "expression": expression, "portrait": portrait_uri,
         "effects": [{"kind": effect[0], "power": effect[1], "seed": effect[2],
                      "x": effect[3][0], "y": effect[3][1], "phase": effect[4]}
-                    for effect in getattr(frame, "effects", ())],
+                    for effect in effects_at(clip, time_ms)],
     }
 
 
