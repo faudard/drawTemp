@@ -8,7 +8,8 @@ from PySide6.QtWidgets import (
     QPushButton, QSlider, QSpinBox, QSplitter, QVBoxLayout, QWidget,
 )
 
-from sporebound.cinematics import KINDS, EASINGS, EXPRESSIONS, FX_KINDS, SHOT_TRANSITIONS
+from sporebound.cinematics import KINDS, EASINGS, EXPRESSIONS, FX_KINDS, SHOT_TRANSITIONS, TRIGGERS
+from sporebound.event_cinematic_qa import audit_event_cinematic_path
 from sporebound.cinematics import cinematic_template, event_template
 from sporebound.model import RuleError
 from drawtemp.player.qt_cinematic import CinematicStage
@@ -53,6 +54,12 @@ class CinematicEditor(QMainWindow):
             btn = QPushButton(label)
             btn.clicked.connect(callback)
             l.addWidget(btn)
+        configure = QPushButton("Configurer le déclencheur")
+        configure.clicked.connect(self._configure_trigger)
+        l.addWidget(configure)
+        audit = QPushButton("QA événement → cinématique")
+        audit.clicked.connect(self._audit_path)
+        l.addWidget(audit)
         body.addWidget(left)
 
         middle = QWidget()
@@ -190,6 +197,70 @@ class CinematicEditor(QMainWindow):
         if self.clip_id and QMessageBox.question(
                 self, "Supprimer", "Supprimer cette cinématique ?") == QMessageBox.Yes:
             self._apply(self.document.delete_clip, self.clip_id)
+
+    def _configure_trigger(self):
+        if not self.clip_id:
+            return
+        current = self.document.clip(self.clip_id)["trigger"]
+        kind, ok = QInputDialog.getItem(self, "Déclencheur", "Type",
+                                        list(TRIGGERS),
+                                        list(TRIGGERS).index(current["kind"]), False)
+        if not ok:
+            return
+        content = self.document.content
+        project = self.document.project
+        if kind == "campaign_start":
+            targets = [c["id"] for c in project.campaigns]
+        elif kind == "scene":
+            targets = [s["id"] for s in project.story.get("scenes", [])]
+        elif kind == "tactical_event":
+            targets = [f"{mission.id}/{trigger['id']}"
+                       for mission in content.missions.values()
+                       for trigger in mission.triggers]
+        else:
+            targets = list(content.missions)
+        if not targets:
+            self._alert(RuleError("Aucune cible disponible pour ce type de déclencheur"))
+            return
+        index = targets.index(current["target"]) if current["target"] in targets else 0
+        target, ok = QInputDialog.getItem(self, "Déclencheur", "Cible", targets, index, False)
+        if ok:
+            self._apply(self.document.edit_clip, self.clip_id,
+                        {"trigger": {"kind": kind, "target": target}})
+
+    def _audit_path(self):
+        if not self.clip_id:
+            return
+        clip = self.document.clip(self.clip_id)
+        if clip["trigger"]["kind"] != "scene":
+            self._alert(RuleError("L'audit de conséquences exige une cinématique liée à une scène."))
+            return
+        source, ok = QInputDialog.getItem(self, "Source", "Événement source",
+                                          ["tactical_event", "strategic_event"], 0, False)
+        if not ok:
+            return
+        target, ok = QInputDialog.getText(self, "Source", "ID événement (mission/ID)")
+        if not ok or not target:
+            return
+        choice, ok = QInputDialog.getText(self, "Choix narratif", "ID du choix/conséquence")
+        if not ok or not choice:
+            return
+        try:
+            report = audit_event_cinematic_path(
+                self.document.project, self.document.content,
+                source_kind=source, source_id=target, choice_id=choice)
+            if self.clip_id not in report.cinematic_ids:
+                raise RuleError("La scène auditée ne déclenche pas cette cinématique")
+        except (RuleError, StopIteration, ValueError) as exc:
+            self._alert(exc)
+            return
+        QMessageBox.information(
+            self, "Chaîne validée",
+            f"Événement : {report.source_id}\n"
+            f"Scène : {report.scene_id}\n"
+            f"Clips : {', '.join(report.cinematic_ids)}\n"
+            f"Effets : {', '.join(report.gameplay_effects)}\n"
+            f"SHA256 : {report.timeline_sha256}")
 
     def _save(self):
         try:
