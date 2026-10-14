@@ -43,6 +43,8 @@ class CampaignFlowEditorGUITests(unittest.TestCase):
                     elements = list(descendants(page))
                     buttons = {w.cget("text"): w for w in widgets
                                if isinstance(w, ttk.Button)}
+                    editor_buttons = {w.cget("text"): w for w in elements
+                                      if isinstance(w, ttk.Button)}
                     combos = [w for w in elements if isinstance(w, ttk.Combobox)]
                     target = next(w for w in combos
                                   if "ending" in tuple(w["values"]))
@@ -51,7 +53,7 @@ class CampaignFlowEditorGUITests(unittest.TestCase):
                                        if w is not target and
                                        "hold" in tuple(w["values"]))
                     target_name.set("hold")
-                    buttons["Voir condition"].invoke()
+                    editor_buttons["Voir condition"].invoke()
                     preset = next(w for w in combos
                                   if "Mission terminée" in tuple(w["values"]))
                     preset.set("Mission terminée")
@@ -62,7 +64,7 @@ class CampaignFlowEditorGUITests(unittest.TestCase):
                                and w is not target
                                and w.get() == "reputation_village")
                     key.set("garden")
-                    buttons["Créer / remplacer"].invoke()
+                    editor_buttons["Créer / remplacer"].invoke()
                     root.update()
                     tree = next(w for w in elements if isinstance(w, ttk.Treeview))
                     self.assertEqual(len(tree.get_children()), 1)
@@ -84,7 +86,7 @@ class CampaignFlowEditorGUITests(unittest.TestCase):
                     form_b = editables[-1]
                     form_a.set("fortification_gate")
                     form_b.set("open")
-                    buttons["Ajouter"].invoke()
+                    editor_buttons["Ajouter"].invoke()
                     root.update()
                     buttons["Enregistrer projet de jeu…"].invoke()
                     loaded = GameProject.load(project_file, Content.load(DEFAULT_CONTENT))
