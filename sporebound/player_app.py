@@ -21,6 +21,8 @@ from .iso_battle_view import IsoBattleCanvas, anchored_iso_zoom
 from .world_map import world_projection
 from .world_map_view import draw_world_map, pick_world_mission
 from .visual_motion import MotionDirector
+from .player_ux import (KeyBindings, PresentationState, combat_hud,
+                        clamp_selection, zoom_to, ZOOM_PRESETS)
 
 
 class PlayerApplication:
@@ -29,6 +31,8 @@ class PlayerApplication:
         from tkinter import ttk, messagebox
 
         self.tk, self.ttk, self.messagebox = tk, ttk, messagebox
+        self.presentation = PresentationState()
+        self.keymap = KeyBindings()
         content_path = Path(content_path)
         project_path = (Path(project_path) if project_path is not None
                         else content_path.with_suffix(".game.json"))
@@ -55,6 +59,10 @@ class PlayerApplication:
                                 music_volume=project.options["music_volume"])
         self.root = tk.Tk()
         self.playtest_optin = tk.BooleanVar(value=False)
+        self.text_scale = tk.IntVar(value=100)
+        self.high_contrast = tk.BooleanVar(value=False)
+        self.compact_hud = tk.BooleanVar(value=False)
+        self.feedback_var = tk.StringVar()
         self.root.title(project.title)
         self.root.geometry("1160x820")
         self.root.minsize(800, 580)
@@ -106,19 +114,30 @@ class PlayerApplication:
         self.title_screen()
 
     def _style(self):
+        """Apply high contrast and the selected text density across ttk views."""
+        scale = self.text_scale.get() / 100
+        contrast = self.high_contrast.get()
+        bg = "#000000" if contrast else "#101a2b"
+        fg = "#ffffff" if contrast else "#e8f0fa"
+        panel = "#172a3c" if contrast else "#304862"
+        self.root.configure(background=bg)
         style = self.ttk.Style(self.root)
         style.theme_use("clam")
-        style.configure(".", background="#101a2b", foreground="#e8f0fa",
-                        font=("TkDefaultFont", 11))
-        style.configure("TFrame", background="#101a2b")
-        style.configure("TLabel", background="#101a2b", foreground="#e8f0fa")
-        style.configure("TButton", padding=8, background="#304862", foreground="#ffffff")
+        style.configure(".", background=bg, foreground=fg,
+                        font=("TkDefaultFont", round(11 * scale)))
+        style.configure("TFrame", background=bg)
+        style.configure("TLabel", background=bg, foreground=fg)
+        style.configure("TButton", padding=8, background=panel, foreground="#ffffff")
         style.map("TButton", background=[("active", "#43668a")])
-        style.configure("TCombobox", fieldbackground="#f5f7fb", foreground="#152438")
-        style.configure("TLabelframe", background="#101a2b", foreground="#e8f0fa")
-        style.configure("TLabelframe.Label", background="#101a2b", foreground="#e8f0fa")
+        style.configure("TCombobox", fieldbackground="#ffffff", foreground="#152438")
+        style.configure("TLabelframe", background=bg, foreground=fg)
+        style.configure("TLabelframe.Label", background=bg, foreground=fg)
+        style.configure("TCheckbutton", background=bg, foreground=fg)
+        style.configure("TRadiobutton", background=bg, foreground=fg)
+
 
     def _clear(self):
+        self.presentation.transition(self.presentation.screen)
         if self.cinematic is not None:
             self.cinematic.close()
             self.cinematic = None
@@ -149,7 +168,7 @@ class PlayerApplication:
         self.info = None
 
     def _heading(self, text, subtitle=""):
-        self.ttk.Label(self.view, text=text, font=("TkDefaultFont", 24, "bold")).pack(
+        self.ttk.Label(self.view, text=text, font=("TkDefaultFont", round(24 * self.text_scale.get() / 100), "bold")).pack(
             anchor="w", pady=(4, 12))
         if subtitle:
             self.ttk.Label(self.view, text=subtitle).pack(anchor="w", pady=(0, 12))
@@ -201,6 +220,7 @@ class PlayerApplication:
         self._resume_world_after_scene = False
         self.audio.music_for("title")
         self._clear()
+        self.presentation.transition("title")
         self._heading(self.project.title, self.project.subtitle)
         panel = self.ttk.LabelFrame(self.view, text="Nouvelle aventure / reprendre", padding=18)
         panel.pack(anchor="center", fill="x", padx=160, pady=30)
@@ -334,6 +354,7 @@ class PlayerApplication:
 
     def options_screen(self):
         self._clear()
+        self.presentation.transition("options")
         self._heading("Options")
         self.ttk.Checkbutton(
             self.view, text="Enregistrer les playtests (activation volontaire)",
@@ -372,6 +393,7 @@ class PlayerApplication:
         elif session.tactical_story_pending:
             # Story UI is modal over the current Battle, not a campaign screen.
             self._clear()
+            self.presentation.transition("tactical_story")
             self._heading("Décision pendant la bataille")
             self._narrative_scene(
                 session.tactical_scene(), choices=session.tactical_choices(),
@@ -380,7 +402,10 @@ class PlayerApplication:
         elif session.mode == "fronts":
             self.battle_screen()
         elif session.mode == "battle":
-            self.battle_screen()
+            if session.finalized:
+                self.results_screen()
+            else:
+                self.battle_screen()
         elif (self._resume_world_after_scene and self.project.world
               and session.active_scene() is None):
             self._resume_world_after_scene = False
@@ -428,6 +453,7 @@ class PlayerApplication:
     def campaign_screen(self):
         session = self.player.session
         self._clear()
+        self.presentation.transition("campaign")
         self._heading(self.project.campaign(session.campaign_id)["name"],
                       "Or : " + str(session.progress.gold) +
                       "    Missions terminées : " + str(len(session.progress.completed)))
@@ -524,6 +550,7 @@ class PlayerApplication:
             available=session.available_missions(),
             completed=session.progress.completed)
         self._clear()
+        self.presentation.transition("world")
         self._heading("Carte du monde", "Déplacez votre groupe sur les routes. "
                       "Cliquez à nouveau sur un lieu atteint pour y combattre.")
         surface = self.ttk.Frame(self.view)
@@ -761,6 +788,7 @@ class PlayerApplication:
 
     def front_setup(self, available):
         self._clear()
+        self.presentation.transition("fronts_setup")
         self._heading("Préparer une opération multi-fronts",
                       "Choisir deux secteurs pour une timeline stratégique commune.")
         choices = [(mid, self.tk.BooleanVar(value=i < 2))
@@ -782,6 +810,7 @@ class PlayerApplication:
         session = self.player.session
         battle = session.active_battle
         self._clear()
+        self.presentation.transition("battle")
         if battle is None:
             self.strategy_screen()
             return
@@ -1098,6 +1127,7 @@ class PlayerApplication:
             self.show()
             return
         self._clear()
+        self.presentation.transition("strategy")
         frame = strategy_frame(session.fronts)
         self._heading("Siège : " + session.siege_id
                       if session.siege_id else "Commandement des fronts",
