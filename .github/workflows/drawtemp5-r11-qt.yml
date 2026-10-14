@@ -27,8 +27,8 @@ on:
 
 jobs:
   cinematic-contracts:
-    name: Headless cinematic contracts (\${{ matrix.os }})
-    runs-on: \${{ matrix.os }}
+    name: Headless cinematic contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
