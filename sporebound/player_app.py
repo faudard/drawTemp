@@ -45,7 +45,7 @@ class PlayerApplication:
         self.playtest_recorder = PlaytestRecorder(content=content,
                                                   rules=self.player.rules)
         self.player.playtest = self.playtest_recorder
-        self.playtest_exported = False
+        self.playtest_exported_revision = -1
         self.project_path = project_path
         self.project = project
         self.registry = project.asset_registry()
@@ -328,7 +328,7 @@ class PlayerApplication:
             defaultextension=".json", filetypes=[("JSON", "*.json")])
         if path:
             save_playtest(path, report)
-            self.playtest_exported = True
+            self.playtest_exported_revision = self.playtest_recorder.revision
             self.messagebox.showinfo(
                 "Playtest", "Rapport exporté localement. Aucune donnée envoyée.")
 
@@ -1336,13 +1336,15 @@ class PlayerApplication:
                     and self.playtest_recorder.active is not None):
                 self.playtest_recorder.finish("interrupted")
             if (self.playtest_recorder.report()["sessions"]
-                    and not self.playtest_exported):
+                    and self.playtest_recorder.revision !=
+                    self.playtest_exported_revision):
                 if self.messagebox.askyesno(
                         "Playtest non exporté",
                         "La télémétrie restera uniquement en mémoire et sera "
                         "perdue en quittant. Exporter le rapport maintenant ?"):
                     self._export_playtest()
-                    if not self.playtest_exported:
+                    if (self.playtest_recorder.revision !=
+                            self.playtest_exported_revision):
                         self._closing = False
                         return
             self.audio.close()
