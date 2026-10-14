@@ -108,6 +108,12 @@ class OcclusionDirtyTileGuiTests(unittest.TestCase):
             self.check_scene(
                 doc, mid, foreground, reference, cache, 5,
                 selected=(3, 3), expected="full")
+            # Paint a second patch while the closed roof obscures parts of
+            # the terrain. Only local tiles and roof overlay may be rebuilt.
+            doc.paint_many(mid, [(14, 18)], "surface:water")
+            self.check_scene(
+                doc, mid, foreground, reference, cache, 6,
+                selected=(3, 3), expected="dirty_tiles")
         finally:
             root.destroy()
 
