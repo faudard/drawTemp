@@ -1120,7 +1120,11 @@ class PlayerApplication:
         if self._preview_job is not None:
             self.root.after_cancel(self._preview_job)
         # Avoid running Dijkstra / forecast on every mouse-motion event.
-        self._preview_job = self.root.after(90, self._update_action_preview)
+        self._preview_job = self.root.after(90, self._flush_action_preview)
+
+    def _flush_action_preview(self):
+        self._preview_job = None
+        self._update_action_preview()
 
     def _preview_leave(self, event=None):
         if self._preview_job is not None:
@@ -1131,7 +1135,9 @@ class PlayerApplication:
             self._update_action_preview()
 
     def _update_action_preview(self):
-        self._preview_job = None
+        if self._preview_job is not None:
+            self.root.after_cancel(self._preview_job)
+            self._preview_job = None
         if not self.preview_enabled.get() or self.canvas is None:
             return
         session = self.player.session
