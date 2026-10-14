@@ -150,6 +150,94 @@ Coverage is **sampled**, not an exhaustive game tree, and still cannot
 establish player satisfaction, informed trade-offs or a 15–30-minute
 duration. Confirm these through real human playtests.
 
+## R6.15 — Tactical Quality and Human Release Gate
+
+**Why R6.15:** R6.14 proves that different commands are executable. It
+cannot prove that those commands produce meaningfully distinct outcomes or
+that real players understand the trade-offs.
+
+### Counterfactuals measured from the same Battle state
+
+`sporebound.tactical_quality_r6` observes bounded selected player commands
+during a real, deterministic AI simulation. It executes the chosen command
+and each R6.14 representative alternative **exactly once**, each against its
+own copy of the same pre-command `Battle`, without modifying the main
+simulation. Reports contain direct evidence, never a fabricated universal
+action score:
+
+| Benefit indicators | Resource / damage costs |
+| --- | --- |
+| Enemy HP removed, ally HP restored | Ally HP lost |
+| Cover gained, hazard avoided | MP spent, consumables consumed |
+| Distance to authored goal reduced | No automatic CT → minutes conversion |
+| Prepared guard/overwatch states created | Preparation is not confirmed damage prevented |
+| Objective hold ticks actually advanced | No prediction of future AI strategy |
+
+A state is **differentiated** only if executable alternatives have different
+immediate outcome vectors. A **trade-off** is present only when neither option
+wins on all observed dimensions: one improves at least one property and
+sacrifices another. This is a Pareto-style local comparison; it is **not**
+proof of optimality, a complete game tree or equivalent end-of-turn value.
+
+### Dual release requirement
+
+1. **Automated gate:** replay digest verified; enough player samples with
+   distinct immediate consequences and observable trade-offs.
+2. **Human gate:** opt-in report from the **same authored content hash**;
+   enough complete, non-partial human sessions for the exact mission and
+   variant; actual median playtime in the **15–30 real minute** design
+   window; confusion annotations reviewed; and explicit approval of five
+   criteria: positioning, protection, resources, objectives and player
+   comprehension. Missing evidence remains **PENDING**; automation never
+   manufactures human signoff.
+
+Minimum complete observations default to five. This is a minimal review
+threshold, **not a statistical power calculation** or proof of balance.
+Real player comments, challenge and accessibility remain product review
+criteria. No personal identifier or free-text feedback is required by the
+instrumentation.
+
+### Studio
+
+In **Balance Matrix**, run a case and select its row, then:
+
+1. **R6.15 · Mesurer les compromis** — collect canonical single-command
+   effects, distinct choices, trade-off evidence and replay verification.
+2. **Revue humaine R6.15** — select an opt-in human report and optional
+   categorical R6.11 annotations; explicitly check the five human review
+   criteria in the dialog. The human gate stays pending otherwise.
+3. **Exporter qualité R6.15** — save reproducible evidence and any locally
+   completed review, without writing to Content/GameProject or savegames.
+
+Human evidence must match the content fingerprint. For annotated variants
+enter the exact label in the review dialog; an unannotated report uses the
+`authored` variant by default.
+
+### CLI and CI
+
+```sh
+python -m unittest tests_standalone.test_tactical_quality_r615 -v
+python -m sporebound tactical-quality --mission garden --seed 1 \
+  --limit 120 --quality-min-differentiated 1 \
+  --quality-min-tradeoffs 1 --report quality.json
+
+# Release evidence: local opt-in human observations and explicit review
+python -m sporebound tactical-quality --mission garden --seed 1 \
+  --limit 120 --quality-min-tradeoffs 1 \
+  --human-playtest human.json --quality-annotations annotations.json \
+  --human-signoff signoff.json --report reviewed.json
+```
+
+`signoff.json` is a plain object containing *exactly* five booleans:
+`positioning`, `protection`, `resources`, `objectives` and
+`player_comprehension`. Every value must be consciously confirmed,
+not generated from simulation data.
+
+The **automated-only** CLI returns 0 if technical checks pass, but its output
+explicitly says `not_certified_without_human_review`. When human evidence
+is provided, it returns **2** if the release gate is incomplete.
+CI uses a non-policy smoke sample and does **not** claim a human signoff.
+
 ## R6 design gate — tactical choices, not merely DPS
 
 A release reviewer should check at least:
@@ -171,6 +259,7 @@ the human-design gate.
 ```sh
 python -m unittest tests_standalone.test_encounter_balance_r6 -v
 python -m unittest tests_standalone.test_tactical_choice_r6 -v
+python -m unittest tests_standalone.test_tactical_quality_r615 -v
 python -m unittest tests_standalone.test_balance_matrix_382 -v
 python -m unittest tests_standalone.test_playtest_384 -v
 python -m unittest tests_standalone.test_battle_diagnostics_381 -v
