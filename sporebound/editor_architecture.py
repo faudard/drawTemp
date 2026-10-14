@@ -14,11 +14,7 @@ from .model import Content, RuleError, require
 from .editor_reliability import IncrementalValidator
 from .tactical_rpg3 import authored_rules_for_document
 
-RENDERER = 'renderer'
-MINIMAP = 'minimap'
-INSPECTOR = 'inspector'
-WORKSPACE = 'workspace'
-ALL_VIEWS = (RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+from .editor_views import RENDERER, MINIMAP, INSPECTOR, WORKSPACE, ALL_VIEWS
 
 
 def _fingerprint(data):
