@@ -37,6 +37,7 @@ class ProjectWorkspaceTab:
         self._explicit_tile = ''
         self._form_signature = None
         self._form_fields = ()
+        self._form_mixed = set()
         self._form_vars = {}
         self._form_key = ''
         self._form_baseline = ''
@@ -333,7 +334,10 @@ class ProjectWorkspaceTab:
                 mid, gid = node.id.split('/', 1)
                 snapshot = inspect_persistent_group(
                     self.owner.doc().data, mid, gid)
-        edit_key = node.key if node is not None else self._explicit_tile
+        keys = tuple(key for key in self.tree.selection()
+                     if key in self.model().nodes)
+        edit_key = (keys if len(keys) > 1 else
+                    node.key if node is not None else self._explicit_tile)
         if self._explicit_tile and node is None:
             _, identifier = self._explicit_tile.split(':', 1)
             mid, xy = identifier.split('/', 1)
@@ -347,6 +351,11 @@ class ProjectWorkspaceTab:
                      else 'Sélectionner une ressource')
             detail = (snapshot.detail if snapshot else
                       'Explorer campagnes, missions, scénarios et bibliothèques.')
+        if len(keys) > 1:
+            title = f'SÉLECTION MULTIPLE — {len(keys)} ressources'
+            detail = ('Les propriétés communes peuvent être appliquées en une '
+                      'seule transaction. Les champs mixtes ne sont pas modifiés '
+                      'tant que leur valeur n’est pas explicitement remplacée.')
         self.heading.config(text=title)
         self.summary.config(text=detail)
         self._render_editable(edit_key)
@@ -377,20 +386,27 @@ class ProjectWorkspaceTab:
         self._select()
 
     def _render_editable(self, key):
-        if not key or not key.startswith(
+        if isinstance(key, tuple) and len(key) > 1:
+            form = batch_form(self.owner.doc().data, key)
+            signature = (form.keys, form.baselines)
+        elif isinstance(key, str) and key.startswith(
                 ('map_actor:', 'map_object:', 'editor_group:', 'map_tile:')):
-            form = None
-        else:
             form = editable_form(self.owner.doc().data, key)
-        signature = ((form.key, form.baseline) if form else (None, None))
+            signature = (form.key, form.baseline)
+        else:
+            form, signature = None, (None, None)
         if signature == self._form_signature:
             return
         self._form_signature = signature
         for widget in self.edit_frame.winfo_children():
             widget.destroy()
         self._form_fields = form.fields if form else ()
-        self._form_key = form.key if form else ''
-        self._form_baseline = form.baseline if form else ''
+        self._form_key = (form.keys if isinstance(form, type(None)) is False
+                          and hasattr(form, 'keys') else form.key if form else '')
+        self._form_baseline = (form.baselines if form is not None
+                               and hasattr(form, 'baselines') else
+                               form.baseline if form else '')
+        self._form_mixed = set(getattr(form, 'mixed', ()))
         self._form_vars = {}
         if form is None:
             self.owner.ttk.Label(
@@ -402,18 +418,27 @@ class ProjectWorkspaceTab:
         for field in form.fields:
             row = ttk.Frame(self.edit_frame)
             row.pack(fill='x', padx=7, pady=2)
-            ttk.Label(row, text=field.label, width=21).pack(side='left')
-            variable = (tk.BooleanVar(value=field.value) if
-                        field.kind == 'boolean' else
-                        tk.StringVar(value=str(field.value)))
-            self._form_vars[field.name] = variable
-            if field.kind == 'boolean':
+            mixed = field.name in self._form_mixed
+            ttk.Label(row, text=field.label + (' *' if mixed else ''),
+                      width=21).pack(side='left')
+            if field.kind == 'boolean' and not mixed:
+                variable = tk.BooleanVar(value=field.value)
                 editor = ttk.Checkbutton(row, variable=variable)
-            elif field.kind == 'choice':
-                editor = ttk.Combobox(row, textvariable=variable,
-                                      values=field.choices, state='readonly')
             else:
-                editor = ttk.Entry(row, textvariable=variable)
+                variable = tk.StringVar(
+                    value=MIXED if mixed else str(field.value))
+                if field.kind == 'boolean':
+                    editor = ttk.Combobox(row, textvariable=variable,
+                                          values=(MIXED, 'True', 'False'),
+                                          state='readonly')
+                elif field.kind == 'choice':
+                    editor = ttk.Combobox(
+                        row, textvariable=variable,
+                        values=((MIXED,) if mixed else ()) + field.choices,
+                        state='readonly')
+                else:
+                    editor = ttk.Entry(row, textvariable=variable)
+            self._form_vars[field.name] = variable
             editor.pack(side='left', fill='x', expand=True)
         ttk.Button(self.edit_frame, text='Appliquer les propriétés',
                    command=lambda: self.owner._run(self.apply_properties)).pack(
@@ -425,14 +450,18 @@ class ProjectWorkspaceTab:
         changed = {}
         for field in self._form_fields:
             value = self._form_vars[field.name].get()
+            mixed = field.name in self._form_mixed
+            if mixed and value == MIXED:
+                continue
+            if mixed and field.kind == 'boolean':
+                value = value == 'True'
             before = field.value
-            if (value if field.kind == 'boolean' else str(value)) != (
+            if mixed or (value if field.kind == 'boolean' else str(value)) != (
                     before if field.kind == 'boolean' else str(before)):
                 changed[field.name] = value
         if not changed:
             self.status.config(text='Aucune propriété modifiée.')
             return
-        # The form's baseline must still match the current resource.
         self.owner.workspace_edit(self._form_key, self._form_baseline, changed)
         self.status.config(text='Propriétés appliquées. Undo/Redo disponibles.')
 
