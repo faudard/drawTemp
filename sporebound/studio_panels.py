@@ -19,7 +19,7 @@ class StudioPanels:
     def __init__(self, notebook, tk, ttk, dialogs, *, doc, content_path,
                  mission, selection, design_change, play_campaign, status, mission_change=None,
                  select_mission=None, on_project_saved=None, set_active_mission=None,
-                 focus_map_cell=None, workspace_edit=None):
+                 focus_map_cell=None, workspace_edit=None, workspace_rename=None):
         self.tk, self.ttk, self.dialogs = tk, ttk, dialogs
         self.notebook = notebook
         self.doc, self.content_path = doc, content_path
@@ -30,6 +30,7 @@ class StudioPanels:
         self.set_active_mission = set_active_mission or self.select_mission
         self.focus_map_cell = focus_map_cell or (lambda mid, cell: None)
         self.workspace_edit = workspace_edit
+        self.workspace_rename = workspace_rename
         self.status = status
         self.on_project_saved = on_project_saved or (lambda _path: None)
         self.project = None
