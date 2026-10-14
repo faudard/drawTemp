@@ -4,6 +4,7 @@ All commands, previews, story choices and persistence run through Simulation.
 This module never imports Qt or Tk and never edits the GameSession directly.
 """
 from pathlib import Path
+import shutil
 
 from drawtemp.sdk.simulation import Simulation, SimulationError, thaw
 
@@ -56,6 +57,9 @@ class PlayerController:
             raise ValueError("No game to save")
         path = self._path(slot)
         path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            Simulation.load(path, self.content, self.project)
+            shutil.copy2(path, path.with_suffix(".json.bak"))
         self.session.save(path)
         self.message = "Sauvegarde dans l'emplacement " + str(slot)
         return self.state()
