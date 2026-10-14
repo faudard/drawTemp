@@ -1,5 +1,7 @@
 # Roadmap — priorité gameplay, sans dépendance à Godot
 
+> **Nouvelle architecture :** [Roadmap DrawTemp 5.0 — Qt 6 / PySide6, renderer GPU commun, Tactical Core Python](docs/DRAWTEMP_5_0_ROADMAP.md). Le document ci-dessous conserve la roadmap historique 2.x/3.x.
+
 ## Priorité éditeur — audit réel du 12 octobre 2026
 
 Voir [roadmap vérifiée 3.7.16–3.7.22](docs/EDITOR_ROADMAP_3716_3722.md) :
