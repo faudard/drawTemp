@@ -75,7 +75,7 @@ def available_missions(progress, flow):
             and (mid not in gates or matches(gates[mid], progress))]
 
 
-def _apply_effect(progress, effect):
+def _apply_effect(progress, effect, content):
     kind = effect["kind"]
     if kind == "set_flag":
         progress.story_flags[effect["flag"]] = deepcopy(effect["value"])
@@ -105,12 +105,13 @@ def _apply_effect(progress, effect):
         progress.story_flags["recruited_" + uid] = True
     elif kind == "equip_hero":
         uid = effect["hero"]
+        require(content is not None, "Equipment consequence requires Content")
         require(not any("recruit:" + uid in unit.tags
-                        for mission in progress._flow_content.missions.values()
+                        for mission in content.missions.values()
                         for unit in mission.units)
                 or progress.story_flags.get("recruited_" + uid) is True,
                 "Hero has not been recruited")
-        progress.equip(progress._flow_content, uid, effect["item"])
+        progress.equip(content, uid, effect["item"])
     elif kind in {"wound", "heal_wound"}:
         wounds = progress.hero(effect["hero"]).wounds
         if kind == "wound":
@@ -134,16 +135,8 @@ def settle(progress, flow, mission, result, *, content=None):
     if key in progress.flow_ledger or not effects:
         return progress
     updated = deepcopy(progress)
-    # equip_hero uses the exact validated tactical Content (never side data).
-    if any(effect["kind"] == "equip_hero" for effect in effects):
-        require(content is not None, "Equipment consequence requires Content")
-        updated._flow_content = content
-    try:
-        for effect in effects:
-            _apply_effect(updated, effect)
-    finally:
-        if hasattr(updated, "_flow_content"):
-            del updated._flow_content
+    for effect in effects:
+        _apply_effect(updated, effect, content)
     require(len(updated.flow_ledger) < 512, "Campaign consequence ledger exhausted")
     updated.flow_ledger.append(key)
     return updated
