@@ -17,6 +17,7 @@ GROUPS = (
     ('siege', 'Sièges multi-fronts'),
     ('strategic_event', 'Événements stratégiques'),
     ('mission', 'Cartes et missions'),
+    ('tactical_event', 'Événements tactiques'),
     ('map_actor', 'Acteurs placés'),
     ('map_object', 'Objets interactifs placés'),
     ('editor_group', 'Groupes hiérarchiques'),
@@ -89,6 +90,15 @@ class ProjectWorkspaceIndex:
                 f'{len(mission.units)} unités | {len(mission.objects)} objets'
                 f'\nObjectif : {mission.objective} | '
                 f'Suites : {", ".join(mission.next_missions) or "aucune"}'))
+        for mission in self.content.missions.values():
+            for trigger in mission.triggers:
+                identifier = str(trigger['id'])
+                actions = trigger.get('actions', ())
+                result['tactical_event'].append(WorkspaceNode(
+                    'tactical_event', mission.id + '/' + identifier,
+                    identifier + ' · ' + mission.name,
+                    f'Événement tactique {identifier} | Mission : {mission.name}'
+                    f' | Actions : {len(actions)}'))
         for mission in self.content.missions.values():
             for actor in mission.units:
                 result['map_actor'].append(WorkspaceNode(

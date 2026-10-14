@@ -96,6 +96,18 @@ class StudioIndex:
                     add(key, 'map_object:' + mission.id + '/' + obj['link'],
                         'Porte associée')
         for mission in self.content.missions.values():
+            for trigger in mission.triggers:
+                source = 'tactical_event:' + mission.id + '/' + trigger['id']
+                add('mission:' + mission.id, source, 'Événement tactique')
+                condition = trigger.get('condition')
+                if condition in ('defeated', 'hp_below') and trigger.get('unit'):
+                    add(source, 'map_actor:' + mission.id + '/' + trigger['unit'],
+                        'Acteur déclencheur')
+                for action in trigger.get('actions', ()):
+                    if action.get('kind') in ('despawn', 'status') and action.get('unit'):
+                        add(source, 'map_actor:' + mission.id + '/' + action['unit'],
+                            'Acteur ciblé')
+        for mission in self.content.missions.values():
             source = 'mission:' + mission.id
             for group in mission.editor_groups:
                 key = 'editor_group:' + mission.id + '/' + group['id']
@@ -113,6 +125,9 @@ class StudioIndex:
         for reference, scene_id in story.get('after_strategic_event', {}).items():
             add('strategic_event:' + reference,
                 'scene:' + scene_id, 'Scène après événement authentifié')
+        for ref, sid in story.get('during_tactical_event', {}).items():
+            add('tactical_event:' + ref, 'scene:' + sid,
+                'Scène pendant événement tactique')
         for cid, sid in story.get('entry_scenes', {}).items():
             add('campaign:' + cid, 'scene:' + sid, 'Introduction')
         for mid, sid in story.get('after_mission', {}).items():
@@ -122,18 +137,35 @@ class StudioIndex:
                 if 'next_scene' in choice:
                     add('scene:' + scene['id'], 'scene:' + choice['next_scene'],
                         'Choix ' + choice['id'])
+        for event in self.project.world.get('events', ()):
+            add('mission:' + event['from'], 'scene:' + event['scene'],
+                'Événement sur route')
+            add('mission:' + event['to'], 'scene:' + event['scene'],
+                'Événement sur route')
         bindings = self.project.asset_registry().to_dict()['bindings'].get('sound', {})
         for clip in self.project.cinematics:
             kind = clip['trigger']['kind']
             source = (('campaign:' if kind == 'campaign_start'
-                       else 'scene:' if kind == 'scene' else 'mission:')
-                      + clip['trigger']['target'])
+                       else 'scene:' if kind == 'scene'
+                       else 'tactical_event:' if kind == 'tactical_event'
+                       else 'mission:') + clip['trigger']['target'])
             add(source, 'cinematic:' + clip['id'], 'Déclenchement cinématique')
             for event in clip['events']:
                 if event['kind'] == 'sound':
                     add('cinematic:' + clip['id'],
                         'asset:' + bindings.get(event['cue'], event['cue']),
                         'Piste audio')
+                elif event['kind'] == 'actor':
+                    trigger_kind = clip['trigger']['kind']
+                    target = clip['trigger']['target']
+                    mission_id = (
+                        target if trigger_kind in ('before_mission', 'after_mission')
+                        else target.split('/', 1)[0]
+                        if trigger_kind == 'tactical_event' else '')
+                    if mission_id:
+                        add('cinematic:' + clip['id'],
+                            'map_actor:' + mission_id + '/' + event['actor'],
+                            'Acteur cinématique')
         for asset in self.project.asset_registry().to_dict()['entries']:
             if asset['kind'] == 'animation':
                 for frame in asset['frames']:
@@ -163,6 +195,26 @@ class StudioIndex:
             if not clip['events']:
                 issues.append(('warning', 'cinematic:' + clip['id'],
                                'Cinématique vide'))
+        for mission in self.content.missions.values():
+            # A despawn can legitimately target an authored future spawn;
+            # do not flag targets present in wave/spawn action definitions.
+            known = {unit.id for unit in mission.units}
+            for trigger in mission.triggers:
+                for action in trigger.get('actions', ()):
+                    if action.get('kind') == 'spawn':
+                        known.add(action.get('actor', {}).get('id'))
+                    elif action.get('kind') in ('wave', 'queue_wave'):
+                        known.update(actor.get('id') for actor in action.get('actors', ()))
+            for trigger in mission.triggers:
+                for number, action in enumerate(trigger.get('actions', ())):
+                    if (action.get('kind') == 'despawn' and
+                            action.get('unit') not in known):
+                        issues.append((
+                            'warning',
+                            'tactical_event:' + mission.id + '/' + trigger['id'],
+                            'Référence d’acteur absente : ' + str(action.get('unit')) +
+                            ' (despawn #' + str(number + 1) + '). '
+                            'Corriger depuis l’inspecteur de cet événement.'))
         if map_warnings:
             from .workspace_shell import map_reference_problems
             issues.extend(map_reference_problems(self.content))

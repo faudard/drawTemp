@@ -75,6 +75,11 @@ from .editor_reliability import EditRecoveryJournal
 from .performance_trace import begin_ui, finish_ui
 from .workspace_shell import inspect_map, LayoutStore, palette_source_for_tree
 from .workspace_editing import WorkspacePropertyCommand, editable_form
+from .workspace_r2 import BatchPropertyCommand, batch_form
+from .workspace_refactoring import (RenameMapResourceCommand,
+                                    DeleteMapResourceCommand, _mentions,
+                                    plan_coordinated_rename)
+from .workspace_story_refactoring import plan_story_rename
 
 
 class Document:
@@ -3945,22 +3950,100 @@ def launch(path):
             schedule_work_checkpoint()
 
     def commit_workspace_properties(key, baseline, values):
-        """One typed, validated edit with Editor undo and Studio history."""
+        """Single canonical EditingContext transaction for one or many resources."""
         if battle is not None or source_pending():
             raise RuleError('Quitter le playtest et appliquer le JSON avant édition.')
-        form = editable_form(doc.data, key)
-        if form.mission_id != mission_var.get():
-            select_workspace_mission(form.mission_id)
-        command = WorkspacePropertyCommand(
-            key, baseline, tuple(values.items()))
+        if isinstance(key, tuple):
+            form = batch_form(doc.data, key)
+            if form.mission_id != mission_var.get():
+                select_workspace_mission(form.mission_id)
+            command = BatchPropertyCommand(
+                key, tuple(baseline), tuple(values.items()))
+        else:
+            form = editable_form(doc.data, key)
+            if form.mission_id != mission_var.get():
+                select_workspace_mission(form.mission_id)
+            command = WorkspacePropertyCommand(
+                key, baseline, tuple(values.items()))
         design_change(lambda: editing_context.execute(command, publish=False))
         status_var.set('Propriétés Workspace enregistrées (Annuler/Rétablir).')
+        return True
+
+    def rename_workspace_resource(key, baseline, new_id):
+        """Typed, stale-safe rename using the existing Studio history."""
+        if battle is not None or source_pending():
+            raise RuleError('Terminer le playtest et appliquer le JSON.')
+        category, _, identity = key.partition(':')
+        if category in ('scene', 'campaign'):
+            project_before = studio.project.to_dict()
+            content_before = json.dumps(doc.data, sort_keys=True)
+            candidate, updated_project = plan_story_rename(
+                doc.data, studio.project, key, baseline, new_id,
+                project_path=studio.project_path)
+
+            def commit_story_rename():
+                if (studio.project.to_dict() != project_before or
+                        json.dumps(doc.data, sort_keys=True) != content_before):
+                    raise RuleError('Documents modifiés depuis la prévisualisation')
+                if candidate != doc.data:
+                    doc.replace(candidate)
+                studio.project = updated_project
+                if category == 'scene' and studio.story_editor.scene_id == identity:
+                    studio.story_editor.scene_id = new_id
+                if category == 'campaign' and studio.campaign_id.get() == identity:
+                    studio.campaign_id.set(new_id)
+                    studio._show_campaign()
+                editing_context.revision += 1
+
+            design_change(commit_story_rename)
+            status_var.set('Références du scénario/campagne migrées (Undo global).')
+            return True
+        mid = identity.split('/', 1)[0]
+        if mid != mission_var.get():
+            select_workspace_mission(mid)
+        project_before = studio.project.to_dict()
+        old = identity.split('/', 1)[1]
+        if _mentions(project_before, old):
+            content_before = json.dumps(doc.data, sort_keys=True)
+            # Pre-validate both snapshots. Commit inside the existing Studio
+            # history timeline so a single global Undo restores both files.
+            next_content, next_project = plan_coordinated_rename(
+                doc.data, studio.project, key, baseline, new_id)
+
+            def commit_joint_rename():
+                if (studio.project.to_dict() != project_before or
+                        json.dumps(doc.data, sort_keys=True) != content_before):
+                    raise RuleError('Documents modifiés depuis la prévisualisation')
+                doc.replace(next_content)
+                studio.project = next_project
+                editing_context.revision += 1
+
+            design_change(commit_joint_rename)
+        else:
+            command = RenameMapResourceCommand(
+                key, baseline, new_id, project_before)
+            design_change(lambda: editing_context.execute(command, publish=False))
+        status_var.set('Identifiant renommé avec propagation validée (Annuler/Rétablir).')
+        return True
+
+    def delete_workspace_resource(key, baseline):
+        """Use the existing Editor preview gate; refusal leaves history intact."""
+        if battle is not None or source_pending():
+            raise RuleError('Terminer le playtest et appliquer le JSON.')
+        mid = key.partition(':')[2].split('/', 1)[0]
+        if mid != mission_var.get():
+            select_workspace_mission(mid)
+        command = DeleteMapResourceCommand(
+            key, baseline, studio.project.to_dict())
+        design_change(lambda: editing_context.execute(command, publish=False))
+        status_var.set('Ressource supprimée (Annuler/Rétablir disponibles).')
         return True
 
     studio = StudioPanels(
         notebook, tk, ttk,
         SimpleNamespace(showerror=messagebox.showerror,
                         askstring=simpledialog.askstring,
+                        askyesno=messagebox.askyesno,
                         asksaveasfilename=filedialog.asksaveasfilename),
         doc=lambda: doc, content_path=lambda: current_path,
         mission=mission_var.get, selection=lambda: selected_cell,
@@ -3969,7 +4052,9 @@ def launch(path):
         select_mission=select_workspace_mission,
         on_project_saved=on_project_saved, set_active_mission=mission_var.set,
         focus_map_cell=focus_workspace_map,
-        workspace_edit=commit_workspace_properties)
+        workspace_edit=commit_workspace_properties,
+        workspace_rename=rename_workspace_resource,
+        workspace_delete=delete_workspace_resource)
     if recovered_work:
         recovered_content = recovered_work[0]
         doc.data = Content.from_dict(
@@ -4000,7 +4085,62 @@ def launch(path):
             if row and not row.startswith('group:'):
                 gesture.update(row=row, x=event.x_root, y=event.y_root)
 
+        def drag_preview(event):
+            row = gesture.get('row')
+            sx, sy = gesture.get('x'), gesture.get('y')
+            canvas.delete('workspace_drop_preview')
+            if (not row or sx is None or
+                    abs(event.x_root - sx) + abs(event.y_root - sy) < 12):
+                return
+            x = event.x_root - canvas.winfo_rootx()
+            y = event.y_root - canvas.winfo_rooty()
+            if not (0 <= x < canvas.winfo_width() and
+                    0 <= y < canvas.winfo_height()):
+                return
+            from types import SimpleNamespace
+            cell = event_cell(SimpleNamespace(x=int(x), y=int(y), state=0))
+            if cell is None:
+                return
+            try:
+                if kind == 'asset':
+                    # Asset placement still validates through choose_palette_asset.
+                    preview_cells((cell,), tag='workspace_drop_preview',
+                                  color='#c58d36')
+                    return
+                if kind == 'workspace':
+                    entry = palette_source_for_tree(row, doc.data, mission_var.get())
+                    link, destination = '', ''
+                    if row.startswith('map_object:'):
+                        source_mid, eid = row.partition(':')[2].split('/', 1)
+                        original = next(o for m in doc.data['missions']
+                                        if m['id'] == source_mid
+                                        for o in m['objects'] if o['id'] == eid)
+                        link = original.get('link', '')
+                        destination = original.get('destination', '')
+                else:
+                    entry = entity_palette.entries.get(row)
+                    if entry is None:
+                        return
+                    link, destination = (entity_palette.link.get(),
+                                         entity_palette.destination.get())
+                cells, valid = preview_entity_cells(
+                    doc.data, mission_var.get(), entry, cell,
+                    link=link, destination=destination)
+                if battle or source_pending():
+                    valid = False
+                mission = next(m for m in doc.data['missions']
+                               if m['id'] == mission_var.get())
+                inside = (pos for pos in cells
+                          if 0 <= pos[0] < mission['board']['width']
+                          and 0 <= pos[1] < mission['board']['height'])
+                preview_cells(inside, tag='workspace_drop_preview',
+                              color='#36a16c' if valid else '#e05252')
+            except (RuleError, ValueError, KeyError, StopIteration, TypeError):
+                preview_cells((cell,), tag='workspace_drop_preview',
+                              color='#e05252')
+
         def finish(event):
+            canvas.delete('workspace_drop_preview')
             row = gesture.get('row')
             start_x, start_y = gesture.get('x'), gesture.get('y')
             gesture.clear()
@@ -4056,6 +4196,10 @@ def launch(path):
                 messagebox.showerror('Dépôt refusé', str(exc))
 
         tree.bind('<ButtonPress-1>', start, add='+')
+        tree.bind('<B1-Motion>', drag_preview, add='+')
+        tree.bind('<Escape>',
+                  lambda _event: (gesture.clear(),
+                                  canvas.delete('workspace_drop_preview')), add='+')
         tree.bind('<ButtonRelease-1>', finish, add='+')
 
     wire_drop(studio.workspace.tree, 'workspace')
@@ -4097,6 +4241,10 @@ def launch(path):
                 'outer_right': work.sashpos(1),
                 'vertical': canvas_region.sashpos(0),
                 'tab': notebook.tab(notebook.select(), 'text'),
+                'favorites': sorted(studio.workspace.explorer.favorites),
+                'recents': studio.workspace.explorer.recents,
+                'family_filter': studio.workspace.family_filter.get(),
+                'scope_filter': studio.workspace.scope_filter.get(),
             })
         except (OSError, ValueError, tk.TclError):
             # UI preferences must never prevent authoring or saving gameplay.
@@ -4104,6 +4252,10 @@ def launch(path):
 
     def restore_layout():
         values = layout_store().load()
+        studio.workspace.explorer.favorites = set(values.get('favorites', ()))
+        studio.workspace.explorer.recents = list(values.get('recents', ()))
+        studio.workspace.family_filter.set(values.get('family_filter', 'all'))
+        studio.workspace.scope_filter.set(values.get('scope_filter', 'all'))
         try:
             if 'outer_left' in values and values['outer_left'] < work.winfo_width():
                 work.sashpos(0, values['outer_left'])

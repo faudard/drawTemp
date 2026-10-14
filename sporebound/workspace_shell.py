@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from .model import RuleError
+from .workspace import GROUPS
 
 
 @dataclass(frozen=True)
@@ -177,27 +178,48 @@ def _missing_entry(key):
 
 
 class LayoutStore:
-    """Atomic UI-only preferences, deliberately separate from Content/GameProject."""
+    """Atomic UI-only preferences; never part of Content or GameProject."""
     def __init__(self, path):
         self.path = Path(path)
 
-    def load(self):
-        try:
-            data = json.loads(self.path.read_text(encoding='utf-8'))
-        except (OSError, ValueError, TypeError):
-            return {}
+    @staticmethod
+    def clean(data):
         if not isinstance(data, dict):
             return {}
-        return {k: v for k, v in data.items()
-                if k in ('outer_left', 'outer_right', 'vertical', 'tab') and
-                (type(v) is int and v >= 0 if k != 'tab'
-                 else isinstance(v, str) and len(v) <= 100)}
+        safe = {}
+        for key in ('outer_left', 'outer_right', 'vertical'):
+            value = data.get(key)
+            if type(value) is int and value >= 0:
+                safe[key] = value
+        tab = data.get('tab')
+        if isinstance(tab, str) and len(tab) <= 100:
+            safe['tab'] = tab
+        for key in ('favorites', 'recents'):
+            values = data.get(key)
+            if isinstance(values, (list, tuple)):
+                unique = []
+                for value in values:
+                    if (isinstance(value, str) and ':' in value and
+                            len(value) <= 256 and value not in unique):
+                        unique.append(value)
+                    if len(unique) >= 64:
+                        break
+                safe[key] = unique
+        if data.get('family_filter') in ('all',) + tuple(
+                kind for kind, _ in GROUPS):
+            safe['family_filter'] = data['family_filter']
+        if data.get('scope_filter') in ('all', 'favorites', 'recents'):
+            safe['scope_filter'] = data['scope_filter']
+        return safe
+
+    def load(self):
+        try:
+            return self.clean(json.loads(self.path.read_text(encoding='utf-8')))
+        except (OSError, ValueError, TypeError):
+            return {}
 
     def save(self, layout):
-        cleaned = {k: v for k, v in dict(layout).items()
-                   if k in ('outer_left', 'outer_right', 'vertical', 'tab') and
-                   (type(v) is int and v >= 0 if k != 'tab'
-                    else isinstance(v, str) and len(v) <= 100)}
+        cleaned = self.clean(layout)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(self.path.suffix + '.tmp')
         temporary.write_text(json.dumps(cleaned, sort_keys=True), encoding='utf-8')
