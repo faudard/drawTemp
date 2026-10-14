@@ -6,7 +6,8 @@ import unittest
 from sporebound.engine import Battle
 from sporebound.model import Board, Content, Mission, RuleError, Tile, Unit
 from sporebound.tactical_choice_lab_r6 import (
-    available_tactical_choices, evaluate_choice_gate, run_choice_lab)
+    available_tactical_choices, compare_choice_reports,
+    evaluate_choice_gate, run_choice_lab)
 
 
 def arena():
@@ -76,6 +77,26 @@ class TacticalChoiceR6Tests(unittest.TestCase):
             evaluate_choice_gate(report, required_pairs=["positioning+magic"])
         with self.assertRaises(RuleError):
             run_choice_lab(arena(), "arena", max_samples=100)
+
+    def test_paired_choice_comparison_and_disappearing_pairs(self):
+        report = run_choice_lab(arena(), "arena", seed=2,
+                                max_commands=15, sample_stride=1)
+        self.assertTrue(compare_choice_reports(report, deepcopy(report))["passed"])
+        changed = deepcopy(report)
+        changed["decisions"] = []
+        comparison = compare_choice_reports(report, changed)
+        self.assertFalse(comparison["passed"])
+        self.assertTrue(comparison["pairs_disappeared"])
+        self.assertGreater(
+            comparison["multi_category_rate_before"],
+            comparison["multi_category_rate_after"])
+        drift = deepcopy(report)
+        drift["digest"] = "tampered"
+        self.assertFalse(compare_choice_reports(report, drift)["passed"])
+        scope = deepcopy(report)
+        scope["seed"] += 1
+        with self.assertRaises(RuleError):
+            compare_choice_reports(report, scope)
 
     def test_runtime_design_limits_are_not_enforced(self):
         content = arena()
