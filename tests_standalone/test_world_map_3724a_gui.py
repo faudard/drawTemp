@@ -153,7 +153,12 @@ class WorldMapGUITests(TestCase):
                                     and w.cget("text") == label)
 
                     root.update()
-                    button("Nouvelle partie").invoke()
+                    # The cinematic title uses Canvas action cards rather
+                    # than the previous standalone ttk new-game button.
+                    title = sessions[0]._title_menu.canvas
+                    title.focus_set()
+                    title.event_generate("<Home>")
+                    title.event_generate("<Return>")
                     root.update()
                     button("Carte du monde").invoke()
                     root.update()
