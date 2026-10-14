@@ -29,6 +29,9 @@ PRESETS = (
     "Dupliquer unité en X,Y",
     "Équiper unité : arc",
     "Inventaire : potions personnalisées",
+    "Case X,Y : couverture",
+    "Case X,Y : danger",
+    "IA choisie : comportement",
 )
 
 
@@ -94,10 +97,15 @@ class BalanceMatrixStudio:
         self.pos_y = self.tk.StringVar(value="0")
         self.attack_delta = self.tk.StringVar(value="2")
         self.potions = self.tk.StringVar(value="4")
+        self.cover = self.tk.StringVar(value="50")
+        self.hazard = self.tk.StringVar(value="10")
+        self.ai_behavior = self.tk.StringVar(value="tactical")
         for col, (label, var) in enumerate((
                 ("Position X", self.pos_x), ("Position Y", self.pos_y),
                 ("Bonus attaque", self.attack_delta),
-                ("Potions joueur", self.potions))):
+                ("Potions joueur", self.potions),
+                ("Couverture", self.cover), ("Danger", self.hazard),
+                ("IA comportement", self.ai_behavior))):
             self.ttk.Label(tuning, text=label).grid(row=0, column=col, sticky="w")
             self.ttk.Entry(tuning, textvariable=var, width=13).grid(
                 row=1, column=col, sticky="w", padx=(0, 12))
@@ -218,6 +226,17 @@ class BalanceMatrixStudio:
         elif preset == PRESETS[10]:
             result["inventory"] = {"potion": int(self.potions.get()),
                                    "ether": 2, "phoenix": 1}
+        elif preset == PRESETS[11]:
+            result["tile_changes"] = [{
+                "pos": [int(self.pos_x.get()), int(self.pos_y.get())],
+                "cover": int(self.cover.get())}]
+        elif preset == PRESETS[12]:
+            result["tile_changes"] = [{
+                "pos": [int(self.pos_x.get()), int(self.pos_y.get())],
+                "hazard": int(self.hazard.get())}]
+        elif preset == PRESETS[13]:
+            result["unit_overrides"] = {
+                uid: {"behavior": self.ai_behavior.get().strip()}}
         return result
 
     def _add(self, mid, preset, uid=""):
@@ -235,7 +254,7 @@ class BalanceMatrixStudio:
         if self.busy:
             return
         mid, preset, uid = self.mission.get(), self.preset.get(), self.unit.get()
-        if preset in PRESETS[5:10] and not uid:
+        if preset in (*PRESETS[5:10], PRESETS[13]) and not uid:
             self.owner.dialogs.showerror("Balance Matrix", "Choisir une unité cible.")
             return
         if len(self.cases) >= 24:
