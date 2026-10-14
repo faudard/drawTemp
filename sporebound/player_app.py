@@ -150,7 +150,12 @@ class PlayerApplication:
         self._audible_scene = None
         self._closing = False
         self.root.protocol("WM_DELETE_WINDOW", self.close)
-        self.root.bind("<Escape>", lambda event: self.root.attributes("-fullscreen", False))
+        self.root.bind(
+            "<Escape>",
+            lambda event: (self._title_menu._close_overlay()
+                           if getattr(self, "_title_menu", None) is not None
+                           and self._title_menu.overlay is not None
+                           else self.root.attributes("-fullscreen", False)))
         self.title_screen()
 
     def _style(self):
@@ -213,6 +218,8 @@ class PlayerApplication:
             self.iso_renderer = None
         for child in self.view.winfo_children():
             child.destroy()
+        self.view.configure(padding=18)
+        self._title_menu = None
         self.canvas = None
         self.info = None
         self.guide_panel = None
@@ -275,79 +282,15 @@ class PlayerApplication:
             self._seen_tactical_cinematics[battle.battle_id] = set(battle.fired)
 
     def title_screen(self):
+        """Display the cinematic menu without exposing save maintenance."""
         self._audible_scene = None
         self._resume_world_after_scene = False
         self.audio.music_for("title")
         self._clear()
         self.presentation.transition("title")
-        self._heading(self.project.title, self.project.subtitle)
-        panel = self.ttk.LabelFrame(self.view, text="Nouvelle aventure / reprendre", padding=18)
-        panel.pack(anchor="center", fill="x", padx=160, pady=30)
-        if self.chapter_one:
-            self.ttk.Label(
-                panel, text="CHAPITRE I  ·  LES CENDRES",
-                font=("TkDefaultFont", 16, "bold")).pack(anchor="w", pady=(0, 10))
-            self.ttk.Label(
-                panel, text="Du camp des réfugiés à Vaucouleurs : recrutez un "
-                            "compagnon, traversez le pont et choisissez entre "
-                            "archives et otages.",
-                wraplength=620, justify="left").pack(anchor="w", pady=(0, 16))
-            slot_row = self.ttk.Frame(panel)
-            slot_row.pack(fill="x", pady=(0, 12))
-            self.ttk.Label(slot_row, text="Emplacement").pack(side="left", padx=(0, 12))
-            self.ttk.Combobox(
-                slot_row, textvariable=self.slot_var, state="readonly",
-                values=[str(i) for i in range(1, self.project.save_slots + 1)],
-                width=8).pack(side="left")
-            self._button(panel, "Commencer le chapitre I", self._new_game).pack(
-                fill="x", pady=4)
-            self._button(panel, "Continuer le chapitre I", self._load_game).pack(
-                fill="x", pady=4)
-            self._button(panel, "Sauvegardes", self.save_manager_screen).pack(
-                fill="x", pady=4)
-            self._button(panel, "Options", self.options_screen).pack(fill="x", pady=4)
-            self._button(panel, "Quitter", self.close).pack(fill="x", pady=4)
-            return
-        self.ttk.Label(panel, text="Campagne").grid(row=0, column=0, sticky="w", pady=9)
-        self.ttk.Combobox(panel, textvariable=self.campaign_var, state="readonly",
-                          values=[c["id"] for c in self.project.campaigns],
-                          width=26).grid(row=0, column=1, padx=15)
-        self.ttk.Label(panel, text="Emplacement").grid(row=1, column=0, sticky="w", pady=9)
-        self.ttk.Combobox(panel, textvariable=self.slot_var, state="readonly",
-                          values=[str(i) for i in range(1, self.project.save_slots + 1)],
-                          width=26).grid(row=1, column=1, padx=15)
-        self.ttk.Checkbutton(
-            panel, text="Sessions longues (expérimental, slots séparés)",
-            variable=self.long_save_var).grid(
-                row=2, column=0, columnspan=2, sticky="w", pady=8)
-        self._button(panel, "Nouvelle partie", self._new_game).grid(
-            row=3, column=0, columnspan=2, sticky="ew", pady=(12, 4))
-        self._button(panel, "Continuer", self._load_game).grid(
-            row=4, column=0, columnspan=2, sticky="ew", pady=4)
-        self._button(panel, "Migrer une sauvegarde v1 vers v2", self._migrate_game).grid(
-            row=5, column=0, columnspan=2, sticky="ew", pady=4)
-        self._button(panel, "Copier v1/v2 vers session longue",
-                     self._migrate_long_game).grid(
-            row=6, column=0, columnspan=2, sticky="ew", pady=4)
-        self._button(panel, "Gestionnaire de sauvegardes",
-                     self.save_manager_screen).grid(
-            row=7, column=0, columnspan=2, sticky="ew", pady=4)
-        # The authored castle example is a repository demo, not packaged
-        # core content. Show its entry only when that source is available.
-        castle_example = Path(__file__).resolve().parent.parent / "examples" / "castle_vertical_slice.py"
-        row = 8
-        if self.project.sieges:
-            self._button(panel, "Sièges créés dans le Studio", self._authored_siege_menu).grid(
-                row=row, column=0, columnspan=2, sticky="ew", pady=4)
-            row += 1
-        if castle_example.is_file():
-            self._button(panel, "Campagne Château (2.8)", self._open_castle).grid(
-                row=row, column=0, columnspan=2, sticky="ew", pady=4)
-            row += 1
-        self._button(panel, "Options", self.options_screen).grid(
-            row=row, column=0, columnspan=2, sticky="ew", pady=4)
-        self._button(panel, "Quitter", self.close).grid(
-            row=row + 1, column=0, columnspan=2, sticky="ew", pady=4)
+        self.view.configure(padding=0)
+        from .title_menu import TitleMenu
+        self._title_menu = TitleMenu(self)
 
     def _authored_siege_menu(self):
         self._clear()
