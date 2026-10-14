@@ -38,15 +38,19 @@ def validate_plan(plan, content, project):
     require(any(isinstance(step, dict) and step.get("kind") == "mission"
                 for step in steps), "Certification must execute a real battle")
     for step in steps:
-        require(isinstance(step, dict) and step.get("kind") in
-                {"choice", "mission"}, "Unknown certification step")
+        require(isinstance(step, dict) and
+                type(step.get("kind")) is str and
+                step["kind"] in {"choice", "mission"},
+                "Unknown certification step")
         if step["kind"] == "choice":
             require(set(step) == {"kind", "id"} and
                     isinstance(step["id"], str) and bool(step["id"]),
                     "Invalid dialogue step")
         else:
             require(set(step) == {"kind", "id", "outcome"} and
+                    isinstance(step["id"], str) and
                     step["id"] in content.missions and
+                    isinstance(step["outcome"], str) and
                     step["outcome"] in {"victory", "defeat"},
                     "Invalid tactical step")
     expected = plan["expect"]
