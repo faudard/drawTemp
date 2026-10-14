@@ -70,10 +70,25 @@ class ReusablePrefab4GuiTests(unittest.TestCase):
                     # starts with rectangular view, where (8,8) is stable.
                     canvas.event_generate('<Motion>', x=8*54+8, y=8*54+8)
                     root.update()
-                    self.assertTrue(canvas.find_withtag('editor_group_preview'))
+                    preview = canvas.find_withtag('editor_group_preview')
+                    self.assertTrue(preview)
+                    self.assertEqual(
+                        canvas.itemcget(preview[0], 'outline'), '#36a16c',
+                        'Prefab hover is invalid (red) before the click-to-stamp')
                     canvas.event_generate('<Button-1>', x=8*54+8, y=8*54+8)
                     canvas.event_generate('<ButtonRelease-1>', x=8*54+8, y=8*54+8)
                     root.update()
+                    self.assertEqual(popups, [],
+                                     'Prefab stamping rejected: ' + repr(popups))
+                    status = next((
+                        str(root.getvar(w.cget('textvariable')))
+                        for w in root.winfo_children()
+                        if isinstance(w, ttk.Label) and w.cget('textvariable')
+                    ), '<missing top-level status label>')
+                    self.assertIn(
+                        'placé en', status,
+                        f'Click did not commit: status={status!r}; tool={tool.get()!r}; '
+                        f'mission={missions.get()!r}; button_binding={canvas.bind("<Button-1>")!r}')
                     buttons['Enregistrer sous'].invoke()
                     saved = json.loads(output_path.read_text(encoding='utf-8'))
                     dst = next(m for m in saved['missions'] if m['id'] == 'prefab_gui_dst4')
