@@ -14,7 +14,7 @@ AI damage formula, persistence format or new default-rules manifest.
 | R6.3 — Formation Intelligence | Existing real Phalanx, Shield Wall, Escort damage/reaction commands; active formation diagnostics expose their verified state | Unit chooses Phalanx only when a spear partner is nearby |
 | R6.4 — Advanced Objectives | Five additional opt-in victory conditions: capture, escort, defend, sabotage, retreat; Studio objective selector and validation | End-to-end capture and sabotage victory/replay, invalid mission rejection |
 | R6.5 — Tactical Terrain & Floors | Active plan exposes height/cover/hazards/path risk. Coordinated ground archers may now take safe, reachable high-cover firing tiles; ground-only squad heal/protection/focus filters allies by floor; upper-floor actors delegate to existing layered AI | Deterministic legal move, cross-floor heal exclusion and parity with layered planner |
-| R6.6 — Elite & Boss AI | Existing `phase_boss` behavior and boss threat previews flow through current-active enemy plan; scripted phases and wave actions remain canonical | Existing `test_tactical_rpg3.py` covers phase/replay |
+| R6.6 — Elite & Boss AI | New **opt-in** `adaptive_boss` behavior uses the real pathfinder/charge options to choose safer footprint-wide moves on dangerous terrain, preserve existing phase-one Guard, and show exact conditional charge/attack path; authored pending reinforcements are `possible`, queued waves are `queued` | `test_elite_boss_r6.py`: blocked/hazard terrain, multi-cell movement, phase one, charge/replay and pending-wave telegraph |
 | R6.7 — Jobs & Builds UX | `party_build_preview` invokes `Campaign.prepare` on a deep copy to show effective equipment, talents, jobs, skills, team tactics and combat stats without spending JP | Build preview checks calculated stats and no campaign mutation |
 
 ## Exact victory conditions
@@ -52,9 +52,10 @@ manifest; new R6 recordings require `tactical_r6_rules()` or the exact
    protected-unit selection and defense-object editing still use their
    existing authoring surfaces. This PR does not implement an entirely new
    graphical objective editor.
-4. R6.5 advanced geometry choices and full multilevel boss path planning
-   remain follow-up work. Existing stairs, level attacks and phalanx
-   threat systems are reused rather than replaced.
+4. R6.5 handles local terrain choices only: it is not long-horizon A*. R6.6
+   has conservative 2D boss positioning and never invents cross-floor
+   boss charges. Full multilevel boss planning and cooperation with reinforcements
+   after spawn remain follow-up work.
 5. R6.7 exposes a pure **preparation view model**; integrating dedicated
    party loadout controls in the final Player flow remains follow-up work.
 6. The 15–30 minute standard battle duration is a **playtest design target**,
@@ -72,3 +73,35 @@ python -m unittest -v tests_standalone.test_tactical_levels_3720c
 Acceptance requires actual command execution, complete replay equality,
 unchanged default manifest, no campaign mutation by read-only previews and
 different coordinated AI choices on different mission objectives.
+
+
+## R6.6 — Elite & Boss AI (opt-in)
+
+Set `Unit.behavior = "adaptive_boss"` in a mission authored with
+`authored_rules_for_document()` or create a Battle using
+`tactical_r6_rules()`. `phase_boss` remains unchanged for old advanced
+replays; the new behavior gets its own versioned manifest entry `6.6`.
+
+In phase 1, this commander uses the old guard/defend rule. At phase 2 and
+above, it considers legal charges, then safe reachable positions around
+walls, hazards, cover and elevation, evaluating **all cells** of a multicell
+footprint. It issues only `move`, `charge`, `act` etc. through the
+existing Battle executor; there is no hidden attack, damage roll or state.
+
+Player/Studio can use `boss_r6_telegraph(battle, boss_id)` or the
+`bosses` section of `tactical_snapshot(battle)`:
+
+- `command`, `path`, `threat_cells` and `destination_cells` are populated
+  only for the active boss's current decision, with **conditional** certainty.
+- Pending `hp_below` reinforcement scripts are labelled **possible** and
+  show their authored threshold and wave size.
+- Already pending `EncounterDirector` waves are **queued** facts.
+- A cast already started is **scheduled**; the forecast never promises a
+  future AI action on another unit's turn.
+
+No new save format or boss-script action was introduced. Phase events,
+spawns, waves and their expiry remain in the existing trigger dispatcher.
+
+```bash
+python -m unittest -v tests_standalone.test_elite_boss_r6
+```
