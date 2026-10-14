@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "min_passed_paths": 3,
+  "required_choices": [
+    "oath/guard",
+    "oath_reward/provisions",
+    "oath/alone",
+    "oath_reward/proceed"
+  ],
+  "required_events": [],
+  "cases": [
+    {
+      "id": "relique_guard_supplies",
+      "campaign": "relique",
+      "seed": 17,
+      "steps": [
+        {
+          "kind": "campaign_choice",
+          "choice": "guard",
+          "expect": {
+            "mode": "campaign",
+            "pending_campaign": "oath_reward",
+            "flags": {
+              "guard_oath": true
+            },
+            "history": [
+              {
+                "scene": "oath",
+                "choice": "guard"
+              }
+            ],
+            "gold": 0
+          }
+        },
+        {
+          "kind": "campaign_choice",
+          "choice": "provisions",
+          "expect": {
+            "mode": "campaign",
+            "pending_campaign": "",
+            "gold": 25,
+            "flags": {
+              "guard_oath": true
+            },
+            "history": [
+              {
+                "scene": "oath",
+                "choice": "guard"
+              },
+              {
+                "scene": "oath_reward",
+                "choice": "provisions"
+              }
+            ],
+            "unlocked": [
+              "crown"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "relique_independent",
+      "campaign": "relique",
+      "seed": 17,
+      "steps": [
+        {
+          "kind": "campaign_choice",
+          "choice": "alone",
+          "expect": {
+            "mode": "campaign",
+            "pending_campaign": "oath_reward",
+            "flags": {
+              "guard_oath": false
+            },
+            "gold": 0
+          }
+        },
+        {
+          "kind": "campaign_choice",
+          "choice": "proceed",
+          "expect": {
+            "mode": "campaign",
+            "pending_campaign": "",
+            "gold": 0,
+            "flags": {
+              "guard_oath": false
+            },
+            "history": [
+              {
+                "scene": "oath",
+                "choice": "alone"
+              },
+              {
+                "scene": "oath_reward",
+                "choice": "proceed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "main_garden_entry",
+      "campaign": "main",
+      "seed": 17,
+      "steps": [
+        {
+          "kind": "start_mission",
+          "mission": "garden",
+          "expect": {
+            "mode": "battle",
+            "pending_tactical": "",
+            "completed": []
+          }
+        }
+      ]
+    }
+  ]
+}

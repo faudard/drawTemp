@@ -449,6 +449,24 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_story_graph_navigation_362_gui.py -v
+      - name: Verify 3.6.3 Branch QA report, story probes and JSON export
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_branch_qa_363_gui.py -v
+      - name: Certify 3.6.4 real GameSession core paths and checkpoint replays
+        run: >-
+          python3 scripts/certify_gameplay_paths_364.py
+          --content sporebound/content/core.json
+          --project sporebound/content/core.game.json
+          --suite tests_standalone/fixtures/core_gameplay_certification_364.json
+          --report "${{ runner.temp }}/gameplay-certification-364.json"
+      - name: Upload 3.6.4 GameSession route certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameplay-certification-364
+          path: ${{ runner.temp }}/gameplay-certification-364.json
+          if-no-files-found: warn
       - name: Exercise full Studio to Player talent progression under Xvfb
         env:
           SPOREBOUND_GUI_SMOKE: '1'
