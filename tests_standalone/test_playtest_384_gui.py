@@ -91,15 +91,19 @@ class HumanPlaytestGUITests(unittest.TestCase):
                 self.assertTrue(any(isinstance(w, ttk.Button) and
                                     w.cget("text") == "Importer playtests JSON"
                                     for w in panels))
-                # Obtain the actual notebook's attached controller via a
-                # selection-independent Tk widget and exercise model from UI.
+                from types import SimpleNamespace
                 from sporebound.studio_playtest import PlaytestStudio
-                # Locate the panel through its bound button callback, not
-                # by fabricating a new editor document.
-                panel = next(w for w in panels if isinstance(w, ttk.Button)
-                             and w.cget("text") == "Importer playtests JSON")
-                callback = root.tk.globalgetvar(panel.cget("command")) if False else None
-                self.assertIsNotNone(panel)
+                # Also exercise the actual model rendering with a real Tk
+                # notebook. No manual JSON write or fake engine simulation.
+                model = PlaytestStudio(
+                    SimpleNamespace(tk=tk, ttk=ttk, dialogs=None), book)
+                model.set_report(sample)
+                self.assertEqual(len(model.rows.get_children()), 1)
+                model.rows.selection_set(model.rows.get_children()[0])
+                model.select()
+                self.assertIn("garden", model.summary.cget("text"))
+                self.assertIn("13.0", model.summary.cget("text"))
+                self.assertGreater(len(model.canvas.find_all()), 0)
                 self.assertFalse(errors)
             finally:
                 root.destroy()
