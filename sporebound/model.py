@@ -465,7 +465,8 @@ class Content:
             known_trigger_ids = {row['id'] for row in m.triggers}
             for row in m.triggers:
                 delayed = False
-                for key in ('delay_ticks', 'delay_activations'):
+                for key in ('delay_ticks', 'delay_activations',
+                            'expire_after_ticks', 'expire_after_activations'):
                     if key in row:
                         require(type(row[key]) is int and 1 <= row[key] <= 10000,
                                 f'{key} must be 1..10000')
@@ -475,6 +476,12 @@ class Content:
                             'Timed trigger requires a predecessor')
                     require(len(m.triggers) <= 200,
                             'Temporal event budget exceeded (200 triggers)')
+                for unit in ('ticks', 'activations'):
+                    delay = row.get('delay_' + unit, 0)
+                    expires = row.get('expire_after_' + unit)
+                    if expires is not None:
+                        require(expires > delay,
+                                'Expiration must follow its corresponding delay')
                 if 'cancel_after' in row:
                     refs = row['cancel_after']
                     require(isinstance(refs, list) and 1 <= len(refs) <= 8,
