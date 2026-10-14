@@ -26,7 +26,7 @@ EQUIPMENT_FIELDS = {"weapon", "attack_range", "min_range", "reaction",
                     "support", "movement", "behavior", "skills", "tactics"}
 FIELDS = {"id", "mission", "remove_units", "team_deltas",
           "unit_deltas", "unit_overrides", "ruleset",
-          "unit_positions", "clone_units", "inventory"}
+          "unit_positions", "clone_units", "inventory", "tile_changes"}
 
 
 def _check_deltas(value, label):
@@ -104,6 +104,23 @@ def _spec(raw, content, rulesets):
                     for row in clones)
             and len({row["id"] for row in clones}) == len(clones),
             "Invalid cloned unit composition")
+    tiles = raw.get("tile_changes", [])
+    require(type(tiles) is list and len(tiles) <= 128
+            and all(type(row) is dict and
+                    "pos" in row and
+                    set(row) <= {"pos", "cover", "hazard", "cost", "blocked"} and
+                    len(row) >= 2 and
+                    type(row["pos"]) in (tuple, list) and
+                    len(row["pos"]) == 2 and
+                    all(type(x) is int for x in row["pos"]) and
+                    all((type(value) is bool if key == "blocked" else
+                         type(value) is int and
+                         (1 <= value <= 99 if key == "cost" else
+                          0 <= value <= (100 if key == "cover" else 10000)))
+                        for key, value in row.items() if key != "pos")
+                    for row in tiles)
+            and len({tuple(row["pos"]) for row in tiles}) == len(tiles),
+            "Invalid map tile variants")
     inventory = raw.get("inventory")
     require(inventory is None or (
             type(inventory) is dict
@@ -115,6 +132,7 @@ def _spec(raw, content, rulesets):
             "unit_positions": deepcopy(positions),
             "clone_units": deepcopy(clones),
             "inventory": deepcopy(inventory),
+            "tile_changes": deepcopy(tiles),
             "remove_units": list(removed),
             "team_deltas": deepcopy(team_deltas),
             "unit_deltas": deepcopy(unit_deltas),
@@ -140,6 +158,14 @@ def scenario_content(content, spec, *, rules=None):
     require(isinstance(content, Content), "Matrix expects Content")
     clone = deepcopy(content)
     mission = clone.missions[spec["mission"]]
+    for entry in spec.get("tile_changes", []):
+        cell = tuple(entry["pos"])
+        require(mission.board.contains(cell), "Tile variant is outside map")
+        terrain = deepcopy(mission.board.tile(cell))
+        for key, value in entry.items():
+            if key != "pos":
+                setattr(terrain, key, value)
+        mission.board.tiles[cell] = terrain
     mission.units = [u for u in mission.units
                      if u.id not in spec["remove_units"]]
     for unit in mission.units:
