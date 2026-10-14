@@ -94,6 +94,19 @@ class PlayerR12Tests(unittest.TestCase):
         copy = build_controller(save_dir=self.temp.name)
         self.assertEqual(copy.load(1)["exploration"], game.state()["exploration"])
 
+    def test_explicit_backup_recovers_previous_verified_slot(self):
+        self.player.new_game()
+        self.player.save(1)
+        self.player.choose("enter")
+        self.player.save(1)
+        original = Path(self.temp.name) / "slot_1.json"
+        backup = original.with_suffix(".json.bak")
+        self.assertTrue(backup.exists())
+        original.write_text("invalid checkpoint", encoding="utf-8")
+        self.player.restore_backup(1)
+        self.assertEqual(original.read_bytes(), backup.read_bytes())
+        self.assertEqual(self.player.state()["screen"], "dialogue")
+
     def test_ui_modules_are_optional_until_launch(self):
         import sys
         from drawtemp.player import controller, qt_app
