@@ -27,6 +27,7 @@ from .player_ux import (KeyBindings, PresentationState, combat_hud,
 from .player_preferences import load_preferences, save_preferences
 from .player_guidance import combat_guidance
 from .player_action_preview import action_preview, preview_screen_geometry
+from .player_hud_layout import combat_hud_sections
 
 
 class PlayerApplication:
@@ -72,6 +73,20 @@ class PlayerApplication:
         self.guidance_enabled = tk.BooleanVar(value=False)
         self.guidance_var = tk.StringVar()
         self.guide_panel = None
+        self.hud_log_visible = tk.BooleanVar(value=False)
+        self.hud_sidebar_visible = tk.BooleanVar(value=True)
+        self.hud_timeline_var = tk.StringVar()
+        self.hud_focus_var = tk.StringVar()
+        self.hud_objective_var = tk.StringVar()
+        self.hud_party_var = tk.StringVar()
+        self.hud_notebook = None
+        self.hud_sidebar = None
+        self.hud_panes = None
+        self.hud_journal = None
+        self.hud_party = None
+        self.hud_portrait = None
+        self.hud_portrait_renderer = None
+        self._hud_portrait_unit = None
         self.preview_enabled = tk.BooleanVar(value=False)
         self.preview_var = tk.StringVar()
         self.preview_panel = None
@@ -190,6 +205,14 @@ class PlayerApplication:
         self.info = None
         self.guide_panel = None
         self.preview_panel = None
+        self.hud_notebook = None
+        self.hud_sidebar = None
+        self.hud_panes = None
+        self.hud_journal = None
+        self.hud_party = None
+        self.hud_portrait = None
+        self.hud_portrait_renderer = None
+        self._hud_portrait_unit = None
 
     def _heading(self, text, subtitle=""):
         self.ttk.Label(self.view, text=text, font=("TkDefaultFont", round(24 * self.text_scale.get() / 100), "bold")).pack(
@@ -1209,11 +1232,19 @@ class PlayerApplication:
             self.strategy_screen()
             return
         self.audio.music_for(f"mission_{battle.mission.id}", "battle")
-        self._heading(battle.mission.name,
-                      "Tick " + str(battle.tick) + "    " +
-                      ("Résultat : " + battle.result if battle.result else
-                       "Déploiement" if battle.deploying else
-                       "Unité active : " + (battle.active.name if battle.active else "?")))
+        title_row = self.ttk.Frame(self.view)
+        title_row.pack(fill="x", pady=(0, 3))
+        self.ttk.Label(
+            title_row, text=battle.mission.name,
+            font=("TkDefaultFont", round(16 * self.text_scale.get() / 100),
+                  "bold")).pack(side="left")
+        self.ttk.Label(
+            title_row, text=("Tick " + str(battle.tick) + " · " +
+                 ("Résultat : " + str(battle.result) if battle.result else
+                  "Déploiement" if battle.deploying else
+                  "Actif : " + (battle.active.name if battle.active else "CT"))),
+            font=("TkDefaultFont", round(10 * self.text_scale.get() / 100))
+        ).pack(side="right")
         self.ttk.Label(
             self.view, text="Objectif : " + str(battle.mission.objective),
             font=("TkDefaultFont", round(12 * self.text_scale.get() / 100), "bold")
@@ -1221,30 +1252,6 @@ class PlayerApplication:
         self.feedback_var.set("")
         self.ttk.Label(self.view, textvariable=self.feedback_var,
                        wraplength=1050).pack(anchor="w", pady=(3, 5))
-        if not self.compact_hud.get():
-            # Reuse authored portrait bindings; retain thumbnails for Tk lifetime.
-            from .tk_images import resize_photo
-            portraits = self.ttk.Frame(self.view)
-            portraits.pack(fill="x", pady=(3, 5))
-            portrait_renderer = CanvasRenderer(
-                portraits, registry=self.registry, asset_root=self.asset_root)
-            for actor in [u for u in battle.units if u.team == "player"][:6]:
-                card = self.ttk.Frame(portraits)
-                card.pack(side="left", padx=5)
-                photo = portrait_renderer.image("portrait", actor.id)
-                if photo is not None:
-                    try:
-                        thumb = resize_photo(photo, 48, 48, master=card)
-                        icon = self.ttk.Label(card, image=thumb,
-                                              text=actor.name)
-                        icon.image = thumb
-                        icon.pack(anchor="center")
-                    except (ValueError, self.tk.TclError):
-                        pass
-                self.ttk.Label(
-                    card, text=actor.name + " · PV " + str(actor.hp) +
-                    "/" + str(actor.max_hp) + " · MP " + str(actor.mp) +
-                    "/" + str(actor.max_mp)).pack(anchor="center")
         nav = self.ttk.Frame(self.view)
         nav.pack(fill="x", pady=4)
         if session.mode == "fronts":
@@ -1264,32 +1271,106 @@ class PlayerApplication:
         self.ttk.Checkbutton(nav, text="Suivi playtest",
                              variable=self.playtest_optin,
                              command=self._toggle_playtest).pack(side="right", padx=4)
-        self.ttk.Checkbutton(nav, text="Vue isométrique 2.5D",
-                             variable=self.iso_view_var,
-                             command=self._switch_projection).pack(side="right", padx=8)
+        # R7.10 shell: fixed action toolbar below a flexible battle viewport.
+        # Only three thin rows sit above the map (title, navigation, CT).
+        self.hud_footer = self.ttk.LabelFrame(
+            self.view, text="Actions tactiques", padding=(7, 4))
+        self.hud_footer.pack(side="bottom", fill="x", pady=(4, 0))
+        self.hud_workspace = self.ttk.Frame(self.view)
+        self.hud_workspace.pack(fill="both", expand=True)
+        ct_strip = self.ttk.LabelFrame(
+            self.hud_workspace, text="Ordre des activations · CT estimé", padding=(8, 3))
+        ct_strip.pack(fill="x", pady=(2, 4))
+        self.ttk.Label(ct_strip, textvariable=self.hud_timeline_var,
+                       wraplength=1000, justify="left").pack(anchor="w")
+        self.hud_panes = self.ttk.Panedwindow(
+            self.hud_workspace, orient="horizontal")
+        self.hud_panes.pack(fill="both", expand=True)
+        self.hud_map = self.ttk.Frame(self.hud_panes)
+        self.hud_sidebar = self.ttk.Frame(self.hud_panes, width=320)
+        self.hud_panes.add(self.hud_map, weight=4)
+        if self.hud_sidebar_visible.get():
+            self.hud_panes.add(self.hud_sidebar, weight=1)
+        self.hud_tools = self.ttk.Frame(self.hud_sidebar)
+        self.hud_tools.pack(fill="x", pady=(0, 4))
         self.ttk.Checkbutton(
-            nav, text="Aide tactique", variable=self.guidance_enabled,
-            command=self._toggle_guidance).pack(side="right", padx=8)
+            self.hud_tools, text="Vue 2.5D", variable=self.iso_view_var,
+            command=self._switch_projection).grid(row=0, column=0, sticky="w")
         self.ttk.Checkbutton(
-            nav, text="Prévision d'action", variable=self.preview_enabled,
-            command=self._toggle_action_preview).pack(side="right", padx=8)
+            self.hud_tools, text="Aide", variable=self.guidance_enabled,
+            command=self._toggle_guidance).grid(row=0, column=1, sticky="w")
+        self.ttk.Checkbutton(
+            self.hud_tools, text="Aperçu", variable=self.preview_enabled,
+            command=self._toggle_action_preview).grid(row=0, column=2, sticky="w")
+        self.ttk.Checkbutton(
+            self.hud_tools, text="Journal", variable=self.hud_log_visible,
+            command=self._toggle_combat_log).grid(row=1, column=0, sticky="w")
+        self.hud_tools.columnconfigure(0, weight=1)
+        self.hud_tools.columnconfigure(1, weight=1)
+        self.hud_tools.columnconfigure(2, weight=1)
+        focus = self.ttk.LabelFrame(
+            self.hud_sidebar, text="Personnage actif", padding=(6, 4))
+        focus.pack(fill="x", pady=(0, 4))
+        self.hud_portrait = self.ttk.Label(focus, width=5)
+        self.hud_portrait.pack(side="left", padx=(0, 7))
+        self.ttk.Label(
+            focus, textvariable=self.hud_focus_var, wraplength=225,
+            justify="left").pack(side="left", fill="x", expand=True)
+        self.hud_portrait_renderer = CanvasRenderer(
+            focus, registry=self.registry, asset_root=self.asset_root)
+        self.ttk.Label(
+            self.hud_sidebar, textvariable=self.hud_objective_var,
+            wraplength=285, justify="left").pack(anchor="w", pady=(0, 4))
+        self.hud_notebook = self.ttk.Notebook(self.hud_sidebar)
+        self.hud_notebook.pack(fill="both", expand=True)
+        self.hud_tactics_tab = self.ttk.Frame(self.hud_notebook)
+        self.hud_journal_tab = self.ttk.Frame(self.hud_notebook)
+        self.hud_party_tab = self.ttk.Frame(self.hud_notebook)
+        self.hud_assistance_tab = self.ttk.Frame(self.hud_notebook)
+        self.hud_notebook.add(self.hud_tactics_tab, text="Tactique")
+        self.hud_notebook.add(self.hud_journal_tab, text="Journal")
+        self.hud_notebook.add(self.hud_party_tab, text="Équipe")
+        self.hud_notebook.add(self.hud_assistance_tab, text="Assistance")
+        self.hud_journal = self.tk.Text(
+            self.hud_journal_tab, wrap="word", height=7,
+            bg="#000000" if self.high_contrast.get() else "#182a40",
+            fg="#ffffff" if self.high_contrast.get() else "#e9f2fc",
+            font=("TkDefaultFont", round(10 * self.text_scale.get() / 100)),
+            relief="flat", state="disabled")
+        self.hud_journal.pack(fill="both", expand=True)
+        self.hud_party = self.tk.Text(
+            self.hud_party_tab, wrap="word", height=6,
+            bg="#000000" if self.high_contrast.get() else "#182a40",
+            fg="#ffffff" if self.high_contrast.get() else "#e9f2fc",
+            font=("TkDefaultFont", round(10 * self.text_scale.get() / 100)),
+            relief="flat", state="disabled")
+        self.hud_party.pack(fill="both", expand=True)
+        if not self.hud_log_visible.get():
+            self.hud_notebook.hide(self.hud_journal_tab)
+        # Sidebar may be collapsed without losing the tactical action bar.
+        self._button(nav, "Panneau latéral", self._toggle_hud_sidebar).pack(
+            side="left", padx=3)
         if not session.finalized and not battle.result:
-            actions = self.ttk.Frame(self.view)
-            actions.pack(fill="x", pady=9)
+            actions = self.ttk.Frame(self.hud_footer)
+            actions.pack(fill="x", pady=1)
+            select_row = self.ttk.Frame(actions)
+            select_row.pack(fill="x")
+            commit_row = self.ttk.Frame(actions)
+            commit_row.pack(fill="x")
             if battle.deploying:
                 options = ["deploy", "start_battle"]
                 players = [u.id for u in battle.units if u.team == "player" and u.alive]
                 if self.unit_var.get() not in players:
                     self.unit_var.set(players[0] if players else "")
-                self.ttk.Label(actions, text="Héros").pack(side="left")
-                self.ttk.Combobox(actions, textvariable=self.unit_var,
+                self.ttk.Label(select_row, text="Héros").pack(side="left")
+                self.ttk.Combobox(select_row, textvariable=self.unit_var,
                                   values=players, state="readonly", width=11).pack(
                                       side="left", padx=5)
             elif battle.active is None:
                 options = []
             elif battle.active.team == "enemy":
                 options = []
-                self._button(actions, "Jouer l'activation IA",
+                self._button(commit_row, "Jouer l'activation IA",
                              lambda: self._change(self.player.ai_turn)).pack(side="left")
             else:
                 active_level = battle.unit_levels.get(battle.active.id, 0)
@@ -1314,17 +1395,17 @@ class PlayerApplication:
             if options:
                 if self.action_var.get() not in options:
                     self.action_var.set(options[0])
-                self.ttk.Label(actions, text="Action").pack(side="left", padx=5)
+                self.ttk.Label(select_row, text="Action").pack(side="left", padx=5)
                 action_box = self.ttk.Combobox(
-                    actions, textvariable=self.action_var,
+                    select_row, textvariable=self.action_var,
                     values=options, state="readonly", width=23)
                 action_box.pack(side="left", padx=7)
                 action_box.bind("<<ComboboxSelected>>",
                                 lambda _event: self._redraw())
                 if battle.mission.level_links:
-                    self.ttk.Label(actions, text="Étage cible").pack(side="left")
+                    self.ttk.Label(select_row, text="Étage cible").pack(side="left")
                     floor_box = self.ttk.Combobox(
-                        actions, textvariable=self.level_var, state="readonly",
+                        select_row, textvariable=self.level_var, state="readonly",
                         values=tuple(range(0, 1+max(
                             max(row["from"][0], row["to"][0])
                             for row in battle.mission.level_links))),
@@ -1332,28 +1413,30 @@ class PlayerApplication:
                     floor_box.pack(side="left")
                     floor_box.bind("<<ComboboxSelected>>",
                                    lambda _event: self._redraw())
-                self.ttk.Label(actions, text="Orientation").pack(side="left")
-                self.ttk.Combobox(actions, textvariable=self.facing_var, state="readonly",
+                self.ttk.Label(commit_row, text="Orientation").pack(side="left")
+                self.ttk.Combobox(commit_row, textvariable=self.facing_var, state="readonly",
                                   values=["north", "south", "east", "west"],
                                   width=9).pack(side="left", padx=6)
-                self._button(actions, "Exécuter", self._execute).pack(side="left", padx=5)
+                self._button(commit_row, "Exécuter", self._execute).pack(side="left", padx=5)
                 if not battle.deploying:
-                    self._button(actions, "Fin de tour", self._end).pack(side="left", padx=5)
+                    self._button(commit_row, "Fin de tour", self._end).pack(side="left", padx=5)
         self.guide_panel = self.ttk.LabelFrame(
-            self.view, text="Aide tactique contextuelle", padding=9)
+            self.hud_assistance_tab, text="Aide tactique contextuelle",
+            padding=6)
         self.ttk.Label(
             self.guide_panel, textvariable=self.guidance_var,
             wraplength=970, justify="left").pack(anchor="w")
         if self.guidance_enabled.get():
             self.guide_panel.pack(fill="x", pady=4)
         self.preview_panel = self.ttk.LabelFrame(
-            self.view, text="Prévision de l'action (sans l'exécuter)", padding=8)
+            self.hud_assistance_tab, text="Prévision de l'action (sans l'exécuter)",
+            padding=6)
         self.ttk.Label(self.preview_panel, textvariable=self.preview_var,
                        wraplength=950, justify="left").pack(anchor="w")
         if self.preview_enabled.get():
             self.preview_panel.pack(fill="x", pady=3)
-        body = self.ttk.Frame(self.view)
-        body.pack(fill="both", expand=True, pady=9)
+        body = self.ttk.Frame(self.hud_map)
+        body.pack(fill="both", expand=True)
         self.canvas = self.tk.Canvas(
             body, background="#172638", takefocus=1, highlightthickness=2,
             highlightcolor="#ffeb70", highlightbackground="#446077")
@@ -1371,24 +1454,20 @@ class PlayerApplication:
         self.canvas.bind("<ButtonPress-2>", self._pan_start)
         self.canvas.bind("<B2-Motion>", self._pan_drag)
         self.info = self.tk.Text(
-            body, width=29 if self.compact_hud.get() else 37, wrap="word",
+            self.hud_tactics_tab, width=30, wrap="word",
             fg="#ffffff" if self.high_contrast.get() else "#e9f2fc",
             bg="#000000" if self.high_contrast.get() else "#182a40",
             font=("TkDefaultFont", round(11 * self.text_scale.get() / 100)),
             relief="flat")
-        self.info.pack(side="right", fill="y", padx=(9, 0))
+        self.info.pack(fill="both", expand=True)
         self._redraw()
         self.canvas.focus_set()
-        self.ttk.Label(
-            self.view,
-            text="Carte : " + self.keymap.get("execute") + " = action ; " +
-            self.keymap.get("end") + " = fin de tour ; flèches = sélection ; " +
-            "Ctrl+flèches = caméra ; raccourcis modifiables dans Options. "
-            "Menaces : terrain certain, sorts programmés, réactions armées, charges possibles."
-        ).pack(anchor="w")
+        # Action instructions remain in Options and Assistance; do not consume
+        # another permanent 40px row under the map.
+        self.canvas.focus_set()
         if not session.finalized:
-            self._button(self.view, "Abandonner l'opération",
-                         self._abandon).pack(anchor="e", pady=4)
+            self._button(nav, "Abandonner l'opération",
+                         self._abandon).pack(side="left", padx=3)
 
 
     def _bind_battle_keys(self):
@@ -1397,11 +1476,66 @@ class PlayerApplication:
             self.canvas.bind(sequence, lambda _event, name=action:
                              self._key_action(name))
 
+    def _update_hud_portrait(self, battle):
+        """Present the selected deploy hero or current unit, with safe fallback."""
+        if self.hud_portrait is None:
+            return
+        active = battle.active
+        if active is None and battle.deploying:
+            active = next(
+                (u for u in battle.units if u.id == self.unit_var.get()
+                 and u.team == "player"), None)
+        if active is None or self._hud_portrait_unit == active.id:
+            return
+        self._hud_portrait_unit = active.id
+        if battle.deploying:
+            self.hud_focus_var.set(
+                active.name + " · PV " + str(active.hp) + "/" + str(active.max_hp)
+                + " · MP " + str(active.mp) + "/" + str(active.max_mp))
+        image = self.hud_portrait_renderer.image("portrait", active.id)
+        if image is not None:
+            try:
+                from .tk_images import resize_photo
+                thumb = resize_photo(image, 48, 48, master=self.hud_portrait)
+                self.hud_portrait.configure(image=thumb, text="")
+                self.hud_portrait.image = thumb
+                return
+            except (ValueError, self.tk.TclError):
+                pass
+        self.hud_portrait.configure(image="", text=active.name[:1].upper())
+        self.hud_portrait.image = None
+
+    def _toggle_hud_sidebar(self):
+        if self.hud_panes is None or self.hud_sidebar is None:
+            return
+        if self.hud_sidebar_visible.get():
+            self.hud_panes.forget(self.hud_sidebar)
+            self.hud_sidebar_visible.set(False)
+        else:
+            self.hud_panes.add(self.hud_sidebar, weight=1)
+            self.hud_sidebar_visible.set(True)
+        if self.canvas is not None:
+            self.canvas.focus_set()
+
+    def _toggle_combat_log(self):
+        if self.hud_notebook is None:
+            return
+        if self.hud_log_visible.get():
+            self.hud_notebook.add(self.hud_journal_tab, text="Journal")
+            self.hud_notebook.select(self.hud_journal_tab)
+        else:
+            self.hud_notebook.select(self.hud_tactics_tab)
+            self.hud_notebook.hide(self.hud_journal_tab)
+        if self.canvas is not None:
+            self.canvas.focus_set()
+
     def _toggle_guidance(self):
         if self.guide_panel is None:
             return
         if self.guidance_enabled.get():
-            self.guide_panel.pack(fill="x", pady=4, before=self.canvas.master)
+            self.guide_panel.pack(fill="x", pady=4)
+            if self.hud_notebook is not None:
+                self.hud_notebook.select(self.hud_assistance_tab)
             self._redraw()
         else:
             self.guide_panel.pack_forget()
@@ -1413,7 +1547,9 @@ class PlayerApplication:
         if self.preview_panel is None or self.canvas is None:
             return
         if self.preview_enabled.get():
-            self.preview_panel.pack(fill="x", pady=3, before=self.canvas.master)
+            self.preview_panel.pack(fill="x", pady=3)
+            if self.hud_notebook is not None:
+                self.hud_notebook.select(self.hud_assistance_tab)
             self._update_action_preview()
         else:
             self.preview_panel.pack_forget()
@@ -1716,6 +1852,24 @@ class PlayerApplication:
         self._preview_hover = None
         self._update_action_preview()
         hud = combat_hud(frame, battle.mission.objective, self.selection)
+        sections = combat_hud_sections(
+            frame, battle.mission.objective, compact=self.compact_hud.get())
+        self.hud_timeline_var.set(
+            "  |  ".join(sections.timeline) if sections.timeline
+            else "Aucune activation CT actuellement disponible")
+        self.hud_focus_var.set(sections.focus)
+        self._update_hud_portrait(battle)
+        self.hud_objective_var.set("Objectif : " + sections.objective)
+        self.hud_party_var.set("\n".join(sections.party))
+        for widget, content in ((self.hud_journal,
+                                  "\n".join(sections.journal)
+                                  if sections.journal else "Aucun événement récent"),
+                                 (self.hud_party, self.hud_party_var.get())):
+            if widget is not None:
+                widget.configure(state="normal")
+                widget.delete("1.0", "end")
+                widget.insert("1.0", content)
+                widget.configure(state="disabled")
         self.feedback_var.set(hud.selection_summary)
         if self.guidance_enabled.get():
             guide = combat_guidance(frame, self.action_var.get(), self.selection)
@@ -1776,11 +1930,7 @@ class PlayerApplication:
                    if tuple(self.selection) in threats.get(kind, set())]
         rows.append("Case sélectionnée : " +
                     (", ".join(on_cell) if on_cell else "aucune menace signalée"))
-        rows.extend(["", "Prochaines activations (CT estimé)"])
-        rows.extend(f"{entry['unit']} : " +
-                    ("actif" if entry["active"] else
-                     "bloqué" if entry["eta_ticks"] is None else
-                     "t+" + str(entry["eta_ticks"])) for entry in frame.timeline)
+        # CT has its own persistent top strip; don't duplicate it in the sidebar.
         if frame.casts:
             rows.extend(["", "Incantations annoncées"])
             rows.extend(f"{cast['unit']} : {cast['skill']} dans {cast['remaining_ticks']} ticks"
@@ -1788,8 +1938,7 @@ class PlayerApplication:
         if frame.charges:
             rows.extend(["", "Charges possibles (non garanties)"])
             rows.extend(f"{charge['unit']} → {charge['target']}" for charge in frame.charges)
-        rows.extend(["", "Journal"])
-        rows.extend(str(event) for event in frame.events[-15:])
+        # Journal has a dedicated, collapsible notebook tab.
         self.info.configure(state="normal")
         self.info.delete("1.0", "end")
         self.info.insert("1.0", "\n".join(rows))

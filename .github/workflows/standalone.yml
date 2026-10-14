@@ -528,6 +528,22 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m unittest tests_standalone.test_player_action_preview_r7_gui -v
+      - name: R7.10 responsive Combat HUD panes, CT, toolbar, keyboard and high contrast
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m unittest tests_standalone.test_player_hud_layout_r710_gui -v
+      - name: R7.10 visual matrix — real Player screenshots and viewport checks
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+          SPOREBOUND_HUD_VISUAL_DIR: ${{ runner.temp }}/hud-r710-visual
+        run: xvfb-run -a -s "-screen 0 2400x1600x24" python3 -m unittest tests_standalone.test_player_hud_visual_r710_gui -v
+      - name: Upload real Player Combat HUD screenshots and layout measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-hud-r710-visual
+          path: ${{ runner.temp }}/hud-r710-visual/
+          if-no-files-found: warn
       - name: Exercise Jeanne atlas PNG crop in Tk (3.7.5)
         env:
           SPOREBOUND_GUI_SMOKE: '1'
