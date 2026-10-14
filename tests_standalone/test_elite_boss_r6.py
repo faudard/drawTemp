@@ -140,6 +140,7 @@ class EliteBossR6Tests(unittest.TestCase):
         updated = set_unit_ai(doc.data, "throne", "warden",
                               behavior="adaptive_boss")
         self.assertEqual(updated["version"], 1)
+        self.assertIn("boss_phase:2", updated["missions"][0]["units"][1]["tags"])
         self.assertEqual(ai_preview(updated, "throne", "warden")["ruleset"], "r6")
         doc.replace(updated)
         self.assertEqual(doc.data["missions"][0]["units"][1]["behavior"],
