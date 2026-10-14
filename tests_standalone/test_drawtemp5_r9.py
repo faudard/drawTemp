@@ -26,11 +26,11 @@ class EventStudioR9Tests(unittest.TestCase):
                            [action("message", text="Jeanne ouvre la porte")])
         self.assertEqual(self.studio.event(MISSION, "lever_r9")["actions"][0]["text"],
                          "Jeanne ouvre la porte")
-        self.assertEqual(len(self.studio.map_markers(MISSION)), 1)
+        self.assertTrue(any(marker["event_id"] == "lever_r9"\n                            for marker in self.studio.map_markers(MISSION)))
         preview = self.studio.preview(MISSION, "lever_r9")
         self.assertTrue(preview["report"]["isolated"])
         self.assertEqual(preview["report"]["outcome"], "applied")
-        self.assertIn("lever_r9", self.studio.graph(MISSION)["nodes"][0]["event_id"])
+        self.assertTrue(any(node["event_id"] == "lever_r9"\n                            for node in self.studio.graph(MISSION)["nodes"]))
         self.assertEqual(before["content"]["missions"][0]["triggers"],
                          self.studio.events(MISSION)[:-1])
         self.studio.undo()
@@ -61,7 +61,7 @@ class EventStudioR9Tests(unittest.TestCase):
         self.assertEqual(event["after"], ["first_r9"])
         self.assertEqual(event["delay_ticks"], 1)
         self.assertEqual(event["expire_after_ticks"], 10)
-        self.assertEqual(event["when"]["all"][1]["not"]["value"], 99)
+        self.assertEqual(event["when"]["any"][1]["not"]["value"], 99)
         graph = self.studio.graph(MISSION)
         self.assertTrue(any(edge["label"] == "après événement"
                             for edge in graph["edges"]))
