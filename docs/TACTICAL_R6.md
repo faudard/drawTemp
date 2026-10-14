@@ -35,9 +35,10 @@ AI damage formula, persistence format or new default-rules manifest.
 
 Validation is done against existing `Mission.goal`,
 `Mission.protected_id` and `Mission.objects`. No JSON version bump or new
-mission fields are needed. Mission authoring selects the enhanced manifest
-only when its objective or actor content requires it. Replays must be opened
-with the same opt-in ruleset.
+mission fields are needed. Mission authoring composes the new objective rules **only** when the mission
+uses an R6 objective. Other Tactical RPG 3.0 missions retain their prior
+manifest; new R6 recordings require `tactical_r6_rules()` or the exact
+`authored_rules_for_document` selection on replay.
 
 ## Contracts / known boundaries
 
