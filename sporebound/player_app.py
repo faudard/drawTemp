@@ -83,6 +83,9 @@ class PlayerApplication:
         self.hud_panes = None
         self.hud_journal = None
         self.hud_party = None
+        self.hud_portrait = None
+        self.hud_portrait_renderer = None
+        self._hud_portrait_unit = None
         self.preview_enabled = tk.BooleanVar(value=False)
         self.preview_var = tk.StringVar()
         self.preview_panel = None
@@ -206,6 +209,9 @@ class PlayerApplication:
         self.hud_panes = None
         self.hud_journal = None
         self.hud_party = None
+        self.hud_portrait = None
+        self.hud_portrait_renderer = None
+        self._hud_portrait_unit = None
 
     def _heading(self, text, subtitle=""):
         self.ttk.Label(self.view, text=text, font=("TkDefaultFont", round(24 * self.text_scale.get() / 100), "bold")).pack(
@@ -1046,9 +1052,13 @@ class PlayerApplication:
         focus = self.ttk.LabelFrame(
             self.hud_sidebar, text="Personnage actif", padding=(6, 4))
         focus.pack(fill="x", pady=(0, 4))
+        self.hud_portrait = self.ttk.Label(focus, width=5)
+        self.hud_portrait.pack(side="left", padx=(0, 7))
         self.ttk.Label(
-            focus, textvariable=self.hud_focus_var, wraplength=285,
-            justify="left").pack(anchor="w")
+            focus, textvariable=self.hud_focus_var, wraplength=225,
+            justify="left").pack(side="left", fill="x", expand=True)
+        self.hud_portrait_renderer = CanvasRenderer(
+            focus, registry=self.registry, asset_root=self.asset_root)
         self.ttk.Label(
             self.hud_sidebar, textvariable=self.hud_objective_var,
             wraplength=285, justify="left").pack(anchor="w", pady=(0, 4))
@@ -1206,6 +1216,35 @@ class PlayerApplication:
         for action, sequence in self.keymap.items():
             self.canvas.bind(sequence, lambda _event, name=action:
                              self._key_action(name))
+
+    def _update_hud_portrait(self, battle):
+        """Present the selected deploy hero or current unit, with safe fallback."""
+        if self.hud_portrait is None:
+            return
+        active = battle.active
+        if active is None and battle.deploying:
+            active = next(
+                (u for u in battle.units if u.id == self.unit_var.get()
+                 and u.team == "player"), None)
+        if active is None or self._hud_portrait_unit == active.id:
+            return
+        self._hud_portrait_unit = active.id
+        if battle.deploying:
+            self.hud_focus_var.set(
+                active.name + " · PV " + str(active.hp) + "/" + str(active.max_hp)
+                + " · MP " + str(active.mp) + "/" + str(active.max_mp))
+        image = self.hud_portrait_renderer.image("portrait", active.id)
+        if image is not None:
+            try:
+                from .tk_images import resize_photo
+                thumb = resize_photo(image, 48, 48, master=self.hud_portrait)
+                self.hud_portrait.configure(image=thumb, text="")
+                self.hud_portrait.image = thumb
+                return
+            except (ValueError, self.tk.TclError):
+                pass
+        self.hud_portrait.configure(image="", text=active.name[:1].upper())
+        self.hud_portrait.image = None
 
     def _toggle_hud_sidebar(self):
         if self.hud_panes is None or self.hud_sidebar is None:
@@ -1560,6 +1599,7 @@ class PlayerApplication:
             "  |  ".join(sections.timeline) if sections.timeline
             else "Aucune activation CT actuellement disponible")
         self.hud_focus_var.set(sections.focus)
+        self._update_hud_portrait(battle)
         self.hud_objective_var.set("Objectif : " + sections.objective)
         self.hud_party_var.set("\n".join(sections.party))
         for widget, content in ((self.hud_journal,
