@@ -164,6 +164,7 @@ def preview_condition(project, target, name, progress):
     from .narrative import matches
     expr = condition_for(project, target, name)
     if expr is None:
-        return {"defined": False, "matches": True, "expression": None}
+        return {"defined": False, "matches": target == "gate",
+                "expression": None}
     return {"defined": True, "matches": matches(expr, progress),
             "expression": expr}
