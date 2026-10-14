@@ -1,8 +1,9 @@
 """Visual cinematic authoring: multi-track timeline, property inspector and preview."""
 from copy import deepcopy
 
-from .cinematics import (KINDS, TRIGGERS, cinematic_template, event_template,
-                         matching_cinematics)
+from .cinematics import (KINDS, TRIGGERS, EASINGS, EXPRESSIONS, SHOT_TRANSITIONS,
+                         cinematic_template, event_template, matching_cinematics)
+from .event_cinematic_qa import audit_event_cinematic_path
 from .cinematic_player import CinematicPlayback, draw_frame
 from .tk_renderer import CanvasRenderer
 from .game_project import GameProject
@@ -26,10 +27,13 @@ class CinematicStudio:
             "trigger": "campaign_start", "target": "", "length": "8000",
             "eid": "event_1", "kind": "dialogue", "start": "0",
             "duration": "1800", "subject": "Jeanne", "text": "Notre histoire commence...",
-            "bus": "sfx", "volume": "100", "fadein": "0",
+            "bus": "sfx", "volume": "100", "volume_to": "100",
+            "easing": "linear", "shot": "", "transition": "cut",
+            "portrait": "", "expression": "neutral", "pace": "0", "fadein": "0",
             "fadeout": "0", "duck": "40", "color": "#243c56", "x0": "0.15", "y0": "0.65",
             "x1": "0.65", "y1": "0.65", "zoom0": "1", "zoom1": "1",
         }.items()}
+        self.qa_status = self.tk.StringVar(value="")
         self.audio_loop = self.tk.BooleanVar(value=False)
         self.cursor = self.tk.DoubleVar(value=0)
         self.preview_renderer = None
@@ -66,6 +70,7 @@ class CinematicStudio:
         self._button(title, "Enregistrer projet", self.owner.save_project)
         self._button(title, "Exemple Jeanne", self.example)
         self._button(title, "Bande-son Jeanne", self.example_soundtrack)
+        self._button(title, "QA événement → choix", self.audit_path)
         main = ttk.Frame(root)
         main.pack(fill="both", expand=True, padx=8)
         left = ttk.LabelFrame(main, text="Séquences")
@@ -113,6 +118,12 @@ class CinematicStudio:
             ("Arrivée Y", "y1", None),
             ("Zoom départ", "zoom0", None),
             ("Zoom arrivée", "zoom1", None),
+            ("Easing", "easing", EASINGS),
+            ("Plan caméra", "shot", None),
+            ("Transition", "transition", SHOT_TRANSITIONS),
+            ("Portrait dialogue", "portrait", None),
+            ("Expression", "expression", EXPRESSIONS),
+            ("Rythme caractères/s (0=immédiat)", "pace", None),
         ]
         for row, (label, key, choices) in enumerate(fields):
             self._field(form, row, label, key, choices)
@@ -120,10 +131,11 @@ class CinematicStudio:
         audio.pack(fill="x", padx=4, pady=3)
         audio_fields = (
             (0, 0, "Bus", "bus", ("music", "ambience", "voice", "sfx")),
-            (0, 2, "Volume (%)", "volume", None),
-            (1, 0, "Fondu entrée (ms)", "fadein", None),
-            (1, 2, "Fondu sortie (ms)", "fadeout", None),
-            (2, 0, "Ducking voix (%)", "duck", None),
+            (0, 2, "Volume initial (%)", "volume", None),
+            (1, 0, "Volume final (%)", "volume_to", None),
+            (1, 2, "Fondu entrée (ms)", "fadein", None),
+            (2, 0, "Fondu sortie (ms)", "fadeout", None),
+            (2, 2, "Ducking voix (%)", "duck", None),
         )
         for row, col, label, key, choices in audio_fields:
             ttk.Label(audio, text=label).grid(
@@ -136,7 +148,7 @@ class CinematicStudio:
                                        values=choices, width=12)
             control.grid(row=row, column=col+1, sticky="ew", padx=3, pady=2)
         ttk.Checkbutton(audio, text="Répéter la piste", variable=self.audio_loop).grid(
-            row=2, column=2, columnspan=2, sticky="w", padx=3)
+            row=3, column=2, columnspan=2, sticky="w", padx=3)
         audio.columnconfigure(1, weight=1)
         audio.columnconfigure(3, weight=1)
         buttons = ttk.Frame(middle)
@@ -144,6 +156,8 @@ class CinematicStudio:
         self._button(buttons, "Ajouter événement", self.add_event)
         self._button(buttons, "Appliquer événement", self.update_event)
         self._button(buttons, "Supprimer événement", self.delete_event)
+        ttk.Label(middle, textvariable=self.qa_status, wraplength=460).pack(
+            fill="x", padx=5, pady=3)
         side = ttk.LabelFrame(main, text="Aperçu instantané")
         side.pack(side="right", fill="both", expand=True, padx=4)
         self.preview_canvas = self.tk.Canvas(side, height=290, width=370,
@@ -279,8 +293,15 @@ class CinematicStudio:
             self.vars[key].set(str(event.get(field, [0., 0.])[index]))
         self.vars["zoom0"].set(str(event.get("zoom_from", 1)))
         self.vars["zoom1"].set(str(event.get("zoom_to", 1)))
+        self.vars["easing"].set(event.get("easing", "linear"))
+        self.vars["shot"].set(event.get("shot", ""))
+        self.vars["transition"].set(event.get("transition", "cut"))
+        self.vars["portrait"].set(event.get("portrait", ""))
+        self.vars["expression"].set(event.get("expression", "neutral"))
+        self.vars["pace"].set(str(event.get("chars_per_second", 0)))
         self.vars["bus"].set(event.get("bus", "sfx"))
         self.vars["volume"].set(str(event.get("volume", 100)))
+        self.vars["volume_to"].set(str(event.get("volume_to", event.get("volume", 100))))
         self.vars["fadein"].set(str(event.get("fade_in_ms", 0)))
         self.vars["fadeout"].set(str(event.get("fade_out_ms", 0)))
         self.vars["duck"].set(str(event.get("duck_percent", 40)))
@@ -291,21 +312,31 @@ class CinematicStudio:
         kind = v("kind")
         event = event_template(kind, v("eid"), int(v("start")), int(v("duration")))
         if kind == "actor":
-            event.update(actor=v("subject"),
+            event.update(actor=v("subject"), easing=v("easing"),
                          **{"from": [float(v("x0")), float(v("y0"))],
                             "to": [float(v("x1")), float(v("y1"))]})
         elif kind == "camera":
             event.update({"from": [float(v("x0")), float(v("y0"))],
                           "to": [float(v("x1")), float(v("y1"))],
-                          "zoom_from": float(v("zoom0")), "zoom_to": float(v("zoom1"))})
+                          "zoom_from": float(v("zoom0")), "zoom_to": float(v("zoom1")),
+                          "easing": v("easing"), "transition": v("transition")})
+            if v("shot"):
+                event["shot"] = v("shot")
         elif kind == "dialogue":
-            event.update(speaker=v("subject"), text=v("text"))
+            event.update(speaker=v("subject"), text=v("text"),
+                         expression=v("expression"),
+                         chars_per_second=int(v("pace")))
+            if v("portrait"):
+                event["portrait"] = v("portrait")
         elif kind in ("fade", "background"):
             event["color"] = v("color")
+            if kind == "fade":
+                event["easing"] = v("easing")
         elif kind == "sound":
             bus = v("bus")
             event.update(cue=v("subject"), bus=bus,
                          volume=int(v("volume")),
+                         volume_to=int(v("volume_to")),
                          fade_in_ms=int(v("fadein")),
                          fade_out_ms=int(v("fadeout")),
                          loop=self.audio_loop.get())
@@ -369,6 +400,33 @@ class CinematicStudio:
         self._apply(edit)
         self.event_id = ""
         self.refresh()
+
+    def audit_path(self):
+        """Authoring certification; choices are still executed by StoryBook."""
+        clip = self._clip()
+        require(clip["trigger"]["kind"] == "scene",
+                "Le contrôle R7.16 attend une cinématique liée à une scène")
+        scene_id = clip["trigger"]["target"]
+        story = self._project().story
+        for kind, field in (("tactical_event", "during_tactical_event"),
+                            ("strategic_event", "after_strategic_event")):
+            for source, linked in story.get(field, {}).items():
+                if linked != scene_id:
+                    continue
+                scene = next(s for s in story["scenes"] if s["id"] == scene_id)
+                choice = next((c for c in scene["choices"]
+                               if c.get("effects") or c.get("tactical_effects")
+                               or c.get("next_scene")), None)
+                require(choice is not None, "La scène ne possède pas de conséquence")
+                report = audit_event_cinematic_path(
+                    self._project(), self.owner._content(), source_kind=kind,
+                    source_id=source, choice_id=choice["id"])
+                self.qa_status.set(
+                    f"R7.16 ✓ {report.source_id} → {report.scene_id} → "
+                    f"{', '.join(report.cinematic_ids)} → {report.choice_id} "
+                    f"(SHA {report.timeline_sha256[:12]})")
+                return report
+        raise RuleError("Aucun événement lié à cette scène : ouvrir le Story Studio")
 
     def example(self):
         from .cinematics import event_template
