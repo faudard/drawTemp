@@ -49,6 +49,7 @@ class ArchitectureInstance:
     cells: frozenset
     entry: tuple | None
     id: str = ''
+    appearance: dict | None = None
 
 
 def preview_structure_sprite_position(geo, name, anchor, turns=0, *, door_slot=0):
@@ -99,7 +100,7 @@ def _stored_instance(record):
     return ArchitectureInstance(record['name'], (x, y),
                                 record['turns'], record['door_slot'],
                                 clip.width, clip.height, cells, entry,
-                                record['id'])
+                                record['id'], record.get('appearance'))
 
 
 def architecture_instances(board, structures=()):
@@ -217,6 +218,16 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
         building_floors = tuple(f for f in interior_floors
                                 if f['structure_id'] == building.id)
         active_level = layers.get('Étage actif', 0)
+        appearance = building.appearance or {}
+        facade_tones = {
+            'pierre': ('#a89a85', '#c0ad90'),
+            'torchis': ('#b69f78', '#dbc59e'),
+            'brique': ('#aa6758', '#c77f61'),
+        }
+        roof_tones = {
+            'tuiles': ('#a85749', '#c47759', '#b15d4b', '#dd9470'),
+            'ardoise': ('#465d6c', '#70818d', '#536873', '#9caab5'),
+        }
         # A designer may open all existing interiors without placing a unit.
         # In the Player, roof_cutaway still follows selected/occupied cells.
         cutaway = (roof_cutaway(building, selected_cell, units, poses)
@@ -253,7 +264,8 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
             continue
         use_sprite = ((layers.get('Bâtiments', True)
                        and (building.name == 'Ruines' or layers.get('Toitures', True)))
-                      and not cutaway and atlas is not None)
+                      and not cutaway and atlas is not None
+                      and building.appearance is None)
         if use_sprite:
             photo = atlas.sprite(building.name, building.turns, geo.cell_size)
             if photo is not None:
@@ -268,8 +280,10 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
             # Faces on the two foreground sides. Separate faces preserve
             # painter order; this remains a decorative visual layer only.
             depth = max(8, geo.step * 2)
-            for a, b, tone in ((east, south, '#a89a85'),
-                               (south, west, '#c0ad90')):
+            for a, b, tone in ((east, south, facade_tones.get(
+                                   appearance.get('facade', 'pierre'), facade_tones['pierre'])[0]),
+                               (south, west, facade_tones.get(
+                                   appearance.get('facade', 'pierre'), facade_tones['pierre'])[1])):
                 canvas.create_polygon(a[0], a[1], b[0], b[1],
                                       b[0], b[1]+depth, a[0], a[1]+depth,
                                       fill=tone if not cutaway else '',
@@ -297,6 +311,23 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                                        fill='#edcb69', outline='',
                                        tags=('architecture', 'architecture_door',
                                              instance_tag))
+            if not cutaway and appearance.get('windows'):
+                # Local exterior-wall offsets survive translations and rotate
+                # together with the structure preset. These outlines never
+                # change tactical wall blockage or picking geometry.
+                for ox, oy in appearance['windows']:
+                    wx, wy = building.anchor[0] + ox, building.anchor[1] + oy
+                    px, py = geo.center((wx, wy))
+                    edge = max(4, geo.cell_size * .105)
+                    top = py - 2 * geo.step - geo.cell_size * .26
+                    canvas.create_rectangle(
+                        px-edge, top, px+edge, top+edge*1.5,
+                        fill='#405b69', outline='#e2c99d', width=2,
+                        tags=('architecture', 'architecture_window', instance_tag))
+                    canvas.create_line(px, top, px, top+edge*1.5,
+                                       fill='#d6c1a1', width=1,
+                                       tags=('architecture', 'architecture_window',
+                                             instance_tag))
         if layers.get('Toitures', True) and building.name != 'Ruines':
             if cutaway:
                 canvas.create_polygon(*_flat(outline), fill='', outline='#b66e5c',
@@ -304,20 +335,29 @@ def draw_architecture(canvas, geo, board, units, selected_cell, layers,
                                       tags=('architecture', 'architecture_cutaway',
                                           instance_tag))
             else:
-                tones = (('#a85749', '#c47759', '#b15d4b', '#dd9470')
-                         if building.name == 'Maison' else
-                         ('#5b6d79', '#8696a1', '#647f88', '#a9b6b9'))
-                corners = (north, east, south, west)
-                for index in range(4):
-                    a, b = corners[index], corners[(index+1) % 4]
-                    canvas.create_polygon(*_flat((a, b, peak)),
-                                          fill=tones[index], outline='#534c48',
-                                          width=2,
-                                          tags=('architecture', 'architecture_roof',
-                                                instance_tag))
-                canvas.create_line(*north, *peak, fill='#f1c49c',
-                                   width=2, tags=('architecture', 'architecture_ridge',
-                                                  instance_tag))
+                profile = appearance.get('roof', 'tuiles')
+                if profile == 'plat':
+                    canvas.create_polygon(
+                        *_flat(outline), fill='#74777a', outline='#45484d',
+                        width=3, tags=('architecture', 'architecture_roof',
+                                       'architecture_flat_roof', instance_tag))
+                else:
+                    tones = (roof_tones.get(profile, roof_tones['tuiles'])
+                             if appearance else
+                             (('#a85749', '#c47759', '#b15d4b', '#dd9470')
+                              if building.name == 'Maison' else
+                              ('#5b6d79', '#8696a1', '#647f88', '#a9b6b9')))
+                    corners = (north, east, south, west)
+                    for roof_index in range(4):
+                        a, b = corners[roof_index], corners[(roof_index+1) % 4]
+                        canvas.create_polygon(*_flat((a, b, peak)),
+                                              fill=tones[roof_index], outline='#534c48',
+                                              width=2,
+                                              tags=('architecture', 'architecture_roof',
+                                                    instance_tag))
+                    canvas.create_line(*north, *peak, fill='#f1c49c',
+                                       width=2, tags=('architecture', 'architecture_ridge',
+                                                      instance_tag))
         elif layers.get('Bâtiments', True) and building.name == 'Ruines':
             canvas.create_line(*north, *east, fill='#6d7468',
                                width=3, dash=(4, 3),

@@ -1,0 +1,29 @@
+{
+  "cases": [
+    {
+      "id": "garden::enemy_defense_plus1",
+      "mission": "garden",
+      "team_deltas": {
+        "enemy": {
+          "defense": 1
+        }
+      }
+    },
+    {
+      "id": "garden::drop_comptable",
+      "mission": "garden",
+      "remove_units": [
+        "comptable"
+      ]
+    },
+    {
+      "id": "escape::player_hp_plus5",
+      "mission": "escape",
+      "team_deltas": {
+        "player": {
+          "max_hp": 5
+        }
+      }
+    }
+  ]
+}

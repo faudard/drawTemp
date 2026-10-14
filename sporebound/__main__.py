@@ -16,7 +16,7 @@ DEFAULT_CONTENT = Path(__file__).parent / 'content' / 'core.json'
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Sporebound standalone gameplay workbench')
-    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','export'])
+    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','export'])
     parser.add_argument('--content', type=Path, default=DEFAULT_CONTENT)
     parser.add_argument('--project', type=Path, help='Game presentation manifest for player')
     parser.add_argument('--output', type=Path, help='Destination ZIP for export')
@@ -25,7 +25,8 @@ def main(argv=None):
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--limit', type=int, default=1000)
     parser.add_argument('--runs', type=int, default=20, help='Number of deterministic balance seeds')
-    parser.add_argument('--baseline', type=Path, help='Prior Battle Lab JSON for paired gate')
+    parser.add_argument('--baseline', type=Path, help='Prior Battle Lab or Matrix JSON for paired gate')
+    parser.add_argument('--matrix-cases', type=Path, help='JSON scenario file for balance-matrix')
     parser.add_argument('--report', type=Path, help='Write versioned Battle Lab JSON')
     parser.add_argument('--max-victory-drop', type=float, default=0.25)
     parser.add_argument('--max-p95-growth', type=float, default=0.30)
@@ -75,6 +76,58 @@ def main(argv=None):
                     return 1
             print(f'Valid: {len(content.missions)} missions, {len(content.skills)} skills, {len(content.jobs)} jobs')
             return 0
+        if args.command == 'battle-diagnostics':
+            from .battle_diagnostics import trace_seed, trace_report
+            from .tactical_rpg3 import authored_rules_for_document
+            rules = authored_rules_for_document(content.to_dict())
+            trace = trace_seed(content, args.mission, seed=args.seed,
+                               max_commands=args.limit, rules=rules)
+            if args.report:
+                trace_report(args.report, trace)
+            print(json.dumps({
+                'mission': trace['mission'], 'seed': trace['seed'],
+                'result': trace['result'], 'commands': trace['commands'],
+                'ticks': trace['ticks'], 'digest': trace['digest'],
+                'replay_verified': trace['replay_verified'],
+                'diagnostics': trace['diagnostics'],
+                'trace_report': str(args.report) if args.report else None
+            }, ensure_ascii=False, sort_keys=True))
+            return 0
+        if args.command == 'balance-matrix':
+            from .balance_matrix import run_matrix, compare_matrices, save_matrix
+            from .tactical_rpg3 import authored_rules_for_document
+            from .rules import default_rules
+            if args.matrix_cases is None:
+                parser.error('balance-matrix requires --matrix-cases file.json')
+            if not 1 <= args.runs <= 64 or not 1 <= args.limit <= 10000:
+                parser.error('balance-matrix requires 1..64 seeds and 1..10000 commands')
+            if args.seed < 0 or args.seed + args.runs > 2**32:
+                parser.error('Matrix seeds must fit unsigned 32-bit integers')
+            with args.matrix_cases.open(encoding='utf-8') as stream:
+                definition = json.load(stream)
+            cases = definition.get('cases') if type(definition) is dict else definition
+            if type(cases) not in (list, tuple):
+                raise RuleError('Matrix definitions need a cases array')
+            rulesets = {'authored': authored_rules_for_document(content.to_dict())}
+            if any(row.get('ruleset') == 'default'
+                   for row in cases if type(row) is dict):
+                rulesets['default'] = default_rules()
+            matrix = run_matrix(content, cases, seeds=list(range(args.seed,
+                                args.seed + args.runs)), max_commands=args.limit,
+                                rulesets=rulesets)
+            if args.report:
+                save_matrix(args.report, matrix)
+            comparison = None
+            if args.baseline:
+                with args.baseline.open(encoding='utf-8') as stream:
+                    baseline = json.load(stream)
+                comparison = compare_matrices(
+                    baseline, matrix, max_victory_drop=args.max_victory_drop,
+                    max_p95_growth=args.max_p95_growth,
+                    max_new_limits=args.max_new_limits)
+            print(json.dumps({'matrix': matrix, 'comparison': comparison},
+                             ensure_ascii=False, sort_keys=True))
+            return 2 if comparison is not None and not comparison['passed'] else 0
         if args.command == 'battle-lab':
             from .battle_lab import compare_reports, run_lab, save_report
             from .tactical_rpg3 import authored_rules_for_document
