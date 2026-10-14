@@ -156,6 +156,57 @@ class DeleteMapResourceCommand:
 
 
 
+@dataclass(frozen=True)
+class DeleteMapResourcesCommand:
+    """Fail-closed, dependency-aware multi-deletion in one Editor transaction.
+
+    The command reuses the existing typed single-delete validation. A link
+    from a selected switch to a selected door is resolved by deleting its
+    source first; all other dangling references block the entire operation.
+    The returned document is committed only once by EditingContext.
+    """
+    keys: tuple
+    baselines: tuple
+    project_snapshot: dict
+    kind: str = 'workspace-batch-delete'
+    views: tuple = ('renderer', 'minimap', 'inspector', 'workspace')
+
+    def transform(self, data, mission_id):
+        require(isinstance(self.keys, tuple) and
+                2 <= len(self.keys) <= 128 and
+                len(self.keys) == len(set(self.keys)) and
+                len(self.keys) == len(self.baselines),
+                'Suppression multiple : 2 à 128 ressources distinctes')
+        remaining = {}
+        for key, baseline in zip(self.keys, self.baselines):
+            category, mid, _identity, _mission, row = _locate(data, key)
+            require(category in ('map_actor', 'map_object') and mid == mission_id,
+                    'Suppression multiple : acteurs/objets de la même mission')
+            require(json.dumps(row, sort_keys=True, ensure_ascii=True) == baseline,
+                    'Sélection modifiée depuis la prévisualisation')
+            remaining[key] = baseline
+
+        candidate = data
+        while remaining:
+            previous_count = len(remaining)
+            failures = {}
+            for key, baseline in tuple(sorted(remaining.items())):
+                command = DeleteMapResourceCommand(
+                    key, baseline, self.project_snapshot)
+                try:
+                    candidate = command.transform(candidate, mission_id)
+                except RuleError as exc:
+                    failures[key] = str(exc)
+                else:
+                    del remaining[key]
+            if len(remaining) == previous_count:
+                details = '; '.join(
+                    key + ': ' + reason for key, reason in sorted(failures.items()))
+                raise RuleError(
+                    'Suppression multiple refusée : liens non résolus. ' + details[:850])
+        return candidate
+
+
 def plan_coordinated_rename(data, project, key, baseline, new_id):
     """Plan a validated two-document rename without committing either document.
 
