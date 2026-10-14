@@ -275,6 +275,10 @@ jobs:
           name: terrain-watercolor-materials-3732g
           path: ${{ runner.temp }}/terrain-watercolor-art/terrain_watercolor.png
           if-no-files-found: error
+      - name: Verify animated grass, reeds, foliage and water in real Tk (3.7.32I)
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_terrain_ambient_3732i_gui.py -v
       - name: Verify painted watercolor joins, corner masks and Tk parity (3.7.32H)
         env:
           SPOREBOUND_GUI_SMOKE: '1'

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .tk_images import crop_scaled
 from .iso_depth import visual_center
+from .terrain_ambient import strokes_for_cell, stroke_tag
 from .terrain_autoblend import (LAND_COLORS, LAND_PRIORITY, blend_edges,
                                 blend_polygon, terrain_variant)
 from .terrain_transition_masks import (ordered_blend_masks,
@@ -373,6 +374,20 @@ def render_isometric(canvas, board, mission, units, *, cell_size, layers,
                     for r in (p,q):
                         tile_canvas.create_line(r[0],r[1],r[0],r[1]-raise_by,
                                            fill='#a69070',width=max(2,cell_size//15))
+        # Small, budgeted ambient vegetation/water accents are regular
+        # per-tile Canvas items. The owning UI animates just their coordinates,
+        # not the board, render stack, actors, camera or gameplay clock.
+        if layers.get('Terrain', True) and layers.get('Ambiance', True):
+            for accent in strokes_for_cell(board, c, (cx, cy), cell_size):
+                method = (tile_canvas.create_oval if accent.shape == 'oval'
+                          else tile_canvas.create_line)
+                options = dict(width=max(1, round(cell_size / 52)),
+                               tags=('iso_ambient', stroke_tag(accent)))
+                if accent.shape == 'oval':
+                    method(*accent.coords, fill='', outline=accent.color,
+                           **options)
+                else:
+                    method(*accent.coords, fill=accent.color, **options)
         if c in deploy and layers.get('Déploiement', True):
             tile_canvas.create_polygon(*_flatten(corners), outline='#3b9ec0', fill='',
                                   width=3)
