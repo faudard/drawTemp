@@ -134,6 +134,10 @@ class WorkspaceR2Tests(unittest.TestCase):
         project_data = self.project.to_dict()
         project_data['cinematics'] = [clip]
         project = GameProject.from_dict(project_data, self.content)
+        indexed = StudioIndex(self.content, project)
+        impact = dependency_impact(indexed, 'map_actor:garden/ziggy')
+        self.assertTrue(any(ref.source == 'cinematic:r2_cast'
+                            for ref in impact.incoming))
         key = 'map_actor:garden/ziggy'
         baseline = editable_form(self.doc.data, key).baseline
         candidate, updated = plan_coordinated_rename(
