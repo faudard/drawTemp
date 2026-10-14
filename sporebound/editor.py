@@ -3144,6 +3144,8 @@ def launch(path):
         ('Charger combat', load_game)):
         file_menu.add_command(label=title, command=callback)
     file_button.configure(menu=file_menu)
+    view_button = ttk.Menubutton(header, text='Affichage ▾')
+    view_button.pack(side='left', padx=(5, 0))
     ttk.Button(header, text='Enregistrer tout',
                command=save_all).pack(side='left', padx=2)
     ttk.Button(header, text='↶', command=undo_global,
@@ -3955,6 +3957,25 @@ def launch(path):
     from .studio_layout import StudioNavigation
     studio_navigation = StudioNavigation(
         section_bar, notebook, tool_tabs, work, tk, ttk)
+    from .studio_docks import StudioDocks, DockPreferences
+    studio_docks = StudioDocks(
+        root, work, canvas_region, sidebar, side_panel, bottom_panel, tk)
+    view_menu = tk.Menu(view_button, tearoff=False)
+    view_button.configure(menu=view_menu)
+    dock_titles = (
+        ('explorer', 'Explorateur  ·  Ctrl+B'),
+        ('inspector', 'Inspecteur  ·  Ctrl+Alt+I'),
+        ('bottom', 'Journal  ·  Ctrl+J'),
+    )
+    for dock_name, dock_title in dock_titles:
+        view_menu.add_checkbutton(
+            label=dock_title, variable=studio_docks.visible_vars[dock_name],
+            command=lambda name=dock_name: toggle_studio_dock(name))
+    view_menu.add_separator()
+    view_menu.add_checkbutton(
+        label='Carte plein espace  ·  F11',
+        variable=studio_docks.focus_var,
+        command=lambda: set_studio_focus(studio_docks.focus_var.get()))
     studio.workspace.attach_navigator(sidebar)
     studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
@@ -4064,21 +4085,49 @@ def launch(path):
     def layout_store():
         return LayoutStore(current_path.with_suffix('.workspace.layout.json'))
 
+    def docks_store():
+        return DockPreferences(current_path.with_suffix('.workspace.docks.json'))
+
     def save_layout(_event=None):
         try:
-            layout_store().save({
-                'outer_left': work.sashpos(0),
-                'outer_right': work.sashpos(1),
-                'vertical': canvas_region.sashpos(0),
-                'tab': notebook.tab(notebook.select(), 'text'),
-            })
+            # Persist geometry only when the corresponding dividers exist.
+            # A hidden dock must not overwrite previously saved sash widths.
+            state = layout_store().load()
+            state['tab'] = notebook.tab(notebook.select(), 'text')
+            if len(work.panes()) == 3 and not studio_docks.focus_var.get():
+                state['outer_left'] = work.sashpos(0)
+                state['outer_right'] = work.sashpos(1)
+            if len(canvas_region.panes()) == 2 and not studio_docks.focus_var.get():
+                state['vertical'] = canvas_region.sashpos(0)
+            layout_store().save(state)
+            docks_store().save(studio_docks.persistence())
         except (OSError, ValueError, tk.TclError):
             # UI preferences must never prevent authoring or saving gameplay.
             pass
 
+    def toggle_studio_dock(name):
+        # Map-only visibility: never change the active editor on a shortcut.
+        if notebook.select() != str(work):
+            return
+        studio_docks.toggle(name)
+        save_layout()
+
+    def set_studio_focus(enabled):
+        if enabled and notebook.select() != str(work):
+            notebook.select(work)
+        studio_docks.set_focus(enabled)
+        save_layout()
+
+    def toggle_focus_key(_event=None):
+        set_studio_focus(not studio_docks.focus_var.get())
+
+    def dock_shortcut(name):
+        return lambda _event: toggle_studio_dock(name)
+
     def restore_layout():
         values = layout_store().load()
         try:
+            root.update_idletasks()
             if 'outer_left' in values and values['outer_left'] < work.winfo_width():
                 work.sashpos(0, values['outer_left'])
             if 'outer_right' in values and values['outer_right'] < work.winfo_width():
@@ -4089,11 +4138,16 @@ def launch(path):
                 if notebook.tab(tab, 'text') == values.get('tab', 'Carte et combat'):
                     notebook.select(tab)
                     break
-        except tk.TclError:
+            studio_docks.restore(docks_store().load())
+        except (OSError, ValueError, tk.TclError):
             pass
 
     work.bind('<ButtonRelease-1>', save_layout, add='+')
     canvas_region.bind('<ButtonRelease-1>', save_layout, add='+')
+    root.bind('<Control-b>', dock_shortcut('explorer'), add='+')
+    root.bind('<Control-Alt-i>', dock_shortcut('inspector'), add='+')
+    root.bind('<Control-j>', dock_shortcut('bottom'), add='+')
+    root.bind('<F11>', toggle_focus_key, add='+')
     root.after_idle(restore_layout)
     def close_editor():
         if discard_ok():
