@@ -72,11 +72,14 @@ class StudioNavigation:
         self.history = {}
         self.group_tabs = {}
         self.buttons = {}
+        self.compact_choice = tk.StringVar(value="Carte & monde")
+        self._compact = None
 
         shell = ttk.Frame(parent, padding=(6, 5, 6, 3))
         shell.pack(fill="x")
         sections = ttk.Frame(shell)
         sections.pack(side="left", fill="x", expand=True)
+        self.sections = sections
         for category in SECTIONS:
             widget = ttk.Radiobutton(
                 sections, text=category, value=category,
@@ -85,6 +88,12 @@ class StudioNavigation:
             )
             widget.pack(side="left", padx=(0, 3))
             self.buttons[category] = widget
+        self.compact_box = ttk.Combobox(
+            sections, textvariable=self.compact_choice,
+            values=SECTIONS, state="readonly", width=21)
+        self.compact_box.bind(
+            "<<ComboboxSelected>>",
+            lambda _e: self.choose_section(self.compact_choice.get()))
 
         chooser = ttk.Frame(shell)
         chooser.pack(side="right", padx=(10, 0))
@@ -113,6 +122,22 @@ class StudioNavigation:
         self.rebuild()
         notebook.bind("<<NotebookTabChanged>>", self.sync, add="+")
         self.sync()
+        shell.bind("<Configure>", self._adapt, add="+")
+
+    def _adapt(self, event):
+        """One category selector at narrow widths; editor tabs stay mounted."""
+        compact = event.width < 1280
+        if compact == self._compact:
+            return
+        self._compact = compact
+        if compact:
+            for button in self.buttons.values():
+                button.pack_forget()
+            self.compact_box.pack(side="left", padx=(0, 5))
+        else:
+            self.compact_box.pack_forget()
+            for category in SECTIONS:
+                self.buttons[category].pack(side="left", padx=(0, 3))
 
     def toggle_tabs(self):
         self.notebook.configure(
@@ -165,6 +190,7 @@ class StudioNavigation:
             values=[label for label, _ in self.group_tabs.get(group, ())]
         )
         self.view.set(title)
+        self.compact_choice.set(group)
         if selected == self.map_tab:
             if not self.tools.winfo_manager():
                 self.tools.pack(fill="x", padx=6, pady=(0, 3),
