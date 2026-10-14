@@ -113,6 +113,8 @@ class AuthoringSession:
                 raise AuthoringError("external_change", "open",
                                      "The project changed during loading")
             result = cls(content, project, history_limit=history_limit)
+        except AuthoringError:
+            raise
         except (ValueError, UnicodeError, OSError) as exc:
             raise AuthoringError("invalid_document", "open", str(exc)) from exc
         result._store = store
