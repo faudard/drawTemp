@@ -3537,7 +3537,8 @@ def launch(path):
                 choose=choose_palette_asset, cell_size=lambda: tile_size,
                 actors=actor_atlas, content=lambda: doc.data,
                 mission=mission_var.get,
-                entities=lambda: palette_entities(doc.data, mission_var.get()))
+                entities=lambda: palette_entities(doc.data, mission_var.get()),
+                preferences_path=lambda: current_path.with_suffix('.asset-browser.json'))
             wire_drop(asset_palette.tree, 'asset')
         else:
             asset_palette.show()
