@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .terrain_watercolor import _hash
+from .environment_atlas import FRAME_COUNT, PIVOTS
 
 TICK_MS = 125
 MAX_ANIMATED_CELLS = 256
@@ -37,26 +38,66 @@ def _eligible(board, cell, kind):
     return _hash(cell[0], cell[1], 0x73ed + len(kind)) % (base * divisor) == 0
 
 
+def ambient_kind(board, cell):
+    """The one authoritative authoring-to-ambience mapping (no new tile data)."""
+    if not board.contains(cell):
+        return None
+    tile = board.tile(cell)
+    if tile.surface == 'water':
+        kind = 'water'
+    elif tile.feature == 'reeds':
+        kind = 'reeds'
+    elif tile.feature in ('tree', 'bush'):
+        kind = 'leaves'
+    elif tile.surface == 'grass' and not tile.feature:
+        kind = 'grass'
+    else:
+        return None
+    return kind if _eligible(board, cell, kind) else None
+
+
+def sprite_origin(board, cell, center, size):
+    """Top-left of a 64px raster sheet with an invariant world-space pivot."""
+    kind = ambient_kind(board, cell)
+    if kind is None:
+        return None
+    cx, cy = center
+    seed = _hash(*cell, 0xdead)
+    cx += ((seed % 13) - 6) * size / 55
+    cy += (((seed >> 5) % 7) - 3) * size / 95
+    if kind == 'leaves':
+        cy -= size * (.8 if board.tile(cell).feature == 'tree' else .3)
+    scaled = max(1, round(64 * size / 54))
+    ratio = scaled / 64
+    px, py = PIVOTS[kind]
+    return (cx-px*ratio, cy-py*ratio)
+
+
+def sprite_tag(kind, cell):
+    """Unique stable marker consumed by both retained and full Canvas paths."""
+    return f'iso_env_frame_{kind}_{cell[0]}_{cell[1]}'
+
+
+def sprite_phase(kind, cell, clock_ms):
+    """Raster frame sampling shares the ambient UI clock; no gameplay turns."""
+    if kind not in ('grass', 'reeds', 'leaves', 'water'):
+        raise ValueError('Unknown environment kind')
+    if type(clock_ms) not in (int, float) or clock_ms < 0:
+        raise ValueError('Nonnegative presentation clock required')
+    return ((int(clock_ms) // TICK_MS) +
+            _hash(cell[0], cell[1], 0x2718) % FRAME_COUNT) % FRAME_COUNT
+
+
 def strokes_for_cell(board, cell, center, size, *, enabled=True):
     """Deterministic small foreground accents from *existing* tile values.
 
     Accent strokes belong inside the tile group for depth sorting, dirty-tile
     invalidation, and cutaway/zoom parity. Nothing is added to Content.
     """
-    if not enabled or not board.contains(cell):
+    if not enabled:
         return ()
-    tile = board.tile(cell)
-    if tile.surface == 'water':
-        kind = 'water'
-    elif tile.feature == 'reeds':
-        kind = 'reeds'
-    elif tile.feature in ('tree', 'bush') and tile.surface != 'water':
-        kind = 'leaves'
-    elif tile.surface == 'grass' and not tile.feature:
-        kind = 'grass'
-    else:
-        return ()
-    if not _eligible(board, cell, kind):
+    kind = ambient_kind(board, cell)
+    if kind is None:
         return ()
     cx, cy = center
     seed = _hash(*cell, 0xdead)
@@ -139,15 +180,30 @@ class TerrainAmbientAnimator:
 
     def __init__(self):
         self.items = {}
+        self.sprites = {}
         self._last_tick = None
 
     def capture(self, canvas):
         self.items.clear()
+        self.sprites.clear()
         self._last_tick = None
         if not all(hasattr(canvas, n) for n in
                    ('find_withtag', 'gettags', 'coords', 'type')):
             return 0
         for item in canvas.find_withtag('iso_ambient'):
+            frame_tags = [tag for tag in canvas.gettags(item)
+                          if tag.startswith('iso_env_frame_')]
+            if len(frame_tags) == 1 and canvas.type(item) == 'image':
+                parts = frame_tags[0].split('_')
+                if len(parts) == 6 and parts[3] in (
+                        'grass', 'reeds', 'leaves', 'water'):
+                    try:
+                        cell = (int(parts[4]), int(parts[5]))
+                        baseline = canvas.itemcget(item, 'image')
+                    except (TypeError, ValueError, AttributeError):
+                        continue
+                    self.sprites[item] = (parts[3], cell, baseline)
+                continue
             names = [tag for tag in canvas.gettags(item)
                      if tag.startswith('iso_ambient_') and tag != 'iso_ambient']
             if len(names) != 1:
@@ -167,26 +223,35 @@ class TerrainAmbientAnimator:
                 continue
             self.items[item] = AmbientStroke(
                 kind, (x, y), part, shape, coords, '')
-        return len(self.items)
+        return len(self.items) + len(self.sprites)
 
     def restore(self, canvas):
         for item, stroke in self.items.items():
             canvas.coords(item, *stroke.coords)
+        for item, (_, _, baseline) in self.sprites.items():
+            canvas.itemconfigure(item, image=baseline)
         self._last_tick = None
 
-    def tick(self, canvas, clock_ms):
+    def tick(self, canvas, clock_ms, *, atlas=None, cell_size=None):
         quantized = int(clock_ms) // TICK_MS
         if self._last_tick == quantized:
             return 0
         self._last_tick = quantized
         for item, stroke in self.items.items():
             canvas.coords(item, *animated_coords(stroke, clock_ms))
-        return len(self.items)
+        if atlas is not None and cell_size is not None:
+            for item, (kind, cell, _) in self.sprites.items():
+                photo = atlas.frame(kind, cell_size,
+                                    sprite_phase(kind, cell, clock_ms))
+                if photo is not None:
+                    canvas.itemconfigure(item, image=photo)
+        return len(self.items) + len(self.sprites)
 
     @property
     def active(self):
-        return bool(self.items)
+        return bool(self.items or self.sprites)
 
     def clear(self):
         self.items.clear()
+        self.sprites.clear()
         self._last_tick = None
