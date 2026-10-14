@@ -140,11 +140,22 @@ class LongSessionMaintenance:
             issues.append("writer lock present; no automatic stale-lock takeover")
         if temps:
             issues.append("temporary files present; manual quarantine only")
+        archived = []
+        try:
+            for path in self._archive_dirs():
+                try:
+                    archived.append(self.verify_archive(path))
+                except (RuleError, OSError, ValueError) as exc:
+                    archived.append({"name": path.name, "verified": False,
+                                     "reason": str(exc)})
+                    issues.append(f"archive {path.name}: {exc}")
+        except (RuleError, OSError) as exc:
+            issues.append(f"archive inventory: {exc}")
         return {"format": "long_session_maintenance", "version": self.VERSION,
                 "slot": str(self.path), "status": status, "source": source,
                 "sequence": sequence, "replayed": replayed,
                 "session_digest": game_digest, "assets": items,
-                "temporary": temps, "issues": issues}
+                "temporary": temps, "archives": archived, "issues": issues}
 
     def _archive_dirs(self):
         if not self.history.exists():
@@ -288,6 +299,9 @@ class LongSessionMaintenance:
         require(isinstance(expected_token, str) and _HASH.fullmatch(expected_token),
                 "Explicit retention plan token required")
         with session_writer_lock(self.path):
+            inventory = self.inspect()
+            require(inventory["status"] == "healthy",
+                    "Do not prune archives when the active slot is degraded")
             current = self.retention_plan(keep=keep)
             require(current["token"] == expected_token,
                     "Retention plan is stale; inspect and confirm it again")
@@ -320,6 +334,9 @@ class LongSessionMaintenance:
         require(isinstance(expected_token, str) and _HASH.fullmatch(expected_token),
                 "Explicit cleanup plan token required")
         with session_writer_lock(self.path):
+            inventory = self.inspect()
+            require(inventory["status"] == "healthy",
+                    "Inspect and recover the active slot before moving evidence")
             current = self.temp_plan(min_age_seconds=min_age_seconds)
             require(current["token"] == expected_token,
                     "Temporary cleanup plan changed; inspect again")
