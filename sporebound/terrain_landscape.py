@@ -107,6 +107,20 @@ def _landscape(data, mission_id, start, end, *, seed, style, vegetation):
     bounds = (x0, y0, x1, y1)
     original = {tuple(t['pos']): t for t in mission['board']['tiles']}
     protected = _reserved_cells(mission)
+    # Preserve spawn/deployment footprints and embedded event placement.
+    protected.update(
+        tuple(point) for zone in mission.get('deployment', ())
+        for point in zone.get('cells', ()))
+    for trigger in mission.get('triggers', ()):
+        for key in ('cell', 'pos'):
+            point = trigger.get(key)
+            if isinstance(point, (tuple, list)) and len(point) == 2 and all(
+                    type(v) is int for v in point):
+                protected.add(tuple(point))
+        for point in trigger.get('cells', ()):
+            if isinstance(point, (tuple, list)) and len(point) == 2 and all(
+                    type(v) is int for v in point):
+                protected.add(tuple(point))
     editable = {p for p in cells if _eligible(original.get(p, {}), p, protected)}
     vertical_river = (seed & 1) == 0
     river_path = _connected_path(bounds, seed, vertical=vertical_river)
@@ -155,15 +169,20 @@ def _landscape(data, mission_id, start, end, *, seed, style, vegetation):
         elif point in clearings:
             surface = 'grass'
         else:
+            nearby_water = any(
+                (x+dx, y+dy) in river or
+                original.get((x+dx, y+dy), {}).get('surface') == 'water'
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+            # Banks mix native grass, earthy pigment and sparse sand. Their
+            # varied watercolor transitions come from the existing atlas.
+            if nearby_water and _hash(x, y, seed ^ 0x8e21) % 4 != 0:
+                surface = ('sand' if style in ('aride', 'vallon')
+                           else 'dirt')
             if point not in buffer:
                 slope = (.78 * _noise(x, y, seed ^ 0x7451, 15) +
                          .22 * _noise(x, y, seed ^ 0x34a7, 7))
                 height = 1 if slope > .66 else 0
             if vegetation:
-                nearby_water = any(
-                    (x+dx, y+dy) in river or
-                    original.get((x+dx, y+dy), {}).get('surface') == 'water'
-                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
                 feature = biome_feature_at(
                     x, y, seed=seed, style=style, surface=surface,
                     vegetation=vegetation, near_water=nearby_water)
