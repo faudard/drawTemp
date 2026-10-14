@@ -3885,6 +3885,7 @@ def launch(path):
         studio.restore_unsaved_project(recovered_work[1])
         status_var.set('Travail interrompu restauré en mémoire ; enregistrer pour le conserver.')
     studio.history.on_change = schedule_work_checkpoint
+    studio.workspace.incremental_validator = editing_context.diagnostics
     studio.workspace.attach_navigator(sidebar)
     studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
