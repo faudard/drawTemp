@@ -24,6 +24,7 @@ from .visual_motion import MotionDirector
 from .player_ux import (KeyBindings, PresentationState, combat_hud,
                         clamp_selection, zoom_to, ZOOM_PRESETS)
 from .player_preferences import load_preferences, save_preferences
+from .player_guidance import combat_guidance
 
 
 class PlayerApplication:
@@ -65,6 +66,9 @@ class PlayerApplication:
         self.high_contrast = tk.BooleanVar(value=preferences["high_contrast"])
         self.compact_hud = tk.BooleanVar(value=preferences["compact_hud"])
         self.feedback_var = tk.StringVar()
+        self.guidance_enabled = tk.BooleanVar(value=False)
+        self.guidance_var = tk.StringVar()
+        self.guide_panel = None
         self.root.title(project.title)
         self.root.geometry("1160x820")
         self.root.minsize(800, 580)
@@ -168,6 +172,7 @@ class PlayerApplication:
             child.destroy()
         self.canvas = None
         self.info = None
+        self.guide_panel = None
 
     def _heading(self, text, subtitle=""):
         self.ttk.Label(self.view, text=text, font=("TkDefaultFont", round(24 * self.text_scale.get() / 100), "bold")).pack(
@@ -946,6 +951,9 @@ class PlayerApplication:
         self.ttk.Checkbutton(nav, text="Vue isométrique 2.5D",
                              variable=self.iso_view_var,
                              command=self._switch_projection).pack(side="right", padx=8)
+        self.ttk.Checkbutton(
+            nav, text="Aide tactique", variable=self.guidance_enabled,
+            command=self._toggle_guidance).pack(side="right", padx=8)
         if not session.finalized and not battle.result:
             actions = self.ttk.Frame(self.view)
             actions.pack(fill="x", pady=9)
@@ -988,17 +996,23 @@ class PlayerApplication:
                 if self.action_var.get() not in options:
                     self.action_var.set(options[0])
                 self.ttk.Label(actions, text="Action").pack(side="left", padx=5)
-                self.ttk.Combobox(actions, textvariable=self.action_var,
-                                  values=options, state="readonly", width=23).pack(
-                                      side="left", padx=7)
+                action_box = self.ttk.Combobox(
+                    actions, textvariable=self.action_var,
+                    values=options, state="readonly", width=23)
+                action_box.pack(side="left", padx=7)
+                action_box.bind("<<ComboboxSelected>>",
+                                lambda _event: self._redraw())
                 if battle.mission.level_links:
                     self.ttk.Label(actions, text="Étage cible").pack(side="left")
-                    self.ttk.Combobox(
+                    floor_box = self.ttk.Combobox(
                         actions, textvariable=self.level_var, state="readonly",
                         values=tuple(range(0, 1+max(
                             max(row["from"][0], row["to"][0])
                             for row in battle.mission.level_links))),
-                        width=3).pack(side="left")
+                        width=3)
+                    floor_box.pack(side="left")
+                    floor_box.bind("<<ComboboxSelected>>",
+                                   lambda _event: self._redraw())
                 self.ttk.Label(actions, text="Orientation").pack(side="left")
                 self.ttk.Combobox(actions, textvariable=self.facing_var, state="readonly",
                                   values=["north", "south", "east", "west"],
@@ -1006,6 +1020,13 @@ class PlayerApplication:
                 self._button(actions, "Exécuter", self._execute).pack(side="left", padx=5)
                 if not battle.deploying:
                     self._button(actions, "Fin de tour", self._end).pack(side="left", padx=5)
+        self.guide_panel = self.ttk.LabelFrame(
+            self.view, text="Aide tactique contextuelle", padding=9)
+        self.ttk.Label(
+            self.guide_panel, textvariable=self.guidance_var,
+            wraplength=970, justify="left").pack(anchor="w")
+        if self.guidance_enabled.get():
+            self.guide_panel.pack(fill="x", pady=4)
         body = self.ttk.Frame(self.view)
         body.pack(fill="both", expand=True, pady=9)
         self.canvas = self.tk.Canvas(
@@ -1048,6 +1069,31 @@ class PlayerApplication:
         for action, sequence in self.keymap.items():
             self.canvas.bind(sequence, lambda _event, name=action:
                              self._key_action(name))
+
+    def _toggle_guidance(self):
+        if self.guide_panel is None:
+            return
+        if self.guidance_enabled.get():
+            self.guide_panel.pack(fill="x", pady=4, before=self.canvas.master)
+            self._redraw()
+        else:
+            self.guide_panel.pack_forget()
+        # The map retains keyboard navigation after toggling the help panel.
+        if self.canvas is not None:
+            self.canvas.focus_set()
+
+    def _submit_tactical(self, command):
+        """Show expected engine refusal inline, without a blocking dialog.
+
+        The controller owns rollback/checkpointing; no GUI-side save on error.
+        Unexpected IO errors still propagate to the existing _safe handler.
+        """
+        try:
+            self._change(lambda: self.player.execute(command))
+        except RuleError as exc:
+            self.feedback_var.set("Action refusée par le moteur : " + str(exc))
+            if self.canvas is not None:
+                self.canvas.focus_set()
 
     def _key_action(self, action):
         battle = self.player.session.active_battle
@@ -1177,6 +1223,11 @@ class PlayerApplication:
         self.audio.observe(battle)
         hud = combat_hud(frame, battle.mission.objective, self.selection)
         self.feedback_var.set(hud.selection_summary)
+        if self.guidance_enabled.get():
+            guide = combat_guidance(frame, self.action_var.get(), self.selection)
+            self.guidance_var.set(
+                guide.title + " — " + guide.instruction +
+                ("\n" + " | ".join(guide.notes) if guide.notes else ""))
         rows = ["Objectif : " + hud.objective, hud.headline,
                 hud.selection_summary, "", "Escouades"]
         if self.action_var.get() == 'level_attack' and battle.active is not None:
@@ -1328,11 +1379,10 @@ class PlayerApplication:
             command = tactical_command(kind, self.selection)
         else:
             command = {"kind": "act", "skill": kind, "cell": list(self.selection)}
-        self._change(lambda: self.player.execute(command))
+        self._submit_tactical(command)
 
     def _end(self):
-        self._change(lambda: self.player.execute(
-            {"kind": "end", "facing": self._facing()}))
+        self._submit_tactical({"kind": "end", "facing": self._facing()})
 
     def _abandon(self):
         if self.messagebox.askyesno("Abandonner",
