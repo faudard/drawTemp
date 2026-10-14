@@ -50,10 +50,10 @@ class PlayerGuidanceR7GuiTests(unittest.TestCase):
 
                 app.action_var.set("deploy")
                 with patch.object(app.player, "execute",
-                                  side_effect=RuleError("case interdite")), \\
-                     patch.object(app.messagebox, "showerror") as popup:
-                    app._execute()
-                    popup.assert_not_called()
+                                  side_effect=RuleError("case interdite")):
+                    with patch.object(app.messagebox, "showerror") as popup:
+                        app._execute()
+                        popup.assert_not_called()
                 self.assertIn("case interdite", app.feedback_var.get())
 
                 app.guidance_enabled.set(False)
