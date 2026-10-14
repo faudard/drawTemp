@@ -974,6 +974,97 @@ class PlayerApplication:
             self._button(self.view, "Abandonner l'opération",
                          self._abandon).pack(anchor="e", pady=4)
 
+
+    def _bind_battle_keys(self):
+        """Canvas-scoped shortcuts leave ttk inputs and dialogs unaffected."""
+        for action, sequence in self.keymap.items():
+            self.canvas.bind(sequence, lambda _event, name=action:
+                             self._key_action(name))
+
+    def _key_action(self, action):
+        battle = self.player.session.active_battle
+        if battle is None:
+            return "break"
+        if action in {"north", "south", "west", "east"}:
+            movement = {"north": (0, -1), "south": (0, 1),
+                        "west": (-1, 0), "east": (1, 0)}[action]
+            self.selection = clamp_selection(
+                (self.selection[0] + movement[0],
+                 self.selection[1] + movement[1]),
+                battle.board.width, battle.board.height)
+            self._redraw()
+        elif action.startswith("pan_"):
+            movement = {"pan_north": (0, 48), "pan_south": (0, -48),
+                        "pan_west": (48, 0), "pan_east": (-48, 0)}[action]
+            self.camera = self.camera.panned(*movement)
+            self._redraw()
+        elif action == "cancel":
+            self.selection = (tuple(battle.active.pos)
+                              if battle.active is not None else (0, 0))
+            self._redraw()
+        elif action in {"zoom_in", "zoom_out"}:
+            self._zoom_step(1 if action == "zoom_in" else -1,
+                            self._canvas_center())
+        elif action.startswith("zoom_"):
+            self._zoom_preset(int(action.partition("_")[2]))
+        elif action == "execute" and not battle.result:
+            if battle.deploying or battle.active and battle.active.team == "player":
+                self._safe(self._execute)
+        elif action == "end" and not battle.deploying and not battle.result:
+            if battle.active is not None and battle.active.team == "player":
+                self._safe(self._end)
+        return "break"
+
+    def _canvas_center(self):
+        return (max(1, self.canvas.winfo_width()) / 2,
+                max(1, self.canvas.winfo_height()) / 2)
+
+    def _zoom_preset(self, size):
+        """Exact 24/54/96px zoom in both projections, preserving the anchor."""
+        if size not in ZOOM_PRESETS:
+            raise ValueError("Unsupported zoom preset")
+        anchor = self._canvas_center()
+        if self.iso_view_var.get() and self.iso_renderer is not None:
+            battle = self.player.session.active_battle
+            self.camera = anchored_iso_zoom(
+                battle.board, self.camera, self.iso_renderer.viewport(),
+                0, anchor, size=size)
+        else:
+            self.camera = zoom_to(self.camera, size, anchor)
+        self._redraw()
+
+    def results_screen(self):
+        """Presentation-only results checkpoint before campaign progression."""
+        session = self.player.session
+        battle = session.active_battle
+        if battle is None or not session.finalized:
+            self.show()
+            return
+        self._clear()
+        self.presentation.transition("results")
+        self.audio.music_for("campaign")
+        self._heading("Résultats · " + battle.mission.name,
+                      "Issue : " + str(battle.result))
+        self.ttk.Label(self.view, text="Objectif : " + str(battle.mission.objective)
+                       ).pack(anchor="w", pady=5)
+        self.ttk.Label(self.view, text="Tick final : " + str(battle.tick)
+                       ).pack(anchor="w", pady=5)
+        frame = battle_frame(battle)
+        for actor in frame.actors:
+            self.ttk.Label(
+                self.view, text=actor.name + " · " + actor.team +
+                " · PV " + str(actor.hp) + "/" + str(actor.max_hp) +
+                (" · hors combat" if not actor.alive else "")
+            ).pack(anchor="w", pady=2)
+        self.ttk.Label(self.view,
+                       text="Partie enregistrée. Le retour à la campagne applique "
+                            "la progression par le contrôleur existant.").pack(
+                                anchor="w", pady=14)
+        self._button(self.view, "Voir le champ de bataille",
+                     self.battle_screen).pack(anchor="w", pady=5)
+        self._button(self.view, "Continuer vers la campagne",
+                     self._finish_mission_with_cinematic).pack(anchor="w", pady=5)
+
     def _motion_tick(self):
         self._motion_job = None
         self._render_motion(time.monotonic() * 1000)
