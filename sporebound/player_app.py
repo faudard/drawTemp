@@ -1176,9 +1176,16 @@ class PlayerApplication:
         coords, destination = preview_screen_geometry(
             preview, self.camera, iso_geometry=geo, shift=shift)
         tags = ("player_action_preview",)
-        # Upper-floor cells are not ground-plane polygons. Hide the planar
-        # overlay rather than draw a misleading path or target below a roof.
-        if preview.levels and any(level > 0 for level in preview.levels):
+        # Never draw an upstairs destination as a ground-plane polygon.
+        # The guidance panel retains the authoritative floor/path details.
+        session = self.player.session
+        battle = session.active_battle if session is not None else None
+        actor_floor = (battle.unit_levels.get(battle.active_id, 0)
+                       if battle is not None and battle.active_id else 0)
+        requested_floor = (self.level_var.get() if preview.action in
+                           {"level_move", "level_attack"} else actor_floor)
+        if (requested_floor > 0 or
+                preview.levels and any(level > 0 for level in preview.levels)):
             return
         if len(coords) > 1:
             flat = tuple(n for xy in coords for n in xy)
