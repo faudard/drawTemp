@@ -96,6 +96,13 @@ class TerrainAmbientGuiTests(unittest.TestCase):
                              for item in canvas.find_withtag('iso_ambient')})
         self.assertEqual(battle.result, result)
         self.assertEqual(renderer._actor_only_frames, 3)
+        # Switching to the flat Player mode destroys the iso items while
+        # retaining the same battle/frame identity: ISO must rebuild.
+        canvas.delete('all')
+        canvas.create_oval(0, 0, 12, 12, tags='actor')
+        renderer.draw(battle, frame, camera, ambient_clock_ms=4*TICK_MS)
+        self.assertEqual(renderer._scene_rebuilds, 2)
+        self.assertTrue(canvas.find_withtag('iso_ambient'))
         renderer.dispose()
         self.assertFalse(renderer.animates_when_idle)
 
