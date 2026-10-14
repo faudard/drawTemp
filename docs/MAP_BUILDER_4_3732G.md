@@ -45,6 +45,8 @@ python -m sporebound.terrain_watercolor --output /tmp/terrain_watercolor.png
 Cette commande exporte le même atlas que le Studio ou le Player, accompagné
 de son SHA-256. Le PNG de 1536×48 peut être ouvert dans n'importe quel éditeur
 graphique; il n'est pas nécessaire de régénérer le projet Content.
+La CI Editor publie également ce **vrai fichier PNG** dans l'artefact GitHub
+`terrain-watercolor-materials-3732g` pour revue visuelle avant fusion.
 
 Pour utiliser explicitement **l'ancien atlas** dans un outil :
 
