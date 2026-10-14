@@ -332,6 +332,41 @@ class CinematicStudio:
         self.vars["fadeout"].set(str(event.get("fade_out_ms", 0)))
         self.vars["duck"].set(str(event.get("duck_percent", 40)))
         self.audio_loop.set(event.get("loop", False))
+        self._refresh_keys()
+
+    def _refresh_keys(self):
+        self.key_list.delete(0, "end")
+        event = next((e for e in self._clip()["events"]
+                      if e["id"] == self.event_id), None)
+        if event is None or event["kind"] not in ("actor", "camera"):
+            self.selected_key_ms = None
+            return
+        keys = event.get("keyframes", [])
+        if self.selected_key_ms not in [key["at_ms"] for key in keys]:
+            self.selected_key_ms = None
+        for index, key in enumerate(keys):
+            label = (f"{key['at_ms']:>5} ms  ({key['pos'][0]:.2f}, "
+                     f"{key['pos'][1]:.2f})" +
+                     (f" zoom {key['zoom']:.2f}" if "zoom" in key else ""))
+            self.key_list.insert("end", label)
+            if key["at_ms"] == self.selected_key_ms:
+                self.key_list.selection_set(index)
+
+    def _select_key(self, _event=None):
+        if self._refreshing or not self.key_list.curselection():
+            return
+        keys = self._event().get("keyframes", [])
+        index = self.key_list.curselection()[0]
+        if index >= len(keys):
+            return
+        key = keys[index]
+        self.selected_key_ms = key["at_ms"]
+        for name, value in (("key_time", key["at_ms"]),
+                            ("key_x", key["pos"][0]), ("key_y", key["pos"][1]),
+                            ("key_zoom", key.get("zoom", 1))):
+            self.vars[name].set(str(value))
+        self.cursor.set(self._event()["start_ms"] + self.selected_key_ms)
+        self._timeline()
 
     def _spec(self):
         v = lambda name: self.vars[name].get().strip()
@@ -368,6 +403,11 @@ class CinematicStudio:
                          loop=self.audio_loop.get())
             if bus == "voice":
                 event["duck_percent"] = int(v("duck"))
+        if kind in ("actor", "camera") and self.event_id == event["id"]:
+            old = next((e for e in self._clip()["events"]
+                        if e["id"] == self.event_id), None)
+            if old is not None and old["kind"] == kind and old.get("keyframes"):
+                event["keyframes"] = deepcopy(old["keyframes"])
         return event
 
     def create_clip(self):
@@ -426,6 +466,67 @@ class CinematicStudio:
         self._apply(edit)
         self.event_id = ""
         self.refresh()
+
+    def _update_selected_event(self, replacement):
+        cid, eid = self.clip_id, self.event_id
+        def commit(data):
+            events = next(c for c in data["cinematics"]
+                          if c["id"] == cid)["events"]
+            events[next(i for i, e in enumerate(events)
+                        if e["id"] == eid)] = replacement
+        self._apply(commit)
+
+    def add_key(self):
+        event = self._event()
+        local = int(round(self.cursor.get())) - event["start_ms"]
+        if not 0 < local < event["duration_ms"]:
+            local = int(self.vars["key_time"].get())
+        replacement = add_motion_keyframe(event, local)
+        self.selected_key_ms = local
+        self._update_selected_event(replacement)
+
+    def update_key(self):
+        event = self._event()
+        require(self.selected_key_ms is not None, "Sélectionner une keyframe")
+        at = int(self.vars["key_time"].get())
+        pos = [float(self.vars["key_x"].get()), float(self.vars["key_y"].get())]
+        zoom = (float(self.vars["key_zoom"].get())
+                if event["kind"] == "camera" else None)
+        replacement = update_motion_keyframe(
+            event, self.selected_key_ms, at_ms=at, pos=pos, zoom=zoom)
+        self.selected_key_ms = at
+        self._update_selected_event(replacement)
+
+    def delete_key(self):
+        require(self.selected_key_ms is not None, "Sélectionner une keyframe")
+        result = remove_motion_keyframe(self._event(), self.selected_key_ms)
+        self.selected_key_ms = None
+        self._update_selected_event(result)
+
+    def duplicate_event(self):
+        event, clip = self._event(), self._clip()
+        ids = {row["id"] for row in clip["events"]}
+        root = event["id"][:56] + "_copy"
+        eid = root
+        counter = 2
+        while eid in ids:
+            eid = f"{root[:55]}{counter}"
+            counter += 1
+        start = min(event["start_ms"] + 100,
+                    clip["duration_ms"] - event["duration_ms"])
+        copy = clone_event(event, eid, start, clip["duration_ms"])
+        cid = self.clip_id
+        self._apply(lambda data: next(c for c in data["cinematics"]
+                                      if c["id"] == cid)["events"].append(copy))
+        self.event_id = eid
+        self.selected_key_ms = None
+        self.refresh()
+
+    def resize_selected(self):
+        event = self._event()
+        replacement = resize_event(event, int(self.vars["duration"].get()),
+                                   self._clip()["duration_ms"])
+        self._update_selected_event(replacement)
 
     def audit_path(self):
         """Authoring certification; choices are still executed by StoryBook."""
