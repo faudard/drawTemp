@@ -6,6 +6,7 @@ on:
       - 'sporebound/save_manager.py'
       - 'sporebound/player_app.py'
       - 'tests_standalone/test_save_manager_r819.py'
+      - 'tests_standalone/test_save_manager_r819_gui.py'
       - 'docs/PLAYER_SAVE_MANAGER_R819.md'
       - '.github/workflows/player-save-manager-r819.yml'
   workflow_dispatch:
@@ -38,3 +39,6 @@ jobs:
       - name: Compile headless and Tk presentation
         run: |
           python -m compileall -q sporebound/save_manager.py sporebound/player_app.py
+      - name: Real Tk Save Manager smoke (Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a env SPOREBOUND_GUI_SMOKE=1 python -m unittest discover -s tests_standalone -p test_save_manager_r819_gui.py -v
