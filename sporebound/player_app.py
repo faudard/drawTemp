@@ -375,10 +375,36 @@ class PlayerApplication:
             self.ttk.Label(self.view, text=name).pack(anchor="w", pady=(8, 0))
             self.ttk.Scale(self.view, from_=0, to=100, variable=variable).pack(
                 fill="x", padx=24, pady=(2, 12))
+        access = self.ttk.LabelFrame(self.view, text="Accessibilité et commandes", padding=10)
+        access.pack(fill="x", pady=6)
+        self.ttk.Checkbutton(access, text="Contraste renforcé",
+                             variable=self.high_contrast).pack(anchor="w")
+        self.ttk.Checkbutton(access, text="HUD compact",
+                             variable=self.compact_hud).pack(anchor="w")
+        self.ttk.Label(access, text="Taille du texte (%)").pack(anchor="w")
+        self.ttk.Combobox(access, state="readonly", textvariable=self.text_scale,
+                          values=(100, 125, 150), width=9).pack(anchor="w")
+        self.ttk.Label(access, text="Raccourcis tactiques (uniquement lorsque la carte a le focus)").pack(
+            anchor="w", pady=(8, 2))
+        shortcuts = self.ttk.Frame(access)
+        shortcuts.pack(fill="x")
+        key_vars = {}
+        from .player_ux import KEY_CHOICES
+        for index, (action, sequence) in enumerate(self.keymap.items()):
+            variable = self.tk.StringVar(value=sequence)
+            key_vars[action] = variable
+            field = self.ttk.Frame(shortcuts)
+            field.grid(row=index // 4, column=index % 4,
+                       sticky="w", padx=5, pady=3)
+            self.ttk.Label(field, text=action).pack(anchor="w")
+            self.ttk.Combobox(field, textvariable=variable, state="readonly",
+                              values=KEY_CHOICES, width=16).pack(anchor="w")
         full = self.tk.BooleanVar(value=bool(self.root.attributes("-fullscreen")))
         self.ttk.Checkbutton(self.view, text="Plein écran", variable=full).pack(
             anchor="w", pady=10)
         def apply():
+            self.keymap.replace({action: var.get() for action, var in key_vars.items()})
+            self._style()
             self.audio.effects_volume = effects.get() / 100
             self.audio.music_volume = music.get() / 100
             self.root.attributes("-fullscreen", full.get())
@@ -425,15 +451,18 @@ class PlayerApplication:
         """Shared playback for campaign, mission, scene and tactical events."""
         from .cinematic_player import CinematicPlayback
 
-        def next_clip(index=0):
+        def next_clip(index=0, revision=None):
+            if revision is not None and not self.presentation.current(revision):
+                return  # A newer screen interrupted this cinematic.
             self.cinematic = None
             if index >= len(clips):
                 finished()
                 return
             self._clear()
+            token = self.presentation.transition("cinematic")
             self.cinematic = CinematicPlayback(
                 self.view, self.tk, self.ttk, clips[index],
-                lambda: next_clip(index + 1), audio=self.audio,
+                lambda: next_clip(index + 1, token), audio=self.audio,
                 registry=self.registry, asset_root=self.asset_root)
 
         next_clip()
