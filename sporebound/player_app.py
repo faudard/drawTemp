@@ -885,6 +885,13 @@ class PlayerApplication:
         self._heading(self.project.campaign(session.campaign_id)["name"],
                       "Or : " + str(session.progress.gold) +
                       "    Missions terminées : " + str(len(session.progress.completed)))
+        # Pack navigation before large story content so it cannot disappear below the window.
+        footer = self.ttk.Frame(self.view)
+        footer.pack(side="bottom", fill="x", pady=12)
+        self._button(footer, "Inspecter la campagne", self._campaign_flow_inspector).pack(side="left", padx=6)
+        self._button(footer, "Sauvegardes", self.save_manager_screen).pack(side="left", padx=6)
+        self._button(footer, "Sauvegarder", self.player.save).pack(side="left", padx=6)
+        self._button(footer, "Menu principal", self.title_screen).pack(side="left", padx=6)
         if self.chapter_one:
             chapter_ids = {"a1_01_route", "a1_02_pont", "a1_03_hospice",
                            "a1_04a_archives", "a1_04b_otages", "a1_05_vaucouleurs"}
@@ -969,12 +976,6 @@ class PlayerApplication:
                            "est conservée pour la suite." if finished else
                            "Campagne terminée : aucun objectif disponible.")
                 self.ttk.Label(self.view, text=message).pack(pady=20)
-        footer = self.ttk.Frame(self.view)
-        footer.pack(side="bottom", fill="x", pady=12)
-        self._button(footer, "Inspecter la campagne", self._campaign_flow_inspector).pack(side="left", padx=6)
-        self._button(footer, "Sauvegardes", self.save_manager_screen).pack(side="left", padx=6)
-        self._button(footer, "Sauvegarder", self.player.save).pack(side="left", padx=6)
-        self._button(footer, "Menu principal", self.title_screen).pack(side="left", padx=6)
 
     def _campaign_flow_inspector(self):
         """Read-only campaign state panel, sourced from the live session."""
@@ -1223,50 +1224,122 @@ class PlayerApplication:
                 lambda: self._exploration_interact(nearest[0])))
 
     def _narrative_scene(self, scene, *, choices=None, on_choice=None):
-        panel = self.ttk.LabelFrame(self.view, text=scene["title"], padding=20)
-        panel.pack(fill="both", expand=True, padx=60, pady=16)
-        if scene["id"].startswith("sc_p0_"):
-            art = self.tk.Canvas(panel, width=860, height=210, highlightthickness=0)
-            art.pack(pady=4)
-            def animate(frame=0):
-                if not art.winfo_exists():
-                    return
-                draw_story_backdrop(art, scene["id"], frame)
-                self._stage_job = self.root.after(170, animate, frame + 1)
-            animate()
-        portrait = CanvasRenderer(panel, registry=self.registry, asset_root=self.asset_root).image(
-            "portrait", scene["speaker"])
-        # PhotoImage needs a widget master; keep a Python reference while showing scene.
-        if portrait is not None:
-            label = self.ttk.Label(panel, image=portrait)
-            label.image = portrait
-            label.pack(pady=6)
-        if scene["speaker"]:
-            self.ttk.Label(panel, text=scene["speaker"],
-                           font=("TkDefaultFont", 14, "bold")).pack(anchor="w", pady=6)
-        text = self.tk.Label(panel, text="", fg="#f2f0d9", bg="#101a2b",
-                             justify="left", wraplength=820, font=("TkDefaultFont", 12))
-        text.pack(anchor="w", pady=15)
-        # Typewriter effect is visual only: no changes to narrative state.
-        message = scene["text"]
-        def reveal(n=0):
-            if not text.winfo_exists():
-                return
-            text.configure(text=message[:n])
-            if n < len(message):
-                self._typewriter_job = self.root.after(8, reveal, min(n + 4, len(message)))
-            else:
-                self._typewriter_job = None
-        reveal()
+        """Keep dialogue choices visible at every supported window size.
+
+        Only the illustrated narrative body scrolls; the actual decisions are
+        pinned at the bottom, above the campaign navigation. No story flags
+        or save data are modified by this presentation layout.
+        """
         if choices is None:
             choices = self.player.session.available_choices()
         if on_choice is None:
             on_choice = lambda cid: self._change(
                 lambda: self.player.choose_story_option(cid))
-        for choice in choices:
-            self._button(panel, choice["label"],
-                         lambda cid=choice["id"]: on_choice(cid)).pack(
-                             fill="x", padx=30, pady=4)
+
+        panel = self.ttk.LabelFrame(self.view, text=scene["title"], padding=12)
+        panel.pack(fill="both", expand=True, padx=20, pady=(6, 8))
+
+        decisions = self.ttk.Frame(panel)
+        decisions.pack(side="bottom", fill="x", pady=(8, 0))
+        if choices:
+            self.ttk.Label(decisions, text="Votre décision — choisissez pour continuer :"
+                           ).pack(anchor="w", pady=(0, 4))
+            for choice in choices:
+                self._button(
+                    decisions, choice["label"],
+                    lambda cid=choice["id"]: on_choice(cid)
+                ).pack(fill="x", padx=4, pady=3)
+        else:
+            self.ttk.Label(
+                decisions,
+                text="Aucune décision accessible dans cette scène.",
+                wraplength=550
+            ).pack(anchor="w", pady=4)
+
+        viewport = self.ttk.Frame(panel)
+        viewport.pack(side="top", fill="both", expand=True)
+        scroll = self.tk.Canvas(viewport, height=220, highlightthickness=0,
+                                background="#101a2b")
+        scroll_bar = self.ttk.Scrollbar(viewport, orient="vertical",
+                                      command=scroll.yview)
+        scroll.configure(yscrollcommand=scroll_bar.set)
+        scroll_bar.pack(side="right", fill="y")
+        scroll.pack(side="left", fill="both", expand=True)
+        body = self.ttk.Frame(scroll)
+        body_window = scroll.create_window((0, 0), window=body, anchor="nw")
+        body.bind("<Configure>", lambda _event:
+                  scroll.configure(scrollregion=scroll.bbox("all")))
+        scroll.bind("<Configure>", lambda event:
+                    scroll.itemconfigure(body_window, width=event.width))
+
+        # Start with the dialogue, not a tall decorative illustration: the
+        # player sees the current narrative context without scrolling.
+        dialogue = self.ttk.Frame(body)
+        dialogue.pack(fill="x", padx=8, pady=(8, 12))
+        picture = CanvasRenderer(
+            dialogue, registry=self.registry, asset_root=self.asset_root
+        ).image("portrait", scene["speaker"])
+        if picture is not None:
+            picture_label = self.ttk.Label(dialogue, image=picture)
+            picture_label.image = picture  # Tk must retain the PhotoImage.
+            picture_label.pack(side="left", anchor="n", padx=(0, 14))
+        copy = self.ttk.Frame(dialogue)
+        copy.pack(side="left", fill="both", expand=True)
+        if scene["speaker"]:
+            speaker_label = self.ttk.Label(
+                copy, text=scene["speaker"],
+                font=("TkDefaultFont", 14, "bold"))
+            speaker_label.pack(anchor="w", pady=(0, 7))
+        narrative_text = self.tk.Label(
+            copy, text="", fg="#f2f0d9", bg="#101a2b",
+            justify="left", wraplength=440, anchor="nw",
+            font=("TkDefaultFont", 12))
+        narrative_text.pack(anchor="w", fill="x", pady=(0, 8))
+        def resize_text(event):
+            narrative_text.configure(wraplength=max(180, event.width - 12))
+        copy.bind("<Configure>", resize_text)
+
+        # Typewriter and background animation are presentation-only.
+        message = scene["text"]
+        def reveal(n=0):
+            if not narrative_text.winfo_exists():
+                return
+            narrative_text.configure(text=message[:n])
+            if n < len(message):
+                self._typewriter_job = self.root.after(
+                    8, reveal, min(n + 4, len(message)))
+            else:
+                self._typewriter_job = None
+        reveal()
+
+        art = None
+        if scene["id"].startswith("sc_p0_"):
+            art = self.tk.Canvas(body, height=160, highlightthickness=0)
+            art.pack(fill="x", padx=8, pady=(0, 8))
+            def animate(frame=0):
+                if not art.winfo_exists():
+                    return
+                draw_story_backdrop(art, scene["id"], frame)
+                art.scale("all", 0, 0, max(0.1, art.winfo_width() / 860), 160 / 210)
+                self._stage_job = self.root.after(170, animate, frame + 1)
+            animate()
+
+        # The scrollbar is always available; the mouse wheel is restricted to
+        # the narrative region so it cannot move the tactical camera or menus.
+        def wheel(event):
+            step = (-1 if getattr(event, "num", None) == 4 or
+                    getattr(event, "delta", 0) > 0 else 1)
+            scroll.yview_scroll(step * 3, "units")
+            return "break"
+        for widget in (scroll, body, dialogue, copy, narrative_text):
+            for event in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                widget.bind(event, wheel)
+        if picture is not None:
+            for event in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                picture_label.bind(event, wheel)
+        if art is not None:
+            for event in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                art.bind(event, wheel)
 
     def front_setup(self, available):
         self._clear()
