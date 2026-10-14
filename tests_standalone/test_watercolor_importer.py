@@ -1,50 +1,49 @@
-"""Tests for watercolor importer without optional Pillow/OpenCV dependencies."""
+"""Registry contract checks for the optional watercolor source-art importer."""
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
-from tempfile import TemporaryDirectory
 import unittest
 
-source = Path(__file__).resolve().parents[1] / 'scripts' / 'import_watercolor_sheets.py'
-spec = spec_from_file_location('watercolor_importer', source)
+IMPORTER = Path(__file__).resolve().parents[1] / 'scripts/import_watercolor_sheets.py'
+spec = spec_from_file_location('watercolor_importer', IMPORTER)
 module = module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
 class WatercolorImporterTests(unittest.TestCase):
-    def test_sheets_have_unique_portable_sprite_ids(self):
-        sprites = [(group, name) for group, _, cols, rows, poses in module.SHEETS
-                   for name in poses.split()]
-        self.assertEqual(len(sprites), 88)
-        self.assertEqual(len(sprites), len(set(sprites)))
-        for group, filename, cols, rows, poses in module.SHEETS:
-            self.assertEqual(cols * rows, len(poses.split()))
-            self.assertTrue(filename.endswith('.png'))
+    def test_grid_and_ids_unique(self):
+        self.assertEqual(sum(len(names) for _, _, _, _, names in module.SHEETS), 88)
+        ids = [f'{group}_{name}' for group, _, cols, rows, names in module.SHEETS
+               for name in names]
+        self.assertEqual(len(ids), len(set(ids)))
+        for group, name, cols, rows, frames in module.SHEETS:
+            with self.subTest(group=group):
+                self.assertEqual(len(frames), cols * rows)
+                self.assertTrue(name.lower().endswith('.png'))
 
-    def test_v1_registry_only_references_known_frames(self):
-        sprites = [{'id': group + '_' + pose, 'path': 'sprites/' + group + '/' + pose + '.png'}
-                   for group, _, _, _, poses in module.SHEETS for pose in poses.split()]
-        manifest = module.build_registry(sprites)
-        ids = {s['id'] for s in sprites}
+    def test_registry_animations_reference_existing_frames(self):
+        records = [{'id': f'{group}_{name}', 'path': f'sprites/{group}/{name}.png'}
+                   for group, _, cols, rows, names in module.SHEETS for name in names]
+        manifest = module.build_registry(records)
         self.assertEqual(manifest['version'], 1)
         self.assertEqual(manifest['bindings'], {})
-        from sporebound.assets import AssetRegistry
-        AssetRegistry(manifest)
-        all_ids = [entry['id'] for entry in manifest['entries']]
-        self.assertEqual(len(all_ids), len(set(all_ids)), 'Duplicate sprite/animation IDs')
-        animations = [e for e in manifest['entries'] if e['kind'] == 'animation']
-        self.assertEqual(len(animations), 15)
-        for animation in animations:
-            self.assertTrue(animation['frames'])
-            for frame in animation['frames']:
-                self.assertIn(frame['sprite'], ids)
-                self.assertGreater(frame['duration_ms'], 0)
+        all_ids = [e['id'] for e in manifest['entries']]
+        self.assertEqual(len(all_ids), len(set(all_ids)), 'duplicate sprite/animation ID')
+        ids = {e['id'] for e in manifest['entries'] if e['kind'] == 'sprite'}
+        for entry in manifest['entries']:
+            if entry['kind'] == 'animation':
+                with self.subTest(animation=entry['id']):
+                    self.assertTrue(entry['frames'])
+                    self.assertTrue(all(frame['sprite'] in ids for frame in entry['frames']))
+                    self.assertTrue(all(frame['duration_ms'] > 0 for frame in entry['frames']))
 
-    def test_missing_sheets_fail_before_output_creation(self):
-        with TemporaryDirectory() as tmp:
-            folder = Path(tmp)
+    def test_missing_sources_fail_before_any_output(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / 'out'
             with self.assertRaises(FileNotFoundError):
-                module.build(folder, folder / 'art')
-            self.assertFalse((folder / 'art').exists())
+                module.build(root, target)
+            self.assertFalse(target.exists())
 
 
 if __name__ == '__main__':

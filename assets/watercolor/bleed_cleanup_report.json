@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "source": "drawTemp_assets_Jeanne_88_sprites_v2.zip",
+  "method": "remove disconnected near-border non-VFX alpha components",
+  "cleaned_sprite_count": 12,
+  "removed_component_count": 17,
+  "unrepaired": "source cell clipping and missing poses require art direction review",
+  "modified_sprites": [
+    {
+      "sprite": "jeanne_guard",
+      "removed_components": 1
+    },
+    {
+      "sprite": "jeanne_victory",
+      "removed_components": 1
+    },
+    {
+      "sprite": "jeanne_windup",
+      "removed_components": 1
+    },
+    {
+      "sprite": "props_oak_tree",
+      "removed_components": 1
+    },
+    {
+      "sprite": "props_pine_tree",
+      "removed_components": 3
+    },
+    {
+      "sprite": "props_ruined_arch",
+      "removed_components": 2
+    },
+    {
+      "sprite": "props_stone_bridge",
+      "removed_components": 1
+    },
+    {
+      "sprite": "props_stone_stairs",
+      "removed_components": 1
+    },
+    {
+      "sprite": "props_treasure_chest",
+      "removed_components": 1
+    },
+    {
+      "sprite": "spearman_kneel",
+      "removed_components": 1
+    },
+    {
+      "sprite": "spearman_recover",
+      "removed_components": 2
+    },
+    {
+      "sprite": "townfolk_scout",
+      "removed_components": 2
+    }
+  ]
+}
