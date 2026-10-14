@@ -3277,6 +3277,32 @@ def launch(path):
                                             outline='#1f6e9a', width=3, tags='selection')
                 x,y = (v*tile_size for v in selected_cell)
                 canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
+        if views is None or RENDERER in views:
+            # Stable overlay on the exact rendered piece. The selection is
+            # decorative and never intercepts or changes tactical picking.
+            canvas.delete('building_component_selection')
+            if (studio_navigation.building_mode and battle is None and
+                    building_part_target is not None and
+                    selected_building is not None):
+                if (building_part_target.part == 'roof' and iso_geometry is not None):
+                    from .iso_architecture import architecture_outline
+                    instance = next((
+                        row for row in getattr(
+                            iso_geometry, 'architecture_instances', ())
+                        if row.id == building_part_target.structure_id), None)
+                    if instance is not None:
+                        roof_outline, _ = architecture_outline(
+                            iso_geometry, instance)
+                        canvas.create_polygon(
+                            *[v for point in roof_outline for v in point],
+                            outline='#1597dd', fill='', width=4,
+                            tags='building_component_selection')
+                else:
+                    preview_cells(
+                        (building_part_target.cell,),
+                        tag='building_component_selection',
+                        color='#1597dd')
+            canvas.tag_raise('building_component_selection')
         if views is None or INSPECTOR in views:
             inspected_tile = board.tile(selected_cell) if board.contains(selected_cell) else None
             mode_var.set('MODE : PLAYTEST (édition verrouillée)' if battle else 'MODE : ÉDITION')
@@ -3874,6 +3900,30 @@ def launch(path):
                ).pack(side='right')
     ttk.Label(buildings_page, textvariable=building_selection_var,
               wraplength=260, justify='left').pack(fill='x', padx=8, pady=(0, 6))
+    selected_part_panel = ttk.LabelFrame(
+        buildings_page, text='ÉLÉMENT SÉLECTIONNÉ · MODE VISUEL 2.5D')
+    selected_part_panel.pack(fill='x', padx=7, pady=(0, 7))
+    ttk.Label(selected_part_panel, textvariable=building_part_var,
+              wraplength=245, justify='left').pack(fill='x', padx=8, pady=5)
+    for name, label, action in (
+        ('add_window', 'Ajouter une fenêtre à ce mur',
+         lambda: edit_visual_window(True)),
+        ('remove_window', 'Supprimer cette fenêtre',
+         lambda: edit_visual_window(False)),
+        ('move_door', 'Basculer la porte (entrée A / B)',
+         switch_visual_door),
+    ):
+        button = ttk.Button(selected_part_panel, text=label, command=action)
+        button.pack(fill='x', padx=7, pady=(0, 3))
+        button.state(['disabled'])
+        building_part_actions[name] = button
+    ttk.Label(
+        selected_part_panel,
+        text='Cliquer le bâtiment dans la carte : toiture = matériaux, '
+             'mur = fenêtre, porte = emplacement autorisé. '
+             'Aucun effet sur les collisions tactiques.',
+        wraplength=248, justify='left').pack(
+            anchor='w', padx=8, pady=(4, 6))
     building_tabs = ttk.Notebook(buildings_page)
     building_tabs.pack(fill='both', expand=True, padx=5, pady=(0, 5))
 
