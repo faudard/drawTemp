@@ -105,6 +105,14 @@ def _validated_bundle(archive):
     return entries, members
 
 
+def validate_bundle(archive):
+    """Validate ZIP manifests, sprite metadata and PNG boundaries before install.
+
+    Public read-only preflight used by authoring tools and installer tests.
+    """
+    return _validated_bundle(archive)
+
+
 def install(bundle, content, project, output):
     """Create a standalone game copy with all sprites and active Player bindings."""
     bundle, content, project, output = map(Path, (bundle, content, project, output))
