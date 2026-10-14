@@ -57,7 +57,12 @@ def mix_at(clip, time_ms):
     tracks = []
     for e in audio:
         bus = e.get("bus", "sfx")
-        gain = (e.get("volume", 100) / 100) * _envelope(e, now)
+        # R7.15: authored level automation is a pure function of playhead time.
+        # The legacy volume-only track remains bit-for-bit unchanged.
+        start = e.get("volume", 100)
+        end = e.get("volume_to", start)
+        ratio = (now - e["start_ms"]) / e["duration_ms"]
+        gain = ((start + (end - start) * ratio) / 100) * _envelope(e, now)
         if bus == "music":
             gain *= duck
         tracks.append(MixedTrack(
