@@ -35,7 +35,7 @@ class VisualR1Acceptance(unittest.TestCase):
         import tkinter as tk
         from tkinter import ttk
 
-        initial, project = R1StudioGuiGate.prepared(None)
+        initial, project = R1StudioGuiGate.prepared(self)
         actor = next(m for m in initial['missions'] if m['id'] == self.MID)['units'][0]
         with TemporaryDirectory() as directory:
             path = Path(directory) / 'visual.json'
@@ -67,11 +67,14 @@ class VisualR1Acceptance(unittest.TestCase):
                     tool_box = next(w for w in widgets
                                     if isinstance(w, ttk.Combobox)
                                     and 'Sélection structure' in w['values'])
-                    iso = next(w for w in widgets
-                               if isinstance(w, ttk.Checkbutton) and
-                               w.cget('text') == 'Vue isométrique 2.5D')
-                    if bool(int(iso.getvar(iso.cget('variable')))):
-                        iso.invoke()
+                    # The map viewport uses a persistent 2D / Iso 2.5D
+                    # radio selector, not the retired isometric checkbox.
+                    projection_2d = next(w for w in widgets
+                                         if isinstance(w, ttk.Radiobutton) and
+                                         w.cget('text') == '2D' and
+                                         w.cget('value') == '2d')
+                    projection_2d.invoke()
+                    root.update()
                     mission_box.set(self.MID)
                     mission_box.event_generate('<<ComboboxSelected>>')
                     root.update()
