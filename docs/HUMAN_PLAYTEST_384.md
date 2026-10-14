@@ -10,10 +10,13 @@ savegames or replay journals.
 
 ## Consent, privacy and ownership
 
-Collection is **OFF at every Player launch**. In the Player, choose
-**Options → Enregistrer les playtests (activation volontaire)**. Uncheck
-to stop; capture since activation is saved only in memory until the tester
-selects **Exporter rapport playtest JSON** (also in a battle's toolbar).
+Collection is **OFF at every Player launch**. The normal Player
+options screen contains only player-facing controls. For an authorized
+local QA session, launch the Player with `DRAWTEMP_DEVELOPER_OPTIONS=1`,
+then choose **Options → Outils de développement → Enregistrer les playtests
+(activation volontaire)**. Uncheck to stop; capture since activation is
+saved only in memory until the tester selects **Exporter rapport playtest
+JSON** (also in a battle's toolbar).
 The tool never uploads any report, stores playtest data in the canonical
 GameSession/save slot, or captures names of the tester, device identity,
 player filesystem paths, free-text dialogue or account credentials.
