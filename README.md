@@ -94,6 +94,19 @@ CT/PV/positions et vérifier les anomalies signalées sans modifier la mission.
 En CLI : `python -m sporebound battle-diagnostics --mission garden --seed 42 --limit 500 --report trace.json`.
 Voir [Combat Diagnostics 3.8.1](docs/BATTLE_DIAGNOSTICS_381.md).
 
+## Human Playtest Telemetry 3.8.4 — mesures réelles et volontairement locales
+
+Le Player propose une option **désactivée par défaut** dans Options pour
+capturer les sessions jouées : durée réelle, actions acceptées, progression
+d'objectif, abandons et issue du combat. Le rapport reste en mémoire jusqu'à
+**Exporter playtest JSON** et n'est jamais intégré aux sauvegardes.
+
+Dans le Studio, **Playtest Lab** importe ces rapports, compare les rencontres
+humaines avec les références automatisées Battle Lab **sans convertir les
+ticks CT en minutes humaines**, et affiche les résultats par mission.
+
+[Guide Human Playtest Telemetry 3.8.4](docs/HUMAN_PLAYTEST_384.md).
+
 ## Balance Matrix 3.8.2 — comparer missions et variantes tactiques
 
 Le Studio propose un onglet **Balance Matrix** accessible depuis l'Espace
