@@ -48,6 +48,11 @@ class TacticalQualityR615Tests(unittest.TestCase):
         self.assertEqual(potion_effect["metrics"]["ally_hp_restored"], 20)
         self.assertEqual(potion_effect["metrics"]["consumables_spent"], 1)
         self.assertEqual(attack_effect["metrics"]["consumables_spent"], 0)
+        self.assertEqual(attack_effect["spent_slots"], ["action"])
+        self.assertEqual(potion_effect["spent_slots"], ["action"])
+        movement = immediate_effect(
+            battle, {"kind": "move", "cell": [1, 1]})
+        self.assertEqual(movement["spent_slots"], ["move"])
         self.assertEqual(battle.digest(), before_digest)
         self.assertEqual(battle.recording(), before_commands)
         with self.assertRaises(RuleError):
@@ -69,6 +74,11 @@ class TacticalQualityR615Tests(unittest.TestCase):
         self.assertEqual(measured["chosen_immediate"]["metrics"][
                          "consumables_spent"], 1)
         self.assertEqual(battle.digest(), snapshot)
+        for row in measured["tradeoffs"]:
+            self.assertTrue(row["shared_spent_slots"])
+            # Attack and movement can be used in the same turn; distinct
+            # first-command outcomes must not be misreported as a tradeoff.
+            self.assertNotEqual(row["categories"], ["damage", "positioning"])
 
     def test_tradeoffs_are_pareto_not_single_damage_score(self):
         one = {"enemy_hp_removed": 8, "cover_gain": 0,
