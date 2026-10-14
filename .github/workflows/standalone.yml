@@ -49,6 +49,8 @@ jobs:
         run: python -m unittest tests_standalone.test_map_builder4_3732d -v
       - name: Verify 3.7.32E reproducible assisted quarter proposals and model safety
         run: python -m unittest tests_standalone.test_map_builder4_3732e -v
+      - name: Campaign Flow R5.13 — visual authoring transactions and runtime parity
+        run: python -m unittest tests_standalone.test_campaign_flow_authoring_r513 -v
       - name: Campaign Flow R5.B — gated progression, save identity and portable export
         run: python -m unittest tests_standalone.test_campaign_flow_r5b -v
       - name: Campaign Flow R5.B — checkpoint-backed branch QA report
@@ -167,6 +169,10 @@ jobs:
         env:
           SPOREBOUND_GUI_SMOKE: '1'
         run: xvfb-run -a python3 -m unittest discover -s tests_standalone -p test_cinematics_gui.py -v
+      - name: Campaign Flow R5.13 — visual Tk authoring, undo/redo and save
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: xvfb-run -a python3 -m unittest tests_standalone.test_campaign_flow_authoring_r513_gui -v
       - name: Exercise 2.5.4 visual Campaign & Siege Studio
         env:
           SPOREBOUND_GUI_SMOKE: '1'
