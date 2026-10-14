@@ -4,7 +4,9 @@ The stage is presentation-only. It never edits Campaign, GameSession or Battle.
 """
 from .cinematics import frame_at
 from .audio_timeline import CinematicAudioDirector
+from .cinematic_transport import CinematicTransport
 from .tk_renderer import CanvasRenderer
+from .model import require
 
 
 def draw_frame(canvas, clip, ms, renderer=None):
@@ -77,7 +79,7 @@ def draw_frame(canvas, clip, ms, renderer=None):
 class CinematicPlayback:
     """Autoplay, pause, restart, skip and deterministic seek. Callback exactly once."""
     def __init__(self, parent, tk, ttk, clip, finished, audio=None,
-                 registry=None, asset_root=None):
+                 registry=None, asset_root=None, clock=None):
         self.parent, self.tk, self.ttk = parent, tk, ttk
         self.clip = clip
         self.finished = finished
@@ -87,6 +89,7 @@ class CinematicPlayback:
             audio = AudioStage(registry, asset_root)
         self.audio = audio
         self.director = CinematicAudioDirector(clip, audio)
+        self.transport = CinematicTransport(clip["duration_ms"], monotonic=clock)
         self.time_ms = 0
         self.playing = True
         self.closed = False
@@ -119,6 +122,8 @@ class CinematicPlayback:
         self.canvas.bind("<Right>", lambda _: self.seek(self.time_ms + 1000))
         self.canvas.bind("<Configure>", lambda _: self.render())
         self.canvas.focus_set()
+        # UI/asset initialization must not consume the opening cinematic.
+        self.transport.seek(0)
         self.director.advance(0)
         self.render()
         self._schedule()
@@ -136,39 +141,53 @@ class CinematicPlayback:
                           f"{self.clip['duration_ms'] / 1000:.1f} s")
 
     def _scrub_to(self, value):
-        if not self._sync_scrub:
-            self.seek(int(float(value)))
+        # Tk may deliver programmatic Scale callbacks on a later idle cycle.
+        # The current playhead value is never treated as a user seek.
+        position = int(float(value))
+        if not self._sync_scrub and abs(position - self.time_ms) > 1:
+            self.seek(position)
 
     def seek(self, ms):
         """Seekable preview; historical audio one-shots must not refire."""
         if self.closed:
             return
-        self.time_ms = max(0, min(self.clip["duration_ms"], int(ms)))
+        self.time_ms = self.transport.seek(int(ms))
         self.director.seek(self.time_ms)
-        if not self.playing:
+        if not self.transport.playing:
             self.director.pause()
         self.render()
 
     def checkpoint(self):
-        """Presentation-only interruption state (never mutates GameSession)."""
-        return {"time_ms": self.time_ms, "playing": self.playing}
+        """In-memory, clip-bound presentation state; not a campaign save."""
+        return {"clip_id": self.clip["id"],
+                "duration_ms": self.clip["duration_ms"],
+                **self.transport.checkpoint()}
 
     def restore(self, checkpoint):
-        from .model import require
         require(isinstance(checkpoint, dict)
-                and set(checkpoint) == {"time_ms", "playing"}
-                and type(checkpoint["time_ms"]) is int
-                and 0 <= checkpoint["time_ms"] <= self.clip["duration_ms"]
-                and type(checkpoint["playing"]) is bool,
-                "Invalid cinematic playback checkpoint")
+                and set(checkpoint) ==
+                    {"clip_id", "duration_ms", "time_ms", "playing"}
+                and checkpoint["clip_id"] == self.clip["id"]
+                and checkpoint["duration_ms"] == self.clip["duration_ms"],
+                "Cinematic checkpoint belongs to another clip")
+        # Strict validation occurs before cancelling any jobs or audio.
+        position = self.transport.restore(
+            {"time_ms": checkpoint["time_ms"],
+             "playing": checkpoint["playing"]})
+        if self.closed:
+            return
         if self.job is not None:
             self.parent.after_cancel(self.job)
             self.job = None
-        self.playing = checkpoint["playing"]
-        self.seek(checkpoint["time_ms"])
+        self.time_ms = position
+        self.playing = self.transport.playing
+        self.director.seek(self.time_ms)  # never re-emit past one-shots
         if self.playing:
             self.director.resume()
+        else:
+            self.director.pause()
         self.pause_button.configure(text="Pause" if self.playing else "Lire")
+        self.render()
         self._schedule()
 
     def _schedule(self):
@@ -179,8 +198,7 @@ class CinematicPlayback:
         self.job = None
         if self.closed or not self.playing:
             return
-        previous = self.time_ms
-        self.time_ms = min(self.clip["duration_ms"], previous + 40)
+        self.time_ms = self.transport.read()
         self.director.advance(self.time_ms)
         self.render()
         if self.time_ms >= self.clip["duration_ms"]:
@@ -191,11 +209,14 @@ class CinematicPlayback:
     def toggle(self):
         if self.closed:
             return
-        self.playing = not self.playing
         if self.playing:
-            self.director.resume()
-        else:
+            self.time_ms = self.transport.pause()
+            self.director.advance(self.time_ms)
             self.director.pause()
+        else:
+            self.transport.resume()
+            self.director.resume()
+        self.playing = self.transport.playing
         self.pause_button.configure(text="Pause" if self.playing else "Lire")
         if self.job is not None:
             self.parent.after_cancel(self.job)
@@ -205,8 +226,9 @@ class CinematicPlayback:
     def restart(self):
         if self.closed:
             return
-        self.time_ms = 0
+        self.time_ms = self.transport.restart()
         self.director.restart()
+        self.director.resume()
         self.playing = True
         self.pause_button.configure(text="Pause")
         self.render()
