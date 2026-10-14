@@ -22,12 +22,12 @@ def affected_terrain_cells(before, after, *, geometry, max_changed=16,
         return None
     if geometry.board is not old_board:
         return None
-    # This check includes all authored metadata other than Board. Forbid any
-    # actor/object/structure/upper deck or decor until an occlusion-aware
-    # tile/actor dependency graph has a full-scene parity gate.
+    # Check all authored metadata except Board; forbid structures, objects,
+    # elevated actors and props. Ordinary actors are allowed only well clear
+    # of the dirty region (see sprite-proximity guard below).
     if replace(before, board=board) != after:
         return None
-    if (after.units or after.objects or after.structures or
+    if (after.objects or after.structures or
             after.interior_floors or after.unit_levels or after.level_links or
             any(t.feature for t in board.tiles.values()) or
             any(t.feature for t in old_board.tiles.values()) or
@@ -55,5 +55,14 @@ def affected_terrain_cells(before, after, *, geometry, max_changed=16,
             if board.contains((x+dx, y+dy))
         )
         if len(affected) > max_affected:
+            return None
+    # Character sprites (including labels) project beyond their own diamond.
+    # Keep their complete draw unchanged only when well clear of edited tiles.
+    # Otherwise the same full painter handles sprite/terrain occlusion.
+    for unit in after.units:
+        if getattr(unit, 'footprint', (1, 1)) != (1, 1):
+            return None
+        ux, uy = unit.pos
+        if any(abs(ux-x) <= 6 and abs(uy-y) <= 6 for x, y in affected):
             return None
     return frozenset(affected)
