@@ -807,6 +807,9 @@ class PlayerApplication:
         self._button(nav, "Sauvegarder", self.player.save).pack(side="right", padx=4)
         self._button(nav, "Exporter playtest",
                      self._export_playtest).pack(side="right", padx=4)
+        self.ttk.Checkbutton(nav, text="Suivi playtest",
+                             variable=self.playtest_optin,
+                             command=self._toggle_playtest).pack(side="right", padx=4)
         self.ttk.Checkbutton(nav, text="Vue isométrique 2.5D",
                              variable=self.iso_view_var,
                              command=self._switch_projection).pack(side="right", padx=8)
