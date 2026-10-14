@@ -114,8 +114,12 @@ class IsoTerrainAtlas:
         if scaled_key in self._mask_tiles:
             return self._mask_tiles[scaled_key]
         try:
-            import base64
             import tkinter as tk
+        except ImportError:
+            self._mask_unavailable = True
+            return None
+        try:
+            import base64
             if key not in self._mask_sources:
                 png = base64.b64encode(painted_mask_png(*key)).decode('ascii')
                 self._mask_sources[key] = tk.PhotoImage(
