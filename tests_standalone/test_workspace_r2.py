@@ -1,0 +1,151 @@
+"""R2 — Workspace UX gates: atomic inspector, canonical explorer, diagnostics."""
+import unittest
+
+from sporebound.__main__ import DEFAULT_CONTENT
+from sporebound.authoring import add_object
+from sporebound.editor import Document
+from sporebound.editor_architecture import EditingContext
+from sporebound.game_project import GameProject
+from sporebound.model import Content, RuleError
+from sporebound.studio_index4 import StudioIndex
+from sporebound.workspace_editing import editable_form, WorkspacePropertyCommand
+from sporebound.workspace_navigation import navigation_target
+from sporebound.workspace_r2 import (
+    BatchPropertyCommand, ExplorerState, batch_form, dependency_impact,
+    validate_drop,
+)
+from sporebound.workspace_shell import map_reference_problems, problem_delta
+
+
+class WorkspaceR2Tests(unittest.TestCase):
+    def setUp(self):
+        self.content = Content.load(DEFAULT_CONTENT)
+        self.doc = Document(self.content)
+        self.project = GameProject.default(self.content)
+        self.mid = 'garden'
+        self.context = EditingContext(self.doc, lambda: self.mid)
+
+    def free_tiles(self, count):
+        mission = self.content.missions[self.mid]
+        occupied = {tuple(obj['pos']) for obj in mission.objects}
+        occupied.update(cell for actor in mission.units
+                        for cell in actor.occupied_cells())
+        cells = [cell for cell in mission.board.cells()
+                 if cell not in occupied and not mission.board.tile(cell).blocked]
+        self.assertGreaterEqual(len(cells), count)
+        return cells[:count]
+
+    def tile_keys(self):
+        return tuple('map_tile:%s/%s,%s' % (self.mid, x, y)
+                     for x, y in self.free_tiles(2))
+
+    def test_batch_edits_two_tiles_as_one_undo_redo(self):
+        keys = self.tile_keys()
+        form = batch_form(self.doc.data, keys)
+        before = self.doc.data
+        self.assertEqual(set(field.name for field in form.fields),
+                         {'surface', 'feature', 'height'})
+        self.context.execute(BatchPropertyCommand(
+            form.keys, form.baselines, (('height', '3'),)))
+        self.assertEqual(len(self.doc.undo_stack), 1)
+        for key in keys:
+            height = next(f.value for f in editable_form(self.doc.data, key).fields
+                          if f.name == 'height')
+            self.assertEqual(height, 3)
+        self.doc.undo()
+        self.assertEqual(self.doc.data, before)
+        self.doc.redo()
+        self.assertEqual(next(f.value for f in editable_form(self.doc.data, keys[0]).fields
+                              if f.name == 'height'), 3)
+
+    def test_mixed_values_and_stale_batch_are_explicit_and_atomic(self):
+        keys = self.tile_keys()
+        form = editable_form(self.doc.data, keys[0])
+        self.context.execute(WorkspacePropertyCommand(
+            keys[0], form.baseline, (('height', '2'),)))
+        batch = batch_form(self.doc.data, keys)
+        self.assertIn('height', batch.mixed)
+        unchanged = self.doc.data
+        for payload in ((('forbidden', 'x'),), (('height', 'invalid'),)):
+            with self.assertRaises(RuleError):
+                self.context.execute(BatchPropertyCommand(
+                    batch.keys, batch.baselines, payload))
+            self.assertEqual(self.doc.data, unchanged)
+        self.context.execute(WorkspacePropertyCommand(
+            keys[1], editable_form(self.doc.data, keys[1]).baseline,
+            (('height', '4'),)))
+        changed = self.doc.data
+        with self.assertRaises(RuleError):
+            self.context.execute(BatchPropertyCommand(
+                batch.keys, batch.baselines, (('height', '5'),)))
+        self.assertEqual(self.doc.data, changed)
+
+    def test_mixed_families_cannot_trigger_partial_edit(self):
+        actor = self.content.missions[self.mid].units[0]
+        keys = (self.tile_keys()[0], f'map_actor:{self.mid}/{actor.id}')
+        with self.assertRaises(RuleError):
+            batch_form(self.doc.data, keys)
+
+    def test_explorer_filters_favorites_recents_and_deleted_keys(self):
+        index = StudioIndex(self.content, self.project)
+        state = ExplorerState(limit=2)
+        key = f'map_actor:{self.mid}/{self.content.missions[self.mid].units[0].id}'
+        self.assertIn(key, state.shown(index, kind='map_actor'))
+        self.assertTrue(state.toggle_favorite(key))
+        self.assertEqual(state.shown(index, scope='favorites'), {key})
+        state.visit(key)
+        state.visit('mission:' + self.mid)
+        state.visit(key)
+        self.assertEqual(state.recents, [key, 'mission:' + self.mid])
+        self.assertIn(key, state.shown(index, scope='recents'))
+        self.assertEqual(state.shown(index, query='nom introuvable'), set())
+        self.assertEqual(state.shown(index, scope='favorites', kind='mission'), set())
+        state.toggle_favorite(key)
+        self.assertFalse(state.shown(index, scope='favorites'))
+        state.favorites.add('mission:deleted')
+        state.reconcile(index)
+        self.assertNotIn('mission:deleted', state.favorites)
+
+    def test_impact_uses_index_incoming_outgoing_and_validated_drop(self):
+        index = StudioIndex(self.content, self.project)
+        actor = self.content.missions[self.mid].units[0]
+        key = f'map_actor:{self.mid}/{actor.id}'
+        report = dependency_impact(index, key)
+        self.assertTrue(any(r.source == 'mission:' + self.mid for r in report.incoming))
+        self.assertEqual(report.outgoing, index.outgoing(key))
+        self.assertEqual(validate_drop(self.doc.data, self.mid, key).id,
+                         'actor:' + actor.id)
+        with self.assertRaises(RuleError):
+            dependency_impact(index, 'map_actor:garden:deleted')
+        with self.assertRaises(RuleError):
+            validate_drop(self.doc.data, self.mid, 'asset:missing')
+
+    def test_problem_to_inspector_fix_to_map_without_manual_refresh(self):
+        door_id = 'r2_unlinked_door'
+        self.doc.replace(add_object(self.doc.data, self.mid,
+                                    door_id, 'door', self.free_tiles(1)[0]))
+        orphan = f'map_object:{self.mid}/{door_id}'
+        before = StudioIndex(Content.from_dict(self.doc.data), self.project)
+        problems = before.diagnostics('.', map_warnings=True)
+        self.assertTrue(any(key == orphan for _, key, _ in problems))
+        mid, cell = navigation_target(self.doc.data, orphan)
+        self.assertEqual(mid, self.mid)
+        self.assertEqual(len(cell), 2)
+        switch = next(obj for obj in self.content.missions[self.mid].objects
+                      if obj['kind'] == 'switch')
+        key = f'map_object:{self.mid}/{switch["id"]}'
+        edit = editable_form(self.doc.data, key)
+        self.context.execute(WorkspacePropertyCommand(
+            key, edit.baseline, (('link', door_id),)))
+        after = StudioIndex(Content.from_dict(self.doc.data), self.project)
+        current = after.diagnostics('.', map_warnings=True)
+        self.assertFalse(any(key == orphan for _, key, _ in current))
+        _, resolved = problem_delta(problems, current)
+        self.assertTrue(any(key == orphan for _, key, _ in resolved))
+        self.doc.undo()
+        self.assertTrue(any(key == orphan for _, key, _ in
+                            map_reference_problems(Content.from_dict(self.doc.data))))
+
+
+if __name__ == '__main__':
+    unittest.main()
