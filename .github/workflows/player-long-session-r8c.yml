@@ -1,0 +1,38 @@
+name: Player long-session R8C
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/player_controller.py'
+      - 'sporebound/player_app.py'
+      - 'sporebound/long_session.py'
+      - 'sporebound/session_lock.py'
+      - 'tests_standalone/test_long_session_player_r8.py'
+      - 'docs/PLAYER_LONG_SESSION_R8C.md'
+      - '.github/workflows/player-long-session-r8c.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  player-long-session:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.11']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Player opt-in and recovery tests
+        run: python -m unittest discover -s tests_standalone -p test_long_session_player_r8.py -v
+      - name: Existing persistence and player contracts
+        run: |
+          python -m unittest discover -s tests_standalone -p test_long_session_r8.py -v
+          python -m unittest discover -s tests_standalone -p test_persistence_v2.py -v
+          python -m unittest discover -s tests_standalone -p test_player_controller.py -v
+          python -m unittest discover -s tests_standalone -p test_save_contract.py -v
