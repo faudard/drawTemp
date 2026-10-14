@@ -57,7 +57,9 @@ class CinematicEditor(QMainWindow):
 
         middle = QWidget()
         ml = QVBoxLayout(middle)
-        self.stage = CinematicStage(self._empty_clip())
+        self.stage = CinematicStage(
+            self._empty_clip(), registry=document.project.asset_registry(),
+            asset_root=document.source_path.parent if document.source_path else None)
         self.stage.pause()
         ml.addWidget(self.stage, 4)
         controls = QHBoxLayout()
