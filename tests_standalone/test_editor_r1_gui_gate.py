@@ -15,6 +15,7 @@ from unittest.mock import patch
 from sporebound.__main__ import DEFAULT_CONTENT
 from sporebound.authoring import add_blank_mission, add_object
 from sporebound.editor import launch
+from sporebound.editor_reliability import EditRecoveryJournal
 from sporebound.editor_architecture import (
     EntityCommand, StructureCommand, TacticalEventCommand)
 from sporebound.event_composer import save_event, action, condition
@@ -159,6 +160,71 @@ class R1StudioGuiGate(unittest.TestCase):
             with patch.object(tk.Tk, 'mainloop', drive), \
                  patch('tkinter.messagebox.showerror') as showerror:
                 launch(path)
+                showerror.assert_not_called()
+
+
+    def test_restart_recovers_draft_without_overwriting_disk(self):
+        import tkinter as tk
+        from tkinter import ttk
+
+        initial, project = self.prepared()
+        draft = deepcopy(initial)
+        next(m for m in draft['missions']
+             if m['id'] == self.MID)['name'] = 'R1 · travail interrompu'
+        edited_project = deepcopy(project)
+        edited_project['title'] = 'Jeanne · recovery R1'
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'r1.json'
+            store = StudioTransactionStore(path)
+            store.save(initial, project)
+            original_bytes = tuple(p.read_bytes() for p in store.paths)
+            journal = EditRecoveryJournal(path)
+            journal.checkpoint(
+                draft, edited_project, expected_disk=store.revisions(),
+                dirty=(True, True))
+            self.assertTrue(journal.pending)
+            callback_errors = []
+
+            def drive(root):
+                try:
+                    root.report_callback_exception = (
+                        lambda *args: callback_errors.append(args))
+                    root.update()
+                    widgets = list(self.walk(root))
+                    source = next(w for w in widgets
+                                  if isinstance(w, tk.Text) and
+                                  '"missions"' in w.get('1.0', 'end'))
+                    self.assertEqual(
+                        json.loads(source.get('1.0', 'end')), draft)
+                    # Rehydration is in-memory until an explicit Save All.
+                    self.assertEqual(
+                        tuple(p.read_bytes() for p in store.paths),
+                        original_bytes)
+                    title = next(w for w in widgets
+                                 if isinstance(w, ttk.Label) and
+                                 w.cget('text') == 'Titre')
+                    title_entry = title.master.grid_slaves(row=0, column=1)[0]
+                    self.assertEqual(title_entry.get(), edited_project['title'])
+                    buttons = {w.cget('text'): w for w in widgets
+                               if isinstance(w, ttk.Button)}
+                    buttons['Enregistrer tout'].invoke()
+                    root.update()
+                    self.assertEqual(
+                        json.loads(path.read_text(encoding='utf-8')), draft)
+                    self.assertEqual(
+                        json.loads(store.project_path.read_text(
+                            encoding='utf-8')), edited_project)
+                    self.assertFalse(store.pending)
+                    self.assertFalse(callback_errors)
+                finally:
+                    root.destroy()
+
+            with patch.object(tk.Tk, 'mainloop', drive), \
+                 patch('tkinter.messagebox.askyesnocancel',
+                       return_value=True) as prompt, \
+                 patch('tkinter.messagebox.showerror') as showerror:
+                launch(path)
+                prompt.assert_called_once()
                 showerror.assert_not_called()
 
 
