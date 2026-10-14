@@ -18,6 +18,11 @@ class PlaytestStudio:
         self.tk, self.ttk = owner.tk, owner.ttk
         self.report = None
         self.ai_report = None
+        self.chart_background = '#E8EEF7'
+        self.chart_foreground = '#152338'
+        self.chart_success = '#176448'
+        self.chart_failure = '#A62439'
+        self.chart_other = '#905514'
         self.annotations = []
         self.tab = self.ttk.Frame(notebook, padding=10)
         notebook.add(self.tab, text="Playtest Lab")
@@ -99,7 +104,7 @@ class PlaytestStudio:
                        padx=(6, 0), pady=6)
         self.rows.bind("<<TreeviewSelect>>", self.select)
         self.canvas = self.tk.Canvas(
-            chart, height=220, background="#252b33",
+            chart, height=220, background=self.chart_background,
             highlightthickness=0)
         self.canvas.pack(fill="both", expand=True, padx=6, pady=6)
         self._chart_sessions = ()
@@ -236,12 +241,22 @@ class PlaytestStudio:
             text="{} sessions · collecte volontaire et export local · "
                  "données non modifiées".format(len(chosen)))
 
+    def set_appearance(self, palette):
+        """Update chart tokens without changing telemetry data or selection."""
+        self.chart_background = palette.elevated
+        self.chart_foreground = palette.text
+        self.chart_success = palette.success
+        self.chart_failure = palette.danger
+        self.chart_other = palette.warning
+        self.canvas.configure(background=self.chart_background)
+        self.draw_chart()
+
     def draw_chart(self, _event=None):
         """Only redraw the chart on resize; preserve the Treeview selection."""
         if self.report is None:
             return
         self.canvas.delete("all")
-        self.canvas.create_text(14, 16, anchor="w", fill="#eff2f5",
+        self.canvas.create_text(14, 16, anchor="w", fill=self.chart_foreground,
                                 text="Durée réelle par session (minutes, y compris l'inactivité)")
         maximum = max((row["duration_seconds"] for _, row in self._chart_sessions), default=0)
         span = max(1, maximum)
@@ -249,15 +264,16 @@ class PlaytestStudio:
         for n, (_, row) in enumerate(self._chart_sessions[:8]):
             y = 36 + n * 17
             length = max(0, width - 185) * row["duration_seconds"] / span
-            color = ("#56a891" if row["outcome"] == "victory" else
-                     "#ce7479" if row["outcome"] == "defeat" else "#d3a967")
+            color = (self.chart_success if row["outcome"] == "victory" else
+                     self.chart_failure if row["outcome"] == "defeat"
+                     else self.chart_other)
             self.canvas.create_rectangle(130, y, 130 + length, y + 11,
                                          fill=color, outline="")
             self.canvas.create_text(
-                12, y + 6, anchor="w", fill="#eff2f5",
+                12, y + 6, anchor="w", fill=self.chart_foreground,
                 text=row["mission"][:15] + " · " + row["outcome"][:8])
             self.canvas.create_text(
-                139 + length, y + 6, anchor="w", fill="#eff2f5",
+                139 + length, y + 6, anchor="w", fill=self.chart_foreground,
                 text="{:.1f}m".format(row["duration_seconds"] / 60))
 
     def annotate(self):
