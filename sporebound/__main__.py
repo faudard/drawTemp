@@ -16,7 +16,7 @@ DEFAULT_CONTENT = Path(__file__).parent / 'content' / 'core.json'
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Sporebound standalone gameplay workbench')
-    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','tactical-choices','export'])
+    parser.add_argument('command', choices=['validate','simulate','replay','play','editor','player','campaign','roster','balance','battle-lab','battle-diagnostics','balance-matrix','tactical-choices','tactical-quality','export'])
     parser.add_argument('--content', type=Path, default=DEFAULT_CONTENT)
     parser.add_argument('--project', type=Path, help='Game presentation manifest for player')
     parser.add_argument('--output', type=Path, help='Destination ZIP for export')
@@ -31,6 +31,15 @@ def main(argv=None):
     parser.add_argument('--max-victory-drop', type=float, default=0.25)
     parser.add_argument('--max-p95-growth', type=float, default=0.30)
     parser.add_argument('--max-new-limits', type=int, default=0)
+    parser.add_argument('--quality-min-differentiated', type=int, default=1)
+    parser.add_argument('--quality-min-tradeoffs', type=int, default=0)
+    parser.add_argument('--human-playtest', type=Path,
+                        help='Optional opt-in human playtest report for R6.15')
+    parser.add_argument('--human-signoff', type=Path,
+                        help='Explicit five-checkbox review JSON for R6.15')
+    parser.add_argument('--quality-annotations', type=Path,
+                        help='Optional R6.11 categorical playtest annotation JSON')
+    parser.add_argument('--quality-variant', default='authored')
     parser.add_argument('--max-choice-drop', type=float, default=0.25,
                         help='Maximum paired decrease of multi-category opportunity rate')
     parser.add_argument('--choice-min-multi', type=int, default=1,
@@ -134,6 +143,59 @@ def main(argv=None):
             print(json.dumps({'matrix': matrix, 'comparison': comparison},
                              ensure_ascii=False, sort_keys=True))
             return 2 if comparison is not None and not comparison['passed'] else 0
+        if args.command == 'tactical-quality':
+            from .tactical_quality_r6 import (
+                run_quality_lab, evaluate_quality_gate, release_quality_review)
+            from .tactical_rpg3 import authored_rules_for_document
+            quality = run_quality_lab(
+                content, args.mission, seed=args.seed, max_commands=args.limit,
+                rules=authored_rules_for_document(content.to_dict()))
+            gate = evaluate_quality_gate(
+                quality, min_differentiated=args.quality_min_differentiated,
+                min_tradeoffs=args.quality_min_tradeoffs)
+            quality["automated_gate"] = gate
+            human_review = None
+            if args.human_playtest or args.human_signoff or args.quality_annotations:
+                if not args.human_playtest:
+                    parser.error('Human review requires --human-playtest')
+                with args.human_playtest.open(encoding='utf-8') as stream:
+                    human = json.load(stream)
+                signoff = None
+                if args.human_signoff:
+                    with args.human_signoff.open(encoding='utf-8') as stream:
+                        signoff = json.load(stream)
+                annotations = []
+                if args.quality_annotations:
+                    with args.quality_annotations.open(encoding='utf-8') as stream:
+                        bundle = json.load(stream)
+                    if (type(bundle) is not dict or
+                            bundle.get('kind') != 'r6_playtest_annotations' or
+                            bundle.get('schema') != 1 or
+                            bundle.get('session_count') != len(human['sessions']) or
+                            bundle.get('content_sha256') !=
+                            human.get('content_sha256')):
+                        raise RuleError('Incompatible human annotation bundle')
+                    annotations = bundle['annotations']
+                human_review = release_quality_review(
+                    quality, human, annotations=annotations,
+                    variant=args.quality_variant, human_signoff=signoff,
+                    min_tradeoffs=max(1, args.quality_min_tradeoffs))
+                quality["human_review"] = human_review
+            if args.report:
+                args.report.write_text(
+                    json.dumps(quality, sort_keys=True, ensure_ascii=False,
+                               indent=2) + "\n", encoding='utf-8')
+            print(json.dumps({
+                'mission': quality['mission'], 'seed': quality['seed'],
+                'digest': quality['digest'],
+                'replay_verified': quality['replay_verified'],
+                'automated_gate': gate, 'human_review': human_review,
+                'release_status': ('not_certified_without_human_review'
+                                   if human_review is None else human_review['status']),
+                'report': str(args.report) if args.report else None,
+            }, ensure_ascii=False, sort_keys=True))
+            return 0 if gate['passed'] and (
+                human_review is None or human_review['passed']) else 2
         if args.command == 'tactical-choices':
             from .tactical_choice_lab_r6 import (
                 run_choice_lab, evaluate_choice_gate, compare_choice_reports)
