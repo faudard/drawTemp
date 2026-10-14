@@ -1189,12 +1189,19 @@ class PlayerApplication:
             return
         if len(coords) > 1:
             flat = tuple(n for xy in coords for n in xy)
+            targeting = (preview.action == "attack" or
+                         preview.action in (battle.active.skills
+                                            if battle and battle.active else ()))
+            line_color = "#ffe38d" if targeting else "#3bf1d0"
             self.canvas.create_line(
-                *flat, fill="#3bf1d0", width=3, dash=(7, 4),
+                *flat, fill=line_color, width=3,
+                dash=(3, 5) if targeting else (7, 4),
                 arrow="last", tags=tags)
-            for x, y in coords[1:-1]:
-                self.canvas.create_oval(x-3, y-3, x+3, y+3,
-                                        outline="#3bf1d0", width=2, tags=tags)
+            if not targeting:
+                for x, y in coords[1:-1]:
+                    self.canvas.create_oval(
+                        x-3, y-3, x+3, y+3,
+                        outline=line_color, width=2, tags=tags)
         if destination is not None:
             if preview.status == "available":
                 color = "#3bf1d0"
