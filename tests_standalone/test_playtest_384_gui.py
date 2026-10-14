@@ -24,9 +24,19 @@ class HumanPlaytestGUITests(unittest.TestCase):
         def drive(root):
             try:
                 root.report_callback_exception = lambda *args: failures.append(args)
-                buttons = [w for w in descendants(root) if isinstance(w, ttk.Button)]
-                option = next(w for w in buttons if w.cget("text") == "Options")
-                option.invoke()
+                root.update()
+                # The title screen is rendered on a Canvas, not as ttk.Button
+                # widgets. Click the real "Options" card via its hit region.
+                menu = next(w for w in descendants(root)
+                            if isinstance(w, tk.Canvas) and
+                            w.find_withtag("title_card_options"))
+                bounds = menu.bbox("title_card_options")
+                self.assertIsNotNone(bounds)
+                x = (bounds[0] + bounds[2]) // 2
+                y = (bounds[1] + bounds[3]) // 2
+                menu.event_generate("<Motion>", x=x, y=y)
+                root.update()
+                menu.event_generate("<Button-1>", x=x, y=y)
                 root.update()
                 checkbox = next(w for w in descendants(root)
                                 if isinstance(w, ttk.Checkbutton) and
@@ -41,7 +51,10 @@ class HumanPlaytestGUITests(unittest.TestCase):
             finally:
                 root.destroy()
 
-        with patch.object(tk.Tk, "mainloop", drive), \
+        # This is a developer-only diagnostic control, intentionally hidden
+        # from ordinary Player options. Enable the flag only for this test.
+        with patch.dict(os.environ, {"DRAWTEMP_DEVELOPER_OPTIONS": "1"}), \
+             patch.object(tk.Tk, "mainloop", drive), \
              patch("tkinter.messagebox.showerror") as errors:
             launch_player(DEFAULT_CONTENT)
             errors.assert_not_called()
