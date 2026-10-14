@@ -51,8 +51,11 @@ def jeanne_intro(campaign_id, *, clip_id="jeanne_intro"):
     wind = event_template("sound", "vent", 0, 10000)
     wind.update({"cue": "jeanne_wind", "bus": "ambience", "volume": 48,
                  "loop": True, "fade_in_ms": 500, "fade_out_ms": 1100})
+    smoke = event_template("fx", "fumee", 8500, 3000)
+    smoke.update({"effect": "smoke", "intensity": .65, "seed": 48,
+                  "at": [.72, .52]})
     fade = event_template("fade", "noir", 10500, 1500)
-    clip["events"] = [bg, cam, actor, line1, line2, music, wind, fade]
+    clip["events"] = [bg, cam, actor, line1, line2, music, wind, smoke, fade]
     return clip
 
 
