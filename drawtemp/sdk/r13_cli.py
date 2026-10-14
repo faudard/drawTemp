@@ -36,6 +36,13 @@ def main(argv=None):
     parser.add_argument("--baseline", type=Path)
     parser.add_argument("--report", type=Path)
     args = parser.parse_args(argv)
+    # A report can never replace authored content or the reference used to
+    # certify it. This also covers distinct relative spellings of the path.
+    if args.report is not None:
+        inputs = (args.content, args.baseline, args.variant, args.human_playtest)
+        if any(args.report.resolve() == path.resolve()
+               for path in inputs if path is not None):
+            parser.error("R13 output must not overwrite an input or baseline")
     if not (1 <= args.runs <= 32 and
             0 <= args.seed_start <= 2**32 - args.runs):
         parser.error("Seeds must form a unique unsigned 32-bit range of 1..32")
