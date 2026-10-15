@@ -13,6 +13,9 @@ IsoViewport {
     readonly property real zoom: renderer.cameraState.zoom
     interactionMode: "select"
     showLegend: false
+    // R3.C repositions the *actual* atlas/actor delegate, not a duplicate ghost.
+    activeVisualClip: board.playing ? board.currentClip : ({})
+    activeVisualPhase: board.phase
 
     // R12.7: animation clips represent *committed* GameSession events. The
     // R3 scene is already authoritative at the final state; this temporary
@@ -55,8 +58,7 @@ IsoViewport {
         currentClip = animationPlan.clips[clipIndex]
         phase = 0
         playing = true
-        concealedActorIds = currentClip.kind === "move" ||
-                            currentClip.kind === "attack" ? [currentClip.actor] : []
+        concealedActorIds = []  // the shared R3 actor delegate animates in place
         tween.duration = currentClip.duration_ms
         tween.restart()
     }
@@ -105,56 +107,8 @@ IsoViewport {
                 ((point[0] + point[1]) * 24 - elevation(point) * 12) * zoom]
     }
 
-    Item {
-        id: motionGhost
-        visible: board.playing && (board.currentClip.kind === "move" ||
-                                   board.currentClip.kind === "attack")
-        readonly property var pos: board.scenePoint(board.clipCell())
-        readonly property real ratio: renderer.cameraState.zoom
-        x: pos[0] - 20 * ratio
-        y: pos[1] - 68 * ratio
-        width: 40 * ratio
-        height: 68 * ratio
-        z: (board.clipCell()[0] + board.clipCell()[1]) * 100 + 75
-        Rectangle {
-            x: 3 * motionGhost.ratio
-            y: 57 * motionGhost.ratio
-            width: 34 * motionGhost.ratio
-            height: 9 * motionGhost.ratio
-            radius: 5 * motionGhost.ratio
-            color: "#10191c"
-            opacity: 0.45
-        }
-        Rectangle {
-            x: 6 * motionGhost.ratio
-            y: 19 * motionGhost.ratio
-            width: 28 * motionGhost.ratio
-            height: 38 * motionGhost.ratio
-            radius: 9 * motionGhost.ratio
-            color: board.currentClip.team === "enemy" ? "#af6556" : "#496cbb"
-            border.width: 2 * motionGhost.ratio
-            border.color: "#e2d7c4"
-        }
-        Rectangle {
-            x: 10 * motionGhost.ratio
-            y: 5 * motionGhost.ratio
-            width: 19 * motionGhost.ratio
-            height: 19 * motionGhost.ratio
-            radius: 10 * motionGhost.ratio
-            color: "#eacaa1"
-            border.color: "#62504b"
-        }
-        Rectangle {
-            visible: board.currentClip.kind === "attack"
-            x: 28 * motionGhost.ratio
-            y: 20 * motionGhost.ratio
-            width: 23 * motionGhost.ratio
-            height: 4 * motionGhost.ratio
-            color: "#efddb7"
-            rotation: -25
-            opacity: 0.6 + 0.4 * Math.sin(Math.PI * board.phase)
-        }
-    }
+    // No separate fake character: R3's Image/actor node follows the same
+    // validated R12 animation clip while remaining at the correct feet depth.
 
     Item {
         id: impactVisual
