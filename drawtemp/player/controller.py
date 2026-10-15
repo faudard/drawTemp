@@ -7,6 +7,8 @@ from pathlib import Path
 
 from drawtemp.sdk.simulation import Simulation, SimulationError, thaw
 from drawtemp.sdk.slots import PlayerSlotStore
+from drawtemp.core import RuleError
+from drawtemp.player.save_manager import SaveManager
 from drawtemp.player.preferences import PlayerPreferences
 
 
@@ -19,6 +21,9 @@ class PlayerController:
         self.content, self.project = content, project
         self.campaign_id, self.seed = campaign_id, seed
         self.save_dir = Path(save_dir)
+        self.saves = SaveManager(self.save_dir, content, project, campaign_id)
+        self.autosave_warning = ""
+        self._autosaved_key = None
         self.preferences = PlayerPreferences(self.save_dir / 'player-preferences.json')
         self.session = None
         self.show_title = True
@@ -47,13 +52,58 @@ class PlayerController:
     def inspect_slot(self, slot=1):
         return self._store(slot).inspect()
 
+    def _activate_save(self, loaded, message, *, source=None):
+        # No state is touched until the verified GameSession has been loaded.
+        self.session = loaded
+        self.show_title = False
+        self.selected = [0, 0]
+        self.inspected_skill = "attack"
+        self.forecast = ""
+        self.message = message
+        self.autosave_warning = ""
+        self._autosaved_key = ((id(loaded), loaded.snapshot().revision)
+                               if source == "auto" else None)
+        return self.state()
+
     def restore_backup(self, slot=1):
         verified = self._store(slot).restore_backup()
-        self.session = verified
-        self.show_title = False
-        self.message = "Sauvegarde de secours restaurée"
-        self.forecast = ""
-        return self.state()
+        return self._activate_save(verified, "Sauvegarde de secours restaurée")
+
+    def restore_autosave_backup(self):
+        verified = self.saves.restore_autosave_backup()
+        return self._activate_save(verified, "Autosauvegarde de secours restaurée",
+                                   source="auto")
+
+    def load_autosave(self):
+        loaded = self.saves.load_autosave()
+        return self._activate_save(loaded, "Autosauvegarde rechargée", source="auto")
+
+    def continue_game(self):
+        loaded, source = self.saves.resume()
+        title = ("autosauvegarde" if source == "auto"
+                 else "emplacement " + str(source))
+        return self._activate_save(loaded, "Reprise depuis " + title,
+                                   source=source)
+
+    def _checkpoint(self):
+        """Auto-save every successfully committed revision, not UI selection.
+
+        Saving can fail after a successful action. Never roll back the engine
+        or silently overwrite corrupt autosaves; expose a persistent warning.
+        """
+        if self.session is None:
+            return
+        key = (id(self.session), self.session.snapshot().revision)
+        if self._autosaved_key == key:
+            return
+        try:
+            self.saves.autosave(self.session)
+        except (RuleError, OSError) as exc:
+            self.autosave_warning = ("Autosauvegarde impossible : " + str(exc) +
+                                     " — sauvegardez manuellement ou restaurez le secours")
+        else:
+            self.autosave_warning = ""
+            self._autosaved_key = key
 
     def new_game(self):
         self.session = Simulation.new(self.content, self.project, self.campaign_id,
@@ -63,6 +113,8 @@ class PlayerController:
         self.forecast = ""
         self.inspected_skill = "attack"
         self.selected = [0, 0]
+        self._autosaved_key = None
+        self._checkpoint()
         return self.state()
 
     def load(self, slot=1):
@@ -70,14 +122,7 @@ class PlayerController:
         # Assignment only after successful verification: preserve the live game
         # and the saved file when a checksum/project/rules mismatch is found.
         loaded = self._store(slot).load()
-        self.session = loaded
-        self.show_title = False
-        self.message = "Partie rechargée."
-        self.forecast = ""
-        self.inspected_skill = "attack"
-        self.selected = [0, 0]
-        return self.state()
-
+        return self._activate_save(loaded, "Partie rechargée.")
     def save(self, slot=1):
         if self.session is None:
             raise ValueError("No game to save")
@@ -308,6 +353,7 @@ class PlayerController:
         if not keep_message:
             self.message = ""
         self.forecast = ""
+        self._checkpoint()
         return self.state()
 
     def state(self):
@@ -315,6 +361,8 @@ class PlayerController:
                 "subtitle": self.project.subtitle, "slots": self.slots(),
                 "backups": self.backups(),
                 "message": self.message, "forecast": self.forecast,
+                "autosave_warning": self.autosave_warning,
+                "save_manager": self.saves.catalog(),
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
                 "choices": [], "missions": [], "scene": {}, "exploration": {},

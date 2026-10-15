@@ -247,8 +247,30 @@ ApplicationWindow {
                 text: "Continuer"
                 Layout.preferredWidth: 290
                 Layout.alignment: Qt.AlignHCenter
-                enabled: root.playerData.slots.length > 0
-                onClicked: player.loadGame(root.playerData.slots[0])
+                enabled: root.playerData.save_manager.continue_available
+                onClicked: player.continueGame()
+            }
+            Label {
+                text: root.playerData.save_manager.continue_available ?
+                      "Reprendre : " + root.playerData.save_manager.continue_label : 
+                      "Aucune sauvegarde valide"
+                color: root.muted
+                Layout.alignment: Qt.AlignHCenter
+                font.pixelSize: 12 * root.textScale
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                Button {
+                    text: "Charger autosauvegarde"
+                    enabled: root.playerData.save_manager.autosave.status === "valid"
+                    onClicked: player.loadAutosave()
+                }
+                Button {
+                    text: "Restaurer auto (.bak)"
+                    enabled: root.playerData.save_manager.autosave.recoverable &&
+                             root.playerData.save_manager.autosave.status !== "valid"
+                    onClicked: player.restoreAutosaveBackup()
+                }
             }
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
@@ -274,6 +296,16 @@ ApplicationWindow {
                 text: "Quitter"
                 Layout.alignment: Qt.AlignHCenter
                 onClicked: Qt.quit()
+            }
+            Label {
+                text: (root.playerData.save_manager.warnings || []).join("\\n")
+                visible: text.length > 0
+                color: "#f5ad9a"
+                wrapMode: Text.WordWrap
+                Layout.preferredWidth: 510
+                horizontalAlignment: Text.AlignHCenter
+                Layout.alignment: Qt.AlignHCenter
+                font.pixelSize: 12 * root.textScale
             }
             Label {
                 text: root.playerData.message || ""
@@ -760,9 +792,10 @@ ApplicationWindow {
             visible: root.playerData.screen !== "title"
             Layout.fillWidth: true
             Label {
-                text: root.playerData.forecast || root.playerData.message ||
+                text: root.playerData.autosave_warning ||
+                      root.playerData.forecast || root.playerData.message ||
                       root.binding("save") + " : sauvegarder · " + root.binding("pause") + " : pause"
-                color: root.gold
+                color: root.playerData.autosave_warning ? "#f5ad9a" : root.gold
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
