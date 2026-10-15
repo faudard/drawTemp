@@ -82,3 +82,41 @@ produire avant de marquer R5 « validé ».
 ### Intégration R3 (PR #237)
 
 Le `MapWindow` n'utilise plus de renderer QML `Canvas` : la projection des missions validées `Content` est fournie à `RendererController` et affichée par `IsoViewport.qml`. Les gestes `strokeStarted/Moved/Finished` repassent par `MapStudio` (transaction et Undo/Redo inchangés). La vérification du rendu sur GPU matériel et des étages reste distincte du smoke Qt offscreen.
+
+
+## Suite R5.6 — Layers Workspace (PR dédiée)
+
+Le dock **Calques** du Studio Qt utilise directement les dix domaines
+\`sporebound.map_layer_workspace.LAYERS\` : Terrain, Relief, Décors,
+Bâtiments, Toitures, Déploiement, Objectifs, Objets, Unités, Étages.
+
+- **Visibilité** par carte dans le viewport R3 partagé. La structure
+  géométrique reste disponible pour le picking, sans mutation de Content.
+  Les calques actuellement projetés en R3 (terrain, décors, murs, objets,
+  acteurs, objectifs) répondent aux contrôles. Les superpositions
+  spécifiques toitures/déploiement/étages attendent R6 et R5.12.
+- **Verrouillage réel** des modifications via \`changed_layers\` /
+  \`ensure_unlocked\`, contrôlé avant \`AuthoringSession.apply\` : peinture,
+  bâtiments, objectifs et autres commandes ne peuvent pas contourner le
+  verrouillage. Les opérations sur un autre domaine restent autorisées.
+- **Niveau actif** 0–3, enregistré en tant que réglage d'éditeur et
+  distinct de la hauteur tactique de chaque case.
+- **Opacité** réglable par calque côté Studio uniquement, conservée pendant
+  la session ; sa persistance attend une migration versionnée du sidecar
+  (pas de nouvelle clé silencieuse en version 1).
+- **Persistance** : le sidecar existant \`*.mapbuilder-view.json\` conserve
+  les réglages d'éditeur lors de \`save\`/\`save_as\` et les restitue
+  à l'ouverture. Il ne modifie ni Content, ni GameProject, ni les sauvegardes.
+- **Fiabilité** : Undo d'une mission nouvellement créée répare la sélection
+  active plutôt que laisser le dock sur une mission supprimée.
+
+Gates supplémentaires :
+\`\`\`bash
+python -m unittest tests_standalone.test_drawtemp5_r5_layers -v
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  python -m unittest tests_standalone.test_drawtemp5_r5_layers_qt -v
+\`\`\`
+
+Cette tranche ne certifie pas le gate de R5 complet. Le support visuel des
+étages/toitures, l'opacity persistante, les captures GPU et le parcours de
+création du village jusqu'au Player restent à intégrer/tester.

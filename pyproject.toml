@@ -16,6 +16,7 @@ art = ["Pillow>=10"]
 [project.scripts]
 drawtemp-qt6 = "drawtemp.platform.qt_bootstrap:main"
 drawtemp-migrate5 = "drawtemp.sdk.legacy_migration:main"
+drawtemp-studio5 = "drawtemp.studio.qt_shell:main"
 drawtemp-iso5 = "drawtemp.render.qt_viewport:main"
 drawtemp-event-studio = "drawtemp.studio.event_studio:main"
 drawtemp-map-editor = "drawtemp.studio.map_editor:main"
