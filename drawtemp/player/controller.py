@@ -80,8 +80,18 @@ class PlayerController:
         path = self._path(slot)
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
+            # Validate before backup; publish it atomically so an interrupted
+            # copy never destroys the last known-good .bak.
             Simulation.load(path, self.content, self.project)
-            shutil.copy2(path, path.with_suffix(".json.bak"))
+            backup = path.with_suffix(".json.bak")
+            staged = path.with_suffix(".json.bak.tmp")
+            try:
+                shutil.copy2(path, staged)
+                with staged.open("rb") as stream:
+                    os.fsync(stream.fileno())
+                os.replace(staged, backup)
+            finally:
+                staged.unlink(missing_ok=True)
         self.session.save(path)
         self.message = "Sauvegarde dans l'emplacement " + str(slot)
         return self.state()
