@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt, QSignalBlocker, QTimer
 from PySide6.QtGui import QColor, QBrush, QPen, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QGraphicsItem,
+    QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QGraphicsItem,
     QGraphicsScene, QGraphicsView, QHBoxLayout, QInputDialog, QLabel,
     QLineEdit, QListWidget, QMainWindow, QMessageBox, QPlainTextEdit,
     QPushButton, QSlider, QSpinBox, QSplitter, QVBoxLayout, QWidget,
@@ -12,6 +12,7 @@ from sporebound.cinematics import KINDS, EASINGS, EXPRESSIONS, FX_KINDS, SHOT_TR
 from sporebound.event_cinematic_qa import audit_event_cinematic_path
 from sporebound.cinematics import cinematic_template, event_template
 from sporebound.model import RuleError
+from drawtemp.sdk.authoring import AuthoringError
 from drawtemp.player.qt_cinematic import CinematicStage
 
 LANES = ("background", "camera", "actor", "dialogue", "fade",
@@ -264,8 +265,18 @@ class CinematicEditor(QMainWindow):
 
     def _save(self):
         try:
-            self.document.save()
-            self.statusBar().showMessage("Projet enregistré et validé.", 5000)
+            try:
+                self.document.save()
+            except AuthoringError as exc:
+                if exc.code != "no_destination" or self.document.session is None:
+                    raise
+                path, _ = QFileDialog.getSaveFileName(
+                    self, "Enregistrer contenu + GameProject", "jeanne.json",
+                    "Content JSON (*.json)")
+                if not path:
+                    return
+                self.document.save(path)
+            self.statusBar().showMessage("Content et GameProject enregistrés.", 5000)
             self._refresh()
         except (RuleError, ValueError, OSError) as exc:
             self._alert(exc)
