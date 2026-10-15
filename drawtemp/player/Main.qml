@@ -121,6 +121,7 @@ ApplicationWindow {
                 onClicked: optionsPopup.open()
             }
             Button {
+                objectName: "r14PauseMenu"
                 text: "Menu  Esc"
                 enabled: root.playerData.screen !== "title"
                 onClicked: pausePopup.open()
@@ -160,6 +161,7 @@ ApplicationWindow {
             }
             Item { Layout.preferredHeight: 38 }
             Button {
+                objectName: "r14NewGame"
                 text: "Nouvelle partie"
                 Layout.preferredWidth: 290
                 Layout.preferredHeight: 46
@@ -167,6 +169,7 @@ ApplicationWindow {
                 onClicked: player.newGame()
             }
             Button {
+                objectName: "r14Continue"
                 text: "Continuer"
                 Layout.preferredWidth: 290
                 Layout.alignment: Qt.AlignHCenter
@@ -261,6 +264,7 @@ ApplicationWindow {
                     model: root.playerData.choices || []
                     Button {
                         Layout.fillWidth: true
+                        objectName: "r14Choice-" + modelData.id
                         text: modelData.label || modelData.id
                         onClicked: player.choose(modelData.id)
                     }
@@ -297,6 +301,7 @@ ApplicationWindow {
             Repeater {
                 model: root.playerData.missions
                 Button {
+                    objectName: "r14Mission-" + modelData
                     text: "Commencer · " + modelData
                     Layout.alignment: Qt.AlignHCenter
                     Layout.preferredWidth: 380
@@ -539,6 +544,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
             }
             Button {
+                objectName: "r14SaveGame"
                 text: "Sauvegarder · F5"
                 onClicked: player.saveGame(root.currentSlot)
             }
@@ -573,6 +579,7 @@ ApplicationWindow {
                 onClicked: { pausePopup.close(); optionsPopup.open() }
             }
             Button {
+                objectName: "r14TitleFromPause"
                 text: "Menu principal"
                 Layout.fillWidth: true
                 onClicked: { pausePopup.close(); player.titleScreen() }
