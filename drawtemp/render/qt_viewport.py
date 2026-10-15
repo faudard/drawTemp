@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from .iso_scene import Camera, IsoProjection, pick, render_items, scene_from_mission
+from .building_geometry import pick_surface
 
 
 def default_atlas_url():
@@ -32,6 +33,8 @@ def make_controller(scene, atlas_url=None):
             self.camera = Camera()
             self.projection = IsoProjection()
             self.selection = None
+            self._building_level = 0
+            self._building_cutaway = False
             self._items = []
             self._atlas = default_atlas_url() if atlas_url is None else atlas_url
             self.center_scene()
@@ -43,7 +46,9 @@ def make_controller(scene, atlas_url=None):
             self.refresh()
 
         def refresh(self):
-            self._items = render_items(self.scene, self.camera, self.projection, self.selection)
+            self._items = render_items(self.scene, self.camera, self.projection,
+                                       self.selection, cutaway=self._building_cutaway,
+                                       active_level=self._building_level)
             self.sceneChanged.emit()
             self.cameraChanged.emit()
 
@@ -98,6 +103,21 @@ def make_controller(scene, atlas_url=None):
             self.refresh()
             if hit is not None:
                 self.picked.emit(hit)
+
+        @Slot(float, float, result="QVariantMap")
+        def buildingAt(self, x, y):
+            """Exact R6 hit against the SAME visible polygons drawn by Qt Quick."""
+            return pick_surface(self._items, self.camera, x, y) or {}
+
+        @Slot(int, bool)
+        def setConstructionView(self, active_level, cutaway):
+            if type(active_level) is not int or not 0 <= active_level <= 3:
+                raise ValueError("Invalid construction floor")
+            if type(cutaway) is not bool:
+                raise ValueError("Cutaway must be boolean")
+            self._building_level = active_level
+            self._building_cutaway = cutaway
+            self.refresh()
 
         @Slot(int, int)
         def selectCell(self, x, y):
