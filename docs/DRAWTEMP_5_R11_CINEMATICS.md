@@ -119,13 +119,42 @@ play the Jeanne introduction, inspect missing asset diagnostics, verify
 pause/seek/restore, then exercise a canonical scene choice and compare
 save/replay hashes with legacy.
 
+## R11.10 — Timeline Direct Editing (follow-on)
+
+The Qt Studio timeline now supports **direct horizontal dragging** of a clip
+block and independent dragging of the white motion-key diamonds. The timing
+ruler is in seconds, the grid snaps to **100 ms** (the last valid event start
+and strict interior keyframe endpoints are clamped even off-grid), and a
+click on free timeline space seeks the Studio preview.
+
+An edit is **preview-only while dragging**. Exactly one transaction is
+committed on mouse release; rejected motion and stale revision operations
+cannot corrupt the GameProject or create a half-finished Undo step. Selecting
+an existing block/key without moving it never rounds its original timestamp.
+The cursor is preserved on normal edits, and Undo/Redo returns to valid
+authoring state. Both actor/camera keyframes and audio/FX event durations
+continue to use the original schema and existing validation.
+
+Tests:
+```
+python -m unittest tests_standalone.test_r11_timeline_editing -v
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  DRAWTEMP_QT_GUI_SMOKE=1 \
+  python -m unittest tests_standalone.test_r11_timeline_editing.TimelineQtSmokeTests -v
+```
+
+**Gate:** interactive Qt smoke and cross-platform headless CI required;
+manual real-input review (drag threshold, keyboard, DPI, touchpad) remains
+separate from offscreen certification. This incremental UI does not claim
+that R3/R9/R12 production parity or physical audio output is complete.
+
 ## Remaining work for final R11 gate
 
 - Replace stylized actor/effect placeholders with the R3 shared isometric GPU
   viewport, while keeping the projection and one QML presentation contract.
 - Bind the finished character animation atlas and voice assets (R4/R7).
-- Add timeline drag/retime and detailed keyframe manipulations to the Qt GUI;
-  current edits use validated typed inspector controls.
+- Complete detailed keyframe pose/zoom editing, multi-selection and accessible
+  keyboard alternatives; direct timeline/retime is present as R11.10.
 - Certify event-to-cinematic-to-campaign consequence on the R9/R12 Qt
   integration, including interruptions and resumed saved campaigns.
 - Record real sound-card latency/mixing, export and Windows/macOS/Linux
