@@ -27,6 +27,9 @@ Item {
     property var concealedActorIds: []
     property bool showLegend: interactionMode === "pan"
     property var hoveredCell: ({})
+    property var previewCells: []
+    signal cellHovered(int x, int y)
+    signal hoverLeft()
     readonly property var camera: renderer.cameraState
     signal strokeStarted(int x, int y)
     signal strokeMoved(int x, int y)
@@ -169,6 +172,56 @@ Item {
                     PathLine { x: 48; y: 0 }
                 }
             }
+            // R5.4: GPU scenegraph polygons derived from the same canonical
+            // AutoBlend rules for Studio and Player (no CPU Canvas fallback).
+            Repeater {
+                model: tile.blends || []
+                delegate: Shape {
+                    required property var modelData
+                    anchors.fill: parent
+                    opacity: root.layerEnabled("Terrain") ? root.layerAlpha("Terrain") : 0
+                    ShapePath {
+                        strokeWidth: 0
+                        fillColor: modelData.color
+                        startX: modelData.points[0][0]
+                        startY: modelData.points[0][1]
+                        PathLine { x: modelData.points[1][0]; y: modelData.points[1][1] }
+                        PathLine { x: modelData.points[2][0]; y: modelData.points[2][1] }
+                        PathLine { x: modelData.points[3][0]; y: modelData.points[3][1] }
+                        PathLine { x: modelData.points[4][0]; y: modelData.points[4][1] }
+                        PathLine { x: modelData.points[5][0]; y: modelData.points[5][1] }
+                        PathLine { x: modelData.points[6][0]; y: modelData.points[6][1] }
+                        PathLine { x: modelData.points[7][0]; y: modelData.points[7][1] }
+                        PathLine { x: modelData.points[8][0]; y: modelData.points[8][1] }
+                        PathLine { x: modelData.points[0][0]; y: modelData.points[0][1] }
+                    }
+                }
+            }
+            // Surface bridge axis comes from canonical channel adjacency.
+            Shape {
+                visible: tile.surface === "bridge" &&
+                         root.layerEnabled("Terrain")
+                anchors.fill: parent
+                opacity: 0.72 * root.layerAlpha("Terrain")
+                ShapePath {
+                    strokeWidth: 2.5
+                    strokeColor: "#584e3f"
+                    fillColor: "transparent"
+                    startX: tile.bridgeAxis === "y" ? 48 : 0
+                    startY: tile.bridgeAxis === "y" ? 0 : 24
+                    PathLine { x: tile.bridgeAxis === "y" ? 96 : 48;
+                               y: tile.bridgeAxis === "y" ? 24 : 48 }
+                }
+                ShapePath {
+                    strokeWidth: 2.5
+                    strokeColor: "#584e3f"
+                    fillColor: "transparent"
+                    startX: tile.bridgeAxis === "y" ? 0 : 48
+                    startY: tile.bridgeAxis === "y" ? 24 : 0
+                    PathLine { x: tile.bridgeAxis === "y" ? 48 : 96;
+                               y: tile.bridgeAxis === "y" ? 48 : 24 }
+                }
+            }
             Shape {
                 visible: highlighted || (tile.goal && root.layerEnabled("Objectifs"))
                 opacity: highlighted ? 1.0 : root.layerAlpha("Objectifs")
@@ -197,6 +250,39 @@ Item {
                 opacity: Math.min(root.layerAlpha("Décors"), root.layerAlpha("Bâtiments"))
                 width: 33; height: 20; x: 30; y: 0
                 color: "#68737c"; border.color: "#bac0b9"
+            }
+            // Every paintable decor token has a visible map representation.
+            // Dedicated R4 sprite bindings may later replace these lightweight
+            // scenegraph shapes without changing the authored feature value.
+            Item {
+                visible: tile.feature !== "" && tile.feature !== "tree" &&
+                         tile.feature !== "stone_wall" && root.layerEnabled("Décors")
+                opacity: root.layerAlpha("Décors")
+                x: 32; y: -3
+                width: 34; height: 30
+                Rectangle {
+                    x: 3; y: 7; width: 28; height: 18
+                    radius: tile.feature === "bush" ? 11 : 4
+                    color: ["bush", "reeds"].indexOf(tile.feature) >= 0 ? "#537d53"
+                         : ["boulder", "ruin", "pillar"].indexOf(tile.feature) >= 0 ? "#89938f"
+                         : ["lantern", "crate"].indexOf(tile.feature) >= 0 ? "#9f774f"
+                         : "#8a9187"
+                    border.color: "#e0d1ab"
+                    border.width: 1
+                }
+                Text {
+                    anchors.centerIn: parent
+                    text: tile.feature === "reeds" ? "≋" :
+                          tile.feature === "lantern" ? "✦" :
+                          tile.feature === "crate" ? "□" :
+                          tile.feature === "stairs" ? "≡" :
+                          tile.feature === "arch" ? "∩" :
+                          tile.feature === "fence" ? "╫" :
+                          tile.feature === "bush" ? "❀" :
+                          tile.feature === "boulder" ? "◆" :
+                          tile.feature === "pillar" ? "▥" : "▣"
+                    color: "#f8ead0"; font.pixelSize: 15; font.bold: true
+                }
             }
             Rectangle {
                 visible: root.showBlocked && tile.blocked
@@ -308,6 +394,38 @@ Item {
         }
     }
 
+    // Preview overlays are non-interactive: the R3 camera/picking path remains
+    // authoritative for both ghost stamps and actual commits.
+    Repeater {
+        model: root.previewCells
+        delegate: Item {
+            required property var modelData
+            property var preview: modelData
+            x: root.width/2 + root.camera.panX + preview.sx * root.camera.zoom
+               - 48*root.camera.zoom
+            y: root.height/2 + root.camera.panY + preview.sy * root.camera.zoom
+               - 24*root.camera.zoom
+            width: 96; height: 48
+            scale: root.camera.zoom
+            transformOrigin: Item.TopLeft
+            z: 1000000
+            Shape {
+                anchors.fill: parent
+                opacity: preview.painted ? 0.64 : 0.46
+                ShapePath {
+                    strokeWidth: preview.painted ? 2.5 : 1.5
+                    strokeColor: preview.painted ? "#ffe294" : "#64c3c8"
+                    fillColor: preview.painted ? preview.color : "transparent"
+                    startX: 48; startY: 0
+                    PathLine { x: 96; y: 24 }
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 48; y: 0 }
+                }
+            }
+        }
+    }
+
     MouseArea {
         id: pointer
         anchors.fill: parent
@@ -320,6 +438,7 @@ Item {
         property bool editing: false
         property var lastCell: ({})
 
+        property string previewKey: ""
         function valid(cell) {
             return cell && cell.x !== undefined && cell.y !== undefined
         }
@@ -339,6 +458,12 @@ Item {
         onPositionChanged: function(mouse) {
             var cell = renderer.cellAt(mouse.x, mouse.y)
             root.hoveredCell = valid(cell) ? cell : ({})
+            const key = valid(cell) ? cell.x + ":" + cell.y : ""
+            if (key !== previewKey) {
+                previewKey = key
+                if (valid(cell)) root.cellHovered(cell.x, cell.y)
+                else root.hoverLeft()
+            }
             var panning = (mouse.buttons & Qt.RightButton) ||
                           (root.interactionMode !== "edit" && (mouse.buttons & Qt.LeftButton))
             if (panning) {
@@ -369,7 +494,11 @@ Item {
             if (editing) root.strokeCancelled()
             editing = false
         }
-        onExited: root.hoveredCell = ({})
+        onExited: {
+            root.hoveredCell = ({})
+            previewKey = ""
+            root.hoverLeft()
+        }
         onWheel: function(wheel) {
             renderer.zoomAt(wheel.angleDelta.y, wheel.x, wheel.y)
             wheel.accepted = true

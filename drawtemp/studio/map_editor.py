@@ -45,6 +45,8 @@ class MapWindow(QMainWindow):
         self.stroke = []
         self.selected = None
         self.selection = []
+        self._hover_position = None
+        self._last_preview = None
 
         toolbar = QToolBar("Carte", self)
         self.addToolBar(toolbar)
@@ -65,7 +67,8 @@ class MapWindow(QMainWindow):
 
         self.tools = QComboBox()
         self.tools.addItems([
-            "Pinceau", "Rectangle", "Ligne", "Remplissage", "Pipette", "Sélection",
+            "Pinceau", "Pinceau intelligent", "Rectangle", "Ligne", "Remplissage",
+            "Pipette", "Sélection",
             "Gomme", "Objectif", "Mur", "Couvert", "Danger",
             "Hauteur +", "Hauteur -", "Maison", "Pont", "Tour",
         ])
@@ -77,11 +80,24 @@ class MapWindow(QMainWindow):
         self.material.addItems(list(SURFACE_PALETTE))
         toolbar.addWidget(QLabel(" Surface "))
         toolbar.addWidget(self.material)
+        toolbar.addWidget(QLabel(" Rayon "))
+        self.smart_radius = QSpinBox()
+        self.smart_radius.setObjectName("r5_smart_radius")
+        self.smart_radius.setRange(0, 3)
+        self.smart_radius.setValue(1)
+        toolbar.addWidget(self.smart_radius)
+        toolbar.addWidget(QLabel(" Forme "))
+        self.smart_shape = QComboBox()
+        self.smart_shape.setObjectName("r5_smart_shape")
+        self.smart_shape.addItem("Losange", "diamond")
+        self.smart_shape.addItem("Carré", "square")
+        toolbar.addWidget(self.smart_shape)
 
         # R3 controller is the only source of camera, hit-testing and render
         # delegates. Its scene is reconstructed from the validated R1 Content.
         self.renderer = make_controller(self._render_scene())
-        viewport = QQuickWidget(self)
+        from .map_dragdrop import MapDropViewport
+        viewport = MapDropViewport(self.renderer, self)
         viewport.setResizeMode(QQuickWidget.SizeRootObjectToView)
         viewport.rootContext().setContextProperty("renderer", self.renderer)
         source = Path(__file__).resolve().parents[1] / "render" / "IsoViewport.qml"
@@ -95,12 +111,25 @@ class MapWindow(QMainWindow):
         root.strokeMoved.connect(self.extend_stroke)
         root.strokeFinished.connect(self.finish_stroke)
         root.strokeCancelled.connect(self.cancel_stroke)
+        root.cellHovered.connect(self._hover_cell)
+        root.hoverLeft.connect(self.clear_preview)
+        viewport.brushHovered.connect(self._hover_drop)
+        viewport.brushDropped.connect(self._drop_brush)
+        viewport.dragEnded.connect(self.clear_preview)
         self.viewport = viewport
         self.setCentralWidget(viewport)
 
         self.maps = QListWidget()
         self.maps.currentRowChanged.connect(self.change_map)
         self._dock("Cartes / Missions", self.maps, Qt.LeftDockWidgetArea)
+        from .map_palette_dock import MapPaletteDock
+        self.palette = MapPaletteDock(self)
+        self.palette.brushSelected.connect(self._palette_selected)
+        self._dock("Palette illustrée", self.palette, Qt.LeftDockWidgetArea)
+        self.material.currentTextChanged.connect(self._select_material)
+        self.smart_radius.valueChanged.connect(self._preview_again)
+        self.smart_shape.currentIndexChanged.connect(self._preview_again)
+        self.tools.currentIndexChanged.connect(self._preview_again)
 
         right = QWidget()
         layout = QVBoxLayout(right)
@@ -268,7 +297,89 @@ class MapWindow(QMainWindow):
             "Gomme": "erase", "Objectif": "goal", "Mur": "wall",
             "Couvert": "cover", "Danger": "hazard",
             "Hauteur +": "height+", "Hauteur -": "height-",
-        }.get(self._tool(), "surface:" + self.material.currentText())
+        }.get(self._tool(), self.palette.current_brush)
+
+    def _palette_selected(self, brush):
+        if brush.startswith("surface:"):
+            self.material.blockSignals(True)
+            self.material.setCurrentText(brush.split(":", 1)[1])
+            self.material.blockSignals(False)
+        if self._tool() not in ("Pinceau", "Pinceau intelligent", "Rectangle",
+                                "Ligne", "Remplissage"):
+            self.tools.setCurrentText("Pinceau intelligent")
+        self._preview_again()
+
+    def _select_material(self, surface):
+        if surface:
+            self.palette.select_brush("surface:" + surface)
+            self._preview_again()
+
+    def _preview_again(self, *_):
+        if self._hover_position is not None:
+            self._hover_cell(*self._hover_position)
+
+    def clear_preview(self, *_):
+        self._hover_position = None
+        self._last_preview = None
+        if getattr(self, "viewport", None) is not None:
+            self.viewport.rootObject().setProperty("previewCells", [])
+
+    def _preview_brush(self, cells, brush, *, radius):
+        from drawtemp.render.iso_scene import MATERIALS, COLORS
+        try:
+            preview = self.studio.smart_preview(
+                cells, brush, radius=radius,
+                shape=self.smart_shape.currentData())
+        except (RuleError, AuthoringError, ValueError):
+            self.clear_preview()
+            return None
+        self._last_preview = preview
+        tiles = {(tile["x"], tile["y"]): tile for tile in self.renderer.scene["tiles"]}
+        rows = []
+        if preview is not None:
+            for neighbour in preview.neighbours:
+                tile = tiles.get((neighbour.x, neighbour.y), {})
+                sx, sy = self.renderer.projection.project(
+                    neighbour.x, neighbour.y, tile.get("height", 0))
+                color = COLORS[MATERIALS.index(neighbour.surface)] if neighbour.surface in MATERIALS else "#819f7d"
+                if brush.startswith("feature:") and neighbour.painted:
+                    color = "#9dbc74"
+                rows.append({
+                    "x": neighbour.x, "y": neighbour.y, "sx": sx, "sy": sy,
+                    "painted": neighbour.painted, "color": color,
+                    "edges": len(neighbour.edges),
+                })
+        self.viewport.rootObject().setProperty("previewCells", rows)
+        return preview
+
+    def _hover_cell(self, x, y):
+        self._hover_position = (x, y)
+        if self._tool() not in ("Pinceau", "Pinceau intelligent", "Rectangle",
+                                "Ligne", "Remplissage"):
+            self.viewport.rootObject().setProperty("previewCells", [])
+            return
+        anchors = self.stroke if self.stroke else [(x, y)]
+        if anchors and anchors[-1] != (x, y):
+            anchors = [*anchors, (x, y)]
+        radius = self.smart_radius.value() if self._tool() == "Pinceau intelligent" else 0
+        self._preview_brush(anchors, self._brush(), radius=radius)
+
+    def _hover_drop(self, brush, x, y):
+        self._hover_position = (x, y)
+        self._preview_brush([(x, y)], brush, radius=self.smart_radius.value())
+
+    def _drop_brush(self, brush, x, y):
+        from .map_palette import require_brush
+        try:
+            brush = require_brush(brush)
+        except ValueError:
+            return
+        self.palette.select_brush(brush)
+        self._safe(lambda: self.studio.smart(
+            [(x, y)], brush, radius=self.smart_radius.value(),
+            shape=self.smart_shape.currentData()))
+        self.clear_preview()
+
 
     def _render_scene(self):
         """Render exactly the Content mission edited by R5, with R3 projection."""
@@ -277,15 +388,18 @@ class MapWindow(QMainWindow):
 
     def cancel_stroke(self):
         self.stroke = []
+        self.clear_preview()
 
     def begin_stroke(self, x, y):
         self.stroke = [(x, y)]
         self.selected = (x, y)
+        self._hover_cell(x, y)
 
     def extend_stroke(self, x, y):
         if self.stroke and (x, y) != self.stroke[-1]:
             self.stroke.append((x, y))
             self.selected = (x, y)
+            self._hover_cell(x, y)
 
     def finish_stroke(self, x, y):
         if not self.stroke:
@@ -305,11 +419,16 @@ class MapWindow(QMainWindow):
                 return self.studio.structure(tool, last)
             if tool == "Pipette":
                 sampled = self.studio.sample(last)
+                self.palette.select_brush("surface:" + sampled)
                 index = self.material.findText(sampled)
                 if index >= 0:
                     self.material.setCurrentIndex(index)
                 return None
             brush = self._brush()
+            if tool == "Pinceau intelligent":
+                return self.studio.smart(
+                    cells, brush, radius=self.smart_radius.value(),
+                    shape=self.smart_shape.currentData())
             if tool == "Rectangle":
                 return self.studio.rectangle(first, last, brush)
             if tool == "Ligne":
@@ -318,12 +437,14 @@ class MapWindow(QMainWindow):
                 return self.studio.flood(last, brush)
             return self.studio.paint(cells, brush)
         self._safe(apply)
+        self.clear_preview()
 
     def refresh(self, *_):
         self.layers_panel.set_mission(self.studio.mission_id)
         mission = self.studio.mission()
         board = mission["board"]
         self.renderer.replace_scene(self._render_scene())
+        self.clear_preview()
         root = self.viewport.rootObject()
         root.setProperty("showGrid", self.show_grid.isChecked())
         root.setProperty("showBlocked", self.show_blocked.isChecked())

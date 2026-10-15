@@ -120,3 +120,61 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
 Cette tranche ne certifie pas le gate de R5 complet. Le support visuel des
 étages/toitures, l'opacity persistante, les captures GPU et le parcours de
 création du village jusqu'au Player restent à intégrer/tester.
+
+## Suite R5.4 + R5.5 — Smart Brushes et palette illustrée (PR empilée sur R5.6)
+
+### Ce qui est livré
+
+- **Pinceau intelligent** : rayon de 0 à 3, empreinte losange ou carrée,
+  interpolation déterministe des gestes rapides. Un glisser de souris =
+  une commande du SDK R1 et un seul Undo/Redo.
+- **Aperçu révisionné** : l'empreinte du pinceau et ses voisins immédiats
+  sont projetés dans `IsoViewport.qml` sans mutation de Content. L'application
+  utilise exactement le plan validé; changement de révision, annulation ou
+  changement de mission rejettent toute tentative de commit périmée.
+- **Préservation** : le pinceau intelligent épargne les empreintes d'acteurs,
+  objectifs, objets et structures, ainsi que les décors significatifs déjà
+  placés. L'outil Pinceau classique reste disponible pour les retouches
+  explicitement voulues.
+- **AutoBlend partagé R3/R12** : les raccords entre surfaces terrestres
+  utilisent `sporebound.terrain_autoblend.blend_edges` et
+  `blend_polygon`. La scène Qt Quick reçoit des polygones GPU; aucun
+  nouveau champ n'est écrit dans Content ni GameProject. Les limites de
+  relief bloquent le raccord. La logique du Player est identique.
+- **Palette R5.5** : tuiles du véritable atlas de terrain, échantillons
+  illustrés de végétation, vignettes de décors, recherche accent-insensible,
+  filtres Terrain/Décors et sélection persistante pendant l'édition.
+  Identifiants de peinture canoniques `surface:*` et `feature:*`.
+- **Drag/drop** : MIME `application/x-drawtemp-map-brush`, strictement validé
+  contre le catalogue connu, déposé sur le viewport R3 après picking
+  isométrique commun. Aucun chargement de fichiers glissés non fiables.
+
+### Démonstration
+
+```bash
+python -m pip install ".[qt6]"
+python -m drawtemp.studio.map_editor
+```
+
+Sélectionner un carreau dans le dock **Palette illustrée** ; choisir
+**Pinceau intelligent**, le rayon et la forme ; survoler la carte pour
+prévisualiser les cellules touchées et les voisins affectés. Un glisser
+applique la transaction. Une vignette peut également être déposée sur la
+carte pour appliquer le pinceau choisi.
+
+### Vérification
+
+```bash
+python -m unittest tests_standalone.test_drawtemp5_r5_smart_palette -v
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  python -m unittest tests_standalone.test_drawtemp5_r5_smart_palette_qt -v
+```
+
+Les snapshots du Studio et du Player utilisent `scene_from_mission` et
+`render_items` communs : une transition calculée est identique dans les
+deux processus. Les berges des cases d'eau et l'orientation des ponts
+réutilisent `shoreline_mask` / `bridge_axis` et dessinent leurs traits
+sur le même viewport R3. Le rendu logiciel Qt offscreen ne certifie
+toujours pas l'apparence sur GPU réel, les transitions aquarelle de
+production, les détails visuels de tous les décors ni les performances
+grands formats.
