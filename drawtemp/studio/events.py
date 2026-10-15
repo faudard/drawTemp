@@ -131,7 +131,9 @@ class EventStudio:
 
     def iso_scene(self, mission_id):
         """Canonical Content → shared R3 Renderer scene, detached from the editor."""
-        content = Content.from_dict(self.documents()["content"])
+        from sporebound.tactical_rpg3 import authored_rules_for_document
+        data = self.documents()["content"]
+        content = Content.from_dict(data, rules=authored_rules_for_document(data))
         return scene_from_mission(content.missions[mission_id])
 
     def move_action(self, mission_id, event_id, index, direction):
