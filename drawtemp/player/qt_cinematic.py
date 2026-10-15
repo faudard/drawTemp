@@ -278,6 +278,9 @@ class CinematicStage(QWidget):
     def closeEvent(self, event):
         self.timer.stop()
         self.director.stop()
+        stop_cues = getattr(self.audio, "stop_cues", None)
+        if stop_cues is not None:
+            stop_cues()
         if self._owns_audio:
             self.audio.close()
         super().closeEvent(event)
