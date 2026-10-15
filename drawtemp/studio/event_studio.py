@@ -554,49 +554,45 @@ def main(argv=None):
 
             self.perform(apply, selected=source.text().strip())
 
+        def update_graph_mode(self, *_):
+            self.graph_view.set_connect_mode(
+                self.graph_link_mode.isChecked(),
+                any_of=self.link_join.currentIndex() == 1)
+
+        def select_graph_event(self, event_id):
+            self.select_event_id(event_id)
+
+        def select_event_id(self, event_id):
+            for index in range(self.event_list.count()):
+                if self.event_list.item(index).data(Qt.UserRole) == event_id:
+                    self.event_list.setCurrentRow(index)
+                    return
+
+        def link_from_graph(self, source, target, any_of):
+            self.perform(lambda: self.studio.link(
+                self.mid(), target, source, any_of=any_of), selected=target)
+
         def render_graph(self):
-            self.graph_scene.clear()
+            if self.mid():
+                self.graph_view.render_events(
+                    self.studio.events(self.mid()), self.mid(),
+                    selected_id=self.eid())
+
+        def select_map_cell(self, x, y):
             if not self.mid():
                 return
-            graph = self.studio.graph(self.mid())
-            nodes = {tuple(row["key"]): row for row in graph["nodes"]}
-            for edge in graph["edges"]:
-                source, target = nodes.get(tuple(edge["source"])), nodes.get(tuple(edge["target"]))
-                if source and target:
-                    self.graph_scene.addLine(
-                        source["x"]+92, source["y"]+16, target["x"], target["y"]+16,
-                        QPen(QColor("#8595aa"), 1.5))
-            for node in graph["nodes"]:
-                focus = node["event_id"] == self.eid()
-                self.graph_scene.addRect(
-                    node["x"], node["y"], 210, 40,
-                    QPen(QColor("#3d7dda") if focus else QColor("#7d8fa4")),
-                    QBrush(QColor("#e9f1ff") if focus else QColor("#f8fafc")))
-                label = self.graph_scene.addText(node["label"][:34])
-                label.setPos(node["x"]+8, node["y"]+6)
-            self.graph_scene.setSceneRect(0, 0, graph["width"], graph["height"])
+            markers = self.studio.map_markers(self.mid())
+            matches = [m["event_id"] for m in markers
+                       if m["pos"] == [x, y]]
+            if matches:
+                self.select_event_id(matches[0])
 
         def render_map(self):
-            self.map_scene.clear()
             if not self.mid():
                 return
-            mission = self.studio._mission(self.mid())
-            width, height = mission["board"]["width"], mission["board"]["height"]
-            scale = max(12, min(30, 600 // max(width, height)))
-            for x in range(width):
-                for y in range(height):
-                    self.map_scene.addRect(x*scale, y*scale, scale, scale,
-                                           QPen(QColor("#d0d7de")))
-            for marker in self.studio.map_markers(self.mid()):
-                x, y = marker["pos"]
-                self.map_scene.addEllipse(
-                    x*scale+3, y*scale+3, max(2,scale-6), max(2,scale-6),
-                    QPen(QColor("#1457a5")),
-                    QBrush(QColor("#e99e3b") if marker["kind"]=="effect"
-                           else QColor("#317ed8")))
-                if marker["event_id"] == self.eid():
-                    text = self.map_scene.addText(marker["event_id"][:12])
-                    text.setPos(x*scale, (y+1)*scale)
+            self.renderer.replace_scene(self.studio.iso_scene(self.mid()))
+            self.renderer.setEventMarkers(
+                self.studio.map_markers(self.mid()), selected_id=self.eid() or "")
 
         def preview(self):
             if not self.eid():
