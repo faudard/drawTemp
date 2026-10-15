@@ -303,6 +303,7 @@ class PlayerController:
         return self.session.snapshot()
 
     def _changed(self, *, keep_message=False):
+        self.inspected_skill = "attack"
         if not keep_message:
             self.message = ""
         self.forecast = ""
