@@ -279,6 +279,7 @@ def main(argv=None):
     renderer = make_controller(scene_for_player(controller), assets=presentation)
     bridge = create_bridge(controller, renderer)
     engine = QQmlApplicationEngine()
+    renderer.attach_engine(engine)
     engine.setInitialProperties({"smokeMode": args.smoke})
     engine.rootContext().setContextProperty("renderer", renderer)
     engine.rootContext().setContextProperty("player", bridge)
