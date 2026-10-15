@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QPoint, Qt, Signal, QRectF
+from PySide6.QtCore import QBuffer, QIODevice, QPoint, Qt, Signal, QRectF
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget,
@@ -268,8 +268,8 @@ class R13ComparisonCharts(QWidget):
             painter.setFont(font)
             painter.setPen(MUTED)
             painter.drawText(QRectF(12, 29, width - 24, 70),
-                             Qt.AlignmentFlag.AlignTop
-                             | Qt.TextFlag.TextWordWrap, self.notice.text())
+                             int(Qt.AlignmentFlag.AlignTop)
+                             | int(Qt.TextFlag.TextWordWrap), self.notice.text())
             self.aggregate_plot.render(painter, QPoint(0, heading))
             self.seed_plot.render(
                 painter, QPoint(0, heading + self.aggregate_plot.height() + spacing))
@@ -277,15 +277,15 @@ class R13ComparisonCharts(QWidget):
             painter.end()
         # Exclusive creation matters: a chart export must never replace
         # authored Content, a baseline or any pre-existing user file.
-        buffer = QByteArray()
-        device = QBuffer(buffer)
+        device = QBuffer()
         if not device.open(QIODevice.OpenModeFlag.WriteOnly):
             raise OSError("Impossible d'ouvrir le tampon PNG.")
         try:
             if not image.save(device, "PNG"):
                 raise OSError("Encodage PNG impossible.")
+            payload = bytes(device.data())
         finally:
             device.close()
         with target.open("xb") as output:
-            output.write(bytes(buffer))
+            output.write(payload)
         return target
