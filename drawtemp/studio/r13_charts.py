@@ -116,7 +116,7 @@ class BarCanvas(QWidget):
         p.end()
 
     def _row_index(self, y):
-        row = (y - 67) // LINE_HEIGHT
+        row = int((y - 67) // LINE_HEIGHT)
         return row if y >= 67 and 0 <= row < len(self._rows()) else None
 
     def mouseMoveEvent(self, event):
