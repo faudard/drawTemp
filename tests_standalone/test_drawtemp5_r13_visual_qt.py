@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
 
@@ -51,7 +53,20 @@ class R13VisualQtTests(unittest.TestCase):
         panel.set_report(build_visual_comparison(
             reference, reference, objective_changed=True))
         self.assertIn("contrôle requis", panel.notice.text())
+        with TemporaryDirectory() as folder:
+            filename = Path(folder) / "r13-visual.png"
+            saved = panel.export_png(filename)
+            self.assertEqual(saved, filename)
+            self.assertTrue(filename.read_bytes().startswith(
+                b"\\x89PNG\\r\\n\\x1a\\n"))
+            with self.assertRaises(FileExistsError):
+                panel.export_png(filename)
+            with self.assertRaises(ValueError):
+                panel.export_png(Path(folder) / "report.json")
         panel.clear()
+        with TemporaryDirectory() as folder:
+            with self.assertRaises(ValueError):
+                panel.export_png(Path(folder) / "empty.png")
         self.assertIsNone(panel.report)
         panel.close()
 
