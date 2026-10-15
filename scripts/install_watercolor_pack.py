@@ -60,17 +60,26 @@ def _validated_bundle(archive):
     names = archive.namelist()
     if len(names) != len(set(names)):
         raise ValueError("Duplicate ZIP member")
-    from scripts.verify_watercolor_release import png_dimensions
+    from scripts.verify_watercolor_release import png_dimensions, validate
     index = _json_from_zip(archive, PREFIX + "index.json")
     manifest = _json_from_zip(archive, PREFIX + "registry.json")
     if index.get("schema_version") != 1 or manifest.get("version") != 1:
         raise ValueError("Unexpected watercolor manifest version")
     sprites = index.get("sprites")
-    if not isinstance(sprites, list) or len(sprites) != 88:
-        raise ValueError("Expected exactly 88 sprites")
+    if not isinstance(sprites, list) or len(sprites) not in (88, 99):
+        raise ValueError("Expected exactly 88 legacy or 99 published sprites")
     entries = manifest.get("entries")
-    if not isinstance(entries, list) or len(entries) != 103:
-        raise ValueError("Expected 88 sprites and 15 animations")
+    if not isinstance(entries, list) or len(entries) != len(sprites) + 15:
+        raise ValueError("Expected sprite entries and 15 animations")
+    if len(sprites) == 99:
+        # Production motion pack: checksum every checked-in image, animation
+        # reference and declared source/derived hash before any install write.
+        # The legacy 88-image preview format is kept intact.
+        provenance = _json_from_zip(archive, PREFIX + "provenance.json")
+        validate(index, manifest, archive.read, set(names), provenance=provenance)
+        from scripts.certify_int03_assets import verify_rights
+        rights = _json_from_zip(archive, PREFIX + "rights.json")
+        verify_rights(rights, provenance)
     ids = [e.get("id") for e in entries]
     if len(set(ids)) != len(ids):
         raise ValueError("Duplicate asset ID in pack")
@@ -188,9 +197,11 @@ def install(bundle, content, project, output):
                 with archive.open(name) as source, dest.open("wb") as target:
                     shutil.copyfileobj(source, target)
             # Retain provenance and a reusable standalone manifest alongside art.
-            for manifest_name in ('index.json', 'registry.json'):
-                with archive.open(PREFIX + manifest_name) as source, (stage / PREFIX / manifest_name).open('wb') as target:
-                    shutil.copyfileobj(source, target)
+            for manifest_name in ('index.json', 'registry.json',
+                                  'provenance.json', 'rights.json'):
+                if PREFIX + manifest_name in archive.namelist():
+                    with archive.open(PREFIX + manifest_name) as source, (stage / PREFIX / manifest_name).open('wb') as target:
+                        shutil.copyfileobj(source, target)
             shutil.copy2(content, stage / "jeanne.json")
             (stage / "jeanne.game.json").write_text(
                 json.dumps(game, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
