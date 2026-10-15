@@ -3,6 +3,7 @@
 Gameplay remains in the R1 SDK. All coordinates refer to tile centres.
 """
 from dataclasses import dataclass
+from copy import deepcopy
 from collections.abc import Mapping
 from math import floor
 import hashlib
@@ -104,7 +105,9 @@ def scene_from_mission(mission, snapshot=None):
     return {"mission": mission.id, "width": mission.board.width,
             "height": mission.board.height,
             "revision": int(getattr(snapshot, "revision", 0)),
-            "tiles": tiles, "actors": actors, "objects": objects}
+            "tiles": tiles, "actors": actors, "objects": objects,
+            "structures": deepcopy(mission.structures),
+            "interior_floors": deepcopy(mission.interior_floors)}
 
 
 def scene_from_exploration(stage, *, revision=0):
@@ -151,7 +154,8 @@ def fingerprint(scene):
     return hashlib.sha256(json.dumps(scene, sort_keys=True).encode()).hexdigest()
 
 
-def render_items(scene, camera, projection=IsoProjection(), selected=None):
+def render_items(scene, camera, projection=IsoProjection(), selected=None, *,
+                 cutaway=False, active_level=0):
     """Cull outside viewport; return depth-sorted QML scenegraph records."""
     elev = {(t["x"], t["y"]): t["height"] for t in scene["tiles"]}
     max_height = max(elev.values(), default=0)
@@ -191,6 +195,12 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None):
                          "label": a.get("name", a["id"]), "team": a["team"],
                          "alive": a["alive"], "sx": sx, "sy": sy,
                          "zOrder": (x + y) * 100 + 60})
+    from .building_geometry import building_surfaces
+    for part in building_surfaces(scene, projection, cutaway=cutaway,
+                                  active_level=active_level):
+        if (-margin <= camera.screen(part["sx"], part["sy"])[0] <= camera.width + margin and
+                -margin <= camera.screen(part["sx"], part["sy"])[1] <= camera.height + margin):
+            rows.append(part)
     return sorted(rows, key=lambda r: (r["zOrder"], r["id"]))
 
 
