@@ -15,7 +15,7 @@ from drawtemp.sdk.reference import reference_project
 from drawtemp.studio.events import EventStudio
 from sporebound.event_composer import action, condition
 from sporebound.event_graph import action_title, condition_summary
-from drawtemp.studio.event_command_catalog import action_catalogue
+from drawtemp.studio.event_command_catalog import action_catalogue, STORY_FIELDS
 from drawtemp.studio.event_presentation import PRESENTATION_FIELDS
 from drawtemp.render.qt_viewport import make_controller
 
@@ -251,6 +251,8 @@ def main(argv=None):
             narrative_form.addRow(self.button("Lier scène à l'événement", self.bind_scene))
             narrative_form.addRow(self.button("Attendre un choix de cette scène…", self.bind_choice))
             narrative_form.addRow(self.button("Effacer la garde narrative", self.clear_choice))
+            narrative_form.addRow(self.button("Ajouter effet de choix (variable / objet)…",
+                                               self.add_story_effect))
             self.tabs.addTab(narrative, "Narration")
 
             map_tab = QWidget()
@@ -603,6 +605,39 @@ def main(argv=None):
             if self.eid():
                 self.perform(lambda: self.studio.clear_choice(
                     self.mid(), self.eid()))
+
+        def add_story_effect(self):
+            if not self.mid():
+                return
+            scene_id = self.scene_id.text().strip()
+            choice_id, ok = QInputDialog.getText(
+                self, "Effet de choix", "Identifiant du choix de la scène")
+            if not ok or not choice_id.strip():
+                return
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Effet StoryBook · " + scene_id + "/" + choice_id)
+            form = QFormLayout(dialog)
+            kind_combo = QComboBox()
+            kind_combo.addItems(list(STORY_FIELDS))
+            form.addRow("Opération", kind_combo)
+            controls = {}
+            for name in {name for fields in STORY_FIELDS.values()
+                         for name, _, _ in fields}:
+                edit = QLineEdit()
+                edit.setPlaceholderText(name)
+                controls[name] = edit
+                form.addRow(name, edit)
+            buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            form.addRow(buttons)
+            if dialog.exec() != QDialog.Accepted:
+                return
+            kind = kind_combo.currentText()
+            fields = {key: controls[key].text()
+                      for key, _, _ in STORY_FIELDS[kind]}
+            self.perform(lambda: self.studio.add_story_effect(
+                self.mid(), scene_id, choice_id.strip(), kind, fields))
 
         def create_fork(self):
             if not self.mid():
