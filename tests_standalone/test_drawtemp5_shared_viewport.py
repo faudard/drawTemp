@@ -138,8 +138,10 @@ class SharedRendererQtSmoke(unittest.TestCase):
             sx, sy = camera.screen(*projection.project(*pos))
             self.assertEqual(window.renderer.cellAt(sx, sy),
                              {"x": pos[0], "y": pos[1]})
+            window.material.setCurrentText("stone")
             window.begin_stroke(*pos)
             window.finish_stroke(*pos)
+            self.assertEqual(window.studio.sample(pos), "stone")
             self.assertIsNotNone(window.viewport.rootObject())
             self.assertEqual(window.renderer.scene["mission"], MISSION)
         finally:
