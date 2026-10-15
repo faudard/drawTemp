@@ -25,7 +25,9 @@ python -m drawtemp.studio.r13_workbench --content sporebound/content/jeanne.json
 6. Les signaux heuristiques IA (`move_without_displacement`, `backtrack`,
    `repeat_idle`, etc.) utilisent les diagnostics existants. Les consulter
    comme des **indices à investiguer**, pas comme une preuve que la décision
-   était incorrecte. Les entrées de preuve disponibles sont cliquables.
+   était incorrecte. Les déplacements incohérents, attentes répétées et
+   incantations échouées sont reliés, lorsque présents, à leurs commandes
+   d'origine. Les entrées de preuve disponibles sont cliquables.
 
 ## Architecture et fidélité
 
