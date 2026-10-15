@@ -53,7 +53,9 @@ def inventory(content, project):
         entries.append(Entry("skills", row["id"], row["name"]))
     for key, row in sorted(content.get("equipment", {}).items()):
         entries.append(Entry("equipment", key, row.get("name", key)))
-    entries.extend(Entry("flags", key, key) for key in sorted(used_flags(project)))
+    from drawtemp.studio.r8_integrity import flags as referenced_flags
+    entries.extend(Entry("flags", key, key)
+                   for key in referenced_flags(content, project))
     return tuple(entries)
 
 
@@ -247,12 +249,19 @@ class DatabaseEditor:
     def detail(self, family, identifier, mission_id=""):
         pair = _data(self.snapshot())
         if family == "flags":
-            require(identifier in used_flags(pair["project"]), "Unknown flag")
+            from drawtemp.studio.r8_integrity import flags as referenced_flags
+            require(identifier in referenced_flags(pair["content"], pair["project"]),
+                    "Unknown flag")
             return {"id": identifier, "read_only": True}
         return deepcopy(_resource(pair["content"], family, identifier, mission_id))
 
     def references(self, family, identifier):
         pair = _data(self.snapshot())
+        if family == "flags":
+            from drawtemp.studio.r8_integrity import flags as referenced_flags
+            return tuple(f"{use.document}{use.path} ({use.context})" for use in
+                         referenced_flags(pair["content"], pair["project"])
+                         .get(identifier, ()))
         return referrers(pair["content"], pair["project"], family, identifier)
 
     def preview_many(self, actions):
