@@ -442,6 +442,86 @@ def main(argv=None):
                 self.perform(lambda: self.studio.bind_scene(
                     self.mid(), self.eid(), self.scene_id.text().strip()))
 
+        def bind_choice(self):
+            if not self.eid():
+                return
+            scene_id = self.scene_id.text().strip()
+            choice_id, ok = QInputDialog.getText(
+                self, "Choix attendu", "Identifiant du choix narratif")
+            if ok and choice_id.strip():
+                self.perform(lambda: self.studio.bind_choice(
+                    self.mid(), self.eid(), scene_id, choice_id.strip()))
+
+        def clear_choice(self):
+            if self.eid():
+                self.perform(lambda: self.studio.clear_choice(
+                    self.mid(), self.eid()))
+
+        def create_fork(self):
+            if not self.mid():
+                return
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Nouvel embranchement — deux décisions")
+            dialog.resize(540, 540)
+            form = QFormLayout(dialog)
+            def field(label, initial=""):
+                edit = QLineEdit(initial)
+                form.addRow(label, edit)
+                return edit
+
+            source = field("Événement de départ", self.eid() or "choice_origin")
+            cell = field("Case d'entrée (x,y)", "2,3")
+            scene = field("ID scène du choix", "jeanne_choice")
+            title = field("Titre", "Quelle voie choisir ?")
+            text = field("Dialogue", "Jeanne doit décider de la suite.")
+            speaker = field("Interlocuteur", "Jeanne")
+            branches = []
+            for index, defaults in enumerate((
+                    ("fight", "Combattre", "fight_event", "hazard", "5"),
+                    ("talk", "Négocier", "talk_event", "message", "0"))):
+                form.addRow(QLabel("Choix " + str(index + 1)))
+                choice = field("ID du choix", defaults[0])
+                label = field("Libellé", defaults[1])
+                event = field("ID événement tactique", defaults[2])
+                kind = QComboBox()
+                kind.addItems(["message", "hazard"])
+                kind.setCurrentText(defaults[3])
+                form.addRow("Conséquence", kind)
+                detail = field("Message de conséquence", label.text())
+                amount = QSpinBox()
+                amount.setRange(0, 10000)
+                amount.setValue(int(defaults[4]))
+                form.addRow("Danger (hazard seulement)", amount)
+                branches.append((choice, label, event, kind, detail, amount))
+            reunion = field("ID de réunion (facultatif)", "choice_reunion")
+            reunion_message = field("Texte de réunion", "Les chemins se rejoignent.")
+            actions = QDialogButtonBox(
+                QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            actions.accepted.connect(dialog.accept)
+            actions.rejected.connect(dialog.reject)
+            form.addRow(actions)
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            def apply():
+                rows = [{
+                    "id": choice.text().strip(),
+                    "label": label.text().strip(),
+                    "event_id": event.text().strip(),
+                    "kind": kind.currentText(),
+                    "text": detail.text().strip(),
+                    "amount": amount.value(),
+                } for choice, label, event, kind, detail, amount in branches]
+                self.studio.create_choice_fork(
+                    self.mid(), origin_event_id=source.text().strip(),
+                    origin_cell=_coordinate_pair(cell.text()),
+                    scene_id=scene.text().strip(), title=title.text().strip(),
+                    text=text.text().strip(), speaker=speaker.text().strip(),
+                    branches=rows, reunion_event_id=reunion.text().strip(),
+                    reunion_message=reunion_message.text().strip())
+
+            self.perform(apply, selected=source.text().strip())
+
         def render_graph(self):
             self.graph_scene.clear()
             if not self.mid():
@@ -496,24 +576,76 @@ def main(argv=None):
             except Exception as exc:
                 QMessageBox.warning(self, "Simulation impossible", str(exc))
 
-        def debug(self):
+        def _render_debug(self, result):
+            self.diagnostics.setPlainText("\\n".join(result["lines"]))
+            self.tabs.setCurrentIndex(self.tabs.count() - 1)
+
+        def debug_start(self):
             if not self.eid():
                 return
             try:
-                result = self.studio.debugger(self.mid(), self.eid())
-                self.diagnostics.setPlainText("\n".join(result["lines"]))
-                self.tabs.setCurrentIndex(self.tabs.count()-1)
+                self.debug_session = self.studio.start_debug(
+                    self.mid(), self.eid(), scenario="satisfied")
+                self.debug_target.blockSignals(True)
+                self.debug_target.clear()
+                self.debug_target.addItems(self.debug_session.chain_ids())
+                self.debug_target.blockSignals(False)
+                self.debug_breakpoint.blockSignals(True)
+                self.debug_breakpoint.setChecked(False)
+                self.debug_breakpoint.blockSignals(False)
+                self._render_debug(self.debug_session.report())
             except Exception as exc:
-                QMessageBox.warning(self, "Diagnostic impossible", str(exc))
+                self.debug_session = None
+                QMessageBox.warning(self, "Débogueur indisponible", str(exc))
+
+        def debug(self):
+            self.debug_start()
+
+        def debug_step(self):
+            if self.debug_session is None:
+                self.debug_start()
+                return
+            try:
+                self._render_debug(self.debug_session.step())
+            except Exception as exc:
+                QMessageBox.warning(self, "Pas à pas interrompu", str(exc))
+
+        def debug_continue(self):
+            if self.debug_session is None:
+                self.debug_start()
+                return
+            try:
+                self._render_debug(self.debug_session.resume())
+            except Exception as exc:
+                QMessageBox.warning(self, "Diagnostic interrompu", str(exc))
+
+        def debug_toggle_breakpoint(self, enabled):
+            if self.debug_session is None or not self.debug_target.currentText():
+                return
+            try:
+                self._render_debug(self.debug_session.breakpoint(
+                    self.debug_target.currentText(), enabled))
+            except Exception as exc:
+                QMessageBox.warning(self, "Point d'arrêt refusé", str(exc))
 
         def qa(self):
+            self._run_qa(False)
+
+        def qa_probe(self):
+            self._run_qa(True)
+
+        def _run_qa(self, probe):
+            if not self.mid():
+                return
             try:
                 issues = self.studio.diagnostics(self.mid())
-                self.diagnostics.setPlainText(
-                    "\n".join(row["severity"] + " : " + row["message"]
-                               for row in issues) if issues else
-                    "Intégrité structurelle validée par Content / GameProject.\n"
-                    "Atteignabilité narrative complète et replay certifié : à intégrer.")
+                report = self.studio.branch_qa(self.mid(), probe=probe)
+                sections = ["CONTRÔLES ÉVÉNEMENTS — "+
+                            (", ".join(p["message"] for p in issues)
+                             if issues else "aucune anomalie détectée"),
+                            "", *report["lines"],
+                            "", "Rejeu Player complet : NON CERTIFIÉ"]
+                self.diagnostics.setPlainText("\\n".join(sections))
                 self.tabs.setCurrentIndex(self.tabs.count()-1)
             except Exception as exc:
                 QMessageBox.warning(self, "QA indisponible", str(exc))
