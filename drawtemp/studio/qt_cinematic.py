@@ -13,6 +13,8 @@ from sporebound.event_cinematic_qa import audit_event_cinematic_path
 from sporebound.cinematics import cinematic_template, event_template
 from sporebound.model import RuleError
 from drawtemp.player.qt_cinematic import CinematicStage
+from drawtemp.cinematics.timeline import TimelineScale
+from drawtemp.studio.cinematic_timeline import TimelineBlock, TimelineKeyframe, TimelineView
 
 LANES = ("background", "camera", "actor", "dialogue", "fade",
          "music", "ambience", "voice", "sfx", "fx")
@@ -94,7 +96,8 @@ class CinematicEditor(QMainWindow):
         ml.addWidget(QLabel("Timeline multipiste · sélectionner un événement pour l'éditer"))
         self.timeline_scene = QGraphicsScene(self)
         self.timeline_scene.selectionChanged.connect(self._on_track_selected)
-        self.timeline = QGraphicsView(self.timeline_scene)
+        self.timeline = TimelineView(self.timeline_scene)
+        self.timeline.cursorRequested.connect(self._scrub_timeline)
         self.timeline.setMinimumHeight(280)
         ml.addWidget(self.timeline, 3)
         body.addWidget(middle)
@@ -134,9 +137,9 @@ class CinematicEditor(QMainWindow):
     def _alert(self, exc):
         QMessageBox.warning(self, "Cinématique non modifiée", str(exc))
 
-    def _apply(self, method, *args):
+    def _apply(self, method, *args, **kwargs):
         try:
-            result = method(*args)
+            result = method(*args, **kwargs)
         except (RuleError, ValueError, OSError) as exc:
             self._alert(exc)
             return False
@@ -156,9 +159,11 @@ class CinematicEditor(QMainWindow):
             if self.clip_id:
                 self.clip_list.setCurrentRow(valid.index(self.clip_id))
         clip = self.document.clip(self.clip_id) if self.clip_id else self._empty_clip()
+        cursor = min(self.stage.time_ms, clip["duration_ms"]) if self.stage.clip["id"] == clip["id"] else 0
         self.slider.setRange(0, clip["duration_ms"])
         self.stage.set_clip(clip)
         self.stage.pause()
+        self.stage.seek(cursor)
         self.play_button.setText("Lire")
         self._draw_timeline()
         self._draw_inspector()
@@ -294,41 +299,79 @@ class CinematicEditor(QMainWindow):
             self.stage.play()
             self.play_button.setText("Pause")
 
+    def _scrub_timeline(self, ms):
+        self.stage.pause()
+        self.stage.seek(ms)
+        self.play_button.setText("Lire")
+
+    def _commit_event_drag(self, clip_id, event_id, at_ms, revision):
+        self.stage.pause()
+        if self._apply(self.document.edit_event, clip_id, event_id,
+                       {"start_ms": at_ms}, expected_revision=revision):
+            self.stage.seek(at_ms)
+            self.statusBar().showMessage("Séquence déplacée · Ctrl+Z pour annuler", 3500)
+        else:
+            # Discard an invalid/stale ghost even if validation rejects the edit.
+            self._draw_timeline()
+
+    def _commit_key_drag(self, clip_id, event_id, old_ms, at_ms, revision):
+        self.stage.pause()
+        if self._apply(self.document.update_keyframe, clip_id, event_id,
+                       old_ms, at_ms=at_ms, expected_revision=revision):
+            self.stage.seek(min(self.stage.clip["duration_ms"], at_ms +
+                                next(e["start_ms"] for e in
+                                     self.document.clip(clip_id)["events"]
+                                     if e["id"] == event_id)))
+            self.statusBar().showMessage("Image-clé déplacée · Ctrl+Z pour annuler", 3500)
+        else:
+            self._draw_timeline()
+
     def _draw_timeline(self):
+        """Interactive multi-lane timeline; one validated commit per release."""
         scene = self.timeline_scene
         scene.blockSignals(True)
-        scene.clear()
-        clip = self.document.clip(self.clip_id) if self.clip_id else self._empty_clip()
-        scene.setSceneRect(0, 0, 1080, 28 + len(LANES) * 32)
-        for lane_index, lane in enumerate(LANES):
-            y = 25 + lane_index * 32
-            scene.addText(lane).setPos(2, y)
-            scene.addLine(128, y + 24, 1060, y + 24,
-                          QPen(QColor("#444b59")))
-        for event in clip["events"]:
-            row = LANES.index(_lane(event))
-            x = 130 + 920 * event["start_ms"] / clip["duration_ms"]
-            width = max(5, 920 * event["duration_ms"] / clip["duration_ms"])
-            y = 26 + row * 32
-            item = scene.addRect(x, y, width, 21, QPen(QColor("#202e3c")),
-                                 QBrush(QColor(COLORS[_lane(event)])))
-            item.setData(0, event["id"])
-            item.setFlag(QGraphicsItem.ItemIsSelectable, True)
-            if event["id"] == self.event_id:
-                item.setSelected(True)
-            label = scene.addText(event["id"])
-            label.setDefaultTextColor(QColor("#f5f1e9"))
-            label.setPos(x + 3, y - 2)
-            label.setAcceptedMouseButtons(Qt.NoButton)
-            for key in event.get("keyframes", ()):
-                kx = x + 920 * key["at_ms"] / clip["duration_ms"]
-                diamond = scene.addEllipse(kx - 3, y + 6, 7, 7,
-                                           QPen(QColor("white")), QBrush(QColor("white")))
-                diamond.setAcceptedMouseButtons(Qt.NoButton)
-        self._playhead = scene.addLine(0, 15, 0, 25 + len(LANES)*32,
-                                        QPen(QColor("#f7e3a2"), 2))
-        self._position(self.stage.time_ms)
-        scene.blockSignals(False)
+        try:
+            scene.clear()
+            clip = self.document.clip(self.clip_id) if self.clip_id else self._empty_clip()
+            scale = TimelineScale(clip["duration_ms"])
+            self.timeline.scale = scale
+            scene.setSceneRect(0, 0, 1080, 35 + len(LANES) * 32)
+            for lane_index, lane in enumerate(LANES):
+                y = 26 + lane_index * 32
+                label = scene.addText(lane)
+                label.setDefaultTextColor(QColor("#b6c5d5"))
+                label.setPos(4, y - 3)
+                scene.addLine(128, y + 24, 1056, y + 24, QPen(QColor("#444b59")))
+            for second in range(0, clip["duration_ms"] // 1000 + 1):
+                x = scale.time_to_x(second * 1000)
+                scene.addLine(x, 17, x, 31 + len(LANES) * 32,
+                              QPen(QColor("#586477")))
+                label = scene.addText(str(second) + " s")
+                label.setDefaultTextColor(QColor("#abb6c5"))
+                label.setScale(.7)
+                label.setPos(x + 2, -2)
+                label.setAcceptedMouseButtons(Qt.NoButton)
+            for event in clip["events"]:
+                row = LANES.index(_lane(event))
+                on_event = lambda eid, ms, rev, cid=clip["id"]: (
+                    self._commit_event_drag(cid, eid, ms, rev))
+                block = TimelineBlock(event, scale, 26 + row * 32,
+                                      self.document.revision, on_event,
+                                      COLORS[_lane(event)])
+                scene.addItem(block)
+                if event["id"] == self.event_id:
+                    block.setSelected(True)
+                for key in event.get("keyframes", ()):
+                    on_key = lambda eid, old, ms, rev, cid=clip["id"]: (
+                        self._commit_key_drag(cid, eid, old, ms, rev))
+                    TimelineKeyframe(event, key, scale, block,
+                                     self.document.revision, on_key)
+            self._playhead = scene.addLine(0, 15, 0, 31 + len(LANES)*32,
+                                            QPen(QColor("#f7e3a2"), 2))
+            self._playhead.setZValue(5)
+            self._position(self.stage.time_ms)
+        finally:
+            scene.blockSignals(False)
 
     def _on_track_selected(self):
         ids = [item.data(0) for item in self.timeline_scene.selectedItems()
