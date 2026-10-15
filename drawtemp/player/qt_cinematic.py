@@ -107,17 +107,25 @@ class QtAudioStage:
     def pause_tracks(self):
         for player, _ in self._tracks.values():
             player.pause()
+        for player, _ in self._cues:
+            player.pause()
 
     def resume_tracks(self):
         for player, _ in self._tracks.values():
             player.play()
+        for player, _ in self._cues:
+            player.play()
+
+    def stop_cues(self):
+        # Transient one-shots must not outlive seek, skip or clip replacement.
+        for player, _ in self._cues:
+            player.stop()
+        self._cues.clear()
 
     def close(self):
         for key in tuple(self._tracks):
             self.stop_track(key)
-        for player, _ in self._cues:
-            player.stop()
-        self._cues.clear()
+        self.stop_cues()
 
 
 class CinematicStage(QWidget):
@@ -193,6 +201,9 @@ class CinematicStage(QWidget):
         self._show(position)
         if position >= self.clip["duration_ms"]:
             self.pause()
+            stop_cues = getattr(self.audio, "stop_cues", None)
+            if stop_cues is not None:
+                stop_cues()
             if not self._completed:
                 self._completed = True
                 self.finished.emit()
@@ -211,8 +222,16 @@ class CinematicStage(QWidget):
         self._show(self.transport.position_ms)
 
     def seek(self, position):
+        was_playing = self.transport.playing
         target = self.transport.seek(int(position))
+        stop_cues = getattr(self.audio, "stop_cues", None)
+        if stop_cues is not None:
+            stop_cues()
         self.director.seek(target)
+        if not was_playing:
+            # Seeking reconstructs sustained tracks, but must not make a
+            # paused timeline audible until the user explicitly resumes.
+            self.director.pause()
         self._show(target)
         if target < self.clip["duration_ms"]:
             self._completed = False
@@ -227,7 +246,12 @@ class CinematicStage(QWidget):
     def restore(self, checkpoint):
         self.pause()
         self.transport.restore(checkpoint)
+        stop_cues = getattr(self.audio, "stop_cues", None)
+        if stop_cues is not None:
+            stop_cues()
         self.director.seek(self.transport.position_ms)
+        if not checkpoint["playing"]:
+            self.director.pause()
         self._show(self.transport.position_ms)
         self._completed = False
         if checkpoint["playing"]:
@@ -237,6 +261,9 @@ class CinematicStage(QWidget):
         was_playing = self.transport.playing
         self.pause()
         self.director.stop()
+        stop_cues = getattr(self.audio, "stop_cues", None)
+        if stop_cues is not None:
+            stop_cues()
         self.clip = clip
         self.transport = CinematicTransport(clip["duration_ms"],
                                              monotonic=self._virtual_now)
