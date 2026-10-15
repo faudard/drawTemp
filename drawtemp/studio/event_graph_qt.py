@@ -116,8 +116,10 @@ class EventGraphView(QGraphicsView):
         if not self._connect_mode:
             self.eventSelected.emit(source_id)
         elif not self._pending:
+            # Do not emit eventSelected here: the consuming editor refresh
+            # rebuilds the graph and would erase the first endpoint.
             self._pending = source_id
-            self.eventSelected.emit(source_id)
+            self._cards[source_id].setPen(QPen(QColor("#ffd477"), 3))
         else:
             source, target = self._pending, source_id
             self._pending = ""
