@@ -74,6 +74,32 @@ class R9DPageContracts(unittest.TestCase):
         self.assertEqual(Battle.replay(battle.recording()).digest(),
                          battle.digest())
 
+    def test_deactivation_of_page_is_journaled_and_replayable(self):
+        self.studio.create(MISSION, "r9d_disable_target",
+                           condition("tick", tick=0),
+                           [action("message", text="Garde")])
+        self.studio.add_page(
+            MISSION, "r9d_disable_target", page_id="visible",
+            priority=40, condition=condition("tick", tick=0),
+            actions=[action("message", text="Page visible")])
+        self.studio.create(
+            MISSION, "r9d_off", condition("tick", tick=0),
+            [{"kind": "event_state", "event": "r9d_disable_target",
+              "page": "visible", "enabled": False}])
+        while [row["id"] for row in self.studio.events(MISSION)].index(
+                "r9d_off") > [row["id"] for row in self.studio.events(MISSION)].index(
+                    "r9d_disable_target"):
+            self.studio.move_event(MISSION, "r9d_off", -1)
+        battle = self.battle()
+        status = page_snapshot(battle, "r9d_disable_target")
+        self.assertFalse(status["enabled"]["visible"])
+        self.assertEqual(status["active_page"], "base")
+        self.assertEqual([row["page"] for row in battle.events
+                          if row["kind"] == "trigger" and
+                          row["id"] == "r9d_disable_target"], ["base"])
+        self.assertEqual(Battle.replay(battle.recording()).digest(),
+                         battle.digest())
+
     def test_repeat_never_fires_twice_at_same_tick_and_replays(self):
         self.studio.create(MISSION, "r9d_repeat", condition("tick", tick=0),
                            [action("message", text="Horloge")])
