@@ -1,0 +1,1 @@
+"""PyInstaller entry point for the standalone Qt 6 Player."""\nfrom drawtemp.player.qt_app import main\n\nif __name__ == "__main__":\n    raise SystemExit(main())\n

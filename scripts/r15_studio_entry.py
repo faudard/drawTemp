@@ -1,0 +1,1 @@
+"""PyInstaller entry point for the Qt 6 Map Studio."""\nfrom drawtemp.studio.map_editor import main\n\nif __name__ == "__main__":\n    raise SystemExit(main())\n
