@@ -31,6 +31,10 @@ def launch(content_path):
     )
     from drawtemp.sdk.r13_visual_metrics import build_visual_comparison
     from drawtemp.sdk.r13_ai_combat_visuals import build_combat_visuals
+    from drawtemp.sdk.r13_movement_heatmap import build_movement_heatmap
+    from drawtemp.studio.r13_replay_heatmap import (
+        MovementHeatmapPanel, ReplayTransport,
+    )
     from drawtemp.studio.r13_charts import R13ComparisonCharts
     from drawtemp.studio.r13_ai_combat_panel import R13AICombatPanel
     from drawtemp.sdk.r13_combat_lab import (
@@ -69,6 +73,7 @@ def launch(content_path):
             self.authoring = authoring
             self._approved_edits = None
             self._timeline_frames = []
+            self._replay_initial = None
             self.reference = None
             self.current = None
             self.inspection = None
@@ -191,8 +196,11 @@ def launch(content_path):
             self.outcomes.setHorizontalHeaderLabels([
                 "Seed", "Résultat", "CT ticks", "Commandes", "Activations", "Replay"])
             lab_layout.addWidget(self.outcomes, 1)
+            self.transport = ReplayTransport()
+            self.transport.stepChanged.connect(self._seek_replay)
+            lab_layout.addWidget(self.transport)
             lab_layout.addWidget(QLabel(
-                "Trace des commandes réelles (sélection automatique : première seed)"))
+                "Replay vérifié · commande 0 = état initial, ensuite positions réellement observées"))
             self.timeline = QTableWidget(0, 5)
             self.timeline.setHorizontalHeaderLabels([
                 "#", "Acteur", "Action", "Position", "Événements"])
@@ -205,6 +213,9 @@ def launch(content_path):
             self.combat_analytics = R13AICombatPanel()
             self.combat_analytics.stepSelected.connect(self._select_replay_step)
             self.tabs.addTab(self.combat_analytics, "Décisions IA · dégâts / soins")
+            self.heatmap_panel = MovementHeatmapPanel()
+            self.heatmap_panel.stepSelected.connect(self._select_replay_step)
+            self.tabs.addTab(self.heatmap_panel, "Heatmaps des déplacements")
             self._refresh(self.mission.currentText())
             if self.authoring is None:
                 self.status.setText(
@@ -215,6 +226,9 @@ def launch(content_path):
                 return
             # Any in-flight result belongs to an older mission snapshot.
             self._sequence += 1
+            self.transport.set_frames(0)
+            self._replay_initial = None
+            self.heatmap_panel.clear()
             self.run_button.setEnabled(True)
             self.trial.setEnabled(True)
             self.status.setText("Mission : " + mission_id)
@@ -472,6 +486,9 @@ def launch(content_path):
                 snapshot, mission, edits, seeds=seeds, max_commands=limit))
 
         def _start_simulation(self):
+            self.transport.set_frames(0)
+            self._replay_initial = None
+            self.heatmap_panel.clear()
             snapshot = deepcopy(self.content)
             mission = self.mission.currentText()
             seeds = tuple(range(1, self.seeds.value()+1))
@@ -524,6 +541,12 @@ def launch(content_path):
                 # Draft A/B has aggregate results but no command-level trace:
                 # never keep an older mission's AI/PV evidence visible.
                 self.combat_analytics.clear()
+                self.transport.set_frames(0)
+                self._replay_initial = None
+                self.heatmap_panel.clear()
+                self._timeline_frames = []
+                self.timeline.setRowCount(0)
+                self.current = None
                 self.tabs.setCurrentWidget(self.charts)
                 return
             self.current = result
@@ -532,6 +555,8 @@ def launch(content_path):
             # The diagnostics belong to the trace seed only, never a fictive
             # average tactical timeline for the other batch seeds.
             self.combat_analytics.set_report(build_combat_visuals(result["trace"]))
+            self.heatmap_panel.set_report(build_movement_heatmap(result["trace"]))
+            self._replay_initial = result["trace"]["initial"]["units"]
             stats = {
                 "mission": report["mission"], "runs": report["runs"],
                 "win_rate": report["victory_rate"],
@@ -565,6 +590,8 @@ def launch(content_path):
                           [e["kind"] for e in frame["events"]]]
                 for col, value in enumerate(fields):
                     self.timeline.setItem(row, col, QTableWidgetItem(str(value)))
+            self.transport.set_frames(len(rows))
+            self._seek_replay(0)
 
         def _show_simulation_charts(self, report):
             """Avoid misleading A/B plots when a loaded baseline mismatches."""
@@ -596,16 +623,29 @@ def launch(content_path):
                     break
 
         def _select_replay_step(self, step):
-            """Navigate to the exact canonical command from the AI/HP charts."""
-            if 1 <= step <= self.timeline.rowCount():
-                self.timeline.selectRow(step - 1)
-                self.timeline.scrollToItem(
-                    self.timeline.item(step - 1, 0))
-                self.status.setText(
-                    f"Replay : commande #{step} · source des courbes IA/PV")
+            """Navigate to the exact canonical command from linked visualizations."""
+            if 0 <= step <= self.transport.maximum:
+                self.transport.seek(step, notify=False)
+                self._seek_replay(step)
+
+        def _seek_replay(self, step):
+            if self._replay_initial is None or not 0 <= step <= len(self._timeline_frames):
+                return
+            if step == 0:
+                self.timeline.clearSelection()
+                initial_actors = [
+                    {"id": unit["id"], "team": unit["team"],
+                     "cell": unit["pos"], "alive": unit["alive"]}
+                    for unit in self._replay_initial
+                ]
+                self._draw_map(self.inspection, actors=initial_actors)
+                self.combat_analytics.select_step(0)
+                self.heatmap_panel.set_step(0)
+                self.status.setText("Replay : état initial (commande 0)")
             else:
-                self.status.setText(
-                    f"Commande #{step} hors de la timeline chargée")
+                self.timeline.selectRow(step - 1)
+                self.timeline.scrollToItem(self.timeline.item(step - 1, 0))
+                self._scrub_timeline()
 
         def _scrub_timeline(self):
             """Project recorded positions without predicting future moves."""
@@ -614,7 +654,9 @@ def launch(content_path):
                     or index >= len(self._timeline_frames)):
                 return
             frame = self._timeline_frames[index]
+            self.transport.seek(frame["index"], notify=False)
             self.combat_analytics.select_step(frame["index"])
+            self.heatmap_panel.set_step(frame["index"])
             # Draw ONLY units actually alive in this replay frame, including
             # units spawned during the encounter. Never show a dead unit at
             # its original authored position.
@@ -688,6 +730,7 @@ def launch(content_path):
                 if answer != QMessageBox.StandardButton.Yes:
                     event.ignore()
                     return
+            self.transport.pause()
             event.accept()
 
         def _show_error(self, error):
