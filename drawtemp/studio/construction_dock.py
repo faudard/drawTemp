@@ -138,7 +138,7 @@ class ConstructionDock(QDockWidget):
         self.redo.clicked.connect(lambda: self._history(self.workspace.redo))
         self.refresh()
 
-    def on_renderer_hit(self, structure_id, anchor, cell, part):
+    def on_renderer_hit(self, structure_id, anchor, cell, part, level=0):
         """Bind to renderer click handling *after* real R3 geometry picking.
 
         A null ID clears selection. All other clicks are revalidated against
@@ -149,7 +149,7 @@ class ConstructionDock(QDockWidget):
                 self.workspace.select(None)
             else:
                 self.workspace.select(ConstructionPick(
-                    structure_id, tuple(anchor), tuple(cell), part))
+                    structure_id, tuple(anchor), tuple(cell), part, level))
         except (ValueError, TypeError) as exc:
             self.workspace.clear_selection()
             QMessageBox.warning(self, "Sélection invalide", str(exc))
