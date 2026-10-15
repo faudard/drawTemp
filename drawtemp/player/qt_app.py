@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from drawtemp.core import Content, GameProject
+from drawtemp.assets.runtime import PresentationAssets
 from drawtemp.player.controller import PlayerController
 from drawtemp.player.animation_controller import AnimationDirector
 from drawtemp.render.iso_scene import scene_from_mission, scene_from_exploration
@@ -23,6 +24,7 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         raise ValueError("--reference cannot be combined with authored content")
     if project_path is not None and content_path is None:
         raise ValueError("--project requires --content")
+    project_manifest = None
     if reference:
         from drawtemp.sdk.reference import reference_project
         content, project = reference_project()
@@ -37,10 +39,12 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         data = json.loads(source.read_text(encoding="utf-8"))
         content = Content.from_dict(data, rules=authored_rules_for_document(data))
         project = GameProject.load(manifest, content)
+        project_manifest = manifest
     else:
         resource = files("sporebound").joinpath("content")
         content = Content.load(resource.joinpath("jeanne.json"))
         project = GameProject.load(resource.joinpath("jeanne.game.json"), content)
+        project_manifest = Path(str(resource.joinpath("jeanne.game.json"))).resolve()
     campaign = campaign_id or project.campaigns[0]["id"]
     if project.campaign(campaign) is None:
         raise ValueError("Unknown campaign: " + str(campaign))
@@ -54,7 +58,9 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
                      "authored" / identity / campaign)
     else:
         directory = Path.home() / ".drawtemp" / "player5" / campaign
-    return PlayerController(content, project, campaign, directory)
+    controller = PlayerController(content, project, campaign, directory)
+    controller.asset_project_path = project_manifest
+    return controller
 
 
 def scene_for_player(controller):
@@ -267,7 +273,10 @@ def main(argv=None):
         controller.new_game()
         if controller.state()["screen"] != "exploration":
             parser.error("No exploration stage in the current campaign")
-    renderer = make_controller(scene_for_player(controller))
+    presentation = (PresentationAssets.for_project(
+        controller.project, controller.asset_project_path)
+        if controller.asset_project_path is not None else None)
+    renderer = make_controller(scene_for_player(controller), assets=presentation)
     bridge = create_bridge(controller, renderer)
     engine = QQmlApplicationEngine()
     engine.setInitialProperties({"smokeMode": args.smoke})

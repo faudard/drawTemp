@@ -9,7 +9,8 @@ import argparse
 from pathlib import Path
 import sys
 
-from drawtemp.core import Content, RuleError
+from drawtemp.core import Content, GameProject, RuleError
+from drawtemp.assets.runtime import PresentationAssets
 from drawtemp.render.iso_scene import scene_from_mission
 from drawtemp.render.qt_viewport import make_controller
 from drawtemp.sdk.authoring import AuthoringError
@@ -37,9 +38,12 @@ except ImportError:
 
 
 class MapWindow(QMainWindow):
-    def __init__(self, studio=None):
+    def __init__(self, studio=None, *, project_path=None):
         super().__init__()
         self.studio = studio or MapStudio.reference()
+        # The asset root belongs to the GameProject manifest, never cwd.
+        self.asset_project_path = Path(project_path).resolve() if project_path else None
+        self.asset_browser_dock = None
         self.setWindowTitle("DrawTemp 5.0 — Éditeur de cartes R5")
         self.resize(1400, 820)
         self.stroke = []
@@ -80,7 +84,7 @@ class MapWindow(QMainWindow):
 
         # R3 controller is the only source of camera, hit-testing and render
         # delegates. Its scene is reconstructed from the validated R1 Content.
-        self.renderer = make_controller(self._render_scene())
+        self.renderer = make_controller(self._render_scene(), assets=self._visual_assets())
         viewport = QQuickWidget(self)
         viewport.setResizeMode(QQuickWidget.SizeRootObjectToView)
         viewport.rootContext().setContextProperty("renderer", self.renderer)
@@ -132,8 +136,35 @@ class MapWindow(QMainWindow):
                                 "Molette : zoom • bouton droit : déplacement.\n"
                                 "Les changements sont validés avant application."))
         self._dock("Inspecteur", right, Qt.RightDockWidgetArea)
+        self._install_asset_browser()
         self.statusBar().showMessage("Viewport Qt Quick partagé R3 · édition R5")
         self.refresh_maps()
+
+    def _visual_assets(self):
+        if self.asset_project_path is None:
+            return None
+        documents = self.studio.snapshot()
+        content = Content.from_dict(documents["content"])
+        project = GameProject.from_dict(documents["project"], content)
+        return PresentationAssets.for_project(project, self.asset_project_path)
+
+    def _install_asset_browser(self):
+        """Use R4's real collection/preview widget inside the Qt R5 Studio."""
+        if self.asset_project_path is None:
+            return
+        from drawtemp.assets.qt_browser import AssetBrowser
+        documents = self.studio.snapshot()
+        content = Content.from_dict(documents["content"])
+        project = GameProject.from_dict(documents["project"], content)
+        browser = AssetBrowser(project.asset_registry(), self.asset_project_path.parent,
+                               parent=self)
+        if self.asset_browser_dock is None:
+            dock = QDockWidget("Ressources / Assets", self)
+            dock.setObjectName("DrawTemp-R4-Assets")
+            self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+            self.asset_browser_dock = dock
+        self.asset_browser_dock.setWidget(browser)
+        self.asset_browser = browser
 
     def _dock(self, title, widget, area):
         dock = QDockWidget(title, self)
@@ -206,6 +237,9 @@ class MapWindow(QMainWindow):
             return
         def open_document():
             self.studio = MapStudio.open(path)
+            self.asset_project_path = Path(path).resolve().with_suffix(".game.json")
+            self.renderer.replace_assets(self._visual_assets())
+            self._install_asset_browser()
             self.refresh_maps()
         self._safe(open_document)
 
@@ -356,7 +390,8 @@ def main(argv=None):
         parser.error('Qt 6 required: pip install ".[qt6]"')
     app = QApplication([sys.argv[0]])
     studio = MapStudio.open(args.content) if args.content else MapStudio.reference()
-    window = MapWindow(studio)
+    window = MapWindow(studio, project_path=args.content.with_suffix(".game.json")
+                       if args.content else None)
     window.show()
     if args.smoke:
         QTimer.singleShot(100, app.quit)

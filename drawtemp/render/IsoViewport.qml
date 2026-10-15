@@ -36,6 +36,14 @@ Item {
         }
     }
 
+    // Independent visual clock: no CT, tactical RNG or save state is changed.
+    Timer {
+        interval: 125
+        repeat: true
+        running: renderer.animatedAssets && root.showActors
+        onTriggered: renderer.advanceVisual(125)
+    }
+
     // Projection, clipping, depth and atlas coordinates are supplied by R3.
     // Delegates use Qt Quick scene-graph nodes; never QML Canvas or CPU paint.
     Repeater {
@@ -51,9 +59,9 @@ Item {
                      (!isActor || root.concealedActorIds.indexOf(row.id) < 0)
             sourceComponent: isTile ? tileComponent : (isActor ? actorComponent : objectComponent)
             x: root.width / 2 + root.camera.panX + row.sx * scaleFactor
-               - (isTile ? 48 : isActor ? 20 : 15) * scaleFactor
+               - (isTile ? 48 : isActor ? (row.imageUrl ? row.pivotX : 20) : 15) * scaleFactor
             y: root.height / 2 + root.camera.panY + row.sy * scaleFactor
-               - (isTile ? 24 : isActor ? 68 : 40) * scaleFactor
+               - (isTile ? 24 : isActor ? (row.imageUrl ? row.pivotY : 68) : 40) * scaleFactor
             scale: scaleFactor
             transformOrigin: Item.TopLeft
             z: row.zOrder
@@ -201,26 +209,45 @@ Item {
         id: actorComponent
         Item {
             property var actor: parent.row
-            width: 40; height: 68
+            readonly property bool hasArt: !!actor.imageUrl
+            width: hasArt ? actor.frameWidth : 40
+            height: hasArt ? actor.frameHeight : 68
+            Image {
+                id: resolvedSprite
+                visible: parent.hasArt && status !== Image.Error
+                width: parent.width
+                height: parent.height
+                source: parent.hasArt ? actor.imageUrl : ""
+                sourceClipRect: parent.hasArt
+                    ? Qt.rect(actor.atlasX, actor.atlasY, actor.frameWidth, actor.frameHeight)
+                    : Qt.rect(0, 0, 0, 0)
+                fillMode: Image.Stretch
+                smooth: false
+                asynchronous: false
+                cache: true
+            }
             Rectangle {
+                visible: !parent.hasArt || resolvedSprite.status === Image.Error
                 width: 34; height: 9; radius: 5
                 x: 3; y: 58
                 color: "#10191c"; opacity: 0.45
             }
             Rectangle {
+                visible: !parent.hasArt || resolvedSprite.status === Image.Error
                 width: 28; height: 38; radius: 9
                 x: 6; y: 19
                 color: actor.alive ? (actor.team === "enemy" ? "#af6556" : "#496cbb") : "#777c85"
                 border.width: 2; border.color: "#e2d7c4"
             }
             Rectangle {
+                visible: !parent.hasArt || resolvedSprite.status === Image.Error
                 width: 19; height: 19; radius: 10
                 x: 10; y: 5
                 color: "#eacaa1"; border.color: "#62504b"
             }
             Text {
                 text: actor.label || actor.id
-                x: -30; y: -15
+                x: (parent.width - 100) / 2; y: -15
                 width: 100; horizontalAlignment: Text.AlignHCenter
                 color: "#fff3df"; font.pixelSize: 11
                 style: Text.Outline; styleColor: "#1e2930"
