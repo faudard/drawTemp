@@ -6,7 +6,7 @@ mode issues one validated authoring link; lines do NOT become serialized nodes.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QBrush, QPen
+from PySide6.QtGui import QColor, QBrush, QPen, QPainter
 from PySide6.QtWidgets import (QGraphicsItem, QGraphicsRectItem, QGraphicsScene,
                                QGraphicsTextItem, QGraphicsView)
 
@@ -18,8 +18,7 @@ class EventGraphView(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setScene(QGraphicsScene(self))
-        self.setRenderHint(self.renderHints() | __import__(
-            "PySide6.QtGui", fromlist=["QPainter"]).QPainter.Antialiasing)
+        self.setRenderHint(QPainter.Antialiasing)
         self.setDragMode(QGraphicsView.RubberBandDrag)
         self._positions = {}
         self._cards = {}
