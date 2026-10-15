@@ -75,6 +75,36 @@ def flags(content, project):
     return dict(sorted((key, tuple(values)) for key, values in grouped.items()))
 
 
+def resource_usages(content, project, family, identifier):
+    """Semantic ID references in both canonical documents, not generic text hits."""
+    require(family in RENAMABLE, "Unsupported resource family")
+    if family == "flags":
+        return tuple(f"{use.document}{use.path}"
+                     for use in flag_usages(content, project)
+                     if use.identifier == identifier)
+    results = []
+    for document_name, document in (("Content", content), ("GameProject", project)):
+        for path, key, value, parent in _visit(document):
+            found = False
+            if family == "skills":
+                found = ((key == "skills" and (
+                    (isinstance(value, list) and identifier in value) or
+                    (isinstance(value, dict) and identifier in value))) or
+                    (key in ("skill", "skill_id") and value == identifier))
+            elif family == "jobs":
+                found = (key in ("job", "job_id") and value == identifier)
+                if (not found and key == "requires" and value == identifier and
+                        len(path) == 3 and path[0] == "jobs"):
+                    found = True
+            elif family == "equipment":
+                found = key == "item" and value == identifier
+            elif family == "archetypes":
+                found = key == "archetype" and value == identifier
+            if found:
+                results.append(document_name + _pointer(path))
+    return tuple(sorted(set(results)))
+
+
 def _identifier(new_id):
     require(isinstance(new_id, str) and 0 < len(new_id) <= 64
             and all(ch.isalnum() or ch in "_-" for ch in new_id)
@@ -203,6 +233,8 @@ class IntegrityEditor:
         selections = tuple(selections)
         require(bool(selections) and isinstance(fields, dict) and bool(fields),
                 "Choose resources and properties")
+        require(all(isinstance(row, tuple) and len(row) == 3 for row in selections),
+                "Invalid resource selection")
         require(len(set(selections)) == len(selections), "Duplicate selected resource")
         require(all(isinstance(row, tuple) and len(row) == 3
                     and row[0] in {"archetypes", "actors", "jobs", "skills", "equipment"}
