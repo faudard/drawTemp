@@ -111,6 +111,9 @@ class CommandPalette(QDialog):
         self.listing.setAccessibleName("Commandes disponibles")
         layout.addWidget(self.listing)
         self.search.textChanged.connect(self.update_list)
+        self.search.returnPressed.connect(
+            lambda: self.run_item(self.listing.currentItem())
+            if self.listing.currentItem() else None)
         self.listing.itemActivated.connect(self.run_item)
         self.update_list("")
         self.search.setFocus()
@@ -534,6 +537,9 @@ class StudioWindow(QMainWindow):
                 child.refresh_maps()
 
     def navigate(self, identifier):
+        if identifier == "actors" and "database" in self._models:
+            database = self._models["database"]
+            database.tree.setCurrentItem(database.tree.topLevelItem(1))
         if identifier not in WORKSPACES:
             raise ValueError("Unknown workspace: " + identifier)
         if identifier not in self.pages:
