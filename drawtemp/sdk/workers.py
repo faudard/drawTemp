@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from threading import Event, Lock, get_ident
 
 from drawtemp.sdk.authoring import AuthoringPlan, AuthoringSession
-from drawtemp.sdk.simulation import Simulation, SimulationError
+from drawtemp.sdk.simulation import Simulation
 
 
 class WorkQueueError(RuntimeError):
@@ -205,7 +205,7 @@ class SdkWorkQueue:
                     result = WorkResult(ticket, "ready", payload)
             except CancelledError:
                 result = WorkResult(ticket, "cancelled", error_code="cancelled")
-            except (SimulationError, Exception) as exc:
+            except Exception as exc:
                 result = WorkResult(ticket, "failed",
                                     error_code=getattr(exc, "code", "worker_failed"),
                                     message=str(exc))
@@ -221,6 +221,7 @@ class SdkWorkQueue:
         for job in self._jobs.values():
             job.cancelled.set()
             job.future.cancel()
+        self._jobs.clear()
         self._executor.shutdown(wait=False, cancel_futures=True)
 
     def __enter__(self):
