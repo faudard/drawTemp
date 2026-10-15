@@ -30,7 +30,9 @@ def launch(content_path):
         compare_draft, preview_authoring,
     )
     from drawtemp.sdk.r13_visual_metrics import build_visual_comparison
+    from drawtemp.sdk.r13_ai_combat_visuals import build_combat_visuals
     from drawtemp.studio.r13_charts import R13ComparisonCharts
+    from drawtemp.studio.r13_ai_combat_panel import R13AICombatPanel
     from drawtemp.sdk.r13_combat_lab import (
         compare_encounters, evaluate_variant, human_review,
         inspect_encounter, simulate_encounter, trace_timeline,
@@ -200,6 +202,9 @@ def launch(content_path):
             self.charts = R13ComparisonCharts()
             self.charts.seedSelected.connect(self._choose_chart_seed)
             self.tabs.addTab(self.charts, "Graphiques A/B")
+            self.combat_analytics = R13AICombatPanel()
+            self.combat_analytics.stepSelected.connect(self._select_replay_step)
+            self.tabs.addTab(self.combat_analytics, "Décisions IA · dégâts / soins")
             self._refresh(self.mission.currentText())
             if self.authoring is None:
                 self.status.setText(
@@ -260,6 +265,7 @@ def launch(content_path):
             self._timeline_frames = []
             self.timeline.setRowCount(0)
             self.charts.clear()
+            self.combat_analytics.clear()
 
         def _draw_map(self, inspected, positions=None, goals=None, actors=None):
             self.scene.clear()
@@ -520,6 +526,9 @@ def launch(content_path):
             self.current = result
             report = result["battle_lab"]
             self._show_simulation_charts(report)
+            # The diagnostics belong to the trace seed only, never a fictive
+            # average tactical timeline for the other batch seeds.
+            self.combat_analytics.set_report(build_combat_visuals(result["trace"]))
             stats = {
                 "mission": report["mission"], "runs": report["runs"],
                 "win_rate": report["victory_rate"],
@@ -541,7 +550,7 @@ def launch(content_path):
                            sample["replay_verified"]]
                 for col, value in enumerate(columns):
                     self.outcomes.setItem(row, col, QTableWidgetItem(str(value)))
-            rows = trace_timeline(result["trace"], limit=200)["frames"]
+            rows = trace_timeline(result["trace"], limit=5000)["frames"]
             self._timeline_frames = rows
             self.timeline.setRowCount(len(rows))
             for row, frame in enumerate(rows):
@@ -583,6 +592,18 @@ def launch(content_path):
                                 sample["commands"]))
                     break
 
+        def _select_replay_step(self, step):
+            """Navigate to the exact canonical command from the AI/HP charts."""
+            if 1 <= step <= self.timeline.rowCount():
+                self.timeline.selectRow(step - 1)
+                self.timeline.scrollToItem(
+                    self.timeline.item(step - 1, 0))
+                self.status.setText(
+                    f"Replay : commande #{step} · source des courbes IA/PV")
+            else:
+                self.status.setText(
+                    f"Commande #{step} hors de la timeline chargée")
+
         def _scrub_timeline(self):
             """Project recorded positions without predicting future moves."""
             index = self.timeline.currentRow()
@@ -590,6 +611,7 @@ def launch(content_path):
                     or index >= len(self._timeline_frames)):
                 return
             frame = self._timeline_frames[index]
+            self.combat_analytics.select_step(frame["index"])
             # Draw ONLY units actually alive in this replay frame, including
             # units spawned during the encounter. Never show a dead unit at
             # its original authored position.
