@@ -15,7 +15,7 @@ from sporebound.authoring import add_blank_mission, set_mission_properties
 from sporebound import story_authoring
 from sporebound.campaign_flow import audit_campaign, inspect_campaign
 from sporebound.campaign_flow_authoring import (
-    build_effect, change_condition, change_effect,
+    build_effect, change_condition, change_effect, condition_for,
 )
 from sporebound.campaign_flow_simulation import CampaignSimulation
 from sporebound.campaign_graph import inspect_graph, set_link
@@ -194,6 +194,22 @@ class CampaignStudio:
                 project, content, target, name, "replace",
                 kind=kind, key=key, value=value),
             "r10-condition")
+
+    def append_condition(self, target, name, kind, key, value):
+        """Extend a gate or ending with an AND leaf in one atomic history entry."""
+        def edit(content, project):
+            current = condition_for(project, target, name)
+            if current is None:
+                return change_condition(
+                    project, content, target, name, "replace",
+                    kind=kind, key=key, value=value)
+            if "all" not in current:
+                project = change_condition(
+                    project, content, target, name, "wrap", operator="all")
+            return change_condition(
+                project, content, target, name, "append",
+                kind=kind, key=key, value=value)
+        return self._project_edit(edit, "r10-condition-and")
 
     def remove_condition(self, target, name):
         return self._project_edit(
