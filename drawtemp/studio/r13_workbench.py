@@ -247,7 +247,7 @@ def launch(content_path):
             self.outcomes.setRowCount(0)
             self.timeline.setRowCount(0)
 
-        def _draw_map(self, inspected, positions=None):
+        def _draw_map(self, inspected, positions=None, goals=None):
             self.scene.clear()
             dims = inspected["profile"]["map"]
             # Preview bounded to 64 x 64; never a substitute for the iso renderer.
@@ -262,7 +262,7 @@ def launch(content_path):
                           "#344735" if tile.get("cover", 0) else "#283a35")
                     self.scene.addRect(x*cell, y*cell, cell, cell,
                                        QPen(QColor("#53635a")), QBrush(QColor(bg)))
-            for x, y in inspected["goal_cells"]:
+            for x, y in (goals if goals is not None else inspected["goal_cells"]):
                 if x < width and y < height:
                     self.scene.addRect(x*cell+2, y*cell+2, cell-4, cell-4,
                                        QPen(QColor("#eed063"), 2))
@@ -288,12 +288,138 @@ def launch(content_path):
                     updates[uid] = pos
             return updates
 
+        def _move_selected_unit(self, x, y):
+            row = self.units.currentRow()
+            if row < 0:
+                if self.units.rowCount() == 0:
+                    return
+                row = 0
+                self.units.selectRow(row)
+            for column, value in ((2, x), (3, y)):
+                self.units.item(row, column).setText(str(value))
+            try:
+                edits = self._read_editor_changes()
+                self._draw_map(self.inspection,
+                               edits.get("unit_positions"),
+                               edits.get("goal_cells"))
+            except (ValueError, TypeError):
+                pass
+            self._approved_edits = None
+            self.apply_button.setEnabled(False)
+
+        def _read_editor_changes(self):
+            mission = self.content.missions[self.mission.currentText()]
+            changes = {}
+            positions = self._read_placements()
+            if positions:
+                changes["unit_positions"] = positions
+            original = {u.id: u for u in mission.units}
+            overrides = {}
+            for row in range(self.units.rowCount()):
+                uid = self.units.item(row, 0).text()
+                fields = {}
+                for column, key in ((4, "weapon"), (5, "behavior")):
+                    value = self.units.item(row, column).text().strip()
+                    if value != getattr(original[uid], key):
+                        fields[key] = value
+                if fields:
+                    overrides[uid] = fields
+            if overrides:
+                changes["unit_overrides"] = overrides
+            objective = self.objective.currentText()
+            if objective != mission.objective:
+                changes["objective"] = objective
+            raw = self.goal_cells.text().strip()
+            goals = []
+            if raw:
+                for part in raw.split(";"):
+                    pieces = part.split(",")
+                    if len(pieces) != 2:
+                        raise ValueError("Chaque objectif doit avoir la forme x,y")
+                    goals.append([int(piece.strip()) for piece in pieces])
+            if goals != [list(c) for c in mission.goal]:
+                changes["goal_cells"] = goals
+            if self.target_ticks.value() != mission.target_ticks:
+                changes["target_ticks"] = self.target_ticks.value()
+            if self.protected.currentText() != mission.protected_id:
+                changes["protected_id"] = self.protected.currentText()
+            return changes
+
+        def _apply_draft(self):
+            if self.authoring is None or self._approved_edits is None:
+                self._show_error("Prévisualiser les modifications avant application")
+                return
+            try:
+                edits = self._read_editor_changes()
+                if edits != self._approved_edits:
+                    raise ValueError("Le formulaire a changé : relancer Prévisualiser")
+                plan = preview_authoring(
+                    self.authoring, self.mission.currentText(), edits)
+                if QMessageBox.question(
+                        self, "Appliquer R13",
+                        "Appliquer ce changement au projet en mémoire ? "
+                        "Il sera annulable et ne sera pas enregistré avant "
+                        "votre clic sur Enregistrer.") != QMessageBox.StandardButton.Yes:
+                    return
+                self.authoring.apply(plan)
+                self.content = Content.from_dict(
+                    self.authoring.snapshot().to_dict()["content"])
+                self._refresh(self.mission.currentText())
+                self.status.setText(
+                    "Modification appliquée en mémoire. Enregistrer pour écrire les deux fichiers.")
+            except (ValueError, AuthoringError, KeyError, TypeError) as exc:
+                self._show_error(str(exc))
+
+        def _undo(self):
+            if self.authoring is None:
+                return
+            try:
+                self.authoring.undo()
+                self.content = Content.from_dict(
+                    self.authoring.snapshot().to_dict()["content"])
+                self._refresh(self.mission.currentText())
+                self.status.setText("Modification annulée (non enregistrée)")
+            except (AuthoringError, ValueError) as exc:
+                self._show_error(str(exc))
+
+        def _redo(self):
+            if self.authoring is None:
+                return
+            try:
+                self.authoring.redo()
+                self.content = Content.from_dict(
+                    self.authoring.snapshot().to_dict()["content"])
+                self._refresh(self.mission.currentText())
+                self.status.setText("Modification rétablie (non enregistrée)")
+            except (AuthoringError, ValueError) as exc:
+                self._show_error(str(exc))
+
+        def _save_authoring(self):
+            if self.authoring is None:
+                return
+            try:
+                if not self.authoring.snapshot().dirty:
+                    self.status.setText("Aucune modification à enregistrer")
+                    return
+                if QMessageBox.question(
+                        self, "Enregistrer la mission",
+                        "Enregistrer Content et GameProject de façon atomique ? "
+                        "En cas de modification externe, le SDK refusera l'écrasement."
+                        ) != QMessageBox.StandardButton.Yes:
+                    return
+                paths = self.authoring.save()
+                self.status.setText(
+                    "Projet enregistré : " + ", ".join(str(p) for p in paths))
+            except (AuthoringError, OSError) as exc:
+                self._show_error(str(exc))
+
         def _submit(self, operation, fn):
             self._sequence += 1
             seq = self._sequence
             self.status.setText("Calcul en cours : " + operation)
             self.run_button.setEnabled(False)
             self.trial.setEnabled(False)
+            self.apply_button.setEnabled(False)
 
             def work():
                 try:
@@ -306,19 +432,20 @@ def launch(content_path):
 
         def _start_trial(self):
             try:
-                positions = self._read_placements()
-            except ValueError:
-                self._show_error("Coordonnées X/Y : entiers requis")
+                edits = self._read_editor_changes()
+                if not edits:
+                    raise ValueError("Aucune modification à prévisualiser")
+            except (ValueError, TypeError, KeyError) as exc:
+                self._show_error(str(exc))
                 return
-            # Snapshot ALL widget state on the GUI thread. Worker code only
-            # receives Python values and immutable authoring copies.
+            self._approved_edits = None
+            # Snapshot Qt state BEFORE starting the worker thread.
             snapshot = deepcopy(self.content)
             mission = self.mission.currentText()
             seeds = tuple(range(1, self.seeds.value()+1))
             limit = self.limit.value()
-            self._submit("variante", lambda: evaluate_variant(
-                snapshot, mission, {"unit_positions": positions},
-                seeds=seeds, max_commands=limit))
+            self._submit("variante", lambda: compare_draft(
+                snapshot, mission, edits, seeds=seeds, max_commands=limit))
 
         def _start_simulation(self):
             snapshot = deepcopy(self.content)
@@ -337,15 +464,36 @@ def launch(content_path):
             operation, result = payload
             self.status.setText("Terminé : " + operation)
             if operation == "variante":
-                cases = result["cases"]
-                self.trial_result.setPlainText(json.dumps(
-                    {"cases": [{"id": c["id"], "victory_rate": c["report"]["victory_rate"],
-                                "commands_p95": c["report"]["commands_p95"]}
-                               for c in cases]}, indent=2, ensure_ascii=False))
                 try:
-                    self._draw_map(self.inspection, self._read_placements())
-                except ValueError:
-                    pass
+                    actual = self._read_editor_changes()
+                except (ValueError, TypeError, KeyError):
+                    actual = None
+                if (self.mission.currentText() != result["mission"]
+                        or actual != result["edits"]):
+                    self.trial_result.setPlainText(
+                        "Prévisualisation obsolète : formulaire modifié pendant le calcul.")
+                    self._approved_edits = None
+                    self.apply_button.setEnabled(False)
+                    return
+                self._approved_edits = deepcopy(result["edits"])
+                self.apply_button.setEnabled(self.authoring is not None)
+                old, new = result["baseline"], result["candidate"]
+                self.trial_result.setPlainText(json.dumps({
+                    "mission": result["mission"],
+                    "victoire_avant": old["victory_rate"],
+                    "victoire_après": new["victory_rate"],
+                    "ticks_p95_avant": old["ticks_p95"],
+                    "ticks_p95_après": new["ticks_p95"],
+                    "commandes_p95_avant": old["commands_p95"],
+                    "commandes_p95_après": new["commands_p95"],
+                    "replays_verified": result["replays_verified"],
+                    "objectif_modifié": result["objective_changed"],
+                    "regression": result["comparison"]["issues"],
+                    "revue_humaine_requise": result["comparison"]["human_signoff_required"],
+                }, indent=2, ensure_ascii=False))
+                self._draw_map(self.inspection,
+                               actual.get("unit_positions"),
+                               actual.get("goal_cells"))
                 return
             self.current = result
             report = result["battle_lab"]
@@ -437,8 +585,14 @@ def launch(content_path):
             QMessageBox.warning(self, "DrawTemp R13", error)
 
     content = Content.load(content_path)
+    try:
+        authoring = AuthoringSession.open(content_path)
+    except (AuthoringError, OSError, ValueError):
+        # A standalone Content may not have a companion .game.json; this
+        # remains a read-only experiment workbench, never a fake save path.
+        authoring = None
     app = QApplication.instance() or QApplication([])
-    window = Workbench(content)
+    window = Workbench(content, authoring)
     window.show()
     # Keep a reference while the caller's QApplication is alive.
     app.r13_workbench = window
