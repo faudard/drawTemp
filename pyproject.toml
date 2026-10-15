@@ -15,6 +15,7 @@ art = ["Pillow>=10"]
 
 [project.scripts]
 drawtemp-qt6 = "drawtemp.platform.qt_bootstrap:main"
+drawtemp-migrate5 = "drawtemp.sdk.legacy_migration:main"
 drawtemp-studio5 = "drawtemp.studio.qt_shell:main"
 drawtemp-iso5 = "drawtemp.render.qt_viewport:main"
 drawtemp-event-studio = "drawtemp.studio.event_studio:main"
@@ -26,7 +27,7 @@ drawtemp-qt6-database = "drawtemp.studio.rpg_database_qt:main"
 drawtemp-player5 = "drawtemp.player.qt_app:main"
 drawtemp-cinematics-qt6 = "drawtemp.platform.qt_cinematics:main"
 drawtemp = "sporebound.__main__:main"
-sporebound = "sporebound.__main__:main"
+sporebound = "drawtemp.legacy_alias:main"
 
 [tool.setuptools.packages.find]
 include = ["sporebound*", "drawtemp*"]
