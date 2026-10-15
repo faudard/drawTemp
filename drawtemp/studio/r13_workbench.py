@@ -64,6 +64,7 @@ def launch(content_path):
             self.content = content
             self.authoring = authoring
             self._approved_edits = None
+            self._timeline_frames = []
             self.reference = None
             self.current = None
             self.inspection = None
@@ -191,6 +192,7 @@ def launch(content_path):
             self.timeline = QTableWidget(0, 5)
             self.timeline.setHorizontalHeaderLabels([
                 "#", "Acteur", "Action", "Position", "Événements"])
+            self.timeline.itemSelectionChanged.connect(self._scrub_timeline)
             lab_layout.addWidget(self.timeline, 1)
             self._refresh(self.mission.currentText())
             if self.authoring is None:
@@ -249,6 +251,7 @@ def launch(content_path):
             self.current = None
             self.summary.clear()
             self.outcomes.setRowCount(0)
+            self._timeline_frames = []
             self.timeline.setRowCount(0)
 
         def _draw_map(self, inspected, positions=None, goals=None):
@@ -523,6 +526,7 @@ def launch(content_path):
                 for col, value in enumerate(columns):
                     self.outcomes.setItem(row, col, QTableWidgetItem(str(value)))
             rows = trace_timeline(result["trace"], limit=200)["frames"]
+            self._timeline_frames = rows
             self.timeline.setRowCount(len(rows))
             for row, frame in enumerate(rows):
                 actor = next((u for u in frame["positions"]
@@ -533,6 +537,20 @@ def launch(content_path):
                           [e["kind"] for e in frame["events"]]]
                 for col, value in enumerate(fields):
                     self.timeline.setItem(row, col, QTableWidgetItem(str(value)))
+
+        def _scrub_timeline(self):
+            """Project recorded positions without predicting future moves."""
+            index = self.timeline.currentRow()
+            if (self.inspection is None or index < 0
+                    or index >= len(self._timeline_frames)):
+                return
+            frame = self._timeline_frames[index]
+            positions = {unit["id"]: unit["cell"]
+                         for unit in frame["positions"] if unit["alive"]}
+            self._draw_map(self.inspection, positions)
+            self.status.setText(
+                "Replay : action #{} · {} · {}".format(
+                    frame["index"], frame["actor"], frame["command"]["kind"]))
 
         def _failed(self, sequence, error):
             if sequence == self._sequence:
