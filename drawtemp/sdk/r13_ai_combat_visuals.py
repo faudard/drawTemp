@@ -7,7 +7,6 @@ Damage/healing amounts are the actual emitted engine events (post mitigation).
 from __future__ import annotations
 
 from collections import Counter
-from math import isfinite
 
 from sporebound.encounter_balance6 import ai_decision_analytics
 from sporebound.model import require
