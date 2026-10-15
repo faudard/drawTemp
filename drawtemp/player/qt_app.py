@@ -44,6 +44,8 @@ def main(argv=None):
     parser.add_argument("--smoke", action="store_true", help="Load the QML root and quit")
     parser.add_argument("--reference", action="store_true",
                         help="Run the deterministic R0 reference campaign")
+    parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration"),
+                        default="title", help="Exercise a real game scene during Qt smoke")
     parser.add_argument("--save-dir", type=Path, help="Separate persistent save directory")
     args = parser.parse_args(argv)
 
@@ -153,6 +155,19 @@ def main(argv=None):
 
     app = QGuiApplication([sys.argv[0]])
     controller = build_controller(save_dir=args.save_dir, reference=args.reference)
+    if args.smoke and args.smoke_scene == "battle":
+        if not args.reference:
+            parser.error("--smoke-scene battle requires --reference")
+        from drawtemp.sdk.reference import MISSION
+        controller.new_game()
+        controller.choose("enter")
+        controller.start_mission(MISSION)
+    elif args.smoke and args.smoke_scene == "exploration":
+        if args.reference:
+            parser.error("--smoke-scene exploration requires packaged campaign")
+        controller.new_game()
+        if controller.state()["screen"] != "exploration":
+            parser.error("No exploration stage in the current campaign")
     renderer = make_controller(scene_for_player(controller))
     bridge = PlayerBridge(controller, renderer)
     engine = QQmlApplicationEngine()
