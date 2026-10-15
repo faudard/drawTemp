@@ -10,7 +10,8 @@ from collections import Counter
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QPushButton, QSlider, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QHBoxLayout, QLabel, QPushButton, QSlider,
+    QVBoxLayout, QWidget,
 )
 
 
@@ -292,6 +293,7 @@ class MovementHeatmapPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.report = None
+        self._replay_step = 0
         layout = QVBoxLayout(self)
         controls = QHBoxLayout()
         layout.addLayout(controls)
@@ -306,6 +308,13 @@ class MovementHeatmapPanel(QWidget):
             controls.addWidget(QLabel(caption))
             controls.addWidget(combo)
             combo.currentIndexChanged.connect(self._changed_filter)
+        self.full_battle = QCheckBox("Toute la bataille")
+        self.full_battle.setChecked(True)
+        self.full_battle.setToolTip(
+            "Afficher les déplacements de toutes les commandes, "
+            "ou décocher pour suivre les commandes lues.")
+        self.full_battle.toggled.connect(self._change_extent)
+        controls.addWidget(self.full_battle)
         self.canvas = HeatmapCanvas()
         self.canvas.cellSelected.connect(self.stepSelected.emit)
         layout.addWidget(self.canvas, 1)
@@ -317,6 +326,7 @@ class MovementHeatmapPanel(QWidget):
 
     def clear(self):
         self.report = None
+        self._replay_step = 0
         self.canvas.set_report(None)
         for combo in (self.team, self.unit, self.floor):
             combo.blockSignals(True)
@@ -328,6 +338,7 @@ class MovementHeatmapPanel(QWidget):
         if model.get("kind") != "r13_movement_heatmap":
             raise ValueError("Validated replay movement model required")
         self.report = model
+        self._replay_step = 0
         for combo in (self.team, self.unit, self.floor):
             combo.blockSignals(True)
             combo.clear()
@@ -344,6 +355,7 @@ class MovementHeatmapPanel(QWidget):
             combo.blockSignals(False)
         self.mode.setCurrentIndex(0)
         self.canvas.set_report(model)
+        self.canvas.set_step(model["commands"] if self.full_battle.isChecked() else 0)
         self._changed_filter()
         self.description.setText(
             f"Mission {model['mission']} · seed {model['seed']} · "
@@ -361,5 +373,14 @@ class MovementHeatmapPanel(QWidget):
             level=self.floor.currentData() if self.floor.currentData() is not None else 0,
             mode=self.mode.currentData() or "moves")
 
+    def _change_extent(self, _checked=None):
+        if self.report is None:
+            return
+        self.canvas.set_step(
+            self.report["commands"] if self.full_battle.isChecked()
+            else self._replay_step)
+
     def set_step(self, step):
-        self.canvas.set_step(step)
+        self._replay_step = step
+        if not self.full_battle.isChecked():
+            self.canvas.set_step(step)
