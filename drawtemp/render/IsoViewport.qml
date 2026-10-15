@@ -2,12 +2,27 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Shapes
 
+// R3: sole scenegraph-backed terrain/actor/object viewport for R3, R5 and R12.
+// All three clients inject the same Python RendererController and scene schema.
+// Only input policy differs: pan/inspect, paint gestures, or tactical selection.
 Item {
     id: root
     width: 960
     height: 640
     clip: true
+    property string interactionMode: "pan"  // pan | edit | select
+    property bool showGrid: true
+    property bool showBlocked: false
+    property bool showHeights: false
+    property bool showActors: true
+    property bool showLegend: interactionMode === "pan"
+    property var hoveredCell: ({})
     readonly property var camera: renderer.cameraState
+    signal strokeStarted(int x, int y)
+    signal strokeMoved(int x, int y)
+    signal strokeFinished(int x, int y)
+    signal strokeCancelled()
+    signal cellSelected(int x, int y)
 
     Rectangle {
         anchors.fill: parent
@@ -18,8 +33,8 @@ Item {
         }
     }
 
-    // Source coordinates and depth order come from the shared Python scene model.
-    // Delegates are QSG-backed Shape/Image/Rectangle nodes, not Canvas painting.
+    // Projection, clipping, depth and atlas coordinates are supplied by R3.
+    // Delegates use Qt Quick scene-graph nodes; never QML Canvas or CPU paint.
     Repeater {
         model: renderer.items
         delegate: Loader {
@@ -29,6 +44,7 @@ Item {
             property real scaleFactor: root.camera.zoom
             property bool isTile: row.kind === "tile"
             property bool isActor: row.kind === "actor"
+            visible: !isActor || root.showActors
             sourceComponent: isTile ? tileComponent : (isActor ? actorComponent : objectComponent)
             x: root.width / 2 + root.camera.panX + row.sx * scaleFactor
                - (isTile ? 48 : isActor ? 20 : 15) * scaleFactor
@@ -44,13 +60,15 @@ Item {
         id: tileComponent
         Item {
             property var tile: parent.row
+            readonly property bool highlighted: tile.selected ||
+                (root.hoveredCell.x === tile.x && root.hoveredCell.y === tile.y)
             width: 96
             height: 48
             Shape {
                 anchors.fill: parent
                 ShapePath {
-                    strokeWidth: tile.selected ? 2 : 0.5
-                    strokeColor: tile.selected ? "#ffda77" : tile.color
+                    strokeWidth: highlighted ? 2.5 : (root.showGrid ? 0.8 : 0)
+                    strokeColor: highlighted ? "#ffda77" : "#283b3d"
                     fillColor: tile.color
                     startX: 48; startY: 0
                     PathLine { x: 96; y: 24 }
@@ -69,18 +87,50 @@ Item {
                 asynchronous: false
             }
             Shape {
-                visible: tile.selected
+                visible: highlighted || tile.goal
                 anchors.fill: parent
                 ShapePath {
-                    strokeWidth: 3
-                    strokeColor: "#ffe080"
-                    fillColor: "transparent"
+                    strokeWidth: highlighted ? 3 : 2
+                    strokeColor: highlighted ? "#ffe080" : "#e7c770"
+                    fillColor: highlighted ? "#22ffe080" : "transparent"
                     startX: 48; startY: 0
                     PathLine { x: 96; y: 24 }
                     PathLine { x: 48; y: 48 }
                     PathLine { x: 0; y: 24 }
                     PathLine { x: 48; y: 0 }
                 }
+            }
+            Rectangle {
+                visible: tile.feature === "tree"
+                width: 15; height: 36; x: 40; y: -22
+                radius: 6; color: "#3c7452"
+                border.color: "#b7c991"; border.width: 1
+            }
+            Rectangle {
+                visible: tile.feature === "stone_wall"
+                width: 33; height: 20; x: 30; y: 0
+                color: "#68737c"; border.color: "#bac0b9"
+            }
+            Rectangle {
+                visible: root.showBlocked && tile.blocked
+                width: 11; height: 11; x: 43; y: 19; radius: 2
+                color: "#cf655c"; border.color: "#f7d4af"
+            }
+            Rectangle {
+                visible: tile.hazard > 0
+                width: 10; height: 10; radius: 5; x: 43; y: 10
+                color: "#e98649"
+            }
+            Rectangle {
+                visible: tile.cover > 0
+                width: 8; height: 8; x: 53; y: 23; radius: 2
+                color: "#6aa68c"
+            }
+            Text {
+                visible: root.showHeights && tile.height > 0
+                text: tile.height
+                x: 58; y: 6; color: "#fff2d5"
+                font.bold: true; font.pixelSize: 12
             }
         }
     }
@@ -98,18 +148,16 @@ Item {
             Rectangle {
                 width: 28; height: 38; radius: 9
                 x: 6; y: 19
-                color: actor.alive ? (actor.team === "player" ? "#496cbb" : "#af6556") : "#777c85"
-                border.width: 2
-                border.color: "#e2d7c4"
+                color: actor.alive ? (actor.team === "enemy" ? "#af6556" : "#496cbb") : "#777c85"
+                border.width: 2; border.color: "#e2d7c4"
             }
             Rectangle {
                 width: 19; height: 19; radius: 10
                 x: 10; y: 5
-                color: "#eacaa1"
-                border.color: "#62504b"
+                color: "#eacaa1"; border.color: "#62504b"
             }
             Text {
-                text: actor.id
+                text: actor.label || actor.id
                 x: -30; y: -15
                 width: 100; horizontalAlignment: Text.AlignHCenter
                 color: "#fff3df"; font.pixelSize: 11
@@ -126,18 +174,22 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 radius: 5
-                color: entry.label === "door" ? "#866445" : "#6b807c"
+                color: entry.label === "door" ? "#866445" :
+                       entry.label === "marker" ? "#d5a35f" : "#6b807c"
                 border.color: "#d0bd92"; border.width: 2
             }
             Text {
                 anchors.centerIn: parent
-                text: entry.label === "door" ? "P" : entry.label === "switch" ? "L" : "•"
+                text: entry.label === "door" ? "P" :
+                      entry.label === "switch" ? "L" :
+                      entry.label === "marker" ? "!" : "•"
                 color: "#faf0de"; font.bold: true
             }
         }
     }
 
     Rectangle {
+        visible: root.showLegend
         height: 34; width: legend.implicitWidth + 28
         anchors { left: parent.left; top: parent.top; margins: 14 }
         radius: 7; color: "#aa121d2a"
@@ -145,31 +197,73 @@ Item {
             id: legend
             anchors.centerIn: parent
             color: "#f7efd9"; font.pixelSize: 13
-            text: "Jeanne d'Arc • " + Math.round(root.camera.zoom * 100) + "%  |  Glisser : déplacer  •  Molette : zoom"
+            text: "R3 · ISO " + Math.round(root.camera.zoom * 100) +
+                  "%  |  Glisser : pan  •  Molette : zoom"
         }
     }
 
     MouseArea {
+        id: pointer
         anchors.fill: parent
+        hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         property real lastX: 0
         property real lastY: 0
         property real downX: 0
         property real downY: 0
+        property bool editing: false
+        property var lastCell: ({})
+
+        function valid(cell) {
+            return cell && cell.x !== undefined && cell.y !== undefined
+        }
         onPressed: function(mouse) {
             lastX = mouse.x; lastY = mouse.y
             downX = mouse.x; downY = mouse.y
-        }
-        onPositionChanged: function(mouse) {
-            if (mouse.buttons !== Qt.NoButton) {
-                renderer.panBy(mouse.x - lastX, mouse.y - lastY)
-                lastX = mouse.x; lastY = mouse.y
+            editing = false
+            if (mouse.button === Qt.LeftButton && root.interactionMode === "edit") {
+                var cell = renderer.cellAt(mouse.x, mouse.y)
+                if (valid(cell)) {
+                    editing = true
+                    lastCell = cell
+                    root.strokeStarted(cell.x, cell.y)
+                }
             }
         }
-        onReleased: function(mouse) {
-            if (Math.abs(mouse.x - downX) + Math.abs(mouse.y - downY) < 6)
-                renderer.pickAt(mouse.x, mouse.y)
+        onPositionChanged: function(mouse) {
+            var cell = renderer.cellAt(mouse.x, mouse.y)
+            root.hoveredCell = valid(cell) ? cell : ({})
+            var panning = (mouse.buttons & Qt.RightButton) ||
+                          (root.interactionMode !== "edit" && (mouse.buttons & Qt.LeftButton))
+            if (panning) {
+                renderer.panBy(mouse.x - lastX, mouse.y - lastY)
+            } else if (editing && (mouse.buttons & Qt.LeftButton) && valid(cell) &&
+                       (!valid(lastCell) || cell.x !== lastCell.x || cell.y !== lastCell.y)) {
+                lastCell = cell
+                root.strokeMoved(cell.x, cell.y)
+            }
+            lastX = mouse.x; lastY = mouse.y
         }
+        onReleased: function(mouse) {
+            if (mouse.button === Qt.LeftButton && editing) {
+                var cell = renderer.cellAt(mouse.x, mouse.y)
+                if (!valid(cell)) cell = lastCell
+                if (valid(cell)) root.strokeFinished(cell.x, cell.y)
+                editing = false
+            } else if (mouse.button === Qt.LeftButton &&
+                       Math.abs(mouse.x - downX) + Math.abs(mouse.y - downY) < 6) {
+                var picked = renderer.cellAt(mouse.x, mouse.y)
+                if (valid(picked) && root.interactionMode === "select")
+                    root.cellSelected(picked.x, picked.y)
+                else if (root.interactionMode === "pan")
+                    renderer.pickAt(mouse.x, mouse.y)
+            }
+        }
+        onCanceled: {
+            if (editing) root.strokeCancelled()
+            editing = false
+        }
+        onExited: root.hoveredCell = ({})
         onWheel: function(wheel) {
             renderer.zoomAt(wheel.angleDelta.y, wheel.x, wheel.y)
             wheel.accepted = true
