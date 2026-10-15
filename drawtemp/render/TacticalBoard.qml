@@ -130,6 +130,7 @@ IsoViewport {
 
     Item {
         id: motionGhost
+        objectName: "r12-motion-ghost"
         readonly property var sprite:
             board.playing && board.currentClip.actor ?
             renderer.animationFrame(board.currentClip.actor,
@@ -150,6 +151,7 @@ IsoViewport {
         z: (board.clipCell()[0] + board.clipCell()[1]) * 100 + 75
         Image {
             id: actionSprite
+            objectName: "r12-action-sprite"
             anchors.fill: parent
             visible: motionGhost.hasArt && status !== Image.Error
             source: motionGhost.hasArt ? motionGhost.sprite.imageUrl : ""
@@ -208,6 +210,7 @@ IsoViewport {
 
     Item {
         id: impactVisual
+        objectName: "r12-impact-effect"
         visible: board.playing && ["impact", "heal", "miss", "cast",
                                     "interrupt"].indexOf(board.currentClip.kind) >= 0
         readonly property var position: board.scenePoint(board.currentClip.start || [0, 0])
