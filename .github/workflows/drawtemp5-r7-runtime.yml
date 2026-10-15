@@ -7,6 +7,8 @@ on:
       - 'drawtemp/render/qt_viewport.py'
       - 'drawtemp/render/IsoViewport.qml'
       - 'drawtemp/player/qt_app.py'
+      - 'drawtemp/player/Main.qml'
+      - 'drawtemp/studio/map_editor.py'
       - 'tests_standalone/test_drawtemp5_r7_runtime.py'
       - 'tests_standalone/test_drawtemp5_r7_qt.py'
       - '.github/workflows/drawtemp5-r7-runtime.yml'
@@ -58,6 +60,11 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: python -m drawtemp.render.qt_viewport --smoke --character-pack .r7-pack
+      - name: R5 map Studio smoke with same published Jeanne sprites
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.studio.map_editor --smoke --character-pack .r7-pack
       - name: R12 autonomous Player battle smoke with Jeanne sprites
         env:
           QT_QPA_PLATFORM: offscreen
