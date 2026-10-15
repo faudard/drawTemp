@@ -9,6 +9,7 @@ from copy import deepcopy
 from . import event_composer
 from .authoring import _identifier, _mission
 from .model import Content, RuleError, require
+from .tactical_rpg3 import authored_rules_for_document
 
 
 def _find_event(data, mission_id, event_id):
@@ -445,10 +446,7 @@ def reorder_event(data, mission_id, event_id, direction):
             'Cannot move event outside mission')
     events[index], events[index+direction] = events[index+direction], events[index]
     return Content.from_dict(
-        result, rules=__import__(
-            "sporebound.tactical_rpg3",
-            fromlist=["authored_rules_for_document"]
-        ).authored_rules_for_document(result)).to_dict()
+        result, rules=authored_rules_for_document(result)).to_dict()
 
 
 def delete_event(data, mission_id, event_id):
@@ -460,10 +458,7 @@ def delete_event(data, mission_id, event_id):
                            if e['id'] != event_id]
     require(len(mission['triggers']) < previous, 'Unknown tactical event')
     return Content.from_dict(
-        result, rules=__import__(
-            "sporebound.tactical_rpg3",
-            fromlist=["authored_rules_for_document"]
-        ).authored_rules_for_document(result)).to_dict()
+        result, rules=authored_rules_for_document(result)).to_dict()
 
 
 def duplicate_event(data, mission_id, event_id, new_id):
@@ -481,10 +476,7 @@ def duplicate_event(data, mission_id, event_id, new_id):
     event['id'] = new_id
     mission['triggers'].append(event)
     return Content.from_dict(
-        result, rules=__import__(
-            "sporebound.tactical_rpg3",
-            fromlist=["authored_rules_for_document"]
-        ).authored_rules_for_document(result)).to_dict()
+        result, rules=authored_rules_for_document(result)).to_dict()
 
 
 def condition_title(event):
