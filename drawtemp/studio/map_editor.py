@@ -83,6 +83,7 @@ class MapWindow(QMainWindow):
         # delegates. Its scene is reconstructed from the validated R1 Content.
         self.renderer = make_controller(self._render_scene())
         viewport = QQuickWidget(self)
+        self.renderer.attach_engine(viewport.engine())
         viewport.setResizeMode(QQuickWidget.SizeRootObjectToView)
         viewport.rootContext().setContextProperty("renderer", self.renderer)
         source = Path(__file__).resolve().parents[1] / "render" / "IsoViewport.qml"
