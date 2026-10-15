@@ -14,7 +14,8 @@ GPU Qt Quick partagé entre Studio et Player. L'ancienne vue Tk reste inchangée
    échéant, les portraits. AssetRegistry v1 et AssetResolver R4 valident les
    PNG, régions, références et chemins avant le rendu.
 3. Le renderer R3 accepte character_pack=... et character_variant=... dans
-   make_controller() et create_view(). Le Player utilise le même contrôleur.
+   make_controller() et create_view(). Le Player R12 et l'éditeur de cartes
+   Studio R5 exposent les mêmes paramètres CLI et utilisent ce contrôleur.
 4. Le rendu Qt Quick sourceClipRect extrait la frame depuis l'atlas GPU au
    lieu d'afficher un placeholder. Le pivot de pied commun à toutes les
    directions corrige la position au sol sans perturber le picking.
@@ -25,6 +26,8 @@ GPU Qt Quick partagé entre Studio et Player. L'ancienne vue Tk reste inchangée
 
 Aucune modification Content, GameProject, combat, seed, sauvegarde ou RNG ;
 les changements de tenue présentés ici sont des prévisualisations cosmétiques.
+Le Player affiche un sélecteur de tenue non sauvegardé uniquement si le pack
+contient plusieurs variantes distinctes.
 Le Player ne charge pas le Studio, Pillow ou Tk. Il lui suffit d'un pack PNG
 exporté et de PySide6.
 
@@ -34,11 +37,13 @@ exporté et de PySide6.
 python -m pip install ".[qt6,art]"
 python -m drawtemp.assets.characters --template jeanne --root . --export .r7-pack
 python -m drawtemp.render.qt_viewport --smoke --character-pack .r7-pack
+python -m drawtemp.studio.map_editor --smoke --character-pack .r7-pack
 python -m drawtemp.player.qt_app --reference --smoke --smoke-scene battle \
     --character-pack .r7-pack --character-variant historical
 
 # Session interactive avec des sprites :
 python -m drawtemp.player.qt_app --character-pack .r7-pack
+python -m drawtemp.studio.map_editor --character-pack .r7-pack
 ~~~
 
 L'atlas historique Jeanne ne contient que cinq familles : idle, walk,
@@ -52,8 +57,8 @@ L'absence de run, block, magic et victory reste visible dans les diagnostics.
   fin de clip non bouclée, fallback, chemins invalides et immutabilité.
 - Test Qt affichant le véritable sprite sourceClipRect depuis le même
   RendererController que le Player.
-- Smoke QML R3 et Player R12 sur Ubuntu, Windows et macOS ; tests de
-  compatibilité R3/R4 existants.
+- Smoke QML R3, Studio R5 et Player R12 sur Ubuntu, Windows et macOS ; tests
+  de compatibilité R3/R4 existants.
 - Parité des états tactiques et sauvegardes (aucun champ visuel ajouté au Core).
 
 ## Restant pour la certification R7
