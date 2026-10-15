@@ -477,6 +477,8 @@ La première valeur produit mesurable est : **ouvrir le Studio Qt → créer/pei
 
 **Gate R16 :** Aucune dépendance Tk dans Studio/Player 5.0 distribué; projets anciens migrés sans perte et avec rollback.
 
+**Avancement (15 octobre 2026) — non certifié :** la PR R16 introduit l’inventaire des imports Tk/Canvas, la migration réversible des paires canoniques v1, l’import strict des checkpoints v1/v2, des tests et une matrice CI. Les suppressions R16.4/R16.5 sont bloquées par R14/R15 ; le namespace `sporebound` reste transitoire. [Contrats, limites et critères de clôture](drawtemp5/R16_LEGACY_MIGRATION.md).
+
 ## Jalons de livraison certifiables (M0–M5)
 
 | Release gate | Livrable | Preuve attendue |
