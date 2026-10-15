@@ -493,9 +493,17 @@ def launch(content_path):
             mission = self.mission.currentText()
             seeds = tuple(range(1, self.seeds.value()+1))
             limit = self.limit.value()
-            self._submit("simulation", lambda: simulate_encounter(
-                snapshot, mission, seeds=seeds, max_commands=limit,
-                trace_seed_id=seeds[0]))
+            def simulate_with_views():
+                report = simulate_encounter(
+                    snapshot, mission, seeds=seeds, max_commands=limit,
+                    trace_seed_id=seeds[0])
+                # Heavy replay analytics are pure Python. Compute them on
+                # the worker thread, never on the Qt event/rendering thread.
+                report["r13_ai_view"] = build_combat_visuals(report["trace"])
+                report["r13_movement_view"] = build_movement_heatmap(report["trace"])
+                return report
+
+            self._submit("simulation", simulate_with_views)
 
         def _complete(self, sequence, payload):
             if sequence != self._sequence:
@@ -554,8 +562,10 @@ def launch(content_path):
             self._show_simulation_charts(report)
             # The diagnostics belong to the trace seed only, never a fictive
             # average tactical timeline for the other batch seeds.
-            self.combat_analytics.set_report(build_combat_visuals(result["trace"]))
-            self.heatmap_panel.set_report(build_movement_heatmap(result["trace"]))
+            self.combat_analytics.set_report(
+                result.get("r13_ai_view") or build_combat_visuals(result["trace"]))
+            self.heatmap_panel.set_report(
+                result.get("r13_movement_view") or build_movement_heatmap(result["trace"]))
             self._replay_initial = result["trace"]["initial"]["units"]
             stats = {
                 "mission": report["mission"], "runs": report["runs"],
