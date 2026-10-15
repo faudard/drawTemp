@@ -62,6 +62,9 @@ class R127VisualQtTests(unittest.TestCase):
             artifact_dir = os.environ.get("DRAWTEMP_R127_ARTIFACT_DIR")
             out = Path(artifact_dir) if artifact_dir else None
 
+            def variant(value):
+                return value.toVariant() if hasattr(value, "toVariant") else value
+
             def snapshot(label):
                 QTest.qWait(90)
                 frame = board.grabFramebuffer()
@@ -72,6 +75,7 @@ class R127VisualQtTests(unittest.TestCase):
                     path = out / ("r127-" + label + ".png")
                     self.assertTrue(frame.save(str(path), "PNG"))
                     captures[label] = path.name
+                return bytes(frame.constBits())
 
             def plan(serial, kind, start, end, duration=600):
                 root.setProperty("animationPlan", {
@@ -87,36 +91,41 @@ class R127VisualQtTests(unittest.TestCase):
                 })
                 QTest.qWait(25)
                 self.assertTrue(root.property("playing"))
-                self.assertEqual(root.property("currentClip")["kind"], kind)
+                self.assertEqual(variant(root.property("currentClip"))["kind"], kind)
                 ghost = root.findChild(QObject, "r12-motion-ghost")
                 sprite = root.findChild(QObject, "r12-action-sprite")
                 self.assertIsNotNone(ghost)
                 self.assertIsNotNone(sprite)
                 self.assertTrue(ghost.property("hasArt"))
-                frame = ghost.property("sprite")
+                frame = variant(ghost.property("sprite"))
                 self.assertIn("jeanne_atlas.png", frame["imageUrl"])
                 self.assertTrue(sprite.property("visible"))
-                self.assertIn("jeanne", root.property("concealedActorIds"))
+                self.assertIn("jeanne", variant(root.property("concealedActorIds")))
                 return frame
 
             try:
-                snapshot("idle")
+                idle_pixels = snapshot("idle")
                 frame = plan(1, "move", [1, 5], [2, 5])
                 self.assertEqual(frame["assetId"], "jeanne_east_move_0")
-                snapshot("move")
+                move_pixels = snapshot("move")
+                self.assertNotEqual(idle_pixels, move_pixels,
+                                    "Movement clip did not change actual viewport pixels")
                 frame = plan(2, "attack", [1, 5], [2, 5])
                 self.assertEqual(frame["assetId"], "jeanne_east_attack_0")
-                snapshot("attack")
+                attack_pixels = snapshot("attack")
+                self.assertNotEqual(move_pixels, attack_pixels,
+                                    "Attack pose and movement render identically")
                 frame = plan(3, "impact", [1, 5], [1, 5])
                 self.assertEqual(frame["assetId"], "jeanne_south_hit_0")
-                snapshot("impact")
-
+                impact_pixels = snapshot("impact")
+                self.assertNotEqual(attack_pixels, impact_pixels)
                 root.setProperty("animationPlan", {
                     "serial": 4, "revision": 0, "scene": "", "clips": []})
                 QTest.qWait(35)
                 self.assertFalse(root.property("playing"))
-                self.assertEqual(root.property("concealedActorIds"), [])
-                snapshot("restored")
+                self.assertEqual(variant(root.property("concealedActorIds")), [])
+                restored_pixels = snapshot("restored")
+                self.assertNotEqual(impact_pixels, restored_pixels)
                 self.assertEqual(recording, game.session.recording())
                 self.assertEqual(renderer.scene["actors"][0]["id"], "jeanne")
                 if out:
