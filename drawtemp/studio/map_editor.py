@@ -132,6 +132,10 @@ class MapWindow(QMainWindow):
                                 "Molette : zoom • bouton droit : déplacement.\n"
                                 "Les changements sont validés avant application."))
         self._dock("Inspecteur", right, Qt.RightDockWidgetArea)
+        # Editor-only layers share the canonical mission, not the Player save.
+        from .map_layers_dock import MapLayersDock
+        self.layers_panel = MapLayersDock(self.studio.layers, self.refresh)
+        self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
         self.statusBar().showMessage("Viewport Qt Quick partagé R3 · édition R5")
         self.refresh_maps()
 
@@ -200,12 +204,13 @@ class MapWindow(QMainWindow):
             self, "Ouvrir un contenu avec manifeste .game.json", "", "Content JSON (*.json)")
         if not path:
             return
-        if self.studio.authoring.snapshot().dirty:
+        if self.studio.authoring.snapshot().dirty or self.studio.layers.dirty:
             QMessageBox.information(self, "Carte modifiée",
                                     "Enregistrez avant d'ouvrir un autre projet.")
             return
         def open_document():
             self.studio = MapStudio.open(path)
+            self.layers_panel.set_workspace(self.studio.layers)
             self.refresh_maps()
         self._safe(open_document)
 
@@ -315,6 +320,7 @@ class MapWindow(QMainWindow):
         self._safe(apply)
 
     def refresh(self, *_):
+        self.layers_panel.set_mission(self.studio.mission_id)
         mission = self.studio.mission()
         board = mission["board"]
         self.renderer.replace_scene(self._render_scene())
@@ -323,6 +329,9 @@ class MapWindow(QMainWindow):
         root.setProperty("showBlocked", self.show_blocked.isChecked())
         root.setProperty("showHeights", self.show_height.isChecked())
         root.setProperty("showActors", self.show_actors.isChecked())
+        view = self.studio.layers.view(self.studio.mission_id)
+        root.setProperty("layerVisibility", view["visible"])
+        root.setProperty("layerOpacity", view["opacity"])
         current = self.studio.snapshot()
         warnings = self.studio.diagnostics()
         self.diagnostics.setPlainText(
@@ -335,9 +344,10 @@ class MapWindow(QMainWindow):
             self.objective.setCurrentIndex(index)
 
     def closeEvent(self, event):
-        if self.studio.authoring.snapshot().dirty:
+        if self.studio.authoring.snapshot().dirty or self.studio.layers.dirty:
             response = QMessageBox.question(self, "Quitter",
-                "Des modifications ne sont pas enregistrées. Quitter sans enregistrer ?",
+                "La carte ou ses réglages de calques ne sont pas enregistrés. "
+                "Quitter sans enregistrer ?",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if response != QMessageBox.Yes:
                 event.ignore()

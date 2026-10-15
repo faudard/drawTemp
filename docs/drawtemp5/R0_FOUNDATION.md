@@ -42,7 +42,7 @@ python -m drawtemp.platform.qt_bootstrap
 python -m drawtemp.platform.qt_bootstrap --smoke
 
 python scripts/audit_drawtemp5.py --check --report r0-imports.json
-python -m drawtemp.sdk.migration --report r0-parity.json
+python -m drawtemp.sdk.migration --verify-baseline docs/drawtemp5/reference-baseline.json --report r0-parity.json
 python -m unittest tests_standalone.test_drawtemp5_r0 -v
 ```
 
@@ -164,6 +164,25 @@ recordings originaux restent vérifiés par le runtime ; les commandes, événem
 `reference-baseline.json` est gelé et a été comparé au runtime du commit initial
 non modifié. Le test ne le régénère jamais. Toute modification doit faire l'objet
 d'une revue des conséquences de gameplay, pas d'un renouvellement automatique.
+
+## Renforcement R0.5/R0.6 — parité de persistance croisée
+
+Le harnais sauvegarde désormais **séparément** la session legacy et la session
+adaptateur, puis recharge **chacun des deux fichiers avec les deux lecteurs**.
+Il compare les états métier à celui d'avant sauvegarde, vérifie que la lecture
+n'a pas modifié les octets des deux fichiers, et poursuit les commandes et le
+replay depuis le fichier propre à chaque implémentation. La trace gelée garde
+son schéma, ses étapes et ses hashes : le renforcement est une validation
+supplémentaire, pas un nouveau format de sauvegarde.
+
+Des tests de mutation doivent faire échouer la certification si l'adaptateur
+écrit une sauvegarde valide mais ancienne, écrit du JSON invalide, ou recharge
+un état périmé même à partir de la sauvegarde legacy. L'option CLI
+`--verify-baseline` bloque toute divergence par rapport au fichier
+`reference-baseline.json` sans jamais le régénérer ; elle conserve un rapport
+observé via `--report` pour diagnostiquer l'écart. La CI R0 invoque ce contrôle
+explicitement. Les assertions supplémentaires ne valent pas à elles seules
+certification de tous les formats de sauvegarde ou de toutes les plateformes.
 
 ## Critères de sortie restant à certifier
 

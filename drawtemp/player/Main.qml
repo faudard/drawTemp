@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import "../render"
 
 ApplicationWindow {
@@ -17,11 +18,24 @@ ApplicationWindow {
     color: "#131c25"
     property var playerData: player.view
     property int currentSlot: 1
-    property real textScale: 1
-    property bool highContrast: false
+    property real textScale: playerData.settings.display.text_scale
+    property bool highContrast: playerData.settings.display.high_contrast
+    property bool inputLocked: pausePopup.opened || optionsPopup.opened
+    function binding(action) { return playerData.settings.bindings[action] || "" }
+    onPlayerDataChanged: {
+        if (smokeMode) return
+        if (playerData.settings.display.fullscreen && visibility !== Window.FullScreen)
+            showFullScreen()
+        else if (!playerData.settings.display.fullscreen && visibility === Window.FullScreen)
+            showNormal()
+    }
+    Component.onCompleted: {
+        if (!smokeMode && playerData.settings.display.fullscreen) showFullScreen()
+    }
     property color ivory: highContrast ? "#ffffff" : "#efe4d2"
     property color muted: highContrast ? "#f3ead6" : "#b2b8b8"
     property color gold: "#e7c78b"
+    property bool tacticalOverlayEnabled: true
 
     function activeSkills() {
         var units = (playerData.battle && playerData.battle.units) || []
@@ -45,49 +59,112 @@ ApplicationWindow {
         }
     }
 
-    // Global commands. The viewport's arrows never intercept input from dialogs.
-    Item {
-        anchors.fill: parent
-        focus: true
-        Keys.onPressed: function(event) {
-            if (pausePopup.opened || optionsPopup.opened)
-                return
-            if (event.key === Qt.Key_Escape) {
-                if (root.playerData.screen !== "title")
-                    pausePopup.open()
-                event.accepted = true
-                return
-            }
-            var screen = root.playerData.screen
-            if (screen === "exploration") {
-                if (event.key === Qt.Key_Up || event.key === Qt.Key_Z || event.key === Qt.Key_W)
-                    player.exploreMove(0, -1)
-                else if (event.key === Qt.Key_Down || event.key === Qt.Key_S)
-                    player.exploreMove(0, 1)
-                else if (event.key === Qt.Key_Left || event.key === Qt.Key_Q || event.key === Qt.Key_A)
-                    player.exploreMove(-1, 0)
-                else if (event.key === Qt.Key_Right || event.key === Qt.Key_D)
-                    player.exploreMove(1, 0)
-                else
-                    return
-                event.accepted = true
-            } else if (screen === "battle") {
-                var cell = root.playerData.selected
-                if (event.key === Qt.Key_Left)
-                    player.selectCell(cell[0] - 1, cell[1])
-                else if (event.key === Qt.Key_Right)
-                    player.selectCell(cell[0] + 1, cell[1])
-                else if (event.key === Qt.Key_Up)
-                    player.selectCell(cell[0], cell[1] - 1)
-                else if (event.key === Qt.Key_Down)
-                    player.selectCell(cell[0], cell[1] + 1)
-                else if (event.key === Qt.Key_Space)
-                    player.command("end")
-                else
-                    return
-                event.accepted = true
-            }
-        }
+    // Window-level shortcuts remain active when buttons have keyboard focus.
+    // Popups disable gameplay actions; QML never mutates tactical rules.
+    Shortcut {
+        sequence: root.binding("explore_up")
+        enabled: root.playerData.screen === "exploration" && !root.inputLocked
+        onActivated: player.exploreMove(0, -1)
+    }
+    Shortcut {
+        sequence: "Up"
+        enabled: root.playerData.screen === "exploration" && !root.inputLocked && root.binding("explore_up") !== "Up"
+        onActivated: player.exploreMove(0, -1)
+    }
+    Shortcut {
+        sequence: root.binding("explore_down")
+        enabled: root.playerData.screen === "exploration" && !root.inputLocked
+        onActivated: player.exploreMove(0, 1)
+    }
+    Shortcut {
+        sequence: "Down"
+        enabled: root.playerData.screen === "exploration" && !root.inputLocked && root.binding("explore_down") !== "Down"
+        onActivated: player.exploreMove(0, 1)
+    }
+    Shortcut {
+        sequence: root.binding("explore_left")
+        enabled: root.playerData.screen === "exploration" && !root.inputLocked
+        onActivated: player.exploreMove(-1, 0)
+    }
+    Shortcut {
+        sequence: "Left"
+        enabled: root.playerData.screen === "exploration" && !root.inputLocked && root.binding("explore_left") !== "Left"
+        onActivated: player.exploreMove(-1, 0)
+    }
+    Shortcut {
+        sequence: root.binding("explore_right")
+        enabled: root.playerData.screen === "exploration" && !root.inputLocked
+        onActivated: player.exploreMove(1, 0)
+    }
+    Shortcut {
+        sequence: "Right"
+        enabled: root.playerData.screen === "exploration" && !root.inputLocked && root.binding("explore_right") !== "Right"
+        onActivated: player.exploreMove(1, 0)
+    }
+    Shortcut {
+        sequence: root.binding("battle_up")
+        enabled: root.playerData.screen === "battle" && !root.inputLocked
+        onActivated: player.selectCell(root.playerData.selected[0] + 0, root.playerData.selected[1] + -1)
+    }
+    Shortcut {
+        sequence: "Up"
+        enabled: root.playerData.screen === "battle" && !root.inputLocked && root.binding("battle_up") !== "Up"
+        onActivated: player.selectCell(root.playerData.selected[0] + 0, root.playerData.selected[1] + -1)
+    }
+    Shortcut {
+        sequence: root.binding("battle_down")
+        enabled: root.playerData.screen === "battle" && !root.inputLocked
+        onActivated: player.selectCell(root.playerData.selected[0] + 0, root.playerData.selected[1] + 1)
+    }
+    Shortcut {
+        sequence: "Down"
+        enabled: root.playerData.screen === "battle" && !root.inputLocked && root.binding("battle_down") !== "Down"
+        onActivated: player.selectCell(root.playerData.selected[0] + 0, root.playerData.selected[1] + 1)
+    }
+    Shortcut {
+        sequence: root.binding("battle_left")
+        enabled: root.playerData.screen === "battle" && !root.inputLocked
+        onActivated: player.selectCell(root.playerData.selected[0] + -1, root.playerData.selected[1] + 0)
+    }
+    Shortcut {
+        sequence: "Left"
+        enabled: root.playerData.screen === "battle" && !root.inputLocked && root.binding("battle_left") !== "Left"
+        onActivated: player.selectCell(root.playerData.selected[0] + -1, root.playerData.selected[1] + 0)
+    }
+    Shortcut {
+        sequence: root.binding("battle_right")
+        enabled: root.playerData.screen === "battle" && !root.inputLocked
+        onActivated: player.selectCell(root.playerData.selected[0] + 1, root.playerData.selected[1] + 0)
+    }
+    Shortcut {
+        sequence: "Right"
+        enabled: root.playerData.screen === "battle" && !root.inputLocked && root.binding("battle_right") !== "Right"
+        onActivated: player.selectCell(root.playerData.selected[0] + 1, root.playerData.selected[1] + 0)
+    }
+    Shortcut {
+        sequence: root.binding("battle_move")
+        enabled: root.playerData.screen === "battle" && !root.inputLocked
+        onActivated: player.command("move")
+    }
+    Shortcut {
+        sequence: root.binding("battle_attack")
+        enabled: root.playerData.screen === "battle" && !root.inputLocked
+        onActivated: player.command("attack")
+    }
+    Shortcut {
+        sequence: root.binding("battle_end")
+        enabled: root.playerData.screen === "battle" && !root.inputLocked
+        onActivated: player.command("end")
+    }
+    Shortcut {
+        sequence: root.binding("save")
+        enabled: root.playerData.screen !== "title" && !root.inputLocked
+        onActivated: player.saveGame(root.currentSlot)
+    }
+    Shortcut {
+        sequence: root.binding("pause")
+        enabled: root.playerData.screen !== "title" && !root.inputLocked
+        onActivated: pausePopup.open()
     }
 
     ColumnLayout {
@@ -332,6 +409,11 @@ ApplicationWindow {
                     exploration: root.playerData.screen === "exploration" ?
                                      root.playerData.exploration : ({})
                     selected: root.playerData.selected
+                    tactical: root.playerData.tactical
+                    animationPlan: player.animationPlan
+                    showTacticalOverlay: root.tacticalOverlayEnabled
+                    showGrid: root.playerData.settings.display.show_grid
+                    showHeights: root.playerData.settings.display.show_heights
                     onCellSelected: function(x, y) {
                         if (root.playerData.screen === "exploration") {
                             var pos = root.playerData.exploration.position
@@ -382,7 +464,11 @@ ApplicationWindow {
                         }
                         Label {
                             text: root.playerData.screen === "exploration" ?
-                                  "Flèches / ZQSD / WASD : se déplacer. Cliquez sur une case adjacente." :
+                                  "Déplacement : " + root.binding("explore_up") + "/" +
+                                  root.binding("explore_left") + "/" +
+                                  root.binding("explore_down") + "/" +
+                                  root.binding("explore_right") +
+                                  " ou flèches. Cliquez sur une case adjacente." :
                                   "Objectif : " + (root.playerData.battle.objective || "")
                             color: root.ivory
                             wrapMode: Text.WordWrap
@@ -395,6 +481,137 @@ ApplicationWindow {
                                   "\nCible : " + root.playerData.selected.join(", ")
                             color: root.ivory
                             Layout.fillWidth: true
+                        }
+                        ColumnLayout {
+                            visible: root.playerData.screen === "battle" ||
+                                     root.playerData.screen === "result"
+                            Layout.fillWidth: true
+                            Label {
+                                text: "PRÉVISION TACTIQUE · MOTEUR"
+                                color: root.gold
+                                font.bold: true
+                                font.pixelSize: 12 * root.textScale
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: root.ivory
+                                text: root.playerData.tactical.selection_summary || ""
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: root.muted
+                                text: root.playerData.tactical.focus ?
+                                  (root.playerData.tactical.focus.line_of_sight === null ?
+                                      "" : root.playerData.tactical.focus.line_of_sight ?
+                                        "Ligne de vue : dégagée" : "Ligne de vue : obstruée")
+                                  : ""
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: root.gold
+                                text: root.playerData.tactical.focus &&
+                                      root.playerData.tactical.focus.move ?
+                                  "Mouvement possible · coût " +
+                                      root.playerData.tactical.focus.move.cost +
+                                      " · risques sur le trajet : " +
+                                      root.playerData.tactical.focus.move.risks.length :
+                                  ""
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: "#f4b5a5"
+                                text: root.playerData.tactical.focus ?
+                                      (root.playerData.tactical.focus.error || "") : ""
+                            }
+                            Repeater {
+                                model: root.playerData.tactical.focus ?
+                                       (root.playerData.tactical.focus.forecast || []) : []
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: root.ivory
+                                    text: (modelData.kind || "effet") + " · " +
+                                          modelData.unit + " · " + modelData.amount +
+                                          (typeof modelData.chance === "number" ?
+                                          " · probabilité " +
+                                          Math.round(modelData.chance * 100) + "%" : "") +
+                                          (modelData.redirected_to ?
+                                          " · intercepté par " + modelData.redirected_to : "")
+                                }
+                            }
+                            Repeater {
+                                model: root.playerData.tactical.focus ?
+                                       (root.playerData.tactical.focus.danger || []) : []
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: "#f2b88e"
+                                    text: "⚠ " + modelData.kind + " · " +
+                                          (modelData.certainty === "certain" ? "certain" :
+                                           modelData.certainty === "scheduled" ? "programmé" :
+                                           modelData.certainty === "armed" ? "réaction armée" :
+                                           "possible, non garanti")
+                                }
+                            }
+                        }
+                        CheckBox {
+                            visible: root.playerData.screen === "battle" ||
+                                     root.playerData.screen === "result"
+                            text: "Afficher portées et dangers"
+                            checked: root.tacticalOverlayEnabled
+                            onClicked: root.tacticalOverlayEnabled = checked
+                        }
+                        Label {
+                            visible: root.playerData.screen === "battle"
+                            text: "PROCHAINES ACTIVATIONS · CT ESTIMÉ"
+                            color: root.gold
+                            font.bold: true
+                        }
+                        Repeater {
+                            model: root.playerData.tactical.timeline || []
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: modelData.team === "enemy" ?
+                                          "#f0aca8" : root.ivory
+                                text: (modelData.active ? "▶ " : "") +
+                                      modelData.unit + " · " +
+                                      (modelData.active ? "ACTIF" :
+                                       modelData.eta_ticks === null ? "bloqué" :
+                                       "t+" + modelData.eta_ticks + " estimé")
+                            }
+                        }
+                        Label {
+                            visible: root.playerData.screen === "battle"
+                            text: "MENACES OBSERVÉES / CONDITIONNELLES"
+                            color: root.gold
+                            font.bold: true
+                        }
+                        Repeater {
+                            model: root.playerData.tactical.casts || []
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: "#dbc0f3"
+                                text: "Sort programmé · " + modelData.unit +
+                                      " · " + modelData.skill + " · t-" +
+                                      modelData.remaining_ticks
+                            }
+                        }
+                        Repeater {
+                            model: root.playerData.tactical.charges || []
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: "#ead39b"
+                                text: "Charge possible · " + modelData.unit +
+                                      " → " + modelData.target +
+                                      " (non garantie)"
+                            }
                         }
                         Repeater {
                             model: root.playerData.screen === "exploration" ?
@@ -429,8 +646,8 @@ ApplicationWindow {
                                    root.activeSkills() : []
                             Button {
                                 Layout.fillWidth: true
-                                text: "Utiliser · " + modelData
-                                onClicked: player.useSkill(modelData)
+                                text: "Cibler · " + modelData
+                                onClicked: player.inspectSkill(modelData)
                             }
                         }
                         Label {
@@ -507,8 +724,19 @@ ApplicationWindow {
             Button { text: "Déplacer"; onClicked: player.command("move") }
             Button { text: "Attaquer"; onClicked: player.command("attack") }
             Button { text: "Aperçu déplacement"; onClicked: player.preview("move") }
-            Button { text: "Aperçu attaque"; onClicked: player.preview("attack") }
-            Button { text: "Fin du tour  Espace"; onClicked: player.command("end") }
+            Button { text: "Prévision attaque"; onClicked: player.preview("attack") }
+            Button {
+                text: "Utiliser " + (root.playerData.tactical.skill || "attaque")
+                enabled: root.playerData.tactical.focus &&
+                         root.playerData.tactical.focus.can_target === true
+                onClicked: {
+                    if (root.playerData.tactical.skill === "attack")
+                        player.command("attack")
+                    else
+                        player.useSkill(root.playerData.tactical.skill)
+                }
+            }
+            Button { text: "Fin du tour  " + root.binding("battle_end"); onClicked: player.command("end") }
             Button { text: "Tour ennemi"; onClicked: player.enemyTurn() }
             Item { Layout.fillWidth: true }
         }
@@ -533,22 +761,16 @@ ApplicationWindow {
             Layout.fillWidth: true
             Label {
                 text: root.playerData.forecast || root.playerData.message ||
-                      "F5 : sauvegarder · Esc : pause"
+                      root.binding("save") + " : sauvegarder · " + root.binding("pause") + " : pause"
                 color: root.gold
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
             Button {
-                text: "Sauvegarder · F5"
+                text: "Sauvegarder · " + root.binding("save")
                 onClicked: player.saveGame(root.currentSlot)
             }
         }
-    }
-
-    Shortcut {
-        sequence: "F5"
-        enabled: root.playerData.screen !== "title"
-        onActivated: player.saveGame(root.currentSlot)
     }
 
     Popup {
@@ -586,29 +808,134 @@ ApplicationWindow {
         modal: true
         focus: true
         anchors.centerIn: Overlay.overlay
-        width: 400
+        width: Math.min(root.width - 36, 570)
+        height: Math.min(root.height - 40, 690)
         padding: 20
+        closePolicy: Popup.CloseOnEscape
+        background: Rectangle {
+            color: "#1e3039"
+            border.color: "#819087"
+            radius: 12
+        }
         ColumnLayout {
             anchors.fill: parent
-            spacing: 14
-            Label { text: "OPTIONS · ACCESSIBILITÉ"; font.bold: true; font.pixelSize: 20 }
-            Label { text: "Taille des textes" }
-            Slider {
-                Layout.fillWidth: true
-                from: 0.85; to: 1.35; stepSize: 0.05
-                value: root.textScale
-                onMoved: root.textScale = value
-            }
-            CheckBox {
-                text: "Contraste élevé"
-                checked: root.highContrast
-                onToggled: root.highContrast = checked
+            spacing: 10
+            Label {
+                text: "OPTIONS DU PLAYER"
+                color: root.gold
+                font.bold: true
+                font.pixelSize: 23 * root.textScale
             }
             Label {
-                text: "Zoom carte : molette · Déplacement : flèches / ZQSD / WASD\n" +
-                      "Combat : clic pour sélectionner, espace pour terminer le tour."
+                text: "Préférences conservées indépendamment de vos sauvegardes."
+                color: root.muted
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
+            }
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: availableWidth
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 10
+                    Label {
+                        text: "AFFICHAGE ET ACCESSIBILITÉ"
+                        color: root.gold
+                        font.bold: true
+                        font.letterSpacing: 1
+                    }
+                    Label { text: "Taille des textes"; color: root.ivory }
+                    Slider {
+                        id: scaleSlider
+                        Layout.fillWidth: true
+                        from: 0.85; to: 1.35; stepSize: 0.05
+                        value: root.playerData.settings.display.text_scale
+                        onPressedChanged: {
+                            if (!pressed) player.setTextScale(Math.round(value * 20) / 20)
+                        }
+                    }
+                    CheckBox {
+                        text: "Contraste renforcé"
+                        checked: root.highContrast
+                        onClicked: player.setDisplayBool("high_contrast", checked)
+                    }
+                    CheckBox {
+                        text: "Plein écran"
+                        checked: root.playerData.settings.display.fullscreen
+                        onClicked: player.setDisplayBool("fullscreen", checked)
+                    }
+                    CheckBox {
+                        text: "Quadrillage de la carte"
+                        checked: root.playerData.settings.display.show_grid
+                        onClicked: player.setDisplayBool("show_grid", checked)
+                    }
+                    CheckBox {
+                        text: "Afficher les hauteurs"
+                        checked: root.playerData.settings.display.show_heights
+                        onClicked: player.setDisplayBool("show_heights", checked)
+                    }
+                    Rectangle {
+                        Layout.fillWidth: true; height: 1; color: "#556d6c"
+                    }
+                    Label {
+                        text: "COMMANDES"
+                        color: root.gold
+                        font.bold: true
+                        font.letterSpacing: 1
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Disposition du clavier"
+                            color: root.ivory
+                            Layout.fillWidth: true
+                        }
+                        ComboBox {
+                            model: ["azerty", "qwerty"]
+                            currentIndex: root.playerData.settings.profile === "azerty" ? 0 : 1
+                            onActivated: player.selectProfile(currentText)
+                        }
+                    }
+                    Label {
+                        text: "Les flèches restent disponibles pour les déplacements. Un raccourci ne peut pas être utilisé deux fois dans le même contexte."
+                        color: root.muted
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    Repeater {
+                        model: root.playerData.settings.rows
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                text: modelData.label
+                                color: root.ivory
+                                font.pixelSize: 13 * root.textScale
+                                Layout.fillWidth: true
+                            }
+                            ComboBox {
+                                Layout.preferredWidth: 150
+                                model: root.playerData.settings.keyChoices
+                                currentIndex: root.playerData.settings.keyChoices.indexOf(modelData.key)
+                                onActivated: player.rebind(modelData.action, currentText)
+                            }
+                        }
+                    }
+                    Button {
+                        text: "Réinitialiser les touches de ce profil"
+                        Layout.fillWidth: true
+                        onClicked: player.resetBindings()
+                    }
+                }
+            }
+            Label {
+                text: root.playerData.message || ""
+                color: root.gold
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                visible: text.length > 0
             }
             Button {
                 text: "Fermer"

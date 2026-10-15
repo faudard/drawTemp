@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from .iso_scene import Camera, IsoProjection, pick, render_items, scene_from_mission
+from .tile_chunks import TileChunkIndex
 
 
 def default_atlas_url():
@@ -17,7 +18,7 @@ def default_atlas_url():
     return Path(str(atlas)).resolve().as_uri() if atlas.is_file() else ""
 
 
-def make_controller(scene, atlas_url=None):
+def make_controller(scene, atlas_url=None, *, assets=None):
     """Create a QObject only when Qt is installed; keep headless module import safe."""
     from PySide6.QtCore import QObject, Property, Signal, Slot
 
@@ -33,6 +34,11 @@ def make_controller(scene, atlas_url=None):
             self.projection = IsoProjection()
             self.selection = None
             self._items = []
+            self._base_items = []
+            self._elapsed_ms = 0
+            self.assets = assets
+            self._index = TileChunkIndex(scene)
+            self.overlays = {}
             self._atlas = default_atlas_url() if atlas_url is None else atlas_url
             self.center_scene()
 
@@ -43,7 +49,11 @@ def make_controller(scene, atlas_url=None):
             self.refresh()
 
         def refresh(self):
-            self._items = render_items(self.scene, self.camera, self.projection, self.selection)
+            self._base_items = render_items(self.scene, self.camera, self.projection,
+                                            self.selection, tile_index=self._index,
+                                            overlays=self.overlays)
+            self._items = (self.assets.decorate(self._base_items, elapsed_ms=self._elapsed_ms)
+                           if self.assets is not None else self._base_items)
             self.sceneChanged.emit()
             self.cameraChanged.emit()
 
@@ -55,6 +65,26 @@ def make_controller(scene, atlas_url=None):
         def cameraState(self):
             return {"zoom": self.camera.zoom, "panX": self.camera.pan_x,
                     "panY": self.camera.pan_y}
+
+        @Property(bool, notify=sceneChanged)
+        def animatedAssets(self):
+            return self.assets is not None and self.assets.has_animations
+
+        @Slot(int)
+        def advanceVisual(self, delta_ms):
+            """Animate cosmetics only; never touch the tactical simulation."""
+            if (type(delta_ms) is not int or not 1 <= delta_ms <= 1000):
+                return
+            if self.assets is not None and self.assets.has_animations:
+                self._elapsed_ms += delta_ms
+                self._items = self.assets.decorate(
+                    self._base_items, elapsed_ms=self._elapsed_ms)
+                self.sceneChanged.emit()
+
+        def replace_assets(self, assets):
+            self.assets = assets
+            self._elapsed_ms = 0
+            self.refresh()
 
         @Property(str, constant=True)
         def atlasUrl(self):
@@ -75,6 +105,42 @@ def make_controller(scene, atlas_url=None):
         @Slot(float, float, float)
         def zoomAt(self, angle, x, y):
             self.camera.zoom_at(1.15 if angle > 0 else 1 / 1.15, x, y)
+            self.refresh()
+
+        @Slot("QVariantMap")
+        def setOverlays(self, overlays):
+            """Set cosmetic [x,y] cell sets for reach, path, LOS, range, intents.
+
+            Validation runs before mutating the live viewport. Gameplay and
+            authoring remain owned by the R1/R5 controllers, not this adapter.
+            """
+            from .iso_scene import OVERLAY_COLORS
+            candidate = {}
+            if not hasattr(overlays, "items"):
+                raise ValueError("Overlays must be a mapping")
+            for kind, cells in overlays.items():
+                if kind not in OVERLAY_COLORS:
+                    raise ValueError("Unknown overlay: " + str(kind))
+                if not isinstance(cells, (tuple, list)):
+                    raise ValueError("Overlay cells must be a sequence")
+                normalized = []
+                for cell in cells:
+                    if not isinstance(cell, (tuple, list)) or len(cell) != 2:
+                        raise ValueError("Overlay cells must be [x,y]")
+                    x, y = cell
+                    if type(x) is not int or type(y) is not int:
+                        raise ValueError("Overlay coordinates must be integers")
+                    if not (0 <= x < self.scene["width"] and
+                            0 <= y < self.scene["height"]):
+                        raise ValueError("Overlay cell outside the map")
+                    normalized.append((x, y))
+                candidate[kind] = tuple(normalized)
+            self.overlays = candidate
+            self.refresh()
+
+        @Slot()
+        def clearOverlays(self):
+            self.overlays = {}
             self.refresh()
 
         @Slot(float, float, result="QVariantMap")
@@ -113,15 +179,18 @@ def make_controller(scene, atlas_url=None):
                        self.scene["height"] != new_scene["height"])
             self.scene = new_scene
             self.selection = None
+            self.overlays = {}  # Never carry stale tactical previews across turns.
             if changed:
+                self._index = TileChunkIndex(new_scene)
                 self.center_scene()
             else:
+                self._index.update(new_scene)
                 self.refresh()
 
     return RendererController()
 
 
-def create_view(scene, parent=None):
+def create_view(scene, parent=None, *, assets=None):
     """Return (QQuickView, controller); caller retains both references.
 
     Studio can wrap the QQuickView with QWidget.createWindowContainer(view).
@@ -129,7 +198,7 @@ def create_view(scene, parent=None):
     """
     from PySide6.QtCore import QUrl
     from PySide6.QtQuick import QQuickView
-    controller = make_controller(scene)
+    controller = make_controller(scene, assets=assets)
     view = QQuickView(parent)
     view.rootContext().setContextProperty("renderer", controller)
     view.setResizeMode(QQuickView.SizeRootObjectToView)
