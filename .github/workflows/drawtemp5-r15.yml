@@ -1,0 +1,88 @@
+name: DrawTemp 5 R15 native export (preview)
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/export/**'
+      - 'drawtemp/player/**'
+      - 'drawtemp/studio/**'
+      - 'scripts/r15_*'
+      - '.github/workflows/drawtemp5-r15.yml'
+      - 'pyproject.toml'
+      - 'sporebound/**'
+      - 'tests_standalone/test_drawtemp5_r15.py'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  creator-contract:
+    name: R15 preflight and integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - run: python -m unittest tests_standalone.test_drawtemp5_r15 -v
+      - run: python -m drawtemp.export.cli check --content sporebound/content/jeanne.json
+
+  native-bundle:
+    name: R15 native Player + Studio / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]" "pyinstaller==6.15.0"
+      - name: Freeze independent Qt Quick Player
+        run: >-
+          python -m PyInstaller --noconfirm --clean --onedir
+          --name DrawTempPlayer
+          --collect-data drawtemp --collect-data sporebound
+          scripts/r15_player_entry.py
+      - name: Export and verify Jeanne with full runtime
+        run: >-
+          python -m drawtemp.export.cli export
+          --content sporebound/content/jeanne.json
+          --runtime-dir dist/DrawTempPlayer
+          --output export/Jeanne
+      - run: python -m drawtemp.export.cli verify --bundle export/Jeanne
+      - name: Smoke frozen Player outside the source tree
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            cd export/Jeanne && ./Player/DrawTempPlayer.exe --smoke
+          else
+            cd export/Jeanne && ./Player/DrawTempPlayer --smoke
+          fi
+      - name: Freeze Qt Map Studio
+        run: >-
+          python -m PyInstaller --noconfirm --clean --onedir
+          --name DrawTempStudio
+          --collect-data drawtemp --collect-data sporebound
+          scripts/r15_studio_entry.py
+      - name: Save preview artifacts (not a certified release)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r15-preview-${{ runner.os }}
+          path: |
+            export/Jeanne/**
+            dist/DrawTempStudio/**
+          if-no-files-found: warn

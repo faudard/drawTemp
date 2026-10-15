@@ -10,10 +10,22 @@ from drawtemp.render.iso_scene import scene_from_mission, scene_from_exploration
 from drawtemp.render.qt_viewport import make_controller
 
 
-def build_controller(*, save_dir=None, reference=False):
+def build_controller(*, save_dir=None, reference=False, content_path=None):
     if reference:
         from drawtemp.sdk.reference import reference_project
         content, project = reference_project()
+    elif content_path is not None:
+        import json
+        from sporebound.studio_transaction import validate_pair
+        from sporebound.tactical_rpg3 import authored_rules_for_document
+        from drawtemp.export.r15 import project_path
+        path = Path(content_path)
+        raw_content = json.loads(path.read_text(encoding="utf-8"))
+        raw_project = json.loads(project_path(path).read_text(encoding="utf-8"))
+        valid_content, valid_project = validate_pair(raw_content, raw_project)
+        content = Content.from_dict(
+            valid_content, rules=authored_rules_for_document(valid_content))
+        project = GameProject.from_dict(valid_project, content)
     else:
         resource = files("sporebound").joinpath("content")
         content = Content.load(resource.joinpath("jeanne.json"))
@@ -47,7 +59,20 @@ def main(argv=None):
     parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration"),
                         default="title", help="Exercise a real game scene during Qt smoke")
     parser.add_argument("--save-dir", type=Path, help="Separate persistent save directory")
+    parser.add_argument("--content", type=Path,
+                        help="Content JSON and adjacent .game.json (R15 creator export)")
     args = parser.parse_args(argv)
+    # A frozen Player always loads the verified sibling game bundle.
+    # Do not silently fall back to an embedded developer fixture.
+    if getattr(sys, "frozen", False):
+        from drawtemp.export.r15 import verify_bundle
+        bundle = Path(sys.executable).resolve().parent.parent
+        try:
+            manifest = verify_bundle(bundle)
+            args.content = bundle / manifest["content"]
+        except (OSError, ValueError) as exc:
+            print("Standalone game integrity failure: " + str(exc), file=sys.stderr)
+            return 1
 
     try:
         from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QUrl
@@ -154,7 +179,8 @@ def main(argv=None):
             self.invoke(self.controller.finish_battle)
 
     app = QGuiApplication([sys.argv[0]])
-    controller = build_controller(save_dir=args.save_dir, reference=args.reference)
+    controller = build_controller(save_dir=args.save_dir, reference=args.reference,
+                                  content_path=args.content)
     if args.smoke and args.smoke_scene == "battle":
         if not args.reference:
             parser.error("--smoke-scene battle requires --reference")
