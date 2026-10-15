@@ -73,7 +73,12 @@ class GameSession:
     FRONT_BATTLE_GROUPS = ("battles", "rescue_battles", "pursuit_battles", "recovery_battles")
 
     def __init__(self, content, project, campaign_id, *, seed=1, rules=None):
-        self.rules = rules if rules is not None else default_rules()
+        if rules is None:
+            from .event_pages import has_pages
+            from .tactical_rpg3 import authored_rules_for_document
+            raw = content.to_dict()
+            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
+        self.rules = rules
         content.validate(rules=self.rules)
         project.validate(content)
         require(project.campaign(campaign_id) is not None, "Unknown campaign")
@@ -602,7 +607,11 @@ class GameSession:
                 "Malformed game session")
         require(data["digest"] == digest({k: v for k, v in data.items()
                                          if k != "digest"}), "Game session checksum mismatch")
-        rules = rules if rules is not None else default_rules()
+        if rules is None:
+            from .event_pages import has_pages
+            from .tactical_rpg3 import authored_rules_for_document
+            raw = content.to_dict()
+            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
         current_content = digest(content.to_dict())
         current_project = gameplay_project_digest(project)
         current_rules = rules.manifest()
