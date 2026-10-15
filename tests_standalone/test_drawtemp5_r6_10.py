@@ -113,6 +113,27 @@ class BuildingGameplayR610Tests(unittest.TestCase):
         self.assertIn("door_state", events)
         self.assertIn("level_move", events)
 
+    def test_two_upper_floors_are_traversable_with_explicit_stair_links(self):
+        from sporebound.interior_levels import add_interior_floor
+        from sporebound.level_navigation import add_level_link
+        data, mid = create()
+        house_id = next(m for m in data["missions"] if m["id"] == mid)["structures"][0]["id"]
+        data = add_interior_floor(data, mid, house_id, 2)
+        data = add_level_link(data, mid, [1, 4, 5], [2, 4, 5])
+        mission = next(m for m in data["missions"] if m["id"] == mid)
+        player = next(u["id"] for u in mission["units"] if u["team"] == "player")
+        data = place_unit_on_level(data, mid, player, 0, (4, 6))
+        data = add_building_door(data, mid, house_id, opened=True)
+        for actor in next(m for m in data["missions"] if m["id"] == mid)["units"]:
+            actor["speed"] = 1000 if actor["team"] == "player" else 1
+        battle = Battle(Content.from_dict(data), mid, seed=42,
+                        battle_id="r610-two-decks")
+        self.assertIn((2, 4, 5), battle.level_reachable())
+        battle.execute({"kind": "level_move", "level": 2, "cell": [4, 5]})
+        self.assertEqual(battle.unit_levels[battle.active.id], 2)
+        self.assertEqual(battle.active.pos, (4, 5))
+        self.assertEqual(Battle.replay(battle.recording()).digest(), battle.digest())
+
     def test_door_close_rejects_occupancy_and_invalid_access_atomically(self):
         content, mid, door = house_scenario(opened=True)
         b = Battle(content, mid, seed=29, battle_id="r610-occupied")
