@@ -132,6 +132,7 @@ def main(argv=None):
     app = QGuiApplication([sys.argv[0]])
     bridge = PlayerBridge(build_controller(save_dir=args.save_dir, reference=args.reference))
     engine = QQmlApplicationEngine()
+    engine.setInitialProperties({"smokeMode": args.smoke})
     engine.rootContext().setContextProperty("player", bridge)
     engine.load(QUrl.fromLocalFile(str(Path(__file__).with_name("Main.qml"))))
     if not engine.rootObjects():
