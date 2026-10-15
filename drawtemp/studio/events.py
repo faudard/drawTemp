@@ -16,6 +16,9 @@ from sporebound.event_branch_builder import author_choice_fork
 from sporebound.branch_qa_363 import (audit_branch_coverage, format_branch_qa,
                                       probe_story_choices, probe_tactical_branches)
 from drawtemp.studio.event_debug_controller import EventDebugController
+from drawtemp.studio.event_command_catalog import tactical_action
+from drawtemp.studio.event_presentation import add_event_cue
+from drawtemp.render.iso_scene import scene_from_mission
 from sporebound.event_context import inspect_event, preview_event, format_preview_report
 from sporebound.event_debugger import EventDebugger, format_debug_report
 
@@ -102,6 +105,34 @@ class EventStudio:
         return self._commit(mission_id, "action", lambda data:
                             event_graph.update_action(data, mission_id, event_id,
                                                       index, action))
+
+    def add_tactical_command(self, mission_id, event_id, kind, fields):
+        """Every action goes through the legacy registered rule contract."""
+        return self.add_action(mission_id, event_id, tactical_action(kind, fields))
+
+    def replace_tactical_command(self, mission_id, event_id, index, kind, fields):
+        return self.replace_action(mission_id, event_id, index,
+                                   tactical_action(kind, fields))
+
+    def add_presentation_cue(self, mission_id, event_id, *, clip_id,
+                             clip_name, kind, cue_id,
+                             start_ms=0, duration_ms=1000, fields=None):
+        """Typed dialogue/audio/actor/camera/FX on the existing Player cinematic hook."""
+        self.event(mission_id, event_id)
+        return self._pair(
+            mission_id, "presentation-cue",
+            lambda data, project: (
+                data, add_event_cue(
+                    project, mission_id, event_id,
+                    clip_id=clip_id, clip_name=clip_name,
+                    kind=kind, cue_id=cue_id,
+                    start_ms=start_ms, duration_ms=duration_ms,
+                    fields=fields)))
+
+    def iso_scene(self, mission_id):
+        """Canonical Content → shared R3 Renderer scene, detached from the editor."""
+        content = Content.from_dict(self.documents()["content"])
+        return scene_from_mission(content.missions[mission_id])
 
     def move_action(self, mission_id, event_id, index, direction):
         return self._commit(mission_id, "action", lambda data:
@@ -263,6 +294,15 @@ class EventStudio:
                 if action["kind"] == "hazard":
                     markers.append({"event_id": event["id"],
                                     "pos": list(action["pos"]), "kind": "effect"})
+                if action["kind"] == "spawn":
+                    markers.append({"event_id": event["id"],
+                                    "pos": list(action["actor"]["pos"]),
+                                    "kind": "effect"})
+                if action["kind"] in ("wave", "queue_wave"):
+                    for actor in action["actors"]:
+                        markers.append({"event_id": event["id"],
+                                        "pos": list(actor["pos"]),
+                                        "kind": "effect"})
         return markers
 
     def preview(self, mission_id, event_id, *, scenario="satisfied", tick=0):
