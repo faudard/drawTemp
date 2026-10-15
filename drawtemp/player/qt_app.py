@@ -154,6 +154,18 @@ def create_bridge(controller, renderer):
         def newGame(self):
             self.invoke(self.controller.new_game)
 
+        @Slot()
+        def continueGame(self):
+            self.invoke(self.controller.continue_game)
+
+        @Slot()
+        def loadAutosave(self):
+            self.invoke(self.controller.load_autosave)
+
+        @Slot()
+        def restoreAutosaveBackup(self):
+            self.invoke(self.controller.restore_autosave_backup)
+
         @Slot(int)
         def loadGame(self, slot):
             self.invoke(self.controller.load, slot)
