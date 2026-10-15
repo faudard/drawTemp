@@ -15,13 +15,16 @@ Item {
     property bool showBlocked: false
     property bool showHeights: false
     property bool showActors: true
-    // Default to all visible for Player/R3. R5 Studio supplies per-map policy.
+    // Optional Studio layer policy; Player defaults to all layers visible.
     property var layerVisibility: ({})
     property var layerOpacity: ({})
     function layerEnabled(name) { return layerVisibility[name] !== false }
     function layerAlpha(name) {
         return layerOpacity[name] === undefined ? 1.0 : layerOpacity[name] / 100.0
     }
+    // Player-only presentation: briefly conceal the static actor while its
+    // committed move / attack clip is displayed. Studio defaults to none.
+    property var concealedActorIds: []
     property bool showLegend: interactionMode === "pan"
     property var hoveredCell: ({})
     readonly property var camera: renderer.cameraState
@@ -40,6 +43,14 @@ Item {
         }
     }
 
+    // Independent visual clock: no CT, tactical RNG or save state is changed.
+    Timer {
+        interval: 125
+        repeat: true
+        running: renderer.animatedAssets && root.showActors
+        onTriggered: renderer.advanceVisual(125)
+    }
+
     // Projection, clipping, depth and atlas coordinates are supplied by R3.
     // Delegates use Qt Quick scene-graph nodes; never QML Canvas or CPU paint.
     Repeater {
@@ -51,15 +62,17 @@ Item {
             property real scaleFactor: root.camera.zoom
             property bool isTile: row.kind === "tile"
             property bool isActor: row.kind === "actor"
-            visible: isActor ? (root.showActors && root.layerEnabled("Unités"))
+            visible: isActor
+                     ? (root.showActors && root.layerEnabled("Unités") &&
+                        root.concealedActorIds.indexOf(row.id) < 0)
                      : isTile ? true : root.layerEnabled("Objets")
             opacity: isActor ? root.layerAlpha("Unités")
                      : isTile ? 1.0 : root.layerAlpha("Objets")
             sourceComponent: isTile ? tileComponent : (isActor ? actorComponent : objectComponent)
             x: root.width / 2 + root.camera.panX + row.sx * scaleFactor
-               - (isTile ? 48 : isActor ? 20 : 15) * scaleFactor
+               - (isTile ? 48 : isActor ? (row.imageUrl ? row.pivotX : 20) : 15) * scaleFactor
             y: root.height / 2 + root.camera.panY + row.sy * scaleFactor
-               - (isTile ? 24 : isActor ? 68 : 40) * scaleFactor
+               - (isTile ? 24 : isActor ? (row.imageUrl ? row.pivotY : 68) : 40) * scaleFactor
             scale: scaleFactor
             transformOrigin: Item.TopLeft
             z: row.zOrder
@@ -74,6 +87,35 @@ Item {
                 (root.hoveredCell.x === tile.x && root.hoveredCell.y === tile.y)
             width: 96
             height: 48
+            // Exposed relief only when an adjacent height is lower.
+            Shape {
+                visible: tile.eastDrop > 0
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: 0.8
+                    strokeColor: "#39444a"
+                    fillColor: "#716f62"
+                    startX: 96; startY: 24
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 48; y: 48 + tile.eastDrop * 12 }
+                    PathLine { x: 96; y: 24 + tile.eastDrop * 12 }
+                    PathLine { x: 96; y: 24 }
+                }
+            }
+            Shape {
+                visible: tile.southDrop > 0
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: 0.8
+                    strokeColor: "#37444a"
+                    fillColor: "#8c8573"
+                    startX: 48; startY: 48
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 0; y: 24 + tile.southDrop * 12 }
+                    PathLine { x: 48; y: 48 + tile.southDrop * 12 }
+                    PathLine { x: 48; y: 48 }
+                }
+            }
             Shape {
                 anchors.fill: parent
                 opacity: root.layerAlpha("Terrain")
@@ -97,6 +139,35 @@ Item {
                 fillMode: Image.Stretch
                 smooth: false
                 asynchronous: false
+            }
+            // Transient overlays never mutate tactical or authored data.
+            Shape {
+                visible: tile.overlay !== ""
+                opacity: 0.24
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: 0
+                    fillColor: tile.overlayColor
+                    startX: 48; startY: 0
+                    PathLine { x: 96; y: 24 }
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 48; y: 0 }
+                }
+            }
+            Shape {
+                visible: tile.overlay !== ""
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: 2.5
+                    strokeColor: tile.overlayColor
+                    fillColor: "transparent"
+                    startX: 48; startY: 0
+                    PathLine { x: 96; y: 24 }
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 48; y: 0 }
+                }
             }
             Shape {
                 visible: highlighted || (tile.goal && root.layerEnabled("Objectifs"))
@@ -155,26 +226,45 @@ Item {
         id: actorComponent
         Item {
             property var actor: parent.row
-            width: 40; height: 68
+            readonly property bool hasArt: !!actor.imageUrl
+            width: hasArt ? actor.frameWidth : 40
+            height: hasArt ? actor.frameHeight : 68
+            Image {
+                id: resolvedSprite
+                visible: parent.hasArt && status !== Image.Error
+                width: parent.width
+                height: parent.height
+                source: parent.hasArt ? actor.imageUrl : ""
+                sourceClipRect: parent.hasArt
+                    ? Qt.rect(actor.atlasX, actor.atlasY, actor.frameWidth, actor.frameHeight)
+                    : Qt.rect(0, 0, 0, 0)
+                fillMode: Image.Stretch
+                smooth: false
+                asynchronous: false
+                cache: true
+            }
             Rectangle {
+                visible: !parent.hasArt || resolvedSprite.status === Image.Error
                 width: 34; height: 9; radius: 5
                 x: 3; y: 58
                 color: "#10191c"; opacity: 0.45
             }
             Rectangle {
+                visible: !parent.hasArt || resolvedSprite.status === Image.Error
                 width: 28; height: 38; radius: 9
                 x: 6; y: 19
                 color: actor.alive ? (actor.team === "enemy" ? "#af6556" : "#496cbb") : "#777c85"
                 border.width: 2; border.color: "#e2d7c4"
             }
             Rectangle {
+                visible: !parent.hasArt || resolvedSprite.status === Image.Error
                 width: 19; height: 19; radius: 10
                 x: 10; y: 5
                 color: "#eacaa1"; border.color: "#62504b"
             }
             Text {
                 text: actor.label || actor.id
-                x: -30; y: -15
+                x: (parent.width - 100) / 2; y: -15
                 width: 100; horizontalAlignment: Text.AlignHCenter
                 color: "#fff3df"; font.pixelSize: 11
                 style: Text.Outline; styleColor: "#1e2930"
