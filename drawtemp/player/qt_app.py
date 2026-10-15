@@ -42,12 +42,16 @@ def scene_for_player(controller):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="DrawTemp 5 — Qt Quick Player (R12)")
     parser.add_argument("--smoke", action="store_true", help="Load the QML root and quit")
+    parser.add_argument("--gui-journey", action="store_true",
+                        help="R14 Qt input journey: title, story, battle, F5, menu, reload")
     parser.add_argument("--reference", action="store_true",
                         help="Run the deterministic R0 reference campaign")
     parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration"),
                         default="title", help="Exercise a real game scene during Qt smoke")
     parser.add_argument("--save-dir", type=Path, help="Separate persistent save directory")
     args = parser.parse_args(argv)
+    if args.gui_journey and (not args.reference or args.smoke or args.save_dir is None):
+        parser.error("--gui-journey requires --reference and an isolated --save-dir")
 
     try:
         from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QUrl
@@ -178,7 +182,63 @@ def main(argv=None):
     if not engine.rootObjects():
         print("R12 Player QML root failed to load", file=sys.stderr)
         return 1
-    if args.smoke:
+    if args.gui_journey:
+        # Drives production QML and the actual PlayerBridge. This intentionally
+        # runs in a separate QGuiApplication process from the Widgets Studio.
+        from PySide6.QtCore import QPoint, QPointF, Qt
+        from PySide6.QtTest import QTest
+
+        def journey():
+            try:
+                window = engine.rootObjects()[0]
+                window.requestActivate()
+                QTest.qWait(60)
+
+                def click(name):
+                    item = window.findChild(QObject, name)
+                    if item is None or not item.isVisible() or not item.isEnabled():
+                        raise AssertionError("Missing visible/enabled QML control: " + name)
+                    point = item.mapToScene(QPointF(item.width() / 2, item.height() / 2))
+                    QTest.mouseClick(window, Qt.LeftButton,
+                                     pos=QPoint(round(point.x()), round(point.y())))
+                    QTest.qWait(80)
+
+                def assert_screen(expected):
+                    actual = controller.state()["screen"]
+                    if actual != expected:
+                        raise AssertionError(f"Expected screen {expected}, got {actual}")
+
+                assert_screen("title")
+                click("r14NewGame")
+                assert_screen("dialogue")
+                click("r14Choice-enter")
+                assert_screen("campaign")
+                from drawtemp.sdk.reference import MISSION
+                click("r14Mission-" + MISSION)
+                if controller.state()["screen"] not in ("battle", "result"):
+                    raise AssertionError("Reference battle did not start")
+                before = controller.state()
+                QTest.keyClick(window, Qt.Key_F5)
+                QTest.qWait(100)
+                if 1 not in controller.slots():
+                    raise AssertionError("F5 did not save slot 1 through the QML Shortcut")
+                click("r14PauseMenu")
+                click("r14TitleFromPause")
+                assert_screen("title")
+                click("r14Continue")
+                after = controller.state()
+                if after["screen"] != before["screen"] or after["battle"] != before["battle"]:
+                    raise AssertionError("GUI save/reload changed the canonical battle state")
+                print("R14 Player QML GUI input: title -> dialogue -> campaign -> "
+                      "battle -> F5 -> pause/title -> reload OK", flush=True)
+                app.exit(0)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                app.exit(1)
+
+        QTimer.singleShot(300, journey)
+    elif args.smoke:
         QTimer.singleShot(125, app.quit)
     return app.exec()
 
