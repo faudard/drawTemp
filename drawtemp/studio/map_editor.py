@@ -178,7 +178,7 @@ class MapWindow(QMainWindow):
         hit = dict(hit or {})
         self.construction.on_renderer_hit(
             hit.get("structure_id"), hit.get("anchor", ()),
-            hit.get("cell", ()), hit.get("part", "building"))
+            hit.get("cell", ()), hit.get("part", "building"), hit.get("level", 0))
         self._construction_view()
 
     def _dock(self, title, widget, area):
