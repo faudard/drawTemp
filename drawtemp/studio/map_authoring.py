@@ -22,7 +22,7 @@ from sporebound.terrain_schema import SURFACES, FEATURES
 from .map_layers import LayerWorkspace
 
 
-BRUSHES = ("grass", "dirt", "sand", "stone", "cobble", "water", "bridge")
+BRUSHES = ("grass", "dirt", "sand", "stone", "cobble", "rock", "water", "bridge")
 TOOLS = ("pencil", "rectangle", "line", "fill", "picker", "erase", "goal",
          "wall", "cover", "hazard", "height+", "height-", "Maison", "Pont", "Tour")
 SURFACE_PALETTE = tuple(name for name in BRUSHES if name in SURFACES)
