@@ -15,7 +15,7 @@ R14 is transverse across R0–R16. The existing Tk application is kept intact un
 | R14.6 GPU Profiling | Reject software/offscreen profiles; validate external real-GPU frame samples and percentile computation | Real GPU measurements for CPU/GPU/VRAM/leaks/loading and repeatable runner |
 | R14.7 Large Map Scale | Require 32²/64²/128² × 24/54/96 px, ≥120 frames/scene and ≥80 actors in supplied profile | Author and benchmark representative renderer scenes and calibrate budgets |
 | R14.8 Long Session | Existing checkpointed three-mission, two-seed, two-ending integration | Prolonged soak with resume/fault cycles and memory leak detection |
-| R14.9 Crash Recovery | Existing persistence fault test suite | Qt/5.0 save manager integration and interruption/fallback UX |
+| R14.9 Crash Recovery | Persistence fault suite plus interrupted backup copy/atomic publish tests against the real R12 PlayerController; last valid backup preserved | GUI recovery messaging and full power-loss interruption test on each OS |
 | R14.10 Security & Validation | Non-destructive asset path containment, drive/traversal/symlink and SHA-256 manifest checks | Apply to all real import/export entry points and fuzz third-party inputs |
 | R14.11 Accessibility QA | Keyboard driver foundation only | Screen-reader, focus/contrast/text-size audit of real Qt UI |
 | R14.12 Release Certification | Structured report, revision matching, environment verification, logs for every probe and explicit missing/failed checks | Full R14 gate, release acceptance and signed-off performance/visual evidence |
@@ -39,7 +39,7 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
   python scripts/certify_drawtemp5_r14.py --report out/r14-report.json --qt --soak --faults
 ```
 
-The latter environment syntax is for bash; on Windows set those environment variables before running Python. The script executes the existing Core SDK tests, the R14 contract/matrix tests, optionally both native Qt GUI journeys and the composition smoke, the checkpointed gameplay fixture, and the existing crash/fault suite. Each test writes a log, records a process return code, and fails its CI job on a non-zero result. The generated JSON does **not** certify R14. The long-session and fault probes are intentionally bounded and are not full-duration soak tests.
+The latter environment syntax is for bash; on Windows set those environment variables before running Python. The script executes the existing Core SDK tests, the R14 contract/matrix tests, optionally both native Qt GUI journeys and the composition smoke, the checkpointed gameplay fixture, the legacy crash/fault suite, and Player slot-backup interruption tests. Each test writes a log, records a process return code, and fails its CI job on a non-zero result. The generated JSON does **not** certify R14. The long-session and fault probes are intentionally bounded and are not full-duration soak tests.
 
 The GitHub Actions workflow `.github/workflows/drawtemp5-r14.yml` runs the same evidence probes on all three OSes, uploads per-run artefacts, and aggregates them.
 
