@@ -54,6 +54,16 @@ class R13QtSmoke(unittest.TestCase):
                     self.assertEqual(edits["objective"], "extract")
                     self.assertEqual(edits["goal_cells"], [[3, 3]])
                     self.assertEqual(content.missions["smoke"].objective, "eliminate")
+                    from sporebound.battle_lab import run_lab
+                    report = run_lab(window.content, "smoke",
+                                     seeds=(2, 5), max_commands=12)
+                    window._show_simulation_charts(report)
+                    self.assertEqual(window.charts.report["mode"], "single")
+                    self.assertEqual(window.charts.report["runs"], 2)
+                    window.reference = report
+                    window._show_simulation_charts(report)
+                    self.assertEqual(window.charts.report["mode"], "comparison")
+                    self.assertTrue(window.charts.report["comparison"]["passed"])
                     captured.append(True)
                 except Exception as exc:
                     captured.append(exc)
