@@ -71,6 +71,18 @@ COLORS = ("#6a9672", "#aa8968", "#9b9d95", "#b7b1a1",
           "#c5b787", "#817d76", "#528cae", "#b7a17b")
 
 
+def facing_to_direction(facing):
+    """Map the four canonical tactical facings to cosmetic atlas directions."""
+    if not isinstance(facing, (tuple, list)) or len(facing) != 2:
+        return "south"
+    dx, dy = facing
+    if type(dx) not in (int, float) or type(dy) not in (int, float):
+        return "south"
+    if abs(dx) > abs(dy):
+        return "east" if dx > 0 else "west"
+    return "south" if dy >= 0 else "north"
+
+
 def scene_from_mission(mission, snapshot=None):
     """Detached dictionary for both Qt clients, using canonical mission + R1 snapshot."""
     battle = getattr(snapshot, "battle", None)
@@ -97,7 +109,10 @@ def scene_from_mission(mission, snapshot=None):
         field = (lambda k: u[k]) if isinstance(u, Mapping) else (lambda k: getattr(u, k))
         actors.append({"id": str(field("id")), "name": str(field("name")), "x": float(field("pos")[0]),
                        "y": float(field("pos")[1]), "team": str(field("team")),
-                       "alive": field("hp") > 0, "level": int(levels.get(field("id"), 0))})
+                       "alive": field("hp") > 0, "level": int(levels.get(field("id"), 0)),
+                       "direction": facing_to_direction(
+                           u.get("facing", (0, 1)) if isinstance(u, Mapping)
+                           else getattr(u, "facing", (0, 1)))})
     objects = [{"id": str(o["id"]), "kind": str(o["kind"]),
                 "x": int(o["pos"][0]), "y": int(o["pos"][1])}
                for o in (battle["objects"] if battle else mission.objects)]
@@ -222,6 +237,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
             rows.append({"kind": "actor", "id": a["id"],
                          "label": a.get("name", a["id"]), "team": a["team"],
                          "alive": a["alive"], "sx": sx, "sy": sy,
+                         "direction": a.get("direction", "south"),
                          "zOrder": (x + y) * 100 + 60})
     return sorted(rows, key=lambda r: (r["zOrder"], r["id"]))
 

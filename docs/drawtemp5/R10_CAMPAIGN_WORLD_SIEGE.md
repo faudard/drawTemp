@@ -102,6 +102,83 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
 Dedicated GitHub Actions checks run the headless suite on Python 3.10, 3.12
 and 3.14 and the Qt window smoke on Linux, macOS and Windows.
 
+## R10.11 — Parcours guidé de campagne et playtest Qt (tranche suivante)
+
+Le nouvel onglet **Créer le parcours** permet, depuis la fenêtre campagne,
+de produire le contenu minimum jouable sans édition manuelle des fichiers JSON :
+
+1. **Mission** : saisir un identifiant, un nom et les dimensions; choisir la
+   mission précédente, puis créer la mission avec une carte vierge et deux
+   acteurs modèles (`sporebound.authoring.add_blank_mission`). La création de
+   carte et du lien `next_missions` forme **une seule transaction Undo/Redo**.
+2. **Récompense** : définir l'or de la mission sélectionnée via le validateur
+   de propriétés de mission existant.
+3. **Scène narrative** : créer titre, dialogue, intervenant, puis ajouter des
+   choix et leurs conséquences typées. Définir une scène d'introduction ou
+   lier une scène après la victoire d'une mission.
+4. **Deux fins** : configurer une condition de décision (`flag_eq`) puis
+   **Ajouter condition ET** sur la mission finale
+   (`completed_mission`). Les fins n'apparaissent ainsi qu'après la bataille.
+5. **Tester dans le Player Qt** : enregistrer la paire Content + GameProject,
+   puis lancer le processus Qt R12 sur **ces deux fichiers**, et non sur la
+   démonstration Jeanne intégrée.
+
+Toutes les opérations traversent `CampaignStudio`,
+`AuthoringSession.preview_pair`, `Content`, `GameProject` et
+`sporebound.story_authoring`. Aucun nouvel interpréteur de quêtes ou
+de conditions n'est ajouté. Les scènes après mission correspondent aux
+**victoires** dans le runtime existant.
+
+### Player Qt sur projet externe
+
+```sh
+python -m drawtemp.player.qt_app \
+  --content /chemin/jeu.json \
+  --project /chemin/jeu.game.json \
+  --campaign main
+
+# --project peut être omis si le fichier est jeu.game.json.
+# --reference et --content sont incompatibles.
+```
+
+Le répertoire des sauvegardes par défaut est propre au chemin absolu de la
+paire projet (SHA-256 tronqué), puis à l'identifiant de campagne :
+`~/.drawtemp/player5/authored/<id>/main/`.
+Le comportement de `--save-dir` est conservé. Le Player vérifie toujours
+les empreintes de compatibilité de la session ; le Studio n'importera pas
+silencieusement un ancien slot.
+
+La campagne de référence du test construit *par API de création*
+trois missions, deux décisions narratives, deux fins conditionnées à la
+victoire finale, de l'or et une ressource persistante, enregistre les deux
+documents, les recharge, et valide la projection du Player.
+
+### Preuves et tests
+
+```sh
+python -m unittest tests_standalone.test_drawtemp5_r10_end_to_end -v
+
+# Gate tactique explicite : six combats réels, trois par choix de dialogue.
+DRAWTEMP_R10_FULL_GATE=1 python -m unittest \
+  tests_standalone.test_drawtemp5_r10_end_to_end.R10EndToEndTests.test_two_endings_with_real_tactical_replay -v
+
+# Widgets réels en rendu offscreen (pas un test GPU)
+QT_QPA_PLATFORM=offscreen python -m unittest \
+  tests_standalone.test_drawtemp5_r10_gui -v
+```
+
+L'audit symbolique et une route *candidate* ne sont jamais présentés comme
+preuves de combats. Le job GitHub **R10 real tactical replay / two endings**
+exécute `certify_path` et contrôle les checkpoints et états observés.
+Il faut son résultat **vert** avant de considérer les deux fins certifiées.
+
+**Limites restantes :** édition GUI du placement précis, transition
+cinématique, événements sur routes, logistique avancée et siege multi-fronts
+joué sont encore couverts par les éditeurs spécialisés, pas directement
+par l'onglet R10. Le Player Qt est toujours un prototype en cours
+d'intégration ; lancement et sauvegarde ne suffisent pas à certifier
+l'ensemble des interactions joueur ni la qualité visuelle.
+
 ## Explicit remaining R10 exit criteria
 
 The roadmap's full **gate R10** is broader than this first integration.
