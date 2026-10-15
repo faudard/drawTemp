@@ -170,6 +170,10 @@ def main(argv=None):
             self.invoke(self.controller.interact_object, object_id)
 
         @Slot(str)
+        def inspectSkill(self, skill):
+            self.invoke(self.controller.inspect_skill, skill)
+
+        @Slot(str)
         def preview(self, kind):
             self.invoke(self.controller.preview, kind)
 
