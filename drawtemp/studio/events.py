@@ -12,6 +12,10 @@ from drawtemp.core import Content, GameProject
 from drawtemp.sdk.authoring import AuthoringSession
 from sporebound import event_composer, event_graph, story_authoring
 from sporebound.entity_event_studio import author_gate_sequence
+from sporebound.event_branch_builder import author_choice_fork
+from sporebound.branch_qa_363 import (audit_branch_coverage, format_branch_qa,
+                                      probe_story_choices, probe_tactical_branches)
+from drawtemp.studio.event_debug_controller import EventDebugController
 from sporebound.event_context import inspect_event, preview_event, format_preview_report
 from sporebound.event_debugger import EventDebugger, format_debug_report
 
@@ -164,6 +168,56 @@ class EventStudio:
         """Full lever/door/dialogue/cinematic sequence, one cross-file undo step."""
         return self._pair(mission_id, "gate-wizard", lambda data, project:
                           author_gate_sequence(data, project, mission_id, **kwargs))
+
+    def create_choice_fork(self, mission_id, *, origin_event_id, origin_cell,
+                           scene_id, title, text, branches,
+                           reunion_event_id="", reunion_message="", speaker=""):
+        """One Undo transaction for the narrative choice scene and tactical forks.
+
+        All branching semantics are delegated to the existing production
+        author_choice_fork validator; no sidecar editor graph is persisted.
+        """
+        return self._pair(
+            mission_id, "choice-fork",
+            lambda data, project: author_choice_fork(
+                data, project, mission_id, origin_event_id=origin_event_id,
+                origin_cell=origin_cell, scene_id=scene_id, title=title,
+                text=text, branches=branches,
+                reunion_event_id=reunion_event_id,
+                reunion_message=reunion_message, speaker=speaker))
+
+    def bind_choice(self, mission_id, event_id, scene_id, choice_id):
+        """Gate an existing tactical event on a validated narrative choice."""
+        return self._commit(mission_id, "choice-guard", lambda data:
+                            event_graph.bind_choice(data, mission_id, event_id,
+                                                    scene_id, choice_id))
+
+    def clear_choice(self, mission_id, event_id):
+        return self._commit(mission_id, "choice-guard", lambda data:
+                            event_graph.clear_choice(data, mission_id, event_id))
+
+    def branch_qa(self, mission_id, *, probe=False):
+        """Read-only branch diagnostics; synthetic previews are not replay proof."""
+        state = self.documents()
+        content = state["content"]
+        project = GameProject.from_dict(state["project"], Content.from_dict(content))
+        structural = audit_branch_coverage(project.story, content, mission_id)
+        results = [structural]
+        if probe:
+            results.extend((
+                probe_story_choices(content, project),
+                probe_tactical_branches(content, project, mission_id)))
+        return {
+            "reports": results,
+            "lines": [line for report in results
+                      for line in format_branch_qa(report)],
+            "replay_verified": False,
+        }
+
+    def start_debug(self, mission_id, event_id, *,
+                    scenario="satisfied", tick=0):
+        return EventDebugController(self.session, mission_id, event_id,
+                                    scenario=scenario, tick=tick)
 
     def graph(self, mission_id):
         return event_graph.build_event_graph(self.documents()["content"], mission_id)

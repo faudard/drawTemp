@@ -39,9 +39,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
+          DRAWTEMP_R14_ARTIFACT_DIR: r14-images
         run: >-
           python scripts/certify_drawtemp5_r14.py
-          --report r14-report.json --qt --soak --faults
+          --report r14-report.json --qt --gui --visual --soak --faults
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -50,6 +51,7 @@ jobs:
             r14-report.json
             *.log
             r14-reliability.json
+            r14-images/*.png
           if-no-files-found: warn
 
   matrix-evidence:
