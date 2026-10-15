@@ -26,13 +26,14 @@ ROOT = Path(__file__).resolve().parents[1]
 class SharedRendererContractTests(unittest.TestCase):
     def test_map_edits_are_the_same_scene_and_metadata_as_player(self):
         studio = MapStudio.reference()
+        studio.create("shared_r3", "Terrain commun R3", 12, 12)
         studio.paint([(4, 3)], "surface:stone")
         studio.paint([(5, 2)], "height+")
         snapshot = studio.snapshot()
         content = Content.from_dict(snapshot["content"])
-        original = content.missions[MISSION]
+        original = content.missions["shared_r3"]
         authored = scene_from_mission(original)
-        player_scene = scene_from_mission(content.missions[MISSION])
+        player_scene = scene_from_mission(content.missions["shared_r3"])
         self.assertEqual(fingerprint(authored), fingerprint(player_scene))
         tile = next(tile for tile in authored["tiles"]
                     if (tile["x"], tile["y"]) == (4, 3))
