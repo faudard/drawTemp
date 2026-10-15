@@ -31,7 +31,7 @@ def contact_sheet(root, destination):
                 sprite = frame.resize((64 * scale, 64 * scale),
                                       Image.Resampling.NEAREST)
                 image.paste(sprite, (x + 10, y + 32), sprite)
-                draw.text((x + 9, y + 7), f"{outfit} • {direction} • {action}",
+                draw.text((x + 9, y + 7), f"{outfit} / {direction} / {action}",
                           fill="#eed5ac")
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
