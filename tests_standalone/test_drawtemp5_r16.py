@@ -45,6 +45,8 @@ class R16MigrationTests(unittest.TestCase):
                          self.originals[0])
         self.assertEqual((bundle / "originals" / "jeanne.game.json").read_bytes(),
                          self.originals[1])
+        self.assertEqual((bundle / "project" / "jeanne.json").read_bytes(), self.originals[0])
+        self.assertEqual((bundle / "project" / "jeanne.game.json").read_bytes(), self.originals[1])
         # Canonical pair must be openable by the same authoring runtime.
         from drawtemp.sdk.authoring import AuthoringSession
         authoring = AuthoringSession.open(bundle / "project" / "jeanne.json")
