@@ -118,6 +118,11 @@ class DatabaseWindow(QMainWindow):
             button = toolbar.addAction(label)
             button.triggered.connect(callback)
 
+        talent_action = toolbar.addAction("Classes et talents…")
+        talent_action.triggered.connect(self._open_talents)
+        encounter_action = toolbar.addAction("Composer une rencontre…")
+        encounter_action.triggered.connect(self._open_encounter)
+
         splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(splitter)
 
@@ -279,11 +284,32 @@ class DatabaseWindow(QMainWindow):
                 effect_button.clicked.connect(self._edit_effects)
                 self.form.addRow(effect_button)
             if family == "jobs":
-                self.form.addRow("Arbre de classe", QLabel(
-                    "Prérequis validés ; liens supplémentaires via l'API R8"))
+                tree_button = QPushButton("Ouvrir l'arbre des classes et talents")
+                tree_button.clicked.connect(self._open_talents)
+                self.form.addRow(tree_button)
+            if family == "actors":
+                encounter_button = QPushButton("Composer la rencontre de cette mission")
+                encounter_button.clicked.connect(self._open_encounter)
+                self.form.addRow(encounter_button)
         refs = self.editor.references(family, key)
         self.references.setPlainText(
             "\n".join(refs) if refs else "Aucune référence directe connue.")
+
+    def _open_talents(self):
+        from drawtemp.studio.r8_workbenches_qt import TalentDialog
+        selected_job = self.selected[1] if self.selected and self.selected[0] == "jobs" else ""
+        dialog = TalentDialog(self.editor.session, selected_job=selected_job,
+                              on_change=self._reload, parent=self)
+        dialog.exec()
+        self._reload()
+
+    def _open_encounter(self):
+        from drawtemp.studio.r8_workbenches_qt import EncounterDialog
+        mission = self.selected[2] if self.selected and self.selected[0] == "actors" else ""
+        dialog = EncounterDialog(self.editor.session, mission_id=mission,
+                                 on_change=self._reload, parent=self)
+        dialog.exec()
+        self._reload()
 
     def _edit_effects(self):
         if not self.selected or self.selected[0] != "skills":
