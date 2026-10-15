@@ -120,6 +120,35 @@ class EncounterDesignerR13Tests(unittest.TestCase):
         with self.assertRaises(AuthoringError):
             studio.apply(plan)
 
+    def test_two_document_save_is_explicit_and_reopenable(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        content, project = reference_project()
+        old_ticks = content.missions[MISSION].target_ticks
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "session.json"
+            studio = AuthoringSession.new(content, project)
+            studio.save_as(path)
+            old_bytes = path.read_bytes()
+            project_path = path.with_suffix(".game.json")
+            old_project = project_path.read_bytes()
+            plan = preview_authoring(
+                studio, MISSION, {"target_ticks": old_ticks + 1})
+            self.assertEqual(path.read_bytes(), old_bytes)
+            studio.apply(plan)
+            self.assertEqual(path.read_bytes(), old_bytes)
+            self.assertTrue(studio.snapshot().dirty)
+            studio.save()
+            self.assertNotEqual(path.read_bytes(), old_bytes)
+            self.assertEqual(project_path.read_bytes(), old_project)
+            reopened = AuthoringSession.open(path)
+            restored = Content.from_dict(
+                reopened.snapshot().to_dict()["content"])
+            self.assertEqual(restored.missions[MISSION].target_ticks,
+                             old_ticks + 1)
+            self.assertFalse(reopened.snapshot().dirty)
+
     def test_invalid_transaction_preserves_canonical_history(self):
         content, project = reference_project()
         studio = AuthoringSession.new(content, project)
