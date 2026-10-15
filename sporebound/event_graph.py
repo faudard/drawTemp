@@ -444,7 +444,11 @@ def reorder_event(data, mission_id, event_id, direction):
     require(index is not None and 0 <= index + direction < len(events),
             'Cannot move event outside mission')
     events[index], events[index+direction] = events[index+direction], events[index]
-    return Content.from_dict(result).to_dict()
+    return Content.from_dict(
+        result, rules=__import__(
+            "sporebound.tactical_rpg3",
+            fromlist=["authored_rules_for_document"]
+        ).authored_rules_for_document(result)).to_dict()
 
 
 def delete_event(data, mission_id, event_id):
@@ -455,7 +459,11 @@ def delete_event(data, mission_id, event_id):
     mission['triggers'] = [e for e in mission.get('triggers', [])
                            if e['id'] != event_id]
     require(len(mission['triggers']) < previous, 'Unknown tactical event')
-    return Content.from_dict(result).to_dict()
+    return Content.from_dict(
+        result, rules=__import__(
+            "sporebound.tactical_rpg3",
+            fromlist=["authored_rules_for_document"]
+        ).authored_rules_for_document(result)).to_dict()
 
 
 def duplicate_event(data, mission_id, event_id, new_id):
@@ -472,7 +480,11 @@ def duplicate_event(data, mission_id, event_id, new_id):
             'Event id already exists')
     event['id'] = new_id
     mission['triggers'].append(event)
-    return Content.from_dict(result).to_dict()
+    return Content.from_dict(
+        result, rules=__import__(
+            "sporebound.tactical_rpg3",
+            fromlist=["authored_rules_for_document"]
+        ).authored_rules_for_document(result)).to_dict()
 
 
 def condition_title(event):
