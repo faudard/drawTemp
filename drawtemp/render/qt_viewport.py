@@ -10,7 +10,14 @@ import sys
 from .iso_scene import Camera, IsoProjection, pick, render_items, scene_from_mission
 
 
-def make_controller(scene, atlas_url=""):
+def default_atlas_url():
+    """One atlas binding for all clients; missing optional art is harmless."""
+    from importlib.resources import files
+    atlas = files("sporebound").joinpath("content/art/iso/terrain.png")
+    return Path(str(atlas)).resolve().as_uri() if atlas.is_file() else ""
+
+
+def make_controller(scene, atlas_url=None):
     """Create a QObject only when Qt is installed; keep headless module import safe."""
     from PySide6.QtCore import QObject, Property, Signal, Slot
 
@@ -26,7 +33,7 @@ def make_controller(scene, atlas_url=""):
             self.projection = IsoProjection()
             self.selection = None
             self._items = []
-            self._atlas = atlas_url
+            self._atlas = default_atlas_url() if atlas_url is None else atlas_url
             self.center_scene()
 
         def center_scene(self):
@@ -92,6 +99,13 @@ def make_controller(scene, atlas_url=""):
             if hit is not None:
                 self.picked.emit(hit)
 
+        @Slot(int, int)
+        def selectCell(self, x, y):
+            self.selection = (x, y) if (
+                0 <= x < self.scene["width"] and
+                0 <= y < self.scene["height"]) else None
+            self.refresh()
+
         def replace_scene(self, new_scene):
             """Keep zoom/pan through edits and turns, recenter for a new map."""
             changed = (self.scene["mission"] != new_scene["mission"] or
@@ -115,11 +129,7 @@ def create_view(scene, parent=None):
     """
     from PySide6.QtCore import QUrl
     from PySide6.QtQuick import QQuickView
-    from importlib.resources import files
-
-    atlas = files("sporebound").joinpath("content/art/iso/terrain.png")
-    atlas_url = Path(str(atlas)).resolve().as_uri() if atlas.is_file() else ""
-    controller = make_controller(scene, atlas_url)
+    controller = make_controller(scene)
     view = QQuickView(parent)
     view.rootContext().setContextProperty("renderer", controller)
     view.setResizeMode(QQuickView.SizeRootObjectToView)
