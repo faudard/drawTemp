@@ -53,7 +53,9 @@ def inventory(content, project):
         entries.append(Entry("skills", row["id"], row["name"]))
     for key, row in sorted(content.get("equipment", {}).items()):
         entries.append(Entry("equipment", key, row.get("name", key)))
-    entries.extend(Entry("flags", key, key) for key in sorted(used_flags(project)))
+    from drawtemp.studio.r8_integrity import flags as referenced_flags
+    entries.extend(Entry("flags", key, key)
+                   for key in referenced_flags(content, project))
     return tuple(entries)
 
 
@@ -247,13 +249,21 @@ class DatabaseEditor:
     def detail(self, family, identifier, mission_id=""):
         pair = _data(self.snapshot())
         if family == "flags":
-            require(identifier in used_flags(pair["project"]), "Unknown flag")
+            from drawtemp.studio.r8_integrity import flags as referenced_flags
+            require(identifier in referenced_flags(pair["content"], pair["project"]),
+                    "Unknown flag")
             return {"id": identifier, "read_only": True}
         return deepcopy(_resource(pair["content"], family, identifier, mission_id))
 
     def references(self, family, identifier):
+        from drawtemp.studio.r8_integrity import resource_usages
         pair = _data(self.snapshot())
-        return referrers(pair["content"], pair["project"], family, identifier)
+        concrete = resource_usages(pair["content"], pair["project"],
+                                   family, identifier)
+        if family == "flags":
+            return concrete
+        legacy = referrers(pair["content"], pair["project"], family, identifier)
+        return tuple(dict.fromkeys((*legacy, *concrete)))
 
     def preview_many(self, actions):
         """Preview a batch atomically, with the SDK's stale-revision protection.
@@ -267,7 +277,9 @@ class DatabaseEditor:
                 require(family in EDITABLE and isinstance(fields, dict),
                         "Invalid database action")
                 if op == "remove":
-                    refs = referrers(content, project, family, key)
+                    from drawtemp.studio.r8_integrity import resource_usages
+                    refs = (*referrers(content, project, family, key),
+                            *resource_usages(content, project, family, key))
                     require(not refs, "Ressource utilisée : " + ", ".join(refs))
                 content = _transform(content, family, op, key, mission,
                                      **deepcopy(fields))

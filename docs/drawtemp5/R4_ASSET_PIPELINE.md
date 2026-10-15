@@ -81,3 +81,24 @@ La première commande n'importe pas Tk, Qt, ni Pillow. Vérifications : PNG inva
 - L'analyse PNG vérifie la structure et le CRC sans constituer un décodage intégral (le decoder Qt lit les pixels dans la GUI). Les fichiers tiers restent des données non fiables.
 - UNVERIFIED produit un diagnostic; il n'est **pas** une licence valable pour la distribution. Le propriétaire des assets doit vérifier et conserver la preuve des droits.
 - La scène/isométrie R3, les tests GPU sur machine réelle, le packaging et la migration visuelle complète restent des jalons de suivi.
+
+## R4.B — Intégration runtime Studio ↔ Player (15 octobre 2026)
+
+La seconde tranche raccorde directement le registre v1 au seul viewport R3/QML déjà utilisé dans l'éditeur R5 et le Player R12.
+
+- `PresentationAssets.for_project(project, path_du_game_json)` charge le registre canonique et les pivots depuis le sidecar optionnel du répertoire du projet, **jamais le working directory**.
+- Pour Jeanne, `--bind-prefix jeanne` produit des slots `jeanne_south_idle`, `jeanne_east_idle`, etc. Le renderer utilise en priorité `<actor_id>_<direction>_<pose>`, puis l'idle de même direction, puis south/idle. Un sprite statique peut être lié via le slot `sprite/<actor_id>`.
+- `PresentationAssets.decorate(render_items(...))` enrichit seulement les acteurs visibles avec l'URI de l'atlas source, le rectangle de frame, le pivot, les dimensions, l'empreinte et la version du fichier. Aucun changement de `Content`, de `GameProject` ou des snapshots du SDK n'est requis.
+- Le `Loader` actor existant de `IsoViewport.qml` découpe réellement le PNG avec `Image.sourceClipRect`. Positionnement : `screen(actor) - pivot*zoom`. Les acteurs non liés conservent le placeholder; une référence déclarée mais absente expose `assetError` au diagnostic côté contrôleur.
+- La `Timer` QML anime les poses sur une horloge cosmétique indépendante des tours CT, de la sauvegarde et des tirages aléatoires tactiques.
+- L'éditeur de cartes est lancé avec `--content` et découvre le manifeste `.game.json` associé. Il affiche le dock « Ressources / Assets » R4 (favoris, collections, vignettes, prévisualisation).
+- Le Player accepte dorénavant `--project /chemin/jeanne.game.json --content /chemin/jeanne.json` ; il charge les mêmes fichiers et IDs sans dépendre du Studio.
+
+### Parcours de validation reproductible
+
+1. Importer dans un projet de test l'atlas directionnel de Jeanne (commande précédente, avec `--bind-prefix jeanne`).
+2. Ouvrir le Studio : `python -m drawtemp.studio.map_editor --content /tmp/jeanne/jeanne.json`. Confirmer que le dock R4 affiche les animations et que Jeanne a son sprite.
+3. Ouvrir le Player **avec les mêmes fichiers** : `python -m drawtemp.player.qt_app --content /tmp/jeanne/jeanne.json --project /tmp/jeanne/jeanne.game.json`. Confirmer que Jeanne utilise les mêmes atlas/IDs/pivots.
+4. Sauvegarder/recharger le projet et une sauvegarde Player. Les tests `tests_standalone.test_drawtemp5_r4_runtime` vérifient les ressources; `tests_standalone.test_drawtemp5_r4_runtime_qt` instancie les vues Qt.
+
+**Limites à ne pas masquer :** la certification de qualité graphique nécessite des captures comparées et une revue visuelle sur carte chargée. Les scènes GPU matérielles, les timings frame p95, le hot-reload texture, les variantes de tenues et le mapping dynamique de toutes les poses de combat restent ouverts. Ces smokes Qt logiciels ne remplacent pas cette certification.

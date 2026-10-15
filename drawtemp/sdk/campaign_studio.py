@@ -11,9 +11,11 @@ from pathlib import Path
 
 from drawtemp.core import Content, GameProject, RuleError
 from drawtemp.sdk.authoring import AuthoringSession
+from sporebound.authoring import add_blank_mission, set_mission_properties
+from sporebound import story_authoring
 from sporebound.campaign_flow import audit_campaign, inspect_campaign
 from sporebound.campaign_flow_authoring import (
-    build_effect, change_condition, change_effect,
+    build_effect, change_condition, change_effect, condition_for,
 )
 from sporebound.campaign_flow_simulation import CampaignSimulation
 from sporebound.campaign_graph import inspect_graph, set_link
@@ -100,11 +102,75 @@ class CampaignStudio:
             "graph": graph,
             "world": world_projection(project.world, content),
             "scenes": deepcopy(project.story.get("scenes", [])),
+            "entry_scene": project.story.get("entry_scenes", {}).get(self.campaign_id, ""),
+            "after_mission_scenes": deepcopy(project.story.get("after_mission", {})),
             "flow": deepcopy(project.campaign_flow),
             "state": inspect_campaign(progress, project.campaign_flow),
             "sieges": [deepcopy(s) for s in project.sieges
                        if s["campaign_id"] == self.campaign_id],
         }
+
+    def create_mission(self, mission_id, name, *, width=8, height=8, after=None):
+        """Create a playable map and optional mission link in one undo step.
+
+        Uses the R5 authoring command (real actor templates) instead of
+        inserting an incomplete mission record into Content.
+        """
+        def edit(content, project):
+            updated = add_blank_mission(content, mission_id, name, width, height)
+            if after is not None:
+                updated = set_link(updated, after, mission_id)
+            return updated, project
+        return self._apply(edit, "r10-mission-create")
+
+    def set_mission_reward(self, mission_id, gold):
+        """Update the canonical reward without touching other mission fields."""
+        def edit(content, project):
+            row = next((m for m in content["missions"] if m["id"] == mission_id), None)
+            if row is None:
+                raise RuleError("Unknown mission: " + str(mission_id))
+            return set_mission_properties(
+                content, mission_id, name=row["name"], objective=row["objective"],
+                reward=gold, next_missions=list(row["next_missions"])), project
+        return self._apply(edit, "r10-mission-reward")
+
+    def create_scene(self, scene_id, title, dialogue, *, speaker=""):
+        return self._project_edit(
+            lambda content, project: story_authoring.create_scene(
+                project, content, scene_id, title, dialogue, speaker),
+            "r10-story-scene")
+
+    def add_story_choice(self, scene_id, choice_id, label):
+        return self._project_edit(
+            lambda content, project: story_authoring.add_choice(
+                project, content, scene_id, choice_id, label),
+            "r10-story-choice")
+
+    def remove_story_choice(self, scene_id, choice_id):
+        return self._project_edit(
+            lambda content, project: story_authoring.remove_choice(
+                project, content, scene_id, choice_id),
+            "r10-story-choice-remove")
+
+    def add_story_choice_effect(self, scene_id, choice_id, kind, name="", value=""):
+        """Persist a typed choice consequence. StoryBook validates its schema."""
+        def edit(content, project):
+            effect = build_effect(kind, name, value, content=content)
+            return story_authoring.add_effect(project, content, scene_id,
+                                              choice_id, effect)
+        return self._project_edit(edit, "r10-story-choice-effect")
+
+    def set_entry_scene(self, scene_id=""):
+        return self._project_edit(
+            lambda content, project: story_authoring.set_scene_entry(
+                project, content, self.campaign_id, scene_id),
+            "r10-story-entry")
+
+    def set_after_mission_scene(self, mission_id, scene_id=""):
+        return self._project_edit(
+            lambda content, project: story_authoring.set_mission_outcome(
+                project, content, mission_id, scene_id),
+            "r10-story-after-mission")
 
     def link_missions(self, origin, destination, enabled=True):
         return self._apply(
@@ -128,6 +194,22 @@ class CampaignStudio:
                 project, content, target, name, "replace",
                 kind=kind, key=key, value=value),
             "r10-condition")
+
+    def append_condition(self, target, name, kind, key, value):
+        """Extend a gate or ending with an AND leaf in one atomic history entry."""
+        def edit(content, project):
+            current = condition_for(project, target, name)
+            if current is None:
+                return change_condition(
+                    project, content, target, name, "replace",
+                    kind=kind, key=key, value=value)
+            if "all" not in current:
+                project = change_condition(
+                    project, content, target, name, "wrap", operator="all")
+            return change_condition(
+                project, content, target, name, "append",
+                kind=kind, key=key, value=value)
+        return self._project_edit(edit, "r10-condition-and")
 
     def remove_condition(self, target, name):
         return self._project_edit(

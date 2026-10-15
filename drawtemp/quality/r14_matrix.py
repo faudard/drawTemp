@@ -7,7 +7,7 @@ import re
 from .r14 import verify_report
 
 REQUIRED_RUNNERS = ("Linux", "macOS", "Windows")
-REQUIRED_PROBES = ("r14_contracts", "core", "qt", "gui", "soak", "faults")
+REQUIRED_PROBES = ("r14_contracts", "core", "qt", "gui", "visual", "soak", "faults")
 PINNED_QT = "6.8.3"
 _REVISION = re.compile(r"[0-9a-f]{40}\Z")
 

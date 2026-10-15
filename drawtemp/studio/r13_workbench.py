@@ -18,12 +18,25 @@ def launch(content_path):
     from PySide6.QtGui import QColor, QBrush, QPen
     from PySide6.QtWidgets import (
         QApplication, QFileDialog, QFormLayout, QGraphicsScene,
-        QGraphicsView, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+        QGraphicsView, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
         QPushButton, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem,
         QTabWidget, QVBoxLayout, QWidget, QComboBox, QTextEdit,
     )
 
     from sporebound.model import Content
+    from sporebound.rules import default_rules
+    from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
+    from drawtemp.sdk.r13_encounter_authoring import (
+        compare_draft, preview_authoring,
+    )
+    from drawtemp.sdk.r13_visual_metrics import build_visual_comparison
+    from drawtemp.sdk.r13_ai_combat_visuals import build_combat_visuals
+    from drawtemp.sdk.r13_movement_heatmap import build_movement_heatmap
+    from drawtemp.studio.r13_replay_heatmap import (
+        MovementHeatmapPanel, ReplayTransport,
+    )
+    from drawtemp.studio.r13_charts import R13ComparisonCharts
+    from drawtemp.studio.r13_ai_combat_panel import R13AICombatPanel
     from drawtemp.sdk.r13_combat_lab import (
         compare_encounters, evaluate_variant, human_review,
         inspect_encounter, simulate_encounter, trace_timeline,
@@ -33,10 +46,34 @@ def launch(content_path):
         ready = Signal(int, object)
         failed = Signal(int, str)
 
+    class TilePicker(QGraphicsView):
+        """Click a map tile to move the currently selected actor in the draft."""
+        tileChosen = Signal(int, int)
+
+        def __init__(self, scene):
+            super().__init__(scene)
+            self.tile_size = 24
+            self.tile_dims = (0, 0)
+
+        def mousePressEvent(self, event):
+            if event.button() == Qt.MouseButton.LeftButton:
+                point = self.mapToScene(event.position().toPoint())
+                x = int(point.x() // self.tile_size)
+                y = int(point.y() // self.tile_size)
+                if 0 <= x < self.tile_dims[0] and 0 <= y < self.tile_dims[1]:
+                    self.tileChosen.emit(x, y)
+                    event.accept()
+                    return
+            super().mousePressEvent(event)
+
     class Workbench(QMainWindow):
-        def __init__(self, content):
+        def __init__(self, content, authoring=None):
             super().__init__()
             self.content = content
+            self.authoring = authoring
+            self._approved_edits = None
+            self._timeline_frames = []
+            self._replay_initial = None
             self.reference = None
             self.current = None
             self.inspection = None
@@ -76,20 +113,58 @@ def launch(content_path):
             self.tabs.addTab(designer, "Encounter Designer")
             design_layout = QVBoxLayout(designer)
             design_layout.addWidget(QLabel(
-                "Placement visuel simplifié · changements essayés en copie, jamais écrits dans la mission"))
+                "Cliquer une case pour déplacer l'unité sélectionnée. Prévisualisation non destructive ; "
+                "application uniquement après validation explicite."))
+            options = QHBoxLayout()
+            design_layout.addLayout(options)
+            options.addWidget(QLabel("Objectif"))
+            self.objective = QComboBox()
+            self.objective.addItems([key for key, _ in default_rules().objectives.entries])
+            options.addWidget(self.objective)
+            options.addWidget(QLabel("Cases d'objectif (x,y; x,y)"))
+            self.goal_cells = QLineEdit()
+            self.goal_cells.setPlaceholderText("2,3; 4,3")
+            options.addWidget(self.goal_cells, 1)
+            options.addWidget(QLabel("Ticks"))
+            self.target_ticks = QSpinBox()
+            self.target_ticks.setRange(1, 100000)
+            options.addWidget(self.target_ticks)
+            options.addWidget(QLabel("Protéger"))
+            self.protected = QComboBox()
+            options.addWidget(self.protected)
             split = QSplitter(Qt.Orientation.Horizontal)
             design_layout.addWidget(split, 1)
             self.scene = QGraphicsScene()
-            self.map = QGraphicsView(self.scene)
+            self.map = TilePicker(self.scene)
+            self.map.tileChosen.connect(self._move_selected_unit)
             split.addWidget(self.map)
             right = QWidget()
             right_layout = QVBoxLayout(right)
-            self.units = QTableWidget(0, 4)
-            self.units.setHorizontalHeaderLabels(["Unité", "Équipe", "X", "Y"])
+            self.units = QTableWidget(0, 6)
+            self.units.setHorizontalHeaderLabels(
+                ["Unité", "Équipe", "X", "Y", "Arme", "IA"])
             right_layout.addWidget(self.units, 1)
-            self.trial = QPushButton("Simuler la variante de placement")
+            self.trial = QPushButton("Prévisualiser & simuler A/B")
             self.trial.clicked.connect(self._start_trial)
             right_layout.addWidget(self.trial)
+            author_actions = QHBoxLayout()
+            right_layout.addLayout(author_actions)
+            self.apply_button = QPushButton("Appliquer")
+            self.apply_button.clicked.connect(self._apply_draft)
+            author_actions.addWidget(self.apply_button)
+            self.undo_button = QPushButton("Annuler")
+            self.undo_button.clicked.connect(self._undo)
+            author_actions.addWidget(self.undo_button)
+            self.redo_button = QPushButton("Refaire")
+            self.redo_button.clicked.connect(self._redo)
+            author_actions.addWidget(self.redo_button)
+            self.save_button = QPushButton("Enregistrer")
+            self.save_button.clicked.connect(self._save_authoring)
+            author_actions.addWidget(self.save_button)
+            for widget in (self.apply_button, self.undo_button,
+                           self.redo_button, self.save_button):
+                widget.setEnabled(self.authoring is not None)
+            self.apply_button.setEnabled(False)
             self.trial_result = QTextEdit()
             self.trial_result.setReadOnly(True)
             right_layout.addWidget(self.trial_result, 1)
@@ -121,31 +196,70 @@ def launch(content_path):
             self.outcomes.setHorizontalHeaderLabels([
                 "Seed", "Résultat", "CT ticks", "Commandes", "Activations", "Replay"])
             lab_layout.addWidget(self.outcomes, 1)
+            self.transport = ReplayTransport()
+            self.transport.stepChanged.connect(self._seek_replay)
+            lab_layout.addWidget(self.transport)
             lab_layout.addWidget(QLabel(
-                "Trace des commandes réelles (sélection automatique : première seed)"))
+                "Replay vérifié · commande 0 = état initial, ensuite positions réellement observées"))
             self.timeline = QTableWidget(0, 5)
             self.timeline.setHorizontalHeaderLabels([
                 "#", "Acteur", "Action", "Position", "Événements"])
+            self.timeline.itemSelectionChanged.connect(self._scrub_timeline)
             lab_layout.addWidget(self.timeline, 1)
+
+            self.charts = R13ComparisonCharts()
+            self.charts.seedSelected.connect(self._choose_chart_seed)
+            self.charts.export_button.clicked.connect(self._export_charts)
+            self.tabs.addTab(self.charts, "Graphiques A/B")
+            self.combat_analytics = R13AICombatPanel()
+            self.combat_analytics.stepSelected.connect(self._select_replay_step)
+            self.tabs.addTab(self.combat_analytics, "Décisions IA · dégâts / soins")
+            self.heatmap_panel = MovementHeatmapPanel()
+            self.heatmap_panel.stepSelected.connect(self._select_replay_step)
+            self.tabs.addTab(self.heatmap_panel, "Heatmaps des déplacements")
             self._refresh(self.mission.currentText())
+            if self.authoring is None:
+                self.status.setText(
+                    "Essai uniquement : projet R1 non ouvert (GameProject manquant ou incompatible).")
 
         def _refresh(self, mission_id):
             if not mission_id:
                 return
             # Any in-flight result belongs to an older mission snapshot.
             self._sequence += 1
+            self.transport.set_frames(0)
+            self._replay_initial = None
+            self.heatmap_panel.clear()
             self.run_button.setEnabled(True)
             self.trial.setEnabled(True)
             self.status.setText("Mission : " + mission_id)
+            self._approved_edits = None
+            self.apply_button.setEnabled(False)
             try:
                 self.inspection = inspect_encounter(self.content, mission_id)
             except Exception as exc:
                 self._show_error(str(exc))
                 return
+            mission = self.content.missions[mission_id]
+            if self.objective.findText(mission.objective) < 0:
+                # Preserve custom authored objective ids instead of silently
+                # substituting the first default ruleset objective.
+                self.objective.addItem(mission.objective)
+            self.objective.setCurrentText(mission.objective)
+            self.goal_cells.setText("; ".join(
+                "{},{}".format(*cell) for cell in mission.goal))
+            self.target_ticks.setValue(mission.target_ticks)
+            self.protected.clear()
+            self.protected.addItem("")
+            self.protected.addItems([u.id for u in mission.units
+                                     if u.team == "player"])
+            self.protected.setCurrentText(mission.protected_id)
             units = self.inspection["profile"]["units"]
             self.units.setRowCount(len(units))
+            authored = {u.id: u for u in mission.units}
             for index, unit in enumerate(units):
-                fields = [unit["id"], unit["team"], *map(str, unit["pos"])]
+                fields = [unit["id"], unit["team"], *map(str, unit["pos"]),
+                          authored[unit["id"]].weapon, authored[unit["id"]].behavior]
                 for col, value in enumerate(fields):
                     item = QTableWidgetItem(value)
                     if col < 2:
@@ -163,9 +277,12 @@ def launch(content_path):
             self.current = None
             self.summary.clear()
             self.outcomes.setRowCount(0)
+            self._timeline_frames = []
             self.timeline.setRowCount(0)
+            self.charts.clear()
+            self.combat_analytics.clear()
 
-        def _draw_map(self, inspected, positions=None):
+        def _draw_map(self, inspected, positions=None, goals=None, actors=None):
             self.scene.clear()
             dims = inspected["profile"]["map"]
             # Preview bounded to 64 x 64; never a substitute for the iso renderer.
@@ -180,18 +297,24 @@ def launch(content_path):
                           "#344735" if tile.get("cover", 0) else "#283a35")
                     self.scene.addRect(x*cell, y*cell, cell, cell,
                                        QPen(QColor("#53635a")), QBrush(QColor(bg)))
-            for x, y in inspected["goal_cells"]:
+            for x, y in (goals if goals is not None else inspected["goal_cells"]):
                 if x < width and y < height:
                     self.scene.addRect(x*cell+2, y*cell+2, cell-4, cell-4,
                                        QPen(QColor("#eed063"), 2))
-            for unit in inspected["profile"]["units"]:
-                x, y = (positions or {}).get(unit["id"], unit["pos"])
+            for unit in (actors if actors is not None
+                         else inspected["profile"]["units"]):
+                if unit.get("alive", True) is False:
+                    continue
+                x, y = (unit["cell"] if actors is not None
+                        else (positions or {}).get(unit["id"], unit["pos"]))
                 if x < 0 or y < 0 or x >= width or y >= height:
                     continue
                 color = "#64bbf7" if unit["team"] == "player" else "#f28c7a"
                 self.scene.addEllipse(x*cell+3, y*cell+3, cell-6, cell-6,
                                       QPen(QColor("#202020")), QBrush(QColor(color)))
             self.scene.setSceneRect(0, 0, cell*width, cell*height)
+            self.map.tile_size = cell
+            self.map.tile_dims = (width, height)
 
         def _read_placements(self):
             updates = {}
@@ -204,12 +327,138 @@ def launch(content_path):
                     updates[uid] = pos
             return updates
 
+        def _move_selected_unit(self, x, y):
+            row = self.units.currentRow()
+            if row < 0:
+                if self.units.rowCount() == 0:
+                    return
+                row = 0
+                self.units.selectRow(row)
+            for column, value in ((2, x), (3, y)):
+                self.units.item(row, column).setText(str(value))
+            try:
+                edits = self._read_editor_changes()
+                self._draw_map(self.inspection,
+                               edits.get("unit_positions"),
+                               edits.get("goal_cells"))
+            except (ValueError, TypeError):
+                pass
+            self._approved_edits = None
+            self.apply_button.setEnabled(False)
+
+        def _read_editor_changes(self):
+            mission = self.content.missions[self.mission.currentText()]
+            changes = {}
+            positions = self._read_placements()
+            if positions:
+                changes["unit_positions"] = positions
+            original = {u.id: u for u in mission.units}
+            overrides = {}
+            for row in range(self.units.rowCount()):
+                uid = self.units.item(row, 0).text()
+                fields = {}
+                for column, key in ((4, "weapon"), (5, "behavior")):
+                    value = self.units.item(row, column).text().strip()
+                    if value != getattr(original[uid], key):
+                        fields[key] = value
+                if fields:
+                    overrides[uid] = fields
+            if overrides:
+                changes["unit_overrides"] = overrides
+            objective = self.objective.currentText()
+            if objective != mission.objective:
+                changes["objective"] = objective
+            raw = self.goal_cells.text().strip()
+            goals = []
+            if raw:
+                for part in raw.split(";"):
+                    pieces = part.split(",")
+                    if len(pieces) != 2:
+                        raise ValueError("Chaque objectif doit avoir la forme x,y")
+                    goals.append([int(piece.strip()) for piece in pieces])
+            if goals != [list(c) for c in mission.goal]:
+                changes["goal_cells"] = goals
+            if self.target_ticks.value() != mission.target_ticks:
+                changes["target_ticks"] = self.target_ticks.value()
+            if self.protected.currentText() != mission.protected_id:
+                changes["protected_id"] = self.protected.currentText()
+            return changes
+
+        def _apply_draft(self):
+            if self.authoring is None or self._approved_edits is None:
+                self._show_error("Prévisualiser les modifications avant application")
+                return
+            try:
+                edits = self._read_editor_changes()
+                if edits != self._approved_edits:
+                    raise ValueError("Le formulaire a changé : relancer Prévisualiser")
+                plan = preview_authoring(
+                    self.authoring, self.mission.currentText(), edits)
+                if QMessageBox.question(
+                        self, "Appliquer R13",
+                        "Appliquer ce changement au projet en mémoire ? "
+                        "Il sera annulable et ne sera pas enregistré avant "
+                        "votre clic sur Enregistrer.") != QMessageBox.StandardButton.Yes:
+                    return
+                self.authoring.apply(plan)
+                self.content = Content.from_dict(
+                    self.authoring.snapshot().to_dict()["content"])
+                self._refresh(self.mission.currentText())
+                self.status.setText(
+                    "Modification appliquée en mémoire. Enregistrer pour écrire les deux fichiers.")
+            except (ValueError, AuthoringError, KeyError, TypeError) as exc:
+                self._show_error(str(exc))
+
+        def _undo(self):
+            if self.authoring is None:
+                return
+            try:
+                self.authoring.undo()
+                self.content = Content.from_dict(
+                    self.authoring.snapshot().to_dict()["content"])
+                self._refresh(self.mission.currentText())
+                self.status.setText("Modification annulée (non enregistrée)")
+            except (AuthoringError, ValueError) as exc:
+                self._show_error(str(exc))
+
+        def _redo(self):
+            if self.authoring is None:
+                return
+            try:
+                self.authoring.redo()
+                self.content = Content.from_dict(
+                    self.authoring.snapshot().to_dict()["content"])
+                self._refresh(self.mission.currentText())
+                self.status.setText("Modification rétablie (non enregistrée)")
+            except (AuthoringError, ValueError) as exc:
+                self._show_error(str(exc))
+
+        def _save_authoring(self):
+            if self.authoring is None:
+                return
+            try:
+                if not self.authoring.snapshot().dirty:
+                    self.status.setText("Aucune modification à enregistrer")
+                    return
+                if QMessageBox.question(
+                        self, "Enregistrer la mission",
+                        "Enregistrer Content et GameProject de façon atomique ? "
+                        "En cas de modification externe, le SDK refusera l'écrasement."
+                        ) != QMessageBox.StandardButton.Yes:
+                    return
+                paths = self.authoring.save()
+                self.status.setText(
+                    "Projet enregistré : " + ", ".join(str(p) for p in paths))
+            except (AuthoringError, OSError) as exc:
+                self._show_error(str(exc))
+
         def _submit(self, operation, fn):
             self._sequence += 1
             seq = self._sequence
             self.status.setText("Calcul en cours : " + operation)
             self.run_button.setEnabled(False)
             self.trial.setEnabled(False)
+            self.apply_button.setEnabled(False)
 
             def work():
                 try:
@@ -222,28 +471,40 @@ def launch(content_path):
 
         def _start_trial(self):
             try:
-                positions = self._read_placements()
-            except ValueError:
-                self._show_error("Coordonnées X/Y : entiers requis")
+                edits = self._read_editor_changes()
+                if not edits:
+                    raise ValueError("Aucune modification à prévisualiser")
+            except (ValueError, TypeError, KeyError) as exc:
+                self._show_error(str(exc))
                 return
-            # Snapshot ALL widget state on the GUI thread. Worker code only
-            # receives Python values and immutable authoring copies.
+            self._approved_edits = None
+            # Snapshot Qt state BEFORE starting the worker thread.
             snapshot = deepcopy(self.content)
             mission = self.mission.currentText()
             seeds = tuple(range(1, self.seeds.value()+1))
             limit = self.limit.value()
-            self._submit("variante", lambda: evaluate_variant(
-                snapshot, mission, {"unit_positions": positions},
-                seeds=seeds, max_commands=limit))
+            self._submit("variante", lambda: compare_draft(
+                snapshot, mission, edits, seeds=seeds, max_commands=limit))
 
         def _start_simulation(self):
+            self.transport.set_frames(0)
+            self._replay_initial = None
+            self.heatmap_panel.clear()
             snapshot = deepcopy(self.content)
             mission = self.mission.currentText()
             seeds = tuple(range(1, self.seeds.value()+1))
             limit = self.limit.value()
-            self._submit("simulation", lambda: simulate_encounter(
-                snapshot, mission, seeds=seeds, max_commands=limit,
-                trace_seed_id=seeds[0]))
+            def simulate_with_views():
+                report = simulate_encounter(
+                    snapshot, mission, seeds=seeds, max_commands=limit,
+                    trace_seed_id=seeds[0])
+                # Heavy replay analytics are pure Python. Compute them on
+                # the worker thread, never on the Qt event/rendering thread.
+                report["r13_ai_view"] = build_combat_visuals(report["trace"])
+                report["r13_movement_view"] = build_movement_heatmap(report["trace"])
+                return report
+
+            self._submit("simulation", simulate_with_views)
 
         def _complete(self, sequence, payload):
             if sequence != self._sequence:
@@ -253,18 +514,60 @@ def launch(content_path):
             operation, result = payload
             self.status.setText("Terminé : " + operation)
             if operation == "variante":
-                cases = result["cases"]
-                self.trial_result.setPlainText(json.dumps(
-                    {"cases": [{"id": c["id"], "victory_rate": c["report"]["victory_rate"],
-                                "commands_p95": c["report"]["commands_p95"]}
-                               for c in cases]}, indent=2, ensure_ascii=False))
                 try:
-                    self._draw_map(self.inspection, self._read_placements())
-                except ValueError:
-                    pass
+                    actual = self._read_editor_changes()
+                except (ValueError, TypeError, KeyError):
+                    actual = None
+                if (self.mission.currentText() != result["mission"]
+                        or actual != result["edits"]):
+                    self.trial_result.setPlainText(
+                        "Prévisualisation obsolète : formulaire modifié pendant le calcul.")
+                    self._approved_edits = None
+                    self.apply_button.setEnabled(False)
+                    return
+                self._approved_edits = deepcopy(result["edits"])
+                self.apply_button.setEnabled(self.authoring is not None)
+                old, new = result["baseline"], result["candidate"]
+                self.trial_result.setPlainText(json.dumps({
+                    "mission": result["mission"],
+                    "victoire_avant": old["victory_rate"],
+                    "victoire_après": new["victory_rate"],
+                    "ticks_p95_avant": old["ticks_p95"],
+                    "ticks_p95_après": new["ticks_p95"],
+                    "commandes_p95_avant": old["commands_p95"],
+                    "commandes_p95_après": new["commands_p95"],
+                    "replays_verified": result["replays_verified"],
+                    "objectif_modifié": result["objective_changed"],
+                    "regression": result["comparison"]["issues"],
+                    "revue_humaine_requise": result["comparison"]["human_signoff_required"],
+                }, indent=2, ensure_ascii=False))
+                self._draw_map(self.inspection,
+                               actual.get("unit_positions"),
+                               actual.get("goal_cells"))
+                self.charts.set_report(build_visual_comparison(
+                    result["baseline"], result["candidate"],
+                    objective_changed=result["objective_changed"]))
+                # Draft A/B has aggregate results but no command-level trace:
+                # never keep an older mission's AI/PV evidence visible.
+                self.combat_analytics.clear()
+                self.transport.set_frames(0)
+                self._replay_initial = None
+                self.heatmap_panel.clear()
+                self._timeline_frames = []
+                self.timeline.setRowCount(0)
+                self.current = None
+                self.tabs.setCurrentWidget(self.charts)
                 return
             self.current = result
             report = result["battle_lab"]
+            self._show_simulation_charts(report)
+            # The diagnostics belong to the trace seed only, never a fictive
+            # average tactical timeline for the other batch seeds.
+            self.combat_analytics.set_report(
+                result.get("r13_ai_view") or build_combat_visuals(result["trace"]))
+            self.heatmap_panel.set_report(
+                result.get("r13_movement_view") or build_movement_heatmap(result["trace"]))
+            self._replay_initial = result["trace"]["initial"]["units"]
             stats = {
                 "mission": report["mission"], "runs": report["runs"],
                 "win_rate": report["victory_rate"],
@@ -286,7 +589,8 @@ def launch(content_path):
                            sample["replay_verified"]]
                 for col, value in enumerate(columns):
                     self.outcomes.setItem(row, col, QTableWidgetItem(str(value)))
-            rows = trace_timeline(result["trace"], limit=200)["frames"]
+            rows = trace_timeline(result["trace"], limit=5000)["frames"]
+            self._timeline_frames = rows
             self.timeline.setRowCount(len(rows))
             for row, frame in enumerate(rows):
                 actor = next((u for u in frame["positions"]
@@ -297,6 +601,98 @@ def launch(content_path):
                           [e["kind"] for e in frame["events"]]]
                 for col, value in enumerate(fields):
                     self.timeline.setItem(row, col, QTableWidgetItem(str(value)))
+            self.transport.set_frames(len(rows))
+            self._seek_replay(0)
+
+        def _show_simulation_charts(self, report):
+            """Avoid misleading A/B plots when a loaded baseline mismatches."""
+            warning = ""
+            if self.reference is not None:
+                try:
+                    visual = build_visual_comparison(self.reference, report)
+                except (ValueError, TypeError, KeyError) as exc:
+                    visual = build_visual_comparison(report)
+                    warning = "Référence incompatible (A/B impossible) : " + str(exc)
+                except Exception as exc:
+                    visual = build_visual_comparison(report)
+                    warning = "Référence incompatible (A/B impossible) : " + str(exc)
+            else:
+                visual = build_visual_comparison(report)
+            self.charts.set_report(visual, warning=warning)
+
+        def _export_charts(self):
+            if self.charts.report is None:
+                self._show_error("Exécuter une simulation avant l'export PNG.")
+                return
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Exporter les graphiques R13.8",
+                "r13-comparaison.png", "Images PNG (*.png)")
+            if not path:
+                return
+            try:
+                target = self.charts.export_png(path)
+                self.status.setText("Graphiques exportés : " + str(target))
+            except (OSError, ValueError) as exc:
+                self._show_error(str(exc))
+
+        def _choose_chart_seed(self, seed):
+            """Highlight the exact seed in the canonical run's outcome table."""
+            if self.current is None:
+                return
+            for index, sample in enumerate(self.current["battle_lab"]["samples"]):
+                if sample["seed"] == seed:
+                    self.outcomes.selectRow(index)
+                    self.status.setText(
+                        "Seed {} : {} · {} ticks CT · {} commandes"
+                        .format(seed, sample["result"], sample["ticks"],
+                                sample["commands"]))
+                    break
+
+        def _select_replay_step(self, step):
+            """Navigate to the exact canonical command from linked visualizations."""
+            if 0 <= step <= self.transport.maximum:
+                self.transport.seek(step, notify=False)
+                self._seek_replay(step)
+
+        def _seek_replay(self, step):
+            if self._replay_initial is None or not 0 <= step <= len(self._timeline_frames):
+                return
+            if step == 0:
+                self.timeline.clearSelection()
+                initial_actors = [
+                    {"id": unit["id"], "team": unit["team"],
+                     "cell": unit["pos"], "alive": unit["alive"]}
+                    for unit in self._replay_initial
+                ]
+                self._draw_map(self.inspection, actors=initial_actors)
+                self.combat_analytics.select_step(0)
+                self.heatmap_panel.set_step(0)
+                self.status.setText("Replay : état initial (commande 0)")
+            else:
+                self.timeline.selectRow(step - 1)
+                self.timeline.scrollToItem(self.timeline.item(step - 1, 0))
+                self._scrub_timeline()
+
+        def _scrub_timeline(self):
+            """Project recorded positions without predicting future moves."""
+            index = self.timeline.currentRow()
+            if (self.inspection is None or index < 0
+                    or index >= len(self._timeline_frames)
+                    or not self.timeline.selectedItems()):
+                # clearSelection() keeps the Qt current-row pointer; never
+                # reapply an old frame when the transport seeks to frame 0.
+                return
+            frame = self._timeline_frames[index]
+            self.transport.seek(frame["index"], notify=False)
+            self.combat_analytics.select_step(frame["index"])
+            self.heatmap_panel.set_step(frame["index"])
+            # Draw ONLY units actually alive in this replay frame, including
+            # units spawned during the encounter. Never show a dead unit at
+            # its original authored position.
+            self._draw_map(self.inspection, actors=frame["positions"])
+            self.status.setText(
+                "Replay : action #{} · {} · {}".format(
+                    frame["index"], frame["actor"], frame["command"]["kind"]))
 
         def _failed(self, sequence, error):
             if sequence == self._sequence:
@@ -317,6 +713,9 @@ def launch(content_path):
                 if doc.get("kind") != "battle_lab":
                     raise ValueError("Rapport Battle Lab requis")
                 self.reference = doc
+                if self.current is not None:
+                    self._show_simulation_charts(self.current["battle_lab"])
+                    self.tabs.setCurrentWidget(self.charts)
                 self.status.setText("Référence chargée : " + str(path))
             except (OSError, ValueError, TypeError, KeyError) as exc:
                 self._show_error(str(exc))
@@ -349,12 +748,32 @@ def launch(content_path):
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 self._show_error(str(exc))
 
+        def closeEvent(self, event):
+            if self.authoring is not None and self.authoring.snapshot().dirty:
+                answer = QMessageBox.question(
+                    self, "Fermer le Battle Lab",
+                    "Des changements appliqués ne sont pas enregistrés. "
+                    "Quitter et les perdre ?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No)
+                if answer != QMessageBox.StandardButton.Yes:
+                    event.ignore()
+                    return
+            self.transport.pause()
+            event.accept()
+
         def _show_error(self, error):
             QMessageBox.warning(self, "DrawTemp R13", error)
 
     content = Content.load(content_path)
+    try:
+        authoring = AuthoringSession.open(content_path)
+    except (AuthoringError, OSError, ValueError):
+        # A standalone Content may not have a companion .game.json; this
+        # remains a read-only experiment workbench, never a fake save path.
+        authoring = None
     app = QApplication.instance() or QApplication([])
-    window = Workbench(content)
+    window = Workbench(content, authoring)
     window.show()
     # Keep a reference while the caller's QApplication is alive.
     app.r13_workbench = window

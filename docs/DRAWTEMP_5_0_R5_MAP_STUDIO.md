@@ -82,3 +82,101 @@ produire avant de marquer R5 « validé ».
 ### Intégration R3 (PR #237)
 
 Le `MapWindow` n'utilise plus de renderer QML `Canvas` : la projection des missions validées `Content` est fournie à `RendererController` et affichée par `IsoViewport.qml`. Les gestes `strokeStarted/Moved/Finished` repassent par `MapStudio` (transaction et Undo/Redo inchangés). La vérification du rendu sur GPU matériel et des étages reste distincte du smoke Qt offscreen.
+
+
+## Suite R5.6 — Layers Workspace (PR dédiée)
+
+Le dock **Calques** du Studio Qt utilise directement les dix domaines
+\`sporebound.map_layer_workspace.LAYERS\` : Terrain, Relief, Décors,
+Bâtiments, Toitures, Déploiement, Objectifs, Objets, Unités, Étages.
+
+- **Visibilité** par carte dans le viewport R3 partagé. La structure
+  géométrique reste disponible pour le picking, sans mutation de Content.
+  Les calques actuellement projetés en R3 (terrain, décors, murs, objets,
+  acteurs, objectifs) répondent aux contrôles. Les superpositions
+  spécifiques toitures/déploiement/étages attendent R6 et R5.12.
+- **Verrouillage réel** des modifications via \`changed_layers\` /
+  \`ensure_unlocked\`, contrôlé avant \`AuthoringSession.apply\` : peinture,
+  bâtiments, objectifs et autres commandes ne peuvent pas contourner le
+  verrouillage. Les opérations sur un autre domaine restent autorisées.
+- **Niveau actif** 0–3, enregistré en tant que réglage d'éditeur et
+  distinct de la hauteur tactique de chaque case.
+- **Opacité** réglable par calque côté Studio uniquement, conservée pendant
+  la session ; sa persistance attend une migration versionnée du sidecar
+  (pas de nouvelle clé silencieuse en version 1).
+- **Persistance** : le sidecar existant \`*.mapbuilder-view.json\` conserve
+  les réglages d'éditeur lors de \`save\`/\`save_as\` et les restitue
+  à l'ouverture. Il ne modifie ni Content, ni GameProject, ni les sauvegardes.
+- **Fiabilité** : Undo d'une mission nouvellement créée répare la sélection
+  active plutôt que laisser le dock sur une mission supprimée.
+
+Gates supplémentaires :
+\`\`\`bash
+python -m unittest tests_standalone.test_drawtemp5_r5_layers -v
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  python -m unittest tests_standalone.test_drawtemp5_r5_layers_qt -v
+\`\`\`
+
+Cette tranche ne certifie pas le gate de R5 complet. Le support visuel des
+étages/toitures, l'opacity persistante, les captures GPU et le parcours de
+création du village jusqu'au Player restent à intégrer/tester.
+
+## R5.7 — Selection & Transform (tranche Qt)
+
+### Parcours sans JSON
+
+1. Choisir **Sélection** pour tracer un rectangle ou **Lasso** pour
+   sélectionner une région polygonale. L'option **Ajouter à la sélection**
+   permet plusieurs zones disjointes, sans perdre les cases déjà retenues.
+2. **Copier** (`Ctrl+C`) capture un presse-papiers indépendant et immuable
+   des cases terrain/décors et des objectifs de mission. **Coller**
+   (`Ctrl+V`) engage un placement en aperçu. Les identifiants d'unités,
+   d'objets et de bâtiments ne sont *jamais* dupliqués implicitement.
+3. **Déplacer sélection** (`Ctrl+M`) transfère le relief, les surfaces,
+   les caractéristiques tactiques, les décors et les objectifs sélectionnés.
+   Les personnages/objets placés dans la sélection sont déplacés avec leurs
+   identifiants stables, sauf incompatibilité de leur emprise.
+4. **Dupliquer sélection** (`Ctrl+D`) laisse la zone initiale intacte
+   puis prévisualise une nouvelle zone. La duplication de personnages et
+   d'objets avec liens est explicitement refusée : utiliser leurs
+   éditeurs pour créer des identifiants distincts.
+5. **Rotation ↻/↺** (`Ctrl+R` / `Ctrl+Shift+R`) et **Miroir
+   horizontal/vertical** (`Ctrl+H` / `Ctrl+J`) prévisualisent
+   une modification *en place*. Les opérations utilisent le contrat
+   `sporebound.map_transform.transform_terrain`.
+6. Dans l'outil **Placement sélection**, déplacer la souris pour voir
+   une empreinte colorée ; le **rouge** signifie que la prévalidation
+   refuse le placement. Cliquer **Appliquer aperçu** ou appuyer sur
+   `Entrée` pour créer **une seule transaction Undo/Redo**, ou
+   **Annuler aperçu** / `Échap` pour quitter sans toucher au document.
+
+### Intégrité et limites
+
+- Un seul `AuthoringPlan` R1 par opération, construit sans mutation puis
+  validé à nouveau à l'application. Révision obsolète, changement de
+  mission, tentative hors limites, destination déjà éditée, unité
+  étrangère ou calque verrouillé : **refus avant changement de Content**.
+- Les formes sont des ensembles explicites de cases (avec trous possibles).
+  Le lasso est échantillonné sur la grille isométrique via le picking R3.
+- Toute emprise touchant une structure persistante/son étage, un escalier
+  relié, une zone de déploiement, une relique ou un déclencheur narratif
+  doté de coordonnées est refusée. L'édition de ces identités et de leurs
+  liens relève des ateliers Construction R6 / Événements R9.
+- Les calques non modifiés ne changent pas ; le verrouillage par domaine R5.6
+  s'applique aux transformations autant qu'aux pinceaux.
+- La sélection, les plans et les overlays de fantôme sont **éphémères** :
+  ni `GameProject`, ni `Content`, ni une sauvegarde Player ne stockent
+  de métadonnées d'outil. Les créations finales restent rechargeables
+  dans le même format canonique.
+
+### Gates
+
+```bash
+python -m unittest tests_standalone.test_drawtemp5_r5_selection -v
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  python -m unittest tests_standalone.test_drawtemp5_r5_selection_qt -v
+```
+
+Le smoke Qt certifie le parcours fonctionnel **hors GPU matériel**.
+Le gate R5 global (village jouable, rendu artistique certifié, packaging)
+reste ouvert indépendamment de la fusion du lot R5.7.

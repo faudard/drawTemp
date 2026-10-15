@@ -4,10 +4,12 @@ All commands, previews, story choices and persistence run through Simulation.
 This module never imports Qt or Tk and never edits the GameSession directly.
 """
 from pathlib import Path
-import os
-import shutil
 
 from drawtemp.sdk.simulation import Simulation, SimulationError, thaw
+from drawtemp.sdk.slots import PlayerSlotStore
+from drawtemp.core import RuleError
+from drawtemp.player.save_manager import SaveManager
+from drawtemp.player.preferences import PlayerPreferences
 
 
 class PlayerController:
@@ -19,11 +21,16 @@ class PlayerController:
         self.content, self.project = content, project
         self.campaign_id, self.seed = campaign_id, seed
         self.save_dir = Path(save_dir)
+        self.saves = SaveManager(self.save_dir, content, project, campaign_id)
+        self.autosave_warning = ""
+        self._autosaved_key = None
+        self.preferences = PlayerPreferences(self.save_dir / 'player-preferences.json')
         self.session = None
         self.show_title = True
         self.selected = [0, 0]
-        self.message = ""
+        self.message = self.preferences.warning
         self.forecast = ""
+        self.inspected_skill = "attack"
 
     def _path(self, slot):
         if type(slot) is not int or not 1 <= slot <= self.project.save_slots:
@@ -38,22 +45,65 @@ class PlayerController:
         return [slot for slot in range(1, self.project.save_slots + 1)
                 if self._path(slot).with_suffix(".json.bak").is_file()]
 
-    def restore_backup(self, slot=1):
-        backup = self._path(slot).with_suffix(".json.bak")
-        if not backup.is_file():
-            raise ValueError("Aucune sauvegarde de secours")
-        verified = Simulation.load(backup, self.content, self.project)
-        path = self._path(slot)
-        temporary = path.with_suffix(".json.recovering")
-        try:
-            shutil.copy2(backup, temporary)
-            os.replace(temporary, path)
-        finally:
-            temporary.unlink(missing_ok=True)
-        self.session = verified
+    def _store(self, slot):
+        return PlayerSlotStore(self._path(slot), self.content, self.project,
+                               campaign_id=self.campaign_id)
+
+    def inspect_slot(self, slot=1):
+        return self._store(slot).inspect()
+
+    def _activate_save(self, loaded, message, *, source=None):
+        # No state is touched until the verified GameSession has been loaded.
+        self.session = loaded
         self.show_title = False
-        self.message = "Sauvegarde de secours restaurée"
+        self.selected = [0, 0]
+        self.inspected_skill = "attack"
+        self.forecast = ""
+        self.message = message
+        self.autosave_warning = ""
+        self._autosaved_key = ((id(loaded), loaded.snapshot().revision)
+                               if source == "auto" else None)
         return self.state()
+
+    def restore_backup(self, slot=1):
+        verified = self._store(slot).restore_backup()
+        return self._activate_save(verified, "Sauvegarde de secours restaurée")
+
+    def restore_autosave_backup(self):
+        verified = self.saves.restore_autosave_backup()
+        return self._activate_save(verified, "Autosauvegarde de secours restaurée",
+                                   source="auto")
+
+    def load_autosave(self):
+        loaded = self.saves.load_autosave()
+        return self._activate_save(loaded, "Autosauvegarde rechargée", source="auto")
+
+    def continue_game(self):
+        loaded, source = self.saves.resume()
+        title = ("autosauvegarde" if source == "auto"
+                 else "emplacement " + str(source))
+        return self._activate_save(loaded, "Reprise depuis " + title,
+                                   source=source)
+
+    def _checkpoint(self):
+        """Auto-save every successfully committed revision, not UI selection.
+
+        Saving can fail after a successful action. Never roll back the engine
+        or silently overwrite corrupt autosaves; expose a persistent warning.
+        """
+        if self.session is None:
+            return
+        key = (id(self.session), self.session.snapshot().revision)
+        if self._autosaved_key == key:
+            return
+        try:
+            self.saves.autosave(self.session)
+        except (RuleError, OSError) as exc:
+            self.autosave_warning = ("Autosauvegarde impossible : " + str(exc) +
+                                     " — sauvegardez manuellement ou restaurez le secours")
+        else:
+            self.autosave_warning = ""
+            self._autosaved_key = key
 
     def new_game(self):
         self.session = Simulation.new(self.content, self.project, self.campaign_id,
@@ -61,38 +111,22 @@ class PlayerController:
         self.show_title = False
         self.message = "Le voyage de Jeanne commence."
         self.forecast = ""
+        self.inspected_skill = "attack"
+        self.selected = [0, 0]
+        self._autosaved_key = None
+        self._checkpoint()
         return self.state()
 
     def load(self, slot=1):
         path = self._path(slot)
         # Assignment only after successful verification: preserve the live game
         # and the saved file when a checksum/project/rules mismatch is found.
-        loaded = Simulation.load(path, self.content, self.project)
-        self.session = loaded
-        self.show_title = False
-        self.message = "Partie rechargée."
-        self.forecast = ""
-        return self.state()
-
+        loaded = self._store(slot).load()
+        return self._activate_save(loaded, "Partie rechargée.")
     def save(self, slot=1):
         if self.session is None:
             raise ValueError("No game to save")
-        path = self._path(slot)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
-            # Validate before backup; publish it atomically so an interrupted
-            # copy never destroys the last known-good .bak.
-            Simulation.load(path, self.content, self.project)
-            backup = path.with_suffix(".json.bak")
-            staged = path.with_suffix(".json.bak.tmp")
-            try:
-                shutil.copy2(path, staged)
-                with staged.open("rb") as stream:
-                    os.fsync(stream.fileno())
-                os.replace(staged, backup)
-            finally:
-                staged.unlink(missing_ok=True)
-        self.session.save(path)
+        self._store(slot).save(self.session)
         self.message = "Sauvegarde dans l'emplacement " + str(slot)
         return self.state()
 
@@ -123,6 +157,8 @@ class PlayerController:
         if mission_id not in state.missions:
             raise ValueError("Mission is locked")
         self.session.start_mission(mission_id, expected_revision=state.revision)
+        self.selected = [0, 0]
+        self.inspected_skill = "attack"
         return self._changed()
 
     def explore_move(self, dx, dy):
@@ -218,27 +254,50 @@ class PlayerController:
                              expected_revision=state.revision)
         return self._changed()
 
-    def preview(self, kind):
+    def inspect_skill(self, skill_id):
         state = self._current()
-        if not state.battle or state.battle["result"]:
+        battle = state.battle
+        if not battle or battle["result"]:
+            raise ValueError("No active battle")
+        active = next((unit for unit in battle["units"]
+                       if unit["id"] == battle["active"]), None)
+        if (active is None or active["team"] != "player" or
+                skill_id not in ("attack", *active.get("skills", ()))):
+            raise ValueError("Compétence indisponible")
+        self.inspected_skill = skill_id
+        self.forecast = ""
+        return self.state()
+
+    def preview(self, kind):
+        """Explain canonical probabilities and path risks, never sample future RNG."""
+        state = self.state()
+        feedback = state["tactical"]
+        if not feedback or state["battle"].get("result"):
             raise ValueError("No tactical preview")
+        focus = feedback["focus"]
         if kind == "move":
-            command = {"kind": "move", "cell": list(self.selected)}
+            move = focus["move"]
+            if move is None:
+                raise ValueError("Destination inaccessible ou déplacement indisponible")
+            risks = move["risks"]
+            self.forecast = ("Déplacement · coût " + str(move["cost"]) +
+                             " · " + str(len(risks)) + " risque(s) moteur" +
+                             (" (réactions possibles, non garanties)" if risks else ""))
         elif kind == "attack":
-            command = {"kind": "act", "skill": "attack", "cell": list(self.selected)}
+            if not focus["can_target"]:
+                raise ValueError(focus["error"] or "Cible hors de portée")
+            effects = focus["forecast"]
+            parts = [
+                str(effect["kind"]) + " " + str(effect.get("amount", "?")) +
+                " sur " + str(effect.get("unit", "?")) +
+                (" (" + str(round(effect["chance"] * 100)) + "%)"
+                 if type(effect.get("chance")) in (float, int) else "")
+                for effect in effects
+            ]
+            self.forecast = "Prévision (non garantie) : " + (
+                ", ".join(parts) if parts else "action valide")
         else:
             raise ValueError("Unsupported preview")
-        predicted = self.session.preview(command, expected_revision=state.revision)
-        old_units = {u["id"]: u for u in state.battle["units"]}
-        changes = []
-        for unit in predicted.snapshot.battle["units"]:
-            before = old_units[unit["id"]]
-            if before["hp"] != unit["hp"]:
-                changes.append(unit["id"] + " PV " + str(before["hp"]) +
-                               " → " + str(unit["hp"]))
-            if list(before["pos"]) != list(unit["pos"]):
-                changes.append(unit["id"] + " se déplace")
-        self.forecast = ", ".join(changes) or "Action validée : aucun changement de PV"
         return self.state()
 
     def advance_enemy(self, *, limit=40):
@@ -261,15 +320,40 @@ class PlayerController:
         self.session.return_to_campaign(expected_revision=state.revision)
         return self._changed()
 
+    def set_profile(self, profile):
+        self.preferences.profile(profile)
+        self.message = "Profil clavier : " + profile.upper()
+        return self.state()
+
+    def set_binding(self, action, key):
+        self.preferences.rebind(action, key)
+        self.message = "Commande modifiée : " + action + " = " + key
+        return self.state()
+
+    def reset_bindings(self):
+        self.preferences.reset()
+        self.message = "Commandes du profil restaurées"
+        return self.state()
+
+    def set_display(self, name, value):
+        self.preferences.set_display(name, value)
+        self.message = "Option enregistrée"
+        return self.state()
+
+    def resolve_key(self, key, context):
+        return self.preferences.resolve(key, context)
+
     def _current(self):
         if self.session is None:
             raise ValueError("No active game")
         return self.session.snapshot()
 
     def _changed(self, *, keep_message=False):
+        self.inspected_skill = "attack"
         if not keep_message:
             self.message = ""
         self.forecast = ""
+        self._checkpoint()
         return self.state()
 
     def state(self):
@@ -277,9 +361,12 @@ class PlayerController:
                 "subtitle": self.project.subtitle, "slots": self.slots(),
                 "backups": self.backups(),
                 "message": self.message, "forecast": self.forecast,
+                "autosave_warning": self.autosave_warning,
+                "save_manager": self.saves.catalog(),
                 "selected": list(self.selected), "campaign": self.campaign_id,
+                "settings": self.preferences.view(),
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
-                "battle": {}, "revision": 0}
+                "battle": {}, "tactical": {}, "revision": 0}
         if self.session is None or self.show_title:
             return base
         snapshot = self._current()
@@ -288,6 +375,15 @@ class PlayerController:
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
         if snapshot.battle:
+            # Selection is a UI concern and can outlive a previous mission.
+            width, height = snapshot.battle["width"], snapshot.battle["height"]
+            self.selected = [min(width - 1, max(0, self.selected[0])),
+                             min(height - 1, max(0, self.selected[1]))]
+            base["selected"] = list(self.selected)
+            projection = self.session.tactical_presentation(
+                self.selected, self.inspected_skill,
+                expected_revision=snapshot.revision)
+            base["tactical"] = thaw(projection) if projection is not None else {}
             battle = thaw(snapshot.battle)
             # The renderer must never receive RNG state, full journals, or rules.
             base["battle"] = {key: battle.get(key) for key in (

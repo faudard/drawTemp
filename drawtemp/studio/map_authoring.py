@@ -19,6 +19,7 @@ from sporebound.map_authoring import (
 )
 from sporebound.map_builder4 import smart_brush_cells
 from sporebound.terrain_schema import SURFACES, FEATURES
+from .map_layers import LayerWorkspace
 
 
 BRUSHES = ("grass", "dirt", "sand", "stone", "cobble", "water", "bridge")
@@ -137,6 +138,8 @@ class MapStudio:
         if self.mission_id not in ids:
             raise RuleError("Unknown map")
         self.clipboard = None
+        self.region_clipboard = None  # R5.7 detached full terrain/goal stamp
+        self.layers = LayerWorkspace()
 
     @classmethod
     def reference(cls):
@@ -159,9 +162,14 @@ class MapStudio:
 
     def _change(self, transformation, kind="map-edit", *, mission_id=None):
         # Both documents are validated before history mutation.
+        def guarded(content, project):
+            before = deepcopy(content)
+            after = transformation(content)
+            self.layers.assert_editable(before, after)
+            return after, project
+
         plan = self.authoring.preview_pair(
-            lambda content, project: (transformation(content), project),
-            kind=kind, mission_id=mission_id)
+            guarded, kind=kind, mission_id=mission_id)
         return self.authoring.apply(plan)
 
     def create(self, mission_id, name, width=12, height=12):
@@ -278,6 +286,48 @@ class MapStudio:
                                           self.clipboard, anchor),
             kind="map-paste", mission_id=self.mission_id)
 
+    def select_rectangle(self, first, last, *, existing=(), additive=False):
+        from .map_selection import rectangle_selection, union_selection
+        selected = rectangle_selection(self.snapshot()["content"], self.mission_id,
+                                       first, last)
+        return (union_selection(self.snapshot()["content"], self.mission_id,
+                                existing, selected) if additive and existing else selected)
+
+    def select_lasso(self, vertices, *, existing=(), additive=False):
+        from .map_selection import lasso_selection, union_selection
+        selected = lasso_selection(self.snapshot()["content"], self.mission_id,
+                                   vertices)
+        return (union_selection(self.snapshot()["content"], self.mission_id,
+                                existing, selected) if additive and existing else selected)
+
+    def copy_region(self, cells):
+        from .map_selection import copy_region
+        self.region_clipboard = copy_region(self.snapshot()["content"],
+                                            self.mission_id, cells)
+        return self.region_clipboard
+
+    def preview_region(self, cells=(), *, operation="move", anchor=None,
+                       include_entities=True):
+        from .map_selection import prepare_transform
+        try:
+            return prepare_transform(self, cells, operation=operation, anchor=anchor,
+                                     stamp=self.region_clipboard,
+                                     include_entities=include_entities)
+        except AuthoringError:
+            raise
+        except RuleError as exc:
+            raise AuthoringError("invalid_edit", "map-selection", str(exc)) from exc
+
+    def commit_region(self, preview):
+        from .map_selection import commit_transform
+        return commit_transform(self, preview)
+
+    def transform_region(self, cells=(), *, operation="move", anchor=None,
+                         include_entities=True):
+        preview = self.preview_region(cells, operation=operation, anchor=anchor,
+                                      include_entities=include_entities)
+        return self.commit_region(preview)
+
     def structure(self, name, anchor):
         if name not in ("Maison", "Pont", "Tour", "Ruines", "Escalier", "Rempart"):
             raise RuleError("Unknown structure")
@@ -354,18 +404,37 @@ class MapStudio:
             "remaining_steps_limit": max_steps,
         }
 
+    def _repair_selection(self):
+        # Undo of a just-created mission must not leave a dangling UI selection.
+        if self.mission_id not in self.map_ids():
+            self.mission_id = self.map_ids()[0]
+
     def undo(self):
-        return self.authoring.undo()
+        transition = self.authoring.undo()
+        self._repair_selection()
+        return transition
 
     def redo(self):
-        return self.authoring.redo()
+        transition = self.authoring.redo()
+        self._repair_selection()
+        return transition
 
     def save(self):
-        return self.authoring.save()
+        # Check the sidecar *before* committing the two canonical documents.
+        if self.layers.path is not None:
+            self.layers.verify_disk()
+        paths = self.authoring.save()
+        self.layers.save()
+        return paths
 
     def save_as(self, path):
-        return self.authoring.save_as(path)
+        self.layers.verify_new_destination(path)
+        paths = self.authoring.save_as(path)
+        self.layers.save(path)
+        return paths
 
     @classmethod
     def open(cls, content_path):
-        return cls(AuthoringSession.open(content_path))
+        result = cls(AuthoringSession.open(content_path))
+        result.layers = LayerWorkspace(content_path=content_path)
+        return result
