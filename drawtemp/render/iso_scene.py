@@ -8,6 +8,8 @@ from math import floor
 import hashlib
 import json
 
+from .autotile import autotile_tiles
+
 
 @dataclass(frozen=True)
 class IsoProjection:
@@ -104,7 +106,8 @@ def scene_from_mission(mission, snapshot=None):
     return {"mission": mission.id, "width": mission.board.width,
             "height": mission.board.height,
             "revision": int(getattr(snapshot, "revision", 0)),
-            "tiles": tiles, "actors": actors, "objects": objects}
+            "tiles": autotile_tiles(tiles, mission.board.width, mission.board.height),
+            "actors": actors, "objects": objects}
 
 
 def scene_from_exploration(stage, *, revision=0):
@@ -144,7 +147,8 @@ def scene_from_exploration(stage, *, revision=0):
     ]
     return {"mission": "exploration:" + stage["scene_id"],
             "width": width, "height": height, "revision": revision,
-            "tiles": tiles, "actors": actors, "objects": objects}
+            "tiles": autotile_tiles(tiles, width, height),
+            "actors": actors, "objects": objects}
 
 
 def fingerprint(scene):
@@ -176,6 +180,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None):
                      "height": z, "feature": t.get("feature", ""),
                      "blocked": t.get("blocked", False), "cover": t.get("cover", 0),
                      "hazard": t.get("hazard", 0), "goal": t.get("goal", False),
+                     "blends": t.get("blends", ()),
                      "zOrder": (x + y) * 100})
     for o in scene["objects"]:
         x, y = o["x"], o["y"]
