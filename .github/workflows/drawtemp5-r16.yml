@@ -1,0 +1,47 @@
+name: DrawTemp 5 R16 Migration Safety
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r16-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migration-matrix:
+    name: R16 / ${{ matrix.os }} / Python 3.12
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install headless engine and SDK
+        run: python -m pip install .
+      - name: Verify reversible migration and explicit save compatibility
+        run: python -m unittest tests_standalone.test_drawtemp5_r16 -v
+      - name: Static Tk legacy inventory (Qt boundary guard)
+        run: python scripts/inventory_drawtemp5_legacy.py --report r16-inventory.json --fail-on-qt-tk
+      - name: Regression on canonical authoring, storage and R0 migration
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp5_r0
+          tests_standalone.test_drawtemp5_r1_authoring
+          -v
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r16-inventory-${{ matrix.os }}
+          path: r16-inventory.json
+          if-no-files-found: warn
