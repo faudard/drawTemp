@@ -651,7 +651,10 @@ def launch(content_path):
             """Project recorded positions without predicting future moves."""
             index = self.timeline.currentRow()
             if (self.inspection is None or index < 0
-                    or index >= len(self._timeline_frames)):
+                    or index >= len(self._timeline_frames)
+                    or not self.timeline.selectedItems()):
+                # clearSelection() keeps the Qt current-row pointer; never
+                # reapply an old frame when the transport seeks to frame 0.
                 return
             frame = self._timeline_frames[index]
             self.transport.seek(frame["index"], notify=False)
