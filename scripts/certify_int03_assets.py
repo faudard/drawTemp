@@ -20,7 +20,7 @@ from scripts.verify_watercolor_release import verify_directory
 from sporebound.assets import AssetRegistry
 from sporebound.watercolor_catalog import WatercolorCatalog
 
-SHA256 = re.compile(r"[a-f0-9]{64}\\Z")
+SHA256 = re.compile(r"[a-f0-9]{64}")
 UNVERIFIED = {"", "unknown", "unverified", "pending", "todo", "none"}
 
 
