@@ -133,7 +133,9 @@ class R9DPageContracts(unittest.TestCase):
     def test_legacy_document_has_identical_default_manifest(self):
         content, _ = reference_project()
         raw = content.to_dict()
-        self.assertEqual(authored_rules_for_document(raw).manifest(),
+        from sporebound.event_pages import has_pages
+        self.assertFalse(has_pages(raw))
+        self.assertEqual(Battle(content, MISSION).rules.manifest(),
                          default_rules().manifest())
 
 
