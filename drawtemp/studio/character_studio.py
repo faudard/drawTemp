@@ -13,6 +13,7 @@ from drawtemp.assets.characters import (
     ACTIONS, DIRECTIONS, SLOTS, CharacterError, CharacterSession, diagnostics,
     export_pack, frame, render_frame, starter_library,
 )
+from drawtemp.assets.jeanne_art import build_jeanne_art
 
 
 def main(argv=None):
@@ -55,6 +56,9 @@ def main(argv=None):
             super().__init__()
             self.session = CharacterSession(recipe)
             self.path = args.open
+            self.art_root = (args.open.parent if args.open and
+                             (args.open.parent / "sources/jeanne_atlas.png").is_file()
+                             else root)
             self.frame_index = 0
             self.playing = False
             self.timer = QTimer(self)
@@ -74,6 +78,8 @@ def main(argv=None):
             self.variants.currentTextChanged.connect(self.variant_changed)
             self.add_variant = QPushButton("Dupliquer la tenue")
             self.add_variant.clicked.connect(self.duplicate_variant)
+            self.generate_outfits = QPushButton("Créer les 4 tenues de Jeanne…")
+            self.generate_outfits.clicked.connect(self.create_jeanne_outfits)
             self.expression = QComboBox()
             self.expression.currentIndexChanged.connect(self.refresh_preview)
             self.add_expression = QPushButton("Ajouter un portrait / une expression…")
@@ -137,6 +143,7 @@ def main(argv=None):
             left.addWidget(QLabel("Tenues / variantes"))
             left.addWidget(self.variants, 1)
             left.addWidget(self.add_variant)
+            left.addWidget(self.generate_outfits)
             left.addWidget(QLabel("Portraits / expressions"))
             left.addWidget(self.expression)
             left.addWidget(self.add_expression)
@@ -317,12 +324,12 @@ def main(argv=None):
                 image = render_frame(
                     self.session.document, self.active_variant(),
                     self.action.currentData(), self.direction.currentData(),
-                    self.frame_index, root)
+                    self.frame_index, self.art_root)
                 if self.onion.isChecked() and self.frame_index > 0:
                     ghost = render_frame(
                         self.session.document, self.active_variant(),
                         self.action.currentData(), self.direction.currentData(),
-                        self.frame_index - 1, root)
+                        self.frame_index - 1, self.art_root)
                     ghost.putalpha(ghost.getchannel("A").point(lambda a: a // 4))
                     ghost.alpha_composite(image)
                     image = ghost
@@ -561,6 +568,7 @@ def main(argv=None):
                 self.stop()
                 self.session = CharacterSession(templates[key])
                 self.path = None
+                self.art_root = root
                 self.refresh()
 
         def open_recipe(self):
@@ -571,6 +579,10 @@ def main(argv=None):
                     self.session = CharacterSession(
                         json.loads(Path(path).read_text(encoding="utf-8")))
                     self.path = Path(path)
+                    self.art_root = (
+                        self.path.parent if
+                        (self.path.parent / "sources/jeanne_atlas.png").is_file()
+                        else root)
                     self.refresh()
                 except (OSError, ValueError, KeyError) as exc:
                     QMessageBox.critical(self, "Fichier invalide", str(exc))
@@ -598,11 +610,32 @@ def main(argv=None):
             if not path:
                 return
             try:
-                registry = export_pack(self.session.document, root, Path(path))
+                registry = export_pack(self.session.document, self.art_root, Path(path))
                 self.statusBar().showMessage(
                     f"Atlas exporté : {len(registry['entries'])} ressources")
             except (OSError, ValueError) as exc:
                 QMessageBox.critical(self, "Export", str(exc))
+
+        def create_jeanne_outfits(self):
+            destination = QFileDialog.getExistingDirectory(
+                self, "Atelier artistique de Jeanne (répertoire dédié)",
+                str(root.parent))
+            if not destination:
+                return
+            try:
+                source = Path(destination).resolve()
+                recipe = build_jeanne_art(root, source)
+                self.stop()
+                self.art_root = source
+                self.path = source / "jeanne.character.json"
+                self.session = CharacterSession(recipe)
+                self.refresh()
+                self.variants.setCurrentRow(
+                    list(recipe["variants"]).index("peasant"))
+                self.statusBar().showMessage(
+                    "Quatre tenues construites, atlas Player exporté dans runtime/")
+            except (ValueError, OSError) as exc:
+                QMessageBox.critical(self, "Création Jeanne", str(exc))
 
         def undo(self):
             if self.session.undo():

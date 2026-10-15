@@ -77,6 +77,14 @@ def main(argv=None):
                 call(*args)
                 self.renderer.replace_scene(scene_for_player(self.controller))
                 if self.controller.session is not None:
+                    # Existing R8 equipment and injuries are already serialized
+                    # in Campaign.progress, and validated by Simulation.load().
+                    # No parallel visual save-state is introduced here.
+                    if call.__name__ in ("new_game", "load", "restore_backup"):
+                        self.renderer.clear_outfit_preview()
+                    snapshot = self.controller.session.snapshot()
+                    self.renderer.sync_progress(snapshot.progress,
+                                                self.controller.content.equipment)
                     self.renderer.selectCell(*self.controller.selected)
                 if visual is not None:
                     self.renderer.play_actor(*visual)
@@ -142,6 +150,14 @@ def main(argv=None):
             self.invoke(self.controller.command, kind, visual=visual)
 
         @Slot(str, str)
+        def equipHero(self, actor_id, item_id):
+            self.invoke(self.controller.equip_hero, actor_id, item_id)
+
+        @Slot(str, str)
+        def unequipHero(self, actor_id, slot):
+            self.invoke(self.controller.unequip_hero, actor_id, slot)
+
+        @Slot(str, str)
         def previewOutfit(self, actor_id, variant):
             """Presentation-only preview; equipment and saves remain canonical."""
             try:
@@ -192,6 +208,9 @@ def main(argv=None):
     renderer = make_controller(scene_for_player(controller),
                                character_pack=args.character_pack,
                                character_variant=args.character_variant)
+    if controller.session is not None:
+        renderer.sync_progress(controller.session.snapshot().progress,
+                               controller.content.equipment)
     bridge = PlayerBridge(controller, renderer)
     engine = QQmlApplicationEngine()
     engine.setInitialProperties({"smokeMode": args.smoke})

@@ -66,6 +66,48 @@ class R7QtIntegrationTests(unittest.TestCase):
             self.assertNotEqual(dead["spriteRegion"], north["spriteRegion"])
             controller._sprite_timer.stop()
 
+    def test_saved_equipment_sync_and_unsaved_outfit_preview(self):
+        from drawtemp.assets.jeanne_art import build_jeanne_art
+        from drawtemp.render.qt_viewport import make_controller
+        with tempfile.TemporaryDirectory() as folder:
+            authoring = Path(folder) / "jeanne"
+            build_jeanne_art(ROOT, authoring)
+            scene = {
+                "mission": "r7_equipment", "width": 1, "height": 1,
+                "revision": 0,
+                "tiles": [{"x": 0, "y": 0, "height": 0, "surface": "grass",
+                           "feature": "", "blocked": False, "cover": 0,
+                           "hazard": 0, "goal": False}],
+                "actors": [{"id": "jeanne", "name": "Jeanne", "x": 0, "y": 0,
+                            "level": 0, "team": "player", "alive": True,
+                            "direction": "south"}],
+                "objects": [],
+            }
+            controller = make_controller(scene,
+                                         character_pack=authoring / "runtime")
+            items = {
+                "train": {"slot": "weapon"},
+                "mail": {"slot": "armor"},
+            }
+            peasant = {"heroes": {"jeanne": {"equipment": {}, "wounds": []}}}
+            armored = {"heroes": {"jeanne": {
+                "equipment": {"armor": "mail"}, "wounds": []}}}
+            self.assertTrue(controller.sync_progress(peasant, items))
+            self.assertEqual(controller.characterCurrentOutfit, "peasant")
+            peasant_region = next(x for x in controller.items
+                                  if x["kind"] == "actor")["spriteRegion"]
+            self.assertTrue(controller.sync_progress(armored, items))
+            self.assertEqual(controller.characterCurrentOutfit, "armor")
+            armor_region = next(x for x in controller.items
+                                if x["kind"] == "actor")["spriteRegion"]
+            self.assertNotEqual(peasant_region, armor_region)
+            controller.set_outfit("jeanne", "apprentice")
+            self.assertEqual(controller.characterCurrentOutfit, "apprentice")
+            controller.clear_outfit_preview()
+            self.assertEqual(controller.characterCurrentOutfit, "armor")
+            self.assertEqual(armored["heroes"]["jeanne"]["equipment"], {"armor": "mail"})
+            controller._sprite_timer.stop()
+
     def test_qml_component_creates_native_scenegraph_with_actor_texture(self):
         from drawtemp.render.qt_viewport import create_view
         with tempfile.TemporaryDirectory() as folder:

@@ -333,6 +333,30 @@ class GameSession:
         require(total <= 30, "Battle support exceeds supply cap")
         return {"inventory": {"potion": 3 + total, "ether": 2, "phoenix": 1}}
 
+    def _can_edit_hero_equipment(self, uid):
+        """Only canonical playable heroes, only outside tactical encounters."""
+        require(self.mode == "campaign" and not self.tactical_story_pending,
+                "Finish the current encounter before changing equipment")
+        require(not self.progress.story_pending and self.active_scene() is None,
+                "Finish dialogue/exploration before changing equipment")
+        require(isinstance(uid, str) and bool(uid),
+                "Hero ID is required")
+        roster = {unit.id for mission in self.content.missions.values()
+                  for unit in mission.units if unit.team == "player"}
+        require(uid in roster, "Unknown playable hero")
+
+    def equip_hero(self, uid, item_id):
+        """Delegate inventory/slot/ownership rules to the existing Campaign."""
+        self._can_edit_hero_equipment(uid)
+        self.progress.equip(self.content, uid, item_id)
+
+    def unequip_hero(self, uid, slot):
+        """Return a canonical equipped item to the persistent inventory."""
+        self._can_edit_hero_equipment(uid)
+        require(slot in ("weapon", "armor", "accessory"),
+                "Unknown equipment slot")
+        self.progress.unequip(uid, slot)
+
     def start_mission(self, mission_id):
         require(self.mode == "campaign", "End the current encounter first")
         require(mission_id in self.available_missions(), "Mission is locked")
