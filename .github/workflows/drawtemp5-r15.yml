@@ -67,9 +67,9 @@ jobs:
           QT_QUICK_BACKEND: software
         run: |
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            cd export/Jeanne && ./Player/DrawTempPlayer.exe --smoke
+            cd export/Jeanne && ./Player/DrawTempPlayer.exe --smoke && ./Player/DrawTempPlayer.exe --smoke --smoke-scene exploration
           else
-            cd export/Jeanne && ./Player/DrawTempPlayer --smoke
+            cd export/Jeanne && ./Player/DrawTempPlayer --smoke && ./Player/DrawTempPlayer --smoke --smoke-scene exploration
           fi
       - name: Freeze Qt Map Studio
         run: >-

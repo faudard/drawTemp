@@ -10,7 +10,7 @@ import json
 import os
 from pathlib import Path
 import shutil
-import sys
+import re
 from tempfile import TemporaryDirectory
 
 from drawtemp.quality.r14 import safe_asset_path, verify_report
@@ -73,7 +73,7 @@ def preflight(content_path, *, require_licenses=False):
                  result["warnings"]).append(message)
             else:
                 try:
-                    licenses = _json(license_file)
+                    licenses = _json(safe_asset_path(source.parent, "asset-licenses.json"))
                     if not isinstance(licenses, dict):
                         raise ValueError("License index must be a path-to-license object")
                     for relative in result["assets"]:
@@ -155,7 +155,7 @@ def export_game(content_path, runtime_dir, destination, *,
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(safe_asset_path(source.parent, relative), target)
         if (source.parent / "asset-licenses.json").is_file():
-            shutil.copy2(source.parent / "asset-licenses.json",
+            shutil.copy2(safe_asset_path(source.parent, "asset-licenses.json"),
                          game / "asset-licenses.json")
         files = [
             {"path": file.relative_to(stage).as_posix(), "size": file.stat().st_size,
@@ -196,7 +196,8 @@ def verify_bundle(path):
             raise ExportError("Duplicate/invalid manifest path")
         listed.add(relative.casefold())
         if (type(row["size"]) is not int or row["size"] < 0 or
-                not isinstance(row["sha256"], str) or len(row["sha256"]) != 64):
+                not isinstance(row["sha256"], str) or
+                not re.fullmatch(r"[0-9a-f]{64}", row["sha256"])):
             raise ExportError("Invalid size or SHA-256 in manifest")
         try:
             file = safe_asset_path(root, relative)
@@ -208,7 +209,9 @@ def verify_bundle(path):
               for file in _files(root) if file != root / "manifest.json"}
     if actual != listed:
         raise ExportError("Unlisted or missing bundle files")
-    if manifest.get("content", "").casefold() not in listed or (
-            manifest.get("player", "").casefold() not in listed):
+    content = manifest.get("content")
+    player = manifest.get("player")
+    if (not isinstance(content, str) or not isinstance(player, str) or
+            content.casefold() not in listed or player.casefold() not in listed):
         raise ExportError("Bundle lacks an indexed game or native Player")
     return manifest
