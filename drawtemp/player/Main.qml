@@ -5,7 +5,10 @@ import "../render"
 
 ApplicationWindow {
     id: root
-    visible: true
+    // A CI smoke must instantiate and bind the full QML tree without
+    // exposing a native window or starting its renderer.
+    property bool smokeMode: false
+    visible: !smokeMode
     width: 1280
     height: 800
     minimumWidth: 850
