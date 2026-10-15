@@ -44,10 +44,12 @@ elle boucle longtemps, proposer ses propres points d'annulation.
 from drawtemp.sdk.workers import SdkWorkQueue
 
 queue = SdkWorkQueue(max_workers=2)  # construit sur le thread GUI
+def rename_village(content, project):
+    content["missions"][0]["name"] = "Village 5.0"
+    return content, project
+
 ticket = queue.submit_authoring(
-    studio_session,
-    lambda content, project: ({**content, "name": "Nouveau nom"}, project),
-    kind="project-edit",
+    studio_session, rename_village, kind="map-edit",
 )
 
 # Dans le slot déclenché par QTimer, **sur le thread GUI** :
