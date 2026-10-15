@@ -50,13 +50,24 @@ class R1210QtBridgeTests(unittest.TestCase):
                 bridge.continueGame()
                 self.assertEqual(game.session.recording(), advanced)
 
-                # Explicit recovery returns the previous generation; no
-                # accidental restore happens as part of Continue.
+                # Never downgrade a valid primary even if its backup exists.
                 bridge.titleScreen()
+                healthy = (Path(folder) / "autosave.json").read_bytes()
+                bridge.restoreAutosaveBackup()
+                self.assertEqual((Path(folder) / "autosave.json").read_bytes(),
+                                 healthy)
+                self.assertEqual(game.session.recording(), advanced)
+
+                # Explicit recovery becomes available after genuine corruption.
+                (Path(folder) / "autosave.json").write_bytes(b"broken")
+                self.assertEqual(game.state()["save_manager"]["autosave"]["status"],
+                                 "invalid")
                 bridge.restoreAutosaveBackup()
                 self.assertEqual(game.session.recording(), initial)
                 self.assertEqual(bridge.view["save_manager"]["autosave"]["status"],
                                  "valid")
+                self.assertEqual((Path(folder) / "autosave.json.damaged").read_bytes(),
+                                 b"broken")
             finally:
                 for item in engine.rootObjects():
                     item.close()
