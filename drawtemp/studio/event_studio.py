@@ -179,6 +179,7 @@ def main(argv=None):
             action_row.addWidget(self.action_value, 1)
             actions_layout.addLayout(action_row)
             for label, callback in (("Ajouter l'action", self.add_action),
+                                    ("Modifier l'action…", self.edit_action),
                                     ("Monter ↑", lambda: self.move_action(-1)),
                                     ("Descendre ↓", lambda: self.move_action(1)),
                                     ("Retirer", self.remove_action)):
@@ -426,11 +427,125 @@ def main(argv=None):
             if self.eid():
                 self.perform(lambda: self.studio.clear_predicates(self.mid(), self.eid()))
 
+        def _command_dialog(self, *, existing=None):
+            kind = existing["kind"] if existing else self.action_kind.currentText()
+            if kind not in action_catalogue():
+                raise ValueError("Action non prise en charge par le moteur tactique")
+            dialog = QDialog(self)
+            dialog.setWindowTitle(("Modifier " if existing else "Ajouter ") + kind)
+            form = QFormLayout(dialog)
+            editors = {}
+            for key, label, type_name in action_catalogue()[kind]:
+                value = ""
+                if existing:
+                    value = existing.get(key, "")
+                    if key == "actor_id":
+                        value = existing.get("actor", {}).get("id", "") if kind == "spawn" else (
+                            existing.get("actors", [{}])[0].get("id", ""))
+                    elif key in ("name", "team", "archetype", "pos") and kind in (
+                            "spawn", "wave", "queue_wave"):
+                        actor = (existing.get("actor", {}) if kind == "spawn" else
+                                 existing.get("actors", [{}])[0])
+                        value = actor.get(key, "")
+                    elif key == "max_active":
+                        value = existing.get("max_active", 14)
+                if type_name == "cell" and isinstance(value, (list, tuple)):
+                    value = ",".join(map(str, value))
+                if type_name == "integer":
+                    editor = QSpinBox()
+                    editor.setRange(0, 10000)
+                    editor.setValue(int(value) if value != "" else
+                                    (14 if key == "max_active" else 1))
+                elif type_name == "team":
+                    editor = QComboBox()
+                    editor.addItems(["enemy", "player"])
+                    editor.setCurrentText(str(value or "enemy"))
+                else:
+                    editor = QLineEdit(str(value) if value else "")
+                    if key == "pos" and not value:
+                        editor.setPlaceholderText("x,y")
+                editors[key] = editor
+                form.addRow(label, editor)
+            buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            form.addRow(buttons)
+            if dialog.exec() != QDialog.Accepted:
+                return None
+            raw = {}
+            for key, _, type_name in action_catalogue()[kind]:
+                editor = editors[key]
+                raw[key] = (editor.value() if type_name == "integer" else
+                            editor.currentText() if type_name == "team" else
+                            editor.text())
+            return kind, raw
+
         def add_action(self):
-            if self.eid():
-                self.perform(lambda: self.studio.add_action(
-                    self.mid(), self.eid(),
-                    make_action(self.action_kind.currentText(), self.action_value.text())))
+            if not self.eid():
+                return
+            try:
+                edited = self._command_dialog()
+                if edited:
+                    kind, fields = edited
+                    self.perform(lambda: self.studio.add_tactical_command(
+                        self.mid(), self.eid(), kind, fields))
+            except Exception as exc:
+                QMessageBox.warning(self, "Action invalide", str(exc))
+
+        def edit_action(self):
+            if not self.eid() or self.actions_list.currentRow() < 0:
+                return
+            index = self.actions_list.currentRow()
+            try:
+                existing = self.studio.event(self.mid(), self.eid())["actions"][index]
+                edited = self._command_dialog(existing=existing)
+                if edited:
+                    kind, fields = edited
+                    self.perform(lambda: self.studio.replace_tactical_command(
+                        self.mid(), self.eid(), index, kind, fields))
+            except Exception as exc:
+                QMessageBox.warning(self, "Modification impossible", str(exc))
+
+        def add_presentation(self):
+            if not self.eid():
+                return
+            kind = self.cue_kind.currentText()
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Piste Player : " + kind)
+            form = QFormLayout(dialog)
+            clip_id = QLineEdit("cin_" + self.eid())
+            clip_name = QLineEdit("Scène " + self.eid())
+            cue_id = QLineEdit(kind + "_" + self.eid())
+            start = QSpinBox()
+            start.setRange(0, 7999)
+            duration = QSpinBox()
+            duration.setRange(1, 8000)
+            duration.setValue(1000)
+            for label, widget in (("ID cinématique", clip_id),
+                                  ("Nom cinématique", clip_name),
+                                  ("ID piste", cue_id),
+                                  ("Début (ms)", start), ("Durée (ms)", duration)):
+                form.addRow(label, widget)
+            entries = {}
+            defaults = {"speaker": "Jeanne", "text": "", "cue": "",
+                        "actor": "jeanne", "color": "#243c56",
+                        "effect": "fire"}
+            for key, label in PRESENTATION_FIELDS[kind]:
+                edit = QLineEdit(defaults.get(key, ""))
+                form.addRow(label, edit)
+                entries[key] = edit
+            buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            form.addRow(buttons)
+            if dialog.exec() != QDialog.Accepted:
+                return
+            fields = {key: editor.text() for key, editor in entries.items()}
+            self.perform(lambda: self.studio.add_presentation_cue(
+                self.mid(), self.eid(), clip_id=clip_id.text().strip(),
+                clip_name=clip_name.text().strip(), kind=kind,
+                cue_id=cue_id.text().strip(), start_ms=start.value(),
+                duration_ms=duration.value(), fields=fields))
 
         def move_action(self, direction):
             if self.eid() and self.actions_list.currentRow() >= 0:
