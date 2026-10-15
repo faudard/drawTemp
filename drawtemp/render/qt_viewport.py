@@ -17,7 +17,7 @@ def default_atlas_url():
     return Path(str(atlas)).resolve().as_uri() if atlas.is_file() else ""
 
 
-def make_controller(scene, atlas_url=None):
+def make_controller(scene, atlas_url=None, *, assets=None):
     """Create a QObject only when Qt is installed; keep headless module import safe."""
     from PySide6.QtCore import QObject, Property, Signal, Slot
 
@@ -33,6 +33,9 @@ def make_controller(scene, atlas_url=None):
             self.projection = IsoProjection()
             self.selection = None
             self._items = []
+            self._base_items = []
+            self._elapsed_ms = 0
+            self.assets = assets
             self._atlas = default_atlas_url() if atlas_url is None else atlas_url
             self.center_scene()
 
@@ -43,7 +46,9 @@ def make_controller(scene, atlas_url=None):
             self.refresh()
 
         def refresh(self):
-            self._items = render_items(self.scene, self.camera, self.projection, self.selection)
+            self._base_items = render_items(self.scene, self.camera, self.projection, self.selection)
+            self._items = (self.assets.decorate(self._base_items, elapsed_ms=self._elapsed_ms)
+                           if self.assets is not None else self._base_items)
             self.sceneChanged.emit()
             self.cameraChanged.emit()
 
@@ -55,6 +60,26 @@ def make_controller(scene, atlas_url=None):
         def cameraState(self):
             return {"zoom": self.camera.zoom, "panX": self.camera.pan_x,
                     "panY": self.camera.pan_y}
+
+        @Property(bool, constant=True)
+        def animatedAssets(self):
+            return self.assets is not None and self.assets.has_animations
+
+        @Slot(int)
+        def advanceVisual(self, delta_ms):
+            """Animate cosmetics only; never touch the tactical simulation."""
+            if (type(delta_ms) is not int or not 1 <= delta_ms <= 1000):
+                return
+            if self.assets is not None and self.assets.has_animations:
+                self._elapsed_ms += delta_ms
+                self._items = self.assets.decorate(
+                    self._base_items, elapsed_ms=self._elapsed_ms)
+                self.sceneChanged.emit()
+
+        def replace_assets(self, assets):
+            self.assets = assets
+            self._elapsed_ms = 0
+            self.refresh()
 
         @Property(str, constant=True)
         def atlasUrl(self):
@@ -121,7 +146,7 @@ def make_controller(scene, atlas_url=None):
     return RendererController()
 
 
-def create_view(scene, parent=None):
+def create_view(scene, parent=None, *, assets=None):
     """Return (QQuickView, controller); caller retains both references.
 
     Studio can wrap the QQuickView with QWidget.createWindowContainer(view).
@@ -129,7 +154,7 @@ def create_view(scene, parent=None):
     """
     from PySide6.QtCore import QUrl
     from PySide6.QtQuick import QQuickView
-    controller = make_controller(scene)
+    controller = make_controller(scene, assets=assets)
     view = QQuickView(parent)
     view.rootContext().setContextProperty("renderer", controller)
     view.setResizeMode(QQuickView.SizeRootObjectToView)
