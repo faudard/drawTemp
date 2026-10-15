@@ -105,9 +105,10 @@ class R10EndToEndTests(unittest.TestCase):
             studio.remove_story_choice("r10_decision", "missing")
         self.assertEqual(studio.revision, revision)
         studio.undo()
-        self.assertNotIn("exil", studio.overview()["flow"]["endings"])
+        self.assertEqual(studio.overview()["flow"]["endings"]["exil"],
+                         {"flag": "allegiance", "eq": "refuse"})
         studio.redo()
-        self.assertIn("exil", studio.overview()["flow"]["endings"])
+        self.assertIn("all", studio.overview()["flow"]["endings"]["exil"])
 
     def test_player_loads_authored_pair_and_separates_save_directories(self):
         studio = guided_campaign()
