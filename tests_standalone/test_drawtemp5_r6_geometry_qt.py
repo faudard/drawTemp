@@ -1,5 +1,6 @@
 """R6.2 real Qt/R5 construction viewport integration smoke."""
 import unittest
+from unittest.mock import patch
 
 try:
     from PySide6.QtWidgets import QApplication
@@ -56,7 +57,9 @@ class ConstructionWindowR6Tests(unittest.TestCase):
             window.mode.setCurrentIndex(0)
             self.assertEqual(window.viewport.rootObject().property("interactionMode"),"edit")
         finally:
-            window.close()
+            from PySide6.QtWidgets import QMessageBox
+            with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+                window.close()
 
 
 if __name__ == "__main__":
