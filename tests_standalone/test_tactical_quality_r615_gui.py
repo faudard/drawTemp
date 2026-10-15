@@ -97,7 +97,9 @@ class TacticalQualityStudioTests(unittest.TestCase):
                                side_effect=[str(human), ""]):
                         buttons["Revue humaine R6.15"].invoke()
                     root.update()
-                    modal = next((w for w in root.winfo_children()
+                    # Toplevel(master=tab) is owned by the nested Matrix tab,
+                    # not necessarily registered as a direct Tk root child.
+                    modal = next((w for w in descendants(root)
                                   if isinstance(w, tk.Toplevel)), None)
                     self.assertIsNotNone(modal)
                     checkboxes = [w for w in descendants(modal)
