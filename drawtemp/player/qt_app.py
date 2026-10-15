@@ -1,5 +1,3 @@
-    parser.add_argument("--character-pack", type=Path, help="Published R7 atlas export directory")
-    parser.add_argument("--character-variant", help="Initial authored outfit ID")
 """Standalone Qt Quick Player 5.0 — no Studio/Tk dependencies in this process."""
 import argparse
 import hashlib
@@ -289,6 +287,8 @@ def main(argv=None):
     parser.add_argument("--content", type=Path, help="Custom canonical Content JSON")
     parser.add_argument("--project", type=Path, help="Paired GameProject JSON (defaults to <content>.game.json)")
     parser.add_argument("--campaign", help="Campaign ID from the selected project")
+    parser.add_argument("--character-pack", type=Path, help="Published R7 atlas export directory")
+    parser.add_argument("--character-variant", help="Initial authored outfit ID")
     args = parser.parse_args(argv)
 
     # R15: a frozen Player must never run unverified or substitute game data.
