@@ -137,7 +137,6 @@ def _reserved(mission):
                                    door_slot=building.get("door_slot", 0))
         structures.update(structure_footprint(stamp, building["anchor"]))
     protected = set(structures)
-    protected.update(tuple(z) for z in mission.get("goal", ()) if False)
     relic = mission.get("relic")
     if relic is not None:
         protected.add(tuple(relic))
