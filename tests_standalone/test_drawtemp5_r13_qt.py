@@ -38,6 +38,22 @@ class R13QtSmoke(unittest.TestCase):
                     self.assertIsInstance(window.map, QGraphicsView)
                     self.assertIsInstance(window.outcomes, QTableWidget)
                     self.assertTrue(window.scene.items())
+                    self.assertEqual(window.units.columnCount(), 6)
+                    self.assertEqual(window.objective.currentText(), "eliminate")
+                    self.assertFalse(window.apply_button.isEnabled())
+                    # The map click is a real Qt signal into the UI editing
+                    # path, not a direct mutation of the canonical Content.
+                    window.units.selectRow(0)
+                    window.map.tileChosen.emit(1, 1)
+                    self.assertEqual(window.units.item(0, 2).text(), "1")
+                    self.assertEqual(window.units.item(0, 3).text(), "1")
+                    window.objective.setCurrentText("extract")
+                    window.goal_cells.setText("3,3")
+                    edits = window._read_editor_changes()
+                    self.assertEqual(edits["unit_positions"], {"jeanne": [1, 1]})
+                    self.assertEqual(edits["objective"], "extract")
+                    self.assertEqual(edits["goal_cells"], [[3, 3]])
+                    self.assertEqual(content.missions["smoke"].objective, "eliminate")
                     captured.append(True)
                 except Exception as exc:
                     captured.append(exc)
