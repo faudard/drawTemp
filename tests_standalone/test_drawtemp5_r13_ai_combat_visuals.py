@@ -85,7 +85,8 @@ class CombatTelemetryR13Tests(unittest.TestCase):
             with self.subTest(event=event), self.assertRaises(RuleError):
                 build_combat_visuals(bad)
         bad = deepcopy(self.trace)
-        bad["steps"] *= 81  # Exceeds configured 5000-step hard cap.
+        bad["steps"] = [deepcopy(self.trace["steps"][0])
+                        for _ in range(5001)]  # Must hit size gate first.
         with self.assertRaises(RuleError):
             build_combat_visuals(bad)
 
