@@ -151,41 +151,73 @@ def fingerprint(scene):
     return hashlib.sha256(json.dumps(scene, sort_keys=True).encode()).hexdigest()
 
 
-def render_items(scene, camera, projection=IsoProjection(), selected=None):
-    """Cull outside viewport; return depth-sorted QML scenegraph records."""
-    elev = {(t["x"], t["y"]): t["height"] for t in scene["tiles"]}
-    max_height = max(elev.values(), default=0)
-    margin = projection.width * 2
-    corners = [camera.world(x, y) for x in (-margin, camera.width + margin)
-               for y in (-margin, camera.height + margin)]
-    coords = [projection.unproject(x, y, z) for x, y in corners for z in (0, max_height)]
-    minx, maxx = int(min(x for x, _ in coords)) - 3, int(max(x for x, _ in coords)) + 3
-    miny, maxy = int(min(y for _, y in coords)) - 3, int(max(y for _, y in coords)) + 3
+OVERLAY_COLORS = {
+    "reachable": "#48c2a2",
+    "path": "#76c9ee",
+    "los": "#b1b9fc",
+    "range": "#efb96c",
+    "cover": "#85b89d",
+    "danger": "#eb726f",
+    "intent": "#b894ee",
+    "objective": "#eed777",
+}
+
+
+def render_items(scene, camera, projection=IsoProjection(), selected=None,
+                 *, tile_index=None, overlays=None):
+    """Render common depth-sorted Qt Quick records with indexed tile culling.
+
+    Optional overlays are cosmetic, revision-independent cells. They never
+    write back to Simulation or Content. A cached TileChunkIndex can be reused
+    through pan/zoom and updated only when authored terrain actually changes.
+    """
+    from .tile_chunks import TileChunkIndex
+
+    index = tile_index if tile_index is not None else TileChunkIndex(scene)
+    elev = index.elevations
+    lo_x, hi_x, lo_y, hi_y = index.visible_bounds(camera, projection)
+    overlay_by_cell = {}
+    for kind, cells in (overlays or {}).items():
+        if kind not in OVERLAY_COLORS:
+            raise ValueError("Unknown overlay: " + str(kind))
+        for cell in cells:
+            if len(cell) != 2:
+                raise ValueError("Overlays require [x, y] cells")
+            x, y = cell
+            if type(x) is not int or type(y) is not int:
+                raise ValueError("Overlay coordinates must be integers")
+            if 0 <= x < scene["width"] and 0 <= y < scene["height"]:
+                overlay_by_cell[(x, y)] = kind
+
     rows = []
-    for t in scene["tiles"]:
+    for t in index.visible_tiles(camera, projection):
         x, y, z = t["x"], t["y"], t["height"]
-        if not (minx <= x <= maxx and miny <= y <= maxy):
-            continue
         sx, sy = projection.project(x, y, z)
         surface = t["surface"] if t["surface"] in MATERIALS else "grass"
         atlas_index = MATERIALS.index(surface) * 2 + ((x * 17 + y * 29) & 1)
+        overlay = overlay_by_cell.get((x, y), "")
         rows.append({"kind": "tile", "id": f"tile:{x}:{y}", "x": x, "y": y,
                      "sx": sx, "sy": sy, "surface": surface,
                      "color": COLORS[MATERIALS.index(surface)],
                      "atlasX": atlas_index * 96, "selected": selected == (x, y),
-                     "height": z, "feature": t.get("feature", ""),
+                     "height": z,
+                     "eastDrop": max(0, z - elev.get((x + 1, y), 0)),
+                     "southDrop": max(0, z - elev.get((x, y + 1), 0)),
+                     "overlay": overlay,
+                     "overlayColor": OVERLAY_COLORS.get(overlay, "transparent"),
+                     "feature": t.get("feature", ""),
                      "blocked": t.get("blocked", False), "cover": t.get("cover", 0),
                      "hazard": t.get("hazard", 0), "goal": t.get("goal", False),
                      "zOrder": (x + y) * 100})
     for o in scene["objects"]:
         x, y = o["x"], o["y"]
-        if minx - 1 <= x <= maxx + 1 and miny - 1 <= y <= maxy + 1:
+        if lo_x - 1 <= x <= hi_x + 1 and lo_y - 1 <= y <= hi_y + 1:
             sx, sy = projection.project(x, y, elev.get((x, y), 0))
             rows.append({"kind": "object", "id": o["id"], "label": o["kind"],
                          "sx": sx, "sy": sy, "zOrder": (x + y) * 100 + 30})
     for a in scene["actors"]:
         x, y = a["x"], a["y"]
-        if minx - 1 <= x <= maxx + 1 and miny - 1 <= y <= maxy + 1:
+        if lo_x - 1 <= x <= hi_x + 1 and lo_y - 1 <= y <= hi_y + 1:
             sx, sy = projection.project(x, y, elev.get((int(x), int(y)), 0) + a["level"] * 4)
             rows.append({"kind": "actor", "id": a["id"],
                          "label": a.get("name", a["id"]), "team": a["team"],
