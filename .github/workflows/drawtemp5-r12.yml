@@ -42,4 +42,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
-        run: python -m drawtemp.player.qt_app --smoke
+        run: |
+          python -m drawtemp.player.qt_app --smoke
+          python -m drawtemp.player.qt_app --reference --smoke --smoke-scene battle
+          python -m drawtemp.player.qt_app --smoke --smoke-scene exploration
