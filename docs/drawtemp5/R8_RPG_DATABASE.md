@@ -1,5 +1,7 @@
 # R8 — RPG Database & Rules Studio (DrawTemp 5.0)
 
+> **Suite R8.B :** [arbres de talents et rencontres Qt](R8_B_TALENTS_ENCOUNTERS.md). La matrice ci-dessous décrit la tranche historique R8.A, pas l'état cumulé des deux tranches.
+
 ## Scope of this PR
 
 This is an **incremental R8 authoring implementation**, not a certification

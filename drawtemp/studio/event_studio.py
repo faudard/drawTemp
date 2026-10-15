@@ -70,7 +70,8 @@ def main(argv=None):
         from PySide6.QtCore import Qt, QTimer
         from PySide6.QtGui import QAction, QBrush, QColor, QPen, QKeySequence
         from PySide6.QtWidgets import (
-            QApplication, QComboBox, QFileDialog, QFormLayout, QGraphicsScene,
+            QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+            QFileDialog, QFormLayout, QGraphicsScene,
             QGraphicsView, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
             QListWidget, QMainWindow, QMessageBox, QPushButton, QSpinBox,
             QSplitter, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
@@ -83,6 +84,7 @@ def main(argv=None):
         def __init__(self, studio):
             super().__init__()
             self.studio = studio
+            self.debug_session = None
             self.setWindowTitle("DrawTemp 5.0 · Studio des événements")
             self.resize(1360, 820)
 
@@ -192,6 +194,8 @@ def main(argv=None):
             dep.addWidget(self.button("Relier", self.link))
             dep.addWidget(self.button("Délier", self.unlink))
             graph_layout.addLayout(dep)
+            graph_layout.addWidget(self.button(
+                "Créer un embranchement narratif (2 choix)…", self.create_fork))
             self.tabs.addTab(graph_tab, "Graphe")
 
             timeline = QWidget()
@@ -200,8 +204,17 @@ def main(argv=None):
             self.delay_ticks.setRange(0, 10000)
             self.expire_ticks = QSpinBox()
             self.expire_ticks.setRange(0, 10000)
+            self.delay_activations = QSpinBox()
+            self.delay_activations.setRange(0, 10000)
+            self.expire_activations = QSpinBox()
+            self.expire_activations.setRange(0, 10000)
+            self.cancel_after = QLineEdit()
+            self.cancel_after.setPlaceholderText("ID événement, ID événement")
             timeline_form.addRow("Délai (ticks)", self.delay_ticks)
+            timeline_form.addRow("Délai (activations)", self.delay_activations)
             timeline_form.addRow("Expiration (ticks)", self.expire_ticks)
+            timeline_form.addRow("Expiration (activations)", self.expire_activations)
+            timeline_form.addRow("Annuler après", self.cancel_after)
             timeline_form.addRow(self.button("Appliquer au trigger", self.set_schedule))
             self.tabs.addTab(timeline, "Timeline")
 
@@ -218,6 +231,8 @@ def main(argv=None):
             narrative_form.addRow("Dialogue", self.scene_text)
             narrative_form.addRow(self.button("Créer scène narrative", self.create_scene))
             narrative_form.addRow(self.button("Lier scène à l'événement", self.bind_scene))
+            narrative_form.addRow(self.button("Attendre un choix de cette scène…", self.bind_choice))
+            narrative_form.addRow(self.button("Effacer la garde narrative", self.clear_choice))
             self.tabs.addTab(narrative, "Narration")
 
             map_tab = QWidget()
@@ -231,9 +246,24 @@ def main(argv=None):
             diagnostic_layout = QVBoxLayout(diagnostic_tab)
             diagnostic_commands = QHBoxLayout()
             diagnostic_commands.addWidget(self.button("Prévisualiser (F5)", self.preview))
-            diagnostic_commands.addWidget(self.button("Debugger", self.debug))
-            diagnostic_commands.addWidget(self.button("QA graphe", self.qa))
+            diagnostic_commands.addWidget(self.button("Démarrer", self.debug_start))
+            diagnostic_commands.addWidget(self.button("Pas →", self.debug_step))
+            diagnostic_commands.addWidget(self.button("Continuer", self.debug_continue))
+            diagnostic_commands.addWidget(self.button("Inspecter", self.debug_inspect))
             diagnostic_layout.addLayout(diagnostic_commands)
+            breakpoint_row = QHBoxLayout()
+            breakpoint_row.addWidget(QLabel("Point d'arrêt avant"))
+            self.debug_target = QComboBox()
+            self.debug_target.currentTextChanged.connect(self.debug_selection_changed)
+            breakpoint_row.addWidget(self.debug_target, 1)
+            self.debug_breakpoint = QCheckBox("Actif")
+            breakpoint_row.addWidget(self.debug_breakpoint)
+            self.debug_breakpoint.toggled.connect(self.debug_toggle_breakpoint)
+            diagnostic_layout.addLayout(breakpoint_row)
+            checks = QHBoxLayout()
+            checks.addWidget(self.button("QA structure", self.qa))
+            checks.addWidget(self.button("QA + sondes de choix", self.qa_probe))
+            diagnostic_layout.addLayout(checks)
             self.diagnostics = QTextEdit()
             self.diagnostics.setReadOnly(True)
             diagnostic_layout.addWidget(self.diagnostics, 1)
@@ -269,6 +299,11 @@ def main(argv=None):
         def perform(self, callback, *, selected=None):
             try:
                 callback()
+                self.debug_session = None
+                self.debug_target.clear()
+                self.debug_breakpoint.blockSignals(True)
+                self.debug_breakpoint.setChecked(False)
+                self.debug_breakpoint.blockSignals(False)
                 self.refresh_events(selected=selected)
             except Exception as exc:
                 QMessageBox.warning(self, "Édition refusée", str(exc))
@@ -308,6 +343,9 @@ def main(argv=None):
                     self.actions_list.addItem(action_title(item))
                 self.delay_ticks.setValue(event.get("delay_ticks", 0))
                 self.expire_ticks.setValue(event.get("expire_after_ticks", 0))
+                self.delay_activations.setValue(event.get("delay_activations", 0))
+                self.expire_activations.setValue(event.get("expire_after_activations", 0))
+                self.cancel_after.setText(", ".join(event.get("cancel_after", [])))
             else:
                 self.event_label.setText("Sélectionnez un événement")
                 self.pred_summary.clear()
@@ -390,7 +428,11 @@ def main(argv=None):
             if self.eid():
                 self.perform(lambda: self.studio.schedule(
                     self.mid(), self.eid(), delay_ticks=self.delay_ticks.value(),
-                    expire_after_ticks=self.expire_ticks.value()))
+                    delay_activations=self.delay_activations.value(),
+                    expire_after_ticks=self.expire_ticks.value(),
+                    expire_after_activations=self.expire_activations.value(),
+                    cancel_after=[v.strip() for v in self.cancel_after.text().split(",")
+                                  if v.strip()]))
 
         def create_scene(self):
             self.perform(lambda: self.studio.create_scene(
@@ -401,6 +443,86 @@ def main(argv=None):
             if self.eid():
                 self.perform(lambda: self.studio.bind_scene(
                     self.mid(), self.eid(), self.scene_id.text().strip()))
+
+        def bind_choice(self):
+            if not self.eid():
+                return
+            scene_id = self.scene_id.text().strip()
+            choice_id, ok = QInputDialog.getText(
+                self, "Choix attendu", "Identifiant du choix narratif")
+            if ok and choice_id.strip():
+                self.perform(lambda: self.studio.bind_choice(
+                    self.mid(), self.eid(), scene_id, choice_id.strip()))
+
+        def clear_choice(self):
+            if self.eid():
+                self.perform(lambda: self.studio.clear_choice(
+                    self.mid(), self.eid()))
+
+        def create_fork(self):
+            if not self.mid():
+                return
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Nouvel embranchement — deux décisions")
+            dialog.resize(540, 540)
+            form = QFormLayout(dialog)
+            def field(label, initial=""):
+                edit = QLineEdit(initial)
+                form.addRow(label, edit)
+                return edit
+
+            source = field("Événement de départ", self.eid() or "choice_origin")
+            cell = field("Case d'entrée (x,y)", "2,3")
+            scene = field("ID scène du choix", "jeanne_choice")
+            title = field("Titre", "Quelle voie choisir ?")
+            text = field("Dialogue", "Jeanne doit décider de la suite.")
+            speaker = field("Interlocuteur", "Jeanne")
+            branches = []
+            for index, defaults in enumerate((
+                    ("fight", "Combattre", "fight_event", "hazard", "5"),
+                    ("talk", "Négocier", "talk_event", "message", "0"))):
+                form.addRow(QLabel("Choix " + str(index + 1)))
+                choice = field("ID du choix", defaults[0])
+                label = field("Libellé", defaults[1])
+                event = field("ID événement tactique", defaults[2])
+                kind = QComboBox()
+                kind.addItems(["message", "hazard"])
+                kind.setCurrentText(defaults[3])
+                form.addRow("Conséquence", kind)
+                detail = field("Message de conséquence", label.text())
+                amount = QSpinBox()
+                amount.setRange(0, 10000)
+                amount.setValue(int(defaults[4]))
+                form.addRow("Danger (hazard seulement)", amount)
+                branches.append((choice, label, event, kind, detail, amount))
+            reunion = field("ID de réunion (facultatif)", "choice_reunion")
+            reunion_message = field("Texte de réunion", "Les chemins se rejoignent.")
+            actions = QDialogButtonBox(
+                QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            actions.accepted.connect(dialog.accept)
+            actions.rejected.connect(dialog.reject)
+            form.addRow(actions)
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            def apply():
+                rows = [{
+                    "id": choice.text().strip(),
+                    "label": label.text().strip(),
+                    "event_id": event.text().strip(),
+                    "kind": kind.currentText(),
+                    "text": detail.text().strip(),
+                    "amount": amount.value(),
+                } for choice, label, event, kind, detail, amount in branches]
+                self.studio.create_choice_fork(
+                    self.mid(), origin_event_id=source.text().strip(),
+                    origin_cell=_coordinate_pair(cell.text()),
+                    scene_id=scene.text().strip(), title=title.text().strip(),
+                    text=text.text().strip(), speaker=speaker.text().strip(),
+                    branches=rows, reunion_event_id=reunion.text().strip(),
+                    reunion_message=reunion_message.text().strip())
+
+            self.perform(apply, selected=source.text().strip())
 
         def render_graph(self):
             self.graph_scene.clear()
@@ -456,24 +578,108 @@ def main(argv=None):
             except Exception as exc:
                 QMessageBox.warning(self, "Simulation impossible", str(exc))
 
-        def debug(self):
+        def _render_debug(self, result):
+            self.diagnostics.setPlainText("\n".join(result["lines"]))
+            self.tabs.setCurrentIndex(self.tabs.count() - 1)
+
+        def debug_start(self):
             if not self.eid():
                 return
             try:
-                result = self.studio.debugger(self.mid(), self.eid())
-                self.diagnostics.setPlainText("\n".join(result["lines"]))
+                self.debug_session = self.studio.start_debug(
+                    self.mid(), self.eid(), scenario="satisfied")
+                self.debug_target.blockSignals(True)
+                self.debug_target.clear()
+                self.debug_target.addItems(self.debug_session.chain_ids())
+                self.debug_target.blockSignals(False)
+                self.debug_breakpoint.blockSignals(True)
+                self.debug_breakpoint.setChecked(False)
+                self.debug_breakpoint.blockSignals(False)
+                self._render_debug(self.debug_session.report())
+            except Exception as exc:
+                self.debug_session = None
+                QMessageBox.warning(self, "Débogueur indisponible", str(exc))
+
+        def debug(self):
+            self.debug_start()
+
+        def debug_step(self):
+            if self.debug_session is None:
+                self.debug_start()
+                return
+            try:
+                self._render_debug(self.debug_session.step())
+            except Exception as exc:
+                QMessageBox.warning(self, "Pas à pas interrompu", str(exc))
+
+        def debug_continue(self):
+            if self.debug_session is None:
+                self.debug_start()
+                return
+            try:
+                self._render_debug(self.debug_session.resume())
+            except Exception as exc:
+                QMessageBox.warning(self, "Diagnostic interrompu", str(exc))
+
+        def debug_selection_changed(self, event_id):
+            if self.debug_session is None:
+                return
+            try:
+                enabled = event_id in self.debug_session.report()["report"]["breakpoints"]
+                self.debug_breakpoint.blockSignals(True)
+                self.debug_breakpoint.setChecked(enabled)
+                self.debug_breakpoint.blockSignals(False)
+            except Exception:
+                self.debug_breakpoint.blockSignals(False)
+
+        def debug_inspect(self):
+            if self.debug_session is None:
+                self.debug_start()
+                if self.debug_session is None:
+                    return
+            event_id = self.debug_target.currentText()
+            if not event_id:
+                return
+            try:
+                details = self.debug_session.inspect(event_id)
+                lines = ["INSPECTION DES CONDITIONS : " + event_id,
+                         "Évaluation : " + ("vrai" if details["passed"] else "faux")]
+                for row in details["conditions"]:
+                    lines.append(
+                        ("✓ " if row["passed"] else "✕ ") + row["label"])
+                lines.extend(["", *self.debug_session.report()["lines"]])
+                self.diagnostics.setPlainText("\n".join(lines))
                 self.tabs.setCurrentIndex(self.tabs.count()-1)
             except Exception as exc:
-                QMessageBox.warning(self, "Diagnostic impossible", str(exc))
+                QMessageBox.warning(self, "Inspection impossible", str(exc))
+
+        def debug_toggle_breakpoint(self, enabled):
+            if self.debug_session is None or not self.debug_target.currentText():
+                return
+            try:
+                self._render_debug(self.debug_session.breakpoint(
+                    self.debug_target.currentText(), enabled))
+            except Exception as exc:
+                QMessageBox.warning(self, "Point d'arrêt refusé", str(exc))
 
         def qa(self):
+            self._run_qa(False)
+
+        def qa_probe(self):
+            self._run_qa(True)
+
+        def _run_qa(self, probe):
+            if not self.mid():
+                return
             try:
                 issues = self.studio.diagnostics(self.mid())
-                self.diagnostics.setPlainText(
-                    "\n".join(row["severity"] + " : " + row["message"]
-                               for row in issues) if issues else
-                    "Intégrité structurelle validée par Content / GameProject.\n"
-                    "Atteignabilité narrative complète et replay certifié : à intégrer.")
+                report = self.studio.branch_qa(self.mid(), probe=probe)
+                sections = ["CONTRÔLES ÉVÉNEMENTS — "+
+                            (", ".join(p["message"] for p in issues)
+                             if issues else "aucune anomalie détectée"),
+                            "", *report["lines"],
+                            "", "Rejeu Player complet : NON CERTIFIÉ"]
+                self.diagnostics.setPlainText("\n".join(sections))
                 self.tabs.setCurrentIndex(self.tabs.count()-1)
             except Exception as exc:
                 QMessageBox.warning(self, "QA indisponible", str(exc))

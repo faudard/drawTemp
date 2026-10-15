@@ -52,3 +52,7 @@ La fenêtre Qt et son contrôleur doivent être conservés par l'hôte. L'adapta
 ### Intégration commune R5/R12 — PR #237
 
 La vue `IsoViewport.qml` est montée par le Studio R5 dans `QQuickWidget` et directement par le Player R12 via la façade `TacticalBoard.qml`. Les deux clients partagent `RendererController`, `IsoProjection`, `render_items` et les scènes canoniques R1. Les politiques d'entrée sont `edit` (gestes de peinture R5), `select` (case tactique R12) et `pan` (R3). Le Canvas historique R5 a été retiré et le Canvas R12 remplacé. Tests conjoints : `tests_standalone/test_drawtemp5_shared_viewport.py`. Les smokes logiciels ne constituent pas une preuve GPU ni une validation d'art final.
+
+### R3.B — Relief, chunks, overlays
+
+La tranche suivante est documentée dans [R3_B_RELIEF_CHUNKS.md](R3_B_RELIEF_CHUNKS.md) : index CPU des chunks, mise à jour localisée, faces de relief, overlays temporaires et mesures CPU 32²/64²/128². Le gate de certification GPU réel, le batching GPU, les structures/étages et les sprites restent ouverts.

@@ -30,14 +30,26 @@ def main(argv=None):
 
     content_path = args.content or DEFAULT_GAME_CONTENT
     project_path = args.project or content_path.with_suffix(".game.json")
-    content = Content.load(content_path)
-    project = (GameProject.load(project_path, content) if project_path.is_file()
-               else GameProject.default(content))
     app = QApplication.instance() or QApplication([sys.argv[0]])
     if args.mode == "studio":
-        document = CinematicDocument(project, content, source_path=project_path)
+        from drawtemp.sdk.authoring import AuthoringSession
+        if project_path != content_path.with_suffix(".game.json"):
+            parser.error("Studio requires the canonical paired Content/.game.json path")
+        # Opening an existing pair MUST use the R1 validator (including R8
+        # authored rules) and its disk revisions, not Content.load followed by
+        # a detached GameProject copy.
+        if project_path.is_file():
+            session = AuthoringSession.open(content_path)
+        else:
+            content = Content.load(content_path)
+            session = AuthoringSession.new(content, GameProject.default(content))
+        document = CinematicDocument.from_session(
+            session, source_path=project_path if project_path.is_file() else None)
         window = CinematicEditor(document)
     else:
+        content = Content.load(content_path)
+        project = (GameProject.load(project_path, content) if project_path.is_file()
+                   else GameProject.default(content))
         clips = [clip for clip in project.cinematics if args.clip in (None, clip["id"])]
         if args.clip and not clips:
             parser.error("Unknown cinematic ID: " + args.clip)

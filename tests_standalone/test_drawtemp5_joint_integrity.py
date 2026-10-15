@@ -46,17 +46,14 @@ class JointIntegrityTests(unittest.TestCase):
         self.assertIn((MISSION, "joint_village"),
                       campaigns.overview()["graph"]["edges"])
 
-        # R11 must not replace the other workspaces' changes with its own
-        # detached project copy. Commit clips through the shared SDK transaction.
-        current = shared.snapshot().to_dict()
-        authored_content = Content.from_dict(current["content"])
-        authored_project = GameProject.from_dict(current["project"], authored_content)
-        cinematic = CinematicDocument(authored_project, authored_content)
+        # R11 uses the very same AuthoringSession. No staging of a detached
+        # project, no second history and no overwriting concurrent workshop edits.
+        cinematic = CinematicDocument.from_session(shared)
+        before_cinematic = shared.revision
         clip_id = cinematic.add_jeanne_intro()
+        self.assertEqual(shared.revision, before_cinematic + 1)
         self.assertTrue(cinematic.sample(clip_id, 2700)[0])
-        shared.apply(shared.preview_project(
-            lambda data: {**data, "cinematics": cinematic.clips},
-            kind="joint-r11-cinematic"))
+        self.assertEqual(cinematic.clips, shared.snapshot().to_dict()["project"]["cinematics"])
         self.assertEqual(shared.snapshot().to_dict()["project"]["cinematics"][0]["id"],
                          clip_id)
 

@@ -194,6 +194,17 @@ class Simulation:
     def return_to_campaign(self, *, expected_revision=None):
         return self._apply('return_to_campaign', expected_revision=expected_revision)
 
+    def tactical_presentation(self, cell, skill_id="attack", *, expected_revision=None):
+        """R12 read-only, revision-checked combat HUD and factual intent overlay.
+
+        The UI sees detached data only; enemy choices remain unknown, and
+        Battle.forecast is a probabilistic forecast rather than an RNG sample.
+        """
+        self._check_revision(expected_revision, 'tactical_presentation')
+        from drawtemp.player.tactical_feedback import build_feedback
+        return freeze(build_feedback(self._session.active_battle, cell, skill_id,
+                                     revision=self._revision))
+
     def preview(self, command, *, expected_revision=None):
         self._check_revision(expected_revision, 'preview')
         sandbox = Simulation(self._session)
