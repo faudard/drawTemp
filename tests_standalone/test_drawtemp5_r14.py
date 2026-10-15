@@ -50,7 +50,7 @@ class R14QualityTests(unittest.TestCase):
             payload = root / "tiles.png"
             payload.write_bytes(b"PNG fixture")
             digest = hashlib.sha256(payload.read_bytes()).hexdigest()
-            self.assertEqual(safe_asset_path(root, "tiles.png"), payload)
+            self.assertEqual(safe_asset_path(root, "tiles.png"), payload.resolve())
             self.assertEqual(validate_asset_manifest(root, [
                 {"path": "tiles.png", "sha256": digest}]), [])
             for path in ("../tiles.png", "nested/../tiles.png", "/etc/passwd",
