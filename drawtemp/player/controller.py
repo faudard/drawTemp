@@ -185,6 +185,16 @@ class PlayerController:
         self.session.explore_actor(actor_id, action, expected_revision=state.revision)
         return self._changed()
 
+    def equip_hero(self, hero_id, item_id):
+        state = self._current()
+        self.session.equip_hero(hero_id, item_id, expected_revision=state.revision)
+        return self._changed()
+
+    def unequip_hero(self, hero_id, slot):
+        state = self._current()
+        self.session.unequip_hero(hero_id, slot, expected_revision=state.revision)
+        return self._changed()
+
     def select_cell(self, x, y):
         state = self._current()
         battle = state.battle
@@ -395,12 +405,25 @@ class PlayerController:
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
-                "battle": {}, "tactical": {}, "revision": 0}
+                "battle": {}, "tactical": {}, "revision": 0,
+                "gear": {"equipped": {}, "inventory": []}}
         if self.session is None or self.show_title:
             return base
         snapshot = self._current()
         base["revision"] = snapshot.revision
         base["missions"] = list(snapshot.missions)
+        progress = thaw(snapshot.progress)
+        equipped = progress.get("heroes", {}).get("jeanne", {}).get("equipment", {})
+        stock = progress.get("inventory", {})
+        base["gear"] = {
+            "equipped": dict(equipped),
+            "inventory": [
+                {"id": item_id, "name": spec.get("name", item_id),
+                 "slot": spec["slot"], "count": stock.get(item_id, 0)}
+                for item_id, spec in sorted(self.content.equipment.items())
+                if stock.get(item_id, 0) > 0
+            ],
+        }
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
         if snapshot.battle:

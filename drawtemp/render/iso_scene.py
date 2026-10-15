@@ -108,6 +108,15 @@ def scene_from_mission(mission, snapshot=None):
     levels = battle.get("unit_levels", {}) if battle else mission.unit_levels
     for u in (battle["units"] if battle else mission.units):
         field = (lambda k: u[k]) if isinstance(u, Mapping) else (lambda k: getattr(u, k))
+        facing = u.get("facing", (0, 1)) if isinstance(u, Mapping) else getattr(u, "facing", (0, 1))
+        if (isinstance(facing, (list, tuple)) and len(facing) == 2
+                and all(type(n) in (int, float) for n in facing)
+                and (facing[0] or facing[1])):
+            fx, fy = facing
+            direction = ("east" if fx > 0 else "west") if abs(fx) > abs(fy) else (
+                "south" if fy >= 0 else "north")
+        else:
+            direction = "south"
         actors.append({"id": str(field("id")), "name": str(field("name")), "x": float(field("pos")[0]),
                        "y": float(field("pos")[1]), "team": str(field("team")),
                        "alive": field("hp") > 0, "level": int(levels.get(field("id"), 0)),
@@ -150,11 +159,12 @@ def scene_from_exploration(stage, *, revision=0):
     ]
     actors = [{"id": "jeanne", "name": "Jeanne", "x": stage["position"][0],
                "y": stage["position"][1], "team": "player", "alive": True,
-               "level": 0}]
+               "level": 0, "direction": "south"}]
     actors.extend(
         {"id": actor["id"], "name": actor["name"], "x": actor["pos"][0],
          "y": actor["pos"][1], "team": "ally",
-         "alive": actor["status"] == "active", "level": 0}
+         "alive": actor["status"] == "active", "level": 0,
+         "direction": "south"}
         for actor in stage.get("actors", ())
     )
     objects = [

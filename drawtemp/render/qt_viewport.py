@@ -21,9 +21,13 @@ def default_atlas_url():
     return Path(str(atlas)).resolve().as_uri() if atlas.is_file() else ""
 
 
-def make_controller(scene, atlas_url=None, *, assets=None):
-    """Create a QObject only when Qt is installed; keep headless module import safe."""
-    from PySide6.QtCore import QObject, Property, Signal, Slot
+def make_controller(scene, atlas_url=None, *, assets=None,
+                    character_pack=None, character_variant=None):
+    """Shared R3 renderer with optional R7 character pack, no gameplay changes."""
+    from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QElapsedTimer
+    from drawtemp.assets.character_runtime import CharacterPack
+    from drawtemp.assets.characters import ACTIONS
+    from drawtemp.assets.character_outfits import outfit_from_progress
 
     class RendererController(QObject):
         sceneChanged = Signal()
@@ -52,13 +56,83 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             self._rendered_items = []
             self._batch_rows = []
             self._batched_ids = set()
+            self._character = (
+                character_pack if isinstance(character_pack, CharacterPack)
+                else CharacterPack(character_pack) if character_pack is not None
+                else None)
+            self._variant = character_variant
+            if (self._character is not None and character_variant is not None
+                    and character_variant not in self._character.variants):
+                raise ValueError("Unknown character outfit: " + character_variant)
+            self._outfits = {}
+            self._progress_outfits = {}
+            self._action_begins = {}
+            self._clock = QElapsedTimer()
+            self._clock.start()
+            self._sprite_timer = QTimer(self)
+            self._sprite_timer.setInterval(80)
+            self._sprite_timer.timeout.connect(self.advance_frames)
             self.center_scene()
+            if self._character is not None:
+                self._sprite_timer.start()
 
         def center_scene(self):
             x, y = self.projection.project((self.scene["width"] - 1) / 2,
                                            (self.scene["height"] - 1) / 2)
             self.camera.center(x, y)
             self.refresh()
+
+        @staticmethod
+        def _apply_character_art(row, art):
+            """Expose R7 authored sprites through the canonical R4 Qt delegate."""
+            if not art:
+                return
+            region, pivot = art["spriteRegion"], art["spritePivot"]
+            row.update(art)
+            row.update({
+                "imageUrl": art["spriteUrl"],
+                "atlasX": region[0], "atlasY": region[1],
+                "frameWidth": region[2], "frameHeight": region[3],
+                "pivotX": pivot[0], "pivotY": pivot[1],
+            })
+
+        def decorate_frames(self, rows):
+            """Add sprite presentation to visible actor rows without Core mutation."""
+            if self._character is None:
+                return
+            now = self._clock.elapsed()
+            for row in rows:
+                if (row["kind"] != "actor" or
+                        row["id"] != self._character.character_id):
+                    continue
+                for field in ("spriteReady", "spriteUrl", "spriteRegion", "spritePivot"):
+                    row.pop(field, None)
+                actor_id = row["id"]
+                outfit = self.outfit_for(actor_id)
+                if outfit is None:
+                    outfit = self._character.variants[0]
+                direction = row.get("direction", "south")
+                if not row.get("alive", True):
+                    # Dead units hold the authored final pose; never animate idle
+                    # as if they were alive. Missing death art falls back to the
+                    # legacy desaturated vector silhouette.
+                    death_ms = self._character.duration(outfit, "death", direction)
+                    if death_ms:
+                        self._apply_character_art(row, self._character.preview_actor(
+                            actor_id, variant=outfit, action="death",
+                            direction=direction, elapsed_ms=death_ms - 1))
+                    continue
+                action, beginning = self._action_begins.get(actor_id, ("idle", 0))
+                elapsed = now - beginning if action != "idle" else now
+                duration = self._character.duration(outfit, action, direction)
+                if action != "idle" and (not duration or elapsed >= duration):
+                    self._action_begins.pop(actor_id, None)
+                    action, elapsed = "idle", now
+                art = self._character.preview_actor(
+                    actor_id, variant=outfit, action=action,
+                    direction=direction, elapsed_ms=elapsed)
+                if art is not None:
+                    self._apply_character_art(row, art)
 
         def refresh(self):
             self._base_items = render_items(self.scene, self.camera, self.projection,
@@ -72,6 +146,7 @@ def make_controller(scene, atlas_url=None, *, assets=None):
                 self._batch_rows, self._batched_ids = self._batch.prepare(self._items)
             else:
                 self._batch_rows, self._batched_ids = [], set()
+            self.decorate_frames(self._items)
             self._filter_visible_items()
             self.sceneChanged.emit()
             self.cameraChanged.emit()
@@ -103,6 +178,63 @@ def make_controller(scene, atlas_url=None, *, assets=None):
         @Property(bool, notify=sceneChanged)
         def textureBatching(self):
             return self._batch_enabled
+
+        def advance_frames(self):
+            """Tick just the actor frames; do not recompute/cull terrain at 12 Hz."""
+            if self._character is None:
+                return
+            rows = [dict(row) for row in self._items]
+            self.decorate_frames(rows)
+            if rows != self._items:
+                self._items = rows
+                self._filter_visible_items()
+                self.sceneChanged.emit()
+
+        def outfit_for(self, actor_id):
+            return self._outfits.get(
+                actor_id, self._progress_outfits.get(actor_id, self._variant))
+
+        def sync_progress(self, progress, equipment):
+            """Reconstruct costume from canonical equipment after load/equip.
+
+            Does not change GameSession, Content, inventory or save format.
+            Presentation-only temporary previews continue to take priority.
+            """
+            if self._character is None:
+                return False
+            hero_id = self._character.character_id
+            desired = outfit_from_progress(
+                progress, equipment, hero_id, self._character.variants)
+            if self._progress_outfits.get(hero_id) == desired:
+                return False
+            self._progress_outfits[hero_id] = desired
+            self.refresh()
+            return True
+
+        def clear_outfit_preview(self):
+            """Discard unsaved costume previews on new/load/restore."""
+            if self._outfits:
+                self._outfits.clear()
+                self.refresh()
+
+        def set_outfit(self, actor_id, variant):
+            """Change a visual preview, never an equipment rule or save field."""
+            if (self._character is None or actor_id != self._character.character_id
+                    or variant not in self._character.variants):
+                raise ValueError("Unknown character/outfit")
+            self._outfits[actor_id] = variant
+            self._action_begins.pop(actor_id, None)
+            self.refresh()
+
+        def play_actor(self, actor_id, action):
+            """Play one authored clip cycle, then restore idle presentation."""
+            if action not in ACTIONS:
+                raise ValueError("Unknown character action")
+            if (self._character is None or actor_id != self._character.character_id):
+                return False
+            self._action_begins[actor_id] = (action, self._clock.elapsed())
+            self.refresh()
+            return True
 
         @Property("QVariantList", notify=sceneChanged)
         def tileBatches(self):
@@ -165,6 +297,7 @@ def make_controller(scene, atlas_url=None, *, assets=None):
                 self._elapsed_ms += delta_ms
                 self._items = self.assets.decorate(
                     self._base_items, elapsed_ms=self._elapsed_ms)
+                self.decorate_frames(self._items)
                 self._filter_visible_items()
                 self.sceneChanged.emit()
 
@@ -199,6 +332,20 @@ def make_controller(scene, atlas_url=None, *, assets=None):
         @Property(str, constant=True)
         def atlasUrl(self):
             return self._atlas
+
+        @Property("QVariantList", constant=True)
+        def characterOutfits(self):
+            return list(self._character.variants) if self._character else []
+
+        @Property(str, constant=True)
+        def characterId(self):
+            return self._character.character_id if self._character else ""
+
+        @Property(str, notify=sceneChanged)
+        def characterCurrentOutfit(self):
+            if self._character is None:
+                return ""
+            return self.outfit_for(self._character.character_id) or self._character.variants[0]
 
         @Slot(float, float)
         def resizeViewport(self, width, height):
@@ -305,6 +452,8 @@ def make_controller(scene, atlas_url=None, *, assets=None):
                        self.scene["width"] != new_scene["width"] or
                        self.scene["height"] != new_scene["height"])
             self.scene = new_scene
+            if changed:
+                self._action_begins.clear()
             self.selection = None
             self.overlays = {}  # Never carry stale tactical previews across turns.
             if changed:
@@ -321,7 +470,8 @@ def make_controller(scene, atlas_url=None, *, assets=None):
     return RendererController()
 
 
-def create_view(scene, parent=None, *, assets=None):
+def create_view(scene, parent=None, *, assets=None,
+                character_pack=None, character_variant=None):
     """Return (QQuickView, controller); caller retains both references.
 
     Studio can wrap the QQuickView with QWidget.createWindowContainer(view).
@@ -329,7 +479,9 @@ def create_view(scene, parent=None, *, assets=None):
     """
     from PySide6.QtCore import QUrl
     from PySide6.QtQuick import QQuickView
-    controller = make_controller(scene, assets=assets)
+    controller = make_controller(scene, assets=assets,
+                                 character_pack=character_pack,
+                                 character_variant=character_variant)
     view = QQuickView(parent)
     controller.attach_engine(view.engine())
     view.rootContext().setContextProperty("renderer", controller)
@@ -344,6 +496,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="DrawTemp 5 shared Qt Quick ISO viewport")
     parser.add_argument("--mode", choices=("studio", "player"), default="player")
     parser.add_argument("--smoke", action="store_true", help="Load real scene and exit")
+    parser.add_argument("--character-pack", type=Path, help="R7 exported character pack")
+    parser.add_argument("--character-variant", help="Authored outfit ID")
     args = parser.parse_args(argv)
     try:
         from PySide6.QtCore import QTimer
@@ -354,7 +508,8 @@ def main(argv=None):
     content, _ = reference_project()
     scene = scene_from_mission(content.missions[MISSION])
     app = QGuiApplication.instance() or QGuiApplication([sys.argv[0]])
-    view, controller = create_view(scene)
+    view, controller = create_view(scene, character_pack=args.character_pack,
+                                   character_variant=args.character_variant)
     view.setTitle("DrawTemp 5 — " + args.mode.capitalize() + " / Shared ISO")
     view.resize(960, 640)
     view.show()

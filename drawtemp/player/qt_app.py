@@ -1,7 +1,3 @@
-    if args.gui_journey and (not args.reference or args.smoke or args.save_dir is None):
-        parser.error("--gui-journey requires --reference and an isolated --save-dir")
-    parser.add_argument("--gui-journey", action="store_true",
-                        help="R14 Qt input journey: title, story, battle, F5, menu, reload")
 """Standalone Qt Quick Player 5.0 — no Studio/Tk dependencies in this process."""
 import argparse
 import hashlib
@@ -104,7 +100,7 @@ def create_bridge(controller, renderer):
         def animationPlan(self):
             return self.animator.snapshot()
 
-        def invoke(self, call, *args):
+        def invoke(self, call, *args, visual=None):
             before = (self.controller.session.snapshot()
                       if self.controller.session is not None else None)
             try:
@@ -120,7 +116,14 @@ def create_bridge(controller, renderer):
                     self.animator.update(before, after)
                 self.renderer.replace_scene(scene_for_player(self.controller))
                 if self.controller.session is not None:
+                    # Existing R8 equipment and injuries are already serialized
+                    # in Campaign.progress, and validated by Simulation.load().
+                    # No parallel visual save-state is introduced here.
+                    if call.__name__ in ("new_game", "load", "restore_backup"):
+                        self.renderer.clear_outfit_preview()
                     snapshot = self.controller.session.snapshot()
+                    self.renderer.sync_progress(snapshot.progress,
+                                                self.controller.content.equipment)
                     if snapshot.battle is not None:
                         active = snapshot.battle["active"]
                         floors = snapshot.battle.get("unit_levels", {})
@@ -131,6 +134,8 @@ def create_bridge(controller, renderer):
                     else:
                         self.renderer.setConstructionView(0, False)
                     self.renderer.selectCell(*self.controller.selected)
+                if visual is not None:
+                    self.renderer.play_actor(*visual)
             except Exception as exc:
                 # An invalid rule does not publish a new clip or overwrite saves.
                 self.controller.message = str(exc)
@@ -206,7 +211,8 @@ def create_bridge(controller, renderer):
 
         @Slot(int, int)
         def exploreMove(self, dx, dy):
-            self.invoke(self.controller.explore_move, dx, dy)
+            self.invoke(self.controller.explore_move, dx, dy,
+                        visual=("jeanne", "walk"))
 
         @Slot(str)
         def exploreInteract(self, target):
@@ -222,7 +228,31 @@ def create_bridge(controller, renderer):
 
         @Slot(str)
         def command(self, kind):
-            self.invoke(self.controller.command, kind)
+            actor_id = ""
+            if self.controller.session is not None:
+                battle = self.controller.session.snapshot().battle
+                if battle is not None:
+                    actor_id = battle.get("active", "")
+            visual = ((actor_id, "walk" if kind == "move" else "attack")
+                      if actor_id and kind in ("move", "attack") else None)
+            self.invoke(self.controller.command, kind, visual=visual)
+
+        @Slot(str, str)
+        def equipHero(self, actor_id, item_id):
+            self.invoke(self.controller.equip_hero, actor_id, item_id)
+
+        @Slot(str, str)
+        def unequipHero(self, actor_id, slot):
+            self.invoke(self.controller.unequip_hero, actor_id, slot)
+
+        @Slot(str, str)
+        def previewOutfit(self, actor_id, variant):
+            """Presentation-only preview; equipment and saves remain canonical."""
+            try:
+                self.renderer.set_outfit(actor_id, variant)
+            except ValueError as exc:
+                self.controller.message = str(exc)
+            self.stateChanged.emit()
 
         @Slot(str)
         def useSkill(self, skill):
@@ -278,7 +308,13 @@ def main(argv=None):
     parser.add_argument("--content", type=Path, help="Custom canonical Content JSON")
     parser.add_argument("--project", type=Path, help="Paired GameProject JSON (defaults to <content>.game.json)")
     parser.add_argument("--campaign", help="Campaign ID from the selected project")
+    parser.add_argument("--character-pack", type=Path, help="Published R7 atlas export directory")
+    parser.add_argument("--character-variant", help="Initial authored outfit ID")
+    parser.add_argument("--gui-journey", action="store_true",
+                        help="R14 Qt input journey: title, story, battle, F5, menu, reload")
     args = parser.parse_args(argv)
+    if args.gui_journey and (not args.reference or args.smoke or args.save_dir is None):
+        parser.error("--gui-journey requires --reference and an isolated --save-dir")
 
     # R15: a frozen Player must never run unverified or substitute game data.
     if getattr(sys, "frozen", False):
@@ -327,7 +363,12 @@ def main(argv=None):
     presentation = (PresentationAssets.for_project(
         controller.project, controller.asset_project_path)
         if controller.asset_project_path is not None else None)
-    renderer = make_controller(scene_for_player(controller), assets=presentation)
+    renderer = make_controller(scene_for_player(controller), assets=presentation,
+                               character_pack=args.character_pack,
+                               character_variant=args.character_variant)
+    if controller.session is not None:
+        renderer.sync_progress(controller.session.snapshot().progress,
+                               controller.content.equipment)
     bridge = create_bridge(controller, renderer)
     engine = QQmlApplicationEngine()
     renderer.attach_engine(engine)

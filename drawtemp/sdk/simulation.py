@@ -183,6 +183,15 @@ class Simulation:
     def start_mission(self, mission, *, expected_revision=None):
         return self._apply('start_mission', mission, expected_revision=expected_revision)
 
+    def equip_hero(self, hero_id, item_id, *, expected_revision=None):
+        """Revision-checked, rollback-safe existing Campaign equipment action."""
+        return self._apply('equip_hero', hero_id, item_id,
+                           expected_revision=expected_revision)
+
+    def unequip_hero(self, hero_id, slot, *, expected_revision=None):
+        return self._apply('unequip_hero', hero_id, slot,
+                           expected_revision=expected_revision)
+
     def execute(self, command, *, expected_revision=None):
         return self._apply('execute', command, expected_revision=expected_revision)
 

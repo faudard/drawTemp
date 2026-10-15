@@ -423,6 +423,37 @@ ApplicationWindow {
                 color: root.muted
                 Layout.alignment: Qt.AlignHCenter
             }
+            Label {
+                text: "Équipement de Jeanne — contenu R8"
+                font.bold: true
+                font.pixelSize: 17 * root.textScale
+                color: root.gold
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Repeater {
+                model: ["weapon", "armor", "accessory"]
+                Button {
+                    Layout.preferredWidth: 380
+                    Layout.alignment: Qt.AlignHCenter
+                    property string equippedId:
+                        (root.playerData.gear.equipped || {})[modelData] || ""
+                    text: modelData + ": " +
+                          (equippedId ? equippedId + "  ·  Retirer" : "—")
+                    enabled: equippedId !== ""
+                    onClicked: player.unequipHero("jeanne", modelData)
+                }
+            }
+            Repeater {
+                model: root.playerData.gear.inventory || []
+                Button {
+                    Layout.preferredWidth: 380
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "Équiper " + modelData.name + " (" +
+                          modelData.slot + " · " + modelData.count + " disponible)"
+                    enabled: modelData.count > 0
+                    onClicked: player.equipHero("jeanne", modelData.id)
+                }
+            }
             Item { Layout.fillHeight: true }
         }
 
@@ -498,6 +529,21 @@ ApplicationWindow {
                             font.pixelSize: 20 * root.textScale
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
+                        }
+                        Label {
+                            visible: renderer.characterOutfits.length > 1
+                            text: "TENUE · aperçu visuel (non sauvegardé)"
+                            color: root.gold
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+                        ComboBox {
+                            visible: renderer.characterOutfits.length > 1
+                            Layout.fillWidth: true
+                            model: renderer.characterOutfits
+                            currentIndex: Math.max(0, renderer.characterOutfits.indexOf(
+                                               renderer.characterCurrentOutfit))
+                            onActivated: player.previewOutfit(renderer.characterId, currentText)
                         }
                         Label {
                             text: root.playerData.screen === "exploration" ?
