@@ -36,6 +36,8 @@ Item {
 
     Rectangle {
         anchors.fill: parent
+        // Must be below chunk textures (z=-1) and all dynamic scene layers.
+        z: -100000
         color: "#1d2831"
         gradient: Gradient {
             GradientStop { position: 0; color: "#263c45" }
