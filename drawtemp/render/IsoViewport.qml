@@ -51,10 +51,33 @@ Item {
         onTriggered: renderer.advanceVisual(125)
     }
 
+    // R3.D: one QSG texture node per static 8x8 terrain chunk instead of
+    // a Shape/Image/ShapePath hierarchy for every simple cell. Terrain with
+    // relief, props, walls or hazards retains its original QML node pipeline.
+    // Qt Quick uploads composited QImages through the single image provider.
+    Repeater {
+        model: root.showGrid && renderer.textureBatching ? renderer.tileBatches : []
+        delegate: Image {
+            required property var modelData
+            readonly property real ratio: root.camera.zoom
+            x: root.width / 2 + root.camera.panX + modelData.sx * ratio
+            y: root.height / 2 + root.camera.panY + modelData.sy * ratio
+            width: modelData.width * ratio
+            height: modelData.height * ratio
+            source: modelData.url
+            fillMode: Image.Stretch
+            smooth: false
+            asynchronous: false
+            cache: false  // Let the bounded provider own CPU images, not QML cache.
+            z: -1
+        }
+    }
+
     // Projection, clipping, depth and atlas coordinates are supplied by R3.
     // Delegates use Qt Quick scene-graph nodes; never QML Canvas or CPU paint.
     Repeater {
-        model: renderer.items
+        model: root.showGrid && renderer.textureBatching
+            ? renderer.displayItems : renderer.items
         delegate: Loader {
             id: renderDelegate
             required property var modelData
