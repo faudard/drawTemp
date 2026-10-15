@@ -95,9 +95,19 @@ def scene_from_mission(mission, snapshot=None):
     levels = battle.get("unit_levels", {}) if battle else mission.unit_levels
     for u in (battle["units"] if battle else mission.units):
         field = (lambda k: u[k]) if isinstance(u, Mapping) else (lambda k: getattr(u, k))
+        facing = u.get("facing", (0, 1)) if isinstance(u, Mapping) else getattr(u, "facing", (0, 1))
+        if (isinstance(facing, (list, tuple)) and len(facing) == 2
+                and all(type(n) in (int, float) for n in facing)
+                and (facing[0] or facing[1])):
+            fx, fy = facing
+            direction = ("east" if fx > 0 else "west") if abs(fx) > abs(fy) else (
+                "south" if fy >= 0 else "north")
+        else:
+            direction = "south"
         actors.append({"id": str(field("id")), "name": str(field("name")), "x": float(field("pos")[0]),
                        "y": float(field("pos")[1]), "team": str(field("team")),
-                       "alive": field("hp") > 0, "level": int(levels.get(field("id"), 0))})
+                       "alive": field("hp") > 0, "level": int(levels.get(field("id"), 0)),
+                       "direction": direction})
     objects = [{"id": str(o["id"]), "kind": str(o["kind"]),
                 "x": int(o["pos"][0]), "y": int(o["pos"][1])}
                for o in (battle["objects"] if battle else mission.objects)]
@@ -130,11 +140,12 @@ def scene_from_exploration(stage, *, revision=0):
     ]
     actors = [{"id": "jeanne", "name": "Jeanne", "x": stage["position"][0],
                "y": stage["position"][1], "team": "player", "alive": True,
-               "level": 0}]
+               "level": 0, "direction": "south"}]
     actors.extend(
         {"id": actor["id"], "name": actor["name"], "x": actor["pos"][0],
          "y": actor["pos"][1], "team": "ally",
-         "alive": actor["status"] == "active", "level": 0}
+         "alive": actor["status"] == "active", "level": 0,
+         "direction": "south"}
         for actor in stage.get("actors", ())
     )
     objects = [
@@ -189,7 +200,8 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None):
             sx, sy = projection.project(x, y, elev.get((int(x), int(y)), 0) + a["level"] * 4)
             rows.append({"kind": "actor", "id": a["id"],
                          "label": a.get("name", a["id"]), "team": a["team"],
-                         "alive": a["alive"], "sx": sx, "sy": sy,
+                         "alive": a["alive"], "direction": a.get("direction", "south"),
+                         "sx": sx, "sy": sy,
                          "zOrder": (x + y) * 100 + 60})
     return sorted(rows, key=lambda r: (r["zOrder"], r["id"]))
 
