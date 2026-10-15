@@ -181,6 +181,7 @@ class TerrainTextureBatches:
         descriptors, replaced = [], set()
         p = IsoProjection()
         self.entries.clear()
+        pinned_bytes = 0
         for chunk in sorted(requested):
             tiles = self._source_tiles(chunk)
             if not tiles:
@@ -191,7 +192,11 @@ class TerrainTextureBatches:
             x1 = ceil(max(x for x, _ in centers) + 48) + 1
             y1 = ceil(max(y for _, y in centers) + 24) + 1
             width, height = x1-x0, y1-y0
-            if (width*height > MAX_PIXELS or width*height*4 > self.store.budget):
+            nbytes = width * height * 4
+            # Visible QImages are pinned until the current model is consumed.
+            # Do not let these references silently exceed the LRU budget.
+            if (width*height > MAX_PIXELS or
+                    pinned_bytes + nbytes > self.store.budget):
                 continue
             image = self.store.get(chunk)
             if image is None:
@@ -204,6 +209,7 @@ class TerrainTextureBatches:
             # QQuick image provider needs an immutable backing image while it
             # is requested. If evicted later, the scenegraph owns its texture.
             self.entries[image_id] = image
+            pinned_bytes += nbytes
             descriptors.append({"id": image_id, "sx": x0, "sy": y0,
                                 "width": width, "height": height,
                                 "url": "image://drawtemp-tiles/" + image_id,
