@@ -1,7 +1,10 @@
 """Shared R3/R5/R12 AutoBlend metadata; presentation only, no terrain mutations."""
 from __future__ import annotations
 
-from sporebound.terrain_autoblend import blend_edges, blend_polygon, LAND_COLORS
+from sporebound.terrain_autoblend import (
+    BlendEdge, blend_edges, blend_polygon, LAND_COLORS,
+)
+from sporebound.iso_connections import DIRECTIONS, shoreline_mask, bridge_axis
 
 
 class _Tile:
@@ -38,15 +41,22 @@ def autotile_tiles(tiles, width, height):
     for original in tiles:
         tile = dict(original)
         joins = []
-        for edge in blend_edges(board, (tile["x"], tile["y"])):
+        edges = list(blend_edges(board, (tile["x"], tile["y"])))
+        # Water/bridge use the canonical channel and shoreline masks, so a
+        # painted river receives banks without inserting connector tiles.
+        shore = shoreline_mask(board, (tile["x"], tile["y"]))
+        edges.extend(BlendEdge(bit, "shoreline", 0)
+                     for _, _, bit in DIRECTIONS if shore & bit)
+        for edge in edges:
             poly = blend_polygon(corners, edge)
-            # First, last, then two inner points. Four vertices make an
-            # inspectable GPU ShapePath strip with no CPU raster copies.
-            points = [[poly[i], poly[i+1]] for i in (0, 2, 4, len(poly)-2)]
+            # Match the whole irregular legacy polygon, not a flat quad.
+            points = [[poly[i], poly[i+1]] for i in range(0, len(poly), 2)]
             joins.append({
                 "bit": edge.bit, "incoming": edge.incoming,
-                "color": LAND_COLORS[edge.incoming], "points": points,
+                "color": "#9bc6ce" if edge.incoming == "shoreline"
+                         else LAND_COLORS[edge.incoming], "points": points,
             })
         tile["blends"] = joins
+        tile["bridgeAxis"] = bridge_axis(board, (tile["x"], tile["y"]))
         result.append(tile)
     return result
