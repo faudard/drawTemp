@@ -14,12 +14,14 @@ from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QMainWindow,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSpinBox, QSplitter,
-    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget, QTableWidget,
+    QTableWidgetItem, QAbstractItemView,
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.reference import reference_project
 from drawtemp.studio.rpg_database import DatabaseEditor, FAMILIES, LABELS
+from drawtemp.studio.r8_integrity import IntegrityEditor
 from sporebound.character_authoring import make_effect, parse_bonuses, parse_skill_levels
 from sporebound.model import MOVEMENTS, REACTIONS, STATUSES, SUPPORTS, Unit, RuleError
 from sporebound.rules import default_rules
@@ -122,6 +124,12 @@ class DatabaseWindow(QMainWindow):
         talent_action.triggered.connect(self._open_talents)
         encounter_action = toolbar.addAction("Composer une rencontre…")
         encounter_action.triggered.connect(self._open_encounter)
+        flags_action = toolbar.addAction("Variables / références…")
+        flags_action.triggered.connect(self._show_variables)
+        rename_action = toolbar.addAction("Renommer l'ID…")
+        rename_action.triggered.connect(self._rename_selected)
+        bulk_action = toolbar.addAction("Édition groupée…")
+        bulk_action.triggered.connect(self._bulk_edit)
 
         splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(splitter)
@@ -146,6 +154,7 @@ class DatabaseWindow(QMainWindow):
         middle_layout.addWidget(self.search)
         self.listing = QListWidget()
         self.listing.setAccessibleName("Ressources RPG")
+        self.listing.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.listing.currentRowChanged.connect(self._select_entry)
         middle_layout.addWidget(self.listing)
         buttons = QHBoxLayout()
@@ -294,6 +303,119 @@ class DatabaseWindow(QMainWindow):
         refs = self.editor.references(family, key)
         self.references.setPlainText(
             "\n".join(refs) if refs else "Aucune référence directe connue.")
+
+    def _selected_resources(self):
+        return tuple(item.data(Qt.UserRole) for item in self.listing.selectedItems())
+
+    def _rename_selected(self):
+        selection = self.selected
+        if selection is None:
+            return
+        family, identifier, mission = selection
+        if family == "actors":
+            QMessageBox.information(
+                self, "Renommage d'acteur non disponible",
+                "Les IDs d'unités référencés par le combat et les sauvegardes "
+                "doivent être migrés avec le scénario ; ce renommage est bloqué.")
+            return
+        new_id, ok = QInputDialog.getText(
+            self, "Renommer une ressource", "Nouvel identifiant", text=identifier)
+        if not ok or not new_id.strip() or new_id == identifier:
+            return
+        answer = QMessageBox.question(
+            self, "Compatibilité des sauvegardes",
+            "Les références de Content et GameProject seront mises à jour "
+            "ensemble, mais les sauvegardes et replays déjà exportés ne seront "
+            "pas migrés. Continuer ?", QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            IntegrityEditor(self.editor.session).rename(
+                family, identifier, new_id.strip(),
+                acknowledge_external_saves=True)
+            self._reload((family, new_id.strip(), mission))
+        except (RuleError, ValueError, TypeError) as exc:
+            QMessageBox.warning(self, "Renommage refusé", str(exc))
+
+    def _show_variables(self):
+        usages = IntegrityEditor(self.editor.session).flag_usages()
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Variables et drapeaux — références réelles")
+        dialog.resize(940, 480)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(
+            "Références existantes dans les missions, scènes et campagnes. "
+            "Aucune variable artificielle n'est ajoutée au format Content v1."))
+        table = QTableWidget(len(usages), 5, dialog)
+        table.setHorizontalHeaderLabels(
+            ["Variable", "Document", "Contexte", "Type", "Chemin de référence"])
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        for i, usage in enumerate(usages):
+            for j, value in enumerate((
+                usage.identifier, usage.document, usage.context,
+                usage.value_type, usage.path)):
+                table.setItem(i, j, QTableWidgetItem(str(value)))
+        table.resizeColumnsToContents()
+        layout.addWidget(table)
+        close = QPushButton("Fermer")
+        close.clicked.connect(dialog.accept)
+        layout.addWidget(close)
+        dialog.exec()
+
+    def _bulk_edit(self):
+        selection = self._selected_resources()
+        if not selection:
+            QMessageBox.information(self, "Édition groupée",
+                                    "Sélectionnez plusieurs ressources dans la liste.")
+            return
+        family = selection[0][0]
+        if family not in SPECS or any(row[0] != family for row in selection):
+            QMessageBox.warning(self, "Édition groupée", "Familles incompatibles.")
+            return
+        specs = SPECS[family]
+        labels = [label for _, label, _ in specs]
+        label, ok = QInputDialog.getItem(
+            self, "Édition groupée", "Propriété à remplacer", labels, 0, False)
+        if not ok:
+            return
+        key, _label, kind = specs[labels.index(label)]
+        if isinstance(kind, tuple) and len(kind) == 2 and all(
+                type(x) is int for x in kind):
+            value, ok = QInputDialog.getInt(
+                self, "Édition groupée", label, kind[0], *kind)
+        elif isinstance(kind, tuple):
+            value, ok = QInputDialog.getItem(
+                self, "Édition groupée", label, list(kind), 0, False)
+        else:
+            raw, ok = QInputDialog.getText(self, "Édition groupée", label)
+            if not ok:
+                return
+            try:
+                ids = {entry.id for entry in self.editor.entries("skills")}
+                value = _parse(raw, kind, ids)
+            except (RuleError, TypeError, ValueError) as exc:
+                QMessageBox.warning(self, "Valeur invalide", str(exc))
+                return
+        if not ok:
+            return
+        integrity = IntegrityEditor(self.editor.session)
+        try:
+            plan = integrity.plan_bulk(selection, {key: value})
+        except (RuleError, TypeError, ValueError) as exc:
+            QMessageBox.warning(self, "Prévisualisation impossible", str(exc))
+            return
+        if QMessageBox.question(
+            self, "Appliquer le lot",
+            f"Modifier {len(selection)} ressources en une transaction Undo/Redo ?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        ) != QMessageBox.Yes:
+            return
+        try:
+            self.editor.session.apply(plan)
+            self._reload()
+        except (RuleError, TypeError, ValueError) as exc:
+            QMessageBox.warning(self, "Lot rejeté sans modification", str(exc))
 
     def _open_talents(self):
         from drawtemp.studio.r8_workbenches_qt import TalentDialog
