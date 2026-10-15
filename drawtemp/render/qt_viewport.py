@@ -78,6 +78,16 @@ def make_controller(scene, atlas_url=None, *, character_pack=None,
                 if outfit is None:
                     outfit = self._character.variants[0]
                 direction = row.get("direction", "south")
+                if not row.get("alive", True):
+                    # Dead units hold the authored final pose; never animate idle
+                    # as if they were alive. Missing death art falls back to the
+                    # legacy desaturated vector silhouette.
+                    death_ms = self._character.duration(outfit, "death", direction)
+                    if death_ms:
+                        row.update(self._character.preview_actor(
+                            actor_id, variant=outfit, action="death",
+                            direction=direction, elapsed_ms=death_ms - 1))
+                    continue
                 action, beginning = self._action_begins.get(actor_id, ("idle", 0))
                 elapsed = now - beginning if action != "idle" else now
                 duration = self._character.duration(outfit, action, direction)
