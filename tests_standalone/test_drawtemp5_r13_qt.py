@@ -80,6 +80,9 @@ class R13QtSmoke(unittest.TestCase):
                     self.assertEqual(window.transport.step, 1)
                     self.assertEqual(window.heatmap_panel.report["digest"],
                                      result["trace"]["digest"])
+                    self.assertEqual(window.heatmap_panel.canvas.step,
+                                     window.heatmap_panel.report["commands"])
+                    window.heatmap_panel.full_battle.setChecked(False)
                     self.assertEqual(window.heatmap_panel.canvas.step, 1)
                     window.transport.play()
                     window.transport._advance()
