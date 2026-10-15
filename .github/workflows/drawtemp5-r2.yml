@@ -5,7 +5,10 @@ on:
     paths:
       - 'drawtemp/studio/qt_shell.py'
       - 'drawtemp/studio/workspace_model.py'
+      - 'drawtemp/studio/inspector_model.py'
+      - 'drawtemp/studio/resource_links.py'
       - 'tests_standalone/test_drawtemp5_r2.py'
+      - 'tests_standalone/test_drawtemp5_r2_cd.py'
       - 'docs/drawtemp5/R2_QT_STUDIO.md'
       - 'pyproject.toml'
       - '.github/workflows/drawtemp5-r2.yml'
@@ -39,7 +42,7 @@ jobs:
         run: python -m pip install -e ".[qt6]"
       - name: Headless SDK and R2 regression
         run: |
-          python -m unittest tests_standalone.test_drawtemp5_r1_authoring tests_standalone.test_drawtemp5_r2 -v
+          python -m unittest tests_standalone.test_drawtemp5_r1_authoring tests_standalone.test_drawtemp5_r2 tests_standalone.test_drawtemp5_r2_cd -v
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
