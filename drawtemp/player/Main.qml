@@ -381,6 +381,19 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                         Label {
+                            visible: renderer.characterOutfits.length > 1
+                            text: "TENUE · aperçu visuel (non sauvegardé)"
+                            color: root.gold
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+                        ComboBox {
+                            visible: renderer.characterOutfits.length > 1
+                            Layout.fillWidth: true
+                            model: renderer.characterOutfits
+                            onActivated: player.previewOutfit(renderer.characterId, currentText)
+                        }
+                        Label {
                             text: root.playerData.screen === "exploration" ?
                                   "Flèches / ZQSD / WASD : se déplacer. Cliquez sur une case adjacente." :
                                   "Objectif : " + (root.playerData.battle.objective || "")
