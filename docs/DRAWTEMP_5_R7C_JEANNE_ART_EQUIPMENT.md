@@ -80,7 +80,9 @@ la campagne à chaque retour de l'état canonique.
 - Un build répété doit produire exactement les mêmes PNG ; les fichiers
   déjà retouchés par l'artiste ne doivent jamais être écrasés.
 - Tests des configurations équipement/arme/armure/blessure, y compris
-  références inexistantes.
+  références inexistantes ; commandes de Player contre Simulation,
+  équipement réellement possédé, achat, révision obsolète, refus en combat,
+  sauvegarde et rechargement de l'équipement.
 - CI Linux/Windows/macOS, Python 3.10/3.12 pour la génération et smoke
   Qt 6 sur Python 3.12 ; planche d'art et atlas exporté publiés comme
   artefacts pour revue humaine.
@@ -95,10 +97,18 @@ des cheveux, des objets tenus ou des mouvements complexes. Le visuel doit
 finale doit valider les nuances, le placement des épaules, le contact au sol
 et la lisibilité en action.
 
-R8 conserve la propriété des règles d'équipement. Le Player ne dispose
-pas encore d'un écran d'inventaire complet permettant de déclencher
-equip/unequip via des actions du SDK. C'est un travail ultérieur distinct
-de la **projection correcte des objets déjà équipés/sauvegardés**.
+R8 conserve la propriété des règles d'équipement. Le **carnet de campagne
+du Player** propose maintenant des actions Équiper / Retirer pour les objets
+effectivement possédés. Elles sont exécutées via GameSession → Simulation
+(révision contrôlée et rollback en cas de commande rejetée) → Campaign.equip/
+unequip, avec vérification des IDs, des slots et de l'inventaire. Le changement
+est impossible durant une bataille ou une exploration active, et l'équipement
+est réellement sauvegardé dans les champs HeroProgress existants.
+
+Le catalogue complet d'inventaire (comparaison de statistiques,
+boutiques, restrictions de classe et aperçu côte à côte) reste du travail
+R8 / Player ultérieur ; cette tranche contient un parcours utilisable,
+sans contourner les règles ni offrir gratuitement une armure.
 
 Les scènes à déplacement continu et les effets avancés de run/magic/block/
 victory restent des lots ouverts. Le gate R7 n'est pas certifié par la seule
