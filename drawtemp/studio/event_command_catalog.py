@@ -72,3 +72,48 @@ def tactical_action(kind, fields):
 def action_catalogue():
     """UI-readable fields; no Qt or game rules imported by the view."""
     return {kind: tuple(fields) for kind, fields in TACTICAL_FIELDS.items()}
+
+
+# StoryBook effects execute after a REAL narrative choice, not on a tactical
+# trigger. This distinction protects GameSession/Player replay semantics.
+STORY_FIELDS = {
+    "set_flag": (("flag", "Drapeau", "text"), ("value", "Valeur", "scalar")),
+    "add_flag": (("flag", "Drapeau", "text"), ("amount", "Montant", "signed")),
+    "grant_item": (("item", "ID équipement", "text"), ("quantity", "Quantité", "integer")),
+    "gold": (("amount", "Variation or", "signed"),),
+    "unlock_mission": (("mission", "Mission", "text"),),
+    "recruit_hero": (("hero", "Héros", "text"),),
+    "equip_hero": (("hero", "Héros", "text"), ("item", "Équipement", "text")),
+}
+
+
+def story_effect(kind, raw):
+    """Build native StoryBook effect, validated further by GameProject."""
+    require(kind in STORY_FIELDS and isinstance(raw, dict), "Unknown narrative effect")
+    fields = STORY_FIELDS[kind]
+    require(set(raw) == {name for name, _, _ in fields}, "Invalid narrative fields")
+    payload = {"kind": kind}
+    for key, _, type_name in fields:
+        value = raw[key]
+        if type_name in ("integer", "signed"):
+            if isinstance(value, str):
+                try:
+                    parsed = int(value)
+                except ValueError as exc:
+                    raise RuleError("Expected integer for " + key) from exc
+            else:
+                require(type(value) is int, "Expected integer for " + key)
+                parsed = value
+            payload[key] = parsed
+        elif type_name == "scalar":
+            if isinstance(value, str):
+                value = (True if value == "true" else
+                         False if value == "false" else
+                         int(value) if value.strip().lstrip("-").isdigit() else value)
+            require(isinstance(value, (bool, int, str)), "Invalid flag scalar")
+            payload[key] = value
+        else:
+            require(isinstance(value, str) and bool(value.strip()),
+                    key + " is required")
+            payload[key] = value.strip()
+    return payload
