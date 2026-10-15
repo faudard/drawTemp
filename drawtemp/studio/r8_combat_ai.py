@@ -54,6 +54,10 @@ def _set_initial_state(data, mission_id, actor_id, *, statuses=None,
             key in STATUS_KEYS and type(value) is int and
             (value == -1 or 1 <= value <= 10000)
             for key, value in statuses.items()), "Invalid initial status/duration")
+        registry = default_rules().statuses
+        require(not any(registry.get(key).opposite in statuses
+                        for key in statuses if registry.get(key).opposite),
+                "Opposed initial statuses cannot coexist")
         actor["statuses"] = dict(sorted(statuses.items()))
     if resistances is not None:
         require(isinstance(resistances, dict) and all(
@@ -90,6 +94,8 @@ def _set_ai(data, mission_id, actor_id, *, behavior, roles, doctrine,
     require(not cells or len(cells) >= 2, "Patrol requires at least two waypoints")
     require(len({tuple(c) for c in cells}) == len(cells),
             "Duplicate patrol waypoint")
+    require(not doctrine or behavior == "tactical",
+            "Doctrines require tactical behavior")
     require(not cells or (behavior == "tactical" and not doctrine),
             "Patrol cannot be combined with a doctrine or boss policy")
     if cells:
