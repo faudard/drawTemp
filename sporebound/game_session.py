@@ -73,7 +73,12 @@ class GameSession:
     FRONT_BATTLE_GROUPS = ("battles", "rescue_battles", "pursuit_battles", "recovery_battles")
 
     def __init__(self, content, project, campaign_id, *, seed=1, rules=None):
-        self.rules = rules if rules is not None else default_rules()
+        if rules is None:
+            from .event_pages import has_pages
+            from .tactical_rpg3 import authored_rules_for_document
+            raw = content.to_dict()
+            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
+        self.rules = rules
         content.validate(rules=self.rules)
         project.validate(content)
         require(project.campaign(campaign_id) is not None, "Unknown campaign")
@@ -127,14 +132,23 @@ class GameSession:
     def tactical_choices(self):
         return self.story.choices(self._tactical_story_progress())
 
-    def _queue_tactical_story(self, battle, old_fired=()):
-        """Consume newly fired canonical triggers, in their engine order."""
+    def _queue_tactical_story(self, battle, old_fired=(), old_event_count=None):
+        """Consume each new event firing, including opt-in repeat pages.
+
+        Mission initialisation retains the historical first-fired-ID logic.
+        During an authenticated command the journal slice is authoritative:
+        a repeated trigger ID produces a NEW dialogue presentation without
+        duplicating the old one-shot event or a restored save.
+        """
         if battle is None or self.fronts is not None:
             return
-        seen = set(old_fired)
-        for event_id in battle.fired:
-            if event_id in seen:
-                continue
+        if old_event_count is None:
+            seen = set(old_fired)
+            ids = [eid for eid in battle.fired if eid not in seen]
+        else:
+            ids = [row["id"] for row in battle.events[old_event_count:]
+                   if row["kind"] == "trigger"]
+        for event_id in ids:
             target = f"{battle.mission.id}/{event_id}"
             scene = self.story.during_tactical_event.get(target)
             if scene:
@@ -159,12 +173,14 @@ class GameSession:
             # Every tactical choice has a journal entry, including an empty
             # tactical-effects list. This makes replay and story history agree.
             before_fired = tuple(self.battle.fired)
+            before_event_count = len(self.battle.events)
             self.battle.execute({
                 'kind': 'story_effects', 'scene': scene_id,
                 'choice': choice_id,
                 'effects': deepcopy(selected.get('tactical_effects', [])),
             })
-            self._queue_tactical_story(self.battle, before_fired)
+            self._queue_tactical_story(
+                self.battle, before_fired, before_event_count)
             next_scene = updated.story_pending
             updated.story_pending = ""
             self.progress = updated
@@ -414,6 +430,8 @@ class GameSession:
         require(not self.progress.story_pending and not self.tactical_story_pending,
                 "Resolve pending dialogue first")
         before_fired = set(self.active_battle.fired) if self.fronts is None else set()
+        before_event_count = (len(self.active_battle.events)
+                              if self.fronts is None else None)
         before = deepcopy((self.progress, self.battle, self.fronts,
                            self.finalized, self.settled_fronts,
                            self.tactical_story_pending, self.tactical_story_queue))
@@ -427,7 +445,8 @@ class GameSession:
             else:
                 require(not self.finalized, "Combat already completed")
                 self.battle.execute(command)
-                self._queue_tactical_story(self.battle, before_fired)
+                self._queue_tactical_story(
+                    self.battle, before_fired, before_event_count)
             self._settle()
         except Exception:
             (self.progress, self.battle, self.fronts,
@@ -602,7 +621,11 @@ class GameSession:
                 "Malformed game session")
         require(data["digest"] == digest({k: v for k, v in data.items()
                                          if k != "digest"}), "Game session checksum mismatch")
-        rules = rules if rules is not None else default_rules()
+        if rules is None:
+            from .event_pages import has_pages
+            from .tactical_rpg3 import authored_rules_for_document
+            raw = content.to_dict()
+            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
         current_content = digest(content.to_dict())
         current_project = gameplay_project_digest(project)
         current_rules = rules.manifest()

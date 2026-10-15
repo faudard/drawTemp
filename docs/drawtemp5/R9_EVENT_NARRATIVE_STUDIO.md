@@ -1,4 +1,4 @@
-# DrawTemp 5.0 — R9 Event & Narrative Studio (R9.A + R9.B + R9.C)
+# DrawTemp 5.0 — R9 Event & Narrative Studio (R9.A + R9.B + R9.C + R9.D)
 
 > **Périmètre :** R9.A et R9.B, par PR dédiées. Ceci décrit les fonctionnalités effectives, non la certification globale R9. L'intégration Studio R2 / carte GPU R5 reste à réaliser.
 
@@ -143,3 +143,61 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
 Les tests R9.C couvrent le catalogue natif, la validation et l'atomicité, les pistes liées, les effets StoryBook, la projection avec hauteur et le démarrage Qt. La CI globale doit aussi confirmer l'absence de régression du Player.
 
 **Reste ouvert :** commandes tactiques non prises en charge par le moteur (mouvement arbitraire, effets d'inventaire directement sur un trigger), édition cinématique avancée déléguée à R11, position du graphe persistante et édition de ses arêtes par glisser-déposer, certification GPU réelle et replay complet du gate R9.12. R9.C est une tranche de livraison, pas le statut « R9 terminé ».
+
+## R9.D — Event Pages & States : moteur et Studio Qt 6
+
+### Contrat canonique, rétrocompatibilité et sauvegarde
+
+Les missions 5.0 continuent d'utiliser `Content.missions[].triggers`. Une page est une variante **du même identifiant d'événement**, pas un deuxième trigger. Les anciens triggers, sans `pages`, `enabled` ni `repeat`, gardent le comportement « une fois » et **leur ruleset / manifeste de replay d'origine**.
+
+- **Page `base`** : condition/actions existantes du trigger, priorité fixe `0`, activée et non répétable par défaut.
+- **Pages supplémentaires** : `pages: [{id, priority, condition, actions, enabled?, repeat?, cooldown_ticks?, when?}]`, 8 maximum, priorité entière de -100 à +100. Chaque page utilise les prédicats et actions de règles déjà déclarés dans `Content`.
+- **Choix de la page active** : parmi les pages activées dont la condition est vraie, priorité décroissante, puis ordre défini dans la mission. Le plus haut rang prime, même si cette page a déjà été déclenchée (pas de cascade vers une page inférieure consommée).
+- **Désactivation/activation** : l'action opt-in `event_state` sur un trigger pointe vers l'ID d'événement cible, et éventuellement l'ID de page. Elle enregistre `{kind:"event_state", event, page, enabled}` dans le journal tactique. Le dernier changement applicable détermine l'état courant, y compris après sauvegarde/rejeu. La création de cette action est accessible dans la palette visuelle.
+- **Répétition bornée** : `repeat=true` et `cooldown_ticks=1..10000`. Une page répétable ne s'exécute jamais deux fois au même tick. Les répétitions sont tracées via les occurrences `trigger` du journal, sans compteur mutable séparé. `battle.fired` conserve l'identité historique du premier déclenchement pour les dépendances des autres triggers.
+- **Priorité de compatibilité** : `authored_rules_for_document` n'enregistre `event_state` que dans les rulesets opt-in. Le manifeste des anciens jeux demeure identique ; un replay utilisant une autre version de règles échoue explicitement au gate de compatibilité.
+
+Les états « persistants » de R9.D concernent **la bataille en cours et sa sauvegarde/reprise Player/GameSession**. La propagation vers une autre mission/campagne est le travail distinct de R9.E.
+
+### Utilisation sans JSON
+
+L'atelier Qt dispose désormais de l'onglet **Pages & états** : sélection d'une page, priorité, activation, répétition, cooldown, condition, liste d'actions, création/suppression et sauvegarde. Ajouter la commande `event_state` à un trigger pour changer la page d'un autre événement (ou toutes les pages de cet événement si `page` est vide).
+
+Exemple du service headless :
+
+```python
+from drawtemp.sdk.authoring import AuthoringSession
+from drawtemp.sdk.reference import reference_project, MISSION
+from drawtemp.studio.events import EventStudio
+from sporebound.event_composer import action, condition
+
+content, project = reference_project()
+studio = EventStudio(AuthoringSession.new(content, project))
+studio.create(MISSION, "gate_scene", condition("interact", object_id="lever"),
+              [action("message", text="Jeanne touche le levier.")])
+studio.add_page(
+    MISSION, "gate_scene", page_id="gate_open", priority=50, enabled=False,
+    condition=condition("tick", tick=0),
+    actions=[action("message", text="Le passage est ouvert.")])
+studio.add_tactical_command(
+    MISSION, "gate_scene", "event_state",
+    {"event": "gate_scene", "page": "gate_open", "enabled": True})
+studio.undo()  # tous les fichiers et variantes reviennent à la révision précédente
+```
+
+Note : l'activation dans le code d'exemple est attachée au **même trigger** et sera visible au prochain passage du dispatcher. Le Player ne fabrique pas de nouvelles variables de script.
+
+### Vérification R9.D
+
+```bash
+python -m unittest tests_standalone.test_drawtemp5_r9d -v
+python -m unittest tests_standalone.test_drawtemp5_r9 tests_standalone.test_drawtemp5_r9b tests_standalone.test_drawtemp5_r9c -v
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  python -m drawtemp.studio.event_studio --smoke
+```
+
+Critères de validation : priorité et égalité d'ordre ; page désactivée ignorée ; action d'état prise en compte par le vrai dispatcher ; pas de répétition dans un même tick ; reconstruction des occurrences et des valeurs après `Battle.replay` et `GameSession.from_recording` ; Undo/Redo et rejet d'une référence/condition invalide. Une page non rejouée après une victoire doit rester inactive ; aucun accès direct aux structures internes du Player n'est permis depuis le Studio.
+
+### Gates encore ouverts
+
+R9.E (état/campagne intermissions), R9.F/R9.12 (parcours certifié complet avec sauvegarde/reprise sur toutes les plateformes), UI de comparaison et prévisualisation conditionnelle avancées, captures GPU réelles et certification artistique du parcours Jeanne. Cette tranche ne doit pas être marquée « terminé » sur la seule présence des API.

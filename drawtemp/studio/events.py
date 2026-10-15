@@ -11,6 +11,7 @@ from copy import deepcopy
 from drawtemp.core import Content, GameProject
 from drawtemp.sdk.authoring import AuthoringSession
 from sporebound import event_composer, event_graph, story_authoring
+from sporebound import event_pages
 from sporebound.entity_event_studio import author_gate_sequence
 from sporebound.event_branch_builder import author_choice_fork
 from sporebound.branch_qa_363 import (audit_branch_coverage, format_branch_qa,
@@ -105,6 +106,52 @@ class EventStudio:
         return self._commit(mission_id, "action", lambda data:
                             event_graph.update_action(data, mission_id, event_id,
                                                       index, action))
+
+    def event_pages(self, mission_id, event_id):
+        """Base is always available; extra pages are stored in this trigger."""
+        trigger = self.event(mission_id, event_id)
+        base = {"id": "base", "priority": 0,
+                "enabled": trigger.get("enabled", True),
+                "repeat": trigger.get("repeat", False),
+                "cooldown_ticks": trigger.get("cooldown_ticks", 1),
+                "condition": trigger["condition"],
+                "actions": deepcopy(trigger["actions"])}
+        return [base, *deepcopy(trigger.get("pages", []))]
+
+    def add_page(self, mission_id, event_id, *, page_id, priority,
+                 condition, actions, enabled=True, repeat=False,
+                 cooldown_ticks=1):
+        return self._commit(
+            mission_id, "page-create",
+            lambda data: event_pages.create_page(
+                data, mission_id, event_id, page_id=page_id,
+                priority=priority, condition=condition, actions=actions,
+                enabled=enabled, repeat=repeat,
+                cooldown_ticks=cooldown_ticks))
+
+    def configure_page(self, mission_id, event_id, page_id, *,
+                       priority=None, enabled=None, repeat=None,
+                       cooldown_ticks=None):
+        return self._commit(
+            mission_id, "page-configure",
+            lambda data: event_pages.update_page(
+                data, mission_id, event_id, page_id,
+                priority=priority, enabled=enabled, repeat=repeat,
+                cooldown_ticks=cooldown_ticks))
+
+    def delete_page(self, mission_id, event_id, page_id):
+        return self._commit(
+            mission_id, "page-delete",
+            lambda data: event_pages.remove_page(data, mission_id,
+                                                 event_id, page_id))
+
+    def edit_page(self, mission_id, event_id, page_id, *,
+                  condition=None, actions=None):
+        return self._commit(
+            mission_id, "page-commands",
+            lambda data: event_pages.update_page_commands(
+                data, mission_id, event_id, page_id,
+                condition=condition, actions=actions))
 
     def add_tactical_command(self, mission_id, event_id, kind, fields):
         """Every action goes through the legacy registered rule contract."""

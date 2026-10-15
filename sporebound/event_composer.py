@@ -81,7 +81,10 @@ def save_event(data, mid, eid, condition_data, actions):
         events.append(event)
     else:
         events[position] = event
-    return Content.from_dict(new).to_dict()
+    # Event pages / toggles are opt-in authored rules, never added to
+    # default_rules() (which would invalidate old replay manifests).
+    from .tactical_rpg3 import authored_rules_for_document
+    return Content.from_dict(new, rules=authored_rules_for_document(new)).to_dict()
 
 
 def move_action(actions, index, offset):

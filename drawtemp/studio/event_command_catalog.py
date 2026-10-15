@@ -24,6 +24,10 @@ TACTICAL_FIELDS = {
              ("team", "Équipe player/enemy", "team"),
              ("pos", "Case x,y", "cell"),
              ("max_active", "Maximum actif", "integer")),
+    # R9.D uses one opt-in canonical action (not in legacy default rules).
+    "event_state": (("event", "Événement cible", "text"),
+                    ("page", "Page (vide = événement entier)", "optional"),
+                    ("enabled", "Activer", "boolean")),
     "queue_wave": (("actor_id", "ID renfort", "text"),
                    ("archetype", "Archétype", "text"), ("name", "Nom", "text"),
                    ("team", "Équipe player/enemy", "team"),
@@ -51,6 +55,17 @@ def parse_typed(kind, raw):
             require(isinstance(value, (tuple, list)) and len(value) == 2 and
                     all(type(x) is int for x in value), "Case invalide")
             converted[name] = list(value)
+        elif type_name == "boolean":
+            require(type(value) is bool or
+                    isinstance(value, str) and value.lower() in
+                    ("true", "false", "oui", "non"),
+                    name + " : booléen requis")
+            converted[name] = (value is True or isinstance(value, str) and
+                               value.lower() in ("true", "oui"))
+        elif type_name == "optional":
+            require(isinstance(value, str), "Invalid optional field")
+            if value.strip():
+                converted[name] = value.strip()
         elif type_name == "integer":
             require(type(value) is int or
                     (isinstance(value, str) and value.strip().isdigit()),
@@ -66,6 +81,8 @@ def parse_typed(kind, raw):
 def tactical_action(kind, fields):
     """Construct the exact action consumed by the production trigger registry."""
     values = parse_typed(kind, fields)
+    if kind == "event_state":
+        return {"kind": "event_state", **values}
     return action(kind, **values)
 
 
