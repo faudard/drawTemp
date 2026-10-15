@@ -91,6 +91,18 @@ class R8IntegrityTests(unittest.TestCase):
                          ["victory"][1]["item"], "long_spear")
         Content.from_dict(pair["content"])
 
+    def test_campaign_equipment_references_block_delete(self):
+        lancer_example(self.session)
+        self._add_project_usages()
+        references = self.editor.references("equipment", "r8_spear")
+        self.assertTrue(any("GameProject/campaign_flow" in ref
+                            for ref in references))
+        self.assertTrue(any("GameProject/story" in ref for ref in references))
+        original = self.session.snapshot()
+        with self.assertRaises(AuthoringError):
+            self.editor.remove("equipment", "r8_spear")
+        self.assertEqual(self.session.snapshot(), original)
+
     def test_skill_rename_preserves_job_archetype_and_instances(self):
         lancer_example(self.session)
         before = self.session.snapshot()
