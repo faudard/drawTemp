@@ -193,6 +193,8 @@ def _load_runtime(content_path):
 def inspect_save(path, content_path):
     """Verify EXACTLY the selected file; never silently switch to a .bak slot."""
     path = Path(path)
+    if path.stat().st_size > 64 * 1024 * 1024:
+        raise MigrationError("Save exceeds the 64 MiB SessionStore safety limit")
     raw, document = _read_json(path)
     if not isinstance(document, dict):
         raise MigrationError("Save must be a JSON object")
@@ -235,15 +237,18 @@ def import_save(path, content_path, destination):
     if _hash(raw) != result["sha256"]:
         raise MigrationError("Save changed during verification")
     destination.parent.mkdir(parents=True, exist_ok=True)
+    created = False
     try:
         with destination.open("xb") as stream:
+            created = True
             stream.write(raw)
             stream.flush()
             os.fsync(stream.fileno())
     except FileExistsError as exc:
         raise MigrationError("Save destination appeared during import") from exc
     except OSError:
-        destination.unlink(missing_ok=True)
+        if created:
+            destination.unlink(missing_ok=True)
         raise
     return {**result, "imported_to": str(destination), "source_unchanged": True}
 
