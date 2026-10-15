@@ -90,6 +90,21 @@ class SmartPaletteTests(unittest.TestCase):
         self.assertEqual(features[(5, 5)], "tree")
         self.assertEqual(features[(6, 5)], "bush")
 
+    def test_water_shoreline_and_bridge_axis_are_presentation_only(self):
+        self.studio.paint([(6, 6)], "surface:water")
+        self.studio.paint([(6, 7)], "surface:bridge")
+        content = Content.from_dict(self.studio.snapshot()["content"])
+        scene = scene_from_mission(content.missions[self.studio.mission_id])
+        center = next(tile for tile in scene["tiles"]
+                      if (tile["x"], tile["y"]) == (6, 6))
+        bridge = next(tile for tile in scene["tiles"]
+                      if (tile["x"], tile["y"]) == (6, 7))
+        self.assertTrue(any(row["incoming"] == "shoreline"
+                            for row in center["blends"]))
+        self.assertIn(bridge["bridgeAxis"], ("x", "y"))
+        self.assertNotIn("blends", str(content.to_dict()))
+        self.assertNotIn("bridgeAxis", str(content.to_dict()))
+
     def test_shared_renderer_uses_identical_autoblend_after_undo_and_reload(self):
         self.studio.smart([(6, 6)], "surface:stone", radius=0)
         snapshot = self.studio.snapshot()
@@ -97,7 +112,7 @@ class SmartPaletteTests(unittest.TestCase):
         scene = scene_from_mission(content.missions[self.studio.mission_id])
         cell = next(tile for tile in scene["tiles"] if (tile["x"], tile["y"]) == (6, 5))
         self.assertTrue(any(edge["incoming"] == "stone" for edge in cell["blends"]))
-        self.assertTrue(all(len(edge["points"]) == 4 for edge in cell["blends"]))
+        self.assertTrue(all(len(edge["points"]) == 9 for edge in cell["blends"]))
         self.assertEqual(scene, scene_from_mission(content.missions[self.studio.mission_id]))
         self.assertNotIn("blends", str(content.to_dict()))
         visible = render_items(scene, Camera())
