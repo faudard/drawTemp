@@ -51,7 +51,7 @@ def make_controller(scene, atlas_url=None, *, character_pack=None,
             self._clock.start()
             self._sprite_timer = QTimer(self)
             self._sprite_timer.setInterval(80)
-            self._sprite_timer.timeout.connect(self.refresh)
+            self._sprite_timer.timeout.connect(self.advance_frames)
             self.center_scene()
             if self._character is not None:
                 self._sprite_timer.start()
@@ -62,34 +62,49 @@ def make_controller(scene, atlas_url=None, *, character_pack=None,
             self.camera.center(x, y)
             self.refresh()
 
+        def decorate_frames(self, rows):
+            """Add sprite presentation to visible actor rows without Core mutation."""
+            if self._character is None:
+                return
+            now = self._clock.elapsed()
+            for row in rows:
+                if (row["kind"] != "actor" or
+                        row["id"] != self._character.character_id):
+                    continue
+                for field in ("spriteReady", "spriteUrl", "spriteRegion", "spritePivot"):
+                    row.pop(field, None)
+                actor_id = row["id"]
+                outfit = self._outfits.get(actor_id, self._variant)
+                if outfit is None:
+                    outfit = self._character.variants[0]
+                direction = row.get("direction", "south")
+                action, beginning = self._action_begins.get(actor_id, ("idle", 0))
+                elapsed = now - beginning if action != "idle" else now
+                duration = self._character.duration(outfit, action, direction)
+                if action != "idle" and (not duration or elapsed >= duration):
+                    self._action_begins.pop(actor_id, None)
+                    action, elapsed = "idle", now
+                art = self._character.preview_actor(
+                    actor_id, variant=outfit, action=action,
+                    direction=direction, elapsed_ms=elapsed)
+                if art is not None:
+                    row.update(art)
+
         def refresh(self):
-            rows = render_items(self.scene, self.camera, self.projection, self.selection)
-            if self._character is not None:
-                now = self._clock.elapsed()
-                for row in rows:
-                    if row["kind"] != "actor":
-                        continue
-                    actor_id = row["id"]
-                    if actor_id != self._character.character_id:
-                        continue
-                    outfit = self._outfits.get(actor_id, self._variant)
-                    if outfit is None:
-                        outfit = self._character.variants[0]
-                    direction = row.get("direction", "south")
-                    action, beginning = self._action_begins.get(actor_id, ("idle", 0))
-                    elapsed = now - beginning if action != "idle" else now
-                    duration = self._character.duration(outfit, action, direction)
-                    if action != "idle" and (not duration or elapsed >= duration):
-                        self._action_begins.pop(actor_id, None)
-                        action, elapsed = "idle", now
-                    art = self._character.preview_actor(
-                        actor_id, variant=outfit, action=action,
-                        direction=direction, elapsed_ms=elapsed)
-                    if art is not None:
-                        row.update(art)
-            self._items = rows
+            self._items = render_items(self.scene, self.camera, self.projection, self.selection)
+            self.decorate_frames(self._items)
             self.sceneChanged.emit()
             self.cameraChanged.emit()
+
+        def advance_frames(self):
+            """Tick just the actor frames; do not recompute/cull terrain at 12 Hz."""
+            if self._character is None:
+                return
+            rows = [dict(row) for row in self._items]
+            self.decorate_frames(rows)
+            if rows != self._items:
+                self._items = rows
+                self.sceneChanged.emit()
 
         def set_outfit(self, actor_id, variant):
             """Change a visual preview, never an equipment rule or save field."""
