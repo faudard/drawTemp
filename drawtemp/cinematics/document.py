@@ -283,6 +283,8 @@ class CinematicDocument:
             # transaction store writes both Content and .game.json atomically.
             if path is not None:
                 content_path = Path(path)
+                require(not content_path.name.endswith(".game.json"),
+                        "Specify a Content filename, not a GameProject filename")
                 saved = self.session.save_as(content_path)
                 self.source_path = content_path.with_suffix(".game.json")
                 return saved
