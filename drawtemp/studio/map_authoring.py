@@ -262,10 +262,18 @@ class MapStudio:
                     pending.append(cell)
         return self.paint(seen, brush)
 
+    def smart_preview(self, anchors, brush, *, radius=1, shape="diamond"):
+        from .map_brushes import preview_smart
+        return preview_smart(self, anchors, brush, radius=radius, shape=shape)
+
+    def smart_commit(self, preview):
+        from .map_brushes import commit_smart
+        return commit_smart(self, preview)
+
     def smart(self, anchors, brush, *, radius=1, shape="diamond"):
-        cells = smart_brush_cells(self.snapshot()["content"], self.mission_id,
-                                  anchors, radius=radius, shape=shape)
-        return self.paint(cells, brush)
+        """One revisioned, undoable edit for a continuous smart gesture."""
+        preview = self.smart_preview(anchors, brush, radius=radius, shape=shape)
+        return self.smart_commit(preview) if preview is not None else None
 
     def sample(self, cell):
         mission = self.mission()
