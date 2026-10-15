@@ -579,18 +579,22 @@ def _open_studio(path, campaign):
         raise ValueError("Journal de sauvegarde interrompue : restauration explicite requise")
     existing = [p.is_file() for p in store.paths]
     if all(existing):
-        return CampaignStudio.open(content_path, campaign), content_path, True
+        session = AuthoringSession.open(content_path)
+        selected = campaign or session.snapshot().to_dict()["project"]["campaigns"][0]["id"]
+        return CampaignStudio(session, selected), content_path, True
     if any(existing):
         raise ValueError("Un seul des deux documents existe : réparation nécessaire")
     content = Content.load(content_path)
     project = GameProject.default(content)
-    return CampaignStudio.new(content, project, campaign), content_path, False
+    selected = campaign or project.campaigns[0]["id"]
+    return CampaignStudio.new(content, project, selected), content_path, False
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--content", help="Contenu tactique JSON existant")
-    parser.add_argument("--campaign", default="main")
+    parser.add_argument("--campaign", default=None,
+                        help="Campaign identifier (defaults to the first authored campaign)")
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args(argv)
     try:
