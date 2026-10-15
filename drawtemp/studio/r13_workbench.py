@@ -213,6 +213,10 @@ def launch(content_path):
                 self._show_error(str(exc))
                 return
             mission = self.content.missions[mission_id]
+            if self.objective.findText(mission.objective) < 0:
+                # Preserve custom authored objective ids instead of silently
+                # substituting the first default ruleset objective.
+                self.objective.addItem(mission.objective)
             self.objective.setCurrentText(mission.objective)
             self.goal_cells.setText("; ".join(
                 "{},{}".format(*cell) for cell in mission.goal))
@@ -580,6 +584,19 @@ def launch(content_path):
                 self.tabs.setCurrentIndex(1)
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 self._show_error(str(exc))
+
+        def closeEvent(self, event):
+            if self.authoring is not None and self.authoring.snapshot().dirty:
+                answer = QMessageBox.question(
+                    self, "Fermer le Battle Lab",
+                    "Des changements appliqués ne sont pas enregistrés. "
+                    "Quitter et les perdre ?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No)
+                if answer != QMessageBox.StandardButton.Yes:
+                    event.ignore()
+                    return
+            event.accept()
 
         def _show_error(self, error):
             QMessageBox.warning(self, "DrawTemp R13", error)
