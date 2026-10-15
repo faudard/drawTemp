@@ -199,6 +199,7 @@ def launch(content_path):
 
             self.charts = R13ComparisonCharts()
             self.charts.seedSelected.connect(self._choose_chart_seed)
+            self.charts.export_button.clicked.connect(self._export_charts)
             self.tabs.addTab(self.charts, "Graphiques A/B")
             self._refresh(self.mission.currentText())
             if self.authoring is None:
@@ -569,6 +570,21 @@ def launch(content_path):
             else:
                 visual = build_visual_comparison(report)
             self.charts.set_report(visual, warning=warning)
+
+        def _export_charts(self):
+            if self.charts.report is None:
+                self._show_error("Exécuter une simulation avant l'export PNG.")
+                return
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Exporter les graphiques R13.8",
+                "r13-comparaison.png", "Images PNG (*.png)")
+            if not path:
+                return
+            try:
+                target = self.charts.export_png(path)
+                self.status.setText("Graphiques exportés : " + str(target))
+            except (OSError, ValueError) as exc:
+                self._show_error(str(exc))
 
         def _choose_chart_seed(self, seed):
             """Highlight the exact seed in the canonical run's outcome table."""
