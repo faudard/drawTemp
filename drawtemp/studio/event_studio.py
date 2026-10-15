@@ -8,12 +8,16 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from drawtemp.sdk.authoring import AuthoringSession
 from drawtemp.sdk.reference import reference_project
 from drawtemp.studio.events import EventStudio
 from sporebound.event_composer import action, condition
 from sporebound.event_graph import action_title, condition_summary
+from drawtemp.studio.event_command_catalog import action_catalogue
+from drawtemp.studio.event_presentation import PRESENTATION_FIELDS
+from drawtemp.render.qt_viewport import make_controller
 
 
 def _coordinate_pair(text):
@@ -67,15 +71,17 @@ def main(argv=None):
     parser.add_argument("--smoke", action="store_true", help="Afficher puis fermer Qt")
     args = parser.parse_args(argv)
     try:
-        from PySide6.QtCore import Qt, QTimer
+        from PySide6.QtCore import Qt, QTimer, QUrl
         from PySide6.QtGui import QAction, QBrush, QColor, QPen, QKeySequence
         from PySide6.QtWidgets import (
             QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-            QFileDialog, QFormLayout, QGraphicsScene,
-            QGraphicsView, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+            QFileDialog, QFormLayout,
+            QHBoxLayout, QInputDialog, QLabel, QLineEdit,
             QListWidget, QMainWindow, QMessageBox, QPushButton, QSpinBox,
             QSplitter, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
         )
+        from PySide6.QtQuickWidgets import QQuickWidget
+        from drawtemp.studio.event_graph_qt import EventGraphView
     except ImportError as exc:
         print('PySide6 requis : pip install ".[qt6]". ' + str(exc), file=sys.stderr)
         return 2
@@ -166,7 +172,7 @@ def main(argv=None):
             actions_layout.addWidget(self.actions_list, 1)
             action_row = QHBoxLayout()
             self.action_kind = QComboBox()
-            self.action_kind.addItems(["message", "hazard", "status", "despawn"])
+            self.action_kind.addItems(list(action_catalogue()))
             self.action_value = QLineEdit()
             self.action_value.setPlaceholderText("Texte | x,y,puissance | acteur,statut,durée")
             action_row.addWidget(self.action_kind)
@@ -177,19 +183,30 @@ def main(argv=None):
                                     ("Descendre ↓", lambda: self.move_action(1)),
                                     ("Retirer", self.remove_action)):
                 actions_layout.addWidget(self.button(label, callback))
+            actions_layout.addWidget(QLabel("Pistes de présentation (dialogue, son, caméra, acteurs, FX)"))
+            self.cue_kind = QComboBox()
+            self.cue_kind.addItems(list(PRESENTATION_FIELDS))
+            actions_layout.addWidget(self.cue_kind)
+            actions_layout.addWidget(self.button("Ajouter une piste à cet événement…",
+                                                  self.add_presentation))
             self.tabs.addTab(actions_tab, "Commandes")
 
             graph_tab = QWidget()
             graph_layout = QVBoxLayout(graph_tab)
             graph_layout.addWidget(QLabel("Graphe des triggers — arêtes persistées dans Content"))
-            self.graph_scene = QGraphicsScene()
-            self.graph_view = QGraphicsView(self.graph_scene)
+            self.graph_view = EventGraphView()
+            self.graph_view.eventSelected.connect(self.select_graph_event)
+            self.graph_view.connectRequested.connect(self.link_from_graph)
             graph_layout.addWidget(self.graph_view, 1)
+            self.graph_link_mode = QCheckBox("Relier deux événements par clic (source → cible)")
+            self.graph_link_mode.toggled.connect(self.update_graph_mode)
+            graph_layout.addWidget(self.graph_link_mode)
             dep = QHBoxLayout()
             self.predecessors = QComboBox()
             dep.addWidget(self.predecessors, 1)
             self.link_join = QComboBox()
             self.link_join.addItems(["ET", "OU"])
+            self.link_join.currentIndexChanged.connect(self.update_graph_mode)
             dep.addWidget(self.link_join)
             dep.addWidget(self.button("Relier", self.link))
             dep.addWidget(self.button("Délier", self.unlink))
@@ -237,9 +254,22 @@ def main(argv=None):
 
             map_tab = QWidget()
             map_layout = QVBoxLayout(map_tab)
-            map_layout.addWidget(QLabel("Repères de triggers/effets (schéma 2D ; viewport GPU R5 à intégrer)"))
-            self.map_scene = QGraphicsScene()
-            map_layout.addWidget(QGraphicsView(self.map_scene), 1)
+            map_layout.addWidget(QLabel(
+                "Viewport R3 partagé · repères au relief · cliquer pour sélectionner un événement"))
+            self.renderer = make_controller(self.studio.iso_scene(self.missions.currentData()))
+            self.map_viewport = QQuickWidget(self)
+            self.map_viewport.setResizeMode(QQuickWidget.SizeRootObjectToView)
+            self.map_viewport.rootContext().setContextProperty("renderer", self.renderer)
+            qml_path = Path(__file__).resolve().parents[1] / "render" / "IsoViewport.qml"
+            self.map_viewport.setSource(QUrl.fromLocalFile(str(qml_path)))
+            if self.map_viewport.status() == QQuickWidget.Error:
+                raise RuntimeError("; ".join(str(e) for e in self.map_viewport.errors()))
+            map_root = self.map_viewport.rootObject()
+            map_root.setProperty("interactionMode", "select")
+            map_root.setProperty("showEventMarkers", True)
+            map_root.setProperty("showLegend", False)
+            map_root.cellSelected.connect(self.select_map_cell)
+            map_layout.addWidget(self.map_viewport, 1)
             self.tabs.addTab(map_tab, "Carte / triggers")
 
             diagnostic_tab = QWidget()
