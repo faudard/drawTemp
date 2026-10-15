@@ -187,3 +187,89 @@ def page_snapshot(battle, event_id):
                                row.get("page", "base") == page
                                for row in battle.events) for page in keys},
     }
+
+
+def _edit(data, mission_id, event_id, callback):
+    from .tactical_rpg3 import authored_rules_for_document
+    from .model import Content
+    updated = deepcopy(data)
+    mission = next((mission for mission in updated["missions"]
+                    if mission["id"] == mission_id), None)
+    require(mission is not None, "Unknown event mission")
+    event = next((row for row in mission["triggers"]
+                  if row["id"] == event_id), None)
+    require(event is not None, "Unknown event")
+    callback(event)
+    return Content.from_dict(
+        updated, rules=authored_rules_for_document(updated)).to_dict()
+
+
+def create_page(data, mission_id, event_id, *, page_id, priority,
+                condition, actions, enabled=True, repeat=False,
+                cooldown_ticks=1):
+    def edit(event):
+        require(not any(row["id"] == page_id for row in event.get("pages", ())),
+                "Duplicate event page")
+        require(type(repeat) is bool and type(enabled) is bool,
+                "Invalid page state")
+        page = {**deepcopy(condition), "id": page_id,
+                "priority": priority, "enabled": enabled,
+                "repeat": repeat, "actions": deepcopy(actions)}
+        if repeat:
+            page["cooldown_ticks"] = cooldown_ticks
+        event.setdefault("pages", []).append(page)
+    return _edit(data, mission_id, event_id, edit)
+
+
+def update_page(data, mission_id, event_id, page_id, *, priority=None,
+                enabled=None, repeat=None, cooldown_ticks=None):
+    def edit(event):
+        if page_id == "base":
+            page = event
+        else:
+            page = next((row for row in event.get("pages", ())
+                         if row["id"] == page_id), None)
+        require(page is not None, "Unknown event page")
+        if priority is not None:
+            require(page_id != "base", "Base page has fixed priority zero")
+            page["priority"] = priority
+        if enabled is not None:
+            page["enabled"] = enabled
+        if repeat is not None:
+            page["repeat"] = repeat
+            if not repeat:
+                page.pop("cooldown_ticks", None)
+        if cooldown_ticks is not None:
+            require(page.get("repeat", False), "Repeat must be enabled first")
+            page["cooldown_ticks"] = cooldown_ticks
+    return _edit(data, mission_id, event_id, edit)
+
+
+def remove_page(data, mission_id, event_id, page_id):
+    require(page_id != "base", "The base event page cannot be removed")
+    def edit(event):
+        pages = event.get("pages", [])
+        before = len(pages)
+        event["pages"] = [row for row in pages if row["id"] != page_id]
+        require(len(event["pages"]) != before, "Unknown event page")
+        if not event["pages"]:
+            event.pop("pages")
+    return _edit(data, mission_id, event_id, edit)
+
+
+def update_page_commands(data, mission_id, event_id, page_id, *,
+                         condition=None, actions=None):
+    """Typed edit of a whole page: preserves R1 atomicity and strict validation."""
+    def edit(event):
+        require(page_id != "base", "Edit base through the existing event commands")
+        page = next((row for row in event.get("pages", ())
+                     if row["id"] == page_id), None)
+        require(page is not None, "Unknown event page")
+        if condition is not None:
+            for key in ("condition", "value", "pos", "unit",
+                        "percent", "max_alive", "team", "object"):
+                page.pop(key, None)
+            page.update(deepcopy(condition))
+        if actions is not None:
+            page["actions"] = deepcopy(actions)
+    return _edit(data, mission_id, event_id, edit)
