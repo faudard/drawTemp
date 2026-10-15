@@ -105,6 +105,10 @@ def make_controller(scene, atlas_url=None, *, assets=None):
         def displayItems(self):
             return self._rendered_items
 
+        @Slot(int, int, result=bool)
+        def isBatchedCell(self, x, y):
+            return "tile:%d:%d" % (x, y) in self._batched_ids
+
         @Property("QVariantMap", notify=sceneChanged)
         def textureStats(self):
             return {
