@@ -1,0 +1,65 @@
+name: DrawTemp 5 R7 Player Sprites
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/assets/character_runtime.py'
+      - 'drawtemp/render/iso_scene.py'
+      - 'drawtemp/render/qt_viewport.py'
+      - 'drawtemp/render/IsoViewport.qml'
+      - 'drawtemp/player/qt_app.py'
+      - 'tests_standalone/test_drawtemp5_r7_runtime.py'
+      - 'tests_standalone/test_drawtemp5_r7_qt.py'
+      - '.github/workflows/drawtemp5-r7-runtime.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  runtime-headless:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install ".[art]"
+      - run: python -m unittest tests_standalone.test_drawtemp5_r7 tests_standalone.test_drawtemp5_r7_runtime -v
+      - run: python -m unittest tests_standalone.test_drawtemp5_r3 tests_standalone.test_drawtemp5_r4 -v
+
+  player-qt6:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux OpenGL software dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6,art]"
+      - name: Export a real four-way Jeanne R7 atlas pack
+        run: python -m drawtemp.assets.characters --template jeanne --root . --export .r7-pack
+      - name: R7 headless playback + Qt scenegraph integration
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_drawtemp5_r7_runtime tests_standalone.test_drawtemp5_r7_qt -v
+      - name: R3 Studio/Player shared renderer smoke
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.render.qt_viewport --smoke --character-pack .r7-pack
+      - name: R12 autonomous Player battle smoke with Jeanne sprites
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.player.qt_app --reference --smoke --smoke-scene battle --character-pack .r7-pack
