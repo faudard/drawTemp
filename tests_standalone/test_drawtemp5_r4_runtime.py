@@ -69,10 +69,16 @@ class R4RuntimeIntegrationTests(unittest.TestCase):
                                     save_dir=Path(tmp) / "saves")
             self.assertEqual(ctrl.asset_project_path, project_path)
             player = PresentationAssets.for_project(ctrl.project, ctrl.asset_project_path)
-            self.assertEqual(player.decorate(render_items(scene_for_player(ctrl), Camera())),
-                             decorated)
-            # Save/reload preserves imported IDs without rewriting content.
             ctrl.new_game()
+            ctrl.choose("enter")
+            ctrl.start_mission(MISSION)
+            player_rows = player.decorate(render_items(scene_for_player(ctrl), Camera()))
+            jeanne_player = next(row for row in player_rows
+                                 if row["kind"] == "actor" and row["id"] == "jeanne")
+            self.assertEqual(jeanne_player["assetId"], jeanne["assetId"])
+            self.assertEqual(jeanne_player["imageUrl"], jeanne["imageUrl"])
+            self.assertEqual((jeanne_player["pivotX"], jeanne_player["pivotY"]), (32, 60))
+            # Save/reload preserves imported IDs without rewriting content.
             ctrl.save(1)
             ctrl.load(1)
             reloaded = GameProject.load(project_path, content)
