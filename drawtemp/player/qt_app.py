@@ -81,6 +81,34 @@ def main(argv=None):
                 self.controller.message = str(exc)
             self.stateChanged.emit()
 
+        def settings_update(self, method, *args):
+            # Presentation-only update: keep the R3 camera, selection and scene.
+            try:
+                method(*args)
+            except Exception as exc:
+                self.controller.message = str(exc)
+            self.stateChanged.emit()
+
+        @Slot(str)
+        def selectProfile(self, profile):
+            self.settings_update(self.controller.set_profile, profile)
+
+        @Slot(str, str)
+        def rebind(self, action, key):
+            self.settings_update(self.controller.set_binding, action, key)
+
+        @Slot()
+        def resetBindings(self):
+            self.settings_update(self.controller.reset_bindings)
+
+        @Slot(str, bool)
+        def setDisplayBool(self, option, value):
+            self.settings_update(self.controller.set_display, option, value)
+
+        @Slot(float)
+        def setTextScale(self, value):
+            self.settings_update(self.controller.set_display, "text_scale", value)
+
         @Slot()
         def newGame(self):
             self.invoke(self.controller.new_game)
