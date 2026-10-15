@@ -37,3 +37,17 @@ project asset registry. The headless tactical engine is not modified.
 * Use `--no-matte` to produce a no-detour full-crop backup from the originals.
 * All pose names are suggestions; the original artwork remains the source of
   truth for alignment, additional retouching, and licensing provenance.
+
+## INT-03 — Release gate for derived Jeanne motion
+
+The 88 original PNGs are tracked, but the 11 motion in-betweens are a
+**separate physical publication** in `sprites/jeanne_motion/`; metadata
+or a successful generator run does not guarantee their presence in a checkout.
+
+The strict certification script `python scripts/certify_int03_assets.py
+--root assets/watercolor` checks the committed files, original/derived
+SHA-256 hashes, animation bindings, installed runtime resolution and
+`rights.json`. The tracked rights record intentionally starts `pending`
+and requires the art owner's documented redistribution and transformation
+authorization; do not mark production art approved by inference. See
+[`docs/drawtemp5/INT03_ASSET_PUBLICATION.md`](../../docs/drawtemp5/INT03_ASSET_PUBLICATION.md).
