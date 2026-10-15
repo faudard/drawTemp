@@ -102,6 +102,35 @@ Item {
         }
     }
 
+    // Hover stays interactive even when its static ground tile is batched.
+    Item {
+        id: batchHover
+        readonly property var cell: root.hoveredCell
+        readonly property real ratio: root.camera.zoom
+        visible: root.showGrid && renderer.textureBatching &&
+                 cell.x !== undefined && cell.y !== undefined &&
+                 renderer.isBatchedCell(cell.x, cell.y)
+        x: root.width/2 + root.camera.panX + (cell.x - cell.y) * 48 * ratio - 48 * ratio
+        y: root.height/2 + root.camera.panY + (cell.x + cell.y) * 24 * ratio - 24 * ratio
+        width: 96 * ratio
+        height: 48 * ratio
+        z: (cell.x + cell.y) * 100 + 5
+        Shape {
+            anchors.fill: parent
+            ShapePath {
+                strokeWidth: 2
+                strokeColor: "#ffe080"
+                fillColor: "#22ffe080"
+                startX: batchHover.width / 2
+                startY: 0
+                PathLine { x: batchHover.width; y: batchHover.height / 2 }
+                PathLine { x: batchHover.width / 2; y: batchHover.height }
+                PathLine { x: 0; y: batchHover.height / 2 }
+                PathLine { x: batchHover.width / 2; y: 0 }
+            }
+        }
+    }
+
     Component {
         id: tileComponent
         Item {
