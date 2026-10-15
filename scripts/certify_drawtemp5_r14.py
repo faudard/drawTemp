@@ -70,7 +70,8 @@ def produce(args):
     if args.faults:
         probes["faults"] = run_probe(
             "faults", [py, "-m", "unittest",
-                       "tests_standalone.test_persistence_fault_r817", "-v"],
+                       "tests_standalone.test_persistence_fault_r817",
+                       "tests_standalone.test_drawtemp5_r14_recovery", "-v"],
             destination, timeout=600)
     checks = {}
     mapping = {"r14_contracts": "R14.10", "core": "R14.2", "qt": "R14.3",
