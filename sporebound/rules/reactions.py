@@ -46,7 +46,8 @@ def movement_threats(battle, u: Unit, path: list[Cell]) -> list[dict]:
             if rule.enters(battle, watcher, previous, cell):
                 skill = battle._basic(watcher)
                 if (skill.min_range <= distance(watcher.pos, cell) <= skill.range
-                        and battle.line_of_sight(watcher.pos, cell)):
+                        and battle.line_of_sight(watcher.pos, cell,
+                                                 level=battle.unit_levels.get(watcher.id, 0))):
                     result.append({'kind': prep['mode'], 'unit': uid, 'cell': cell,
                                    'chance': battle.hit_chance(watcher, ghost, skill),
                                    'amount': battle.damage(watcher, ghost, skill, skill.effects[0])})
@@ -61,7 +62,8 @@ def interceptor_for(battle, target: Unit, source: Unit | None) -> Unit | None:
         return None
     for uid, prep in sorted(battle.prepared_reactions.items()):
         protector = battle.unit(uid)
-        if battle.rules.preparations.get(prep['mode']).intercepts(battle, protector, prep, target):
+        if (battle.unit_levels.get(protector.id, 0) == battle.unit_levels.get(target.id, 0)
+                and battle.rules.preparations.get(prep['mode']).intercepts(battle, protector, prep, target)):
             return protector
     return None
 
@@ -109,7 +111,8 @@ def _prepared_attack(battle, watcher: Unit, mover: Unit, mode: str):
         return
     skill = battle._basic(watcher)
     d = distance(watcher.pos, mover.pos)
-    if not (skill.min_range <= d <= skill.range) or not battle.line_of_sight(watcher.pos, mover.pos):
+    if not (skill.min_range <= d <= skill.range) or not battle.line_of_sight(watcher.pos, mover.pos,
+                                                       level=battle.unit_levels.get(watcher.id, 0)):
         return
     prep["charges"] -= 1
     watcher.ct = max(0, watcher.ct - prep.get("ct_tax", 20))

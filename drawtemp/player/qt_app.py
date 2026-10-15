@@ -116,6 +116,16 @@ def create_bridge(controller, renderer):
                     self.animator.update(before, after)
                 self.renderer.replace_scene(scene_for_player(self.controller))
                 if self.controller.session is not None:
+                    snapshot = self.controller.session.snapshot()
+                    if snapshot.battle is not None:
+                        active = snapshot.battle["active"]
+                        floors = snapshot.battle.get("unit_levels", {})
+                        level = int(floors.get(active, 0)) if active else 0
+                        # An upstairs player must see the authored floor rather
+                        # than an opaque roof after move, save/load or enemy CT.
+                        self.renderer.setConstructionView(level, level > 0)
+                    else:
+                        self.renderer.setConstructionView(0, False)
                     self.renderer.selectCell(*self.controller.selected)
             except Exception as exc:
                 # An invalid rule does not publish a new clip or overwrite saves.
@@ -222,9 +232,21 @@ def create_bridge(controller, renderer):
         def interactObject(self, object_id):
             self.invoke(self.controller.interact_object, object_id)
 
+        @Slot(int, int, int)
+        def levelMove(self, level, x, y):
+            self.invoke(self.controller.level_move, level, (x, y))
+
+        @Slot(int, int, int)
+        def levelAttack(self, level, x, y):
+            self.invoke(self.controller.level_attack, level, (x, y))
+
         @Slot(str)
         def inspectSkill(self, skill):
             self.invoke(self.controller.inspect_skill, skill)
+
+        @Slot(str)
+        def toggleDoor(self, object_id):
+            self.invoke(self.controller.toggle_door, object_id)
 
         @Slot(str)
         def preview(self, kind):

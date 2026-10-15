@@ -268,6 +268,35 @@ class PlayerController:
         self.forecast = ""
         return self.state()
 
+    def level_move(self, level, cell):
+        """Use the canonical floor-aware movement command from the Player."""
+        state = self._current()
+        if not state.battle or state.battle["result"]:
+            raise ValueError("No active combat")
+        self.session.execute({"kind": "level_move", "level": level,
+                              "cell": list(cell)}, expected_revision=state.revision)
+        return self._changed()
+
+    def level_attack(self, level, cell):
+        """Conservative projectile shot only through authored floor openings."""
+        state = self._current()
+        if not state.battle or state.battle["result"]:
+            raise ValueError("No active combat")
+        self.session.execute({"kind": "level_attack", "level": level,
+                              "cell": list(cell)}, expected_revision=state.revision)
+        return self._changed()
+
+    def toggle_door(self, object_id):
+        state = self._current()
+        if not state.battle or state.battle["result"]:
+            raise ValueError("No active combat")
+        if object_id not in {obj["id"] for obj in state.battle["objects"]
+                             if obj["kind"] == "door"}:
+            raise ValueError("Unknown interactive door")
+        self.session.execute({"kind": "door_toggle", "object": object_id},
+                             expected_revision=state.revision)
+        return self._changed()
+
     def preview(self, kind):
         """Explain canonical probabilities and path risks, never sample future RNG."""
         state = self.state()
@@ -389,7 +418,11 @@ class PlayerController:
             base["battle"] = {key: battle.get(key) for key in (
                 "mission_id", "objective", "width", "height", "units",
                 "tiles", "objects", "tick", "active", "result", "deploying",
-                "inventory", "zones")}
+                "inventory", "zones", "unit_levels")}
+            # Stair connectors are authored Content, not mutable battle state.
+            base["battle"]["level_links"] = [
+                dict(link) for link in
+                self.content.missions[battle["mission_id"]].level_links]
         if snapshot.scene and (snapshot.battle or not snapshot.exploration or
                                snapshot.exploration["completed"]):
             base["screen"] = "dialogue"

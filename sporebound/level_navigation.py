@@ -19,8 +19,43 @@ def walkable_levels(mission):
         x0, y0 = parent['anchor']
         cells.setdefault(floor['level'], set()).update(
             (x0+tile['pos'][0], y0+tile['pos'][1])
-            for tile in floor['tiles'])
+            for tile in floor['tiles']
+            if tile['feature'] not in ('pillar', 'crate'))
     return cells
+
+
+def floor_line_of_sight(mission, level, start, end):
+    """Same-floor supercover LOS through authored walkable deck cells only.
+
+    Missing deck tiles, solid furniture and unsupported rooms obstruct sight.
+    This deliberately makes no cross-floor visibility claim; shafts continue
+    through the conservative vertical_combat rule.
+    """
+    require(type(level) is int and 1 <= level <= MAX_INTERIOR_LEVEL,
+            'Expected an authored upper level')
+    floor = walkable_levels(mission).get(level, set())
+    if tuple(start) not in floor or tuple(end) not in floor:
+        return False
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    nx, ny = abs(dx), abs(dy)
+    sx = 1 if dx > 0 else -1
+    sy = 1 if dy > 0 else -1
+    x, y = start
+    ix = iy = 0
+    while ix < nx or iy < ny:
+        decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx
+        if decision == 0:
+            if (x + sx, y) not in floor or (x, y + sy) not in floor:
+                return False
+            x, y = x + sx, y + sy
+            ix, iy = ix + 1, iy + 1
+        elif decision < 0:
+            x, ix = x + sx, ix + 1
+        else:
+            y, iy = y + sy, iy + 1
+        if (x, y) not in floor:
+            return False
+    return True
 
 
 def validate_levels(mission):

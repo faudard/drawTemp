@@ -708,7 +708,9 @@ ApplicationWindow {
                             Button {
                                 Layout.fillWidth: true
                                 text: modelData.kind + " · " + modelData.id
-                                onClicked: player.interactObject(modelData.id)
+                                onClicked: modelData.kind === "door" ?
+                                           player.toggleDoor(modelData.id) :
+                                           player.interactObject(modelData.id)
                             }
                         }
                         Repeater {
@@ -770,6 +772,43 @@ ApplicationWindow {
             }
             Button { text: "Fin du tour  " + root.binding("battle_end"); onClicked: player.command("end") }
             Button { text: "Tour ennemi"; onClicked: player.enemyTurn() }
+            Item { Layout.fillWidth: true }
+        }
+
+        RowLayout {
+            visible: root.playerData.screen === "battle" &&
+                     ((root.playerData.battle.level_links || []).length > 0)
+            Layout.fillWidth: true
+            spacing: 8
+            Label { text: "Étage cible"; color: root.ivory }
+            ComboBox {
+                id: targetFloor
+                model: ["Sol", "Étage 1", "Étage 2", "Étage 3"]
+                Layout.preferredWidth: 130
+            }
+            Label {
+                text: "Case " + root.playerData.selected[0] + "," +
+                      root.playerData.selected[1]
+                color: root.muted
+            }
+            Button {
+                text: "Escaliers"
+                onClicked: player.levelMove(targetFloor.currentIndex,
+                                            root.playerData.selected[0],
+                                            root.playerData.selected[1])
+            }
+            Button {
+                text: "Tir vertical"
+                onClicked: player.levelAttack(targetFloor.currentIndex,
+                                              root.playerData.selected[0],
+                                              root.playerData.selected[1])
+            }
+            Label {
+                text: "Niveau de l'unité : " + (
+                    (root.playerData.battle.unit_levels || {})[
+                        root.playerData.battle.active] || 0)
+                color: root.muted
+            }
             Item { Layout.fillWidth: true }
         }
 

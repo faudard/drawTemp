@@ -10,6 +10,7 @@ import sys
 from .iso_scene import Camera, IsoProjection, pick, render_items, scene_from_mission
 from .tile_chunks import TileChunkIndex
 from .visual_compositor import actor_visual_position, automatic_cutaway
+from .building_geometry import pick_surface
 from .texture_batches import TerrainTextureBatches, make_image_provider
 
 
@@ -35,6 +36,8 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             self.camera = Camera()
             self.projection = IsoProjection()
             self.selection = None
+            self._building_level = 0
+            self._building_cutaway = False
             self._items = []
             self._base_items = []
             self._elapsed_ms = 0
@@ -61,7 +64,8 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             self._base_items = render_items(self.scene, self.camera, self.projection,
                                             self.selection, tile_index=self._index,
                                             overlays=self.overlays,
-                                            active_level=self.active_level)
+                                            active_level=self.active_level,
+                                            cutaway=self._building_cutaway)
             self._items = (self.assets.decorate(self._base_items, elapsed_ms=self._elapsed_ms)
                            if self.assets is not None else self._base_items)
             if self._batch_enabled:
@@ -255,6 +259,22 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             self.refresh()
             if hit is not None:
                 self.picked.emit(hit)
+
+        @Slot(float, float, result="QVariantMap")
+        def buildingAt(self, x, y):
+            """Exact R6 hit against the SAME visible polygons drawn by Qt Quick."""
+            return pick_surface(self._items, self.camera, x, y) or {}
+
+        @Slot(int, bool)
+        def setConstructionView(self, active_level, cutaway):
+            if type(active_level) is not int or not 0 <= active_level <= 3:
+                raise ValueError("Invalid construction floor")
+            if type(cutaway) is not bool:
+                raise ValueError("Cutaway must be boolean")
+            self._building_level = active_level
+            self.active_level = active_level
+            self._building_cutaway = cutaway
+            self.refresh()
 
         @Slot(int, int)
         def selectCell(self, x, y):
