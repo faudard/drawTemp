@@ -62,14 +62,34 @@ def run_gate(adapter_type=SessionAdapter, seed=17):
     if legacy.active_battle.board.tile((3, 4)).blocked:
         raise AssertionError("Lever did not open the canonical door")
     with TemporaryDirectory() as folder:
-        path = Path(folder) / "session.json"
-        candidate.save(path)
-        before = path.read_bytes()
-        legacy = GameSession.load(path, content, project)
-        candidate = adapter_type.load(path, content, project)
+        # Persist both implementations independently. Reload EACH file through
+        # BOTH readers: loading only the candidate's save misses legacy regressions.
+        sources = {}
+        for name, session in (("legacy", legacy), ("candidate", candidate)):
+            path = Path(folder) / (name + ".json")
+            session.save(path)
+            sources[name] = (path, path.read_bytes())
+        expected = comparable(legacy.recording())
+        loaded = {}
+        for name, (path, original_bytes) in sources.items():
+            try:
+                from_legacy = GameSession.load(path, content, project)
+                from_adapter = adapter_type.load(path, content, project)
+            except Exception as exc:
+                raise AssertionError(
+                    "Migration " + name + " save cannot be loaded by both runtimes"
+                ) from exc
+            if (comparable(from_legacy.recording()) != expected or
+                    comparable(from_adapter.snapshot()) != expected):
+                raise AssertionError("Migration " + name + " save differs from pre-save state")
+            if path.read_bytes() != original_bytes:
+                raise AssertionError("Loading mutated the " + name + " source save")
+            loaded[name] = (from_legacy, from_adapter)
+        # Resume each implementation from its OWN saved output for the remainder
+        # of the command-by-command parity check and the final replay.
+        legacy = loaded["legacy"][0]
+        candidate = loaded["candidate"][1]
         check("resume")
-        if path.read_bytes() != before:
-            raise AssertionError("Loading mutated the source save")
         for step in range(700):
             if legacy.active_battle.result:
                 break
@@ -90,6 +110,8 @@ def run_gate(adapter_type=SessionAdapter, seed=17):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--verify-baseline", type=Path,
+                        help="Fail if the current parity trace differs from the frozen R0 reference")
     args = parser.parse_args()
     report = run_gate()
     text = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
@@ -97,6 +119,10 @@ def main():
         args.report.write_text(text, encoding="utf-8")
     else:
         print(text, end="")
+    if args.verify_baseline:
+        expected = json.loads(args.verify_baseline.read_text(encoding="utf-8"))
+        if report != expected:
+            parser.exit(1, "R0 frozen baseline mismatch; investigate before updating the reference\n")
 
 
 if __name__ == "__main__":
