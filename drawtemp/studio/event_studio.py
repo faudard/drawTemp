@@ -70,7 +70,8 @@ def main(argv=None):
         from PySide6.QtCore import Qt, QTimer
         from PySide6.QtGui import QAction, QBrush, QColor, QPen, QKeySequence
         from PySide6.QtWidgets import (
-            QApplication, QComboBox, QFileDialog, QFormLayout, QGraphicsScene,
+            QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+            QFileDialog, QFormLayout, QGraphicsScene,
             QGraphicsView, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
             QListWidget, QMainWindow, QMessageBox, QPushButton, QSpinBox,
             QSplitter, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
@@ -83,6 +84,7 @@ def main(argv=None):
         def __init__(self, studio):
             super().__init__()
             self.studio = studio
+            self.debug_session = None
             self.setWindowTitle("DrawTemp 5.0 · Studio des événements")
             self.resize(1360, 820)
 
@@ -192,6 +194,8 @@ def main(argv=None):
             dep.addWidget(self.button("Relier", self.link))
             dep.addWidget(self.button("Délier", self.unlink))
             graph_layout.addLayout(dep)
+            graph_layout.addWidget(self.button(
+                "Créer un embranchement narratif (2 choix)…", self.create_fork))
             self.tabs.addTab(graph_tab, "Graphe")
 
             timeline = QWidget()
@@ -200,8 +204,17 @@ def main(argv=None):
             self.delay_ticks.setRange(0, 10000)
             self.expire_ticks = QSpinBox()
             self.expire_ticks.setRange(0, 10000)
+            self.delay_activations = QSpinBox()
+            self.delay_activations.setRange(0, 10000)
+            self.expire_activations = QSpinBox()
+            self.expire_activations.setRange(0, 10000)
+            self.cancel_after = QLineEdit()
+            self.cancel_after.setPlaceholderText("ID événement, ID événement")
             timeline_form.addRow("Délai (ticks)", self.delay_ticks)
+            timeline_form.addRow("Délai (activations)", self.delay_activations)
             timeline_form.addRow("Expiration (ticks)", self.expire_ticks)
+            timeline_form.addRow("Expiration (activations)", self.expire_activations)
+            timeline_form.addRow("Annuler après", self.cancel_after)
             timeline_form.addRow(self.button("Appliquer au trigger", self.set_schedule))
             self.tabs.addTab(timeline, "Timeline")
 
@@ -218,6 +231,8 @@ def main(argv=None):
             narrative_form.addRow("Dialogue", self.scene_text)
             narrative_form.addRow(self.button("Créer scène narrative", self.create_scene))
             narrative_form.addRow(self.button("Lier scène à l'événement", self.bind_scene))
+            narrative_form.addRow(self.button("Attendre un choix de cette scène…", self.bind_choice))
+            narrative_form.addRow(self.button("Effacer la garde narrative", self.clear_choice))
             self.tabs.addTab(narrative, "Narration")
 
             map_tab = QWidget()
@@ -231,9 +246,22 @@ def main(argv=None):
             diagnostic_layout = QVBoxLayout(diagnostic_tab)
             diagnostic_commands = QHBoxLayout()
             diagnostic_commands.addWidget(self.button("Prévisualiser (F5)", self.preview))
-            diagnostic_commands.addWidget(self.button("Debugger", self.debug))
-            diagnostic_commands.addWidget(self.button("QA graphe", self.qa))
+            diagnostic_commands.addWidget(self.button("Démarrer", self.debug_start))
+            diagnostic_commands.addWidget(self.button("Pas →", self.debug_step))
+            diagnostic_commands.addWidget(self.button("Continuer", self.debug_continue))
             diagnostic_layout.addLayout(diagnostic_commands)
+            breakpoint_row = QHBoxLayout()
+            breakpoint_row.addWidget(QLabel("Point d'arrêt avant"))
+            self.debug_target = QComboBox()
+            breakpoint_row.addWidget(self.debug_target, 1)
+            self.debug_breakpoint = QCheckBox("Actif")
+            breakpoint_row.addWidget(self.debug_breakpoint)
+            self.debug_breakpoint.toggled.connect(self.debug_toggle_breakpoint)
+            diagnostic_layout.addLayout(breakpoint_row)
+            checks = QHBoxLayout()
+            checks.addWidget(self.button("QA structure", self.qa))
+            checks.addWidget(self.button("QA + sondes de choix", self.qa_probe))
+            diagnostic_layout.addLayout(checks)
             self.diagnostics = QTextEdit()
             self.diagnostics.setReadOnly(True)
             diagnostic_layout.addWidget(self.diagnostics, 1)
@@ -269,6 +297,11 @@ def main(argv=None):
         def perform(self, callback, *, selected=None):
             try:
                 callback()
+                self.debug_session = None
+                self.debug_target.clear()
+                self.debug_breakpoint.blockSignals(True)
+                self.debug_breakpoint.setChecked(False)
+                self.debug_breakpoint.blockSignals(False)
                 self.refresh_events(selected=selected)
             except Exception as exc:
                 QMessageBox.warning(self, "Édition refusée", str(exc))
@@ -308,6 +341,9 @@ def main(argv=None):
                     self.actions_list.addItem(action_title(item))
                 self.delay_ticks.setValue(event.get("delay_ticks", 0))
                 self.expire_ticks.setValue(event.get("expire_after_ticks", 0))
+                self.delay_activations.setValue(event.get("delay_activations", 0))
+                self.expire_activations.setValue(event.get("expire_after_activations", 0))
+                self.cancel_after.setText(", ".join(event.get("cancel_after", [])))
             else:
                 self.event_label.setText("Sélectionnez un événement")
                 self.pred_summary.clear()
@@ -390,7 +426,11 @@ def main(argv=None):
             if self.eid():
                 self.perform(lambda: self.studio.schedule(
                     self.mid(), self.eid(), delay_ticks=self.delay_ticks.value(),
-                    expire_after_ticks=self.expire_ticks.value()))
+                    delay_activations=self.delay_activations.value(),
+                    expire_after_ticks=self.expire_ticks.value(),
+                    expire_after_activations=self.expire_activations.value(),
+                    cancel_after=[v.strip() for v in self.cancel_after.text().split(",")
+                                  if v.strip()]))
 
         def create_scene(self):
             self.perform(lambda: self.studio.create_scene(
