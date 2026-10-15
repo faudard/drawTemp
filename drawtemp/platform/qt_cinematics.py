@@ -35,7 +35,15 @@ def main(argv=None):
                else GameProject.default(content))
     app = QApplication.instance() or QApplication([sys.argv[0]])
     if args.mode == "studio":
-        document = CinematicDocument(project, content, source_path=project_path)
+        from drawtemp.sdk.authoring import AuthoringSession
+        if project_path != content_path.with_suffix(".game.json"):
+            parser.error("Studio requires the canonical paired Content/.game.json path")
+        # The Qt cinematic workspace uses the same two-file ownership, revision
+        # and undo stack as Map, Database, Event and Campaign workspaces.
+        session = (AuthoringSession.open(content_path) if project_path.is_file()
+                   else AuthoringSession.new(content, project))
+        document = CinematicDocument.from_session(
+            session, source_path=project_path if project_path.is_file() else None)
         window = CinematicEditor(document)
     else:
         clips = [clip for clip in project.cinematics if args.clip in (None, clip["id"])]
