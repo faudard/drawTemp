@@ -61,7 +61,7 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             return {"zoom": self.camera.zoom, "panX": self.camera.pan_x,
                     "panY": self.camera.pan_y}
 
-        @Property(bool, constant=True)
+        @Property(bool, notify=sceneChanged)
         def animatedAssets(self):
             return self.assets is not None and self.assets.has_animations
 
