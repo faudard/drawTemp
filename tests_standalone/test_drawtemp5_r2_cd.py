@@ -207,6 +207,10 @@ class QtInspectorExplorerTests(unittest.TestCase):
             win.apply_selection()
             self.assertEqual(win.session.revision, 1)
             self.assertNotEqual(win.inspector_error.text(), "")
+            # Reset the dirty transaction so offscreen CI never prompts for
+            # an interactive Save / Discard choice during window close.
+            win.session.undo()
+            win.refresh()
             win.close()
 
     def test_reference_navigation_and_facets(self):
