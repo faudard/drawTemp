@@ -14,6 +14,192 @@ IsoViewport {
     interactionMode: "select"
     showLegend: false
 
+    // R12.7: animation clips represent *committed* GameSession events. The
+    // R3 scene is already authoritative at the final state; this temporary
+    // ghost is not a second actor nor a second game clock.
+    property var animationPlan: ({serial: 0, clips: []})
+    property var currentClip: ({})
+    property int runningSerial: -1
+    property int clipIndex: -1
+    property bool playing: false
+    property real phase: 0
+
+    function beginPlan() {
+        if (!animationPlan || animationPlan.serial === runningSerial)
+            return
+        runningSerial = animationPlan.serial
+        playing = false
+        tween.stop()
+        concealedActorIds = []
+        clipIndex = -1
+        currentClip = ({})
+        if (animationPlan.clips && animationPlan.clips.length > 0)
+            nextClip()
+    }
+
+    function nextClip() {
+        // A new scene, save/load, or player action resets the serial and
+        // immediately discards any callbacks from an older plan.
+        if (!animationPlan || runningSerial !== animationPlan.serial) {
+            playing = false
+            concealedActorIds = []
+            return
+        }
+        clipIndex += 1
+        if (!animationPlan.clips || clipIndex >= animationPlan.clips.length) {
+            playing = false
+            concealedActorIds = []
+            currentClip = ({})
+            return
+        }
+        currentClip = animationPlan.clips[clipIndex]
+        phase = 0
+        playing = true
+        concealedActorIds = currentClip.kind === "move" ||
+                            currentClip.kind === "attack" ? [currentClip.actor] : []
+        tween.duration = currentClip.duration_ms
+        tween.restart()
+    }
+
+    onAnimationPlanChanged: beginPlan()
+    Component.onCompleted: beginPlan()
+    NumberAnimation {
+        id: tween
+        target: board
+        property: "phase"
+        from: 0
+        to: 1
+        duration: 250
+        easing.type: Easing.InOutCubic
+        onStopped: {
+            if (board.playing && board.runningSerial === board.animationPlan.serial)
+                board.nextClip()
+        }
+    }
+
+    function elevation(point) {
+        if (!point || !battle || !battle.tiles) return 0
+        for (var i = 0; i < battle.tiles.length; ++i) {
+            var t = battle.tiles[i]
+            if (t.pos[0] === Math.round(point[0]) &&
+                t.pos[1] === Math.round(point[1]))
+                return t.height || 0
+        }
+        return 0
+    }
+    function clipCell() {
+        if (!playing || !currentClip.start) return [0, 0]
+        var start = currentClip.start
+        var end = currentClip.end || start
+        var fraction = currentClip.kind === "move" ? phase :
+                       currentClip.kind === "attack" ?
+                           0.25 * Math.sin(Math.PI * phase) : 0
+        return [start[0] + (end[0] - start[0]) * fraction,
+                start[1] + (end[1] - start[1]) * fraction]
+    }
+    function scenePoint(point) {
+        var zoom = renderer.cameraState.zoom
+        return [board.width / 2 + renderer.cameraState.panX +
+                (point[0] - point[1]) * 48 * zoom,
+                board.height / 2 + renderer.cameraState.panY +
+                ((point[0] + point[1]) * 24 - elevation(point) * 12) * zoom]
+    }
+
+    Item {
+        id: motionGhost
+        visible: board.playing && (board.currentClip.kind === "move" ||
+                                   board.currentClip.kind === "attack")
+        readonly property var pos: board.scenePoint(board.clipCell())
+        readonly property real ratio: renderer.cameraState.zoom
+        x: pos[0] - 20 * ratio
+        y: pos[1] - 68 * ratio
+        width: 40 * ratio
+        height: 68 * ratio
+        z: (board.clipCell()[0] + board.clipCell()[1]) * 100 + 75
+        Rectangle {
+            x: 3 * motionGhost.ratio
+            y: 57 * motionGhost.ratio
+            width: 34 * motionGhost.ratio
+            height: 9 * motionGhost.ratio
+            radius: 5 * motionGhost.ratio
+            color: "#10191c"
+            opacity: 0.45
+        }
+        Rectangle {
+            x: 6 * motionGhost.ratio
+            y: 19 * motionGhost.ratio
+            width: 28 * motionGhost.ratio
+            height: 38 * motionGhost.ratio
+            radius: 9 * motionGhost.ratio
+            color: board.currentClip.team === "enemy" ? "#af6556" : "#496cbb"
+            border.width: 2 * motionGhost.ratio
+            border.color: "#e2d7c4"
+        }
+        Rectangle {
+            x: 10 * motionGhost.ratio
+            y: 5 * motionGhost.ratio
+            width: 19 * motionGhost.ratio
+            height: 19 * motionGhost.ratio
+            radius: 10 * motionGhost.ratio
+            color: "#eacaa1"
+            border.color: "#62504b"
+        }
+        Rectangle {
+            visible: board.currentClip.kind === "attack"
+            x: 28 * motionGhost.ratio
+            y: 20 * motionGhost.ratio
+            width: 23 * motionGhost.ratio
+            height: 4 * motionGhost.ratio
+            color: "#efddb7"
+            rotation: -25
+            opacity: 0.6 + 0.4 * Math.sin(Math.PI * board.phase)
+        }
+    }
+
+    Item {
+        id: impactVisual
+        visible: board.playing && ["impact", "heal", "miss", "cast",
+                                    "interrupt"].indexOf(board.currentClip.kind) >= 0
+        readonly property var position: board.scenePoint(board.currentClip.start || [0, 0])
+        readonly property real ratio: renderer.cameraState.zoom
+        readonly property bool healing: board.currentClip.kind === "heal"
+        readonly property color accent: healing ? "#8cdbad" :
+                                       board.currentClip.kind === "miss" ? "#d9d7c7" :
+                                       board.currentClip.kind === "cast" ? "#b3a0ea" :
+                                       board.currentClip.kind === "interrupt" ? "#e3b66e" :
+                                       "#f47b5d"
+        x: position[0] - 25 * ratio
+        y: position[1] - 50 * ratio
+        width: 50 * ratio
+        height: 50 * ratio
+        z: 99999
+        opacity: 1 - board.phase
+        Rectangle {
+            anchors.centerIn: parent
+            width: parent.width * (0.4 + 0.6 * board.phase)
+            height: width
+            radius: width / 2
+            color: "transparent"
+            border.width: 3 * impactVisual.ratio
+            border.color: impactVisual.accent
+        }
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: -18 * impactVisual.ratio - board.phase * 22 * impactVisual.ratio
+            text: board.currentClip.kind === "impact" ?
+                      "−" + (board.currentClip.amount === null ? "!" : board.currentClip.amount) :
+                  board.currentClip.kind === "heal" ?
+                      "+" + (board.currentClip.amount === null ? "♥" : board.currentClip.amount) :
+                  board.currentClip.kind === "miss" ? "ESQUIVE" :
+                  board.currentClip.kind === "interrupt" ? "INTERROMPU" : "SORT"
+            color: impactVisual.accent
+            font.bold: true
+            font.pixelSize: Math.max(12, 16 * impactVisual.ratio)
+            style: Text.Outline
+            styleColor: "#202730"
+        }
+    }
+
     Repeater {
         model: board.showTacticalOverlay && board.tactical && board.tactical.markers ?
                    board.tactical.markers : []
