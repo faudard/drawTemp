@@ -378,7 +378,8 @@ class MapStudio:
 
     def save(self):
         # Check the sidecar *before* committing the two canonical documents.
-        self.layers.verify_disk()
+        if self.layers.path is not None:
+            self.layers.verify_disk()
         paths = self.authoring.save()
         self.layers.save()
         return paths
