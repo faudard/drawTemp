@@ -29,6 +29,8 @@ def launch(content_path):
     from drawtemp.sdk.r13_encounter_authoring import (
         compare_draft, preview_authoring,
     )
+    from drawtemp.sdk.r13_visual_metrics import build_visual_comparison
+    from drawtemp.studio.r13_charts import R13ComparisonCharts
     from drawtemp.sdk.r13_combat_lab import (
         compare_encounters, evaluate_variant, human_review,
         inspect_encounter, simulate_encounter, trace_timeline,
@@ -194,6 +196,10 @@ def launch(content_path):
                 "#", "Acteur", "Action", "Position", "Événements"])
             self.timeline.itemSelectionChanged.connect(self._scrub_timeline)
             lab_layout.addWidget(self.timeline, 1)
+
+            self.charts = R13ComparisonCharts()
+            self.charts.seedSelected.connect(self._choose_chart_seed)
+            self.tabs.addTab(self.charts, "Graphiques A/B")
             self._refresh(self.mission.currentText())
             if self.authoring is None:
                 self.status.setText(
@@ -253,6 +259,7 @@ def launch(content_path):
             self.outcomes.setRowCount(0)
             self._timeline_frames = []
             self.timeline.setRowCount(0)
+            self.charts.clear()
 
         def _draw_map(self, inspected, positions=None, goals=None, actors=None):
             self.scene.clear()
@@ -505,9 +512,14 @@ def launch(content_path):
                 self._draw_map(self.inspection,
                                actual.get("unit_positions"),
                                actual.get("goal_cells"))
+                self.charts.set_report(build_visual_comparison(
+                    result["baseline"], result["candidate"],
+                    objective_changed=result["objective_changed"]))
+                self.tabs.setCurrentWidget(self.charts)
                 return
             self.current = result
             report = result["battle_lab"]
+            self._show_simulation_charts(report)
             stats = {
                 "mission": report["mission"], "runs": report["runs"],
                 "win_rate": report["victory_rate"],
@@ -541,6 +553,35 @@ def launch(content_path):
                           [e["kind"] for e in frame["events"]]]
                 for col, value in enumerate(fields):
                     self.timeline.setItem(row, col, QTableWidgetItem(str(value)))
+
+        def _show_simulation_charts(self, report):
+            """Avoid misleading A/B plots when a loaded baseline mismatches."""
+            warning = ""
+            if self.reference is not None:
+                try:
+                    visual = build_visual_comparison(self.reference, report)
+                except (ValueError, TypeError, KeyError) as exc:
+                    visual = build_visual_comparison(report)
+                    warning = "Référence incompatible (A/B impossible) : " + str(exc)
+                except Exception as exc:
+                    visual = build_visual_comparison(report)
+                    warning = "Référence incompatible (A/B impossible) : " + str(exc)
+            else:
+                visual = build_visual_comparison(report)
+            self.charts.set_report(visual, warning=warning)
+
+        def _choose_chart_seed(self, seed):
+            """Highlight the exact seed in the canonical run's outcome table."""
+            if self.current is None:
+                return
+            for index, sample in enumerate(self.current["battle_lab"]["samples"]):
+                if sample["seed"] == seed:
+                    self.outcomes.selectRow(index)
+                    self.status.setText(
+                        "Seed {} : {} · {} ticks CT · {} commandes"
+                        .format(seed, sample["result"], sample["ticks"],
+                                sample["commands"]))
+                    break
 
         def _scrub_timeline(self):
             """Project recorded positions without predicting future moves."""
@@ -576,6 +617,9 @@ def launch(content_path):
                 if doc.get("kind") != "battle_lab":
                     raise ValueError("Rapport Battle Lab requis")
                 self.reference = doc
+                if self.current is not None:
+                    self._show_simulation_charts(self.current["battle_lab"])
+                    self.tabs.setCurrentWidget(self.charts)
                 self.status.setText("Référence chargée : " + str(path))
             except (OSError, ValueError, TypeError, KeyError) as exc:
                 self._show_error(str(exc))
