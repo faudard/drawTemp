@@ -7,6 +7,7 @@ No Pillow, Qt, Tk, animation timers or filesystem writes at runtime.
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
 from sporebound.assets import AssetRegistry
@@ -104,7 +105,7 @@ class CharacterPack:
         t = elapsed_ms % duration if loop else min(elapsed_ms, duration - 1)
         for asset_id, span in frames:
             if t < span:
-                return dict(self._files[asset_id])
+                return deepcopy(self._files[asset_id])
             t -= span
         raise AssertionError("Animation timing mismatch")
 
