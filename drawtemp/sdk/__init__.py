@@ -10,7 +10,7 @@ SDK_API_VERSION = (1, 0)
 SDK_API_STATUS = "provisional"  # Stabilization candidate, not final 5.0 certification.
 SDK_FEATURES = frozenset({
     "simulation.v1", "authoring.v1", "migration.v0-envelope-to-v1",
-    "replay.v1", "player-slots.v1",
+    "replay.v1", "player-slots.v1", "workers.v1", "certification.v1",
 })
 
 _PUBLIC = {
@@ -38,6 +38,14 @@ _PUBLIC = {
     "PlayerSlotStore": "slots",
     "SlotError": "slots",
     "SlotInspection": "slots",
+    "SdkWorkQueue": "workers",
+    "WorkTicket": "workers",
+    "WorkResult": "workers",
+    "WorkQueueError": "workers",
+    "CertificationError": "certification",
+    "CertificationStep": "certification",
+    "CertificationReport": "certification",
+    "certify_trace": "certification",
 }
 
 __all__ = ["SDK_API_VERSION", "SDK_API_STATUS", "SDK_FEATURES", "capabilities",
