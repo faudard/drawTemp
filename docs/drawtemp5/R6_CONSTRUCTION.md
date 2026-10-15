@@ -93,3 +93,43 @@ actual dock controls under an offscreen platform.
 create a two-level house, cut away the roof, navigate between actual gameplay
 floors, and reload the same appearance and collision state. No green headless
 test alone should be taken as visual certification.
+
+## R6.2 — construction in the shared R3/R5 viewport (follow-up)
+
+The initial R6 PR delivered a dock and an abstract hit contract. This
+follow-up **renders the real authored buildings** in the Qt Quick scenegraph,
+then selects from the exact same projected polygons.
+
+- `scene_from_mission` carries detached `structures` and `interior_floors`
+  from canonical `Content`. Studio and Player call this same adapter.
+- `building_geometry.building_surfaces` produces individually hit-testable
+  south/east facade segments, roof polygon, window/door apertures and selected
+  authored interior level tiles; each stores stable structure ID, anchor,
+  world cell and (for deck cells) level. Invisible back faces are not pickable.
+- The Qt Quick Shape renderer uses those polygon vertices directly.
+  `RendererController.buildingAt` tests **only the currently visible rows**
+  in reverse scenegraph painter order, using the same camera as tiles/actors.
+- The R5 map window adds a contextual **Construction 2.5D** workspace and
+  hooks its actual shared renderer's clicks into `ConstructionDock`. Switching
+  maps/projects clears stale building identity and keeps one R1 undo history.
+  Switching back restores map-painting controls. There is no competing renderer.
+- A cutaway hides the visual roof and reveals only authored floor tiles.
+  Clicking a floor picks its real level and cell; an un-authored deck or a
+  stale selection is rejected by the SDK.
+
+### Verification and limitations
+
+```bash
+python -m unittest tests_standalone.test_drawtemp5_r6_geometry -v
+QT_QPA_PLATFORM=offscreen python -m unittest \
+  tests_standalone.test_drawtemp5_r6_geometry_qt -v
+```
+
+These tests check real roof/door/window polygon hits, camera pan and zoom,
+cutaway and floor identity, invalid floor picks, canonical save/load parity
+and Qt dock-to-map integration. Geometry uses stylized vector faces until R4
+asset/atlas mapping is ready; it does not yet provide modular roof segments
+or customized footprints. **Upper floors remain decorative, not tactical
+traversal/LOS**, so **the complete R6.10 / overall R6 product gate remains
+open**. A later dedicated lot must add tested multilevel core semantics
+without inventing a second combat state.
