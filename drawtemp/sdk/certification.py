@@ -64,35 +64,43 @@ def _witness(index, operation, session, record):
     )
 
 
-def _without_ephemeral_ids(record):
-    """Only normalize identities that are deliberately randomized at spawn.
+def _without_ephemeral_ids(record, identities):
+    """Normalize only previously witnessed random Battle identities.
 
-    Content, missions, damage, CT, RNG, orders and event journals are *never*
-    normalized. Fresh independently spawned Battle UUIDs are presentation
-    identities, not deterministic gameplay state.
+    The map is persistent across steps, including after return_to_campaign,
+    when a finished battle's UUID no longer occurs in the tactical record.
+    Every other Content/CT/RNG/command/event field remains authoritative.
     """
     value = deepcopy(record)
     value.pop("digest", None)
-    identities = {}
     tactical = value.get("tactical")
     if isinstance(tactical, dict) and isinstance(tactical.get("battle_id"), str):
         original = tactical["battle_id"]
-        identities[original] = "<active-battle>"
-        tactical["battle_id"] = "<active-battle>"
+        token = identities.setdefault(original, "<battle-%d>" % len(identities))
+        tactical["battle_id"] = token
     groups = value.get("front_battle_ids")
     if isinstance(groups, dict):
         for group, battles in sorted(groups.items()):
             if isinstance(battles, dict):
                 for key, original in sorted(battles.items()):
                     if isinstance(original, str):
-                        identity = "<%s/%s>" % (group, key)
-                        identities[original] = identity
-                        battles[key] = identity
-    progress = value.get("progress")
-    if isinstance(progress, dict) and isinstance(progress.get("tracked_battles"), list):
-        progress["tracked_battles"] = [
-            identities.get(battle_id, battle_id) for battle_id in progress["tracked_battles"]
-        ]
+                        token = identities.setdefault(
+                            original, "<%s/%s>" % (group, key))
+                        battles[key] = token
+
+    # Campaign progress may retain UUIDs after its Battle is finalized. Only
+    # strings equal to already witnessed battle IDs may be normalized.
+    def known(value):
+        if isinstance(value, str):
+            return identities.get(value, value)
+        if isinstance(value, dict):
+            return {key: known(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [known(item) for item in value]
+        return value
+
+    if "progress" in value:
+        value["progress"] = known(value["progress"])
     return value
 
 
@@ -123,6 +131,10 @@ def certify_trace(content, project, campaign_id, commands, *,
         raise CertificationError("invalid_start", str(exc)) from exc
 
     steps = [_witness(0, "initial", continuous, source)]
+    # Identifier leases survive battle completion and front transitions.
+    continuous_ids, resumed_ids = {}, {}
+    _without_ephemeral_ids(source, continuous_ids)
+    _without_ephemeral_ids(source, resumed_ids)
     with TemporaryDirectory(prefix="drawtemp-r1e-") as folder:
         path = Path(folder) / "checkpoint.json"
         for index, command in enumerate(actions, 1):
@@ -141,7 +153,7 @@ def certify_trace(content, project, campaign_id, commands, *,
                     *deepcopy(command.args), **deepcopy(command.kwargs))
                 recorded = continuous.recording()
                 second = replayed.recording()
-                if _without_ephemeral_ids(recorded) != _without_ephemeral_ids(second):
+                if (_without_ephemeral_ids(recorded, continuous_ids) !=\n                        _without_ephemeral_ids(second, resumed_ids)):
                     raise CertificationError("runtime_divergence",
                                              "Continuous and independently resumed engines differ")
                 # Verify CT, RNG, event streams and front timelines *before*
