@@ -10,7 +10,7 @@ Item {
     width: 960
     height: 640
     clip: true
-    property string interactionMode: "pan"  // pan | edit | select
+    property string interactionMode: "pan"  // pan | edit | select | construction
     property bool showGrid: true
     property bool showBlocked: false
     property bool showHeights: false
@@ -23,6 +23,7 @@ Item {
     signal strokeFinished(int x, int y)
     signal strokeCancelled()
     signal cellSelected(int x, int y)
+    signal buildingPicked(var hit)
 
     Rectangle {
         anchors.fill: parent
@@ -44,12 +45,14 @@ Item {
             property real scaleFactor: root.camera.zoom
             property bool isTile: row.kind === "tile"
             property bool isActor: row.kind === "actor"
+            property bool isBuilding: row.kind === "building"
             visible: !isActor || root.showActors
-            sourceComponent: isTile ? tileComponent : (isActor ? actorComponent : objectComponent)
+            sourceComponent: isBuilding ? buildingComponent :
+                             (isTile ? tileComponent : (isActor ? actorComponent : objectComponent))
             x: root.width / 2 + root.camera.panX + row.sx * scaleFactor
-               - (isTile ? 48 : isActor ? 20 : 15) * scaleFactor
+               - (isBuilding ? 0 : isTile ? 48 : isActor ? 20 : 15) * scaleFactor
             y: root.height / 2 + root.camera.panY + row.sy * scaleFactor
-               - (isTile ? 24 : isActor ? 68 : 40) * scaleFactor
+               - (isBuilding ? 0 : isTile ? 24 : isActor ? 68 : 40) * scaleFactor
             scale: scaleFactor
             transformOrigin: Item.TopLeft
             z: row.zOrder
@@ -131,6 +134,31 @@ Item {
                 text: tile.height
                 x: 58; y: 6; color: "#fff2d5"
                 font.bold: true; font.pixelSize: 12
+            }
+        }
+    }
+
+    // R6: four-vertex surfaces are generated and picked by the same
+    // Python geometry, with identical projection, camera and painter order.
+    // No second Canvas or invisible, guessed roof hit rectangle.
+    Component {
+        id: buildingComponent
+        Item {
+            property var face: parent.row
+            width: face.spanX
+            height: face.spanY
+            Shape {
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: face.part === "roof" ? 1.2 : 0.7
+                    strokeColor: face.part === "window" ? "#dfedec" : "#38454a"
+                    fillColor: face.color
+                    startX: face.points[0][0]; startY: face.points[0][1]
+                    PathLine { x: face.points[1][0]; y: face.points[1][1] }
+                    PathLine { x: face.points[2][0]; y: face.points[2][1] }
+                    PathLine { x: face.points[3][0]; y: face.points[3][1] }
+                    PathLine { x: face.points[0][0]; y: face.points[0][1] }
+                }
             }
         }
     }
@@ -234,7 +262,8 @@ Item {
             var cell = renderer.cellAt(mouse.x, mouse.y)
             root.hoveredCell = valid(cell) ? cell : ({})
             var panning = (mouse.buttons & Qt.RightButton) ||
-                          (root.interactionMode !== "edit" && (mouse.buttons & Qt.LeftButton))
+                          ((root.interactionMode === "pan" || root.interactionMode === "select") &&
+                           (mouse.buttons & Qt.LeftButton))
             if (panning) {
                 renderer.panBy(mouse.x - lastX, mouse.y - lastY)
             } else if (editing && (mouse.buttons & Qt.LeftButton) && valid(cell) &&
@@ -253,7 +282,9 @@ Item {
             } else if (mouse.button === Qt.LeftButton &&
                        Math.abs(mouse.x - downX) + Math.abs(mouse.y - downY) < 6) {
                 var picked = renderer.cellAt(mouse.x, mouse.y)
-                if (valid(picked) && root.interactionMode === "select")
+                if (root.interactionMode === "construction")
+                    root.buildingPicked(renderer.buildingAt(mouse.x, mouse.y))
+                else if (valid(picked) && root.interactionMode === "select")
                     root.cellSelected(picked.x, picked.y)
                 else if (root.interactionMode === "pan")
                     renderer.pickAt(mouse.x, mouse.y)
