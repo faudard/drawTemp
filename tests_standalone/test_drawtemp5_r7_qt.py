@@ -59,6 +59,11 @@ class R7QtIntegrationTests(unittest.TestCase):
             controller.refresh()
             north = next(row for row in controller.items if row["id"] == "jeanne")
             self.assertNotEqual(north["spriteRegion"], jeanne["spriteRegion"])
+            scene["actors"][0]["alive"] = False
+            controller.refresh()
+            dead = next(row for row in controller.items if row["id"] == "jeanne")
+            self.assertTrue(dead["spriteReady"])
+            self.assertNotEqual(dead["spriteRegion"], north["spriteRegion"])
             controller._sprite_timer.stop()
 
     def test_qml_component_creates_native_scenegraph_with_actor_texture(self):
