@@ -140,6 +140,22 @@ def make_controller(scene, atlas_url=None, *, assets=None):
         def animatedAssets(self):
             return self.assets is not None and self.assets.has_animations
 
+        @Slot(str, str, str, int, result="QVariantMap")
+        def animationFrame(self, actor_id, direction, pose, elapsed_ms):
+            """Read-only frame for R12 committed event clips.
+
+            The same project AssetRegistry and resolver power R3's idle actor
+            and R12's action ghost. No new manifest, painter, or battle rules.
+            """
+            if self.assets is None:
+                return {}
+            try:
+                return self.assets.actor_frame(
+                    actor_id, direction=direction, pose=pose,
+                    elapsed_ms=elapsed_ms) or {}
+            except (OSError, ValueError, RuntimeError):
+                return {}
+
         @Slot(int)
         def advanceVisual(self, delta_ms):
             """Animate cosmetics only; never touch the tactical simulation."""
