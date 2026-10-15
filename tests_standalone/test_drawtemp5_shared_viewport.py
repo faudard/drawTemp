@@ -134,7 +134,7 @@ class SharedRendererQtSmoke(unittest.TestCase):
             self.assertEqual(window.renderer.scene["mission"], MISSION)
             projection = window.renderer.projection
             camera = window.renderer.camera
-            pos = (4, 3)
+            pos = (2, 2)
             sx, sy = camera.screen(*projection.project(*pos))
             self.assertEqual(window.renderer.cellAt(sx, sy),
                              {"x": pos[0], "y": pos[1]})
@@ -145,7 +145,10 @@ class SharedRendererQtSmoke(unittest.TestCase):
             self.assertIsNotNone(window.viewport.rootObject())
             self.assertEqual(window.renderer.scene["mission"], MISSION)
         finally:
-            window.close()
+            # Qt's dirty-document close dialog would be modal in an offscreen test.
+            # This is a viewport smoke, not an interactive discard confirmation.
+            window.hide()
+            window.deleteLater()
 
     def test_player_instantiates_the_same_qml_with_reference_scene(self):
         env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
