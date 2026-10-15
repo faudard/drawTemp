@@ -6,6 +6,8 @@ on:
       - 'scripts/benchmark_drawtemp5_r3.py'
       - 'tests_standalone/test_drawtemp5_r3.py'
       - 'tests_standalone/test_drawtemp5_r3b.py'
+      - 'tests_standalone/test_drawtemp5_r3d.py'
+      - 'scripts/benchmark_drawtemp5_r3d.py'
       - 'tests_standalone/test_drawtemp5_shared_viewport.py'
       - 'pyproject.toml'
       - '.github/workflows/drawtemp5-r3.yml'
@@ -24,7 +26,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install .
-      - run: python -m unittest tests_standalone.test_drawtemp5_r3 tests_standalone.test_drawtemp5_r3b.ChunkAndLayerTests tests_standalone.test_drawtemp5_r1 tests_standalone.test_drawtemp5_shared_viewport.SharedRendererContractTests -v
+      - run: python -m unittest tests_standalone.test_drawtemp5_r3 tests_standalone.test_drawtemp5_r3b.ChunkAndLayerTests tests_standalone.test_drawtemp5_r3d.R3DContracts tests_standalone.test_drawtemp5_r1 tests_standalone.test_drawtemp5_shared_viewport.SharedRendererContractTests -v
       - run: python scripts/audit_drawtemp5.py --check --strict
       - name: R3 CPU projection measurements (not GPU certification)
         run: python scripts/benchmark_drawtemp5_r3.py --frames 30 --output r3-cpu-projection.json
@@ -59,4 +61,15 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
-        run: python -m unittest tests_standalone.test_drawtemp5_shared_viewport.SharedRendererQtSmoke tests_standalone.test_drawtemp5_r3b.QtRendererR3BSmoke -v
+        run: python -m unittest tests_standalone.test_drawtemp5_shared_viewport.SharedRendererQtSmoke tests_standalone.test_drawtemp5_r3b.QtRendererR3BSmoke tests_standalone.test_drawtemp5_r3d.R3DQtSmoke -v
+
+      - name: R3.D Qt Quick texture profile (software only, no hardware GPU claim)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python scripts/benchmark_drawtemp5_r3d.py --map-size 64 --frames 6 --smoke --output r3d-qt-profile.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r3d-qt-${{ matrix.os }}
+          path: r3d-qt-profile.json
