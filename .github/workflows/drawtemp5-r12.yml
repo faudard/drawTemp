@@ -25,6 +25,7 @@ jobs:
           tests_standalone.test_drawtemp5_r12
           tests_standalone.test_drawtemp5_r12_preferences
           tests_standalone.test_drawtemp5_r12_tactical
+          tests_standalone.test_drawtemp5_r12_animation
           -v
   qt-player-smoke:
     runs-on: ${{ matrix.os }}
