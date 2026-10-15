@@ -23,6 +23,8 @@ jobs:
           python-version: "3.12"
       - name: Install authoring-only dependencies
         run: python -m pip install "Pillow==11.3.0" "numpy==2.2.6" "opencv-python-headless==4.12.0.88"
+      - name: Install repository package for generator imports
+        run: python -m pip install -e .
       - name: Generate 11 new transparent PNG cels
         run: python scripts/generate_jeanne_motion.py --root assets/watercolor
       - name: Verify all 99 watercolor PNGs
