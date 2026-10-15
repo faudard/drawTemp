@@ -26,6 +26,7 @@ class PlayerController:
         self.selected = [0, 0]
         self.message = self.preferences.warning
         self.forecast = ""
+        self.inspected_skill = "attack"
 
     def _path(self, slot):
         if type(slot) is not int or not 1 <= slot <= self.project.save_slots:
@@ -63,6 +64,8 @@ class PlayerController:
         self.show_title = False
         self.message = "Le voyage de Jeanne commence."
         self.forecast = ""
+        self.inspected_skill = "attack"
+        self.selected = [0, 0]
         return self.state()
 
     def load(self, slot=1):
@@ -74,6 +77,8 @@ class PlayerController:
         self.show_title = False
         self.message = "Partie rechargée."
         self.forecast = ""
+        self.inspected_skill = "attack"
+        self.selected = [0, 0]
         return self.state()
 
     def save(self, slot=1):
@@ -115,6 +120,8 @@ class PlayerController:
         if mission_id not in state.missions:
             raise ValueError("Mission is locked")
         self.session.start_mission(mission_id, expected_revision=state.revision)
+        self.selected = [0, 0]
+        self.inspected_skill = "attack"
         return self._changed()
 
     def explore_move(self, dx, dy):
@@ -210,6 +217,20 @@ class PlayerController:
                              expected_revision=state.revision)
         return self._changed()
 
+    def inspect_skill(self, skill_id):
+        state = self._current()
+        battle = state.battle
+        if not battle or battle["result"]:
+            raise ValueError("No active battle")
+        active = next((unit for unit in battle["units"]
+                       if unit["id"] == battle["active"]), None)
+        if (active is None or active["team"] != "player" or
+                skill_id not in ("attack", *active.get("skills", ()))):
+            raise ValueError("Compétence indisponible")
+        self.inspected_skill = skill_id
+        self.forecast = ""
+        return self.state()
+
     def preview(self, kind):
         state = self._current()
         if not state.battle or state.battle["result"]:
@@ -295,7 +316,7 @@ class PlayerController:
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
-                "battle": {}, "revision": 0}
+                "battle": {}, "tactical": {}, "revision": 0}
         if self.session is None or self.show_title:
             return base
         snapshot = self._current()
@@ -304,6 +325,15 @@ class PlayerController:
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
         if snapshot.battle:
+            # Selection is a UI concern and can outlive a previous mission.
+            width, height = snapshot.battle["width"], snapshot.battle["height"]
+            self.selected = [min(width - 1, max(0, self.selected[0])),
+                             min(height - 1, max(0, self.selected[1]))]
+            base["selected"] = list(self.selected)
+            projection = self.session.tactical_presentation(
+                self.selected, self.inspected_skill,
+                expected_revision=snapshot.revision)
+            base["tactical"] = thaw(projection) if projection is not None else {}
             battle = thaw(snapshot.battle)
             # The renderer must never receive RNG state, full journals, or rules.
             base["battle"] = {key: battle.get(key) for key in (
