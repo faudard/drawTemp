@@ -298,6 +298,50 @@ class ConstructionWorkspace:
             content, self.mission_id, record["id"], level, cell,
             surface=surface, feature=feature, present=present))
 
+    def preview_gameplay_door(self, *, opened=False, locked=False):
+        """Attach a real tactical door object to the selected building entry."""
+        record = self._selected()
+        if record["name"] not in BUILDINGS:
+            raise AuthoringError("unsupported_part", "door", "Select a house or tower")
+        from sporebound.building_gameplay import add_building_door
+        return self._preview("gameplay-door", lambda content: add_building_door(
+            content, self.mission_id, record["id"], opened=opened, locked=locked))
+
+    def preview_staircase(self, cell, *, from_level=0, cost=1):
+        """One Undo transaction for an explicit, legal adjacent-floor stair.
+
+        No implicit teleports: the endpoint must lie within the selected
+        persistent footprint and be walkable on both authored levels.
+        """
+        record = self._selected()
+        if type(from_level) is not int or not 0 <= from_level < MAX_INTERIOR_LEVEL:
+            raise AuthoringError("invalid_level", "staircase", "Select lower level 0..2")
+        if (type(cell) not in (list, tuple) or len(cell) != 2
+                or any(type(v) is not int for v in cell)):
+            raise AuthoringError("invalid_cell", "staircase", "Expected a world cell")
+        world = tuple(cell)
+        if world not in _geometry(record)[0]:
+            raise AuthoringError("invalid_cell", "staircase",
+                                 "Stair landing must belong to the building")
+        from sporebound.level_navigation import add_level_link
+        return self._preview("staircase", lambda content: add_level_link(
+            content, self.mission_id, [from_level, *world],
+            [from_level + 1, *world], cost=cost))
+
+    def preview_remove_staircase(self, connector_id):
+        record = self._selected()
+        mission = _mission(self._content(), self.mission_id)
+        item = next((row for row in mission.get("level_links", ())
+                     if row["id"] == connector_id), None)
+        if item is None or not all(
+                tuple(endpoint[1:]) in _geometry(record)[0]
+                for endpoint in (item["from"], item["to"])):
+            raise AuthoringError("invalid_link", "staircase",
+                                 "Select a connector in this building")
+        from sporebound.level_navigation import remove_level_link
+        return self._preview("staircase-remove", lambda content: remove_level_link(
+            content, self.mission_id, connector_id))
+
     def apply(self, plan):
         """Commit a single validated gesture and rebind selection by stable ID."""
         before = {sid for sid, _, _ in self.list_buildings()}

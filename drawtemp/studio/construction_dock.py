@@ -102,6 +102,30 @@ class ConstructionDock(QDockWidget):
         floor_form.addRow(self.paint_floor)
         layout.addWidget(interiors)
 
+        gameplay = QGroupBox("Gameplay du bâtiment")
+        gameplay_form = QFormLayout(gameplay)
+        self.gameplay_door = QPushButton("Créer une porte tactique ouvrable")
+        gameplay_form.addRow(self.gameplay_door)
+        self.stair_from = QComboBox()
+        for lower in range(MAX_INTERIOR_LEVEL):
+            self.stair_from.addItem(
+                "RDC → N1" if lower == 0 else
+                "N" + str(lower) + " → N" + str(lower + 1), lower)
+        gameplay_form.addRow("Escalier", self.stair_from)
+        stair_xy = QWidget()
+        stair_layout = QHBoxLayout(stair_xy)
+        stair_layout.setContentsMargins(0, 0, 0, 0)
+        self.stair_x, self.stair_y = QSpinBox(), QSpinBox()
+        for field in (self.stair_x, self.stair_y):
+            field.setRange(0, 9999)
+            stair_layout.addWidget(field)
+        gameplay_form.addRow("Case X / Y", stair_xy)
+        self.make_stair = QPushButton("Connecter les deux niveaux")
+        gameplay_form.addRow(self.make_stair)
+        gameplay_form.addRow(QLabel(
+            "Les escaliers utilisent une case réellement praticable sur chaque niveau."))
+        layout.addWidget(gameplay)
+
         self.cutaway = QPushButton("Afficher la coupe de toiture")
         self.cutaway.setCheckable(True)
         layout.addWidget(self.cutaway)
@@ -115,6 +139,9 @@ class ConstructionDock(QDockWidget):
         layout.addStretch(1)
 
         self.place_button.clicked.connect(self._place)
+        self.gameplay_door.clicked.connect(
+            lambda: self._apply(self.workspace.preview_gameplay_door))
+        self.make_stair.clicked.connect(self._make_stair)
         self.material_button.clicked.connect(
             lambda: self._apply(lambda: self.workspace.preview_material(
                 facade=self.facade.currentText(), roof=self.roof.currentText())))
@@ -153,6 +180,9 @@ class ConstructionDock(QDockWidget):
         except (ValueError, TypeError) as exc:
             self.workspace.clear_selection()
             QMessageBox.warning(self, "Sélection invalide", str(exc))
+        if self.workspace.pick:
+            self.stair_x.setValue(self.workspace.pick.cell[0])
+            self.stair_y.setValue(self.workspace.pick.cell[1])
         self.refresh()
 
     def _apply(self, builder):
@@ -176,6 +206,11 @@ class ConstructionDock(QDockWidget):
     def _place(self):
         self._apply(lambda: self.workspace.preview_place(
             self.preset.currentData(), (self.x.value(), self.y.value())))
+
+    def _make_stair(self):
+        self._apply(lambda: self.workspace.preview_staircase(
+            (self.stair_x.value(), self.stair_y.value()),
+            from_level=self.stair_from.currentData()))
 
     def _window(self, present):
         if self.workspace.pick is None:
@@ -253,6 +288,8 @@ class ConstructionDock(QDockWidget):
         self.remove_floor.setEnabled(bool(info and info.active_level > 0))
         self.paint_floor.setEnabled(bool(info and info.active_level > 0))
         self.delete.setEnabled(bool(info))
+        self.make_stair.setEnabled(interior)
+        self.gameplay_door.setEnabled(supports_exterior)
         snapshot = self.workspace.authoring.snapshot()
         self.undo.setEnabled(snapshot.can_undo)
         self.redo.setEnabled(snapshot.can_redo)

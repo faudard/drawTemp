@@ -81,7 +81,7 @@ def engaged_by(battle, u: Unit) -> list[Unit]:
             and battle.unit_levels.get(e.id, 0) == battle.unit_levels.get(u.id, 0)
             and battle.engagement_range(e) > 0
             and min(distance(a, b) for a in e.occupied_cells() for b in u.occupied_cells()) <= battle.engagement_range(e)
-            and battle.line_of_sight(e.pos, u.pos)]
+            and battle.line_of_sight(e.pos, u.pos, level=battle.unit_levels.get(u.id, 0))]
 
 
 def engagement_threats(battle, cell: Cell, moving_team: str) -> list[dict]:

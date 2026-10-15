@@ -202,13 +202,15 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 radius: 5
-                color: entry.label === "door" ? "#866445" :
+                color: entry.label === "door" ?
+                           (entry.open ? "#4e8f76" : "#866445") :
                        entry.label === "marker" ? "#d5a35f" : "#6b807c"
                 border.color: "#d0bd92"; border.width: 2
             }
             Text {
                 anchors.centerIn: parent
-                text: entry.label === "door" ? "P" :
+                text: entry.label === "door" ?
+                      (entry.open ? "✓" : "P") :
                       entry.label === "switch" ? "L" :
                       entry.label === "marker" ? "!" : "•"
                 color: "#faf0de"; font.bold: true

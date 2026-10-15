@@ -100,7 +100,9 @@ def scene_from_mission(mission, snapshot=None):
                        "y": float(field("pos")[1]), "team": str(field("team")),
                        "alive": field("hp") > 0, "level": int(levels.get(field("id"), 0))})
     objects = [{"id": str(o["id"]), "kind": str(o["kind"]),
-                "x": int(o["pos"][0]), "y": int(o["pos"][1])}
+                "x": int(o["pos"][0]), "y": int(o["pos"][1]),
+                **({"open": bool(o.get("open", False))}
+                   if o["kind"] == "door" else {})}
                for o in (battle["objects"] if battle else mission.objects)]
     return {"mission": mission.id, "width": mission.board.width,
             "height": mission.board.height,
@@ -186,6 +188,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None, *,
         if minx - 1 <= x <= maxx + 1 and miny - 1 <= y <= maxy + 1:
             sx, sy = projection.project(x, y, elev.get((x, y), 0))
             rows.append({"kind": "object", "id": o["id"], "label": o["kind"],
+                         "open": o.get("open", False),
                          "sx": sx, "sy": sy, "zOrder": (x + y) * 100 + 30})
     for a in scene["actors"]:
         x, y = a["x"], a["y"]
