@@ -133,8 +133,7 @@ class BuildingGameplayR610Tests(unittest.TestCase):
         self.assertEqual(b.digest(), before)
         b.execute({"kind": "door_toggle", "object": door})
         self.assertTrue(b.board.tile((4, 5)).blocked)
-        self.assertEqual(Battle.replay(b.recording()).digest(),
-                         b.digest() if False else Battle.replay(b.recording()).digest())
+        self.assertFalse(next(o for o in b.mission.objects if o["id"] == door)["open"])
 
     def test_locked_and_upstairs_door_actions_fail(self):
         content, mid, door = house_scenario(locked=True)
@@ -157,7 +156,8 @@ class BuildingGameplayR610Tests(unittest.TestCase):
             content, mid, _ = house_scenario(**{variant: True})
             mission = content.missions[mid]
             b = Battle(content, mid, seed=17, battle_id="r610-los-" + variant)
-            self.assertNotIn((1, 5, 5), b.level_reachable())
+            from sporebound.level_navigation import walkable_levels
+            self.assertNotIn((5, 5), walkable_levels(mission)[1])
             self.assertFalse(floor_line_of_sight(mission, 1, (4, 5), (5, 4)))
             self.assertFalse(b.line_of_sight((4, 5), (5, 4), level=1))
             self.assertTrue(b.line_of_sight((4, 5), (4, 4), level=1))
