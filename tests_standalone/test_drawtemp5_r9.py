@@ -26,11 +26,13 @@ class EventStudioR9Tests(unittest.TestCase):
                            [action("message", text="Jeanne ouvre la porte")])
         self.assertEqual(self.studio.event(MISSION, "lever_r9")["actions"][0]["text"],
                          "Jeanne ouvre la porte")
-        self.assertTrue(any(marker["event_id"] == "lever_r9"\n                            for marker in self.studio.map_markers(MISSION)))
+        self.assertTrue(any(marker["event_id"] == "lever_r9"
+                            for marker in self.studio.map_markers(MISSION)))
         preview = self.studio.preview(MISSION, "lever_r9")
         self.assertTrue(preview["report"]["isolated"])
         self.assertEqual(preview["report"]["outcome"], "applied")
-        self.assertTrue(any(node["event_id"] == "lever_r9"\n                            for node in self.studio.graph(MISSION)["nodes"]))
+        self.assertTrue(any(node["event_id"] == "lever_r9"
+                            for node in self.studio.graph(MISSION)["nodes"]))
         self.assertEqual(before["content"]["missions"][0]["triggers"],
                          self.studio.events(MISSION)[:-1])
         self.studio.undo()
