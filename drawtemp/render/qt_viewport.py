@@ -23,6 +23,7 @@ def make_controller(scene, atlas_url=None, *, character_pack=None,
     from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QElapsedTimer
     from drawtemp.assets.character_runtime import CharacterPack
     from drawtemp.assets.characters import ACTIONS
+    from drawtemp.assets.character_outfits import outfit_from_progress
 
     class RendererController(QObject):
         sceneChanged = Signal()
@@ -46,6 +47,7 @@ def make_controller(scene, atlas_url=None, *, character_pack=None,
                     and character_variant not in self._character.variants):
                 raise ValueError("Unknown character outfit: " + character_variant)
             self._outfits = {}
+            self._progress_outfits = {}
             self._action_begins = {}
             self._clock = QElapsedTimer()
             self._clock.start()
@@ -74,7 +76,7 @@ def make_controller(scene, atlas_url=None, *, character_pack=None,
                 for field in ("spriteReady", "spriteUrl", "spriteRegion", "spritePivot"):
                     row.pop(field, None)
                 actor_id = row["id"]
-                outfit = self._outfits.get(actor_id, self._variant)
+                outfit = self.outfit_for(actor_id)
                 if outfit is None:
                     outfit = self._character.variants[0]
                 direction = row.get("direction", "south")
@@ -116,6 +118,33 @@ def make_controller(scene, atlas_url=None, *, character_pack=None,
                 self._items = rows
                 self.sceneChanged.emit()
 
+        def outfit_for(self, actor_id):
+            return self._outfits.get(
+                actor_id, self._progress_outfits.get(actor_id, self._variant))
+
+        def sync_progress(self, progress, equipment):
+            """Reconstruct costume from canonical equipment after load/equip.
+
+            Does not change GameSession, Content, inventory or save format.
+            Presentation-only temporary previews continue to take priority.
+            """
+            if self._character is None:
+                return False
+            hero_id = self._character.character_id
+            desired = outfit_from_progress(
+                progress, equipment, hero_id, self._character.variants)
+            if self._progress_outfits.get(hero_id) == desired:
+                return False
+            self._progress_outfits[hero_id] = desired
+            self.refresh()
+            return True
+
+        def clear_outfit_preview(self):
+            """Discard unsaved costume previews on new/load/restore."""
+            if self._outfits:
+                self._outfits.clear()
+                self.refresh()
+
         def set_outfit(self, actor_id, variant):
             """Change a visual preview, never an equipment rule or save field."""
             if (self._character is None or actor_id != self._character.character_id
@@ -155,6 +184,12 @@ def make_controller(scene, atlas_url=None, *, character_pack=None,
         @Property(str, constant=True)
         def characterId(self):
             return self._character.character_id if self._character else ""
+
+        @Property(str, notify=sceneChanged)
+        def characterCurrentOutfit(self):
+            if self._character is None:
+                return ""
+            return self.outfit_for(self._character.character_id) or self._character.variants[0]
 
         @Slot(float, float)
         def resizeViewport(self, width, height):
