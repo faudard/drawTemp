@@ -337,8 +337,8 @@ class GameSession:
         """Only canonical playable heroes, only outside tactical encounters."""
         require(self.mode == "campaign" and not self.tactical_story_pending,
                 "Finish the current encounter before changing equipment")
-        require(not self.progress.story_pending,
-                "Resolve the current dialogue before changing equipment")
+        require(not self.progress.story_pending and self.active_scene() is None,
+                "Finish dialogue/exploration before changing equipment")
         require(isinstance(uid, str) and bool(uid),
                 "Hero ID is required")
         roster = {unit.id for mission in self.content.missions.values()
