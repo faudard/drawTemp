@@ -114,6 +114,33 @@ class LayerWorkspaceTests(unittest.TestCase):
             with self.assertRaises(RuleError):
                 self.studio.layers.set_level(self.mid, value)
 
+    def test_external_sidecar_revision_is_not_overwritten(self):
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "jeanne.json"
+            self.studio.save_as(path)
+            opened = MapStudio.open(path)
+            opened.select_map(self.mid)
+            opened.layers.set_visible(self.mid, "Terrain", False)
+            original_content = path.read_bytes()
+            sidecar = view_sidecar_path(path)
+            outside_change = sidecar.read_bytes() + b" "
+            sidecar.write_bytes(outside_change)
+            with self.assertRaises(RuleError):
+                opened.save()
+            self.assertEqual(sidecar.read_bytes(), outside_change)
+            self.assertEqual(path.read_bytes(), original_content)
+
+    def test_save_as_rejects_existing_sidecar_without_writing_project(self):
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "new_project.json"
+            sidecar = view_sidecar_path(path)
+            sidecar.write_text("Existing sidecar", encoding="utf-8")
+            with self.assertRaises(RuleError):
+                self.studio.save_as(path)
+            self.assertFalse(path.exists())
+            self.assertFalse(path.with_suffix(".game.json").exists())
+            self.assertEqual(sidecar.read_text(encoding="utf-8"), "Existing sidecar")
+
     def test_undo_deleted_mission_repairs_selection(self):
         self.assertEqual(self.studio.mission_id, self.mid)
         self.studio.undo()  # Undo create
