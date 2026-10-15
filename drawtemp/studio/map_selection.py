@@ -130,6 +130,35 @@ class TransformPreview:
     plan: object
 
 
+def _spatial_trigger_cells(rows):
+    """Conservatively protect explicit event coordinate fields.
+
+    IDs, condition references and relative animation offsets are not
+    interpreted as map locations. This avoids silent event desynchronisation.
+    """
+    result = set()
+    def scan(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in ("pos", "cell", "position", "target_cell", "anchor"):
+                    if (isinstance(child, (tuple, list)) and len(child) == 2
+                            and all(type(v) is int for v in child)):
+                        result.add(tuple(child))
+                elif key in ("cells", "positions"):
+                    if isinstance(child, (list, tuple)):
+                        for point in child:
+                            if (isinstance(point, (tuple, list)) and len(point) == 2
+                                    and all(type(v) is int for v in point)):
+                                result.add(tuple(point))
+                elif isinstance(child, (dict, list, tuple)):
+                    scan(child)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                scan(item)
+    scan(rows)
+    return result
+
+
 def _reserved(mission):
     structures = set()
     for building in mission.get("structures", ()):
@@ -137,6 +166,7 @@ def _reserved(mission):
                                    door_slot=building.get("door_slot", 0))
         structures.update(structure_footprint(stamp, building["anchor"]))
     protected = set(structures)
+    protected.update(_spatial_trigger_cells(mission.get("triggers", ())))
     relic = mission.get("relic")
     if relic is not None:
         protected.add(tuple(relic))
