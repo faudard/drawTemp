@@ -271,6 +271,8 @@ le `PlayerSlotStore` R1.8 et les `slot_N.json` manuels inchangés.
   valide, même si un emplacement manuel est plus récent. **Restaurer
   auto (.bak)** est une action séparée : elle valide le secours et préserve
   `autosave.json.damaged` en cas de corruption du fichier principal.
+  **La restauration est refusée si l'autosauvegarde principale est encore
+  valide**, pour empêcher une régression involontaire de progression.
   Le mécanisme refuse d'effacer une sauvegarde `.damaged` préexistante.
 - Les erreurs d'écriture/validation de l'autosauvegarde sont **non destructives** :
   elles ne reviennent pas sur un coup valide en mémoire, conservent les
@@ -299,3 +301,9 @@ redémarrage, isolation des slots, rejet de source corrompue, restauration
 explicite et conservation des octets `.damaged`, fichiers de secours
 orphelins, absence d'écriture sur une prévisualisation, échec disque
 non destructif.
+
+Le test de panne injecte également un échec du remplacement atomique
+**après** l'écriture du secours : l'ancien primaire demeure intact, les
+temporaires sont nettoyés et la session progresse toujours en mémoire.
+Le bouton Qt de restauration n'est activé que pour un primaire absent ou
+invalide accompagné d'un secours vérifié.
