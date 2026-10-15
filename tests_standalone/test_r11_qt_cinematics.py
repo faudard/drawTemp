@@ -155,9 +155,37 @@ class R11QtSmokeTests(unittest.TestCase):
         editor = CinematicEditor(doc)
         self.assertEqual(editor.stage.bridge.frame, frame0)
         self.assertIsNotNone(editor.stage.view.rootObject())
-        editor.close()
+        # The sample is unsaved by design: approve the close guard explicitly.
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QMessageBox
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+            editor.close()
         stage.close()
         app.processEvents()
+
+    def test_studio_ui_actions_commit_to_shared_authoring_history(self):
+        from PySide6.QtWidgets import QApplication
+        from drawtemp.sdk.authoring import AuthoringSession
+        from drawtemp.sdk.reference import reference_project
+        from drawtemp.studio.qt_cinematic import CinematicEditor
+
+        app = QApplication.instance() or QApplication([])
+        session = AuthoringSession.new(*reference_project())
+        document = CinematicDocument.from_session(session)
+        editor = CinematicEditor(document)
+        try:
+            editor._jeanne()
+            self.assertEqual(session.snapshot().project["cinematics"][0]["id"],
+                             "jeanne_intro")
+            editor._undo()
+            self.assertFalse(session.snapshot().project["cinematics"])
+            editor._redo()
+            self.assertEqual(len(session.snapshot().project["cinematics"]), 1)
+            editor._undo()  # close without triggering an unsaved-work prompt
+            self.assertFalse(session.snapshot().dirty)
+        finally:
+            editor.close()
+            app.processEvents()
 
 
 if __name__ == "__main__":

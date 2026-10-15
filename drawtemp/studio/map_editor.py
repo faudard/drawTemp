@@ -45,10 +45,15 @@ class MapWindow(QMainWindow):
         self.stroke = []
         self.selected = None
         self.selection = []
+        self.pending_operation = None
+        self.pending_transform = None
+        self.preview_anchor = None
 
         toolbar = QToolBar("Carte", self)
         self.addToolBar(toolbar)
+        self.toolbar_actions = {}
         for name, func in (
+            ("Nouveau / Export", self.creator),
             ("Nouvelle carte", self.create_map),
             ("Dupliquer", self.duplicate_map),
             ("Renommer", self.rename_map),
@@ -62,10 +67,30 @@ class MapWindow(QMainWindow):
         ):
             action = toolbar.addAction(name)
             action.triggered.connect(func)
+            self.toolbar_actions[name] = action
+        self.toolbar_actions["Copier"].setShortcut("Ctrl+C")
+        self.toolbar_actions["Coller"].setShortcut("Ctrl+V")
+        transform_actions = (
+            ("Déplacer sélection", lambda: self.start_transform("move"), "Ctrl+M"),
+            ("Dupliquer sélection", lambda: self.start_transform("duplicate"), "Ctrl+D"),
+            ("Rotation ↻", lambda: self.start_transform("rotate_cw"), "Ctrl+R"),
+            ("Rotation ↺", lambda: self.start_transform("rotate_ccw"), "Ctrl+Shift+R"),
+            ("Miroir horizontal", lambda: self.start_transform("mirror_x"), "Ctrl+H"),
+            ("Miroir vertical", lambda: self.start_transform("mirror_y"), "Ctrl+J"),
+            ("Appliquer aperçu", self.apply_transform, "Return"),
+            ("Annuler aperçu", self.cancel_transform, "Escape"),
+        )
+        toolbar.addSeparator()
+        for label, handler, shortcut in transform_actions:
+            action = toolbar.addAction(label)
+            action.setShortcut(shortcut)
+            action.triggered.connect(handler)
+            self.toolbar_actions[label] = action
 
         self.tools = QComboBox()
         self.tools.addItems([
             "Pinceau", "Rectangle", "Ligne", "Remplissage", "Pipette", "Sélection",
+            "Lasso", "Placement sélection",
             "Gomme", "Objectif", "Mur", "Couvert", "Danger",
             "Hauteur +", "Hauteur -", "Maison", "Pont", "Tour",
         ])
@@ -77,6 +102,10 @@ class MapWindow(QMainWindow):
         self.material.addItems(list(SURFACE_PALETTE))
         toolbar.addWidget(QLabel(" Surface "))
         toolbar.addWidget(self.material)
+        self.additive_selection = QCheckBox("Ajouter à la sélection")
+        self.additive_selection.setObjectName("r5_selection_additive")
+        self.additive_selection.setToolTip("Conserver les cellules déjà sélectionnées, même disjointes")
+        toolbar.addWidget(self.additive_selection)
 
         # R3 controller is the only source of camera, hit-testing and render
         # delegates. Its scene is reconstructed from the validated R1 Content.
@@ -84,6 +113,7 @@ class MapWindow(QMainWindow):
                                         character_pack=character_pack,
                                         character_variant=character_variant)
         viewport = QQuickWidget(self)
+        self.renderer.attach_engine(viewport.engine())
         viewport.setResizeMode(QQuickWidget.SizeRootObjectToView)
         viewport.rootContext().setContextProperty("renderer", self.renderer)
         source = Path(__file__).resolve().parents[1] / "render" / "IsoViewport.qml"
@@ -97,6 +127,8 @@ class MapWindow(QMainWindow):
         root.strokeMoved.connect(self.extend_stroke)
         root.strokeFinished.connect(self.finish_stroke)
         root.strokeCancelled.connect(self.cancel_stroke)
+        root.editHover.connect(self._hover_transform)
+        root.editHoverLeft.connect(self._hover_left)
         self.viewport = viewport
         self.setCentralWidget(viewport)
 
@@ -134,8 +166,17 @@ class MapWindow(QMainWindow):
                                 "Molette : zoom • bouton droit : déplacement.\n"
                                 "Les changements sont validés avant application."))
         self._dock("Inspecteur", right, Qt.RightDockWidgetArea)
+        # Editor-only layers share the canonical mission, not the Player save.
+        from .map_layers_dock import MapLayersDock
+        self.layers_panel = MapLayersDock(self.studio.layers, self.refresh)
+        self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
         self.statusBar().showMessage("Viewport Qt Quick partagé R3 · édition R5")
         self.refresh_maps()
+
+    def creator(self):
+        # Import lazily: headless MapStudio and Player do not depend on Qt UI.
+        from .r15_creator import open_creator
+        open_creator(self)
 
     def _dock(self, title, widget, area):
         dock = QDockWidget(title, self)
@@ -164,7 +205,11 @@ class MapWindow(QMainWindow):
     def change_map(self, row):
         if row < 0:
             return
-        self._safe(lambda: self.studio.select_map(self.studio.map_ids()[row]))
+        def action():
+            self.studio.select_map(self.studio.map_ids()[row])
+            self.selection = []
+            self.cancel_transform()
+        self._safe(action)
 
     def _name_id(self, title, initial):
         name, ok = QInputDialog.getText(self, title, "Nom de la carte", text=initial)
@@ -202,12 +247,15 @@ class MapWindow(QMainWindow):
             self, "Ouvrir un contenu avec manifeste .game.json", "", "Content JSON (*.json)")
         if not path:
             return
-        if self.studio.authoring.snapshot().dirty:
+        if self.studio.authoring.snapshot().dirty or self.studio.layers.dirty:
             QMessageBox.information(self, "Carte modifiée",
                                     "Enregistrez avant d'ouvrir un autre projet.")
             return
         def open_document():
             self.studio = MapStudio.open(path)
+            self.layers_panel.set_workspace(self.studio.layers)
+            self.selection = []
+            self.cancel_transform()
             self.refresh_maps()
         self._safe(open_document)
 
@@ -226,10 +274,12 @@ class MapWindow(QMainWindow):
         self._safe(action)
 
     def undo(self):
+        self.cancel_transform()
         self._safe(self.studio.undo)
         self.refresh_maps()
 
     def redo(self):
+        self.cancel_transform()
         self._safe(self.studio.redo)
         self.refresh_maps()
 
@@ -246,13 +296,140 @@ class MapWindow(QMainWindow):
 
     def copy_selection(self):
         if not self.selection:
-            QMessageBox.information(self, "Copie", "Choisissez Sélection et tracez une zone.")
+            QMessageBox.information(self, "Copier", "Sélectionnez des cases au rectangle ou au lasso.")
             return
-        self._safe(lambda: self.studio.copy(self.selection))
+        result = self._safe(lambda: self.studio.copy_region(self.selection))
+        if result is not None:
+            self.statusBar().showMessage(
+                "Copie terrain + objectifs prête. Identités d'unités/objets non dupliquées.")
 
     def paste_selection(self):
-        if self.selected is not None:
-            self._safe(lambda: self.studio.paste(self.selected))
+        if self.studio.region_clipboard is None:
+            QMessageBox.information(self, "Coller", "Copiez une sélection avant le collage.")
+            return
+        self.start_transform("paste")
+
+    def _selection_origin(self):
+        if not self.selection:
+            raise RuleError("Sélectionnez une zone au rectangle ou au lasso")
+        return min(x for x, _ in self.selection), min(y for _, y in self.selection)
+
+    def _project_cells(self, cells, *, invalid=False):
+        from drawtemp.render.iso_scene import MATERIALS, COLORS
+        heights = {(tile["x"], tile["y"]): tile.get("height", 0)
+                   for tile in self.renderer.scene["tiles"]}
+        result = []
+        for x, y, surface in cells:
+            sx, sy = self.renderer.projection.project(
+                x, y, heights.get((x, y), 0))
+            tint = COLORS[MATERIALS.index(surface)] if surface in MATERIALS else "#87ad9b"
+            result.append({"x": x, "y": y, "sx": sx, "sy": sy,
+                           "tint": tint, "invalid": invalid})
+        return result
+
+    def _render_selection(self):
+        if not hasattr(self, "viewport"):
+            return
+        tiles = {(tile["x"], tile["y"]): tile for tile in self.renderer.scene["tiles"]}
+        cells = [(x, y, tiles.get((x, y), {}).get("surface", "grass"))
+                 for x, y in self.selection
+                 if 0 <= x < self.renderer.scene["width"]
+                 and 0 <= y < self.renderer.scene["height"]]
+        self.viewport.rootObject().setProperty(
+            "selectionCells", self._project_cells(cells))
+
+    def cancel_transform(self, *_):
+        self.pending_operation = None
+        self.pending_transform = None
+        self.preview_anchor = None
+        if hasattr(self, "viewport") and self.viewport.rootObject():
+            self.viewport.rootObject().setProperty("transformCells", [])
+
+    def start_transform(self, operation):
+        if operation != "paste" and not self.selection:
+            QMessageBox.information(self, "Sélection", "Choisissez d'abord une région.")
+            return
+        if operation == "paste" and self.studio.region_clipboard is None:
+            QMessageBox.information(self, "Coller", "Aucun presse-papiers de carte.")
+            return
+        self.pending_operation = operation
+        self.pending_transform = None
+        self.preview_anchor = None
+        self.tools.setCurrentText("Placement sélection")
+        if operation in ("rotate_cw", "rotate_ccw", "mirror_x", "mirror_y"):
+            self._preview_transform_at(self._selection_origin())
+        else:
+            self.viewport.rootObject().setProperty("transformCells", [])
+            self.statusBar().showMessage(
+                "Survolez la carte pour placer la transformation, puis Appliquer aperçu.")
+
+    def _hover_transform(self, x, y):
+        self.selected = (x, y)
+        if self.pending_operation:
+            if self.preview_anchor != (x, y):
+                self._preview_transform_at((x, y))
+
+    def _hover_left(self):
+        # Keep the last valid preview so a toolbar click can commit it.
+        pass
+
+    def _preview_transform_at(self, anchor):
+        if self.pending_operation is None:
+            return
+        operation = self.pending_operation
+        self.preview_anchor = anchor
+        try:
+            preview = self.studio.preview_region(
+                self.selection if operation != "paste" else (),
+                operation=operation, anchor=anchor)
+            self.pending_transform = preview
+            tinted = [(x, y, tile.get("surface", "grass"))
+                      for x, y, tile, _ in preview.preview_cells]
+            self.viewport.rootObject().setProperty(
+                "transformCells", self._project_cells(tinted))
+            self.statusBar().showMessage(
+                f"{operation} : {len(tinted)} cases · aperçu validé · Appliquer pour confirmer")
+        except (AuthoringError, RuleError, ValueError) as exc:
+            self.pending_transform = None
+            self.statusBar().showMessage("Placement refusé : " + str(exc))
+            self._show_invalid_transform(anchor)
+
+    def _show_invalid_transform(self, anchor):
+        from sporebound.map_authoring import copy_terrain
+        from sporebound.map_transform import transform_terrain
+        try:
+            op = self.pending_operation
+            if op == "paste":
+                clip = self.studio.region_clipboard.clip
+            else:
+                clip = copy_terrain(self.studio.snapshot()["content"],
+                                    self.studio.mission_id, self.selection)
+            if op in ("rotate_cw", "rotate_ccw", "mirror_x", "mirror_y"):
+                clip = transform_terrain(clip, op)
+            stamped = [(anchor[0] + dx, anchor[1] + dy,
+                        tile.get("surface", "grass"))
+                       for (dx, dy), tile in zip(clip.offsets, clip.terrain)]
+            self.viewport.rootObject().setProperty(
+                "transformCells", self._project_cells(stamped, invalid=True))
+        except (RuleError, ValueError, AttributeError):
+            self.viewport.rootObject().setProperty("transformCells", [])
+
+    def apply_transform(self, *_):
+        if self.pending_transform is None:
+            QMessageBox.information(
+                self, "Placement", "Choisissez une destination valide (aperçu non rouge).")
+            return
+        preview = self.pending_transform
+        def action():
+            result = self.studio.commit_region(preview)
+            self.selection = list(preview.target_cells)
+            return result
+        result = self._safe(action)
+        if result is not None:
+            self.cancel_transform()
+            self._render_selection()
+            self.statusBar().showMessage(
+                "Transformation validée en une transaction. Ctrl+Z pour annuler.")
 
     def change_objective(self):
         self._safe(lambda: self.studio.set_objective(self.objective.currentText()))
@@ -293,10 +470,23 @@ class MapWindow(QMainWindow):
         tool = self._tool()
         first, last = cells[0], cells[-1]
         def apply():
-            if tool == "Sélection":
-                self.selection = list(self.studio.rectangle_cells(first, last))
+            if tool in ("Sélection", "Lasso"):
+                selected = (self.studio.select_lasso(
+                    cells, existing=self.selection,
+                    additive=self.additive_selection.isChecked())
+                    if tool == "Lasso" else self.studio.select_rectangle(
+                        first, last, existing=self.selection,
+                        additive=self.additive_selection.isChecked()))
+                self.selection = list(selected)
+                self.cancel_transform()
+                self._render_selection()
                 self.statusBar().showMessage(
-                    "{} cases sélectionnées — Copier puis Coller".format(len(self.selection)))
+                    "{} cases sélectionnées — Copier, déplacer, dupliquer, pivoter ou miroir"
+                    .format(len(self.selection)))
+                return None
+            if tool == "Placement sélection":
+                if self.pending_operation is not None:
+                    self._preview_transform_at(last)
                 return None
             if tool in ("Maison", "Pont", "Tour"):
                 return self.studio.structure(tool, last)
@@ -317,14 +507,19 @@ class MapWindow(QMainWindow):
         self._safe(apply)
 
     def refresh(self, *_):
+        self.layers_panel.set_mission(self.studio.mission_id)
         mission = self.studio.mission()
         board = mission["board"]
         self.renderer.replace_scene(self._render_scene())
         root = self.viewport.rootObject()
+        self._render_selection()
         root.setProperty("showGrid", self.show_grid.isChecked())
         root.setProperty("showBlocked", self.show_blocked.isChecked())
         root.setProperty("showHeights", self.show_height.isChecked())
         root.setProperty("showActors", self.show_actors.isChecked())
+        view = self.studio.layers.view(self.studio.mission_id)
+        root.setProperty("layerVisibility", view["visible"])
+        root.setProperty("layerOpacity", view["opacity"])
         current = self.studio.snapshot()
         warnings = self.studio.diagnostics()
         self.diagnostics.setPlainText(
@@ -337,9 +532,10 @@ class MapWindow(QMainWindow):
             self.objective.setCurrentIndex(index)
 
     def closeEvent(self, event):
-        if self.studio.authoring.snapshot().dirty:
+        if self.studio.authoring.snapshot().dirty or self.studio.layers.dirty:
             response = QMessageBox.question(self, "Quitter",
-                "Des modifications ne sont pas enregistrées. Quitter sans enregistrer ?",
+                "La carte ou ses réglages de calques ne sont pas enregistrés. "
+                "Quitter sans enregistrer ?",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if response != QMessageBox.Yes:
                 event.ignore()
