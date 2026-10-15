@@ -5,22 +5,35 @@ from pathlib import Path
 import sys
 
 from drawtemp.core import Content, GameProject
+from drawtemp.assets.runtime import PresentationAssets
 from drawtemp.player.controller import PlayerController
 from drawtemp.render.iso_scene import scene_from_mission, scene_from_exploration
 from drawtemp.render.qt_viewport import make_controller
 
 
-def build_controller(*, save_dir=None, reference=False):
+def build_controller(*, save_dir=None, reference=False, project_path=None, content_path=None):
+    if reference and (project_path is not None or content_path is not None):
+        raise ValueError("Reference mode cannot load a different project")
+    if (project_path is None) != (content_path is None):
+        raise ValueError("Provide both --project and --content for a custom game")
+    project_manifest = None
     if reference:
         from drawtemp.sdk.reference import reference_project
         content, project = reference_project()
+    elif project_path is not None:
+        project_manifest = Path(project_path).resolve()
+        content = Content.load(Path(content_path))
+        project = GameProject.load(project_manifest, content)
     else:
         resource = files("sporebound").joinpath("content")
         content = Content.load(resource.joinpath("jeanne.json"))
-        project = GameProject.load(resource.joinpath("jeanne.game.json"), content)
+        project_manifest = Path(str(resource.joinpath("jeanne.game.json"))).resolve()
+        project = GameProject.load(project_manifest, content)
     campaign = project.campaigns[0]["id"]
     directory = Path(save_dir) if save_dir else Path.home() / ".drawtemp" / "player5" / campaign
-    return PlayerController(content, project, campaign, directory)
+    controller = PlayerController(content, project, campaign, directory)
+    controller.asset_project_path = project_manifest
+    return controller
 
 
 def scene_for_player(controller):
@@ -47,6 +60,8 @@ def main(argv=None):
     parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration"),
                         default="title", help="Exercise a real game scene during Qt smoke")
     parser.add_argument("--save-dir", type=Path, help="Separate persistent save directory")
+    parser.add_argument("--content", type=Path, help="Canonical tactical content JSON")
+    parser.add_argument("--project", type=Path, help="Paired GameProject .game.json manifest")
     args = parser.parse_args(argv)
 
     try:
@@ -154,7 +169,8 @@ def main(argv=None):
             self.invoke(self.controller.finish_battle)
 
     app = QGuiApplication([sys.argv[0]])
-    controller = build_controller(save_dir=args.save_dir, reference=args.reference)
+    controller = build_controller(save_dir=args.save_dir, reference=args.reference,
+                                  project_path=args.project, content_path=args.content)
     if args.smoke and args.smoke_scene == "battle":
         if not args.reference:
             parser.error("--smoke-scene battle requires --reference")
@@ -168,7 +184,10 @@ def main(argv=None):
         controller.new_game()
         if controller.state()["screen"] != "exploration":
             parser.error("No exploration stage in the current campaign")
-    renderer = make_controller(scene_for_player(controller))
+    presentation = (PresentationAssets.for_project(
+        controller.project, controller.asset_project_path)
+        if controller.asset_project_path is not None else None)
+    renderer = make_controller(scene_for_player(controller), assets=presentation)
     bridge = PlayerBridge(controller, renderer)
     engine = QQmlApplicationEngine()
     engine.setInitialProperties({"smokeMode": args.smoke})
