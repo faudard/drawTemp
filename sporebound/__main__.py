@@ -369,5 +369,7 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
+    import sys
+    print('Deprecated: python -m sporebound is a compatibility alias; use python -m drawtemp.', file=sys.stderr)
     raise SystemExit(main())
 
