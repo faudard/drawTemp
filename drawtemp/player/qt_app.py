@@ -124,6 +124,15 @@ def create_bridge(controller, renderer):
                     snapshot = self.controller.session.snapshot()
                     self.renderer.sync_progress(snapshot.progress,
                                                 self.controller.content.equipment)
+                    if snapshot.battle is not None:
+                        active = snapshot.battle["active"]
+                        floors = snapshot.battle.get("unit_levels", {})
+                        level = int(floors.get(active, 0)) if active else 0
+                        # An upstairs player must see the authored floor rather
+                        # than an opaque roof after move, save/load or enemy CT.
+                        self.renderer.setConstructionView(level, level > 0)
+                    else:
+                        self.renderer.setConstructionView(0, False)
                     self.renderer.selectCell(*self.controller.selected)
                 if visual is not None:
                     self.renderer.play_actor(*visual)
@@ -257,9 +266,21 @@ def create_bridge(controller, renderer):
         def interactObject(self, object_id):
             self.invoke(self.controller.interact_object, object_id)
 
+        @Slot(int, int, int)
+        def levelMove(self, level, x, y):
+            self.invoke(self.controller.level_move, level, (x, y))
+
+        @Slot(int, int, int)
+        def levelAttack(self, level, x, y):
+            self.invoke(self.controller.level_attack, level, (x, y))
+
         @Slot(str)
         def inspectSkill(self, skill):
             self.invoke(self.controller.inspect_skill, skill)
+
+        @Slot(str)
+        def toggleDoor(self, object_id):
+            self.invoke(self.controller.toggle_door, object_id)
 
         @Slot(str)
         def preview(self, kind):
@@ -289,7 +310,11 @@ def main(argv=None):
     parser.add_argument("--campaign", help="Campaign ID from the selected project")
     parser.add_argument("--character-pack", type=Path, help="Published R7 atlas export directory")
     parser.add_argument("--character-variant", help="Initial authored outfit ID")
+    parser.add_argument("--gui-journey", action="store_true",
+                        help="R14 Qt input journey: title, story, battle, F5, menu, reload")
     args = parser.parse_args(argv)
+    if args.gui_journey and (not args.reference or args.smoke or args.save_dir is None):
+        parser.error("--gui-journey requires --reference and an isolated --save-dir")
 
     # R15: a frozen Player must never run unverified or substitute game data.
     if getattr(sys, "frozen", False):
@@ -354,7 +379,63 @@ def main(argv=None):
     if not engine.rootObjects():
         print("R12 Player QML root failed to load", file=sys.stderr)
         return 1
-    if args.smoke:
+    if args.gui_journey:
+        # Drives production QML and the actual PlayerBridge. This intentionally
+        # runs in a separate QGuiApplication process from the Widgets Studio.
+        from PySide6.QtCore import QPoint, QPointF, Qt
+        from PySide6.QtTest import QTest
+
+        def journey():
+            try:
+                window = engine.rootObjects()[0]
+                window.requestActivate()
+                QTest.qWait(60)
+
+                def click(name):
+                    item = window.findChild(QObject, name)
+                    if item is None or not item.isVisible() or not item.isEnabled():
+                        raise AssertionError("Missing visible/enabled QML control: " + name)
+                    point = item.mapToScene(QPointF(item.width() / 2, item.height() / 2))
+                    QTest.mouseClick(window, Qt.LeftButton,
+                                     pos=QPoint(round(point.x()), round(point.y())))
+                    QTest.qWait(80)
+
+                def assert_screen(expected):
+                    actual = controller.state()["screen"]
+                    if actual != expected:
+                        raise AssertionError(f"Expected screen {expected}, got {actual}")
+
+                assert_screen("title")
+                click("r14NewGame")
+                assert_screen("dialogue")
+                click("r14Choice-enter")
+                assert_screen("campaign")
+                from drawtemp.sdk.reference import MISSION
+                click("r14Mission-" + MISSION)
+                if controller.state()["screen"] not in ("battle", "result"):
+                    raise AssertionError("Reference battle did not start")
+                before = controller.state()
+                QTest.keyClick(window, Qt.Key_F5)
+                QTest.qWait(100)
+                if 1 not in controller.slots():
+                    raise AssertionError("F5 did not save slot 1 through the QML Shortcut")
+                click("r14PauseMenu")
+                click("r14TitleFromPause")
+                assert_screen("title")
+                click("r14Continue")
+                after = controller.state()
+                if after["screen"] != before["screen"] or after["battle"] != before["battle"]:
+                    raise AssertionError("GUI save/reload changed the canonical battle state")
+                print("R14 Player QML GUI input: title -> dialogue -> campaign -> "
+                      "battle -> F5 -> pause/title -> reload OK", flush=True)
+                app.exit(0)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                app.exit(1)
+
+        QTimer.singleShot(300, journey)
+    elif args.smoke:
         QTimer.singleShot(125, app.quit)
     return app.exec()
 

@@ -13,6 +13,7 @@ from drawtemp.core import Content, RuleError
 from drawtemp.render.iso_scene import scene_from_mission
 from drawtemp.render.qt_viewport import make_controller
 from drawtemp.sdk.authoring import AuthoringError
+from drawtemp.sdk.construction import ConstructionWorkspace
 from .map_authoring import MapStudio, SURFACE_PALETTE
 
 try:
@@ -95,6 +96,10 @@ class MapWindow(QMainWindow):
             "Hauteur +", "Hauteur -", "Maison", "Pont", "Tour",
         ])
         toolbar.addSeparator()
+        self.mode = QComboBox()
+        self.mode.addItems(["Édition carte", "Construction 2.5D"])
+        toolbar.addWidget(QLabel(" Espace "))
+        toolbar.addWidget(self.mode)
         toolbar.addWidget(QLabel(" Outil "))
         toolbar.addWidget(self.tools)
 
@@ -129,6 +134,7 @@ class MapWindow(QMainWindow):
         root.strokeCancelled.connect(self.cancel_stroke)
         root.editHover.connect(self._hover_transform)
         root.editHoverLeft.connect(self._hover_left)
+        root.buildingPicked.connect(self._on_building_pick)
         self.viewport = viewport
         self.setCentralWidget(viewport)
 
@@ -170,6 +176,18 @@ class MapWindow(QMainWindow):
         from .map_layers_dock import MapLayersDock
         self.layers_panel = MapLayersDock(self.studio.layers, self.refresh)
         self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
+
+        from .construction_dock import ConstructionDock
+        # R6 runs on the EXACT MapStudio authoring session and viewport.
+        # Its dock is contextual, not a second map editor or renderer.
+        self.construction = ConstructionDock(
+            ConstructionWorkspace(self.studio.authoring, self.studio.mission_id), self)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.construction)
+        self.construction.hide()
+        self.mode.currentIndexChanged.connect(self._construction_mode)
+        self.construction.committed.connect(lambda _change: self.refresh())
+        self.construction.level_changed.connect(self._construction_view)
+        self.construction.cutaway_changed.connect(self._construction_view)
         self.statusBar().showMessage("Viewport Qt Quick partagé R3 · édition R5")
         self.refresh_maps()
 
@@ -177,6 +195,37 @@ class MapWindow(QMainWindow):
         # Import lazily: headless MapStudio and Player do not depend on Qt UI.
         from .r15_creator import open_creator
         open_creator(self)
+
+    def _construction_mode(self, *_):
+        active = self.mode.currentIndex() == 1
+        root = self.viewport.rootObject()
+        root.setProperty("interactionMode", "construction" if active else "edit")
+        self.construction.setVisible(active)
+        self.tools.setEnabled(not active)
+        self.material.setEnabled(not active)
+        self._construction_view()
+        self.statusBar().showMessage(
+            "R6 : sélectionner directement toiture, murs, fenêtres, porte et étages"
+            if active else "R5 : édition de carte et terrain")
+
+    def _construction_view(self, *_):
+        active = self.mode.currentIndex() == 1
+        workspace = self.construction.workspace
+        self.renderer.setConstructionView(
+            workspace.active_level if active else 0,
+            workspace.cutaway if active else False)
+
+    def _on_building_pick(self, hit):
+        if self.mode.currentIndex() != 1:
+            return
+        # QML var may arrive as a Python dict or an opaque QJSValue.
+        if hasattr(hit, "toVariant"):
+            hit = hit.toVariant()
+        hit = hit if isinstance(hit, dict) else {}
+        self.construction.on_renderer_hit(
+            hit.get("structure_id"), hit.get("anchor", ()),
+            hit.get("cell", ()), hit.get("part", "building"), hit.get("level", 0))
+        self._construction_view()
 
     def _dock(self, title, widget, area):
         dock = QDockWidget(title, self)
@@ -508,9 +557,24 @@ class MapWindow(QMainWindow):
 
     def refresh(self, *_):
         self.layers_panel.set_mission(self.studio.mission_id)
+        if hasattr(self, "construction"):
+            workspace = self.construction.workspace
+            if (workspace.authoring is not self.studio.authoring or
+                    workspace.mission_id != self.studio.mission_id):
+                # Opening/selecting a different map invalidates *all* prior
+                # selections; a house ID may occur on multiple missions.
+                self.construction.workspace = ConstructionWorkspace(
+                    self.studio.authoring, self.studio.mission_id)
+                workspace = self.construction.workspace
+            elif (workspace.pick is not None and
+                  workspace._selection_revision != self.studio.authoring.revision):
+                workspace.clear_selection()
+            self.construction.refresh()
         mission = self.studio.mission()
         board = mission["board"]
         self.renderer.replace_scene(self._render_scene())
+        if hasattr(self, "construction"):
+            self._construction_view()
         root = self.viewport.rootObject()
         self._render_selection()
         root.setProperty("showGrid", self.show_grid.isChecked())

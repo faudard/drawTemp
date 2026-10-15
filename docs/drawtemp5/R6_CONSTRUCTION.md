@@ -93,3 +93,97 @@ actual dock controls under an offscreen platform.
 create a two-level house, cut away the roof, navigate between actual gameplay
 floors, and reload the same appearance and collision state. No green headless
 test alone should be taken as visual certification.
+
+## R6.2 — construction in the shared R3/R5 viewport (follow-up)
+
+The initial R6 PR delivered a dock and an abstract hit contract. This
+follow-up **renders the real authored buildings** in the Qt Quick scenegraph,
+then selects from the exact same projected polygons.
+
+- `scene_from_mission` carries detached `structures` and `interior_floors`
+  from canonical `Content`. Studio and Player call this same adapter.
+- `building_geometry.building_surfaces` produces individually hit-testable
+  south/east facade segments, roof polygon, window/door apertures and selected
+  authored interior level tiles; each stores stable structure ID, anchor,
+  world cell and (for deck cells) level. Invisible back faces are not pickable.
+- The Qt Quick Shape renderer uses those polygon vertices directly.
+  `RendererController.buildingAt` tests **only the currently visible rows**
+  in reverse scenegraph painter order, using the same camera as tiles/actors.
+- The R5 map window adds a contextual **Construction 2.5D** workspace and
+  hooks its actual shared renderer's clicks into `ConstructionDock`. Switching
+  maps/projects clears stale building identity and keeps one R1 undo history.
+  Switching back restores map-painting controls. There is no competing renderer.
+- A cutaway hides the visual roof and reveals only authored floor tiles.
+  Clicking a floor picks its real level and cell; an un-authored deck or a
+  stale selection is rejected by the SDK.
+
+### Verification and limitations
+
+```bash
+python -m unittest tests_standalone.test_drawtemp5_r6_geometry -v
+QT_QPA_PLATFORM=offscreen python -m unittest \
+  tests_standalone.test_drawtemp5_r6_geometry_qt -v
+```
+
+These tests check real roof/door/window polygon hits, camera pan and zoom,
+cutaway and floor identity, invalid floor picks, canonical save/load parity
+and Qt dock-to-map integration. Geometry uses stylized vector faces until R4
+asset/atlas mapping is ready; it does not yet provide modular roof segments
+or customized footprints. **Upper floors remain decorative, not tactical
+traversal/LOS**, so **the complete R6.10 / overall R6 product gate remains
+open**. A later dedicated lot must add tested multilevel core semantics
+without inventing a second combat state.
+
+## R6.10 — tactical building gameplay (stacked on R6.2)
+
+This tranche connects the existing *validated* multilevel Battle rules to
+the construction tools and the standalone Qt Player; it does not invent
+separate gameplay physics or a second persistence format.
+
+**Contract and gameplay behavior**
+- `ConstructionWorkspace.preview_staircase(world_cell, from_level=N)`
+  creates a same-cell, adjacent-floor `level_links` connector via canonical
+  authoring. Both endpoints must be walkable and inside the selected building.
+  Missing decks, walls, duplicate connectors and invalid costs are rejected
+  atomically. The Qt construction dock exposes the landing coordinates and
+  floor pair; each edit is one Undo/Redo transaction.
+- `preview_gameplay_door()` creates a normal `kind: door` mission object at
+  the template's unique entrance, which the Battle already knows how to
+  represent as a dynamic blocked/unblocked ground tile. Authoring refuses
+  occupied entrances and duplicate objects; visual windows remain cosmetic.
+- `door_toggle` is a new replayed Battle command for opening/closing an
+  *unlocked* adjacent, ground-floor door. The acting player spends an action.
+  Closing on any living ground-floor occupant is rejected. Replay checksum
+  and GameSession persistence use the existing battle objects/board.
+- `level_move` continues to use the existing authored stair links and
+  Dijkstra path budget, so locked/closed door tiles block both ground walking
+  and access to upstairs stairs until opened.
+- Above ground, only **authored deck cells** are walkable. Crates and pillars
+  block movement, and gaps/solid props block same-floor supercover LOS;
+  the ground LOS still uses the original tactical board and remains
+  byte-for-byte compatible for legacy missions.
+- Upper-floor basic ranged/focus attacks may use this validated LOS, while
+  normal melee remains range 1. Cross-floor shooting still requires the
+  conservative authored aperture rule `level_attack`: a solid ceiling
+  prevents projectile fire. Defensive reactions/engagement use each actor's
+  actual floor, without interception or overwatch through decks.
+- `PlayerController.level_move / level_attack / toggle_door`, Qt bridge
+  and QML controls make these commands available without hand-writing JSON.
+  The Player shows authored links and current unit floors. Studio/Player
+  share the same Content and Battle state; no extra runtime save schema.
+
+**Qualification**
+```bash
+python -m unittest tests_standalone.test_drawtemp5_r6_10 \
+  tests_standalone.test_vertical_combat_3720c2 -v
+QT_QPA_PLATFORM=offscreen python -m unittest \
+  tests_standalone.test_drawtemp5_r6_10_qt -v
+```
+
+Acceptance covers a locked entrance, opening it before using stairs to N1,
+rejected closing on occupied ground, no LOS through deck holes or pillars,
+two-level authorship, history, Battle.replay equality and Player save/load.
+This remains a constrained floor graph rather than freeform room walls,
+simulation of siege gates on multiple elevations or physically modeled
+vertical beams. Those are still future R6.4/R6.8/R6.11 and R14 certification
+work; a green headless check alone does **not** complete the full R6 gate.

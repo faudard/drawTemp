@@ -247,7 +247,10 @@ class Battle:
         from .vertical_combat import shot_forecast
         return shot_forecast(self, unit or self.active, target_level, cell)
 
-    def line_of_sight(self, start: Cell, end: Cell) -> bool:
+    def line_of_sight(self, start: Cell, end: Cell, *, level: int = 0) -> bool:
+        if level:
+            from .level_navigation import floor_line_of_sight
+            return floor_line_of_sight(self.mission, level, start, end)
         return movement.line_of_sight(self, start, end)
 
     def engagement_range(self, u: Unit) -> int:
@@ -288,11 +291,15 @@ class Battle:
         require(self.board.contains(cell), "Target outside board")
         require(s.min_range <= min(distance(origin, cell) for origin in u.occupied_cells()) <= s.range, "Target outside range")
         level = self.unit_levels.get(u.id, 0)
-        # Initial multilevel combat gate: adjacent attacks on a single deck.
-        # Ground-floor legacy LOS remains authoritative and unchanged.
-        require(level == 0 or (s.id == 'attack' and distance(u.pos, cell) == 1),
-                'Upper decks currently support adjacent basic attacks only')
-        require(not s.los or level > 0 or self.line_of_sight(u.pos, cell),
+        # Upper floors keep their own walkability/LOS, not the ground board
+        # below. No floor-to-floor attack is implied here; use level_attack
+        # for a validated shot through an authored shaft.
+        require(level == 0 or s.id == 'attack',
+                'Upper decks currently allow basic attacks only')
+        require(level == 0 or distance(u.pos, cell) == 1
+                or u.weapon in {'ranged', 'focus'},
+                'Upper-floor long-range attacks require a ranged weapon')
+        require(not s.los or self.line_of_sight(u.pos, cell, level=level),
                 "Line of sight blocked")
         target = self.at(cell, alive=s.target != "downed",
                          level=self.unit_levels.get(u.id, 0))
@@ -652,7 +659,12 @@ class Battle:
             require(command.get("unit", u.id) == u.id, "Not this unit's turn")
             kind = command.get('kind')
             level = self.unit_levels.get(u.id, 0)
-            if kind == 'level_move':
+            if kind == 'door_toggle':
+                require(set(command) == {'kind', 'object'},
+                        'Door toggle expects an object ID')
+                from .building_gameplay import toggle_door
+                toggle_door(self, u, command['object'])
+            elif kind == 'level_move':
                 require(bool(self.mission.level_links),
                         'No authored vertical connectors in this mission')
                 from .level_navigation import navigate_level
@@ -667,7 +679,7 @@ class Battle:
                             'Upper-floor actions require the layered combat rules')
                     if kind == 'act':
                         require(command.get('skill') == 'attack',
-                                'Upper decks currently allow basic melee attacks only')
+                                'Upper decks currently allow basic attacks only')
                 self.rules.commands.get(kind).execute(self, u, command)
             self.commands.append(deepcopy(command))
             # Interaction events are observable immediately by the Player.

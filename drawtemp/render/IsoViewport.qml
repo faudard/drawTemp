@@ -10,7 +10,7 @@ Item {
     width: 960
     height: 640
     clip: true
-    property string interactionMode: "pan"  // pan | edit | select
+    property string interactionMode: "pan"  // pan | edit | select | construction
     property bool showGrid: true
     property bool showBlocked: false
     property bool showHeights: false
@@ -47,6 +47,7 @@ Item {
     signal strokeFinished(int x, int y)
     signal strokeCancelled()
     signal cellSelected(int x, int y)
+    signal buildingPicked(var hit)
 
     Rectangle {
         anchors.fill: parent
@@ -392,13 +393,15 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 radius: 5
-                color: entry.label === "door" ? "#866445" :
+                color: entry.label === "door" ?
+                           (entry.open ? "#4e8f76" : "#866445") :
                        entry.label === "marker" ? "#d5a35f" : "#6b807c"
                 border.color: "#d0bd92"; border.width: 2
             }
             Text {
                 anchors.centerIn: parent
-                text: entry.label === "door" ? "P" :
+                text: entry.label === "door" ?
+                      (entry.open ? "✓" : "P") :
                       entry.label === "switch" ? "L" :
                       entry.label === "marker" ? "!" : "•"
                 color: "#faf0de"; font.bold: true
@@ -519,7 +522,8 @@ Item {
                 else root.editHoverLeft()
             }
             var panning = (mouse.buttons & Qt.RightButton) ||
-                          (root.interactionMode !== "edit" && (mouse.buttons & Qt.LeftButton))
+                          ((root.interactionMode === "pan" || root.interactionMode === "select") &&
+                           (mouse.buttons & Qt.LeftButton))
             if (panning) {
                 renderer.panBy(mouse.x - lastX, mouse.y - lastY)
             } else if (editing && (mouse.buttons & Qt.LeftButton) && valid(cell) &&
@@ -538,7 +542,9 @@ Item {
             } else if (mouse.button === Qt.LeftButton &&
                        Math.abs(mouse.x - downX) + Math.abs(mouse.y - downY) < 6) {
                 var picked = renderer.cellAt(mouse.x, mouse.y)
-                if (valid(picked) && root.interactionMode === "select")
+                if (root.interactionMode === "construction")
+                    root.buildingPicked(renderer.buildingAt(mouse.x, mouse.y))
+                else if (valid(picked) && root.interactionMode === "select")
                     root.cellSelected(picked.x, picked.y)
                 else if (root.interactionMode === "pan")
                     renderer.pickAt(mouse.x, mouse.y)

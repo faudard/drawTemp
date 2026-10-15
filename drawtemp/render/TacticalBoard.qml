@@ -58,7 +58,13 @@ IsoViewport {
         currentClip = animationPlan.clips[clipIndex]
         phase = 0
         playing = true
-        concealedActorIds = []  // the shared R3 actor delegate animates in place
+        // For a real hit pose also hide the idle frame, preventing double
+        // Jeanne on top of a genuine impact animation.
+        var artHit = currentClip.kind === "impact" &&
+                     !!renderer.animationFrame(currentClip.actor, "south", "hit", 0).imageUrl
+        concealedActorIds = (currentClip.kind === "move" ||
+                             currentClip.kind === "attack" || artHit) ?
+                             [currentClip.actor] : []
         tween.duration = currentClip.duration_ms
         tween.restart()
     }
@@ -110,8 +116,107 @@ IsoViewport {
     // No separate fake character: R3's Image/actor node follows the same
     // validated R12 animation clip while remaining at the correct feet depth.
 
+    // The exact R4 asset frames are resolved by the R3 renderer. Movement
+    // and attacks use their authored directional poses; missing bindings keep
+    // the original abstract silhouette, never guess another character's art.
+    function actionDirection() {
+        if (!currentClip.start || !currentClip.end) return "south"
+        var dx = currentClip.end[0] - currentClip.start[0]
+        var dy = currentClip.end[1] - currentClip.start[1]
+        if (Math.abs(dx) > Math.abs(dy)) return dx >= 0 ? "east" : "west"
+        if (Math.abs(dy) > 0) return dy >= 0 ? "south" : "north"
+        return "south"
+    }
+    function actionPose() {
+        if (currentClip.kind === "move") return "move"
+        if (currentClip.kind === "attack" || currentClip.kind === "cast") return "attack"
+        if (currentClip.kind === "impact") return "hit"
+        return "idle"
+    }
+
+    Item {
+        id: motionGhost
+        objectName: "r12-motion-ghost"
+        readonly property var sprite:
+            board.playing && board.currentClip.actor ?
+            renderer.animationFrame(board.currentClip.actor,
+                                    board.actionDirection(), board.actionPose(),
+                                    Math.floor(board.phase *
+                                               (board.currentClip.duration_ms || 250))) : ({})
+        readonly property bool hasArt: !!sprite.imageUrl
+        visible: board.playing &&
+                 (board.currentClip.kind === "move" ||
+                  board.currentClip.kind === "attack" ||
+                  (board.currentClip.kind === "impact" && hasArt))
+        readonly property var pos: board.scenePoint(board.clipCell())
+        readonly property real ratio: renderer.cameraState.zoom
+        x: pos[0] - (hasArt ? sprite.pivotX : 20) * ratio
+        y: pos[1] - (hasArt ? sprite.pivotY : 68) * ratio
+        width: (hasArt ? sprite.frameWidth : 40) * ratio
+        height: (hasArt ? sprite.frameHeight : 68) * ratio
+        z: (board.clipCell()[0] + board.clipCell()[1]) * 100 + 75
+        Image {
+            id: actionSprite
+            objectName: "r12-action-sprite"
+            anchors.fill: parent
+            visible: motionGhost.hasArt && status !== Image.Error
+            source: motionGhost.hasArt ? motionGhost.sprite.imageUrl : ""
+            sourceClipRect: motionGhost.hasArt ?
+               Qt.rect(motionGhost.sprite.atlasX, motionGhost.sprite.atlasY,
+                       motionGhost.sprite.frameWidth, motionGhost.sprite.frameHeight) :
+               Qt.rect(0, 0, 0, 0)
+            fillMode: Image.Stretch
+            smooth: false
+            asynchronous: false
+            cache: true
+        }
+        Rectangle {
+            visible: !motionGhost.hasArt || actionSprite.status === Image.Error
+            x: 3 * motionGhost.ratio
+            y: 57 * motionGhost.ratio
+            width: 34 * motionGhost.ratio
+            height: 9 * motionGhost.ratio
+            radius: 5 * motionGhost.ratio
+            color: "#10191c"
+            opacity: 0.45
+        }
+        Rectangle {
+            visible: !motionGhost.hasArt || actionSprite.status === Image.Error
+            x: 6 * motionGhost.ratio
+            y: 19 * motionGhost.ratio
+            width: 28 * motionGhost.ratio
+            height: 38 * motionGhost.ratio
+            radius: 9 * motionGhost.ratio
+            color: board.currentClip.team === "enemy" ? "#af6556" : "#496cbb"
+            border.width: 2 * motionGhost.ratio
+            border.color: "#e2d7c4"
+        }
+        Rectangle {
+            visible: !motionGhost.hasArt || actionSprite.status === Image.Error
+            x: 10 * motionGhost.ratio
+            y: 5 * motionGhost.ratio
+            width: 19 * motionGhost.ratio
+            height: 19 * motionGhost.ratio
+            radius: 10 * motionGhost.ratio
+            color: "#eacaa1"
+            border.color: "#62504b"
+        }
+        Rectangle {
+            visible: (!motionGhost.hasArt || actionSprite.status === Image.Error) &&
+                     board.currentClip.kind === "attack"
+            x: 28 * motionGhost.ratio
+            y: 20 * motionGhost.ratio
+            width: 23 * motionGhost.ratio
+            height: 4 * motionGhost.ratio
+            color: "#efddb7"
+            rotation: -25
+            opacity: 0.6 + 0.4 * Math.sin(Math.PI * board.phase)
+        }
+    }
+
     Item {
         id: impactVisual
+        objectName: "r12-impact-effect"
         visible: board.playing && ["impact", "heal", "miss", "cast",
                                     "interrupt"].indexOf(board.currentClip.kind) >= 0
         readonly property var position: board.scenePoint(board.currentClip.start || [0, 0])

@@ -6,6 +6,7 @@ Example:
   python scripts/certify_drawtemp5_r14.py --aggregate build/r14-matrix --report build/release.json --require-complete
 """
 import argparse
+from importlib.metadata import PackageNotFoundError, version
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ import sys
 from drawtemp.quality.r14 import (
     ALL_CHECKS, evidence_report, validate_gpu_profile, verify_report, write_report,
 )
+from drawtemp.quality.r14_matrix import inspect_matrix
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,7 +44,8 @@ def produce(args):
     probes = {
         "r14_contracts": run_probe(
             "r14-contracts", [py, "-m", "unittest",
-                              "tests_standalone.test_drawtemp5_r14", "-v"], destination),
+                              "tests_standalone.test_drawtemp5_r14",
+                              "tests_standalone.test_drawtemp5_r14_matrix", "-v"], destination),
         "core": run_probe(
             "core", [py, "-m", "unittest",
                      "tests_standalone.test_drawtemp5_r0",
@@ -71,7 +74,8 @@ def produce(args):
     if args.faults:
         probes["faults"] = run_probe(
             "faults", [py, "-m", "unittest",
-                       "tests_standalone.test_persistence_fault_r817", "-v"],
+                       "tests_standalone.test_persistence_fault_r817",
+                       "tests_standalone.test_drawtemp5_r14_recovery", "-v"],
             destination, timeout=600)
     checks = {}
     mapping = {"r14_contracts": "R14.10", "core": "R14.2", "qt": "R14.3",
@@ -112,6 +116,10 @@ def produce(args):
     checks["R14.11"] = {"status": "blocked", "detail": "Accessibility review/assistive technology evidence pending"}
     checks["R14.12"] = {"status": "blocked", "detail": "Release gate needs all P0 evidence and GPU hardware"}
     report = evidence_report(checks, revision=os.environ.get("GITHUB_SHA", "local"))
+    try:
+        report["environment"]["qt"] = version("PySide6")
+    except PackageNotFoundError:
+        report["environment"]["qt"] = "unavailable"
     report["probes"] = probes
     if gpu_summary:
         report["gpu"] = gpu_summary
@@ -121,26 +129,27 @@ def produce(args):
 
 
 def aggregate(args):
+    """Certify the CI matrix only with inspectable, same-revision runner logs."""
     files = sorted(args.aggregate.glob("**/r14-report.json"))
-    reports = []
+    sources, decode_problems = [], []
     for path in files:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        verify_report(data)
-        reports.append(data)
-    by_os = {r["environment"]["runner"]: r for r in reports}
-    required = {"Linux", "Windows", "macOS"}
-    missing = sorted(required - set(by_os))
-    checks = {}
-    required_probes = {"r14_contracts", "core", "qt", "gui", "visual", "soak", "faults"}
-    matrix_success = not missing and all(
-        r["environment"]["python"].startswith("3.12.") and
-        all(r.get("probes", {}).get(probe, {}).get("status") == "pass"
-            for probe in required_probes)
-        for r in (by_os[name] for name in required))
-    checks["R14.1"] = {
-        "status": "pass" if matrix_success else "fail",
-        "detail": "Python 3.12, PySide6 6.8.3; three-host matrix"
-                  if matrix_success else "Missing/failed CI runner: " + ", ".join(missing)}
+        try:
+            sources.append((path, json.loads(path.read_text(encoding="utf-8"))))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            decode_problems.append(f"{path}: unreadable JSON: {exc}")
+    by_os, problems = inspect_matrix(
+        sources, expected_revision=os.environ.get("GITHUB_SHA"))
+    problems = decode_problems + problems
+    reports = list(by_os.values())
+    matrix_success = not problems
+    checks = {
+        "R14.1": {
+            "status": "pass" if matrix_success else "fail",
+            "detail": ("All three OS reports verified against the same SHA, "
+                       "Python 3.12 / PySide6 6.8.3, probes and nonempty logs"
+                       if matrix_success else "; ".join(problems)[:3000]),
+        }
+    }
     for key in ALL_CHECKS:
         if key == "R14.1":
             continue
@@ -148,15 +157,23 @@ def aggregate(args):
         checks[key] = {
             "status": ("fail" if "fail" in statuses else
                        "partial" if "partial" in statuses else "blocked"),
-            "detail": "Aggregated from " + str(len(reports)) + " per-platform reports",
+            "detail": "Aggregated from " + str(len(reports)) + " validated per-platform reports",
         }
-    # Do not infer release certification from availability of matrix artifacts.
-    checks["R14.12"] = {"status": "blocked", "detail": "Hardware, E2E, visual and release reviews outstanding"}
+    checks["R14.12"] = {
+        "status": "blocked",
+        "detail": "Hardware GPU, release-grade E2E/visual, endurance and accessibility reviews pending",
+    }
     report = evidence_report(checks, revision=os.environ.get("GITHUB_SHA", "local"))
-    report["matrix"] = {"required": sorted(required), "found": sorted(by_os), "sources": len(files)}
+    report["matrix"] = {
+        "required": ["Linux", "macOS", "Windows"],
+        "found": sorted(by_os),
+        "sources": len(files),
+        "problems": problems,
+        "revisions": sorted(set(r["revision"] for r in reports)),
+    }
     write_report(args.report, report)
-    return 1 if not matrix_success or any(r["checks"][key]["status"] == "fail"
-                                          for r in reports for key in ALL_CHECKS) else 0
+    return 1 if not matrix_success or any(
+        item["status"] == "fail" for item in checks.values()) else 0
 
 
 def main(argv=None):

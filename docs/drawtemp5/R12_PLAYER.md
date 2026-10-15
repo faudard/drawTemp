@@ -307,3 +307,7 @@ Le test de panne injecte également un échec du remplacement atomique
 temporaires sont nettoyés et la session progresse toujours en mémoire.
 Le bouton Qt de restauration n'est activé que pour un primaire absent ou
 invalide accompagné d'un secours vérifié.
+
+### R12.7 — Certification artistique et visuelle
+
+Voir [R12_7_VISUAL_QA.md](R12_7_VISUAL_QA.md) pour les assets Jeanne 4 directions, captures Qt réelles et checklist d'approbation artistique/GPU.

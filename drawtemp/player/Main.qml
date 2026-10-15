@@ -198,6 +198,7 @@ ApplicationWindow {
                 onClicked: optionsPopup.open()
             }
             Button {
+                objectName: "r14PauseMenu"
                 text: "Menu  Esc"
                 enabled: root.playerData.screen !== "title"
                 onClicked: pausePopup.open()
@@ -237,6 +238,7 @@ ApplicationWindow {
             }
             Item { Layout.preferredHeight: 38 }
             Button {
+                objectName: "r14NewGame"
                 text: "Nouvelle partie"
                 Layout.preferredWidth: 290
                 Layout.preferredHeight: 46
@@ -244,6 +246,7 @@ ApplicationWindow {
                 onClicked: player.newGame()
             }
             Button {
+                objectName: "r14Continue"
                 text: "Continuer"
                 Layout.preferredWidth: 290
                 Layout.alignment: Qt.AlignHCenter
@@ -370,6 +373,7 @@ ApplicationWindow {
                     model: root.playerData.choices || []
                     Button {
                         Layout.fillWidth: true
+                        objectName: "r14Choice-" + modelData.id
                         text: modelData.label || modelData.id
                         onClicked: player.choose(modelData.id)
                     }
@@ -406,6 +410,7 @@ ApplicationWindow {
             Repeater {
                 model: root.playerData.missions
                 Button {
+                    objectName: "r14Mission-" + modelData
                     text: "Commencer · " + modelData
                     Layout.alignment: Qt.AlignHCenter
                     Layout.preferredWidth: 380
@@ -754,7 +759,9 @@ ApplicationWindow {
                             Button {
                                 Layout.fillWidth: true
                                 text: modelData.kind + " · " + modelData.id
-                                onClicked: player.interactObject(modelData.id)
+                                onClicked: modelData.kind === "door" ?
+                                           player.toggleDoor(modelData.id) :
+                                           player.interactObject(modelData.id)
                             }
                         }
                         Repeater {
@@ -820,6 +827,43 @@ ApplicationWindow {
         }
 
         RowLayout {
+            visible: root.playerData.screen === "battle" &&
+                     ((root.playerData.battle.level_links || []).length > 0)
+            Layout.fillWidth: true
+            spacing: 8
+            Label { text: "Étage cible"; color: root.ivory }
+            ComboBox {
+                id: targetFloor
+                model: ["Sol", "Étage 1", "Étage 2", "Étage 3"]
+                Layout.preferredWidth: 130
+            }
+            Label {
+                text: "Case " + root.playerData.selected[0] + "," +
+                      root.playerData.selected[1]
+                color: root.muted
+            }
+            Button {
+                text: "Escaliers"
+                onClicked: player.levelMove(targetFloor.currentIndex,
+                                            root.playerData.selected[0],
+                                            root.playerData.selected[1])
+            }
+            Button {
+                text: "Tir vertical"
+                onClicked: player.levelAttack(targetFloor.currentIndex,
+                                              root.playerData.selected[0],
+                                              root.playerData.selected[1])
+            }
+            Label {
+                text: "Niveau de l'unité : " + (
+                    (root.playerData.battle.unit_levels || {})[
+                        root.playerData.battle.active] || 0)
+                color: root.muted
+            }
+            Item { Layout.fillWidth: true }
+        }
+
+        RowLayout {
             visible: root.playerData.screen === "result"
             Layout.fillWidth: true
             Label {
@@ -846,6 +890,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
             }
             Button {
+                objectName: "r14SaveGame"
                 text: "Sauvegarder · " + root.binding("save")
                 onClicked: player.saveGame(root.currentSlot)
             }
@@ -874,6 +919,7 @@ ApplicationWindow {
                 onClicked: { pausePopup.close(); optionsPopup.open() }
             }
             Button {
+                objectName: "r14TitleFromPause"
                 text: "Menu principal"
                 Layout.fillWidth: true
                 onClicked: { pausePopup.close(); player.titleScreen() }

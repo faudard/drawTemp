@@ -124,7 +124,9 @@ def scene_from_mission(mission, snapshot=None):
                            u.get("facing", (0, 1)) if isinstance(u, Mapping)
                            else getattr(u, "facing", (0, 1)))})
     objects = [{"id": str(o["id"]), "kind": str(o["kind"]),
-                "x": int(o["pos"][0]), "y": int(o["pos"][1])}
+                "x": int(o["pos"][0]), "y": int(o["pos"][1]),
+                **({"open": bool(o.get("open", False))}
+                   if o["kind"] == "door" else {})}
                for o in (battle["objects"] if battle else mission.objects)]
     return {"mission": mission.id, "width": mission.board.width,
             "height": mission.board.height,
@@ -193,7 +195,7 @@ OVERLAY_COLORS = {
 
 def render_items(scene, camera, projection=IsoProjection(), selected=None,
                  *, tile_index=None, overlays=None, active_level=0,
-                 actor_positions=None):
+                 actor_positions=None, cutaway=False):
     """Render common depth-sorted Qt Quick records with indexed tile culling.
 
     Optional overlays are cosmetic, revision-independent cells. They never
@@ -243,6 +245,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
         if lo_x - 1 <= x <= hi_x + 1 and lo_y - 1 <= y <= hi_y + 1:
             sx, sy = projection.project(x, y, elev.get((x, y), 0))
             rows.append({"kind": "object", "id": o["id"], "label": o["kind"],
+                         "open": o.get("open", False),
                          "sx": sx, "sy": sy, "zOrder": (x + y) * 100 + 30})
     for a in scene["actors"]:
         x, y = a["x"], a["y"]
@@ -250,15 +253,18 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
             sx, sy = projection.project(x, y, elev.get((int(x), int(y)), 0) + a["level"] * 4)
             rows.append({"kind": "actor", "id": a["id"],
                          "label": a.get("name", a["id"]), "team": a["team"],
-                         "alive": a["alive"], "direction": a.get("direction", "south"),
-                         "sx": sx, "sy": sy,
+                         "alive": a["alive"], "sx": sx, "sy": sy,
                          "direction": a.get("direction", "south"),
                          "zOrder": (x + y) * 100 + 60})
-    from .visual_compositor import building_surfaces
+    from .building_geometry import building_surfaces
+    from .visual_compositor import automatic_cutaway
+    hidden_roofs = automatic_cutaway(
+        scene, selected=selected, active_level=active_level,
+        positions=actor_positions)
     margin = projection.width * 2
-    for part in building_surfaces(scene, projection, selected=selected,
+    for part in building_surfaces(scene, projection, cutaway=cutaway,
                                   active_level=active_level,
-                                  actor_positions=actor_positions):
+                                  hidden_roofs=hidden_roofs):
         x0, y0 = camera.screen(part["sx"], part["sy"])
         x1, y1 = camera.screen(part["sx"] + part["spanX"],
                                 part["sy"] + part["spanY"])
@@ -284,11 +290,15 @@ def pick(scene, camera, sx, sy, projection=IsoProjection(), *,
             hits.append(((o["x"] + o["y"]) * 100 + 30, {"kind": "object", "id": o["id"]}))
     if hits:
         return max(hits, key=lambda row: row[0])[1]
-    from .visual_compositor import building_surfaces, top_building_hit
-    structure_hit = top_building_hit(building_surfaces(
-        scene, projection, selected=selected, active_level=active_level,
-        actor_positions=actor_positions), camera, sx, sy)
+    from .building_geometry import building_surfaces, pick_surface
+    from .visual_compositor import automatic_cutaway
+    hidden_roofs = automatic_cutaway(
+        scene, selected=selected, active_level=active_level,
+        positions=actor_positions)
+    structure_hit = pick_surface(building_surfaces(
+        scene, projection, active_level=active_level,
+        hidden_roofs=hidden_roofs), camera, sx, sy)
     if structure_hit is not None:
-        return structure_hit
+        return {"kind": "building", **structure_hit}
     cell = projection.pick(wx, wy, scene["width"], scene["height"], elevations)
     return {"kind": "tile", "cell": list(cell)} if cell else None

@@ -1,0 +1,57 @@
+name: DrawTemp 5 R12.7 Visual Certification
+on:
+  pull_request:
+    paths:
+      - "drawtemp/assets/**"
+      - "drawtemp/render/**"
+      - "drawtemp/player/**"
+      - "sporebound/content/jeanne.game.json"
+      - "sporebound/content/art/jeanne/**"
+      - "tests_standalone/test_drawtemp5_r127*"
+      - ".github/workflows/drawtemp5-r127-visual.yml"
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  art-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: Validate real packaged Jeanne atlas, four directions, timing and no session mutation
+        run: python -m unittest tests_standalone.test_drawtemp5_r127_art -v
+  real-qt-captures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]"
+      - name: Render real R3/R4 Jeanne atlas at 5 R12.7 playback phases
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          DRAWTEMP_R127_ARTIFACT_DIR: ${{ runner.temp }}/r127-visual
+        run: |
+          python -m unittest tests_standalone.test_drawtemp5_r127_visual_qt -v
+          python -m unittest tests_standalone.test_drawtemp5_r4_runtime_qt -v
+      - name: Archive screenshots for art-direction approval (not golden baseline)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drawtemp-r127-visual-candidates-ubuntu
+          path: ${{ runner.temp }}/r127-visual/
+          if-no-files-found: warn
+          retention-days: 14
