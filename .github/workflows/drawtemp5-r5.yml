@@ -3,7 +3,11 @@ on:
   pull_request:
     paths:
       - 'drawtemp/studio/map_*.py'
-      - 'drawtemp/render/MapDraft.qml'
+      - 'drawtemp/render/IsoViewport.qml'
+      - 'drawtemp/render/TacticalBoard.qml'
+      - 'drawtemp/render/iso_scene.py'
+      - 'drawtemp/render/qt_viewport.py'
+      - 'tests_standalone/test_drawtemp5_shared_viewport.py'
       - 'tests_standalone/test_drawtemp5_r5_map.py'
       - 'pyproject.toml'
       - '.github/workflows/drawtemp5-r5.yml'
