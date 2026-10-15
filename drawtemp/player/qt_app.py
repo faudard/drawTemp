@@ -39,24 +39,9 @@ def scene_for_player(controller):
     return scene_from_mission(next(iter(controller.content.missions.values())))
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description="DrawTemp 5 — Qt Quick Player (R12)")
-    parser.add_argument("--smoke", action="store_true", help="Load the QML root and quit")
-    parser.add_argument("--reference", action="store_true",
-                        help="Run the deterministic R0 reference campaign")
-    parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration"),
-                        default="title", help="Exercise a real game scene during Qt smoke")
-    parser.add_argument("--save-dir", type=Path, help="Separate persistent save directory")
-    args = parser.parse_args(argv)
-
-    try:
-        from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QUrl
-        from PySide6.QtGui import QGuiApplication
-        from PySide6.QtQml import QQmlApplicationEngine
-    except ImportError as exc:
-        print('Install the Qt 6 extra: python -m pip install ".[qt6]": ' +
-              str(exc), file=sys.stderr)
-        return 2
+def create_bridge(controller, renderer):
+    """Share the real QML bridge with the R14 GUI driver, without a mock runtime."""
+    from PySide6.QtCore import QObject, Property, Signal, Slot
 
     class PlayerBridge(QObject):
         stateChanged = Signal()
@@ -153,6 +138,29 @@ def main(argv=None):
         def finishBattle(self):
             self.invoke(self.controller.finish_battle)
 
+
+    return PlayerBridge(controller, renderer)
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="DrawTemp 5 — Qt Quick Player (R12)")
+    parser.add_argument("--smoke", action="store_true", help="Load the QML root and quit")
+    parser.add_argument("--reference", action="store_true",
+                        help="Run the deterministic R0 reference campaign")
+    parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration"),
+                        default="title", help="Exercise a real game scene during Qt smoke")
+    parser.add_argument("--save-dir", type=Path, help="Separate persistent save directory")
+    args = parser.parse_args(argv)
+
+    try:
+        from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QUrl
+        from PySide6.QtGui import QGuiApplication
+        from PySide6.QtQml import QQmlApplicationEngine
+    except ImportError as exc:
+        print('Install the Qt 6 extra: python -m pip install ".[qt6]": ' +
+              str(exc), file=sys.stderr)
+        return 2
+
+
     app = QGuiApplication([sys.argv[0]])
     controller = build_controller(save_dir=args.save_dir, reference=args.reference)
     if args.smoke and args.smoke_scene == "battle":
@@ -169,7 +177,7 @@ def main(argv=None):
         if controller.state()["screen"] != "exploration":
             parser.error("No exploration stage in the current campaign")
     renderer = make_controller(scene_for_player(controller))
-    bridge = PlayerBridge(controller, renderer)
+    bridge = create_bridge(controller, renderer)
     engine = QQmlApplicationEngine()
     engine.setInitialProperties({"smokeMode": args.smoke})
     engine.rootContext().setContextProperty("renderer", renderer)
