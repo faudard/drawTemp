@@ -522,7 +522,7 @@ class StudioWindow(QMainWindow):
             for resource in self._resource_by_key.values():
                 if resource.family != family:
                     continue
-                label = resource.title
+                label = resource.title + " · " + resource.resource_id
                 if resource.mission_id:
                     label += "  [" + resource.mission_id + "]"
                 child = QStandardItem(label)
