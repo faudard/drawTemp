@@ -6,11 +6,12 @@ viewport; locks are checked against the *actual* Content diff of each edit.
 from __future__ import annotations
 
 from copy import deepcopy
+from hashlib import sha256
 from pathlib import Path
 
 from sporebound.map_layer_workspace import (
     LAYERS, empty_views, ensure_unlocked, load_views, save_views,
-    update_view, view_for,
+    update_view, view_for, view_sidecar_path,
 )
 from sporebound.model import RuleError, require
 
@@ -28,6 +29,30 @@ class LayerWorkspace:
         self._views = load_views(self.path) if self.path else empty_views()
         self._opacity = {}
         self._saved = deepcopy(self._views)
+        self._disk_revision = self._fingerprint(self.path)
+
+    @staticmethod
+    def _fingerprint(content_path):
+        if content_path is None:
+            return None
+        path = view_sidecar_path(content_path)
+        if not path.exists():
+            return None
+        return sha256(path.read_bytes()).hexdigest()
+
+    def verify_disk(self, content_path=None):
+        destination = Path(content_path) if content_path is not None else self.path
+        if destination is None:
+            raise RuleError("Save the project before saving layers")
+        expected = self._disk_revision if self.path == destination else None
+        actual = self._fingerprint(destination)
+        if actual != expected:
+            raise RuleError("Map layer sidecar changed externally; reload before saving")
+        return destination
+
+    def verify_new_destination(self, content_path):
+        if view_sidecar_path(content_path).exists():
+            raise RuleError("Map view destination exists; Save As will not overwrite it")
 
     def view(self, mission_id):
         current = view_for(self._views, mission_id)
@@ -72,10 +97,10 @@ class LayerWorkspace:
 
     def save(self, content_path=None):
         destination = Path(content_path) if content_path is not None else self.path
-        if destination is None:
-            raise RuleError("Save the project before persisting workspace layers")
+        self.verify_disk(destination)
         save_views(destination, self._views)
         self.path = destination
+        self._disk_revision = self._fingerprint(destination)
         self._saved = deepcopy(self._views)
         return destination
 
@@ -83,6 +108,7 @@ class LayerWorkspace:
         self._views = load_views(self.path) if self.path else empty_views()
         self._opacity.clear()
         self._saved = deepcopy(self._views)
+        self._disk_revision = self._fingerprint(self.path)
 
 
 __all__ = ["LayerWorkspace", "LAYERS"]
