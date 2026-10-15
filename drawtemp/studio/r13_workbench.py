@@ -254,7 +254,7 @@ def launch(content_path):
             self._timeline_frames = []
             self.timeline.setRowCount(0)
 
-        def _draw_map(self, inspected, positions=None, goals=None):
+        def _draw_map(self, inspected, positions=None, goals=None, actors=None):
             self.scene.clear()
             dims = inspected["profile"]["map"]
             # Preview bounded to 64 x 64; never a substitute for the iso renderer.
@@ -273,8 +273,12 @@ def launch(content_path):
                 if x < width and y < height:
                     self.scene.addRect(x*cell+2, y*cell+2, cell-4, cell-4,
                                        QPen(QColor("#eed063"), 2))
-            for unit in inspected["profile"]["units"]:
-                x, y = (positions or {}).get(unit["id"], unit["pos"])
+            for unit in (actors if actors is not None
+                         else inspected["profile"]["units"]):
+                if unit.get("alive", True) is False:
+                    continue
+                x, y = (unit["cell"] if actors is not None
+                        else (positions or {}).get(unit["id"], unit["pos"]))
                 if x < 0 or y < 0 or x >= width or y >= height:
                     continue
                 color = "#64bbf7" if unit["team"] == "player" else "#f28c7a"
@@ -545,9 +549,10 @@ def launch(content_path):
                     or index >= len(self._timeline_frames)):
                 return
             frame = self._timeline_frames[index]
-            positions = {unit["id"]: unit["cell"]
-                         for unit in frame["positions"] if unit["alive"]}
-            self._draw_map(self.inspection, positions)
+            # Draw ONLY units actually alive in this replay frame, including
+            # units spawned during the encounter. Never show a dead unit at
+            # its original authored position.
+            self._draw_map(self.inspection, actors=frame["positions"])
             self.status.setText(
                 "Replay : action #{} · {} · {}".format(
                     frame["index"], frame["actor"], frame["command"]["kind"]))
