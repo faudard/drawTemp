@@ -1,6 +1,10 @@
 """R10 real Qt Widgets interactions, offscreen but not a GPU golden."""
 import importlib.util
 import os
+from pathlib import Path
+import subprocess
+import sys
+from tempfile import TemporaryDirectory
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -99,6 +103,24 @@ class CampaignQtTests(unittest.TestCase):
         self._click("Après victoire de la mission")
         self.assertEqual(gui.studio.overview()["after_mission_scenes"]["r10_new"],
                          "r10_scene")
+
+    def test_qml_player_smoke_loads_saved_r10_campaign(self):
+        # Verify actual Qt Quick bootstrap, not only build_controller().
+        gui = self.window
+        gui.studio.create_mission("r10_road", "Sur la route",
+                                  after=MISSION)
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "content.json"
+            gui.studio.save_as(path)
+            env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
+                       QT_QUICK_BACKEND="software")
+            command = [
+                sys.executable, "-m", "drawtemp.player.qt_app",
+                "--content", str(path), "--campaign", "main", "--smoke",
+            ]
+            result = subprocess.run(
+                command, capture_output=True, text=True, env=env, timeout=45)
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_typed_condition_and_campaign_simulation(self):
         gui = self.window
