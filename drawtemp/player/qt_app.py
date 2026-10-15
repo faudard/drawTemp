@@ -141,6 +141,18 @@ def main(argv=None):
         def interactObject(self, object_id):
             self.invoke(self.controller.interact_object, object_id)
 
+        @Slot(int, int, int)
+        def levelMove(self, level, x, y):
+            self.invoke(self.controller.level_move, level, (x, y))
+
+        @Slot(int, int, int)
+        def levelAttack(self, level, x, y):
+            self.invoke(self.controller.level_attack, level, (x, y))
+
+        @Slot(str)
+        def toggleDoor(self, object_id):
+            self.invoke(self.controller.toggle_door, object_id)
+
         @Slot(str)
         def preview(self, kind):
             self.invoke(self.controller.preview, kind)
