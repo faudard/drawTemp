@@ -212,7 +212,10 @@ class IntelligenceTests(unittest.TestCase):
         from tests_standalone.test_tactical_levels_3720c import TacticalFloorTests
         floors = TacticalFloorTests()
         floors.setUp()
-        battle = floors.battle()
+        # The ordinary floor fixture uses the legacy ruleset, which deliberately
+        # has no coordinated behavior. Install R6 rules for this AI test.
+        battle = Battle(Content.from_dict(floors.doc.data), floors.MID,
+                        seed=7, rules=tactical_r6_rules())
         boss = battle.unit(floors.enemy)
         boss.behavior = "coordinated"
         boss.tags = ["squad:archer", "squad:medic"]

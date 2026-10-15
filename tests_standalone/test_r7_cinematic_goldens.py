@@ -102,7 +102,9 @@ class R718GoldenTests(unittest.TestCase):
             elif change == "camera":
                 clip["events"][2]["to"] = [.4, 0.]
             elif change == "text":
-                clip["events"][3]["text"] = "Une grille"
+                # The reviewed 1000 ms beat shows the first four characters;
+                # change text visible at that beat to certify the golden gate.
+                clip["events"][3]["text"] = "Alerte à la porte"
             elif change == "portrait":
                 clip["events"][3]["expression"] = "sad"
             else:

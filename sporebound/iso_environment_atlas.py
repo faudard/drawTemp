@@ -28,6 +28,12 @@ class IsoEnvironmentAtlas:
         key = kind, cell_size, phase
         if key in self._frames:
             return self._frames[key]
+        # Real Tk widgets own a Tcl interpreter. Headless Canvas adapters
+        # intentionally do not: fall back to the vector environment accents.
+        # Never attempt PhotoImage(master=fake_canvas) on a test renderer.
+        if not callable(getattr(getattr(self.canvas, "tk", None), "call", None)):
+            self._unavailable = True
+            return None
         try:
             import tkinter as tk
         except ImportError:

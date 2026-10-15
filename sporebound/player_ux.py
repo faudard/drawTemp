@@ -32,7 +32,8 @@ KEY_LABELS = {
 }
 KEY_LABELS.update({f"<Key-{chr(code)}>": chr(code).upper()
                    for code in range(ord("a"), ord("z") + 1)})
-KEY_LABELS.update({f"<F{number}>": f"F{number}" for number in range(1, 11)})
+KEY_LABELS.update({key: key[1:-1] for key in KEY_CHOICES
+                   if key.startswith("<F") and key.endswith(">")})
 KEY_BY_LABEL = {label: sequence for sequence, label in KEY_LABELS.items()}
 ACTION_LABELS = {
     "execute": "Valider l'action", "end": "Terminer le tour",

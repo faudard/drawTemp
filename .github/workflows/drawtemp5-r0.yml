@@ -43,6 +43,7 @@ jobs:
           tests_standalone.test_editor_r1_visual_gui
           tests_standalone.test_studio_history_gui_3721b
           tests_standalone.test_playtest_384_gui
+          tests_standalone.test_studio_theme_2026
           -v
   qt6-composition:
     runs-on: ${{ matrix.os }}
@@ -66,3 +67,35 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: python -m drawtemp.platform.qt_bootstrap --smoke
+
+  legacy-player-cinematic:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: CI baseline #223 — Player, cinematics, assets, iso renderer and R6
+        run: >-
+          python -m unittest
+          tests_standalone.test_player_ux_r7
+          tests_standalone.test_player_guidance_r7
+          tests_standalone.test_player_hud_layout_r710
+          tests_standalone.test_r7_cinematic_studio4
+          tests_standalone.test_r7_cinematic_batch
+          tests_standalone.test_r7_cinematic_goldens
+          tests_standalone.test_workspace_r2
+          tests_standalone.test_iso_battle_view_3718
+          tests_standalone.test_iso_cache_invalidation_3718c
+          tests_standalone.test_iso_frame_cache_3718c
+          tests_standalone.test_assets
+          tests_standalone.test_install_watercolor_pack
+          tests_standalone.test_playtest_384
+          tests_standalone.test_tactical_r6
+          -v

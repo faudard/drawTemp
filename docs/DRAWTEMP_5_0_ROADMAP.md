@@ -8,6 +8,33 @@
 
 Ce document définit la **cible DrawTemp 5.0**, et non l'état d'avancement des lots 2.x/3.x. Il complète [ROADMAP.md](../ROADMAP.md) et les docs héritées au lieu de les réécrire. Une fonctionnalité documentée dans le dépôt legacy n'est pas automatiquement marquée « livrée en Qt ». Les priorités sont des **priorités de réalisation**, pas des statuts.
 
+## État d'intégration au 15 octobre 2026 — PR #237 (non fusionnée)
+
+**Suivi de l'implémentation, distinct de la roadmap cible.** La [PR #237](https://github.com/faudard/drawTemp/pull/237) propose une consolidation des PR #224–#236 couvrant R3 à R14 et des correctifs de baseline. Son état **draft** indique que les gates fonctionnels, visuels, CI et de packaging ne sont **pas** réputés franchis. Le fait qu'une branche soit à jour ou mergeable ne constitue pas une certification.
+
+| Périmètre | État d'intégration | Validation nécessaire |
+| --- | --- | --- |
+| R0–R2 | Fondations déjà présentes sur `master`, certification des parcours toujours à distinguer de la présence de code | Compatibilité, Studio Qt et isolation headless |
+| R3–R4 | Code et tests proposés par #237, non certifiés | GPU matériel, scènes identiques et ressources/provenance |
+| R5 + R12 | Branchement partagé R3 proposé dans #237 (même `IsoViewport.qml`, `scene_from_mission`, caméra et picking) | CI Qt réelle sur les trois OS et validation visuelle encore exigées |
+| R6–R11 + R13 | Implémentations proposées par #237, non déclarées terminées | Flux UI de bout en bout, fichiers partagés, Undo/Redo, replay |
+| R14 | Contrôles et matrice multi-OS proposés par #237 | Rapport final et preuve complète; pas de réussite inférée de tests offscreen |
+| R15–R16 | Hors périmètre de #237 | Export autonome et retrait du legacy après certification |
+
+### Écarts d'intégration à lever avant fusion
+
+1. **INT-01 — Rendu R3/R5/R12 (code raccordé; certification ouverte).** `IsoViewport.qml` est désormais l'unique composant scène-graph rendu dans R3, R5 et R12. Le Studio utilise `make_controller(scene_from_mission(...))` et reçoit les gestes de peinture via les signaux QML ; le Player utilise `scene_for_player`, alimenté par les snapshots R1, avec un `TacticalBoard.qml` réduit à une façade de compatibilité. `MapDraft.qml` (ancien Canvas) a été supprimé. Même géométrie/picking, profondeur, atlas et caméra R3. Les tests `test_drawtemp5_shared_viewport.py` vérifient le contrat headless et l'instanciation Qt offscreen. **Le gate visuel/GPU réel et les performances restent non certifiés** jusqu'aux preuves multi-OS, textures/animations et scènes à étages.
+2. **INT-02 — Propriété des documents.** Les modules Map, Database, Events et Campaign savent partager un `AuthoringSession`. Le `CinematicDocument` de R11 travaille sur une copie du `GameProject`; l'intégration à l'historique transactionnel commun doit être assurée dans le Studio avant de revendiquer des Undo/Redo et des sauvegardes multi-ateliers sûres. Aucun schéma secondaire ne doit être ajouté.
+3. **INT-03 — Assets de production.** Contrôler la publication et la présence effective des PNG dérivés Jeanne, les licences et les références d'atlas. L'exécution d'un workflow de génération, seule, n'est pas une preuve que l'art est livré et disponible au runtime.
+4. **INT-04 — Certification R14.** Les smokes Qt offscreen/software prouvent seulement le chargement du parcours testé, pas les performances GPU, l'identité visuelle ni une release autonome. Conserver les gates fail-closed et joindre les rapports de la matrice du dernier SHA.
+5. **INT-05 — Export.** R15 et R16 restent à réaliser : ne pas assimiler la présence d'un lanceur Python à une distribution Player autonome ni supprimer le legacy avant le remplacement vérifié.
+
+### Test de non-régression conjoint ajouté dans #237
+
+`tests_standalone/test_drawtemp5_joint_integrity.py`, invoqué par le workflow R14 sur Linux, Windows et macOS, teste la **même session d'authoring** à travers R5 (carte/bâtiment), R8 (règles), R9 (événement), R10 (campagne), puis l'insertion transactionnelle de R11, une sauvegarde Content/GameProject, la réouverture, et l'utilisation de ces mêmes documents par R12 (Player et reprise de sauvegarde) et R3 (projection de scène). Il vérifie également le rejet d'une prévisualisation obsolète entre deux éditeurs.
+
+**Portée exacte :** cette preuve headless valide le contrat documentaire lorsqu'elle réussit; elle **ne remplace pas** les tests GUI/GPU, ne démontre pas encore le branchement réel du renderer commun et ne certifie pas R15/R16. Toute régression du test bloque désormais le job R14; son succès isolé ne débloque pas INT-01 à INT-05.
+
 ## Vision et critères de réussite
 
 Permettre à une personne de **créer puis exporter un RPG tactique narratif complet sans écrire de JSON** : cartes, personnages, classes, objets, événements, dialogues, campagnes, sièges, cinématiques, équilibrage et présentation. L'expérience d'édition doit être proche de RPG Maker en accessibilité, plus ambitieuse sur l'isométrie et le gameplay tactique, avec des outils de production d'assets cohérents.

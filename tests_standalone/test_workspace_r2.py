@@ -184,7 +184,10 @@ class WorkspaceR2Tests(unittest.TestCase):
         trigger['after_choice'] = {
             'scene': 'r2_old_scene', 'choice': 'continue'}
         content = Content.from_dict(doc)
-        project_data = self._linked_story_project(content).to_dict()
+        # Build the initial story from content without the new guard, then
+        # validate the tactical link and choice guard together. An interim
+        # project containing only the guard is intentionally invalid.
+        project_data = self._linked_story_project(self.content).to_dict()
         project_data['story']['during_tactical_event'] = {
             'garden/' + trigger['id']: 'r2_old_scene'}
         project = GameProject.from_dict(project_data, content)
@@ -265,20 +268,20 @@ class WorkspaceR2Tests(unittest.TestCase):
             self.doc.data, project, key, baseline, 'ziggy_r2')
         Content.from_dict(candidate)
         self.assertEqual(updated.cinematics[0]['events'][0]['actor'], 'ziggy_r2')
-        self.assertTrue(any(actor['id'] == 'ziggy_r2'
+        self.assertTrue(any(actor.id == 'ziggy_r2'
                             for actor in Content.from_dict(
                                 candidate).missions[self.mid].units))
         history = StudioHistory(self.doc.data, project)
         self.doc.replace(candidate)
         self.assertTrue(history.record(self.doc.data, updated))
         old_content, old_project = history.undo()
-        self.assertTrue(any(actor['id'] == 'ziggy'
+        self.assertTrue(any(actor.id == 'ziggy'
                             for actor in Content.from_dict(
                                 old_content).missions[self.mid].units))
         self.assertEqual(old_project.cinematics[0]['events'][0]['actor'], 'ziggy')
         new_content, new_project = history.redo()
         self.assertEqual(new_project.cinematics[0]['events'][0]['actor'], 'ziggy_r2')
-        self.assertTrue(any(actor['id'] == 'ziggy_r2'
+        self.assertTrue(any(actor.id == 'ziggy_r2'
                             for actor in Content.from_dict(
                                 new_content).missions[self.mid].units))
 

@@ -1,0 +1,81 @@
+name: DrawTemp 5 R14 Quality
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r14-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-matrix:
+    name: R14 / ${{ matrix.os }} / Python 3.12
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Qt loader prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - name: Install pinned Python / Qt SDK
+        run: python -m pip install ".[qt6]"
+      - name: Joint DrawTemp 5 Studio → Player integrity (R3–R12)
+        run: >-
+          python -m unittest discover -s tests_standalone
+          -p test_drawtemp5_joint_integrity.py -v
+      - name: Core, QA, Qt composition, checkpoint and crash regression evidence
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: >-
+          python scripts/certify_drawtemp5_r14.py
+          --report r14-report.json --qt --soak --faults
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r14-${{ matrix.os }}
+          path: |
+            r14-report.json
+            *.log
+            r14-reliability.json
+          if-no-files-found: warn
+
+  matrix-evidence:
+    name: R14 / cross-OS evidence aggregation
+    needs: [quality-matrix]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: r14-*
+          path: r14-artifacts
+          merge-multiple: false
+      - name: Verify all three platforms submitted valid evidence
+        run: >-
+          python scripts/certify_drawtemp5_r14.py
+          --aggregate r14-artifacts --report r14-aggregate.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r14-certification-summary
+          path: r14-aggregate.json
+          if-no-files-found: warn

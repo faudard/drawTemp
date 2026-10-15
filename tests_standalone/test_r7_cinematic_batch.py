@@ -93,7 +93,8 @@ class R720BatchTests(unittest.TestCase):
         clipboard = copy_events(self.clip, ("jeanne", "line"))
         before = deepcopy(dest)
         with self.assertRaises(RuleError):
-            paste_events(dest, clipboard, 100)
+            # Actor ends at 2000 ms; dialogue alone ends at 2600 ms.
+            paste_events(dest, clipboard, 400)
         self.assertEqual(dest, before)
         with self.assertRaises(RuleError):
             paste_events(dest, clipboard, True)

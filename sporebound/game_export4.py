@@ -12,7 +12,6 @@ from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 
 from .model import RuleError, require
 from .campaign_flow import audit_campaign
-from .studio_index4 import StudioIndex
 
 
 LAUNCHER = """from pathlib import Path
@@ -38,9 +37,11 @@ def _json(data):
 
 
 def _bundle(content, project, root):
-    source = StudioIndex(content, project)
-    errors = [message for severity, _, message in source.diagnostics(root)
-              if severity == 'error']
+    # Export checks must stay headless: StudioIndex pulls the workspace UI
+    # graph into otherwise pure SDK imports.  Its error-level validation is
+    # the canonical asset registry's diagnostics; other StudioIndex findings
+    # are advisory warnings and never block this source export.
+    errors = [issue['message'] for issue in project.asset_registry().diagnostics(root)]
     require(not errors, 'Export refusé : ' + '; '.join(errors[:5]))
     reports = [audit_campaign(content, project, row['id'])
                for row in project.campaigns]

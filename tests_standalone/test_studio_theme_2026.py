@@ -148,7 +148,7 @@ class StudioEditorAppearanceSmoke(unittest.TestCase):
             finally:
                 root.destroy()
 
-        with patch.object(tk.Tk, "mainloop", drive), \\
+        with patch.object(tk.Tk, "mainloop", drive), \
              patch("tkinter.messagebox.showerror") as dialogs:
             launch(DEFAULT_CONTENT)
             dialogs.assert_not_called()
