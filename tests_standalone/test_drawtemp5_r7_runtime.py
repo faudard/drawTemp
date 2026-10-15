@@ -46,6 +46,12 @@ class CharacterRuntimeTests(unittest.TestCase):
             with self.assertRaises(CharacterError):
                 runtime.preview_actor("jeanne", direction="diagonal")
             self.assertEqual(runtime.duration("historical", "walk", "south"), 360)
+            isolated = runtime.sample(variant="historical", action="idle",
+                                      direction="south")
+            isolated["spriteRegion"][0] = -10000
+            self.assertGreaterEqual(
+                runtime.sample(variant="historical", action="idle",
+                               direction="south")["spriteRegion"][0], 0)
             self.assertEqual(runtime.duration("historical", "run", "south"), 0)
             # End-of-action frames are held, never wrapped.
             last = runtime.preview_actor("jeanne", action="attack", elapsed_ms=999999)
