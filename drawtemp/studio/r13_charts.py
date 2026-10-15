@@ -10,7 +10,7 @@ from pathlib import Path
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QPoint, Qt, Signal, QRectF
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen
 from PySide6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
+    QComboBox, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 BLUE = QColor("#4187bf")
@@ -176,6 +176,10 @@ class R13ComparisonCharts(QWidget):
         self.metric_selector.currentIndexChanged.connect(self._change_metric)
         selectors.addWidget(self.metric_selector)
         selectors.addStretch()
+        self.export_button = QPushButton("Exporter graphiques PNG")
+        self.export_button.setToolTip(
+            "Exporter les graphiques complets, même les seeds hors écran")
+        selectors.addWidget(self.export_button)
         self.seed_scroll = QScrollArea()
         self.seed_scroll.setWidgetResizable(True)
         self.seed_plot = BarCanvas(per_seed=True)
@@ -282,11 +286,6 @@ class R13ComparisonCharts(QWidget):
                 raise OSError("Encodage PNG impossible.")
         finally:
             device.close()
-        try:
-            with target.open("xb") as destination_file:
-                destination_file.write(bytes(buffer))
-        except Exception:
-            # Exclusive open fails without touching pre-existing files.
-            # Other errors propagate so the user sees that export failed.
-            raise
+        with target.open("xb") as output:
+            output.write(bytes(buffer))
         return target
