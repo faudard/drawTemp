@@ -70,6 +70,20 @@ def make_controller(scene, atlas_url=""):
             self.camera.zoom_at(1.15 if angle > 0 else 1 / 1.15, x, y)
             self.refresh()
 
+        @Slot(float, float, result="QVariantMap")
+        def cellAt(self, x, y):
+            """Return a terrain cell even when an actor/object obscures it.
+
+            R5 paint gestures and R12 tactical selection use this same R3
+            altitude-aware picking contract. Empty maps return an empty map.
+            """
+            wx, wy = self.camera.world(x, y)
+            elevations = {(tile["x"], tile["y"]): tile["height"]
+                          for tile in self.scene["tiles"] if tile["height"]}
+            cell = self.projection.pick(wx, wy, self.scene["width"],
+                                        self.scene["height"], elevations)
+            return {"x": cell[0], "y": cell[1]} if cell is not None else {}
+
         @Slot(float, float)
         def pickAt(self, x, y):
             hit = pick(self.scene, self.camera, x, y, self.projection)
@@ -79,10 +93,16 @@ def make_controller(scene, atlas_url=""):
                 self.picked.emit(hit)
 
         def replace_scene(self, new_scene):
-            """Use the same method after R1 simulation transitions or editor edits."""
+            """Keep zoom/pan through edits and turns, recenter for a new map."""
+            changed = (self.scene["mission"] != new_scene["mission"] or
+                       self.scene["width"] != new_scene["width"] or
+                       self.scene["height"] != new_scene["height"])
             self.scene = new_scene
             self.selection = None
-            self.refresh()
+            if changed:
+                self.center_scene()
+            else:
+                self.refresh()
 
     return RendererController()
 
