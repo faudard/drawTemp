@@ -10,7 +10,7 @@
 | Lot | Statut | Preuve / condition de clôture |
 | --- | --- | --- |
 | R16.1 — Legacy Inventory | Implémenté (statique) | `scripts/inventory_drawtemp5_legacy.py` : imports Tk, appels Canvas, imports transitoires `sporebound`, entrypoints |
-| R16.2 — Project Migration | Première tranche | Bundle versionné avec paire canonique v1 validée, empreintes SHA-256 et originaux bit-à-bit ; pas de conversion imaginaire vers un schéma v2 |
+| R16.2 — Project Migration | Première tranche | Bundle versionné avec paire canonique v1 validée sans réécriture, empreintes SHA-256 et originaux bit-à-bit ; pas de conversion imaginaire vers un schéma v2 |
 | R16.3 — Save Compatibility | Première tranche | Import explicite **uniquement** des `game_session` v1 et `session_checkpoint` v2 vérifiés par le runtime/replay, sans réécriture ; autres formats refusés avec motif |
 | R16.4 — Renderer Retirement | Bloqué | Équivalence GPU/caméra/picking/goldens R3, R12 et R14 démontrée sur machines réelles |
 | R16.5 — Studio Retirement | Bloqué | Atelier Qt de remplacement vérifié, parcours sans JSON, Undo/Redo + import/export; R15 packaging validé |
@@ -58,11 +58,11 @@ jeanne-r16/
   receipt.json                   # version migration, chemins, SHA-256, provenance
   originals/jeanne.json          # copie exacte, non reformattée
   originals/jeanne.game.json
-  project/jeanne.json            # documents validés / normalisés au schéma v1
+  project/jeanne.json            # copie exacte du document v1 validé
   project/jeanne.game.json
 ```
 
-La paire est validée contre les **vrais contrats** `Content` et `GameProject`
+Les fichiers sous `project/` sont conservés **octet pour octet** : aucun schéma v2 n'est inventé et aucune normalisation potentiellement destructive n'est appliquée. La paire est validée contre les **vrais contrats** `Content` et `GameProject`
 du moteur avant publication. Écriture par staging puis publication du dossier.
 Une destination existante ou un original modifié pendant la conversion bloque
 l'opération. Le rollback vérifie **les quatre** empreintes (originaux et fichiers
