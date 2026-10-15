@@ -59,6 +59,11 @@ class R13VisualQtTests(unittest.TestCase):
             self.assertEqual(saved, filename)
             self.assertTrue(filename.read_bytes().startswith(
                 b"\\x89PNG\\r\\n\\x1a\\n"))
+            from PySide6.QtGui import QImageReader
+            image_size = QImageReader(str(filename)).size()
+            self.assertGreaterEqual(
+                image_size.height(),
+                panel.aggregate_plot.height() + panel.seed_plot.height())
             with self.assertRaises(FileExistsError):
                 panel.export_png(filename)
             with self.assertRaises(ValueError):
