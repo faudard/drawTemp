@@ -9,8 +9,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from drawtemp.core import Content, GameProject, RuleError
-from drawtemp.assets.runtime import PresentationAssets
+from drawtemp.core import Content, RuleError
 from drawtemp.render.iso_scene import scene_from_mission
 from drawtemp.render.qt_viewport import make_controller
 from drawtemp.sdk.authoring import AuthoringError
@@ -38,12 +37,9 @@ except ImportError:
 
 
 class MapWindow(QMainWindow):
-    def __init__(self, studio=None, *, project_path=None):
+    def __init__(self, studio=None):
         super().__init__()
         self.studio = studio or MapStudio.reference()
-        # The asset root belongs to the GameProject manifest, never cwd.
-        self.asset_project_path = Path(project_path).resolve() if project_path else None
-        self.asset_browser_dock = None
         self.setWindowTitle("DrawTemp 5.0 — Éditeur de cartes R5")
         self.resize(1400, 820)
         self.stroke = []
@@ -84,7 +80,7 @@ class MapWindow(QMainWindow):
 
         # R3 controller is the only source of camera, hit-testing and render
         # delegates. Its scene is reconstructed from the validated R1 Content.
-        self.renderer = make_controller(self._render_scene(), assets=self._visual_assets())
+        self.renderer = make_controller(self._render_scene())
         viewport = QQuickWidget(self)
         viewport.setResizeMode(QQuickWidget.SizeRootObjectToView)
         viewport.rootContext().setContextProperty("renderer", self.renderer)
@@ -136,35 +132,12 @@ class MapWindow(QMainWindow):
                                 "Molette : zoom • bouton droit : déplacement.\n"
                                 "Les changements sont validés avant application."))
         self._dock("Inspecteur", right, Qt.RightDockWidgetArea)
-        self._install_asset_browser()
+        # Editor-only layers share the canonical mission, not the Player save.
+        from .map_layers_dock import MapLayersDock
+        self.layers_panel = MapLayersDock(self.studio.layers, self.refresh)
+        self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
         self.statusBar().showMessage("Viewport Qt Quick partagé R3 · édition R5")
         self.refresh_maps()
-
-    def _visual_assets(self):
-        if self.asset_project_path is None:
-            return None
-        documents = self.studio.snapshot()
-        content = Content.from_dict(documents["content"])
-        project = GameProject.from_dict(documents["project"], content)
-        return PresentationAssets.for_project(project, self.asset_project_path)
-
-    def _install_asset_browser(self):
-        """Use R4's real collection/preview widget inside the Qt R5 Studio."""
-        if self.asset_project_path is None:
-            return
-        from drawtemp.assets.qt_browser import AssetBrowser
-        documents = self.studio.snapshot()
-        content = Content.from_dict(documents["content"])
-        project = GameProject.from_dict(documents["project"], content)
-        browser = AssetBrowser(project.asset_registry(), self.asset_project_path.parent,
-                               parent=self)
-        if self.asset_browser_dock is None:
-            dock = QDockWidget("Ressources / Assets", self)
-            dock.setObjectName("DrawTemp-R4-Assets")
-            self.addDockWidget(Qt.LeftDockWidgetArea, dock)
-            self.asset_browser_dock = dock
-        self.asset_browser_dock.setWidget(browser)
-        self.asset_browser = browser
 
     def _dock(self, title, widget, area):
         dock = QDockWidget(title, self)
@@ -231,15 +204,13 @@ class MapWindow(QMainWindow):
             self, "Ouvrir un contenu avec manifeste .game.json", "", "Content JSON (*.json)")
         if not path:
             return
-        if self.studio.authoring.snapshot().dirty:
+        if self.studio.authoring.snapshot().dirty or self.studio.layers.dirty:
             QMessageBox.information(self, "Carte modifiée",
                                     "Enregistrez avant d'ouvrir un autre projet.")
             return
         def open_document():
             self.studio = MapStudio.open(path)
-            self.asset_project_path = Path(path).resolve().with_suffix(".game.json")
-            self.renderer.replace_assets(self._visual_assets())
-            self._install_asset_browser()
+            self.layers_panel.set_workspace(self.studio.layers)
             self.refresh_maps()
         self._safe(open_document)
 
@@ -349,6 +320,7 @@ class MapWindow(QMainWindow):
         self._safe(apply)
 
     def refresh(self, *_):
+        self.layers_panel.set_mission(self.studio.mission_id)
         mission = self.studio.mission()
         board = mission["board"]
         self.renderer.replace_scene(self._render_scene())
@@ -357,6 +329,9 @@ class MapWindow(QMainWindow):
         root.setProperty("showBlocked", self.show_blocked.isChecked())
         root.setProperty("showHeights", self.show_height.isChecked())
         root.setProperty("showActors", self.show_actors.isChecked())
+        view = self.studio.layers.view(self.studio.mission_id)
+        root.setProperty("layerVisibility", view["visible"])
+        root.setProperty("layerOpacity", view["opacity"])
         current = self.studio.snapshot()
         warnings = self.studio.diagnostics()
         self.diagnostics.setPlainText(
@@ -369,9 +344,10 @@ class MapWindow(QMainWindow):
             self.objective.setCurrentIndex(index)
 
     def closeEvent(self, event):
-        if self.studio.authoring.snapshot().dirty:
+        if self.studio.authoring.snapshot().dirty or self.studio.layers.dirty:
             response = QMessageBox.question(self, "Quitter",
-                "Des modifications ne sont pas enregistrées. Quitter sans enregistrer ?",
+                "La carte ou ses réglages de calques ne sont pas enregistrés. "
+                "Quitter sans enregistrer ?",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if response != QMessageBox.Yes:
                 event.ignore()
@@ -390,8 +366,7 @@ def main(argv=None):
         parser.error('Qt 6 required: pip install ".[qt6]"')
     app = QApplication([sys.argv[0]])
     studio = MapStudio.open(args.content) if args.content else MapStudio.reference()
-    window = MapWindow(studio, project_path=args.content.with_suffix(".game.json")
-                       if args.content else None)
+    window = MapWindow(studio)
     window.show()
     if args.smoke:
         QTimer.singleShot(100, app.quit)

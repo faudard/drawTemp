@@ -15,6 +15,13 @@ Item {
     property bool showBlocked: false
     property bool showHeights: false
     property bool showActors: true
+    // Optional Studio layer policy; Player defaults to all layers visible.
+    property var layerVisibility: ({})
+    property var layerOpacity: ({})
+    function layerEnabled(name) { return layerVisibility[name] !== false }
+    function layerAlpha(name) {
+        return layerOpacity[name] === undefined ? 1.0 : layerOpacity[name] / 100.0
+    }
     // Player-only presentation: briefly conceal the static actor while its
     // committed move / attack clip is displayed. Studio defaults to none.
     property var concealedActorIds: []
@@ -55,8 +62,12 @@ Item {
             property real scaleFactor: root.camera.zoom
             property bool isTile: row.kind === "tile"
             property bool isActor: row.kind === "actor"
-            visible: (!isActor || root.showActors) &&
-                     (!isActor || root.concealedActorIds.indexOf(row.id) < 0)
+            visible: isActor
+                     ? (root.showActors && root.layerEnabled("Unités") &&
+                        root.concealedActorIds.indexOf(row.id) < 0)
+                     : isTile ? true : root.layerEnabled("Objets")
+            opacity: isActor ? root.layerAlpha("Unités")
+                     : isTile ? 1.0 : root.layerAlpha("Objets")
             sourceComponent: isTile ? tileComponent : (isActor ? actorComponent : objectComponent)
             x: root.width / 2 + root.camera.panX + row.sx * scaleFactor
                - (isTile ? 48 : isActor ? (row.imageUrl ? row.pivotX : 20) : 15) * scaleFactor
@@ -107,10 +118,11 @@ Item {
             }
             Shape {
                 anchors.fill: parent
+                opacity: root.layerAlpha("Terrain")
                 ShapePath {
                     strokeWidth: highlighted ? 2.5 : (root.showGrid ? 0.8 : 0)
                     strokeColor: highlighted ? "#ffda77" : "#283b3d"
-                    fillColor: tile.color
+                    fillColor: root.layerEnabled("Terrain") ? tile.color : "transparent"
                     startX: 48; startY: 0
                     PathLine { x: 96; y: 24 }
                     PathLine { x: 48; y: 48 }
@@ -120,7 +132,8 @@ Item {
             }
             Image {
                 anchors.fill: parent
-                visible: renderer.atlasUrl !== ""
+                visible: renderer.atlasUrl !== "" && root.layerEnabled("Terrain")
+                opacity: root.layerAlpha("Terrain")
                 source: renderer.atlasUrl
                 sourceClipRect: Qt.rect(tile.atlasX, 0, 96, 48)
                 fillMode: Image.Stretch
@@ -157,7 +170,8 @@ Item {
                 }
             }
             Shape {
-                visible: highlighted || tile.goal
+                visible: highlighted || (tile.goal && root.layerEnabled("Objectifs"))
+                opacity: highlighted ? 1.0 : root.layerAlpha("Objectifs")
                 anchors.fill: parent
                 ShapePath {
                     strokeWidth: highlighted ? 3 : 2
@@ -171,13 +185,16 @@ Item {
                 }
             }
             Rectangle {
-                visible: tile.feature === "tree"
+                visible: tile.feature === "tree" && root.layerEnabled("Décors")
+                opacity: root.layerAlpha("Décors")
                 width: 15; height: 36; x: 40; y: -22
                 radius: 6; color: "#3c7452"
                 border.color: "#b7c991"; border.width: 1
             }
             Rectangle {
-                visible: tile.feature === "stone_wall"
+                visible: tile.feature === "stone_wall" &&
+                         root.layerEnabled("Décors") && root.layerEnabled("Bâtiments")
+                opacity: Math.min(root.layerAlpha("Décors"), root.layerAlpha("Bâtiments"))
                 width: 33; height: 20; x: 30; y: 0
                 color: "#68737c"; border.color: "#bac0b9"
             }
