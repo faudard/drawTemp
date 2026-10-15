@@ -92,28 +92,15 @@ class EncounterDesignerR13Tests(unittest.TestCase):
         content, project = reference_project()
         studio = AuthoringSession.new(content, project)
         original = studio.snapshot().to_dict()
-        edit = {"unit_positions": {"jeanne": [1, 2]}}
-        # Use a known, valid in-bounds tile not occupied by fixtures.
-        mission = content.missions[MISSION]
-        occupied = set().union(*(u.occupied_cells()
-                                  for u in mission.units if u.id != "jeanne"))
-        free = next((cell for cell in mission.board.cells()
-                     if cell not in occupied and
-                     not mission.board.tile(cell).blocked and
-                     cell not in mission.goal and cell != next(
-                         u.pos for u in mission.units if u.id == "jeanne")),
-                    None)
-        self.assertIsNotNone(free)
-        edit["unit_positions"]["jeanne"] = list(free)
-        plan = preview_authoring(studio, MISSION, edit)
+        old_ticks = content.missions[MISSION].target_ticks
+        plan = preview_authoring(
+            studio, MISSION, {"target_ticks": old_ticks + 1})
         self.assertEqual(studio.snapshot().to_dict(), original)
         committed = studio.apply(plan)
         self.assertEqual(committed.kind, "r13-encounter")
         self.assertTrue(committed.snapshot.can_undo)
-        self.assertEqual(list(next(u["pos"] for m in
-                              committed.snapshot.to_dict()["content"]["missions"]
-                              if m["id"] == MISSION for u in m["units"]
-                              if u["id"] == "jeanne")), list(free))
+        mutated = Content.from_dict(committed.snapshot.to_dict()["content"])
+        self.assertEqual(mutated.missions[MISSION].target_ticks, old_ticks + 1)
         self.assertEqual(studio.undo().snapshot.content,
                          AuthoringSession.new(content, project).snapshot().content)
         self.assertTrue(studio.redo().snapshot.dirty)
