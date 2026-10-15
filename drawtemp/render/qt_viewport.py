@@ -138,6 +138,14 @@ def make_controller(scene, atlas_url=None, *, character_pack=None,
         def atlasUrl(self):
             return self._atlas
 
+        @Property("QVariantList", constant=True)
+        def characterOutfits(self):
+            return list(self._character.variants) if self._character else []
+
+        @Property(str, constant=True)
+        def characterId(self):
+            return self._character.character_id if self._character else ""
+
         @Slot(float, float)
         def resizeViewport(self, width, height):
             if width > 0 and height > 0:
