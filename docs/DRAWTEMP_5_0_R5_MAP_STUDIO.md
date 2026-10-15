@@ -23,7 +23,7 @@ remplissage, structure ou collage = **une transaction Undo**.
 
 - **R5.1 (partiel)** : liste des missions, création, duplication, renommage,
   changement de carte ; dossiers et navigation avancée restent à faire.
-- **R5.2 (aperçu)** : Canvas iso Qt Quick avec zoom, pan, grille, acteurs,
+- **R5.2 (branché à R3)** : `IsoViewport.qml` en Qt Quick Scene Graph, caméra et picking partagés, peinture par gestes, grille, acteurs,
   objectifs. Ce n'est pas encore le renderer GPU R3.
 - **R5.3** : pinceau, rectangle, ligne, gomme, remplissage, pipette, objectif,
   couvert, collision, danger, hauteur.
@@ -78,3 +78,7 @@ commandes de création visuelle, la sauvegarde et la simulation tactique
 isolée, mais le gate final dépend de R3 (renderer commun), R4 (atlas) et R12
 (Player). Les captures, goldens et vérifications sur GPU réel restent à
 produire avant de marquer R5 « validé ».
+
+### Intégration R3 (PR #237)
+
+Le `MapWindow` n'utilise plus de renderer QML `Canvas` : la projection des missions validées `Content` est fournie à `RendererController` et affichée par `IsoViewport.qml`. Les gestes `strokeStarted/Moved/Finished` repassent par `MapStudio` (transaction et Undo/Redo inchangés). La vérification du rendu sur GPU matériel et des étages reste distincte du smoke Qt offscreen.
