@@ -121,6 +121,29 @@ class SaveManagerR1210Tests(unittest.TestCase):
         self.assertEqual(self.player.saves.load_autosave().recording(),
                          self.player.session.recording())
 
+    def test_atomic_replace_failure_preserves_prior_primary_bytes(self):
+        from sporebound import storage
+        self._new()
+        primary = self.auto.read_bytes()
+        original_replace = storage.os.replace
+
+        def crash_before_publish(source, target):
+            # Allow the previous generation to be written to .bak, then fail
+            # exactly at the final atomic rename of the new primary.
+            if Path(target) == self.auto:
+                raise OSError("interrupted rename")
+            return original_replace(source, target)
+
+        with patch("sporebound.storage.os.replace", side_effect=crash_before_publish):
+            state = self.player.choose("enter")
+        self.assertIn("Autosauvegarde impossible", state["autosave_warning"])
+        self.assertEqual(self.auto.read_bytes(), primary)
+        self.assertEqual(self.auto.with_suffix(".json.bak").read_bytes(), primary)
+        self.assertFalse(list(self.directory.glob("autosave.json.*.tmp")))
+        self.assertEqual(self.player.state()["screen"], "campaign")
+        self.assertNotEqual(self.player.session.recording(),
+                            self.player.saves.load_autosave().recording())
+
     def test_rejected_rule_preview_selection_and_options_do_not_write(self):
         self._new()
         recorded = self.player.session.recording()
