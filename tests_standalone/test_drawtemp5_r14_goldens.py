@@ -140,6 +140,9 @@ class PixelDiffRoundtripTests(unittest.TestCase):
             image = QImage(str(path))
             image.setPixelColor(3, 3, QColor("#ff0000"))
             self.assertTrue(image.save(str(path), "PNG"))
+            # The image is a new capture in the test: update its recorded digest
+            # before asserting that the pixel comparator catches the regression.
+            report["cases"][key]["sha256"] = digest(path)
             evaluate_capture(output, goldens, report)
             self.assertEqual(report["comparison"], "fail")
             self.assertEqual(report["cases"][key]["metrics"]["changed_pixels"], 1)
