@@ -92,6 +92,18 @@ def render_frame(args):
 
     if image.isNull() or image.width() <= 0 or image.height() <= 0:
         raise RuntimeError("Qt produced a null/empty frame; never fake a golden")
+    # A black or transparent screenshot can be non-null when Qt fails to
+    # compose a scene in offscreen mode. Inspect a bounded, deterministic grid.
+    unique = set()
+    opaque = 0
+    for sy in range(24):
+        for sx in range(36):
+            pixel = image.pixelColor(sx * (image.width() - 1) // 35,
+                                     sy * (image.height() - 1) // 23)
+            unique.add((pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()))
+            opaque += pixel.alpha() >= 240
+    if len(unique) < 12 or opaque < 500:
+        raise RuntimeError("Qt frame is blank/transparent: no useful visual evidence")
     args.png.parent.mkdir(parents=True, exist_ok=True)
     if not image.save(str(args.png), "PNG"):
         raise RuntimeError("Failed to save real Qt frame")
