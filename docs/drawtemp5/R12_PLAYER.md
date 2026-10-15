@@ -75,8 +75,8 @@ Le smoke **n'est pas** une certification de qualité GPU.
 | R12.5 Combat HUD | Objectif, CT, roster, PV, PM, compétences/objets ; UX avancée non certifiée |
 | R12.6 Tactical Feedback | Prévisualisation exacte d'actions ; zones LOS/danger/télégraphies à intégrer |
 | R12.7 Animation Controller | À faire avec les pistes R3/R4 |
-| R12.8 Input & Keybinding | Commandes de base ; remappage persistant à faire |
-| R12.9 Menus & Options | Contraste et échelle de texte ; options audio/graphique à faire |
+| R12.8 Input & Keybinding | Profils AZERTY/QWERTY persistants, remappage contextuel avec contrôle des conflits ; manette et variantes spécifiques à compléter |
+| R12.9 Menus & Options | Options Qt persistantes : contraste, taille, plein écran, grille et hauteurs ; configuration audio à connecter à R11 |
 | R12.10 Save Manager | Slots canoniques, reprise, sauvegarde de secours vérifiée ; UI conflits à enrichir |
 | R12.11 Cinematic Runtime | À connecter à R11 |
 | R12.12 Accessibility | Premier contraste/échelle ; navigation complète à auditer |
@@ -91,3 +91,56 @@ certifié en test intégré Qt réel, avec graphismes partagés finalisés.
 ### Viewport partagé R3 (PR #237)
 
 Le Player n'a plus son moteur Canvas QML. `TacticalBoard.qml` conserve les propriétés `battle`, `exploration`, `selected` et le signal `cellSelected`, tout en déléguant entièrement le rendu et le picking à `IsoViewport.qml`. `scene_for_player` projette la bataille via `scene_from_mission` ou l'exploration via `scene_from_exploration`, exclusivement depuis la session R1. Le zoom/pan et les textures sont les mêmes que dans l'éditeur R5. Les futures intégrations de sprites/animations et les performances GPU sont à certifier séparément.
+
+### R12.8–R12.9 — Commandes et préférences (tranche suivante)
+
+Le Player conserve désormais ses réglages **indépendamment** des checkpoints
+`GameSession`, dans `~/.drawtemp/player5/jeanne/player-preferences.json`
+(`--save-dir` permet de choisir un autre profil local). Le document est
+versionné (`version: 1`) et remplacé atomiquement. Les fichiers corrompus ou
+de version inconnue ne sont jamais migrés silencieusement : chargement des
+valeurs par défaut en mémoire et préservation du fichier brut dans
+`player-preferences.json.invalid` lors de la première modification explicite.
+
+#### Commandes
+
+| Action | AZERTY | QWERTY | Portée |
+|---|---|---|---|
+| Explorer haut / gauche / bas / droite | Z / Q / S / D | W / A / S / D | Exploration |
+| Sélection tactique | Flèches | Flèches | Combat |
+| Déplacer / attaquer / terminer | M / A / Espace | M / A / Espace | Combat |
+| Sauvegarde / pause | F5 / Échap | F5 / Échap | Global (hors titre) |
+
+Le menu **Options** comporte un sélecteur AZERTY/QWERTY et un sélecteur de
+touche pour chacune des commandes. Chaque profil conserve ses propres
+personnalisations. Les flèches directionnelles restent accessibles pour
+déplacement/sélection même après personnalisation. Un même raccourci ne peut
+pas être affecté deux fois au sein du même contexte ou entre une commande
+globale et une commande contextuelle. En cas de collision, aucune modification
+n'est sauvegardée ; le joueur voit l'erreur dans Options. Le bouton
+« Réinitialiser les touches » restaure le profil actif uniquement.
+
+Les raccourcis passent par des `Shortcut` Qt de portée fenêtre,
+automatiquement désactivés pendant les popups, pour ne pas capturer les
+flèches/lettres d'un champ d'options. Aucune règle tactique ni revision de
+simulation n'est modifiée par un réglage.
+
+#### Affichage et accessibilité
+
+Les réglages taille des textes (85–135 %), contraste, plein écran,
+quadrillage et affichage des hauteurs sont maintenant persistants.
+Le quadrillage/les hauteurs utilisent directement les options du viewport
+partagé R3. La configuration des volumes ne sera ajoutée qu'avec un runtime
+audio réellement raccordé (R11), pour éviter des curseurs factices.
+
+#### Validation ciblée
+
+```bash
+python -m unittest tests_standalone.test_drawtemp5_r12_preferences -v
+python -m unittest tests_standalone.test_drawtemp5_r12 -v
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  python -m drawtemp.player.qt_app --smoke --smoke-scene exploration
+```
+
+Le smoke Qt ne remplace pas la validation manuelle d'une session longue et
+du rendu GPU. Le **Gate R12 demeure ouvert**.
