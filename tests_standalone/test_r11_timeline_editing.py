@@ -90,6 +90,34 @@ class TimelineDocumentTests(TestCase):
 @skipUnless(os.environ.get("DRAWTEMP_QT_GUI_SMOKE") == "1",
             "Qt UI smoke requires a display and PySide6")
 class TimelineQtSmokeTests(TestCase):
+    def test_paused_seek_and_restore_do_not_restart_audio(self):
+        from unittest.mock import Mock
+        from PySide6.QtWidgets import QApplication
+        from drawtemp.player.qt_cinematic import CinematicStage
+        app = QApplication.instance() or QApplication([])
+        content = Content.load(DEFAULT_CONTENT)
+        doc = CinematicDocument(GameProject.default(content), content)
+        clip = doc.clip(doc.add_jeanne_intro())
+        audio = Mock()
+        stage = CinematicStage(clip, audio=audio)
+        try:
+            stage.pause()
+            audio.reset_mock()
+            stage.seek(2700)
+            self.assertFalse(stage.playing)
+            audio.stop_cues.assert_called_once()
+            audio.pause_tracks.assert_called_once()
+            self.assertEqual(stage.bridge.frame["timeMs"], 2700)
+            audio.reset_mock()
+            stage.restore({"time_ms": 3500, "playing": False})
+            self.assertFalse(stage.playing)
+            self.assertEqual(stage.time_ms, 3500)
+            audio.pause_tracks.assert_called()
+            audio.stop_cues.assert_called_once()
+        finally:
+            stage.close()
+            app.processEvents()
+
     def test_handles_select_move_and_seek_with_one_transaction(self):
         from PySide6.QtWidgets import QApplication, QMessageBox, QGraphicsItem
         from drawtemp.studio.cinematic_timeline import TimelineBlock, TimelineKeyframe
