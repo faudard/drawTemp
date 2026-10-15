@@ -38,6 +38,7 @@ class ConstructionPick:
     anchor: tuple[int, int]
     cell: tuple[int, int]
     part: str
+    level: int = 0
 
 
 @dataclass(frozen=True)
@@ -172,10 +173,24 @@ class ConstructionWorkspace:
             visual = building_appearance(record)
             if (hit.cell[0]-x0, hit.cell[1]-y0) not in {tuple(c) for c in visual["windows"]}:
                 raise AuthoringError("invalid_pick", "select", "No window at this wall")
+        if hit.part == "floor":
+            floors = _mission(data, self.mission_id).get("interior_floors", ())
+            dx, dy = hit.cell[0]-hit.anchor[0], hit.cell[1]-hit.anchor[1]
+            if (type(hit.level) is not int or hit.level < 1 or
+                    not any(f["structure_id"] == hit.structure_id and
+                            f["level"] == hit.level and
+                            any(t["pos"] == [dx, dy] for t in f["tiles"])
+                            for f in floors)):
+                raise AuthoringError("invalid_pick", "select",
+                                     "No visible authored floor tile at this cell")
+        elif hit.level != 0:
+            raise AuthoringError("invalid_pick", "select", "Level is not a floor")
+        prior_level = (self._level if self._pick is not None and
+                       self._pick.structure_id == hit.structure_id else 0)
         self._pick = hit
         self._last_pick = hit
         self._selection_revision = self.authoring.revision
-        self._level = 0
+        self._level = hit.level if hit.part == "floor" else prior_level
         return self.inspect()
 
     def _selected(self):
