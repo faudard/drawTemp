@@ -3,6 +3,7 @@
 Gameplay remains in the R1 SDK. All coordinates refer to tile centres.
 """
 from dataclasses import dataclass
+from copy import deepcopy
 from collections.abc import Mapping
 from math import floor
 import hashlib
@@ -119,7 +120,9 @@ def scene_from_mission(mission, snapshot=None):
     return {"mission": mission.id, "width": mission.board.width,
             "height": mission.board.height,
             "revision": int(getattr(snapshot, "revision", 0)),
-            "tiles": tiles, "actors": actors, "objects": objects}
+            "tiles": tiles, "actors": actors, "objects": objects,
+            "structures": deepcopy(mission.structures),
+            "interior_floors": deepcopy(mission.interior_floors)}
 
 
 def scene_from_exploration(stage, *, revision=0):
@@ -179,7 +182,8 @@ OVERLAY_COLORS = {
 
 
 def render_items(scene, camera, projection=IsoProjection(), selected=None,
-                 *, tile_index=None, overlays=None):
+                 *, tile_index=None, overlays=None, active_level=0,
+                 actor_positions=None):
     """Render common depth-sorted Qt Quick records with indexed tile culling.
 
     Optional overlays are cosmetic, revision-independent cells. They never
@@ -239,10 +243,22 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                          "alive": a["alive"], "sx": sx, "sy": sy,
                          "direction": a.get("direction", "south"),
                          "zOrder": (x + y) * 100 + 60})
+    from .visual_compositor import building_surfaces
+    margin = projection.width * 2
+    for part in building_surfaces(scene, projection, selected=selected,
+                                  active_level=active_level,
+                                  actor_positions=actor_positions):
+        x0, y0 = camera.screen(part["sx"], part["sy"])
+        x1, y1 = camera.screen(part["sx"] + part["spanX"],
+                                part["sy"] + part["spanY"])
+        if x1 >= -margin and x0 <= camera.width + margin and (
+                y1 >= -margin and y0 <= camera.height + margin):
+            rows.append(part)
     return sorted(rows, key=lambda r: (r["zOrder"], r["id"]))
 
 
-def pick(scene, camera, sx, sy, projection=IsoProjection()):
+def pick(scene, camera, sx, sy, projection=IsoProjection(), *,
+         selected=None, active_level=0, actor_positions=None):
     wx, wy = camera.world(sx, sy)
     elevations = {(t["x"], t["y"]): t["height"] for t in scene["tiles"] if t["height"]}
     hits = []
@@ -257,5 +273,11 @@ def pick(scene, camera, sx, sy, projection=IsoProjection()):
             hits.append(((o["x"] + o["y"]) * 100 + 30, {"kind": "object", "id": o["id"]}))
     if hits:
         return max(hits, key=lambda row: row[0])[1]
+    from .visual_compositor import building_surfaces, top_building_hit
+    structure_hit = top_building_hit(building_surfaces(
+        scene, projection, selected=selected, active_level=active_level,
+        actor_positions=actor_positions), camera, sx, sy)
+    if structure_hit is not None:
+        return structure_hit
     cell = projection.pick(wx, wy, scene["width"], scene["height"], elevations)
     return {"kind": "tile", "cell": list(cell)} if cell else None

@@ -412,3 +412,26 @@ Prototype opt-in sous Python 3.12 : `python -m pip install ".[qt6]"`,
 puis `python -m drawtemp.platform.qt_bootstrap`.
 Voir [les contrats et validations R0](docs/drawtemp5/R0_FOUNDATION.md).
 Le Studio/Player Tk demeure le client fonctionnel pendant la migration.
+
+
+## DrawTemp 5.0 — Migration R16 (pré-certification)
+
+Le **nouvel assistant headless R16** produit une copie validée de la paire
+Content/GameProject, préserve les fichiers originaux octet pour octet,
+et fournit un rollback explicite sans écrasement. Les sauvegardes
+`game_session` v1 et `session_checkpoint` v2 peuvent être importées
+**uniquement après vérification de leurs checksums et replays**.
+
+```bash
+python -m drawtemp.sdk.legacy_migration project --content sporebound/content/jeanne.json --dry-run
+python -m drawtemp.sdk.legacy_migration project --content sporebound/content/jeanne.json --destination ./jeanne-r16
+python -m drawtemp.sdk.legacy_migration rollback --bundle ./jeanne-r16 --destination ./jeanne-original
+python scripts/inventory_drawtemp5_legacy.py --report r16-inventory.json
+```
+
+R16 **n'est pas certifié** : les clients/Canvas Tk et `sporebound` restent
+disponibles jusqu'à validation de R14, packaging autonome R15 et parité des
+projets et sauvegardes historiques. Les formats non supportés sont refusés,
+jamais convertis silencieusement.
+
+Voir [R16 — guide migration et conditions de retrait](docs/drawtemp5/R16_LEGACY_MIGRATION.md).
