@@ -4,9 +4,9 @@ One gesture produces one immutable, validated document edit at mouse release.
 Scene items are intentionally disposable: a rebuild happens after commit.
 """
 from PySide6.QtCore import QPointF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QBrush, QPen, QPolygonF
+from PySide6.QtGui import QColor, QBrush, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (
-    QGraphicsEllipseItem, QGraphicsItem, QGraphicsPolygonItem,
+    QGraphicsItem, QGraphicsPolygonItem,
     QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsView,
 )
 
@@ -19,7 +19,7 @@ class TimelineView(QGraphicsView):
     def __init__(self, scene, parent=None):
         super().__init__(scene, parent)
         self.scale = None
-        self.setRenderHint(self.renderHints().Antialiasing, True)
+        self.setRenderHint(QPainter.Antialiasing, True)
 
     def mousePressEvent(self, event):
         point = self.mapToScene(event.pos())
@@ -64,8 +64,14 @@ class TimelineBlock(QGraphicsRectItem):
             return QPointF(x, self.lane_y)
         return super().itemChange(change, value)
 
+    def mousePressEvent(self, event):
+        self._pressed_x = self.pos().x()
+        super().mousePressEvent(event)
+
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
+        if abs(self.pos().x() - getattr(self, "_pressed_x", self.pos().x())) < 2:
+            return  # Selection never snaps an existing unsnapped event.
         target = self.scale.absolute(self.pos().x(), self.event_duration)
         if target == self.original_ms:
             self.setPos(self.scale.time_to_x(self.original_ms), self.lane_y)
@@ -106,10 +112,13 @@ class TimelineKeyframe(QGraphicsPolygonItem):
 
     def mousePressEvent(self, event):
         # Selection belongs to this handle; moving a key never moves its track.
+        self._pressed_x = self.pos().x()
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
+        if abs(self.pos().x() - getattr(self, "_pressed_x", self.pos().x())) < 2:
+            return
         absolute_x = self.parentItem().pos().x() + self.pos().x()
         target = self.scale.local_key(absolute_x, self.start_ms,
                                       self.event_duration)
