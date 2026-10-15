@@ -141,6 +141,11 @@ class LayerWorkspaceTests(unittest.TestCase):
             self.assertFalse(path.with_suffix(".game.json").exists())
             self.assertEqual(sidecar.read_text(encoding="utf-8"), "Existing sidecar")
 
+    def test_unsaved_project_retains_save_as_contract(self):
+        with self.assertRaises(AuthoringError) as error:
+            self.studio.save()
+        self.assertEqual(error.exception.code, "no_destination")
+
     def test_undo_deleted_mission_repairs_selection(self):
         self.assertEqual(self.studio.mission_id, self.mid)
         self.studio.undo()  # Undo create
