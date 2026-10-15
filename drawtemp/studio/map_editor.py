@@ -37,7 +37,7 @@ except ImportError:
 
 
 class MapWindow(QMainWindow):
-    def __init__(self, studio=None):
+    def __init__(self, studio=None, *, character_pack=None, character_variant=None):
         super().__init__()
         self.studio = studio or MapStudio.reference()
         self.setWindowTitle("DrawTemp 5.0 — Éditeur de cartes R5")
@@ -80,7 +80,9 @@ class MapWindow(QMainWindow):
 
         # R3 controller is the only source of camera, hit-testing and render
         # delegates. Its scene is reconstructed from the validated R1 Content.
-        self.renderer = make_controller(self._render_scene())
+        self.renderer = make_controller(self._render_scene(),
+                                        character_pack=character_pack,
+                                        character_variant=character_variant)
         viewport = QQuickWidget(self)
         viewport.setResizeMode(QQuickWidget.SizeRootObjectToView)
         viewport.rootContext().setContextProperty("renderer", self.renderer)
@@ -349,6 +351,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--content", type=Path, help="Existing canonical Content JSON (paired .game.json)")
     parser.add_argument("--smoke", action="store_true", help="Create window in Qt offscreen CI, then exit")
+    parser.add_argument("--character-pack", type=Path, help="R7 published character atlas")
+    parser.add_argument("--character-variant", help="R7 character outfit ID")
     args = parser.parse_args(argv)
     try:
         from PySide6.QtCore import QTimer
@@ -356,7 +360,8 @@ def main(argv=None):
         parser.error('Qt 6 required: pip install ".[qt6]"')
     app = QApplication([sys.argv[0]])
     studio = MapStudio.open(args.content) if args.content else MapStudio.reference()
-    window = MapWindow(studio)
+    window = MapWindow(studio, character_pack=args.character_pack,
+                       character_variant=args.character_variant)
     window.show()
     if args.smoke:
         QTimer.singleShot(100, app.quit)
