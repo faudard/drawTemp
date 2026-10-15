@@ -521,6 +521,9 @@ def launch(content_path):
                 self.charts.set_report(build_visual_comparison(
                     result["baseline"], result["candidate"],
                     objective_changed=result["objective_changed"]))
+                # Draft A/B has aggregate results but no command-level trace:
+                # never keep an older mission's AI/PV evidence visible.
+                self.combat_analytics.clear()
                 self.tabs.setCurrentWidget(self.charts)
                 return
             self.current = result
