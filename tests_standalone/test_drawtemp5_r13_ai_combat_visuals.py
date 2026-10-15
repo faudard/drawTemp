@@ -38,7 +38,13 @@ class CombatTelemetryR13Tests(unittest.TestCase):
         self.assertEqual(sum(model["action_totals"].values()),
                          len(self.trace["steps"]))
         self.assertEqual(model["signals"], analytic["signals"])
-        self.assertEqual(model["signal_evidence"], analytic["evidence"])
+        for finding in analytic["evidence"]:
+            self.assertIn(finding, model["signal_evidence"])
+        for finding in self.trace["diagnostics"]["findings"]:
+            self.assertTrue(any(
+                event["step"] == finding["step"]
+                and event["signal"] == finding["code"]
+                for event in model["signal_evidence"]))
         self.assertEqual(json.loads(json.dumps(model)), model)
         self.assertEqual(self.trace, original)
 
