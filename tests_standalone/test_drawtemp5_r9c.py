@@ -102,6 +102,31 @@ class R9CCanonicalCommands(unittest.TestCase):
         self.studio.undo()
         self.assertEqual(len(self.studio.documents()["project"]["cinematics"][0]["events"]), 2)
 
+    def test_story_flag_and_inventory_contract_via_real_choice(self):
+        self.studio.create_scene(MISSION, "r9c_dialogue", "Choix", "Jeanne hésite")
+        self.studio.add_story_effect(
+            MISSION, "r9c_dialogue", "continue",
+            "set_flag", {"flag": "gate_opened", "value": "true"})
+        self.studio.add_story_effect(
+            MISSION, "r9c_dialogue", "continue",
+            "gold", {"amount": "30"})
+        scenes = self.studio.documents()["project"]["story"]["scenes"]
+        target = next(scene for scene in scenes if scene["id"] == "r9c_dialogue")
+        self.assertEqual(target["choices"][0]["effects"], [
+            {"kind": "set_flag", "flag": "gate_opened", "value": True},
+            {"kind": "gold", "amount": 30}])
+        snapshot = self.studio.documents()
+        with self.assertRaises(AuthoringError):
+            self.studio.add_story_effect(
+                MISSION, "r9c_dialogue", "continue",
+                "grant_item", {"item": "missing_item", "quantity": "1"})
+        self.assertEqual(self.studio.documents(), snapshot)
+        self.studio.undo()
+        scenes = self.studio.documents()["project"]["story"]["scenes"]
+        self.assertEqual(next(s for s in scenes
+                              if s["id"] == "r9c_dialogue")["choices"][0]["effects"],
+                         [{"kind": "set_flag", "flag": "gate_opened", "value": True}])
+
     def test_overlay_matches_elevated_iso_tiles_and_never_mutates_scene(self):
         scene = self.studio.iso_scene(MISSION)
         source = deepcopy(scene)
