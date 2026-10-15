@@ -1,9 +1,12 @@
 """R14 Qt 6 functional composition smoke; software/offscreen != real GPU or Player E2E."""
 import os
+import importlib.util
 from pathlib import Path
 import unittest
 
 
+@unittest.skipUnless(importlib.util.find_spec('PySide6') is not None,
+                     'Qt smoke is covered in the optional PySide6 CI matrix')
 class QtIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
