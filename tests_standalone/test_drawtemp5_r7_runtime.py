@@ -8,6 +8,7 @@ from drawtemp.assets.characters import CharacterError, export_pack, starter_libr
 from drawtemp.assets.character_runtime import CharacterPack
 from drawtemp.render.iso_scene import Camera, IsoProjection, render_items, scene_from_mission
 from drawtemp.sdk.reference import MISSION, reference_project
+from sporebound.model import RuleError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,7 +43,8 @@ class CharacterRuntimeTests(unittest.TestCase):
                                                  elapsed_ms=360))
                 self.assertTrue(first["spriteUrl"].startswith("file:"))
             self.assertIsNone(runtime.preview_actor("unknown"))
-            self.assertIsNone(runtime.preview_actor("jeanne", direction="diagonal"))
+            with self.assertRaises(CharacterError):
+                runtime.preview_actor("jeanne", direction="diagonal")
             self.assertEqual(runtime.duration("historical", "walk", "south"), 360)
             self.assertEqual(runtime.duration("historical", "run", "south"), 0)
             # End-of-action frames are held, never wrapped.
@@ -81,7 +83,7 @@ class CharacterRuntimeTests(unittest.TestCase):
             registry = json.loads(registry_path.read_text(encoding="utf-8"))
             next(x for x in registry["entries"] if x["kind"] == "sprite")["path"] = "../escape.png"
             registry_path.write_text(json.dumps(registry), encoding="utf-8")
-            with self.assertRaises(ValueError):
+            with self.assertRaises((ValueError, RuleError)):
                 CharacterPack(root)
 
     def test_shared_scene_projection_retains_direction_without_gameplay_changes(self):
