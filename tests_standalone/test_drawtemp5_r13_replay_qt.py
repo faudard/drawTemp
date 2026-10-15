@@ -80,11 +80,21 @@ class R13ReplayQtTests(unittest.TestCase):
         panel.mode.setCurrentIndex(1)
         self.assertEqual(panel.canvas.mode, "visits")
         at_start = panel.canvas.grab().toImage()
+        left, top, size = panel.canvas._geometry()
+        hotspot = (int(left + 2.5*size), int(top + 1.5*size))
 
         panel.set_step(4)
         self.assertEqual(panel.canvas.step, 4)
         at_end = panel.canvas.grab().toImage()
-        self.assertNotEqual(at_start, at_end)
+        self.assertNotEqual(
+            at_start.pixel(*hotspot), at_end.pixel(*hotspot),
+            "Observed movement must produce a visible heatmap cell")
+        panel.set_step(0)
+        self.assertEqual(
+            at_start.pixel(*hotspot),
+            panel.canvas.grab().toImage().pixel(*hotspot),
+            "Rewind must restore the same deterministic heatmap pixel")
+        panel.set_step(4)
         self.assertEqual(panel.canvas._counts[(1, 1)], 1)
         self.assertEqual(panel.canvas._counts[(2, 1)], 1)
         panel.mode.setCurrentIndex(0)
