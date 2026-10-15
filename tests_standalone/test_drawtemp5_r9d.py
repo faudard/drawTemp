@@ -96,6 +96,26 @@ class R9DPageContracts(unittest.TestCase):
         self.assertEqual(Battle.replay(battle.recording()).digest(),
                          battle.digest())
 
+    def test_real_game_session_checkpoint_restores_event_page_state(self):
+        from drawtemp.core import GameProject
+        from sporebound.game_session import GameSession
+        self.studio.create(MISSION, "r9d_session", condition("tick", tick=0),
+                           [action("message", text="Garde")])
+        self.studio.configure_page(MISSION, "r9d_session", "base",
+                                   repeat=True, cooldown_ticks=2)
+        data = self.studio.documents()
+        rules = authored_rules_for_document(data["content"])
+        content = Content.from_dict(data["content"], rules=rules)
+        project = GameProject.from_dict(data["project"], content)
+        session = GameSession.new(content, project, "main")
+        session.start_mission(MISSION)
+        before = session.recording()
+        restored = GameSession.from_recording(before, content, project)
+        self.assertEqual(restored.recording(), before)
+        self.assertEqual(
+            page_snapshot(restored.active_battle, "r9d_session"),
+            page_snapshot(session.active_battle, "r9d_session"))
+
     def test_authoring_undo_redo_and_invalid_page_are_atomic(self):
         self.studio.create(MISSION, "r9d_author", condition("tick", tick=0),
                            [action("message", text="original")])
