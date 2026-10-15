@@ -179,10 +179,10 @@ class CinematicDocument:
             event.update(add_motion_keyframe(event, local_time_ms))
         self._edit(operation)
 
-    def update_keyframe(self, clip_id, event_id, at_ms, **changes):
+    def update_keyframe(self, clip_id, event_id, local_time_ms, **changes):
         def operation(data):
             _, event = self._event_in(data, clip_id, event_id)
-            event.update(update_motion_keyframe(event, at_ms, **changes))
+            event.update(update_motion_keyframe(event, local_time_ms, **changes))
         self._edit(operation)
 
     def undo(self):
