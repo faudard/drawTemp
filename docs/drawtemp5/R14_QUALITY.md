@@ -88,3 +88,30 @@ The asset validator `drawtemp.quality.r14.validate_asset_manifest(root, entries)
 Each report captures host OS, Python, runner OS, source revision, per-probe logs and coverage. Do not suppress historical failures or reclassify skipped tests as passed. Any regression should leave an actionable report with its failed command and log. Qt software tests, virtual display tests, visual goldens and real-GPU measurements must be labelled separately. Retain artefacts from representative Windows, macOS and Linux hosts; record GPU, driver, Qt backend and display resolution for measurements.
 
 See [the R14 roadmap](../DRAWTEMP_5_0_ROADMAP.md#r14) and [the existing R0 foundation CI](../../.github/workflows/drawtemp5-r0.yml).
+
+## Second tranche — GUI action journeys and visual baseline tooling
+
+The R14 continuation adds `--gui --visual` to the evidence runner:
+
+```sh
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software DRAWTEMP_R14_ARTIFACT_DIR=r14-images \
+  python scripts/certify_drawtemp5_r14.py --report r14-report.json --qt --gui --visual
+```
+
+- **R14.4 (partial):** `tests_standalone/test_drawtemp5_r14_gui.py` drives the real R5 `MapWindow` with Qt mouse events: paint a tile, Undo, Redo, Save, reopen the Content/GameProject pair. It also loads the actual R12 `Main.qml` with its production `PlayerBridge`, clicks New Game → narrative choice → mission → Save → Continue, and compares replay recordings. The bridge is now exposed by `create_bridge` so the test does not mock Player calls.
+- **R14.5 (partial):** `drawtemp.quality.visual.compare_png` compares decoded RGBA pixels rather than PNG files, with explicit per-channel tolerance and changed-pixel fraction; a diff heatmap is emitted on demand. A missing approved golden is **always an error**; no capture is silently promoted to baseline. `tests_standalone/test_drawtemp5_r14_visual.py` asserts exact equivalence, tolerance behavior, visible differences, mismatched dimensions and rejection of missing goldens.
+- **Capture evidence:** the GUI job uploads `r14-images/r14-studio.png` from the actual R3 viewport and, when supported, `r14-images/r14-player.png` from the Player. These are **candidate snapshots for review**, not approvals or golden comparisons. CI does not claim multi-DPI coverage.
+- **Scope still open:** full onscreen GUI paths on physical desktops, approved and versioned per-backend goldens across DPI/zoom, color management/font variation policy, accessibility QA and real GPU frame samples. R14.4 and R14.5 remain `partial`, and R14.12 remains `blocked`.
+
+To compare a reviewed reference with a fresh screenshot:
+
+```python
+from drawtemp.quality.visual import compare_png
+result = compare_png(
+    "captures/studio.png", "approved/linux-qt6/studio.png",
+    max_channel_delta=12, max_changed_fraction=0.001,
+    diff_path="captures/studio.diff.png")
+assert result["passed"], result
+```
+
+The reference must be reviewed and committed or supplied from a trusted release baseline, and matched to the tested Qt backend/DPI; generating a golden from the same run under test is not permitted.

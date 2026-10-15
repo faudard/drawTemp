@@ -15,6 +15,9 @@ Item {
     property bool showBlocked: false
     property bool showHeights: false
     property bool showActors: true
+    // Player-only presentation: briefly conceal the static actor while its
+    // committed move / attack clip is displayed. Studio defaults to none.
+    property var concealedActorIds: []
     property bool showLegend: interactionMode === "pan"
     property var hoveredCell: ({})
     readonly property var camera: renderer.cameraState
@@ -44,7 +47,8 @@ Item {
             property real scaleFactor: root.camera.zoom
             property bool isTile: row.kind === "tile"
             property bool isActor: row.kind === "actor"
-            visible: !isActor || root.showActors
+            visible: (!isActor || root.showActors) &&
+                     (!isActor || root.concealedActorIds.indexOf(row.id) < 0)
             sourceComponent: isTile ? tileComponent : (isActor ? actorComponent : objectComponent)
             x: root.width / 2 + root.camera.panX + row.sx * scaleFactor
                - (isTile ? 48 : isActor ? 20 : 15) * scaleFactor
@@ -64,6 +68,35 @@ Item {
                 (root.hoveredCell.x === tile.x && root.hoveredCell.y === tile.y)
             width: 96
             height: 48
+            // Exposed relief only when an adjacent height is lower.
+            Shape {
+                visible: tile.eastDrop > 0
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: 0.8
+                    strokeColor: "#39444a"
+                    fillColor: "#716f62"
+                    startX: 96; startY: 24
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 48; y: 48 + tile.eastDrop * 12 }
+                    PathLine { x: 96; y: 24 + tile.eastDrop * 12 }
+                    PathLine { x: 96; y: 24 }
+                }
+            }
+            Shape {
+                visible: tile.southDrop > 0
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: 0.8
+                    strokeColor: "#37444a"
+                    fillColor: "#8c8573"
+                    startX: 48; startY: 48
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 0; y: 24 + tile.southDrop * 12 }
+                    PathLine { x: 48; y: 48 + tile.southDrop * 12 }
+                    PathLine { x: 48; y: 48 }
+                }
+            }
             Shape {
                 anchors.fill: parent
                 ShapePath {
@@ -85,6 +118,35 @@ Item {
                 fillMode: Image.Stretch
                 smooth: false
                 asynchronous: false
+            }
+            // Transient overlays never mutate tactical or authored data.
+            Shape {
+                visible: tile.overlay !== ""
+                opacity: 0.24
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: 0
+                    fillColor: tile.overlayColor
+                    startX: 48; startY: 0
+                    PathLine { x: 96; y: 24 }
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 48; y: 0 }
+                }
+            }
+            Shape {
+                visible: tile.overlay !== ""
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: 2.5
+                    strokeColor: tile.overlayColor
+                    fillColor: "transparent"
+                    startX: 48; startY: 0
+                    PathLine { x: 96; y: 24 }
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 48; y: 0 }
+                }
             }
             Shape {
                 visible: highlighted || tile.goal
