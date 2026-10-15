@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from .iso_scene import Camera, IsoProjection, pick, render_items, scene_from_mission
+from .tile_chunks import TileChunkIndex
 
 
 def default_atlas_url():
@@ -36,6 +37,8 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             self._base_items = []
             self._elapsed_ms = 0
             self.assets = assets
+            self._index = TileChunkIndex(scene)
+            self.overlays = {}
             self._atlas = default_atlas_url() if atlas_url is None else atlas_url
             self.center_scene()
 
@@ -46,7 +49,9 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             self.refresh()
 
         def refresh(self):
-            self._base_items = render_items(self.scene, self.camera, self.projection, self.selection)
+            self._base_items = render_items(self.scene, self.camera, self.projection,
+                                            self.selection, tile_index=self._index,
+                                            overlays=self.overlays)
             self._items = (self.assets.decorate(self._base_items, elapsed_ms=self._elapsed_ms)
                            if self.assets is not None else self._base_items)
             self.sceneChanged.emit()
@@ -102,6 +107,42 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             self.camera.zoom_at(1.15 if angle > 0 else 1 / 1.15, x, y)
             self.refresh()
 
+        @Slot("QVariantMap")
+        def setOverlays(self, overlays):
+            """Set cosmetic [x,y] cell sets for reach, path, LOS, range, intents.
+
+            Validation runs before mutating the live viewport. Gameplay and
+            authoring remain owned by the R1/R5 controllers, not this adapter.
+            """
+            from .iso_scene import OVERLAY_COLORS
+            candidate = {}
+            if not hasattr(overlays, "items"):
+                raise ValueError("Overlays must be a mapping")
+            for kind, cells in overlays.items():
+                if kind not in OVERLAY_COLORS:
+                    raise ValueError("Unknown overlay: " + str(kind))
+                if not isinstance(cells, (tuple, list)):
+                    raise ValueError("Overlay cells must be a sequence")
+                normalized = []
+                for cell in cells:
+                    if not isinstance(cell, (tuple, list)) or len(cell) != 2:
+                        raise ValueError("Overlay cells must be [x,y]")
+                    x, y = cell
+                    if type(x) is not int or type(y) is not int:
+                        raise ValueError("Overlay coordinates must be integers")
+                    if not (0 <= x < self.scene["width"] and
+                            0 <= y < self.scene["height"]):
+                        raise ValueError("Overlay cell outside the map")
+                    normalized.append((x, y))
+                candidate[kind] = tuple(normalized)
+            self.overlays = candidate
+            self.refresh()
+
+        @Slot()
+        def clearOverlays(self):
+            self.overlays = {}
+            self.refresh()
+
         @Slot(float, float, result="QVariantMap")
         def cellAt(self, x, y):
             """Return a terrain cell even when an actor/object obscures it.
@@ -138,9 +179,12 @@ def make_controller(scene, atlas_url=None, *, assets=None):
                        self.scene["height"] != new_scene["height"])
             self.scene = new_scene
             self.selection = None
+            self.overlays = {}  # Never carry stale tactical previews across turns.
             if changed:
+                self._index = TileChunkIndex(new_scene)
                 self.center_scene()
             else:
+                self._index.update(new_scene)
                 self.refresh()
 
     return RendererController()
