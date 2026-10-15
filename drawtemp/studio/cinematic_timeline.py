@@ -32,6 +32,34 @@ class TimelineView(QGraphicsView):
             self.cursorRequested.emit(self.scale.seek(point.x()))
         super().mousePressEvent(event)
 
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Left, Qt.Key_Right):
+            selected = self.scene().selectedItems()
+            if selected:
+                # Keyframes get priority when parent and child are selected.
+                item = next((i for i in selected if isinstance(i, TimelineKeyframe)),
+                            next((i for i in selected if isinstance(i, TimelineBlock)),
+                                 None))
+                if item is not None:
+                    step = 1000 if event.modifiers() & Qt.ShiftModifier else 100
+                    delta = step if event.key() == Qt.Key_Right else -step
+                    if isinstance(item, TimelineKeyframe):
+                        new = min(item.event_duration - 1,
+                                  max(1, item.old_local + delta))
+                        if new != item.old_local:
+                            QTimer.singleShot(0, lambda: item.move_callback(
+                                item.event_id, item.old_local, new,
+                                item.base_revision))
+                    else:
+                        new = min(item.scale.duration_ms - item.event_duration,
+                                  max(0, item.original_ms + delta))
+                        if new != item.original_ms:
+                            QTimer.singleShot(0, lambda: item.move_callback(
+                                item.event_id, new, item.base_revision))
+                    event.accept()
+                    return
+        super().keyPressEvent(event)
+
 
 class TimelineBlock(QGraphicsRectItem):
     def __init__(self, event, scale, lane_y, revision, move_callback, color):
@@ -71,6 +99,7 @@ class TimelineBlock(QGraphicsRectItem):
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
         if abs(self.pos().x() - getattr(self, "_pressed_x", self.pos().x())) < 2:
+            self.setPos(self.scale.time_to_x(self.original_ms), self.lane_y)
             return  # Selection never snaps an existing unsnapped event.
         target = self.scale.absolute(self.pos().x(), self.event_duration)
         if target == self.original_ms:
@@ -117,6 +146,7 @@ class TimelineKeyframe(QGraphicsPolygonItem):
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
         if abs(self.pos().x() - getattr(self, "_pressed_x", self.pos().x())) < 2:
+            self.setPos(self.scale.width_for(self.old_local), 10)
             return
         absolute_x = self.parentItem().pos().x() + self.pos().x()
         target = self.scale.local_key(absolute_x, self.start_ms,
