@@ -391,6 +391,8 @@ ApplicationWindow {
                             visible: renderer.characterOutfits.length > 1
                             Layout.fillWidth: true
                             model: renderer.characterOutfits
+                            currentIndex: Math.max(0, renderer.characterOutfits.indexOf(
+                                               renderer.characterCurrentOutfit))
                             onActivated: player.previewOutfit(renderer.characterId, currentText)
                         }
                         Label {
