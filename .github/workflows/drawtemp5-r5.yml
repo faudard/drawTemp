@@ -8,7 +8,9 @@ on:
       - 'drawtemp/render/iso_scene.py'
       - 'drawtemp/render/qt_viewport.py'
       - 'tests_standalone/test_drawtemp5_shared_viewport.py'
-      - 'tests_standalone/test_drawtemp5_r5_map.py'
+      - 'tests_standalone/test_drawtemp5_r5_*.py'
+      - 'drawtemp/render/autotile.py'
+      - 'drawtemp/studio/map_dragdrop.py'
       - 'pyproject.toml'
       - '.github/workflows/drawtemp5-r5.yml'
   workflow_dispatch:
@@ -28,7 +30,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install .
       - name: Transactional map authoring tests
-        run: python -m unittest tests_standalone.test_drawtemp5_r5_map tests_standalone.test_drawtemp5_r5_layers tests_standalone.test_drawtemp5_r1_authoring -v
+        run: python -m unittest tests_standalone.test_drawtemp5_r5_map tests_standalone.test_drawtemp5_r5_layers tests_standalone.test_drawtemp5_r5_smart_palette tests_standalone.test_drawtemp5_shared_viewport tests_standalone.test_drawtemp5_r1_authoring -v
   qt-offscreen:
     runs-on: ubuntu-latest
     steps:
@@ -45,4 +47,4 @@ jobs:
           QT_QUICK_BACKEND: software
         run: |
           python -m drawtemp.studio.map_editor --smoke
-          python -m unittest tests_standalone.test_drawtemp5_r5_layers_qt -v
+          python -m unittest tests_standalone.test_drawtemp5_r5_layers_qt tests_standalone.test_drawtemp5_r5_smart_palette_qt -v
