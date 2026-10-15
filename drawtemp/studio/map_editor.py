@@ -325,10 +325,10 @@ class MapWindow(QMainWindow):
         current = self.studio.snapshot()
         warnings = self.studio.diagnostics()
         self.diagnostics.setPlainText(
-            f'{mission["name"]}\\n{board["width"]} × {board["height"]} • '
-            f'révision {current["revision"]}\\n'
-            f'{"Modifications non enregistrées" if current["dirty"] else "Enregistré / nouveau"}\\n\\n'
-            + ("\\n".join(warnings) if warnings else "Aucun problème de navigation détecté."))
+            f'{mission["name"]}\n{board["width"]} × {board["height"]} • '
+            f'révision {current["revision"]}\n'
+            f'{"Modifications non enregistrées" if current["dirty"] else "Enregistré / nouveau"}\n\n'
+            + ("\n".join(warnings) if warnings else "Aucun problème de navigation détecté."))
         index = self.objective.findText(mission["objective"])
         if index >= 0:
             self.objective.setCurrentIndex(index)
