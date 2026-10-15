@@ -49,7 +49,7 @@ DOOR = (
     PropertySpec("locked", "Porte verrouillée", "bool"),
 )
 DEFAULTS = {"maps": {"reward": 100, "target_ticks": 100},
-            "objects": {"amount": 1, "hp": 1, "locked": False}}
+            "objects": {"name": "", "amount": 1, "hp": 1, "locked": False}}
 
 
 class InspectorError(ValueError):
@@ -121,8 +121,12 @@ def common_value(snapshot, selected, key):
     valid = {spec.key for spec in shared_specs(pair, selected)}
     if key not in valid:
         raise InspectorError("Champ indisponible : " + key)
-    values = [_resolve(pair, resource).get(
-        key, DEFAULTS.get(resource.family, {}).get(key)) for resource in selected]
+    values = [
+        _resolve(pair, resource).get(
+            key, resource.resource_id if key == "name" else
+            DEFAULTS.get(resource.family, {}).get(key))
+        for resource in selected
+    ]
     first = values[0]
     return first, any(value != first for value in values[1:])
 
