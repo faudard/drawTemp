@@ -284,17 +284,28 @@ class StudioWindow(QMainWindow):
         layout.addWidget(self.inspector_title)
         self.form = QFormLayout()
         layout.addLayout(self.form)
-        self.name_edit = QLineEdit()
-        self.name_edit.setAccessibleName("Nom des ressources sélectionnées")
-        self.form.addRow("Nom", self.name_edit)
-        self.apply_button = QPushButton("Appliquer à la sélection")
+        self.name_edit = None
+        self.property_widgets = {}
+        self._edited_fields = set()
+        self._inspector_revision = self.session.revision
+        self.apply_button = QPushButton("Appliquer les propriétés")
         self.apply_button.clicked.connect(self.apply_selection)
+        self.apply_button.setEnabled(False)
         layout.addWidget(self.apply_button)
+        self.inspector_error = QLabel("")
+        self.inspector_error.setWordWrap(True)
+        self.inspector_error.setAccessibleName("Erreur de validation des propriétés")
+        layout.addWidget(self.inspector_error)
         self.references = QLabel("Aucune sélection")
         self.references.setWordWrap(True)
         self.references.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(self.references)
-        layout.addStretch(1)
+        layout.addWidget(QLabel("Références croisées — double-cliquer pour naviguer"))
+        self.links = QListWidget()
+        self.links.setAccessibleName("Références entrantes et sortantes")
+        self.links.itemActivated.connect(self.follow_reference)
+        self.links.itemDoubleClicked.connect(self.follow_reference)
+        layout.addWidget(self.links, 1)
         self.inspector_dock = self._dock(
             "Inspecteur", "r2-inspector-dock", host, Qt.RightDockWidgetArea)
 
@@ -325,7 +336,7 @@ class StudioWindow(QMainWindow):
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
-                     lambda: self.name_edit.setFocus())
+                     lambda: (self.name_edit or self.resource_view).setFocus())
         for identifier in WORKSPACES:
             self._action("go_" + identifier, "Atelier : " + LABELS[identifier],
                          lambda _checked=False, key=identifier: self.navigate(key))
