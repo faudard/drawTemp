@@ -49,6 +49,7 @@ class MapWindow(QMainWindow):
         toolbar = QToolBar("Carte", self)
         self.addToolBar(toolbar)
         for name, func in (
+            ("Nouveau / Export", self.creator),
             ("Nouvelle carte", self.create_map),
             ("Dupliquer", self.duplicate_map),
             ("Renommer", self.rename_map),
@@ -139,6 +140,11 @@ class MapWindow(QMainWindow):
         self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
         self.statusBar().showMessage("Viewport Qt Quick partagé R3 · édition R5")
         self.refresh_maps()
+
+    def creator(self):
+        # Import lazily: headless MapStudio and Player do not depend on Qt UI.
+        from .r15_creator import open_creator
+        open_creator(self)
 
     def _dock(self, title, widget, area):
         dock = QDockWidget(title, self)

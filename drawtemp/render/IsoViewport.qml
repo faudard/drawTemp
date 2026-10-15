@@ -25,6 +25,15 @@ Item {
     // Player-only presentation: briefly conceal the static actor while its
     // committed move / attack clip is displayed. Studio defaults to none.
     property var concealedActorIds: []
+    property var activeVisualClip: ({})
+    property real activeVisualPhase: 1
+
+    function actorMotion(row) {
+        if (row.kind !== "actor" || !activeVisualClip ||
+            row.id !== activeVisualClip.actor)
+            return ({})
+        return renderer.motionPoint(activeVisualClip, activeVisualPhase)
+    }
     property bool showLegend: interactionMode === "pan"
     property var hoveredCell: ({})
     readonly property var camera: renderer.cameraState
@@ -87,20 +96,31 @@ Item {
             property real scaleFactor: root.camera.zoom
             property bool isTile: row.kind === "tile"
             property bool isActor: row.kind === "actor"
-            visible: isActor
+            property bool isBuilding: row.kind === "building"
+            readonly property var motion: isActor ? root.actorMotion(row) : ({})
+            readonly property real renderSX: motion.sx !== undefined ? motion.sx : row.sx
+            readonly property real renderSY: motion.sy !== undefined ? motion.sy : row.sy
+            visible: isBuilding ? root.layerEnabled("Bâtiments")
+                     : isActor
                      ? (root.showActors && root.layerEnabled("Unités") &&
                         root.concealedActorIds.indexOf(row.id) < 0)
                      : isTile ? true : root.layerEnabled("Objets")
-            opacity: isActor ? root.layerAlpha("Unités")
+            opacity: isBuilding ? root.layerAlpha("Bâtiments")
+                     : isActor ? root.layerAlpha("Unités")
                      : isTile ? 1.0 : root.layerAlpha("Objets")
-            sourceComponent: isTile ? tileComponent : (isActor ? actorComponent : objectComponent)
-            x: root.width / 2 + root.camera.panX + row.sx * scaleFactor
-               - (isTile ? 48 : isActor ? (row.imageUrl ? row.pivotX : 20) : 15) * scaleFactor
-            y: root.height / 2 + root.camera.panY + row.sy * scaleFactor
-               - (isTile ? 24 : isActor ? (row.imageUrl ? row.pivotY : 68) : 40) * scaleFactor
+            sourceComponent: isTile ? tileComponent :
+                (isActor ? actorComponent : (isBuilding ? buildingComponent : objectComponent))
+            x: root.width / 2 + root.camera.panX + renderSX * scaleFactor
+               - (isTile ? 48 : isActor ? (row.imageUrl ? row.pivotX : 20) :
+                  isBuilding ? 0 : 15) * scaleFactor
+            y: root.height / 2 + root.camera.panY + renderSY * scaleFactor
+               - (isTile ? 24 : isActor ? (row.imageUrl ? row.pivotY : 68) :
+                  isBuilding ? 0 : 40) * scaleFactor
             scale: scaleFactor
             transformOrigin: Item.TopLeft
-            z: row.zOrder
+            // Render moving actors at their interpolated feet depth.
+            z: isActor && motion.worldX !== undefined ?
+                (motion.worldX + motion.worldY) * 100 + 60 : row.zOrder
         }
     }
 
@@ -276,6 +296,31 @@ Item {
         }
     }
 
+    // The same projected polygons are used for drawing and surface picking.
+    // A roof is omitted by the renderer when a living unit enters the house.
+    Component {
+        id: buildingComponent
+        Item {
+            property var structure: parent.row
+            width: structure.spanX
+            height: structure.spanY
+            Shape {
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: structure.part === "roof" ? 1.6 : 0.8
+                    strokeColor: structure.part === "roof" ? "#efcf9d" : "#5d514d"
+                    fillColor: structure.color
+                    startX: structure.points[0][0]
+                    startY: structure.points[0][1]
+                    PathLine { x: structure.points[1][0]; y: structure.points[1][1] }
+                    PathLine { x: structure.points[2][0]; y: structure.points[2][1] }
+                    PathLine { x: structure.points[3][0]; y: structure.points[3][1] }
+                    PathLine { x: structure.points[0][0]; y: structure.points[0][1] }
+                }
+            }
+        }
+    }
+
     Component {
         id: actorComponent
         Item {
@@ -315,6 +360,14 @@ Item {
                 width: 19; height: 19; radius: 10
                 x: 10; y: 5
                 color: "#eacaa1"; border.color: "#62504b"
+            }
+            Rectangle {
+                visible: root.activeVisualClip.actor === actor.id &&
+                         root.activeVisualClip.kind === "attack"
+                x: parent.width * 0.70; y: parent.height * 0.28
+                width: 28; height: 4; rotation: -30 + 70 * root.activeVisualPhase
+                radius: 1
+                color: "#f2e4b6"
             }
             Text {
                 text: actor.label || actor.id

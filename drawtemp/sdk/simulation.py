@@ -96,11 +96,6 @@ class Simulation:
         except OSError as exc:
             raise SimulationError('io_error', 'load', str(exc)) from exc
 
-    @property
-    def revision(self):
-        """Monotonic lease for presentation and background SDK work."""
-        return self._revision
-
     def recording(self):
         return deepcopy(self._session.recording())
 
@@ -211,35 +206,21 @@ class Simulation:
         sandbox._revision = self._revision
         return sandbox.execute(command)
 
-    def simulate(self, *, max_steps=100, cancelled=None, on_progress=None):
-        """Bounded detached AI simulation; never advances the live handle.
+    def simulate(self, *, max_steps=100):
+        """Bounded detached AI simulation; may stop before victory or at dialogue.
 
-        Optional pure-Python cancellation and progress hooks are intended for
-        SDK workers, not UI callbacks. Cancellation is cooperative at each
-        activation and leaves the source handle unchanged.
+        Returns a final immutable state. Never advances the live handle.
         """
         if type(max_steps) is not int or not 1 <= max_steps <= 1000:
             raise SimulationError('invalid_budget', 'simulate', 'Expected 1..1000 steps')
-        if cancelled is not None and not callable(cancelled):
-            raise SimulationError('invalid_callback', 'simulate', 'Expected cancellation callable')
-        if on_progress is not None and not callable(on_progress):
-            raise SimulationError('invalid_callback', 'simulate', 'Expected progress callable')
         sandbox = Simulation(self._session)
         sandbox._revision = self._revision
-        if on_progress is not None:
-            on_progress(0, max_steps)
-        for step in range(max_steps):
-            if cancelled is not None and cancelled():
-                raise SimulationError('cancelled', 'simulate', 'Simulation cancelled')
+        for _ in range(max_steps):
             battle = sandbox._session.active_battle
             if (battle is None or battle.result or sandbox._session.tactical_story_pending
                     or sandbox._session.progress.story_pending):
                 break
             sandbox.execute(choose_command(battle))
-            if on_progress is not None:
-                on_progress(step + 1, max_steps)
-        if cancelled is not None and cancelled():
-            raise SimulationError('cancelled', 'simulate', 'Simulation cancelled')
         return sandbox.snapshot()
 
     def save(self, path):

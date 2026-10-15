@@ -9,6 +9,7 @@ import sys
 
 from .iso_scene import Camera, IsoProjection, pick, render_items, scene_from_mission
 from .tile_chunks import TileChunkIndex
+from .visual_compositor import actor_visual_position, automatic_cutaway
 from .texture_batches import TerrainTextureBatches, make_image_provider
 
 
@@ -40,6 +41,7 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             self.assets = assets
             self._index = TileChunkIndex(scene)
             self.overlays = {}
+            self.active_level = 0
             self._atlas = default_atlas_url() if atlas_url is None else atlas_url
             self._batch = TerrainTextureBatches(self._index, atlas_url=self._atlas)
             self._batch_enabled = False  # Enabled only when an engine owns the provider.
@@ -58,7 +60,8 @@ def make_controller(scene, atlas_url=None, *, assets=None):
         def refresh(self):
             self._base_items = render_items(self.scene, self.camera, self.projection,
                                             self.selection, tile_index=self._index,
-                                            overlays=self.overlays)
+                                            overlays=self.overlays,
+                                            active_level=self.active_level)
             self._items = (self.assets.decorate(self._base_items, elapsed_ms=self._elapsed_ms)
                            if self.assets is not None else self._base_items)
             if self._batch_enabled:
@@ -150,6 +153,29 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             self._elapsed_ms = 0
             self.refresh()
 
+        @Property("QVariantList", notify=sceneChanged)
+        def autoCutawayStructures(self):
+            return list(automatic_cutaway(self.scene, selected=self.selection,
+                                          active_level=self.active_level))
+
+        @Slot(int)
+        def setActiveLevel(self, level):
+            if type(level) is not int or level < 0:
+                raise ValueError("Level must be a non-negative integer")
+            self.active_level = level
+            self.refresh()
+
+        @Slot("QVariantMap", float, result="QVariantMap")
+        def motionPoint(self, clip, phase):
+            """Project a committed R12 clip; no gameplay state is touched."""
+            actor_id = clip.get("actor") if hasattr(clip, "get") else None
+            actor = next((a for a in self.scene["actors"] if a["id"] == actor_id), None)
+            if actor is None:
+                return {}
+            return actor_visual_position(actor, dict(clip), phase,
+                                         self._index.elevations, self.scene["width"],
+                                         self.scene["height"], self.projection) or {}
+
         @Property(str, constant=True)
         def atlasUrl(self):
             return self._atlas
@@ -223,7 +249,8 @@ def make_controller(scene, atlas_url=None, *, assets=None):
 
         @Slot(float, float)
         def pickAt(self, x, y):
-            hit = pick(self.scene, self.camera, x, y, self.projection)
+            hit = pick(self.scene, self.camera, x, y, self.projection,
+                       selected=self.selection, active_level=self.active_level)
             self.selection = tuple(hit["cell"]) if hit and hit["kind"] == "tile" else None
             self.refresh()
             if hit is not None:
@@ -244,6 +271,8 @@ def make_controller(scene, atlas_url=None, *, assets=None):
             self.scene = new_scene
             self.selection = None
             self.overlays = {}  # Never carry stale tactical previews across turns.
+            if changed:
+                self.active_level = 0
             if changed:
                 self._index = TileChunkIndex(new_scene)
                 self._batch.reset(self._index)

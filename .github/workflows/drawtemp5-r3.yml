@@ -6,6 +6,7 @@ on:
       - 'scripts/benchmark_drawtemp5_r3.py'
       - 'tests_standalone/test_drawtemp5_r3.py'
       - 'tests_standalone/test_drawtemp5_r3b.py'
+      - 'tests_standalone/test_drawtemp5_r3c.py'
       - 'tests_standalone/test_drawtemp5_r3d.py'
       - 'scripts/benchmark_drawtemp5_r3d.py'
       - 'tests_standalone/test_drawtemp5_shared_viewport.py'
@@ -26,7 +27,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install .
-      - run: python -m unittest tests_standalone.test_drawtemp5_r3 tests_standalone.test_drawtemp5_r3b.ChunkAndLayerTests tests_standalone.test_drawtemp5_r3d.R3DContracts tests_standalone.test_drawtemp5_r1 tests_standalone.test_drawtemp5_shared_viewport.SharedRendererContractTests -v
+      - run: python -m unittest tests_standalone.test_drawtemp5_r3 tests_standalone.test_drawtemp5_r3b.ChunkAndLayerTests tests_standalone.test_drawtemp5_r3c.SharedCompositorTests tests_standalone.test_drawtemp5_r3d.R3DContracts tests_standalone.test_drawtemp5_r1 tests_standalone.test_drawtemp5_shared_viewport.SharedRendererContractTests -v
       - run: python scripts/audit_drawtemp5.py --check --strict
       - name: R3 CPU projection measurements (not GPU certification)
         run: python scripts/benchmark_drawtemp5_r3.py --frames 30 --output r3-cpu-projection.json
@@ -61,8 +62,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
-        run: python -m unittest tests_standalone.test_drawtemp5_shared_viewport.SharedRendererQtSmoke tests_standalone.test_drawtemp5_r3b.QtRendererR3BSmoke tests_standalone.test_drawtemp5_r3d.R3DQtSmoke -v
-
+        run: python -m unittest tests_standalone.test_drawtemp5_shared_viewport.SharedRendererQtSmoke tests_standalone.test_drawtemp5_r3b.QtRendererR3BSmoke tests_standalone.test_drawtemp5_r3c.QtR3CSmoke tests_standalone.test_drawtemp5_r3d.R3DQtSmoke -v
       - name: R3.D Qt Quick texture profile (software only, no hardware GPU claim)
         env:
           QT_QPA_PLATFORM: offscreen
