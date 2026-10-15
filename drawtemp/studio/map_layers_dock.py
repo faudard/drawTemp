@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QHBoxLayout, QLabel, QSlider, QSpinBox, QTreeWidget,
+    QAbstractItemView, QHeaderView, QHBoxLayout, QLabel, QSlider, QSpinBox, QTreeWidget,
     QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -32,9 +32,9 @@ class MapLayersDock(QWidget):
         self.tree.setSelectionMode(QAbstractItemView.SingleSelection)
         self.tree.setAlternatingRowColors(True)
         self.tree.header().setStretchLastSection(False)
-        self.tree.header().setSectionResizeMode(0, self.tree.header().Stretch)
+        self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
         for column in (1, 2):
-            self.tree.header().setSectionResizeMode(column, self.tree.header().ResizeToContents)
+            self.tree.header().setSectionResizeMode(column, QHeaderView.ResizeToContents)
         outer.addWidget(self.tree, 1)
 
         fade_row = QHBoxLayout()
