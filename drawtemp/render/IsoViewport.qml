@@ -47,9 +47,9 @@ Item {
             visible: !isActor || root.showActors
             sourceComponent: isTile ? tileComponent : (isActor ? actorComponent : objectComponent)
             x: root.width / 2 + root.camera.panX + row.sx * scaleFactor
-               - (isTile ? 48 : isActor ? 20 : 15) * scaleFactor
+               - (isTile ? 48 : isActor ? (row.spriteReady === true ? row.spritePivot[0] : 20) : 15) * scaleFactor
             y: root.height / 2 + root.camera.panY + row.sy * scaleFactor
-               - (isTile ? 24 : isActor ? 68 : 40) * scaleFactor
+               - (isTile ? 24 : isActor ? (row.spriteReady === true ? row.spritePivot[1] : 68) : 40) * scaleFactor
             scale: scaleFactor
             transformOrigin: Item.TopLeft
             z: row.zOrder
@@ -139,19 +139,37 @@ Item {
         id: actorComponent
         Item {
             property var actor: parent.row
-            width: 40; height: 68
+            width: actor.spriteReady === true ? actor.spriteRegion[2] : 40
+            height: actor.spriteReady === true ? actor.spriteRegion[3] : 68
+            // Cropped atlas texture is shared by Studio and Player.
+            Image {
+                visible: actor.spriteReady === true
+                width: parent.width; height: parent.height
+                source: visible ? actor.spriteUrl : ""
+                sourceClipRect: visible ?
+                    Qt.rect(actor.spriteRegion[0], actor.spriteRegion[1],
+                            actor.spriteRegion[2], actor.spriteRegion[3]) :
+                    Qt.rect(0, 0, 0, 0)
+                fillMode: Image.Stretch
+                smooth: false
+                asynchronous: false
+                mipmap: false
+            }
             Rectangle {
+                visible: actor.spriteReady !== true
                 width: 34; height: 9; radius: 5
                 x: 3; y: 58
                 color: "#10191c"; opacity: 0.45
             }
             Rectangle {
+                visible: actor.spriteReady !== true
                 width: 28; height: 38; radius: 9
                 x: 6; y: 19
                 color: actor.alive ? (actor.team === "enemy" ? "#af6556" : "#496cbb") : "#777c85"
                 border.width: 2; border.color: "#e2d7c4"
             }
             Rectangle {
+                visible: actor.spriteReady !== true
                 width: 19; height: 19; radius: 10
                 x: 10; y: 5
                 color: "#eacaa1"; border.color: "#62504b"
