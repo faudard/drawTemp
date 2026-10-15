@@ -15,7 +15,6 @@ from drawtemp.render.qt_viewport import make_controller
 from drawtemp.sdk.authoring import AuthoringError
 from drawtemp.sdk.construction import ConstructionWorkspace
 from .map_authoring import MapStudio, SURFACE_PALETTE
-from .construction_dock import ConstructionDock
 
 try:
     from PySide6.QtCore import QObject, Property, Signal, Slot, Qt, QUrl
@@ -140,6 +139,7 @@ class MapWindow(QMainWindow):
                                 "Les changements sont validés avant application."))
         self._dock("Inspecteur", right, Qt.RightDockWidgetArea)
 
+        from .construction_dock import ConstructionDock
         # R6 runs on the EXACT MapStudio authoring session and viewport.
         # Its dock is contextual, not a second map editor or renderer.
         self.construction = ConstructionDock(
