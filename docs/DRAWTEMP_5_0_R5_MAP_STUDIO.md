@@ -172,7 +172,9 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
 
 Les snapshots du Studio et du Player utilisent `scene_from_mission` et
 `render_items` communs : une transition calculée est identique dans les
-deux processus. Le rendu logiciel Qt offscreen ne certifie toujours pas
-l'apparence sur GPU réel, la qualité artistique de tous les décors ni les
-performances grands formats. Les raccords aquatiques restent liés au
-système existant de berges/ponts, à intégrer visuellement en R3.B.
+deux processus. Les berges des cases d'eau et l'orientation des ponts
+réutilisent `shoreline_mask` / `bridge_axis` et dessinent leurs traits
+sur le même viewport R3. Le rendu logiciel Qt offscreen ne certifie
+toujours pas l'apparence sur GPU réel, les transitions aquarelle de
+production, les détails visuels de tous les décors ni les performances
+grands formats.
