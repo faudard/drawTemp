@@ -1,0 +1,375 @@
+"""Qt 6 standalone authoring and evidence window for R13.
+
+The tactical simulation stays in the SDK/legacy canonical rules package.
+Qt never owns Content and worker threads never touch widgets.
+"""
+from __future__ import annotations
+
+import argparse
+from copy import deepcopy
+import json
+from pathlib import Path
+from threading import Thread
+
+
+def launch(content_path):
+    """Open the R13 workbench. Requires the optional PySide6 dependency."""
+    from PySide6.QtCore import QObject, Qt, Signal
+    from PySide6.QtGui import QColor, QBrush, QPen
+    from PySide6.QtWidgets import (
+        QApplication, QFileDialog, QFormLayout, QGraphicsScene,
+        QGraphicsView, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+        QPushButton, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem,
+        QTabWidget, QVBoxLayout, QWidget, QComboBox, QTextEdit,
+    )
+
+    from sporebound.model import Content
+    from drawtemp.sdk.r13_combat_lab import (
+        compare_encounters, evaluate_variant, human_review,
+        inspect_encounter, simulate_encounter, trace_timeline,
+    )
+
+    class ResultBus(QObject):
+        ready = Signal(int, object)
+        failed = Signal(int, str)
+
+    class Workbench(QMainWindow):
+        def __init__(self, content):
+            super().__init__()
+            self.content = content
+            self.reference = None
+            self.current = None
+            self.inspection = None
+            self._sequence = 0
+            self.bus = ResultBus(self)
+            self.bus.ready.connect(self._complete)
+            self.bus.failed.connect(self._failed)
+            self.setWindowTitle("DrawTemp 5.0 — R13 Combat Design & Balance Lab")
+            self.resize(1250, 850)
+            central = QWidget()
+            self.setCentralWidget(central)
+            outer = QVBoxLayout(central)
+            toolbar = QHBoxLayout()
+            outer.addLayout(toolbar)
+            toolbar.addWidget(QLabel("Mission"))
+            self.mission = QComboBox()
+            self.mission.addItems(sorted(content.missions))
+            self.mission.currentTextChanged.connect(self._refresh)
+            toolbar.addWidget(self.mission)
+            toolbar.addWidget(QLabel("Seeds"))
+            self.seeds = QSpinBox()
+            self.seeds.setRange(1, 32)
+            self.seeds.setValue(4)
+            toolbar.addWidget(self.seeds)
+            toolbar.addWidget(QLabel("Max. commandes"))
+            self.limit = QSpinBox()
+            self.limit.setRange(10, 5000)
+            self.limit.setValue(300)
+            toolbar.addWidget(self.limit)
+            toolbar.addStretch(1)
+            self.status = QLabel("Prêt")
+            outer.addWidget(self.status)
+
+            self.tabs = QTabWidget()
+            outer.addWidget(self.tabs, 1)
+            designer = QWidget()
+            self.tabs.addTab(designer, "Encounter Designer")
+            design_layout = QVBoxLayout(designer)
+            design_layout.addWidget(QLabel(
+                "Placement visuel simplifié · changements essayés en copie, jamais écrits dans la mission"))
+            split = QSplitter(Qt.Orientation.Horizontal)
+            design_layout.addWidget(split, 1)
+            self.scene = QGraphicsScene()
+            self.map = QGraphicsView(self.scene)
+            split.addWidget(self.map)
+            right = QWidget()
+            right_layout = QVBoxLayout(right)
+            self.units = QTableWidget(0, 4)
+            self.units.setHorizontalHeaderLabels(["Unité", "Équipe", "X", "Y"])
+            right_layout.addWidget(self.units, 1)
+            self.trial = QPushButton("Simuler la variante de placement")
+            self.trial.clicked.connect(self._start_trial)
+            right_layout.addWidget(self.trial)
+            self.trial_result = QTextEdit()
+            self.trial_result.setReadOnly(True)
+            right_layout.addWidget(self.trial_result, 1)
+            split.addWidget(right)
+            split.setSizes([720, 420])
+
+            lab = QWidget()
+            self.tabs.addTab(lab, "Battle Lab / Visual Replay")
+            lab_layout = QVBoxLayout(lab)
+            actions = QHBoxLayout()
+            lab_layout.addLayout(actions)
+            self.run_button = QPushButton("Simuler + vérifier les replays")
+            self.run_button.clicked.connect(self._start_simulation)
+            actions.addWidget(self.run_button)
+            load = QPushButton("Charger la référence")
+            load.clicked.connect(self._load_reference)
+            actions.addWidget(load)
+            save = QPushButton("Exporter le rapport JSON")
+            save.clicked.connect(self._export_report)
+            actions.addWidget(save)
+            human = QPushButton("Analyser un playtest opt-in")
+            human.clicked.connect(self._load_human)
+            actions.addWidget(human)
+            self.summary = QTextEdit()
+            self.summary.setReadOnly(True)
+            self.summary.setMaximumHeight(200)
+            lab_layout.addWidget(self.summary)
+            self.outcomes = QTableWidget(0, 6)
+            self.outcomes.setHorizontalHeaderLabels([
+                "Seed", "Résultat", "CT ticks", "Commandes", "Activations", "Replay"])
+            lab_layout.addWidget(self.outcomes, 1)
+            lab_layout.addWidget(QLabel(
+                "Trace des commandes réelles (sélection automatique : première seed)"))
+            self.timeline = QTableWidget(0, 5)
+            self.timeline.setHorizontalHeaderLabels([
+                "#", "Acteur", "Action", "Position", "Événements"])
+            lab_layout.addWidget(self.timeline, 1)
+            self._refresh(self.mission.currentText())
+
+        def _refresh(self, mission_id):
+            if not mission_id:
+                return
+            # Any in-flight result belongs to an older mission snapshot.
+            self._sequence += 1
+            self.run_button.setEnabled(True)
+            self.trial.setEnabled(True)
+            self.status.setText("Mission : " + mission_id)
+            try:
+                self.inspection = inspect_encounter(self.content, mission_id)
+            except Exception as exc:
+                self._show_error(str(exc))
+                return
+            units = self.inspection["profile"]["units"]
+            self.units.setRowCount(len(units))
+            for index, unit in enumerate(units):
+                fields = [unit["id"], unit["team"], *map(str, unit["pos"])]
+                for col, value in enumerate(fields):
+                    item = QTableWidgetItem(value)
+                    if col < 2:
+                        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    self.units.setItem(index, col, item)
+            self._draw_map(self.inspection)
+            self.trial_result.setPlainText(
+                "Objectif : {}\n{} joueur(s), {} adversaire(s)\n"
+                "Menaces conditionnelles : {}\n"
+                "Les durées humaines ne sont pas déduites des ticks CT.".format(
+                    self.inspection["profile"]["objective"],
+                    self.inspection["profile"]["player_count"],
+                    self.inspection["profile"]["enemy_count"],
+                    len(self.inspection["intent"]["danger"])))
+            self.current = None
+            self.summary.clear()
+            self.outcomes.setRowCount(0)
+            self.timeline.setRowCount(0)
+
+        def _draw_map(self, inspected, positions=None):
+            self.scene.clear()
+            dims = inspected["profile"]["map"]
+            # Preview bounded to 64 x 64; never a substitute for the iso renderer.
+            width, height = min(64, dims["width"]), min(64, dims["height"])
+            cell = max(8, min(24, 700 // max(1, width, height)))
+            terrain = {tuple(t["cell"]): t for t in inspected["tiles"]}
+            for y in range(height):
+                for x in range(width):
+                    tile = terrain.get((x, y), {})
+                    bg = ("#344451" if tile.get("blocked") else
+                          "#675337" if tile.get("hazard") else
+                          "#344735" if tile.get("cover", 0) else "#283a35")
+                    self.scene.addRect(x*cell, y*cell, cell, cell,
+                                       QPen(QColor("#53635a")), QBrush(QColor(bg)))
+            for x, y in inspected["goal_cells"]:
+                if x < width and y < height:
+                    self.scene.addRect(x*cell+2, y*cell+2, cell-4, cell-4,
+                                       QPen(QColor("#eed063"), 2))
+            for unit in inspected["profile"]["units"]:
+                x, y = (positions or {}).get(unit["id"], unit["pos"])
+                if x < 0 or y < 0 or x >= width or y >= height:
+                    continue
+                color = "#64bbf7" if unit["team"] == "player" else "#f28c7a"
+                self.scene.addEllipse(x*cell+3, y*cell+3, cell-6, cell-6,
+                                      QPen(QColor("#202020")), QBrush(QColor(color)))
+            self.scene.setSceneRect(0, 0, cell*width, cell*height)
+
+        def _read_placements(self):
+            updates = {}
+            for row in range(self.units.rowCount()):
+                uid = self.units.item(row, 0).text()
+                original = next(u["pos"] for u in self.inspection["profile"]["units"]
+                                if u["id"] == uid)
+                pos = [int(self.units.item(row, col).text()) for col in (2, 3)]
+                if pos != original:
+                    updates[uid] = pos
+            return updates
+
+        def _submit(self, operation, fn):
+            self._sequence += 1
+            seq = self._sequence
+            self.status.setText("Calcul en cours : " + operation)
+            self.run_button.setEnabled(False)
+            self.trial.setEnabled(False)
+
+            def work():
+                try:
+                    result = fn()
+                    self.bus.ready.emit(seq, (operation, result))
+                except Exception as exc:
+                    self.bus.failed.emit(seq, str(exc))
+
+            Thread(target=work, daemon=True).start()
+
+        def _start_trial(self):
+            try:
+                positions = self._read_placements()
+            except ValueError:
+                self._show_error("Coordonnées X/Y : entiers requis")
+                return
+            # Snapshot ALL widget state on the GUI thread. Worker code only
+            # receives Python values and immutable authoring copies.
+            snapshot = deepcopy(self.content)
+            mission = self.mission.currentText()
+            seeds = tuple(range(1, self.seeds.value()+1))
+            limit = self.limit.value()
+            self._submit("variante", lambda: evaluate_variant(
+                snapshot, mission, {"unit_positions": positions},
+                seeds=seeds, max_commands=limit))
+
+        def _start_simulation(self):
+            snapshot = deepcopy(self.content)
+            mission = self.mission.currentText()
+            seeds = tuple(range(1, self.seeds.value()+1))
+            limit = self.limit.value()
+            self._submit("simulation", lambda: simulate_encounter(
+                snapshot, mission, seeds=seeds, max_commands=limit,
+                trace_seed_id=seeds[0]))
+
+        def _complete(self, sequence, payload):
+            if sequence != self._sequence:
+                return
+            self.run_button.setEnabled(True)
+            self.trial.setEnabled(True)
+            operation, result = payload
+            self.status.setText("Terminé : " + operation)
+            if operation == "variante":
+                cases = result["cases"]
+                self.trial_result.setPlainText(json.dumps(
+                    {"cases": [{"id": c["id"], "victory_rate": c["report"]["victory_rate"],
+                                "commands_p95": c["report"]["commands_p95"]}
+                               for c in cases]}, indent=2, ensure_ascii=False))
+                try:
+                    self._draw_map(self.inspection, self._read_placements())
+                except ValueError:
+                    pass
+                return
+            self.current = result
+            report = result["battle_lab"]
+            stats = {
+                "mission": report["mission"], "runs": report["runs"],
+                "win_rate": report["victory_rate"],
+                "CT p95": report["ticks_p95"],
+                "commands p95": report["commands_p95"],
+                "unresolved": report["outcomes"]["limit"],
+            }
+            if self.reference is not None:
+                try:
+                    stats["regression"] = compare_encounters(
+                        self.reference, report)
+                except Exception as exc:
+                    stats["reference_error"] = str(exc)
+            self.summary.setPlainText(json.dumps(stats, indent=2, ensure_ascii=False))
+            self.outcomes.setRowCount(len(report["samples"]))
+            for row, sample in enumerate(report["samples"]):
+                columns = [sample["seed"], sample["result"], sample["ticks"],
+                           sample["commands"], sample["activations_ct"],
+                           sample["replay_verified"]]
+                for col, value in enumerate(columns):
+                    self.outcomes.setItem(row, col, QTableWidgetItem(str(value)))
+            rows = trace_timeline(result["trace"], limit=200)["frames"]
+            self.timeline.setRowCount(len(rows))
+            for row, frame in enumerate(rows):
+                actor = next((u for u in frame["positions"]
+                              if u["id"] == frame["actor"]), None)
+                fields = [frame["index"], frame["actor"],
+                          frame["command"]["kind"],
+                          actor["cell"] if actor else None,
+                          [e["kind"] for e in frame["events"]]]
+                for col, value in enumerate(fields):
+                    self.timeline.setItem(row, col, QTableWidgetItem(str(value)))
+
+        def _failed(self, sequence, error):
+            if sequence == self._sequence:
+                self.run_button.setEnabled(True)
+                self.trial.setEnabled(True)
+                self.status.setText("Erreur")
+                self._show_error(error)
+
+        def _load_reference(self):
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Ouvrir rapport Battle Lab", "", "JSON (*.json)")
+            if not path:
+                return
+            try:
+                doc = json.loads(Path(path).read_text(encoding="utf-8"))
+                if doc.get("kind") == "r13_simulation":
+                    doc = doc["battle_lab"]
+                if doc.get("kind") != "battle_lab":
+                    raise ValueError("Rapport Battle Lab requis")
+                self.reference = doc
+                self.status.setText("Référence chargée : " + str(path))
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                self._show_error(str(exc))
+
+        def _export_report(self):
+            if self.current is None:
+                self._show_error("Exécuter une simulation avant export")
+                return
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Exporter rapport R13", "r13-report.json", "JSON (*.json)")
+            if path:
+                try:
+                    Path(path).write_text(json.dumps(
+                        self.current, ensure_ascii=False, sort_keys=True, indent=2)
+                        + "\n", encoding="utf-8")
+                except OSError as exc:
+                    self._show_error(str(exc))
+
+        def _load_human(self):
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Rapport de playtest local (opt-in)", "", "JSON (*.json)")
+            if not path:
+                return
+            try:
+                data = json.loads(Path(path).read_text(encoding="utf-8"))
+                review = human_review(data)
+                self.summary.setPlainText(json.dumps(
+                    review, indent=2, ensure_ascii=False))
+                self.tabs.setCurrentIndex(1)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                self._show_error(str(exc))
+
+        def _show_error(self, error):
+            QMessageBox.warning(self, "DrawTemp R13", error)
+
+    content = Content.load(content_path)
+    app = QApplication.instance() or QApplication([])
+    window = Workbench(content)
+    window.show()
+    # Keep a reference while the caller's QApplication is alive.
+    app.r13_workbench = window
+    return app.exec()
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="DrawTemp 5.0 R13 Battle Lab (Qt6)")
+    parser.add_argument("--content", type=Path, default=None)
+    args = parser.parse_args(argv)
+    if args.content is None:
+        import sporebound
+        args.content = Path(sporebound.__file__).parent / "content" / "jeanne.json"
+    return launch(args.content)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

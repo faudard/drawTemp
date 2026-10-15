@@ -1,0 +1,64 @@
+name: DrawTemp 5 R11 Cinematic Qt
+
+on:
+  push:
+    branches:
+      - master
+      - feat/5-0-r11-cinematics-qt6
+    paths:
+      - drawtemp/cinematics/**
+      - drawtemp/platform/qt_cinematics.py
+      - drawtemp/player/qt_cinematic.py
+      - drawtemp/studio/qt_cinematic.py
+      - drawtemp/render/CinematicStage.qml
+      - sporebound/cinematics.py
+      - tests_standalone/test_r11_qt_cinematics.py
+      - .github/workflows/drawtemp5-r11-qt.yml
+  pull_request:
+    paths:
+      - drawtemp/cinematics/**
+      - drawtemp/platform/qt_cinematics.py
+      - drawtemp/player/qt_cinematic.py
+      - drawtemp/studio/qt_cinematic.py
+      - drawtemp/render/CinematicStage.qml
+      - sporebound/cinematics.py
+      - tests_standalone/test_r11_qt_cinematics.py
+      - .github/workflows/drawtemp5-r11-qt.yml
+
+jobs:
+  cinematic-contracts:
+    name: Headless cinematic contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install project
+        run: python -m pip install -e .
+      - name: Validate R11 and pre-existing R7 pipeline
+        run: python -m unittest tests_standalone.test_r11_qt_cinematics tests_standalone.test_r7_cinematic_pipeline -v
+
+  cinematic-qt:
+    name: Shared Studio/Player Qt Quick smoke (Linux)
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+      DRAWTEMP_QT_GUI_SMOKE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Qt6 package
+        run: python -m pip install -e ".[qt6]"
+      - name: Verify Qt stage in both applications
+        run: |
+          python -m unittest tests_standalone.test_r11_qt_cinematics.R11QtSmokeTests -v
+          python -m drawtemp.platform.qt_cinematics --mode studio --content sporebound/content/core.json --smoke
+          python -m drawtemp.platform.qt_cinematics --mode player --content sporebound/content/core.json --smoke

@@ -67,7 +67,7 @@ class PlayerHudLayoutR710Tests(unittest.TestCase):
         self.assertIn("MP ", rendered.focus)
         self.assertEqual(len(rendered.party), 1)
         self.assertIn("Déploiement", combat_hud_sections(
-            replace(modified, active_id=None)).focus)
+            replace(modified, deploying=True, active_id=None)).focus)
 
     def test_reject_incorrect_parameters(self):
         battle = Battle(self.content, "garden", seed=2)

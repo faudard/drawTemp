@@ -152,6 +152,7 @@ class RecorderTests(unittest.TestCase):
 
         controller = object.__new__(PlayerController)
         controller.session = Session(battle)
+        controller.long_mode = False  # Explicitly initialize bypassed constructor state.
         controller.playtest = recorder
         saved = []
         controller.save = lambda: saved.append(True)
