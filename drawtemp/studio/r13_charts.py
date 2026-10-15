@@ -5,8 +5,10 @@ validated metric model; this module ONLY paints those observations.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal, QRectF
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from pathlib import Path
+
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QPoint, Qt, Signal, QRectF
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
@@ -222,3 +224,69 @@ class R13ComparisonCharts(QWidget):
 
     def select_seed(self, seed):
         self.seed_plot.select_seed(seed)
+
+    def export_png(self, destination):
+        """Write both complete plots to a lossless PNG, never overwrite a file.
+
+        This export paints the full seed chart, including rows outside the
+        on-screen scroll viewport. It is presentation only; raw JSON metrics
+        remain the reproducible scientific evidence.
+        """
+        if self.report is None:
+            raise ValueError("Simuler avant d'exporter les graphiques.")
+        target = Path(destination)
+        if target.suffix.lower() != ".png":
+            raise ValueError("Le format d'export pris en charge est PNG.")
+        if target.exists():
+            raise FileExistsError("Le fichier existe déjà : " + str(target))
+        if not target.parent.is_dir():
+            raise FileNotFoundError("Dossier d'export introuvable.")
+
+        width = max(650, self.aggregate_plot.width(), self.seed_plot.width())
+        heading = 102
+        spacing = 18
+        height = (heading + self.aggregate_plot.height() + spacing
+                  + self.seed_plot.height() + spacing)
+        image = QImage(width, height, QImage.Format.Format_ARGB32)
+        if image.isNull():
+            raise OSError("Impossible de créer l'image d'export.")
+        image.fill(QColor("#ffffff"))
+        painter = QPainter(image)
+        try:
+            painter.setPen(INK)
+            font = QFont(self.font())
+            font.setBold(True)
+            font.setPointSize(13)
+            painter.setFont(font)
+            painter.drawText(12, 22, "DrawTemp — Visual Battle Lab R13.8")
+            font.setBold(False)
+            font.setPointSize(9)
+            painter.setFont(font)
+            painter.setPen(MUTED)
+            painter.drawText(QRectF(12, 29, width - 24, 70),
+                             Qt.AlignmentFlag.AlignTop
+                             | Qt.TextFlag.TextWordWrap, self.notice.text())
+            self.aggregate_plot.render(painter, QPoint(0, heading))
+            self.seed_plot.render(
+                painter, QPoint(0, heading + self.aggregate_plot.height() + spacing))
+        finally:
+            painter.end()
+        # Exclusive creation matters: a chart export must never replace
+        # authored Content, a baseline or any pre-existing user file.
+        buffer = QByteArray()
+        device = QBuffer(buffer)
+        if not device.open(QIODevice.OpenModeFlag.WriteOnly):
+            raise OSError("Impossible d'ouvrir le tampon PNG.")
+        try:
+            if not image.save(device, "PNG"):
+                raise OSError("Encodage PNG impossible.")
+        finally:
+            device.close()
+        try:
+            with target.open("xb") as destination_file:
+                destination_file.write(bytes(buffer))
+        except Exception:
+            # Exclusive open fails without touching pre-existing files.
+            # Other errors propagate so the user sees that export failed.
+            raise
+        return target
