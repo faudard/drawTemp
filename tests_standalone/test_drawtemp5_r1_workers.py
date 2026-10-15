@@ -1,10 +1,9 @@
 """R1.9: no-GUI worker boundary, cancellation, revision leases and parity."""
-from copy import deepcopy
 import threading
 import time
 import unittest
 
-from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
+from drawtemp.sdk.authoring import AuthoringSession
 from drawtemp.sdk.reference import MISSION, reference_project
 from drawtemp.sdk.simulation import Simulation, SimulationError
 from drawtemp.sdk.workers import SdkWorkQueue, WorkQueueError
@@ -110,7 +109,12 @@ class WorkerTests(unittest.TestCase):
         simulation.start_mission(MISSION)
         simulation.execute({"kind": "interact", "unit": "jeanne", "object": "lever"})
         before = simulation.recording()
-        expected = simulation.simulate(max_steps=700)
+        progress = []
+        expected = simulation.simulate(
+            max_steps=700, on_progress=lambda done, total: progress.append((done, total)))
+        self.assertEqual(progress[0], (0, 700))
+        self.assertGreater(progress[-1][0], 0)
+        self.assertLessEqual(progress[-1][0], 700)
         with SdkWorkQueue() as queue:
             ticket = queue.submit_simulation(simulation, max_steps=700)
             outcome = wait_for(queue, ticket)
@@ -118,6 +122,18 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(outcome.payload, expected)
         self.assertEqual(simulation.recording(), before)
         self.assertEqual(expected.battle["result"], "victory")
+
+    def test_simulation_result_stale_after_live_command(self):
+        simulation = Simulation.new(self.content, self.project, "main", seed=17)
+        simulation.choose_story_option("enter")
+        simulation.start_mission(MISSION)
+        with SdkWorkQueue() as queue:
+            ticket = queue.submit_simulation(simulation, max_steps=700)
+            simulation.execute({"kind": "interact", "unit": "jeanne", "object": "lever"})
+            outcome = wait_for(queue, ticket)
+            self.assertEqual(outcome.status, "stale")
+            self.assertEqual(outcome.error_code, "stale_revision")
+        self.assertEqual(simulation.snapshot().battle["result"], None)
 
     def test_simulation_error_and_direct_cooperative_cancellation(self):
         simulation = Simulation.new(self.content, self.project, "main")
