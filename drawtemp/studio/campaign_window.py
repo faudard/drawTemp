@@ -559,11 +559,13 @@ class CampaignWindow(QMainWindow):
         if self.source is None:
             return
         arguments = [
-            "-m", "drawtemp.player.qt_app", "--content", str(self.source),
+            "-m", "drawtemp.player.qt_app",
+            "--content", str(self.source.resolve()),
+            "--project", str(self.source.with_suffix(".game.json").resolve()),
             "--campaign", self.studio.campaign_id,
         ]
         started = QProcess.startDetached(
-            sys.executable, arguments, str(self.source.parent))
+            sys.executable, arguments, str(Path.cwd()))
         ok = started[0] if isinstance(started, tuple) else started
         if not ok:
             QMessageBox.warning(self, "Player indisponible",
