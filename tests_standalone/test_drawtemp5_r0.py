@@ -26,6 +26,56 @@ class MigrationFoundationTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, 'lever'):
             run_gate(BrokenAdapter)
 
+    def test_gate_rejects_a_valid_but_stale_candidate_save(self):
+        # A self-consistent older checkpoint is more dangerous than broken JSON:
+        # both readers can open it, but the lever/mission state has been lost.
+        from drawtemp.core import GameSession
+        from drawtemp.sdk.reference import reference_project
+
+        class StaleSaveAdapter(SessionAdapter):
+            def save(self, path):
+                content, project = reference_project()
+                return GameSession.new(content, project, "main", seed=17).save(path)
+
+        with self.assertRaisesRegex(AssertionError, "candidate save differs"):
+            run_gate(StaleSaveAdapter)
+
+    def test_gate_rejects_corrupted_candidate_save(self):
+        class CorruptSaveAdapter(SessionAdapter):
+            def save(self, path):
+                Path(path).write_text("{}", encoding="utf-8")
+
+        with self.assertRaisesRegex(AssertionError, "candidate save cannot be loaded"):
+            run_gate(CorruptSaveAdapter)
+
+    def test_gate_rejects_broken_adapter_loader_even_for_legacy_save(self):
+        from drawtemp.core import GameSession
+
+        class StaleLoadAdapter(SessionAdapter):
+            @classmethod
+            def load(cls, path, content, project):
+                return cls(GameSession.new(content, project, "main", seed=17))
+
+        with self.assertRaisesRegex(AssertionError, "legacy save differs"):
+            run_gate(StaleLoadAdapter)
+
+    def test_cli_rejects_reference_drift_and_keeps_diagnostic_report(self):
+        expected = json.loads((ROOT / "docs/drawtemp5/reference-baseline.json").read_text())
+        expected["trace"][0]["sha256"] = "0" * 64
+        with tempfile.TemporaryDirectory() as folder:
+            baseline = Path(folder) / "modified-baseline.json"
+            report = Path(folder) / "observed.json"
+            baseline.write_text(json.dumps(expected), encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, "-m", "drawtemp.sdk.migration",
+                 "--verify-baseline", str(baseline), "--report", str(report)],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("R0 frozen baseline mismatch", result.stderr)
+            self.assertEqual(json.loads(report.read_text())["result"], "victory")
+            self.assertNotEqual(json.loads(report.read_text()), expected)
+
     def test_snapshot_does_not_expose_mutable_session(self):
         from drawtemp.sdk.reference import reference_project
         content, project = reference_project()

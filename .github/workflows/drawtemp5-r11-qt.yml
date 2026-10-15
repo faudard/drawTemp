@@ -14,6 +14,7 @@ on:
       - drawtemp/render/CinematicStage.qml
       - sporebound/cinematics.py
       - tests_standalone/test_r11_qt_cinematics.py
+      - tests_standalone/test_drawtemp5_int02.py
       - drawtemp/cinematics/timeline.py
       - drawtemp/studio/cinematic_timeline.py
       - tests_standalone/test_r11_timeline_editing.py
@@ -27,6 +28,7 @@ on:
       - drawtemp/render/CinematicStage.qml
       - sporebound/cinematics.py
       - tests_standalone/test_r11_qt_cinematics.py
+      - tests_standalone/test_drawtemp5_int02.py
       - drawtemp/cinematics/timeline.py
       - drawtemp/studio/cinematic_timeline.py
       - tests_standalone/test_r11_timeline_editing.py
@@ -47,8 +49,12 @@ jobs:
           python-version: '3.12'
       - name: Install project
         run: python -m pip install -e .
-      - name: Validate R11 and pre-existing R7 pipeline
-        run: python -m unittest tests_standalone.test_r11_qt_cinematics tests_standalone.test_r11_timeline_editing tests_standalone.test_r7_cinematic_pipeline -v
+      - name: Validate R11 timeline, INT-02 shared history and R7 pipeline
+        run: >-
+          python -m unittest tests_standalone.test_r11_qt_cinematics
+          tests_standalone.test_drawtemp5_int02
+          tests_standalone.test_r11_timeline_editing
+          tests_standalone.test_r7_cinematic_pipeline -v
 
   cinematic-qt:
     name: Shared Studio/Player Qt Quick smoke (Linux)

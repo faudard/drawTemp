@@ -12,7 +12,9 @@ from sporebound.cinematic_authoring4 import (add_motion_keyframe, move_event,
 from sporebound.cinematics import cinematic_template, event_template, frame_at
 from sporebound.audio_timeline import mix_at
 from sporebound.game_project import GameProject
-from sporebound.model import RuleError, require
+from sporebound.model import Content, RuleError, require
+from sporebound.tactical_rpg3 import authored_rules_for_document
+from drawtemp.sdk.authoring import AuthoringSession
 
 
 def _digest(data):
@@ -60,10 +62,16 @@ def jeanne_intro(campaign_id, *, clip_id="jeanne_intro"):
 
 
 class CinematicDocument:
-    """Copy-on-validate undoable document with optional stale-disk protection."""
+    """Canonical cinematic editor.
+
+    Standalone documents preserve the R11 API. In Studio mode the supplied
+    AuthoringSession is the *only* document and history owner: no private copy,
+    undo stack, sidecar or project-only save may overwrite another workspace.
+    """
 
     def __init__(self, project, content, *, source_path=None):
         project.validate(content)
+        self.session = None
         self.content = content
         self.project = GameProject.from_dict(project.to_dict(), content)
         self.source_path = Path(source_path) if source_path else None
@@ -73,6 +81,51 @@ class CinematicDocument:
         self._redo = []
         self.revision = 0
 
+    @classmethod
+    def from_session(cls, session: AuthoringSession, *, source_path=None):
+        """Bind R11 to the same revisioned Content/GameProject as R5/R8/R9/R10."""
+        require(isinstance(session, AuthoringSession), "Expected AuthoringSession")
+        document = cls.__new__(cls)
+        document.session = session
+        # Source is only an asset-root hint; disk writes belong to the session.
+        document.source_path = Path(source_path) if source_path else None
+        return document
+
+    def _session_state(self):
+        return self.session.snapshot().to_dict()
+
+    @property
+    def content(self):
+        if self.session is not None:
+            data = self._session_state()["content"]
+            return Content.from_dict(data, rules=authored_rules_for_document(data))
+        return self._content
+
+    @content.setter
+    def content(self, value):
+        self._content = value
+
+    @property
+    def project(self):
+        if self.session is not None:
+            state = self._session_state()
+            content = Content.from_dict(
+                state["content"], rules=authored_rules_for_document(state["content"]))
+            return GameProject.from_dict(state["project"], content)
+        return self._project
+
+    @project.setter
+    def project(self, value):
+        self._project = value
+
+    @property
+    def revision(self):
+        return self.session.revision if self.session is not None else self._revision
+
+    @revision.setter
+    def revision(self, value):
+        self._revision = value
+
     def _read_file_digest(self):
         if self.source_path and self.source_path.exists():
             return hashlib.sha256(self.source_path.read_bytes()).hexdigest()
@@ -80,6 +133,8 @@ class CinematicDocument:
 
     @property
     def dirty(self):
+        if self.session is not None:
+            return self.session.snapshot().dirty
         return _digest(self.project.to_dict()) != self._saved_digest
 
     @property
@@ -94,6 +149,16 @@ class CinematicDocument:
     def _edit(self, operation, *, expected_revision=None):
         require(expected_revision is None or expected_revision == self.revision,
                 "Outdated cinematic editor revision")
+        if self.session is not None:
+            # The transform works on a detached GameProject, validates the
+            # canonical Content/GameProject pair and commits a SINGLE shared
+            # undo step. Concurrent edits invalidate the preview revision.
+            def transform(project):
+                operation(project)
+                return project
+            plan = self.session.preview_project(transform, kind="cinematic.edit")
+            self.session.apply(plan)
+            return
         before = self.project.to_dict()
         working = deepcopy(before)
         operation(working)
@@ -187,6 +252,11 @@ class CinematicDocument:
         self._edit(operation, expected_revision=expected_revision)
 
     def undo(self):
+        if self.session is not None:
+            if not self.session.snapshot().can_undo:
+                return False
+            self.session.undo()
+            return True
         if not self._undo:
             return False
         self._redo.append(self.project.to_dict())
@@ -195,6 +265,11 @@ class CinematicDocument:
         return True
 
     def redo(self):
+        if self.session is not None:
+            if not self.session.snapshot().can_redo:
+                return False
+            self.session.redo()
+            return True
         if not self._redo:
             return False
         self._undo.append(self.project.to_dict())
@@ -207,6 +282,17 @@ class CinematicDocument:
         return frame_at(clip, ms), mix_at(clip, ms)
 
     def save(self, path=None):
+        if self.session is not None:
+            # An explicit destination is a *Content* filename: the canonical
+            # transaction store writes both Content and .game.json atomically.
+            if path is not None:
+                content_path = Path(path)
+                require(not content_path.name.endswith(".game.json"),
+                        "Specify a Content filename, not a GameProject filename")
+                saved = self.session.save_as(content_path)
+                self.source_path = content_path.with_suffix(".game.json")
+                return saved
+            return self.session.save()
         target = Path(path) if path else self.source_path
         require(target is not None, "No project path specified")
         if self.source_path and target.resolve() == self.source_path.resolve():
