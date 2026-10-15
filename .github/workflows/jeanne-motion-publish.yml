@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - art/jeanne-motion-complete-20261014
+      - consolidate/drawtemp5-r3-r14-20261015
   workflow_dispatch:
 
 permissions:
