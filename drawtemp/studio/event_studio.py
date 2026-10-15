@@ -249,10 +249,12 @@ def main(argv=None):
             diagnostic_commands.addWidget(self.button("Démarrer", self.debug_start))
             diagnostic_commands.addWidget(self.button("Pas →", self.debug_step))
             diagnostic_commands.addWidget(self.button("Continuer", self.debug_continue))
+            diagnostic_commands.addWidget(self.button("Inspecter", self.debug_inspect))
             diagnostic_layout.addLayout(diagnostic_commands)
             breakpoint_row = QHBoxLayout()
             breakpoint_row.addWidget(QLabel("Point d'arrêt avant"))
             self.debug_target = QComboBox()
+            self.debug_target.currentTextChanged.connect(self.debug_selection_changed)
             breakpoint_row.addWidget(self.debug_target, 1)
             self.debug_breakpoint = QCheckBox("Actif")
             breakpoint_row.addWidget(self.debug_breakpoint)
@@ -618,6 +620,38 @@ def main(argv=None):
                 self._render_debug(self.debug_session.resume())
             except Exception as exc:
                 QMessageBox.warning(self, "Diagnostic interrompu", str(exc))
+
+        def debug_selection_changed(self, event_id):
+            if self.debug_session is None:
+                return
+            try:
+                enabled = event_id in self.debug_session.report()["report"]["breakpoints"]
+                self.debug_breakpoint.blockSignals(True)
+                self.debug_breakpoint.setChecked(enabled)
+                self.debug_breakpoint.blockSignals(False)
+            except Exception:
+                self.debug_breakpoint.blockSignals(False)
+
+        def debug_inspect(self):
+            if self.debug_session is None:
+                self.debug_start()
+                if self.debug_session is None:
+                    return
+            event_id = self.debug_target.currentText()
+            if not event_id:
+                return
+            try:
+                details = self.debug_session.inspect(event_id)
+                lines = ["INSPECTION DES CONDITIONS : " + event_id,
+                         "Évaluation : " + ("vrai" if details["passed"] else "faux")]
+                for row in details["conditions"]:
+                    lines.append(
+                        ("✓ " if row["passed"] else "✕ ") + row["label"])
+                lines.extend(["", *self.debug_session.report()["lines"]])
+                self.diagnostics.setPlainText("\n".join(lines))
+                self.tabs.setCurrentIndex(self.tabs.count()-1)
+            except Exception as exc:
+                QMessageBox.warning(self, "Inspection impossible", str(exc))
 
         def debug_toggle_breakpoint(self, enabled):
             if self.debug_session is None or not self.debug_target.currentText():
