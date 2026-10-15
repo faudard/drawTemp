@@ -1,4 +1,4 @@
-# DrawTemp 5.0 — R9 Event & Narrative Studio (R9.A + R9.B)
+# DrawTemp 5.0 — R9 Event & Narrative Studio (R9.A + R9.B + R9.C)
 
 > **Périmètre :** R9.A et R9.B, par PR dédiées. Ceci décrit les fonctionnalités effectives, non la certification globale R9. L'intégration Studio R2 / carte GPU R5 reste à réaliser.
 
@@ -110,3 +110,36 @@ assert report["report"]["replay_verified"] is None
 ### Limites restantes
 
 Le graphe Qt ne gère pas encore le câblage par glisser-déposer, la palette de commandes reste partielle, les pages/états ne sont pas livrés, et les marqueurs de carte utilisent encore une projection schématique distincte du viewport GPU partagé. La chaîne de replay certifiée **Studio → Player → sauvegarde → chargement → replay** reste un gate ouvert. Aucune confusion entre aperçu de bataille synthétique et certification de partie réelle n'est autorisée.
+
+## R9.C — Actions natives, graphe éditable et viewport ISO
+
+La troisième tranche dépend explicitement de R9.B : la branche R9.C est dérivée de `feat/drawtemp5-r9b-branches-debugger`, non de `master`, puisque la PR R9.B peut encore être en revue.
+
+### Commandes réellement exécutables (R9.3)
+
+- **Actions du moteur tactique :** `message`, `hazard`, `status`, `despawn`, `spawn`, `wave` et `queue_wave`. Onglet **Commandes** → sélectionner un type → Ajouter / Modifier. Les formulaires sont typés (identifiant d'acteur, archétype, position, équipe, durée). Le résultat passe par `event_composer.action` et `Content` ; aucune action inconnue ni code utilisateur brut n'est injecté.
+- **Cinématiques déclenchées par événement :** onglet **Commandes** → Pistes de présentation → Ajouter une piste. Crée ou enrichit une `GameProject.cinematics` existante, dont le trigger est `tactical_event: mission/event`. Les pistes compatibles avec le Player sont `dialogue`, `sound`, `actor`, `camera`, `background`, `fade`, `fx`. Leurs paramètres passent par `cinematics.event_template` et le validateur de `GameProject`.
+- **Variables/objets/économie :** onglet **Narration** → Ajouter effet de choix. Les opérations natives `set_flag`, `add_flag`, `grant_item`, `equip_hero`, `gold`, `recruit_hero`, `unlock_mission` ne s'exécutent **qu'après un choix StoryBook valide**, pas comme action tactique autonome. Leur source de vérité est `GameProject.story.scenes[].choices[].effects` ; `story_authoring.add_effect` vérifie chaque référence.
+
+Ce catalogue couvre les opérations déjà définies dans les registres du moteur et dans StoryBook. **Une commande de mouvement arbitraire en pleine bataille, un branchement conditionnel de scripts utilisateur ou un inventaire modifié directement par un trigger tactique ne sont pas des capacités du moteur actuel : elles ne sont pas inventées dans cette PR.**
+
+### Graphe éditable (R9.6)
+
+L'onglet Graphe affiche un nœud par trigger, avec condition, nombre et types d'actions. Les nœuds peuvent être déplacés pour composer la vue (positions locales non sérialisées). En cochant « Relier deux événements par clic », sélectionner d'abord le **prédécesseur**, puis le **successeur** ; le choix ET/OU détermine `after` ou `after_any`. Les cycles, références cassées et doublons sont refusés transactionnellement par le validateur de Content.
+
+### Viewport R3 commun (R9.8)
+
+La carte schématique `QGraphicsView` est remplacée par un `QQuickWidget` affichant **le vrai `IsoViewport.qml`** de R3/R5/R12. La scène est construite par `scene_from_mission`, sans renderer parallèle. La propriété opt-in `renderer.eventMarkers` ajoute des symboles déclencheur/effet via la même projection isométrique et les hauteurs des tiles ; les mouvements caméra et zoom réutilisent l'état du même contrôleur. Cliquer une case de trigger sélectionne son événement. Quand le Player utilise le composant sans l'option `showEventMarkers`, ces symboles ne sont pas affichés.
+
+### Validation
+
+```bash
+python -m pip install ".[qt6]"
+python -m unittest tests_standalone.test_drawtemp5_r9c -v
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  python -m drawtemp.studio.event_studio --smoke
+```
+
+Les tests R9.C couvrent le catalogue natif, la validation et l'atomicité, les pistes liées, les effets StoryBook, la projection avec hauteur et le démarrage Qt. La CI globale doit aussi confirmer l'absence de régression du Player.
+
+**Reste ouvert :** commandes tactiques non prises en charge par le moteur (mouvement arbitraire, effets d'inventaire directement sur un trigger), édition cinématique avancée déléguée à R11, position du graphe persistante et édition de ses arêtes par glisser-déposer, certification GPU réelle et replay complet du gate R9.12. R9.C est une tranche de livraison, pas le statut « R9 terminé ».

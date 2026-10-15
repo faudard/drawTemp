@@ -15,6 +15,7 @@ Item {
     property bool showBlocked: false
     property bool showHeights: false
     property bool showActors: true
+    property bool showEventMarkers: false
     property bool showLegend: interactionMode === "pan"
     property var hoveredCell: ({})
     readonly property var camera: renderer.cameraState
@@ -184,6 +185,52 @@ Item {
                       entry.label === "switch" ? "L" :
                       entry.label === "marker" ? "!" : "•"
                 color: "#faf0de"; font.bold: true
+            }
+        }
+    }
+
+    // R9.C: optional event symbols anchored with the SAME ISO projection,
+    // elevation and camera as the normal R3 scenegraph. No second renderer.
+    Repeater {
+        model: root.showEventMarkers ? renderer.eventMarkers : []
+        delegate: Item {
+            required property var modelData
+            readonly property var marker: modelData
+            readonly property real scaleFactor: root.camera.zoom
+            x: root.width / 2 + root.camera.panX + marker.sx * scaleFactor
+               - 13 * scaleFactor
+            y: root.height / 2 + root.camera.panY + marker.sy * scaleFactor
+               - 52 * scaleFactor
+            width: 26 * scaleFactor
+            height: 42 * scaleFactor
+            z: marker.zOrder + 4
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 6 * parent.scaleFactor
+                width: 23 * parent.scaleFactor
+                height: 23 * parent.scaleFactor
+                radius: width / 2
+                color: marker.kind === "effect" ? "#b26031" : "#2e71ae"
+                border.width: marker.selected ? 3 : 1.5
+                border.color: marker.selected ? "#ffec98" : "#f5f3df"
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 9 * parent.scaleFactor
+                text: marker.kind === "effect" ? "!" : "E"
+                color: "white"; font.bold: true
+                font.pixelSize: 14 * parent.scaleFactor
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: -8 * parent.scaleFactor
+                text: marker.event_id
+                color: marker.selected ? "#ffe49b" : "#f2f2ef"
+                font.bold: marker.selected
+                font.pixelSize: 10 * parent.scaleFactor
+                style: Text.Outline
+                styleColor: "#19242f"
+                visible: marker.selected
             }
         }
     }

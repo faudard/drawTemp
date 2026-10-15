@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from .iso_scene import Camera, IsoProjection, pick, render_items, scene_from_mission
+from .event_overlay import project_event_markers
 
 
 def default_atlas_url():
@@ -33,6 +34,8 @@ def make_controller(scene, atlas_url=None):
             self.projection = IsoProjection()
             self.selection = None
             self._items = []
+            self._event_markers = []
+            self._event_selected = ""
             self._atlas = default_atlas_url() if atlas_url is None else atlas_url
             self.center_scene()
 
@@ -50,6 +53,23 @@ def make_controller(scene, atlas_url=None):
         @Property("QVariantList", notify=sceneChanged)
         def items(self):
             return self._items
+
+        @Property("QVariantList", notify=sceneChanged)
+        def eventMarkers(self):
+            return project_event_markers(self.scene, self._event_markers,
+                                         selected_id=self._event_selected,
+                                         projection=self.projection)
+
+        def setEventMarkers(self, markers, selected_id=""):
+            """Read-only R9 overlay: opt-in, independent of Player render items."""
+            from copy import deepcopy
+            staged = deepcopy(markers)
+            project_event_markers(self.scene, staged,
+                                  selected_id=selected_id,
+                                  projection=self.projection)
+            self._event_markers = staged
+            self._event_selected = selected_id
+            self.sceneChanged.emit()
 
         @Property("QVariantMap", notify=cameraChanged)
         def cameraState(self):
@@ -112,6 +132,9 @@ def make_controller(scene, atlas_url=None):
                        self.scene["width"] != new_scene["width"] or
                        self.scene["height"] != new_scene["height"])
             self.scene = new_scene
+            if changed:
+                self._event_markers = []
+                self._event_selected = ""
             self.selection = None
             if changed:
                 self.center_scene()

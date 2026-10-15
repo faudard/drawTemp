@@ -8,12 +8,16 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from drawtemp.sdk.authoring import AuthoringSession
 from drawtemp.sdk.reference import reference_project
 from drawtemp.studio.events import EventStudio
 from sporebound.event_composer import action, condition
 from sporebound.event_graph import action_title, condition_summary
+from drawtemp.studio.event_command_catalog import action_catalogue, STORY_FIELDS
+from drawtemp.studio.event_presentation import PRESENTATION_FIELDS
+from drawtemp.render.qt_viewport import make_controller
 
 
 def _coordinate_pair(text):
@@ -67,15 +71,17 @@ def main(argv=None):
     parser.add_argument("--smoke", action="store_true", help="Afficher puis fermer Qt")
     args = parser.parse_args(argv)
     try:
-        from PySide6.QtCore import Qt, QTimer
+        from PySide6.QtCore import Qt, QTimer, QUrl
         from PySide6.QtGui import QAction, QBrush, QColor, QPen, QKeySequence
         from PySide6.QtWidgets import (
             QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-            QFileDialog, QFormLayout, QGraphicsScene,
-            QGraphicsView, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+            QFileDialog, QFormLayout,
+            QHBoxLayout, QInputDialog, QLabel, QLineEdit,
             QListWidget, QMainWindow, QMessageBox, QPushButton, QSpinBox,
             QSplitter, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
         )
+        from PySide6.QtQuickWidgets import QQuickWidget
+        from drawtemp.studio.event_graph_qt import EventGraphView
     except ImportError as exc:
         print('PySide6 requis : pip install ".[qt6]". ' + str(exc), file=sys.stderr)
         return 2
@@ -166,30 +172,42 @@ def main(argv=None):
             actions_layout.addWidget(self.actions_list, 1)
             action_row = QHBoxLayout()
             self.action_kind = QComboBox()
-            self.action_kind.addItems(["message", "hazard", "status", "despawn"])
+            self.action_kind.addItems(list(action_catalogue()))
             self.action_value = QLineEdit()
             self.action_value.setPlaceholderText("Texte | x,y,puissance | acteur,statut,durée")
             action_row.addWidget(self.action_kind)
             action_row.addWidget(self.action_value, 1)
             actions_layout.addLayout(action_row)
             for label, callback in (("Ajouter l'action", self.add_action),
+                                    ("Modifier l'action…", self.edit_action),
                                     ("Monter ↑", lambda: self.move_action(-1)),
                                     ("Descendre ↓", lambda: self.move_action(1)),
                                     ("Retirer", self.remove_action)):
                 actions_layout.addWidget(self.button(label, callback))
+            actions_layout.addWidget(QLabel("Pistes de présentation (dialogue, son, caméra, acteurs, FX)"))
+            self.cue_kind = QComboBox()
+            self.cue_kind.addItems(list(PRESENTATION_FIELDS))
+            actions_layout.addWidget(self.cue_kind)
+            actions_layout.addWidget(self.button("Ajouter une piste à cet événement…",
+                                                  self.add_presentation))
             self.tabs.addTab(actions_tab, "Commandes")
 
             graph_tab = QWidget()
             graph_layout = QVBoxLayout(graph_tab)
             graph_layout.addWidget(QLabel("Graphe des triggers — arêtes persistées dans Content"))
-            self.graph_scene = QGraphicsScene()
-            self.graph_view = QGraphicsView(self.graph_scene)
+            self.graph_view = EventGraphView()
+            self.graph_view.eventSelected.connect(self.select_graph_event)
+            self.graph_view.connectRequested.connect(self.link_from_graph)
             graph_layout.addWidget(self.graph_view, 1)
+            self.graph_link_mode = QCheckBox("Relier deux événements par clic (source → cible)")
+            self.graph_link_mode.toggled.connect(self.update_graph_mode)
+            graph_layout.addWidget(self.graph_link_mode)
             dep = QHBoxLayout()
             self.predecessors = QComboBox()
             dep.addWidget(self.predecessors, 1)
             self.link_join = QComboBox()
             self.link_join.addItems(["ET", "OU"])
+            self.link_join.currentIndexChanged.connect(self.update_graph_mode)
             dep.addWidget(self.link_join)
             dep.addWidget(self.button("Relier", self.link))
             dep.addWidget(self.button("Délier", self.unlink))
@@ -233,13 +251,28 @@ def main(argv=None):
             narrative_form.addRow(self.button("Lier scène à l'événement", self.bind_scene))
             narrative_form.addRow(self.button("Attendre un choix de cette scène…", self.bind_choice))
             narrative_form.addRow(self.button("Effacer la garde narrative", self.clear_choice))
+            narrative_form.addRow(self.button("Ajouter effet de choix (variable / objet)…",
+                                               self.add_story_effect))
             self.tabs.addTab(narrative, "Narration")
 
             map_tab = QWidget()
             map_layout = QVBoxLayout(map_tab)
-            map_layout.addWidget(QLabel("Repères de triggers/effets (schéma 2D ; viewport GPU R5 à intégrer)"))
-            self.map_scene = QGraphicsScene()
-            map_layout.addWidget(QGraphicsView(self.map_scene), 1)
+            map_layout.addWidget(QLabel(
+                "Viewport R3 partagé · repères au relief · cliquer pour sélectionner un événement"))
+            self.renderer = make_controller(self.studio.iso_scene(self.missions.currentData()))
+            self.map_viewport = QQuickWidget(self)
+            self.map_viewport.setResizeMode(QQuickWidget.SizeRootObjectToView)
+            self.map_viewport.rootContext().setContextProperty("renderer", self.renderer)
+            qml_path = Path(__file__).resolve().parents[1] / "render" / "IsoViewport.qml"
+            self.map_viewport.setSource(QUrl.fromLocalFile(str(qml_path)))
+            if self.map_viewport.status() == QQuickWidget.Error:
+                raise RuntimeError("; ".join(str(e) for e in self.map_viewport.errors()))
+            map_root = self.map_viewport.rootObject()
+            map_root.setProperty("interactionMode", "select")
+            map_root.setProperty("showEventMarkers", True)
+            map_root.setProperty("showLegend", False)
+            map_root.cellSelected.connect(self.select_map_cell)
+            map_layout.addWidget(self.map_viewport, 1)
             self.tabs.addTab(map_tab, "Carte / triggers")
 
             diagnostic_tab = QWidget()
@@ -396,11 +429,125 @@ def main(argv=None):
             if self.eid():
                 self.perform(lambda: self.studio.clear_predicates(self.mid(), self.eid()))
 
+        def _command_dialog(self, *, existing=None):
+            kind = existing["kind"] if existing else self.action_kind.currentText()
+            if kind not in action_catalogue():
+                raise ValueError("Action non prise en charge par le moteur tactique")
+            dialog = QDialog(self)
+            dialog.setWindowTitle(("Modifier " if existing else "Ajouter ") + kind)
+            form = QFormLayout(dialog)
+            editors = {}
+            for key, label, type_name in action_catalogue()[kind]:
+                value = ""
+                if existing:
+                    value = existing.get(key, "")
+                    if key == "actor_id":
+                        value = existing.get("actor", {}).get("id", "") if kind == "spawn" else (
+                            existing.get("actors", [{}])[0].get("id", ""))
+                    elif key in ("name", "team", "archetype", "pos") and kind in (
+                            "spawn", "wave", "queue_wave"):
+                        actor = (existing.get("actor", {}) if kind == "spawn" else
+                                 existing.get("actors", [{}])[0])
+                        value = actor.get(key, "")
+                    elif key == "max_active":
+                        value = existing.get("max_active", 14)
+                if type_name == "cell" and isinstance(value, (list, tuple)):
+                    value = ",".join(map(str, value))
+                if type_name == "integer":
+                    editor = QSpinBox()
+                    editor.setRange(0, 10000)
+                    editor.setValue(int(value) if value != "" else
+                                    (14 if key == "max_active" else 1))
+                elif type_name == "team":
+                    editor = QComboBox()
+                    editor.addItems(["enemy", "player"])
+                    editor.setCurrentText(str(value or "enemy"))
+                else:
+                    editor = QLineEdit(str(value) if value else "")
+                    if key == "pos" and not value:
+                        editor.setPlaceholderText("x,y")
+                editors[key] = editor
+                form.addRow(label, editor)
+            buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            form.addRow(buttons)
+            if dialog.exec() != QDialog.Accepted:
+                return None
+            raw = {}
+            for key, _, type_name in action_catalogue()[kind]:
+                editor = editors[key]
+                raw[key] = (editor.value() if type_name == "integer" else
+                            editor.currentText() if type_name == "team" else
+                            editor.text())
+            return kind, raw
+
         def add_action(self):
-            if self.eid():
-                self.perform(lambda: self.studio.add_action(
-                    self.mid(), self.eid(),
-                    make_action(self.action_kind.currentText(), self.action_value.text())))
+            if not self.eid():
+                return
+            try:
+                edited = self._command_dialog()
+                if edited:
+                    kind, fields = edited
+                    self.perform(lambda: self.studio.add_tactical_command(
+                        self.mid(), self.eid(), kind, fields))
+            except Exception as exc:
+                QMessageBox.warning(self, "Action invalide", str(exc))
+
+        def edit_action(self):
+            if not self.eid() or self.actions_list.currentRow() < 0:
+                return
+            index = self.actions_list.currentRow()
+            try:
+                existing = self.studio.event(self.mid(), self.eid())["actions"][index]
+                edited = self._command_dialog(existing=existing)
+                if edited:
+                    kind, fields = edited
+                    self.perform(lambda: self.studio.replace_tactical_command(
+                        self.mid(), self.eid(), index, kind, fields))
+            except Exception as exc:
+                QMessageBox.warning(self, "Modification impossible", str(exc))
+
+        def add_presentation(self):
+            if not self.eid():
+                return
+            kind = self.cue_kind.currentText()
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Piste Player : " + kind)
+            form = QFormLayout(dialog)
+            clip_id = QLineEdit("cin_" + self.eid())
+            clip_name = QLineEdit("Scène " + self.eid())
+            cue_id = QLineEdit(kind + "_" + self.eid())
+            start = QSpinBox()
+            start.setRange(0, 7999)
+            duration = QSpinBox()
+            duration.setRange(1, 8000)
+            duration.setValue(1000)
+            for label, widget in (("ID cinématique", clip_id),
+                                  ("Nom cinématique", clip_name),
+                                  ("ID piste", cue_id),
+                                  ("Début (ms)", start), ("Durée (ms)", duration)):
+                form.addRow(label, widget)
+            entries = {}
+            defaults = {"speaker": "Jeanne", "text": "", "cue": "",
+                        "actor": "jeanne", "color": "#243c56",
+                        "effect": "fire"}
+            for key, label in PRESENTATION_FIELDS[kind]:
+                edit = QLineEdit(defaults.get(key, ""))
+                form.addRow(label, edit)
+                entries[key] = edit
+            buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            form.addRow(buttons)
+            if dialog.exec() != QDialog.Accepted:
+                return
+            fields = {key: editor.text() for key, editor in entries.items()}
+            self.perform(lambda: self.studio.add_presentation_cue(
+                self.mid(), self.eid(), clip_id=clip_id.text().strip(),
+                clip_name=clip_name.text().strip(), kind=kind,
+                cue_id=cue_id.text().strip(), start_ms=start.value(),
+                duration_ms=duration.value(), fields=fields))
 
         def move_action(self, direction):
             if self.eid() and self.actions_list.currentRow() >= 0:
@@ -458,6 +605,39 @@ def main(argv=None):
             if self.eid():
                 self.perform(lambda: self.studio.clear_choice(
                     self.mid(), self.eid()))
+
+        def add_story_effect(self):
+            if not self.mid():
+                return
+            scene_id = self.scene_id.text().strip()
+            choice_id, ok = QInputDialog.getText(
+                self, "Effet de choix", "Identifiant du choix de la scène")
+            if not ok or not choice_id.strip():
+                return
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Effet StoryBook · " + scene_id + "/" + choice_id)
+            form = QFormLayout(dialog)
+            kind_combo = QComboBox()
+            kind_combo.addItems(list(STORY_FIELDS))
+            form.addRow("Opération", kind_combo)
+            controls = {}
+            for name in {name for fields in STORY_FIELDS.values()
+                         for name, _, _ in fields}:
+                edit = QLineEdit()
+                edit.setPlaceholderText(name)
+                controls[name] = edit
+                form.addRow(name, edit)
+            buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            form.addRow(buttons)
+            if dialog.exec() != QDialog.Accepted:
+                return
+            kind = kind_combo.currentText()
+            fields = {key: controls[key].text()
+                      for key, _, _ in STORY_FIELDS[kind]}
+            self.perform(lambda: self.studio.add_story_effect(
+                self.mid(), scene_id, choice_id.strip(), kind, fields))
 
         def create_fork(self):
             if not self.mid():
@@ -524,49 +704,45 @@ def main(argv=None):
 
             self.perform(apply, selected=source.text().strip())
 
+        def update_graph_mode(self, *_):
+            self.graph_view.set_connect_mode(
+                self.graph_link_mode.isChecked(),
+                any_of=self.link_join.currentIndex() == 1)
+
+        def select_graph_event(self, event_id):
+            self.select_event_id(event_id)
+
+        def select_event_id(self, event_id):
+            for index in range(self.event_list.count()):
+                if self.event_list.item(index).data(Qt.UserRole) == event_id:
+                    self.event_list.setCurrentRow(index)
+                    return
+
+        def link_from_graph(self, source, target, any_of):
+            self.perform(lambda: self.studio.link(
+                self.mid(), target, source, any_of=any_of), selected=target)
+
         def render_graph(self):
-            self.graph_scene.clear()
+            if self.mid():
+                self.graph_view.render_events(
+                    self.studio.events(self.mid()), self.mid(),
+                    selected_id=self.eid())
+
+        def select_map_cell(self, x, y):
             if not self.mid():
                 return
-            graph = self.studio.graph(self.mid())
-            nodes = {tuple(row["key"]): row for row in graph["nodes"]}
-            for edge in graph["edges"]:
-                source, target = nodes.get(tuple(edge["source"])), nodes.get(tuple(edge["target"]))
-                if source and target:
-                    self.graph_scene.addLine(
-                        source["x"]+92, source["y"]+16, target["x"], target["y"]+16,
-                        QPen(QColor("#8595aa"), 1.5))
-            for node in graph["nodes"]:
-                focus = node["event_id"] == self.eid()
-                self.graph_scene.addRect(
-                    node["x"], node["y"], 210, 40,
-                    QPen(QColor("#3d7dda") if focus else QColor("#7d8fa4")),
-                    QBrush(QColor("#e9f1ff") if focus else QColor("#f8fafc")))
-                label = self.graph_scene.addText(node["label"][:34])
-                label.setPos(node["x"]+8, node["y"]+6)
-            self.graph_scene.setSceneRect(0, 0, graph["width"], graph["height"])
+            markers = self.studio.map_markers(self.mid())
+            matches = [m["event_id"] for m in markers
+                       if m["pos"] == [x, y]]
+            if matches:
+                self.select_event_id(matches[0])
 
         def render_map(self):
-            self.map_scene.clear()
             if not self.mid():
                 return
-            mission = self.studio._mission(self.mid())
-            width, height = mission["board"]["width"], mission["board"]["height"]
-            scale = max(12, min(30, 600 // max(width, height)))
-            for x in range(width):
-                for y in range(height):
-                    self.map_scene.addRect(x*scale, y*scale, scale, scale,
-                                           QPen(QColor("#d0d7de")))
-            for marker in self.studio.map_markers(self.mid()):
-                x, y = marker["pos"]
-                self.map_scene.addEllipse(
-                    x*scale+3, y*scale+3, max(2,scale-6), max(2,scale-6),
-                    QPen(QColor("#1457a5")),
-                    QBrush(QColor("#e99e3b") if marker["kind"]=="effect"
-                           else QColor("#317ed8")))
-                if marker["event_id"] == self.eid():
-                    text = self.map_scene.addText(marker["event_id"][:12])
-                    text.setPos(x*scale, (y+1)*scale)
+            self.renderer.replace_scene(self.studio.iso_scene(self.mid()))
+            self.renderer.setEventMarkers(
+                self.studio.map_markers(self.mid()), selected_id=self.eid() or "")
 
         def preview(self):
             if not self.eid():
