@@ -410,6 +410,7 @@ ApplicationWindow {
                                      root.playerData.exploration : ({})
                     selected: root.playerData.selected
                     tactical: root.playerData.tactical
+                    animationPlan: player.animationPlan
                     showTacticalOverlay: root.tacticalOverlayEnabled
                     showGrid: root.playerData.settings.display.show_grid
                     showHeights: root.playerData.settings.display.show_heights
