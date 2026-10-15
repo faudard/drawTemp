@@ -75,9 +75,13 @@ remplacer les vues courantes.
 
 **Important :** les tests/captures vérifient l'affichage et les interactions,
 mais ne valent pas certification visuelle humaine tant que les artefacts CI
-n'ont pas été revus. Les images automatiques utilisent un scénario
-déterministe à deux niveaux explicitement identifié comme **fixture** dans
-le rapport, pas une capture trompeuse d'une mission complète de Jeanne.
+n'ont pas été revus. Les images automatiques comprennent un scénario
+déterministe à deux niveaux explicitement identifié comme **fixture**
+(`heatmap-initial.png`, `heatmap-final.png`) et un combat
+**réellement simulé/rejoué** par le moteur canonique
+(`heatmap-canonical-replay.png`, `r13_canonical_replay.json`).
+Ce dernier est un scénario d'arène de test, pas une capture trompeuse
+d'une mission complète de Jeanne.
 
 ### Exécution locale
 
