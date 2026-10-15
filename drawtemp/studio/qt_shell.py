@@ -592,39 +592,160 @@ class StudioWindow(QMainWindow):
         for index in self.resource_view.selectionModel().selectedRows(0):
             identity = index.data(Qt.UserRole)
             if identity:
-                parts = identity.split("|")
-                key = (parts[0], parts[1], parts[2])
+                key = tuple(identity.split("|", 2))
                 if key in self._resource_by_key:
                     selected.append(self._resource_by_key[key])
-        self._selected = tuple(selected)
+        # An active relation filter retains its original selection even when
+        # the anchor is itself hidden by the filtered result set.
+        if selected:
+            self._selected = tuple(selected)
+        elif self.reference_filter.currentIndex() == 0:
+            self._selected = ()
         self._show_inspector()
+
+    def _mark_property_edit(self, key):
+        self._edited_fields.add(key)
+        self.inspector_error.setText("")
+        self.apply_button.setEnabled(True)
 
     def _show_inspector(self):
         chosen = self._selected
+        snapshot = self.session.snapshot()
+        self._inspector_revision = snapshot.revision
+        self._edited_fields = set()
+        self.property_widgets.clear()
+        self.name_edit = None
+        while self.form.rowCount():
+            self.form.removeRow(0)
+        self.inspector_error.setText("")
+        self.apply_button.setEnabled(False)
         self.inspector_title.setText(
             str(len(chosen)) + " ressource(s) sélectionnée(s)" if chosen else
             "Sélectionnez une ressource dans l'explorateur")
-        can_edit = editable_name(chosen)
-        self.name_edit.setEnabled(can_edit)
-        self.apply_button.setEnabled(can_edit)
-        value, mixed = common_name(chosen)
-        self.name_edit.setPlaceholderText("Valeurs multiples" if mixed else "Nom")
-        self.name_edit.setText(value)
-        if len(chosen) == 1:
-            hints = reference_hints(self.session.snapshot(), chosen[0])
-            self.references.setText("ID stable : " + chosen[0].resource_id +
-                "\nRéférences indicatives :\n" +
-                ("\n".join(hints) if hints else "Aucune référence connue"))
-        else:
-            self.references.setText("Modifications de nom atomiques (un Undo)."
-                                    if can_edit else "Lecture seule / sélection mixte.")
+        self.links.clear()
+        if not chosen:
+            self.references.setText("Aucune sélection")
+            return
+        try:
+            specs = shared_specs(snapshot, chosen)
+            for spec in specs:
+                value, mixed = common_value(snapshot, chosen, spec.key)
+                if spec.kind == "int" and not mixed:
+                    widget = QSpinBox()
+                    widget.setRange(spec.minimum, spec.maximum)
+                    widget.setValue(value)
+                    widget.valueChanged.connect(
+                        lambda _v, key=spec.key: self._mark_property_edit(key))
+                elif spec.kind == "int":
+                    widget = QLineEdit()
+                    widget.setValidator(QIntValidator(spec.minimum, spec.maximum, widget))
+                    widget.setPlaceholderText("Valeurs multiples — saisir un entier")
+                    widget.textEdited.connect(
+                        lambda _v, key=spec.key: self._mark_property_edit(key))
+                elif spec.kind == "bool":
+                    widget = QCheckBox()
+                    widget.setTristate(mixed)
+                    widget.setCheckState(Qt.PartiallyChecked if mixed else
+                                         (Qt.Checked if value else Qt.Unchecked))
+                    widget.stateChanged.connect(
+                        lambda _v, key=spec.key: self._mark_property_edit(key))
+                elif spec.kind == "multiline":
+                    widget = QPlainTextEdit()
+                    widget.setFixedHeight(100)
+                    widget.setPlainText("" if mixed else value)
+                    if mixed:
+                        widget.setPlaceholderText("Valeurs multiples")
+                    widget.textChanged.connect(
+                        lambda key=spec.key: self._mark_property_edit(key))
+                else:
+                    widget = QLineEdit("" if mixed else value)
+                    if mixed:
+                        widget.setPlaceholderText("Valeurs multiples")
+                    widget.textEdited.connect(
+                        lambda _v, key=spec.key: self._mark_property_edit(key))
+                widget.setAccessibleName(spec.label)
+                self.form.addRow(spec.label, widget)
+                self.property_widgets[spec.key] = (widget, spec)
+                if spec.key in ("name", "title") and self.name_edit is None:
+                    self.name_edit = widget
+            self.references.setText(
+                "Identifiant(s) stable(s) : " +
+                ", ".join(r.resource_id for r in chosen) +
+                "\nLes identifiants et références ne sont pas modifiés par l'inspecteur.")
+            for direction, title in (("incoming", "← Référencée par"),
+                                     ("outgoing", "→ Référence")):
+                for edge in connections(snapshot, chosen, direction):
+                    other = edge.source if direction == "incoming" else edge.target
+                    item = self._link_item(
+                        title + " : " + other.title + " (" + other.family + ")",
+                        other.key, edge.path)
+                    self.links.addItem(item)
+        except (InspectorError, ValueError) as exc:
+            self.inspector_error.setText(str(exc))
+
+    def _link_item(self, title, identity, path):
+        from PySide6.QtWidgets import QListWidgetItem
+        item = QListWidgetItem(title)
+        item.setData(Qt.UserRole, identity)
+        item.setToolTip(path)
+        return item
+
+    def _field_value(self, widget, spec):
+        if isinstance(widget, QSpinBox):
+            return widget.value()
+        if isinstance(widget, QCheckBox):
+            if widget.checkState() == Qt.PartiallyChecked:
+                raise InspectorError(spec.label + " : choisir Oui ou Non")
+            return widget.isChecked()
+        if isinstance(widget, QPlainTextEdit):
+            return widget.toPlainText()
+        if spec.kind == "int":
+            try:
+                return int(widget.text().strip())
+            except ValueError as exc:
+                raise InspectorError(spec.label + " : entier attendu") from exc
+        return widget.text()
 
     def apply_selection(self):
+        if not self._edited_fields:
+            return
         try:
-            edit_names(self.session, self._selected, self.name_edit.text())
+            updates = {key: self._field_value(*self.property_widgets[key])
+                       for key in self._edited_fields}
+            edit_properties(self.session, self._selected, updates,
+                            expected_revision=self._inspector_revision)
             self.refresh()
-        except (AuthoringError, ValueError) as exc:
-            self.report_error(exc)
+        except (AuthoringError, InspectorError, ValueError) as exc:
+            self.inspector_error.setText(str(exc))
+            self.problems.addItem("Inspecteur : " + str(exc))
+            self.statusBar().showMessage(str(exc))
+
+    def follow_reference(self, item):
+        identity = item.data(Qt.UserRole)
+        if identity:
+            self.focus_resource(tuple(identity))
+
+    def focus_resource(self, identity):
+        """Reveal one resource across all facets, then navigate precisely."""
+        self.search.clear()
+        self.reference_filter.setCurrentIndex(0)
+        self.filter.setCurrentIndex(0)
+        self.family_filter.setCurrentIndex(0)
+        self.mission_filter.setCurrentIndex(0)
+        for row in range(self.resource_model.rowCount()):
+            parent = self.resource_model.item(row)
+            for j in range(parent.rowCount()):
+                child = parent.child(j)
+                if tuple(child.data(Qt.UserRole).split("|", 2)) == identity:
+                    index = self.proxy.mapFromSource(child.index())
+                    if index.isValid():
+                        self.resource_view.selectionModel().setCurrentIndex(
+                            index, QItemSelectionModel.ClearAndSelect |
+                            QItemSelectionModel.Rows)
+                        self.resource_view.scrollTo(index)
+                        self.resource_view.setFocus()
+                        return True
+        return False
 
     def _open_selected_resource(self, _index):
         if not self._selected:
