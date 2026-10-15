@@ -8,6 +8,7 @@ import os
 import shutil
 
 from drawtemp.sdk.simulation import Simulation, SimulationError, thaw
+from drawtemp.player.preferences import PlayerPreferences
 
 
 class PlayerController:
@@ -19,10 +20,11 @@ class PlayerController:
         self.content, self.project = content, project
         self.campaign_id, self.seed = campaign_id, seed
         self.save_dir = Path(save_dir)
+        self.preferences = PlayerPreferences(self.save_dir / 'player-preferences.json')
         self.session = None
         self.show_title = True
         self.selected = [0, 0]
-        self.message = ""
+        self.message = self.preferences.warning
         self.forecast = ""
 
     def _path(self, slot):
@@ -251,6 +253,29 @@ class PlayerController:
         self.session.return_to_campaign(expected_revision=state.revision)
         return self._changed()
 
+    def set_profile(self, profile):
+        self.preferences.profile(profile)
+        self.message = "Profil clavier : " + profile.upper()
+        return self.state()
+
+    def set_binding(self, action, key):
+        self.preferences.rebind(action, key)
+        self.message = "Commande modifiée : " + action + " = " + key
+        return self.state()
+
+    def reset_bindings(self):
+        self.preferences.reset()
+        self.message = "Commandes du profil restaurées"
+        return self.state()
+
+    def set_display(self, name, value):
+        self.preferences.set_display(name, value)
+        self.message = "Option enregistrée"
+        return self.state()
+
+    def resolve_key(self, key, context):
+        return self.preferences.resolve(key, context)
+
     def _current(self):
         if self.session is None:
             raise ValueError("No active game")
@@ -268,6 +293,7 @@ class PlayerController:
                 "backups": self.backups(),
                 "message": self.message, "forecast": self.forecast,
                 "selected": list(self.selected), "campaign": self.campaign_id,
+                "settings": self.preferences.view(),
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
                 "battle": {}, "revision": 0}
         if self.session is None or self.show_title:
