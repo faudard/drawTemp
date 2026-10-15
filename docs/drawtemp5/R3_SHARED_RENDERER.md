@@ -48,3 +48,7 @@ La fenêtre Qt et son contrôleur doivent être conservés par l'hôte. L'adapta
 3. Capturer des goldens de chaque vue avec tests d'occlusion/étages et contrôle DPR, Linux/Windows/macOS.
 4. Benchmarker une **vraie** GPU pour 32²/64²/128² aux zooms cibles : p50/p95/p99 frame time, CPU/GPU/VRAM, nombre de nœuds visibles, backend Qt, pilotes et matériel.
 5. Tester le branchement aux vrais shells R2/R12 dès leur intégration, avec interaction souris/clavier et même scene/atlas dans les deux.
+
+### Intégration commune R5/R12 — PR #237
+
+La vue `IsoViewport.qml` est montée par le Studio R5 dans `QQuickWidget` et directement par le Player R12 via la façade `TacticalBoard.qml`. Les deux clients partagent `RendererController`, `IsoProjection`, `render_items` et les scènes canoniques R1. Les politiques d'entrée sont `edit` (gestes de peinture R5), `select` (case tactique R12) et `pan` (R3). Le Canvas historique R5 a été retiré et le Canvas R12 remplacé. Tests conjoints : `tests_standalone/test_drawtemp5_shared_viewport.py`. Les smokes logiciels ne constituent pas une preuve GPU ni une validation d'art final.
