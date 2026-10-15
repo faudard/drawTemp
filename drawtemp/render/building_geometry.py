@@ -79,7 +79,10 @@ def building_surfaces(scene, projection, *, cutaway=False, active_level=0):
         x0, y0 = record["anchor"]
         w, h = clip.width, clip.height
         cells = [(x0 + dx, y0 + dy) for dx, dy in clip.offsets]
-        base = max(elev.get(cell, 0) for cell in cells)
+        # Wall stamps carry a tactical height of 2 while interior floors
+        # retain the underlying ground level. Anchoring at their maximum
+        # would make the whole house float above its entrance.
+        base = min(elev.get(cell, 0) for cell in cells)
         attached = sorted((f for f in floors if f["structure_id"] == record["id"]),
                           key=lambda f: f["level"])
         top = base + 2.5 + len(attached)*2.0
