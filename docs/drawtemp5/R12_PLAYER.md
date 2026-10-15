@@ -72,8 +72,8 @@ Le smoke **n'est pas** une certification de qualité GPU.
 | R12.2 Title & Main Menu | Menu, pause, nouvelle partie, charger, quitter ; animation artistique à compléter |
 | R12.3 Campaign Flow | Intro, exploration, dialogue, combat et résultat fonctionnels ; gate end-to-end complète à certifier |
 | R12.4 Exploration UX | Déplacements, interactions, isométrie et zoom initial ; caméra avancée à compléter |
-| R12.5 Combat HUD | Objectif, CT, roster, PV, PM, compétences/objets ; UX avancée non certifiée |
-| R12.6 Tactical Feedback | Prévisualisation exacte d'actions ; zones LOS/danger/télégraphies à intégrer |
+| R12.5 Combat HUD | Timeline CT moteur, roster PV/PM, sélection, compétences et objets, cible détaillée, prévisions ; portraits artistiques et UX avancée à compléter |
+| R12.6 Tactical Feedback | Portées, cases accessibles, coûts, LOS, probabilités, dangers et réactions, sorts programmés et charges possibles projetés par R1 sur R3 ; polish à certifier |
 | R12.7 Animation Controller | À faire avec les pistes R3/R4 |
 | R12.8 Input & Keybinding | Profils AZERTY/QWERTY persistants, remappage contextuel avec contrôle des conflits ; manette et variantes spécifiques à compléter |
 | R12.9 Menus & Options | Options Qt persistantes : contraste, taille, plein écran, grille et hauteurs ; configuration audio à connecter à R11 |
@@ -144,3 +144,49 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
 
 Le smoke Qt ne remplace pas la validation manuelle d'une session longue et
 du rendu GPU. Le **Gate R12 demeure ouvert**.
+
+### R12.5–R12.6 — HUD et projection tactique autoritative
+
+La nouvelle API `Simulation.tactical_presentation(cell, skill_id,
+expected_revision=...)` expose exclusivement une projection **immuable et
+détachée** calculée à partir du `Battle` canonique. Elle se fonde sur :
+
+- `sporebound.presentation.battle_frame` et `combat_hud` pour les PV/PM,
+  objectifs, roster, sélection, CT estimé et avertissements ;
+- `Battle.reachable` pour les cases accessibles, chemins et coûts ;
+- `Battle.movement_threats` pour les réactions et engagements possibles
+  sur un chemin (elles peuvent ne pas se déclencher) ;
+- `Battle.forecast` et `Battle.line_of_sight` pour la visibilité et
+  les effets probabilistes d'une compétence sélectionnée ;
+- `sporebound.tactical_intents` pour les zones de terrain dangereux,
+  réactions armées, sorts programmés et charges seulement *possibles*.
+
+La projection ne consomme aucun tirage RNG : elle copie le combat avant les
+requêtes et renvoie sa révision source pour rejeter les affichages périmés.
+Les chances d'impact/quantités sont des **prévisions**, non des résultats
+garantis et la timeline CT suppose les vitesses inchangées. Il n'y a ni
+simulation cachée du futur comportement IA ni formule tactique réinventée
+dans le QML.
+
+Le composant `TacticalBoard.qml` continue d'étendre le viewport partagé
+`IsoViewport.qml` de R3. Ses losanges de portées/dangers utilisent la
+projection caméra/hauteur identique au terrain existant ; ils ne capturent
+aucune entrée souris. Les charges hypothétiques sont en pointillés.
+`Main.qml` présente la prévision de la compétence inspectée, les chances,
+le LOS, le risque du chemin, les tours CT, charges et sorts programmés.
+Un bouton permet de masquer les surcouches.
+
+Tests headless : `tests_standalone.test_drawtemp5_r12_tactical` vérifie
+l'immutabilité/revision, la parité avec le moteur, la pureté des prévisions,
+les erreurs de sélection, le mouvement et un parcours de référence
+**combat → victoire → sauvegarde → reprise → campagne**. Ce dernier test
+utilise la politique IA canonique comme pilote de test, jamais comme
+automatisme du Player livré au joueur.
+
+```bash
+python -m unittest tests_standalone.test_drawtemp5_r12_tactical -v
+```
+
+Le test moteur ne clôt pas encore le gate de jeu GUI réel. R12.7
+(animation), les portraits/sprites de production et le rendu artistique
+restent des axes ouverts.
