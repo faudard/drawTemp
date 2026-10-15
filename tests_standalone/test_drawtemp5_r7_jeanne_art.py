@@ -64,11 +64,11 @@ class JeanneArtTests(unittest.TestCase):
                 next_step = render_frame(recipe, "peasant", "walk", direction, 1,
                                          destination)
                 self.assertIsNotNone(ImageChops.difference(
-                    base, next_step).getbbox(), "Walking poses are not distinct")
+                    base.convert("RGB"), next_step.convert("RGB")).getbbox(), "Walking poses are not distinct")
                 armor = render_frame(recipe, "armor", "walk", direction, 0,
                                      destination)
                 self.assertIsNotNone(ImageChops.difference(
-                    base, armor).getbbox(), "Armor was only renamed")
+                    base.convert("RGB"), armor.convert("RGB")).getbbox(), "Armor was only renamed")
             reference = (destination / "layers/armor/south.png").read_bytes()
             build_jeanne_art(ROOT, destination)
             self.assertEqual((destination / "layers/armor/south.png").read_bytes(),
