@@ -377,11 +377,14 @@ class MapStudio:
         return transition
 
     def save(self):
+        # Check the sidecar *before* committing the two canonical documents.
+        self.layers.verify_disk()
         paths = self.authoring.save()
         self.layers.save()
         return paths
 
     def save_as(self, path):
+        self.layers.verify_new_destination(path)
         paths = self.authoring.save_as(path)
         self.layers.save(path)
         return paths
