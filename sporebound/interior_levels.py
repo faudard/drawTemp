@@ -1,8 +1,8 @@
 """Authorable stacked interior decks, separate from the 2D tactical board.
 
-These are PRESENTATION-ONLY decks attached to persistent building identities.
-Nothing in this module alters Battle, unit positions, line of sight or movement.
-The distinction is explicit until a versioned multilevel gameplay contract exists.
+The same validated deck cells now serve the conservative level_navigation
+walkability and same-floor LOS rules introduced in R6.10. They never rewrite
+the level-0 tactical tiles or imply full arbitrary 3D geometry/collision.
 """
 from copy import deepcopy
 
@@ -99,7 +99,7 @@ def _floor(mission, sid, level):
 
 
 def add_interior_floor(data, mid, sid, level=1):
-    """Create a walkable-looking upper deck with a hole-free base floor plan.
+    """Create an authored walkable upper deck using the building base plan.
 
     The authored plan copies the PRESET walkable cells, not the authoritative
     board. This lets designers add holes and props without mutating battle.
@@ -153,7 +153,7 @@ def delete_interior_floor(data, mid, sid, level):
 
 def edit_interior_tile(data, mid, sid, level, cell, *,
                        surface=None, feature=None, present=True):
-    """Edit a cell on one floor atomically, with no effect on 2D board tiles.
+    """Edit an upper deck atomically without altering level-0 board tiles.
 
     'present=False' makes a hole in the authored deck; 'present=True' can
     restore the cell. Features use None for unchanged, '' to erase a prop.
