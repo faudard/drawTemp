@@ -198,8 +198,13 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None, *,
     from .building_geometry import building_surfaces
     for part in building_surfaces(scene, projection, cutaway=cutaway,
                                   active_level=active_level):
-        if (-margin <= camera.screen(part["sx"], part["sy"])[0] <= camera.width + margin and
-                -margin <= camera.screen(part["sx"], part["sy"])[1] <= camera.height + margin):
+        x0, y0 = camera.screen(part["sx"], part["sy"])
+        x1, y1 = camera.screen(part["sx"] + part["spanX"],
+                                part["sy"] + part["spanY"])
+        # Cull by the entire polygon AABB, not only its top-left point: a
+        # partly visible wall must remain paintable and pickable at any zoom.
+        if (x1 >= -margin and x0 <= camera.width + margin and
+                y1 >= -margin and y0 <= camera.height + margin):
             rows.append(part)
     return sorted(rows, key=lambda r: (r["zOrder"], r["id"]))
 
