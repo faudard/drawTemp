@@ -155,7 +155,11 @@ class R11QtSmokeTests(unittest.TestCase):
         editor = CinematicEditor(doc)
         self.assertEqual(editor.stage.bridge.frame, frame0)
         self.assertIsNotNone(editor.stage.view.rootObject())
-        editor.close()
+        # The sample is unsaved by design: approve the close guard explicitly.
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QMessageBox
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+            editor.close()
         stage.close()
         app.processEvents()
 
