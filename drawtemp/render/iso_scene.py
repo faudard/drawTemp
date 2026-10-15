@@ -86,12 +86,16 @@ def scene_from_mission(mission, snapshot=None):
         tiles.append({"x": x, "y": y,
                       "surface": str(t["surface"] if t else original.surface),
                       "height": int(t["height"] if t else original.height),
-                      "feature": str(t["feature"] if t else original.feature)})
+                      "feature": str(t["feature"] if t else original.feature),
+                      "blocked": bool(t["blocked"] if t else original.blocked),
+                      "cover": int(t["cover"] if t else original.cover),
+                      "hazard": int(t["hazard"] if t else original.hazard),
+                      "goal": (x, y) in mission.goal})
     actors = []
     levels = battle.get("unit_levels", {}) if battle else mission.unit_levels
     for u in (battle["units"] if battle else mission.units):
         field = (lambda k: u[k]) if isinstance(u, Mapping) else (lambda k: getattr(u, k))
-        actors.append({"id": str(field("id")), "x": float(field("pos")[0]),
+        actors.append({"id": str(field("id")), "name": str(field("name")), "x": float(field("pos")[0]),
                        "y": float(field("pos")[1]), "team": str(field("team")),
                        "alive": field("hp") > 0, "level": int(levels.get(field("id"), 0))})
     objects = [{"id": str(o["id"]), "kind": str(o["kind"]),
@@ -100,6 +104,46 @@ def scene_from_mission(mission, snapshot=None):
     return {"mission": mission.id, "width": mission.board.width,
             "height": mission.board.height,
             "revision": int(getattr(snapshot, "revision", 0)),
+            "tiles": tiles, "actors": actors, "objects": objects}
+
+
+def scene_from_exploration(stage, *, revision=0):
+    """Adapt an R1 narrative exploration snapshot to the same R3 scene schema.
+
+    The canonical exploration stage has no authored tactical terrain map. Its
+    theme and blockers produce a presentation fallback; gameplay still uses
+    the untouched SDK exploration state.
+    """
+    if not isinstance(stage, Mapping):
+        raise ValueError("Expected a validated exploration snapshot")
+    width, height = stage["width"], stage["height"]
+    blocked = {tuple(cell) for cell in stage["blocked"]}
+    materials = {"fields": "grass", "village": "cobble",
+                 "forest": "grass", "stone": "stone"}
+    surface = materials.get(stage["theme"], "grass")
+    tiles = [
+        {"x": x, "y": y, "height": 0, "surface": surface,
+         "feature": "tree" if (x, y) in blocked and surface == "grass" else "",
+         "blocked": (x, y) in blocked, "cover": 0, "hazard": 0,
+         "goal": False}
+        for y in range(height) for x in range(width)
+    ]
+    actors = [{"id": "jeanne", "name": "Jeanne", "x": stage["position"][0],
+               "y": stage["position"][1], "team": "player", "alive": True,
+               "level": 0}]
+    actors.extend(
+        {"id": actor["id"], "name": actor["name"], "x": actor["pos"][0],
+         "y": actor["pos"][1], "team": "ally",
+         "alive": actor["status"] == "active", "level": 0}
+        for actor in stage.get("actors", ())
+    )
+    objects = [
+        {"id": point["id"], "kind": "visited" if point["visited"] else "marker",
+         "x": point["pos"][0], "y": point["pos"][1]}
+        for point in stage["interactions"]
+    ]
+    return {"mission": "exploration:" + stage["scene_id"],
+            "width": width, "height": height, "revision": revision,
             "tiles": tiles, "actors": actors, "objects": objects}
 
 
@@ -125,9 +169,13 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None):
         sx, sy = projection.project(x, y, z)
         surface = t["surface"] if t["surface"] in MATERIALS else "grass"
         atlas_index = MATERIALS.index(surface) * 2 + ((x * 17 + y * 29) & 1)
-        rows.append({"kind": "tile", "id": f"tile:{x}:{y}", "sx": sx, "sy": sy,
+        rows.append({"kind": "tile", "id": f"tile:{x}:{y}", "x": x, "y": y,
+                     "sx": sx, "sy": sy, "surface": surface,
                      "color": COLORS[MATERIALS.index(surface)],
                      "atlasX": atlas_index * 96, "selected": selected == (x, y),
+                     "height": z, "feature": t.get("feature", ""),
+                     "blocked": t.get("blocked", False), "cover": t.get("cover", 0),
+                     "hazard": t.get("hazard", 0), "goal": t.get("goal", False),
                      "zOrder": (x + y) * 100})
     for o in scene["objects"]:
         x, y = o["x"], o["y"]
@@ -139,7 +187,8 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None):
         x, y = a["x"], a["y"]
         if minx - 1 <= x <= maxx + 1 and miny - 1 <= y <= maxy + 1:
             sx, sy = projection.project(x, y, elev.get((int(x), int(y)), 0) + a["level"] * 4)
-            rows.append({"kind": "actor", "id": a["id"], "team": a["team"],
+            rows.append({"kind": "actor", "id": a["id"],
+                         "label": a.get("name", a["id"]), "team": a["team"],
                          "alive": a["alive"], "sx": sx, "sy": sy,
                          "zOrder": (x + y) * 100 + 60})
     return sorted(rows, key=lambda r: (r["zOrder"], r["id"]))
