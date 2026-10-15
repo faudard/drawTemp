@@ -51,7 +51,7 @@ class R12InputPreferencesTests(unittest.TestCase):
             ("explore_up", "Q"),      # exploration duplicate
             ("battle_attack", "X"),   # combat duplicate
             ("save", "Z"),            # global vs exploration
-            ("pause", "M"),           # global vs combat
+            ("pause", "X"),           # global vs combat
             ("battle_end", "Up"),     # reserved directional arrow
             ("explore_up", "Left"),   # wrong direction
             ("explore_up", "F11"),    # unsupported key
