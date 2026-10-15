@@ -11,21 +11,22 @@ import logging
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QSettings, QSortFilterProxyModel, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QFont, QKeySequence, QPalette, QStandardItem, QStandardItemModel
+from PySide6.QtCore import QItemSelectionModel, QSettings, QSortFilterProxyModel, Qt, QTimer
+from PySide6.QtGui import QAction, QColor, QFont, QIntValidator, QKeySequence, QPalette, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QComboBox, QDialog, QDockWidget, QFileDialog,
-    QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
-    QMainWindow, QMessageBox, QPushButton, QSplitter, QStackedWidget, QStyleFactory,
-    QToolBar, QTreeView, QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDockWidget,
+    QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
+    QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
+    QSplitter, QStackedWidget, QStyleFactory, QToolBar, QTreeView, QVBoxLayout, QWidget,
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.reference import reference_project
-from drawtemp.studio.workspace_model import (
-    FAMILY_LABELS, common_name, edit_names, editable_name, reference_hints,
-    resources,
+from drawtemp.studio.workspace_model import FAMILY_LABELS, resources
+from drawtemp.studio.inspector_model import (
+    InspectorError, common_value, edit_properties, shared_specs,
 )
+from drawtemp.studio.resource_links import connections
 
 log = logging.getLogger(__name__)
 WORKSPACES = ("project", "maps", "actors", "database", "events",
@@ -75,24 +76,34 @@ def apply_theme(app, name, scale=100):
 
 
 class ResourceProxy(QSortFilterProxyModel):
-    """Recursive search plus optional favorites, both UI-only filters."""
+    """Recursive text/family/mission/reference filters, applied to stable keys."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.favorite_only = False
         self.favorites = set()
+        self.family_filter = ""
+        self.mission_filter = ""
+        self.related_keys = None
         self.setRecursiveFilteringEnabled(True)
         self.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
     def filterAcceptsRow(self, source_row, source_parent):
         index = self.sourceModel().index(source_row, 0, source_parent)
         identity = index.data(Qt.UserRole)
-        if identity is not None and self.favorite_only:
-            if identity not in self.favorites:
-                return False
-        elif identity is None and self.favorite_only:
+        if identity is None:
             return any(self.filterAcceptsRow(row, index)
                        for row in range(self.sourceModel().rowCount(index)))
+        family, mission, identifier = identity.split("|", 2)
+        if self.favorite_only and identity not in self.favorites:
+            return False
+        if self.family_filter and family != self.family_filter:
+            return False
+        if self.mission_filter and self.mission_filter not in (mission,
+                                                               identifier if family == "maps" else ""):
+            return False
+        if self.related_keys is not None and (family, mission, identifier) not in self.related_keys:
+            return False
         return super().filterAcceptsRow(source_row, source_parent)
 
 
@@ -213,9 +224,19 @@ class StudioWindow(QMainWindow):
         layout = QVBoxLayout(host)
         self.search = QLineEdit()
         self.search.setClearButtonEnabled(True)
-        self.search.setPlaceholderText("Rechercher cartes, personnages, événements…")
+        self.search.setPlaceholderText("Rechercher nom, ID ou mission…")
         self.search.setAccessibleName("Recherche de ressources")
         layout.addWidget(self.search)
+        self.family_filter = QComboBox()
+        self.family_filter.setAccessibleName("Famille de ressources")
+        self.family_filter.addItem("Toutes les familles", "")
+        for family, label in FAMILY_LABELS.items():
+            self.family_filter.addItem(label, family)
+        layout.addWidget(self.family_filter)
+        self.mission_filter = QComboBox()
+        self.mission_filter.setAccessibleName("Carte ou mission")
+        self.mission_filter.addItem("Toutes les cartes", "")
+        layout.addWidget(self.mission_filter)
         row = QHBoxLayout()
         self.filter = QComboBox()
         self.filter.addItems(("Toutes les ressources", "Favoris"))
@@ -226,6 +247,13 @@ class StudioWindow(QMainWindow):
         self.favorite_button.clicked.connect(self.toggle_favorite)
         row.addWidget(self.favorite_button)
         layout.addLayout(row)
+        self.reference_filter = QComboBox()
+        self.reference_filter.setAccessibleName("Relations de la sélection")
+        self.reference_filter.addItems((
+            "Toutes les relations", "Ressources qui la référencent",
+            "Ressources qu'elle référence"))
+        layout.addWidget(self.reference_filter)
+
         self.resource_model = QStandardItemModel(self)
         self.resource_model.setHorizontalHeaderLabels(["Ressources"])
         self.proxy = ResourceProxy(self)
@@ -235,12 +263,17 @@ class StudioWindow(QMainWindow):
         self.resource_view.setHeaderHidden(True)
         self.resource_view.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.resource_view.setAccessibleName("Explorateur du projet")
+        self.resource_view.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.resource_view.customContextMenuRequested.connect(self.resource_context_menu)
         self.resource_view.selectionModel().selectionChanged.connect(
             lambda *_: self._update_selection())
         self.resource_view.doubleClicked.connect(self._open_selected_resource)
         layout.addWidget(self.resource_view, 1)
         self.search.textChanged.connect(self.proxy.setFilterFixedString)
         self.filter.currentIndexChanged.connect(self._set_favorites_only)
+        self.family_filter.currentIndexChanged.connect(self._update_resource_filters)
+        self.mission_filter.currentIndexChanged.connect(self._update_resource_filters)
+        self.reference_filter.currentIndexChanged.connect(self._update_resource_filters)
         self.resource_dock = self._dock(
             "Explorateur", "r2-resource-dock", host, Qt.LeftDockWidgetArea)
 
