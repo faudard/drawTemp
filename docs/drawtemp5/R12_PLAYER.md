@@ -190,3 +190,8 @@ python -m unittest tests_standalone.test_drawtemp5_r12_tactical -v
 Le test moteur ne clôt pas encore le gate de jeu GUI réel. R12.7
 (animation), les portraits/sprites de production et le rendu artistique
 restent des axes ouverts.
+
+
+### R12.7 — Certification artistique et visuelle
+
+Voir [R12_7_VISUAL_QA.md](R12_7_VISUAL_QA.md) pour les assets Jeanne 4 directions, captures Qt réelles et checklist d'approbation artistique/GPU.
