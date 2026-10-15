@@ -40,7 +40,9 @@ class IntegrityQtTests(unittest.TestCase):
             with patch("PySide6.QtWidgets.QDialog.exec", return_value=0):
                 window._show_variables()
         finally:
-            window.close()
+            with patch("PySide6.QtWidgets.QMessageBox.question",
+                       return_value=QMessageBox.Yes):
+                window.close()
 
     def test_bulk_edit_two_actors_one_undo(self):
         from drawtemp.studio.rpg_database_qt import DatabaseWindow
