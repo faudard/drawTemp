@@ -87,3 +87,7 @@ Le smoke **n'est pas** une certification de qualité GPU.
 **Gate R12 reste ouverte** tant que le flux complet titre → Jeanne →
 exploration → combat → victoire → résultat → sauvegarde → reprise n'a pas été
 certifié en test intégré Qt réel, avec graphismes partagés finalisés.
+
+### Viewport partagé R3 (PR #237)
+
+Le Player n'a plus son moteur Canvas QML. `TacticalBoard.qml` conserve les propriétés `battle`, `exploration`, `selected` et le signal `cellSelected`, tout en déléguant entièrement le rendu et le picking à `IsoViewport.qml`. `scene_for_player` projette la bataille via `scene_from_mission` ou l'exploration via `scene_from_exploration`, exclusivement depuis la session R1. Le zoom/pan et les textures sont les mêmes que dans l'éditeur R5. Les futures intégrations de sprites/animations et les performances GPU sont à certifier séparément.
