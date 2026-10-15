@@ -50,9 +50,15 @@ class PresentationAssets:
             return None
         # Exact binding first. Only idle/south fallback for a missing optional
         # cosmetic pose; no reinterpretation of tactical state.
+        # Imported R4 strips use actor_direction_pose. The packaged Jeanne
+        # campaign predates R4 and uses actor_pose_direction. Both are
+        # authoritative bindings in the unchanged GameProject asset registry.
         for slot in (f"{actor_id}_{direction}_{pose}",
+                     f"{actor_id}_{pose}_{direction}",
                      f"{actor_id}_{direction}_idle",
-                     f"{actor_id}_south_idle"):
+                     f"{actor_id}_idle_{direction}",
+                     f"{actor_id}_south_idle",
+                     f"{actor_id}_idle_south"):
             if slot in self._animations:
                 return self._animations[slot]
         return self._sprites.get(actor_id)
