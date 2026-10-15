@@ -6,6 +6,7 @@ import sys
 
 from drawtemp.core import Content, GameProject
 from drawtemp.player.controller import PlayerController
+from drawtemp.player.animation_controller import AnimationDirector
 from drawtemp.render.iso_scene import scene_from_mission, scene_from_exploration
 from drawtemp.render.qt_viewport import make_controller
 
@@ -50,21 +51,65 @@ def create_bridge(controller, renderer):
             super().__init__()
             self.controller = controller
             self.renderer = renderer
+            self.animator = AnimationDirector()
 
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
             return self.controller.state()
 
+        @Property("QVariantMap", notify=stateChanged)
+        def animationPlan(self):
+            return self.animator.snapshot()
+
         def invoke(self, call, *args):
+            before = (self.controller.session.snapshot()
+                      if self.controller.session is not None else None)
             try:
                 call(*args)
+                after = (self.controller.session.snapshot()
+                         if self.controller.session is not None else None)
+                reset = (call.__name__ in
+                         {"new_game", "load", "restore_backup", "title"})
+                if reset or self.controller.show_title:
+                    self.animator.cancel()
+                elif (before is not None and after is not None and
+                      after.revision != before.revision):
+                    self.animator.update(before, after)
                 self.renderer.replace_scene(scene_for_player(self.controller))
                 if self.controller.session is not None:
                     self.renderer.selectCell(*self.controller.selected)
             except Exception as exc:
-                # A rejected rule/invalid save leaves the canonical Simulation intact.
+                # An invalid rule does not publish a new clip or overwrite saves.
                 self.controller.message = str(exc)
             self.stateChanged.emit()
+
+        def settings_update(self, method, *args):
+            # Presentation-only update: keep the R3 camera, selection and scene.
+            try:
+                method(*args)
+            except Exception as exc:
+                self.controller.message = str(exc)
+            self.stateChanged.emit()
+
+        @Slot(str)
+        def selectProfile(self, profile):
+            self.settings_update(self.controller.set_profile, profile)
+
+        @Slot(str, str)
+        def rebind(self, action, key):
+            self.settings_update(self.controller.set_binding, action, key)
+
+        @Slot()
+        def resetBindings(self):
+            self.settings_update(self.controller.reset_bindings)
+
+        @Slot(str, bool)
+        def setDisplayBool(self, option, value):
+            self.settings_update(self.controller.set_display, option, value)
+
+        @Slot(float)
+        def setTextScale(self, value):
+            self.settings_update(self.controller.set_display, "text_scale", value)
 
         @Slot()
         def newGame(self):
@@ -125,6 +170,10 @@ def create_bridge(controller, renderer):
         @Slot(str)
         def interactObject(self, object_id):
             self.invoke(self.controller.interact_object, object_id)
+
+        @Slot(str)
+        def inspectSkill(self, skill):
+            self.invoke(self.controller.inspect_skill, skill)
 
         @Slot(str)
         def preview(self, kind):

@@ -15,6 +15,9 @@ Item {
     property bool showBlocked: false
     property bool showHeights: false
     property bool showActors: true
+    // Player-only presentation: briefly conceal the static actor while its
+    // committed move / attack clip is displayed. Studio defaults to none.
+    property var concealedActorIds: []
     property bool showLegend: interactionMode === "pan"
     property var hoveredCell: ({})
     readonly property var camera: renderer.cameraState
@@ -44,7 +47,8 @@ Item {
             property real scaleFactor: root.camera.zoom
             property bool isTile: row.kind === "tile"
             property bool isActor: row.kind === "actor"
-            visible: !isActor || root.showActors
+            visible: (!isActor || root.showActors) &&
+                     (!isActor || root.concealedActorIds.indexOf(row.id) < 0)
             sourceComponent: isTile ? tileComponent : (isActor ? actorComponent : objectComponent)
             x: root.width / 2 + root.camera.panX + row.sx * scaleFactor
                - (isTile ? 48 : isActor ? 20 : 15) * scaleFactor
