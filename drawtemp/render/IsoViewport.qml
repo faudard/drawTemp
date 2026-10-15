@@ -118,8 +118,38 @@ Item {
                         PathLine { x: modelData.points[1][0]; y: modelData.points[1][1] }
                         PathLine { x: modelData.points[2][0]; y: modelData.points[2][1] }
                         PathLine { x: modelData.points[3][0]; y: modelData.points[3][1] }
+                        PathLine { x: modelData.points[4][0]; y: modelData.points[4][1] }
+                        PathLine { x: modelData.points[5][0]; y: modelData.points[5][1] }
+                        PathLine { x: modelData.points[6][0]; y: modelData.points[6][1] }
+                        PathLine { x: modelData.points[7][0]; y: modelData.points[7][1] }
+                        PathLine { x: modelData.points[8][0]; y: modelData.points[8][1] }
                         PathLine { x: modelData.points[0][0]; y: modelData.points[0][1] }
                     }
+                }
+            }
+            // Surface bridge axis comes from canonical channel adjacency.
+            Shape {
+                visible: tile.surface === "bridge" &&
+                         root.layerEnabled("Terrain")
+                anchors.fill: parent
+                opacity: 0.72 * root.layerAlpha("Terrain")
+                ShapePath {
+                    strokeWidth: 2.5
+                    strokeColor: "#584e3f"
+                    fillColor: "transparent"
+                    startX: tile.bridgeAxis === "y" ? 48 : 0
+                    startY: tile.bridgeAxis === "y" ? 0 : 24
+                    PathLine { x: tile.bridgeAxis === "y" ? 96 : 48;
+                               y: tile.bridgeAxis === "y" ? 24 : 48 }
+                }
+                ShapePath {
+                    strokeWidth: 2.5
+                    strokeColor: "#584e3f"
+                    fillColor: "transparent"
+                    startX: tile.bridgeAxis === "y" ? 0 : 48
+                    startY: tile.bridgeAxis === "y" ? 24 : 0
+                    PathLine { x: tile.bridgeAxis === "y" ? 48 : 96;
+                               y: tile.bridgeAxis === "y" ? 48 : 24 }
                 }
             }
             Shape {
