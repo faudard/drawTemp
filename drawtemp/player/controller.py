@@ -4,10 +4,9 @@ All commands, previews, story choices and persistence run through Simulation.
 This module never imports Qt or Tk and never edits the GameSession directly.
 """
 from pathlib import Path
-import os
-import shutil
 
 from drawtemp.sdk.simulation import Simulation, SimulationError, thaw
+from drawtemp.sdk.slots import PlayerSlotStore
 from drawtemp.player.preferences import PlayerPreferences
 
 
@@ -41,21 +40,19 @@ class PlayerController:
         return [slot for slot in range(1, self.project.save_slots + 1)
                 if self._path(slot).with_suffix(".json.bak").is_file()]
 
+    def _store(self, slot):
+        return PlayerSlotStore(self._path(slot), self.content, self.project,
+                               campaign_id=self.campaign_id)
+
+    def inspect_slot(self, slot=1):
+        return self._store(slot).inspect()
+
     def restore_backup(self, slot=1):
-        backup = self._path(slot).with_suffix(".json.bak")
-        if not backup.is_file():
-            raise ValueError("Aucune sauvegarde de secours")
-        verified = Simulation.load(backup, self.content, self.project)
-        path = self._path(slot)
-        temporary = path.with_suffix(".json.recovering")
-        try:
-            shutil.copy2(backup, temporary)
-            os.replace(temporary, path)
-        finally:
-            temporary.unlink(missing_ok=True)
+        verified = self._store(slot).restore_backup()
         self.session = verified
         self.show_title = False
         self.message = "Sauvegarde de secours restaurée"
+        self.forecast = ""
         return self.state()
 
     def new_game(self):
@@ -72,7 +69,7 @@ class PlayerController:
         path = self._path(slot)
         # Assignment only after successful verification: preserve the live game
         # and the saved file when a checksum/project/rules mismatch is found.
-        loaded = Simulation.load(path, self.content, self.project)
+        loaded = self._store(slot).load()
         self.session = loaded
         self.show_title = False
         self.message = "Partie rechargée."
@@ -84,12 +81,7 @@ class PlayerController:
     def save(self, slot=1):
         if self.session is None:
             raise ValueError("No game to save")
-        path = self._path(slot)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
-            Simulation.load(path, self.content, self.project)
-            shutil.copy2(path, path.with_suffix(".json.bak"))
-        self.session.save(path)
+        self._store(slot).save(self.session)
         self.message = "Sauvegarde dans l'emplacement " + str(slot)
         return self.state()
 
