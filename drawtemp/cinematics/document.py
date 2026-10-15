@@ -13,6 +13,7 @@ from sporebound.cinematics import cinematic_template, event_template, frame_at
 from sporebound.audio_timeline import mix_at
 from sporebound.game_project import GameProject
 from sporebound.model import Content, RuleError, require
+from sporebound.tactical_rpg3 import authored_rules_for_document
 from drawtemp.sdk.authoring import AuthoringSession
 
 
@@ -96,7 +97,8 @@ class CinematicDocument:
     @property
     def content(self):
         if self.session is not None:
-            return Content.from_dict(self._session_state()["content"])
+            data = self._session_state()["content"]
+            return Content.from_dict(data, rules=authored_rules_for_document(data))
         return self._content
 
     @content.setter
@@ -107,7 +109,8 @@ class CinematicDocument:
     def project(self):
         if self.session is not None:
             state = self._session_state()
-            content = Content.from_dict(state["content"])
+            content = Content.from_dict(
+                state["content"], rules=authored_rules_for_document(state["content"]))
             return GameProject.from_dict(state["project"], content)
         return self._project
 
