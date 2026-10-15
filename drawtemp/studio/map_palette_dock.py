@@ -28,7 +28,7 @@ class BrushList(QListWidget):
         drag = QDrag(self)
         drag.setMimeData(mime)
         drag.setPixmap(row.icon().pixmap(self.iconSize()))
-        drag.exec(Qt.CopyAction)
+        drag.exec(Qt.DropAction.CopyAction)
 
 
 class MapPaletteDock(QWidget):
@@ -61,9 +61,9 @@ class MapPaletteDock(QWidget):
         root.addLayout(filters)
         self.items = BrushList()
         self.items.setObjectName("r5_palette_tiles")
-        self.items.setViewMode(QListWidget.IconMode)
-        self.items.setResizeMode(QListWidget.Adjust)
-        self.items.setMovement(QListWidget.Static)
+        self.items.setViewMode(QListWidget.ViewMode.IconMode)
+        self.items.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self.items.setMovement(QListWidget.Movement.Static)
         self.items.setDragEnabled(True)
         self.items.setIconSize(QSize(100, 72))
         self.items.setGridSize(QSize(130, 114))
