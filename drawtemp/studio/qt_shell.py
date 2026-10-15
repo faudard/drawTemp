@@ -403,7 +403,10 @@ class StudioWindow(QMainWindow):
         return "|".join(resource.key)
 
     def _favorites(self):
-        return set(self.settings.value("resources/favorites", [], type=str) or [])
+        stored = self.settings.value("resources/favorites", [])
+        if isinstance(stored, str):
+            return {stored} if stored else set()
+        return set(stored or [])
 
     def toggle_favorite(self):
         chosen = self._selected
@@ -546,6 +549,13 @@ class StudioWindow(QMainWindow):
         self.statusBar().showMessage("Atelier : " + LABELS[identifier])
 
     def _make_workspace(self, identifier):
+        if identifier in ("database", "actors") and "database" in self._models:
+            child = self._models["database"]
+            self.pages[identifier] = child
+            self.pages["database"] = child
+            if identifier == "actors":
+                child.tree.setCurrentItem(child.tree.topLevelItem(1))
+            return
         if identifier == "maps":
             from drawtemp.studio.map_authoring import MapStudio
             from drawtemp.studio.map_editor import MapWindow
@@ -583,6 +593,9 @@ class StudioWindow(QMainWindow):
                         button.setEnabled(False)
         self.workspace_tabs.addWidget(child)
         self.pages[identifier] = child
+        if identifier in ("database", "actors"):
+            self.pages["database"] = child
+            self.pages["actors"] = child
 
     def _overview(self, identifier):
         page = QWidget()
@@ -676,12 +689,12 @@ class StudioWindow(QMainWindow):
             self.report_error(exc)
             return
         self.workspace_tabs.setCurrentWidget(self.pages["project"])
-        for name in tuple(self.pages):
-            if name != "project":
-                page = self.pages.pop(name)
-                self.workspace_tabs.removeWidget(page)
-                page.setParent(None)
-                page.deleteLater()
+        old_pages = {page for name, page in self.pages.items() if name != "project"}
+        self.pages = {"project": self.pages["project"]}
+        for page in old_pages:
+            self.workspace_tabs.removeWidget(page)
+            page.setParent(None)
+            page.deleteLater()
         self._models.clear()
         self._selected = ()
         self.session = fresh
