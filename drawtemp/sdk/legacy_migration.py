@@ -94,8 +94,18 @@ def migrate_project(content_path, destination):
     names = [_safe_name(p.name) for p in (source, manifest)]
     if names[0] == names[1]:
         raise MigrationError("Content and manifest filenames collide")
-    converted = tuple(json_text(doc).encode("utf-8") for doc in documents)
-    receipt = plan_project(content_path)
+    converted = originals  # Exact source bytes: no speculative schema upgrade.
+    receipt = {
+        "kind": "drawtemp5_project_migration", "version": RECEIPT_VERSION,
+        "content_schema": documents[0]["version"],
+        "project_schema": documents[1]["version"],
+        "strategy": "canonical_v1_copy_with_exact_original_backup",
+        "sources": [
+            {"path": str(path), "sha256": _hash(raw), "bytes": len(raw)}
+            for path, raw in zip((source, manifest), originals)
+        ],
+        "warning": "No unsupported schema upgrade or lossy rewrite performed.",
+    }
     receipt["files"] = {
         key: {
             "original": f"originals/{name}", "original_sha256": _hash(raw),
