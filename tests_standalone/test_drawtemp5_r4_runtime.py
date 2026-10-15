@@ -59,6 +59,12 @@ class R4RuntimeIntegrationTests(unittest.TestCase):
                             if row["kind"] == "actor" and row["id"] == "jeanne")
             self.assertEqual(next_row["assetId"], "jeanne.south.idle.1")
             self.assertEqual(next_row["atlasY"], 64)
+            west = dict(next(row for row in rows
+                             if row["kind"] == "actor" and row["id"] == "jeanne"))
+            west["direction"] = "west"
+            west_frame = art.decorate([west])[0]
+            self.assertEqual(west_frame["assetId"], "jeanne.west.idle.0")
+            self.assertEqual(west_frame["atlasX"], 192)
             self.assertEqual(art.decorate(rows, elapsed_ms=240), decorated)
             self.assertFalse(any("imageUrl" in row for row in decorated
                                  if row["kind"] != "actor"))
