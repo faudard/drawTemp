@@ -9,8 +9,8 @@ from copy import deepcopy
 
 from drawtemp.sdk.authoring import AuthoringSession
 from sporebound import class_ai_authoring, character_authoring
-from sporebound.model import Content, RuleError, require
-from sporebound.rules import default_rules
+from sporebound.model import Content, SUPPORTS, require
+from sporebound.rules import default_rules, statuses as status_rules
 from sporebound.tactical_rpg3 import authored_rules_for_document
 
 DOCTRINES = ("", "pack_hunt", "bandit_ambush", "spear_hold", "crossbow_reload")
@@ -19,7 +19,7 @@ FORMATIONS = ("none", "shield_wall", "phalanx", "escort")
 ROLES = class_ai_authoring.ROLES
 REACTION_KEYS = tuple(sorted(key for key, _ in default_rules().reactions.entries))
 STATUS_KEYS = tuple(sorted(key for key, _ in default_rules().statuses.entries))
-SUPPORT_KEYS = tuple(sorted(__import__("sporebound.model", fromlist=["SUPPORTS"]).SUPPORTS))
+SUPPORT_KEYS = tuple(sorted(SUPPORTS))
 MOVEMENT_KEYS = tuple(sorted(key for key, _ in default_rules().movements.entries))
 
 # Elements here are damage-resistance keys, NOT immunity against status application.
@@ -210,8 +210,7 @@ class CombatAIEditor:
             "reaction": unit.reaction, "support": unit.support,
             "statuses": deepcopy(unit.statuses),
             "resistances": deepcopy(unit.resistances),
-            "effective_speed": __import__(
-                "sporebound.rules.statuses", fromlist=["speed"]).speed(battle, unit),
+            "effective_speed": status_rules.speed(battle, unit),
             "blocked_move": battle.status_blocks(unit, "move"),
             "blocked_act": battle.status_blocks(unit, "act"),
             "formation": formation_preview(battle, unit.id),
