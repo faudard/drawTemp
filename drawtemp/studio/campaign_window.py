@@ -7,7 +7,7 @@ from importlib.resources import files
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
+from PySide6.QtCore import QObject, QProcess, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QColor, QBrush, QPen
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QFormLayout, QGraphicsScene,
@@ -84,6 +84,7 @@ class CampaignWindow(QMainWindow):
         for label, action in [
             ("Annuler", self._undo), ("Rétablir", self._redo),
             ("Enregistrer", self._save), ("Enregistrer sous…", self._save_as),
+            ("Tester dans le Player Qt", self._play_project),
         ]:
             toolbar.addWidget(_button(label, action, right))
         toolbar.addStretch(1)
@@ -96,6 +97,7 @@ class CampaignWindow(QMainWindow):
         self.setCentralWidget(root)
         self.statusBar().showMessage("Les changements sont validés avant leur application.")
         self._graph_tab()
+        self._authoring_tab()
         self._world_tab()
         self._flow_tab()
         self._siege_tab()
@@ -131,6 +133,76 @@ class CampaignWindow(QMainWindow):
         layout.addWidget(QLabel(
             "Arêtes = next_missions canonique. Les actes et chapitres sont "
             "regroupés visuellement par distance depuis la mission initiale."))
+
+    def _authoring_tab(self):
+        """Guided route authoring: all controls commit canonical transactions."""
+        page, layout = self._form_tab("Créer le parcours")
+        mission_group = QGroupBox("1. Créer des missions jouables")
+        form = QFormLayout(mission_group)
+        self.new_mission_id, self.new_mission_name = QLineEdit(), QLineEdit()
+        self.new_mission_id.setPlaceholderText("ex. village_siege")
+        self.new_mission_name.setPlaceholderText("Nom affiché dans le Player")
+        self.new_width, self.new_height = QSpinBox(), QSpinBox()
+        for spin in (self.new_width, self.new_height):
+            spin.setRange(4, 128)
+            spin.setValue(8)
+        self.new_after = QComboBox()
+        form.addRow("Identifiant", self.new_mission_id)
+        form.addRow("Nom", self.new_mission_name)
+        form.addRow("Largeur", self.new_width)
+        form.addRow("Hauteur", self.new_height)
+        form.addRow("Après", self.new_after)
+        form.addRow(_button("Créer la mission et son lien", self._new_mission, page))
+        self.mission_reward = QSpinBox()
+        self.mission_reward.setRange(0, 1000000)
+        form.addRow("Récompense or", self.mission_reward)
+        form.addRow(_button("Définir pour la mission sélectionnée",
+                            self._set_reward, page))
+        layout.addWidget(mission_group)
+
+        story_group = QGroupBox("2. Dialogue, décisions et transitions")
+        sf = QFormLayout(story_group)
+        self.scene_select = QComboBox()
+        self.scene_select.currentIndexChanged.connect(
+            lambda _i: self._refresh_choice_select())
+        self.scene_id, self.scene_title = QLineEdit(), QLineEdit()
+        self.scene_speaker = QLineEdit()
+        self.scene_dialogue = QTextEdit()
+        self.scene_dialogue.setMaximumHeight(72)
+        sf.addRow("Scène existante", self.scene_select)
+        sf.addRow("Nouvel ID", self.scene_id)
+        sf.addRow("Titre", self.scene_title)
+        sf.addRow("Intervenant", self.scene_speaker)
+        sf.addRow("Dialogue", self.scene_dialogue)
+        sf.addRow(_button("Créer une scène", self._new_scene, page))
+        links = QHBoxLayout()
+        links.addWidget(_button("Scène d'introduction", self._bind_entry, page))
+        links.addWidget(_button("Après victoire de la mission",
+                                self._bind_after_mission, page))
+        sf.addRow(links)
+
+        self.choice_select = QComboBox()
+        self.choice_id, self.choice_label = QLineEdit(), QLineEdit()
+        sf.addRow("Choix existant", self.choice_select)
+        sf.addRow("Nouvel ID de choix", self.choice_id)
+        sf.addRow("Texte du choix", self.choice_label)
+        sf.addRow(_button("Ajouter le choix", self._add_choice, page))
+        sf.addRow(_button("Retirer le choix sélectionné", self._remove_choice, page))
+        self.choice_effect_kind = QComboBox()
+        self.choice_effect_kind.addItems([
+            "set_flag", "add_flag", "unlock_mission", "recruit_hero",
+            "grant_item", "equip_hero", "gold"])
+        self.choice_effect_name, self.choice_effect_value = QLineEdit(), QLineEdit()
+        sf.addRow("Effet de choix", self.choice_effect_kind)
+        sf.addRow("Variable / objet / héros", self.choice_effect_name)
+        sf.addRow("Valeur / quantité", self.choice_effect_value)
+        sf.addRow(_button("Ajouter l'effet au choix sélectionné",
+                           self._add_choice_effect, page))
+        layout.addWidget(story_group)
+        layout.addWidget(QLabel(
+            "La carte est jouable avec deux unités modèles. Pour personnaliser "
+            "terrain, objectifs et acteurs, ouvrir ensuite l'éditeur R5."))
+        layout.addStretch(1)
 
     def _world_tab(self):
         page, layout = self._form_tab("Carte du monde")
@@ -305,6 +377,11 @@ class CampaignWindow(QMainWindow):
         missions = [(row["name"], row["id"]) for row in data["missions"]]
         self._populate(self.origin, missions)
         self._populate(self.destination, missions)
+        self._populate(self.new_after, [("Départ indépendant", None), *missions])
+        self._populate(self.scene_select, [
+            (scene.get("title", scene["id"]), scene["id"])
+            for scene in data["scenes"]])
+        self._refresh_choice_select(data)
         self._populate(self.siege, [(row["id"], row["id"]) for row in data["sieges"]])
         self._refresh_tree(data)
         self._draw_graph(data)
@@ -322,6 +399,14 @@ class CampaignWindow(QMainWindow):
             self.qa_output.setPlainText(str(exc))
         self.setWindowTitle(
             "DrawTemp 5.0 — Campagnes & sièges" + (" *" if data["dirty"] else ""))
+
+    def _refresh_choice_select(self, data=None):
+        if data is None:
+            data = self.studio.overview()
+        current = self.scene_select.currentData()
+        scene = next((row for row in data["scenes"] if row["id"] == current), None)
+        choices = [(row["label"], row["id"]) for row in scene["choices"]] if scene else []
+        self._populate(self.choice_select, choices)
 
     def _refresh_tree(self, data):
         self.explorer.clear()
@@ -405,6 +490,86 @@ class CampaignWindow(QMainWindow):
         cid = self.campaign.currentData()
         if cid and cid != self.studio.campaign_id:
             self._act(lambda: self.studio.select_campaign(cid), "Campagne sélectionnée")
+
+    def _new_mission(self):
+        mid = self.new_mission_id.text().strip()
+        result = self._act(lambda: self.studio.create_mission(
+            mid, self.new_mission_name.text(),
+            width=self.new_width.value(), height=self.new_height.value(),
+            after=self.new_after.currentData()), "Mission et lien créés")
+        if result is not None:
+            index = self.origin.findData(mid)
+            if index >= 0:
+                self.origin.setCurrentIndex(index)
+
+    def _set_reward(self):
+        self._act(lambda: self.studio.set_mission_reward(
+            self._selected_mission(), self.mission_reward.value()))
+
+    def _new_scene(self):
+        scene_id = self.scene_id.text().strip()
+        result = self._act(lambda: self.studio.create_scene(
+            scene_id, self.scene_title.text(), self.scene_dialogue.toPlainText(),
+            speaker=self.scene_speaker.text()), "Dialogue créé")
+        if result is not None:
+            index = self.scene_select.findData(scene_id)
+            if index >= 0:
+                self.scene_select.setCurrentIndex(index)
+
+    def _bind_entry(self):
+        self._act(lambda: self.studio.set_entry_scene(self.scene_select.currentData()),
+                  "Scène d'introduction associée")
+
+    def _bind_after_mission(self):
+        self._act(lambda: self.studio.set_after_mission_scene(
+            self._selected_mission(), self.scene_select.currentData()),
+            "Scène après victoire associée")
+
+    def _add_choice(self):
+        new_id = self.choice_id.text().strip()
+        result = self._act(lambda: self.studio.add_story_choice(
+            self.scene_select.currentData(), new_id, self.choice_label.text()),
+            "Choix créé")
+        if result is not None:
+            index = self.choice_select.findData(new_id)
+            if index >= 0:
+                self.choice_select.setCurrentIndex(index)
+
+    def _remove_choice(self):
+        self._act(lambda: self.studio.remove_story_choice(
+            self.scene_select.currentData(), self.choice_select.currentData()),
+            "Choix supprimé")
+
+    def _add_choice_effect(self):
+        self._act(lambda: self.studio.add_story_choice_effect(
+            self.scene_select.currentData(), self.choice_select.currentData(),
+            self.choice_effect_kind.currentText(),
+            self.choice_effect_name.text(), self.choice_effect_value.text()),
+            "Conséquence de dialogue enregistrée")
+
+    def _play_project(self):
+        """Launch the saved pair, never an unsaved or half-written revision."""
+        if not self.opened or self.studio.authoring.snapshot().dirty:
+            self._save()
+        if not self.opened or self.studio.authoring.snapshot().dirty:
+            self.statusBar().showMessage(
+                "Enregistrer les deux documents avant le playtest", 6000)
+            return
+        if self.source is None:
+            return
+        arguments = [
+            "-m", "drawtemp.player.qt_app", "--content", str(self.source),
+            "--campaign", self.studio.campaign_id,
+        ]
+        started = QProcess.startDetached(
+            sys.executable, arguments, str(self.source.parent))
+        ok = started[0] if isinstance(started, tuple) else started
+        if not ok:
+            QMessageBox.warning(self, "Player indisponible",
+                                "Impossible de démarrer le Player Qt.")
+        else:
+            self.statusBar().showMessage(
+                "Player Qt lancé sur le projet sauvegardé", 6000)
 
     def _link(self, enabled):
         self._act(lambda: self.studio.link_missions(
