@@ -309,9 +309,14 @@ class MapStudio:
     def preview_region(self, cells=(), *, operation="move", anchor=None,
                        include_entities=True):
         from .map_selection import prepare_transform
-        return prepare_transform(self, cells, operation=operation, anchor=anchor,
-                                 stamp=self.region_clipboard,
-                                 include_entities=include_entities)
+        try:
+            return prepare_transform(self, cells, operation=operation, anchor=anchor,
+                                     stamp=self.region_clipboard,
+                                     include_entities=include_entities)
+        except AuthoringError:
+            raise
+        except RuleError as exc:
+            raise AuthoringError("invalid_edit", "map-selection", str(exc)) from exc
 
     def commit_region(self, preview):
         from .map_selection import commit_transform
