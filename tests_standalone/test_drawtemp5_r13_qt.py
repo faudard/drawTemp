@@ -64,6 +64,19 @@ class R13QtSmoke(unittest.TestCase):
                     window._show_simulation_charts(report)
                     self.assertEqual(window.charts.report["mode"], "comparison")
                     self.assertTrue(window.charts.report["comparison"]["passed"])
+                    from drawtemp.sdk.r13_combat_lab import simulate_encounter
+                    result = simulate_encounter(
+                        window.content, "smoke", seeds=(2, 5),
+                        max_commands=12, trace_seed_id=2)
+                    window._complete(window._sequence, ("simulation", result))
+                    self.assertEqual(window.combat_analytics.model["seed"], 2)
+                    self.assertEqual(window.combat_analytics.model["digest"],
+                                     result["trace"]["digest"])
+                    self.assertEqual(window.timeline.rowCount(),
+                                     len(result["trace"]["steps"]))
+                    self.assertTrue(window.timeline.rowCount())
+                    window.combat_analytics.curve.stepSelected.emit(1)
+                    self.assertEqual(window.timeline.currentRow(), 0)
                     captured.append(True)
                 except Exception as exc:
                     captured.append(exc)
