@@ -124,6 +124,24 @@ def build_combat_visuals(trace):
             == {team + ":" + action: count
                 for (team, action), count in sorted(by_team.items())},
             "AI decision telemetry disagrees with canonical diagnostics")
+    # Include the existing Battle Diagnostics findings as clickable evidence,
+    # not only the movement warnings surfaced by AI analytics.
+    diagnostics = trace.get("diagnostics", {})
+    require(type(diagnostics) is dict
+            and type(diagnostics.get("findings")) is list,
+            "Missing canonical replay diagnostics")
+    detailed = list(analytic["evidence"])
+    for finding in diagnostics["findings"]:
+        require(type(finding) is dict and
+                type(finding.get("code")) is str and
+                type(finding.get("step")) is int,
+                "Invalid diagnostic finding")
+        detailed.append({
+            "step": finding["step"], "actor": finding.get("actor"),
+            "team": roster.get(finding.get("actor"), "unknown"),
+            "signal": finding["code"],
+        })
+    detailed.sort(key=lambda item: (item["step"], item["signal"]))
     return {
         "schema": SCHEMA, "kind": "r13_ai_combat_visuals",
         "mission": trace["mission"], "seed": trace["seed"],
@@ -141,7 +159,8 @@ def build_combat_visuals(trace):
         "unit_teams": dict(sorted(roster.items())),
         "combat_events": events, "curve": points,
         "signals": analytic["signals"],
-        "signal_evidence": analytic["evidence"],
+        "signal_evidence": detailed[:300],
+        "evidence_truncated": len(detailed) > 300,
         "limitations": (
             "Décisions réellement exécutées, pas candidats IA écartés. "
             "Dégâts/soins effectivement émis par le moteur après résolution. "
