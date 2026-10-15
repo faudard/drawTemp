@@ -1,16 +1,51 @@
 # DrawTemp 5.0 — Roadmap de refondation Qt 6
 
-> **Statut :** roadmap cible (proposition structurée, aucun lot 5.0 déclaré livré par ce document).  
-> **Date de référence :** 14 octobre 2026.  
+> **Statut :** roadmap 5.0 historique (R0–R16) et proposition détaillée de consolidation/évolutions (R17–R24) ; fusion de PR ≠ certification de release.  
+> **Date de référence :** 14 octobre 2026 pour la spécification initiale ; état GitHub ponctuel et extension au 15 octobre 2026.  
 > **Dépôt :** [faudard/drawTemp](https://github.com/faudard/drawTemp) — branche principale `master`.  
 > **Décision produit :** **Qt 6 / PySide6 pour le Studio et le Player**, **un renderer GPU 2.5D isométrique commun**, **Tactical Core Python headless**.  
 > **Références UX :** RPG Maker MZ (ergonomie d'édition), RPG Maker U2U (construction P2D), gameplay tactique propre à DrawTemp.
 
 Ce document définit la **cible DrawTemp 5.0**, et non l'état d'avancement des lots 2.x/3.x. Il complète [ROADMAP.md](../ROADMAP.md) et les docs héritées au lieu de les réécrire. Une fonctionnalité documentée dans le dépôt legacy n'est pas automatiquement marquée « livrée en Qt ». Les priorités sont des **priorités de réalisation**, pas des statuts.
 
-## État d'intégration au 15 octobre 2026 — PR #237 fusionnée, suivi INT-02
 
-**Suivi de l'implémentation, distinct de la roadmap cible.** La [PR #237](https://github.com/faudard/drawTemp/pull/237) a été fusionnée dans `master` le 15 octobre 2026 et regroupe les PR #224–#236 (R3 à R14). La fusion ne certifie pas les gates fonctionnels, visuels, GPU, CI multi-OS ou packaging. INT-02 fait l'objet d'un correctif incrémental et de tests supplémentaires.
+## Extension détaillée après les PR 5.0 : R17–R24
+
+**Document de référence pour la suite :** [DrawTemp 5.0 → 6.0 — roadmap détaillée, sous-lots, dépendances, critères de tests et plan de PR](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md).
+
+Le présent document **conserve intégralement les contrats R0–R16** ; l'annexe ajoute **106 sous-lots R17–R24** et un plan de PR incrémentales. Ne pas considérer les versions 5.1–6.0 ci-dessous comme des versions livrées. La priorité immédiate est l'intégrité de master et la certification du vertical slice, **avant** l'ajout de nouveaux ateliers.
+
+### Actualisation GitHub du 15 octobre 2026 (contrôle ponctuel)
+
+| Sujet | Constat vérifié / exigence |
+|---|---|
+| PR ouverte | [#248 R7.B](https://github.com/faudard/drawTemp/pull/248) ; vérifier sa CI, sa base et son contenu avant fusion |
+| Branche empilée R7 | [#264 R7.C](https://github.com/faudard/drawTemp/pull/264) fusionnée vers la branche de #248, pas directement vers master : inclusion à prouver |
+| Branches empilées R9 | [#263 R9.C](https://github.com/faudard/drawTemp/pull/263) et [#273 R9.D](https://github.com/faudard/drawTemp/pull/273) fusionnées dans une branche intermédiaire : comparer commits/tree de master |
+| Packaging et legacy | [#255 R15](https://github.com/faudard/drawTemp/pull/255) et [#253 R16](https://github.com/faudard/drawTemp/pull/253) fusionnées ; leurs gates de distribution et retrait Tk restent distincts |
+| Qualité visuelle | [#254 R14](https://github.com/faudard/drawTemp/pull/254) et [#275 R14.5](https://github.com/faudard/drawTemp/pull/275) fusionnées ; goldens approuvés et tests GPU réel à prouver |
+| Asset release | [INT-03](drawtemp5/INT03_ASSET_PUBLICATION.md) : 99 PNG et droits explicites à valider ; aucune release de ressources à droits encore « pending » |
+
+### Jalons post-merge et releases *proposées*
+
+| Jalon | Cible | Objectif / gate à démontrer | Priorité |
+|---|---|---|---|
+| [R17](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md#3-r17--post-merge-integration--release-readiness) | 5.0 RC / stable | Intégration réelle, données, GPU matériel, export autonome, licences | P0 |
+| [R18](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md#4-r18--studio--player-ux-20-51) | 5.1 | UX Studio/Player, navigation et création sans JSON | P0 |
+| [R19](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md#5-r19--art-direction-assets--renderer-20-52) | 5.2 | Direction artistique, atlas, animations et parité de rendu | P0 |
+| [R20](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md#6-r20--jeanne-darc--les-cendres-du-royaume-acte-i-53) | 5.3 | Acte I Jeanne autonome, embranchements et progression | P0 |
+| [R21](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md#7-r21--tactical-rpg--castle-siege-20-54) | 5.4 | Formations, IA coordonnée, siège multi-fronts, boss et fins | P1 |
+| [R22](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md#8-r22--creator-studio-20-55-beta) | 5.5 beta | Production complète d'un mini-jeu sans programmation | P1 |
+| [R23](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md#9-r23--public-release--certification-55) | 5.5 stable | Release certifiée, documentation, installateurs et playtests | P0 |
+| [R24](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md#10-r24--drawtemp-60-creator-platform) | 6.0 | SDK et écosystème réutilisables pour un deuxième jeu | P2 |
+
+**Séquence de livraison :** R17 → (R18 + R19 en parallèle) → R20 → (R21 + R22 avec dépendances explicites) → R23 → R24. Toute PR porte ses propres preuves et référence au sous-lot concerné. La certification finale est décrite dans les sections 11 à 15 de [la roadmap détaillée](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md).
+
+---
+
+## Historique d'intégration initial du 15 octobre 2026 — PR #237 et suivi INT-02
+
+**Instantané historique de la consolidation #237 (et non état GitHub le plus récent).** Suivi de l'implémentation, distinct de la roadmap cible. La [PR #237](https://github.com/faudard/drawTemp/pull/237) a été fusionnée dans `master` le 15 octobre 2026 et regroupe les PR #224–#236 (R3 à R14). La fusion ne certifie pas les gates fonctionnels, visuels, GPU, CI multi-OS ou packaging. INT-02 fait l'objet d'un correctif incrémental et de tests supplémentaires.
 
 | Périmètre | État d'intégration | Validation nécessaire |
 | --- | --- | --- |
@@ -555,5 +590,7 @@ Les machines, GPU, pilotes, résolution, backend Qt et contenu exact doivent êt
 - [PR de consolidation #218](https://github.com/faudard/drawTemp/pull/218) : référence de travaux ouverts, à réexaminer avant démarrage.
 
 ## Politique de statut
+
+Pour R17–R24, utiliser aussi la [matrice de preuves, les gates et le journal d'avancement](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md#15-journal-davancement-recommandé). Les statuts doivent différencier branche fusionnée, présence sur master, tests passés et certification de release.
 
 Pour chaque lot R*, suivre séparément : `non démarré`, `en cours`, `en revue`, `validé` ou `bloqué`; conserver PR, commit, preuves CI, captures et rapport de gate. **Ce document est une roadmap, pas une certification de livraison.** Les gates sont les seuls critères de clôture; la présence d'une classe ou d'une PR ne suffit pas.
