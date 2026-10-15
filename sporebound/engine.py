@@ -15,7 +15,12 @@ from .model import Cell, Content, Effect, RuleError, Skill, Tile, Unit, distance
 
 class Battle:
     def __init__(self, content: Content, mission_id: str, seed: int = 1, battle_id: str | None = None, *, rules=None, initial_state=None):
-        self.rules = rules if rules is not None else default_rules()
+        if rules is None:
+            from .event_pages import has_pages
+            from .tactical_rpg3 import authored_rules_for_document
+            raw = content.to_dict()
+            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
+        self.rules = rules
         for key in ('damage', 'hit_chance', 'mitigation'):
             self.rules.formulas.get(key)
         content.validate(rules=self.rules)
@@ -729,7 +734,11 @@ class Battle:
     @classmethod
     def replay(cls, recording: dict, *, rules=None) -> Battle:
         require(recording.get("version") in {1, 2, 3}, "Unsupported replay version")
-        rules = rules if rules is not None else default_rules()
+        if rules is None:
+            from .event_pages import has_pages
+            from .tactical_rpg3 import authored_rules_for_document
+            raw = recording["content"]
+            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
         if recording['version'] == 3:
             require(recording.get('rules') == rules.manifest(), 'Replay ruleset mismatch')
         elif recording['version'] == 2:
