@@ -51,7 +51,8 @@ class CampaignStudio:
 
     def _models(self):
         document = self.authoring.snapshot().to_dict()
-        content = Content.from_dict(document["content"],\n                                    rules=authored_rules_for_document(document["content"]))
+        content = Content.from_dict(document["content"],
+                                    rules=authored_rules_for_document(document["content"]))
         project = GameProject.from_dict(document["project"], content)
         if project.campaign(self.campaign_id) is None:
             raise RuleError("Unknown campaign: " + self.campaign_id)
@@ -73,7 +74,8 @@ class CampaignStudio:
 
     def _project_edit(self, editor, kind):
         def change(content_data, project_data):
-            content = Content.from_dict(content_data,\n                                        rules=authored_rules_for_document(content_data))
+            content = Content.from_dict(content_data,
+                                        rules=authored_rules_for_document(content_data))
             project = GameProject.from_dict(project_data, content)
             replacement = editor(content, project)
             return content_data, replacement.to_dict()
