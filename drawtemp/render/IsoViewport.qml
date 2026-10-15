@@ -151,6 +151,39 @@ Item {
                 width: 33; height: 20; x: 30; y: 0
                 color: "#68737c"; border.color: "#bac0b9"
             }
+            // Every paintable decor token has a visible map representation.
+            // Dedicated R4 sprite bindings may later replace these lightweight
+            // scenegraph shapes without changing the authored feature value.
+            Item {
+                visible: tile.feature !== "" && tile.feature !== "tree" &&
+                         tile.feature !== "stone_wall" && root.layerEnabled("Décors")
+                opacity: root.layerAlpha("Décors")
+                x: 32; y: -3
+                width: 34; height: 30
+                Rectangle {
+                    x: 3; y: 7; width: 28; height: 18
+                    radius: tile.feature === "bush" ? 11 : 4
+                    color: ["bush", "reeds"].indexOf(tile.feature) >= 0 ? "#537d53"
+                         : ["boulder", "ruin", "pillar"].indexOf(tile.feature) >= 0 ? "#89938f"
+                         : ["lantern", "crate"].indexOf(tile.feature) >= 0 ? "#9f774f"
+                         : "#8a9187"
+                    border.color: "#e0d1ab"
+                    border.width: 1
+                }
+                Text {
+                    anchors.centerIn: parent
+                    text: tile.feature === "reeds" ? "≋" :
+                          tile.feature === "lantern" ? "✦" :
+                          tile.feature === "crate" ? "□" :
+                          tile.feature === "stairs" ? "≡" :
+                          tile.feature === "arch" ? "∩" :
+                          tile.feature === "fence" ? "╫" :
+                          tile.feature === "bush" ? "❀" :
+                          tile.feature === "boulder" ? "◆" :
+                          tile.feature === "pillar" ? "▥" : "▣"
+                    color: "#f8ead0"; font.pixelSize: 15; font.bold: true
+                }
+            }
             Rectangle {
                 visible: root.showBlocked && tile.blocked
                 width: 11; height: 11; x: 43; y: 19; radius: 2
