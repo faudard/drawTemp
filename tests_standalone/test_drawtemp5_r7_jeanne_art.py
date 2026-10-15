@@ -101,6 +101,24 @@ class CharacterEquipmentTests(unittest.TestCase):
         self.assertEqual(self.outfit(inventory={"armor": "knights_armor"},
                                      wounds=["arm_injury"]), "wounded")
 
+    def test_campaign_save_load_keeps_equipment_and_visual_derivation(self):
+        from dataclasses import asdict
+        from sporebound.campaign import Campaign
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "campaign.json"
+            progress = Campaign(unlocked=["p0_01_lame"])
+            progress.hero("jeanne").equipment["armor"] = "knights_armor"
+            progress.save(path)
+            restored = Campaign.load(path)
+            saved_snapshot = asdict(restored)
+            self.assertEqual(outfit_from_progress(
+                saved_snapshot, self.content_items, "jeanne", OUTFITS), "armor")
+            restored.hero("jeanne").wounds.append("arm_injury")
+            self.assertEqual(outfit_from_progress(
+                asdict(restored), self.content_items, "jeanne", OUTFITS),
+                "wounded")
+            self.assertEqual(saved_snapshot["heroes"]["jeanne"]["wounds"], [])
+
     def test_only_canonical_equipment_slot_unlocks_costume(self):
         self.assertEqual(self.outfit(inventory={"armor": "fake_armor"}), "peasant")
         self.assertEqual(self.outfit(inventory={"armor": "missing"}), "peasant")
