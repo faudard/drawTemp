@@ -60,6 +60,46 @@ class CampaignQtTests(unittest.TestCase):
         self.assertNotEqual(next(row for row in gui.studio.overview()["world"]["nodes"]
                                  if row["mission"] == "r10_forest")["x"], 360)
 
+    def test_create_linked_mission_and_story_without_json(self):
+        gui = self.window
+        gui.new_mission_id.setText("r10_new")
+        gui.new_mission_name.setText("Mission de test")
+        gui.new_after.setCurrentIndex(gui.new_after.findData(MISSION))
+        self._click("Créer la mission et son lien")
+        missions = gui.studio.overview()["missions"]
+        self.assertEqual(len(missions), 4)
+        self.assertIn((MISSION, "r10_new"), gui.studio.overview()["graph"]["edges"])
+        self.assertEqual(gui.origin.currentData(), "r10_new")
+        gui.mission_reward.setValue(15)
+        self._click("Définir pour la mission sélectionnée")
+        self.assertEqual(next(m["reward"] for m in gui.studio.overview()["missions"]
+                              if m["id"] == "r10_new"), 15)
+
+        gui.scene_id.setText("r10_scene")
+        gui.scene_title.setText("Un choix")
+        gui.scene_dialogue.setPlainText("Où aller ?")
+        self._click("Créer une scène")
+        self.assertEqual(gui.scene_select.currentData(), "r10_scene")
+        self._click("Scène d'introduction")
+        self.assertEqual(gui.studio.overview()["entry_scene"], "r10_scene")
+        gui.choice_id.setText("help")
+        gui.choice_label.setText("Aider")
+        self._click("Ajouter le choix")
+        self.assertEqual(gui.choice_select.currentData(), "help")
+        gui.choice_effect_kind.setCurrentText("set_flag")
+        gui.choice_effect_name.setText("allegiance")
+        gui.choice_effect_value.setText("aid")
+        self._click("Ajouter l'effet au choix sélectionné")
+        scene = next(x for x in gui.studio.overview()["scenes"]
+                     if x["id"] == "r10_scene")
+        choice = next(x for x in scene["choices"] if x["id"] == "help")
+        self.assertEqual(choice["effects"], [
+            {"kind": "set_flag", "flag": "allegiance", "value": "aid"}])
+        gui.origin.setCurrentIndex(gui.origin.findData("r10_new"))
+        self._click("Après victoire de la mission")
+        self.assertEqual(gui.studio.overview()["after_mission_scenes"]["r10_new"],
+                         "r10_scene")
+
     def test_typed_condition_and_campaign_simulation(self):
         gui = self.window
         gui.condition_target.setCurrentText("ending")
