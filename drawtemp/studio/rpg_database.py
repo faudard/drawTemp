@@ -256,13 +256,14 @@ class DatabaseEditor:
         return deepcopy(_resource(pair["content"], family, identifier, mission_id))
 
     def references(self, family, identifier):
+        from drawtemp.studio.r8_integrity import resource_usages
         pair = _data(self.snapshot())
+        concrete = resource_usages(pair["content"], pair["project"],
+                                   family, identifier)
         if family == "flags":
-            from drawtemp.studio.r8_integrity import flags as referenced_flags
-            return tuple(f"{use.document}{use.path} ({use.context})" for use in
-                         referenced_flags(pair["content"], pair["project"])
-                         .get(identifier, ()))
-        return referrers(pair["content"], pair["project"], family, identifier)
+            return concrete
+        legacy = referrers(pair["content"], pair["project"], family, identifier)
+        return tuple(dict.fromkeys((*legacy, *concrete)))
 
     def preview_many(self, actions):
         """Preview a batch atomically, with the SDK's stale-revision protection.
@@ -276,7 +277,9 @@ class DatabaseEditor:
                 require(family in EDITABLE and isinstance(fields, dict),
                         "Invalid database action")
                 if op == "remove":
-                    refs = referrers(content, project, family, key)
+                    from drawtemp.studio.r8_integrity import resource_usages
+                    refs = (*referrers(content, project, family, key),
+                            *resource_usages(content, project, family, key))
                     require(not refs, "Ressource utilisée : " + ", ".join(refs))
                 content = _transform(content, family, op, key, mission,
                                      **deepcopy(fields))
