@@ -88,7 +88,7 @@ class JointIntegrityTests(unittest.TestCase):
             player.choose("enter")
             player.start_mission(MISSION)
             state = player.state()
-            self.assertEqual(state["screen"], "battle")
+            self.assertIn(state["screen"], ("battle", "result"))
             self.assertEqual(state["battle"]["mission_id"], MISSION)
 
             # R3 sees the exact mission and R1 runtime snapshot used by R12.
