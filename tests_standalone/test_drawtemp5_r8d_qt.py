@@ -71,9 +71,7 @@ class CombatAIQtTests(unittest.TestCase):
             self.assertEqual(window.selected[2], MISSION)
             with patch.object(CombatAIDialog, "exec", return_value=0):
                 window._open_combat_ai()
-            self.assertIn("États", window.findChildren(
-                type(window.addToolBar("Test")))[0].windowTitle()
-                if False else "États")
+            self.assertEqual(window.selected[2], MISSION)
         finally:
             window.close()
 
