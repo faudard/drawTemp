@@ -153,6 +153,10 @@ def evaluate_capture(capture_root, golden_root, report):
         row = report["cases"].get(name)
         if not row or row.get("capture_status") != "captured":
             continue
+        actual = output / "actual" / (name + ".png")
+        if not actual.is_file() or digest(actual) != row.get("sha256"):
+            row.update(comparison="fail", reason="Candidate PNG is missing or changed since capture")
+            continue
         if approved is None:
             row.update(comparison="blocked", reason="No independently reviewed baseline for this profile")
             continue
