@@ -175,7 +175,10 @@ class MapWindow(QMainWindow):
     def _on_building_pick(self, hit):
         if self.mode.currentIndex() != 1:
             return
-        hit = dict(hit or {})
+        # QML var may arrive as a Python dict or an opaque QJSValue.
+        if hasattr(hit, "toVariant"):
+            hit = hit.toVariant()
+        hit = hit if isinstance(hit, dict) else {}
         self.construction.on_renderer_hit(
             hit.get("structure_id"), hit.get("anchor", ()),
             hit.get("cell", ()), hit.get("part", "building"), hit.get("level", 0))
