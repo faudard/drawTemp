@@ -150,6 +150,14 @@ def main(argv=None):
             self.invoke(self.controller.command, kind, visual=visual)
 
         @Slot(str, str)
+        def equipHero(self, actor_id, item_id):
+            self.invoke(self.controller.equip_hero, actor_id, item_id)
+
+        @Slot(str, str)
+        def unequipHero(self, actor_id, slot):
+            self.invoke(self.controller.unequip_hero, actor_id, slot)
+
+        @Slot(str, str)
         def previewOutfit(self, actor_id, variant):
             """Presentation-only preview; equipment and saves remain canonical."""
             try:
