@@ -106,8 +106,7 @@ class TimelineKeyframe(QGraphicsPolygonItem):
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange and self.scene() is not None:
-            return QPointF(min(self.track_width - 0.1,
-                               max(0.1, value.x())), 10)
+            return QPointF(min(self.track_width, max(0.0, value.x())), 10)
         return super().itemChange(change, value)
 
     def mousePressEvent(self, event):
