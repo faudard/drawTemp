@@ -38,6 +38,8 @@ class MapPaletteQtTests(unittest.TestCase):
         from drawtemp.studio.map_editor import MapWindow
         window = MapWindow()
         self.addCleanup(window.deleteLater)
+        window.studio.create("qt_smart", "Carte Qt", 12, 12)
+        window.refresh_maps()
         root = window.viewport.rootObject()
         self.assertIsNotNone(root)
         self.assertEqual(root.property("interactionMode"), "edit")
@@ -78,6 +80,8 @@ class MapPaletteQtTests(unittest.TestCase):
         self.assertIsNone(MapDropViewport._brush(Drop(b"\xff")))
         window = MapWindow()
         self.addCleanup(window.deleteLater)
+        window.studio.create("qt_drop", "Carte glisser", 12, 12)
+        window.refresh_maps()
         rev = window.studio.snapshot()["revision"]
         window._drop_brush("surface:stone", 4, 4)
         self.assertEqual(window.studio.snapshot()["revision"], rev + 1)
