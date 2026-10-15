@@ -117,9 +117,12 @@ class AnimationDirectorTests(unittest.TestCase):
             player.new_game()
             player.choose("enter")
             player.start_mission(MISSION)
+            # The reference castle gate requires the authored lever, as in
+            # the deterministic R1 migration and R12 victory/resume gates.
+            player.interact_object("lever")
             director = AnimationDirector()
             observed = set()
-            for _ in range(500):
+            for _ in range(700):
                 before = player.session.snapshot()
                 battle = player.session._session.active_battle
                 if battle is None or battle.result:
