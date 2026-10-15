@@ -41,7 +41,10 @@ artificielle de décisions IA, d'actions ou de durée humaine n'est générée.
   par R13.6 et le modèle visuel exige une nouvelle référence et une revue
   humaine. Un changement de contenu ou de règles nécessite également
   confirmation humaine.
-- - Le bouton **Exporter graphiques PNG** capture la totalité des deux\n  graphiques, y compris les seeds non visibles dans le panneau défilant ;\n  il refuse explicitement d'écraser un fichier existant.\n- Les couleurs indiquent uniquement **avant/référence** et **après/
+- Le bouton **Exporter graphiques PNG** capture la totalité des deux
+  graphiques, y compris les seeds non visibles dans le panneau défilant ;
+  il refuse explicitement d'écraser un fichier existant.
+- Les couleurs indiquent uniquement **avant/référence** et **après/
   candidat**, jamais une amélioration ou une dégradation implicite.
 - Les métriques CT/commandes/activations proviennent du moteur et ne
   représentent **pas** le temps effectivement passé par un joueur.
