@@ -4,6 +4,8 @@ Qt software/offscreen CI tests mouse, transaction, undo, redo and persistence;
 it is not a GPU/onscreen release certificate.
 """
 import os
+import subprocess
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -81,6 +83,24 @@ class MapStudioGuiJourney(unittest.TestCase):
                 window.hide()
                 window.deleteLater()
                 self.app.processEvents()
+
+
+class PlayerGuiJourney(unittest.TestCase):
+    def test_real_qml_mouse_keyboard_and_resume(self):
+        root = Path(__file__).resolve().parents[1]
+        with TemporaryDirectory() as directory:
+            env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
+                       QT_QUICK_BACKEND="software")
+            result = subprocess.run(
+                [sys.executable, "-m", "drawtemp.player.qt_app",
+                 "--reference", "--gui-journey", "--save-dir", directory],
+                cwd=root, env=env, text=True, capture_output=True,
+                timeout=60, check=False)
+            self.assertEqual(result.returncode, 0,
+                             "Player GUI journey failed:\n" +
+                             result.stdout + "\n" + result.stderr)
+            self.assertIn("R14 Player QML GUI input:", result.stdout)
+            self.assertTrue((Path(directory) / "slot_1.json").is_file())
 
 
 if __name__ == "__main__":
