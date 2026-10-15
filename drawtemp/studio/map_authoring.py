@@ -361,18 +361,33 @@ class MapStudio:
             "remaining_steps_limit": max_steps,
         }
 
+    def _repair_selection(self):
+        # Undo of a just-created mission must not leave a dangling UI selection.
+        if self.mission_id not in self.map_ids():
+            self.mission_id = self.map_ids()[0]
+
     def undo(self):
-        return self.authoring.undo()
+        transition = self.authoring.undo()
+        self._repair_selection()
+        return transition
 
     def redo(self):
-        return self.authoring.redo()
+        transition = self.authoring.redo()
+        self._repair_selection()
+        return transition
 
     def save(self):
-        return self.authoring.save()
+        paths = self.authoring.save()
+        self.layers.save()
+        return paths
 
     def save_as(self, path):
-        return self.authoring.save_as(path)
+        paths = self.authoring.save_as(path)
+        self.layers.save(path)
+        return paths
 
     @classmethod
     def open(cls, content_path):
-        return cls(AuthoringSession.open(content_path))
+        result = cls(AuthoringSession.open(content_path))
+        result.layers = LayerWorkspace(content_path=content_path)
+        return result
