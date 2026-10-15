@@ -254,6 +254,7 @@ class CampaignWindow(QMainWindow):
         ]:
             form.addRow(name, widget)
         form.addRow(_button("Appliquer la condition", self._set_condition, page))
+        form.addRow(_button("Ajouter condition ET", self._append_condition, page))
         form.addRow(_button("Supprimer la condition", self._remove_condition, page))
         layout.addWidget(gate)
 
@@ -594,6 +595,16 @@ class CampaignWindow(QMainWindow):
             self.condition_target.currentText(), name,
             self.condition_kind.currentText(),
             self.condition_key.text(), self.condition_value.text()))
+
+    def _append_condition(self):
+        name = self.condition_id.text().strip()
+        if self.condition_target.currentText() == "gate" and not name:
+            name = self._selected_mission()
+        self._act(lambda: self.studio.append_condition(
+            self.condition_target.currentText(), name,
+            self.condition_kind.currentText(),
+            self.condition_key.text(), self.condition_value.text()),
+            "Condition ET ajoutée à la fin ou au verrou")
 
     def _remove_condition(self):
         name = self.condition_id.text().strip()
