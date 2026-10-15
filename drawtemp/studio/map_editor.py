@@ -1,17 +1,17 @@
 """DrawTemp 5.0 R5 Map Studio preview.
 
-Qt Widgets authoring chrome + Qt Quick isometric canvas. R3 will replace the
-temporary Canvas renderer with the shared GPU renderer; it must not fork the
-map model or serialization. All editing goes through MapStudio / R1.
+Qt Widgets authoring chrome embeds the canonical R3 Qt Quick scenegraph.
+All editing goes through MapStudio / R1; no private QML Canvas renderer.
 """
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 import sys
 
-from drawtemp.core import RuleError
+from drawtemp.core import Content, RuleError
+from drawtemp.render.iso_scene import scene_from_mission
+from drawtemp.render.qt_viewport import make_controller
 from drawtemp.sdk.authoring import AuthoringError
 from .map_authoring import MapStudio, SURFACE_PALETTE
 
@@ -35,33 +35,6 @@ except ImportError:
         return lambda fn: fn
 
 
-class MapBridge(QObject):
-    sceneChanged = Signal()
-    @Slot(int, int)
-    def begin(self, x, y):
-        self.window.begin_stroke(x, y)
-
-    @Slot(int, int)
-    def extend(self, x, y):
-        self.window.extend_stroke(x, y)
-
-    @Slot(int, int)
-    def finish(self, x, y):
-        self.window.finish_stroke(x, y)
-
-    def __init__(self, window):
-        super().__init__()
-        self.window = window
-        self._scene = "{}"
-
-    @Property(str, notify=sceneChanged)
-    def sceneJSON(self):
-        return self._scene
-
-    def publish(self, scene):
-        self._scene = json.dumps(scene, ensure_ascii=False)
-        self.sceneChanged.emit()
-
 
 class MapWindow(QMainWindow):
     def __init__(self, studio=None):
@@ -70,7 +43,6 @@ class MapWindow(QMainWindow):
         self.setWindowTitle("DrawTemp 5.0 — Éditeur de cartes R5")
         self.resize(1400, 820)
         self.stroke = []
-        self.bridge = MapBridge(self)
         self.selected = None
         self.selection = []
 
@@ -106,13 +78,24 @@ class MapWindow(QMainWindow):
         toolbar.addWidget(QLabel(" Surface "))
         toolbar.addWidget(self.material)
 
+        # R3 controller is the only source of camera, hit-testing and render
+        # delegates. Its scene is reconstructed from the validated R1 Content.
+        self.renderer = make_controller(self._render_scene())
         viewport = QQuickWidget(self)
         viewport.setResizeMode(QQuickWidget.SizeRootObjectToView)
-        viewport.rootContext().setContextProperty("mapBridge", self.bridge)
-        source = Path(__file__).resolve().parents[1] / "render" / "MapDraft.qml"
+        viewport.rootContext().setContextProperty("renderer", self.renderer)
+        source = Path(__file__).resolve().parents[1] / "render" / "IsoViewport.qml"
         viewport.setSource(QUrl.fromLocalFile(str(source)))
         if viewport.status() == QQuickWidget.Error:
             raise RuntimeError("\n".join(error.toString() for error in viewport.errors()))
+        root = viewport.rootObject()
+        root.setProperty("interactionMode", "edit")
+        root.setProperty("showLegend", False)
+        root.strokeStarted.connect(self.begin_stroke)
+        root.strokeMoved.connect(self.extend_stroke)
+        root.strokeFinished.connect(self.finish_stroke)
+        root.strokeCancelled.connect(self.cancel_stroke)
+        self.viewport = viewport
         self.setCentralWidget(viewport)
 
         self.maps = QListWidget()
@@ -149,7 +132,7 @@ class MapWindow(QMainWindow):
                                 "Molette : zoom • bouton droit : déplacement.\n"
                                 "Les changements sont validés avant application."))
         self._dock("Inspecteur", right, Qt.RightDockWidgetArea)
-        self.statusBar().showMessage("Qt Quick R5 preview — rendu GPU commun R3 à intégrer")
+        self.statusBar().showMessage("Viewport Qt Quick partagé R3 · édition R5")
         self.refresh_maps()
 
     def _dock(self, title, widget, area):
@@ -281,6 +264,14 @@ class MapWindow(QMainWindow):
             "Hauteur +": "height+", "Hauteur -": "height-",
         }.get(self._tool(), "surface:" + self.material.currentText())
 
+    def _render_scene(self):
+        """Render exactly the Content mission edited by R5, with R3 projection."""
+        content = Content.from_dict(self.studio.snapshot()["content"])
+        return scene_from_mission(content.missions[self.studio.mission_id])
+
+    def cancel_stroke(self):
+        self.stroke = []
+
     def begin_stroke(self, x, y):
         self.stroke = [(x, y)]
         self.selected = (x, y)
@@ -325,34 +316,19 @@ class MapWindow(QMainWindow):
     def refresh(self, *_):
         mission = self.studio.mission()
         board = mission["board"]
-        tiles = {tuple(t["pos"]): t for t in board["tiles"]}
-        rows = []
-        for y in range(board["height"]):
-            for x in range(board["width"]):
-                tile = tiles.get((x, y), {})
-                rows.append({
-                    "x": x, "y": y, "surface": tile.get("surface", "grass"),
-                    "feature": tile.get("feature", ""),
-                    "blocked": tile.get("blocked", False),
-                    "height": tile.get("height", 0),
-                    "hazard": tile.get("hazard", 0),
-                    "cover": tile.get("cover", 0),
-                    "goal": [x, y] in mission.get("goal", []),
-                })
-        self.bridge.publish({
-            "width": board["width"], "height": board["height"], "tiles": rows,
-            "units": mission["units"] if self.show_actors.isChecked() else [],
-            "grid": self.show_grid.isChecked(),
-            "blocked": self.show_blocked.isChecked(),
-            "heights": self.show_height.isChecked(),
-        })
+        self.renderer.replace_scene(self._render_scene())
+        root = self.viewport.rootObject()
+        root.setProperty("showGrid", self.show_grid.isChecked())
+        root.setProperty("showBlocked", self.show_blocked.isChecked())
+        root.setProperty("showHeights", self.show_height.isChecked())
+        root.setProperty("showActors", self.show_actors.isChecked())
         current = self.studio.snapshot()
         warnings = self.studio.diagnostics()
         self.diagnostics.setPlainText(
-            f'{mission["name"]}\n{board["width"]} × {board["height"]} • '
-            f'révision {current["revision"]}\n'
-            f'{"Modifications non enregistrées" if current["dirty"] else "Enregistré / nouveau"}\n\n'
-            + ("\n".join(warnings) if warnings else "Aucun problème de navigation détecté."))
+            f'{mission["name"]}\\n{board["width"]} × {board["height"]} • '
+            f'révision {current["revision"]}\\n'
+            f'{"Modifications non enregistrées" if current["dirty"] else "Enregistré / nouveau"}\\n\\n'
+            + ("\\n".join(warnings) if warnings else "Aucun problème de navigation détecté."))
         index = self.objective.findText(mission["objective"])
         if index >= 0:
             self.objective.setCurrentIndex(index)
