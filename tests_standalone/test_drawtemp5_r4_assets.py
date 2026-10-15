@@ -141,7 +141,7 @@ class R4AtlasTests(unittest.TestCase):
             plan.copy_into(self.root)
         self.source.write_bytes(rgba_png(256, 512))
         assets = self.root / "assets"
-        assets.mkdir()
+        assets.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory() as external:
             try:
                 (assets / "imported").symlink_to(Path(external), target_is_directory=True)
