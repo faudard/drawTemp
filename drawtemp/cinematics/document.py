@@ -154,7 +154,7 @@ class CinematicDocument:
     def add_template(self, clip_id, kind, event_id, at_ms, duration_ms):
         self.add_event(clip_id, event_template(kind, event_id, at_ms, duration_ms))
 
-    def edit_event(self, clip_id, event_id, updates):
+    def edit_event(self, clip_id, event_id, updates, *, expected_revision=None):
         changes = deepcopy(updates)
         require("id" not in changes and "kind" not in changes,
                 "Event identity and kind cannot be edited")
@@ -165,7 +165,7 @@ class CinematicDocument:
             if "duration_ms" in changes:
                 event.update(resize_event(event, changes["duration_ms"], clip["duration_ms"]))
             event.update(changes)
-        self._edit(operation)
+        self._edit(operation, expected_revision=expected_revision)
 
     def delete_event(self, clip_id, event_id):
         def operation(data):
@@ -179,11 +179,12 @@ class CinematicDocument:
             event.update(add_motion_keyframe(event, local_time_ms))
         self._edit(operation)
 
-    def update_keyframe(self, clip_id, event_id, local_time_ms, **changes):
+    def update_keyframe(self, clip_id, event_id, local_time_ms, *,
+                        expected_revision=None, **changes):
         def operation(data):
             _, event = self._event_in(data, clip_id, event_id)
             event.update(update_motion_keyframe(event, local_time_ms, **changes))
-        self._edit(operation)
+        self._edit(operation, expected_revision=expected_revision)
 
     def undo(self):
         if not self._undo:
