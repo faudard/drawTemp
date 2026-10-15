@@ -273,7 +273,7 @@ class StudioWindow(QMainWindow):
         self.filter.currentIndexChanged.connect(self._set_favorites_only)
         self.family_filter.currentIndexChanged.connect(self._update_resource_filters)
         self.mission_filter.currentIndexChanged.connect(self._update_resource_filters)
-        self.reference_filter.currentIndexChanged.connect(self._update_resource_filters)
+        self.reference_filter.currentIndexChanged.connect(self._reference_mode_changed)
         self.resource_dock = self._dock(
             "Explorateur", "r2-resource-dock", host, Qt.LeftDockWidgetArea)
 
@@ -445,6 +445,29 @@ class StudioWindow(QMainWindow):
         self.proxy.favorite_only = index == 1
         self.proxy.invalidateFilter()
 
+    def _reference_mode_changed(self, _index):
+        # Freeze anchor while displaying related resources; selecting another
+        # result must not silently change the scope of the query.
+        self._reference_anchor = tuple(self._selected)
+        self._update_resource_filters()
+
+    def _update_resource_filters(self, *_):
+        self.proxy.family_filter = self.family_filter.currentData() or ""
+        self.proxy.mission_filter = self.mission_filter.currentData() or ""
+        mode = self.reference_filter.currentIndex()
+        if mode:
+            anchor = getattr(self, "_reference_anchor", ())
+            direction = "incoming" if mode == 1 else "outgoing"
+            rows = connections(self.session.snapshot(), anchor, direction)
+            self.proxy.related_keys = {
+                (edge.source.key if mode == 1 else edge.target.key)
+                for edge in rows
+            }
+        else:
+            self.proxy.related_keys = None
+        self.proxy.invalidateFilter()
+        self.resource_view.expandAll()
+
     @staticmethod
     def _identity(resource):
         return "|".join(resource.key)
@@ -456,11 +479,10 @@ class StudioWindow(QMainWindow):
         return set(stored or [])
 
     def toggle_favorite(self):
-        chosen = self._selected
-        if not chosen:
+        if not self._selected:
             return
         favorites = self._favorites()
-        for resource in chosen:
+        for resource in self._selected:
             key = self._identity(resource)
             if key in favorites:
                 favorites.remove(key)
@@ -470,10 +492,28 @@ class StudioWindow(QMainWindow):
         self.proxy.favorites = favorites
         self.proxy.invalidateFilter()
 
+    def resource_context_menu(self, point):
+        index = self.resource_view.indexAt(point)
+        if not index.isValid():
+            return
+        self.resource_view.setCurrentIndex(index)
+        menu = QMenu(self.resource_view)
+        menu.addAction("Ouvrir la ressource",
+                       lambda: self._open_selected_resource(index))
+        menu.addAction("Ajouter / retirer des favoris", self.toggle_favorite)
+        menu.addSeparator()
+        menu.addAction("Qui référence cette ressource ?",
+                       lambda: self.reference_filter.setCurrentIndex(1))
+        menu.addAction("Références utilisées",
+                       lambda: self.reference_filter.setCurrentIndex(2))
+        menu.exec(self.resource_view.viewport().mapToGlobal(point))
+
     def refresh(self):
         snapshot = self.session.snapshot()
         selected_keys = {r.key for r in self._selected}
         self._resource_by_key = {r.key: r for r in resources(snapshot)}
+        selection = self.resource_view.selectionModel()
+        selection.blockSignals(True)
         self.resource_model.clear()
         self.resource_model.setHorizontalHeaderLabels(["Ressources"])
         for family, title in FAMILY_LABELS.items():
@@ -492,11 +532,34 @@ class StudioWindow(QMainWindow):
                 parent.appendRow(child)
             if parent.rowCount():
                 self.resource_model.appendRow(parent)
+        # Family, mission and favorite filters are UI preferences, not part of
+        # GameProject. A project switch preserves the type filter, but clears an
+        # invalid mission scope.
+        mission = self.mission_filter.currentData() or ""
+        self.mission_filter.blockSignals(True)
+        self.mission_filter.clear()
+        self.mission_filter.addItem("Toutes les cartes", "")
+        for resource in self._resource_by_key.values():
+            if resource.family == "maps":
+                self.mission_filter.addItem(resource.title, resource.resource_id)
+        pos = self.mission_filter.findData(mission)
+        self.mission_filter.setCurrentIndex(max(0, pos))
+        self.mission_filter.blockSignals(False)
         self.proxy.favorites = self._favorites()
-        self.proxy.invalidateFilter()
-        self.resource_view.expandAll()
+        self._update_resource_filters()
         self._selected = tuple(r for k, r in self._resource_by_key.items()
                                if k in selected_keys)
+        for row in range(self.resource_model.rowCount()):
+            parent = self.resource_model.item(row)
+            for j in range(parent.rowCount()):
+                child = parent.child(j)
+                identity = child.data(Qt.UserRole)
+                if identity and tuple(identity.split("|", 2)) in selected_keys:
+                    mapped = self.proxy.mapFromSource(child.index())
+                    if mapped.isValid():
+                        selection.select(mapped, QItemSelectionModel.Select |
+                                         QItemSelectionModel.Rows)
+        selection.blockSignals(False)
         self.last_revision = snapshot.revision
         self._show_inspector()
         self._update_title()
