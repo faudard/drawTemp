@@ -577,7 +577,7 @@ def main(argv=None):
                 QMessageBox.warning(self, "Simulation impossible", str(exc))
 
         def _render_debug(self, result):
-            self.diagnostics.setPlainText("\\n".join(result["lines"]))
+            self.diagnostics.setPlainText("\n".join(result["lines"]))
             self.tabs.setCurrentIndex(self.tabs.count() - 1)
 
         def debug_start(self):
@@ -645,7 +645,7 @@ def main(argv=None):
                              if issues else "aucune anomalie détectée"),
                             "", *report["lines"],
                             "", "Rejeu Player complet : NON CERTIFIÉ"]
-                self.diagnostics.setPlainText("\\n".join(sections))
+                self.diagnostics.setPlainText("\n".join(sections))
                 self.tabs.setCurrentIndex(self.tabs.count()-1)
             except Exception as exc:
                 QMessageBox.warning(self, "QA indisponible", str(exc))
