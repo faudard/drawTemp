@@ -245,3 +245,57 @@ move → skill → damage/heal, les esquives, les interruptions, la limite de
 clips, l'annulation sur nouvelle génération, l'isolation du gameplay et la
 sauvegarde/reprise. Le smoke Qt charge le QML, **sans certifier** la fluidité
 ni la synchronisation audiovisuelle du Player réel.
+
+### R12.10 — Save Manager : reprise et récupération
+
+Le Player garde **strictement le format canonique `GameSession v1`**,
+le `PlayerSlotStore` R1.8 et les `slot_N.json` manuels inchangés.
+
+- `autosave.json` dans le dossier de campagne est **séparé** des slots
+  manuels. Une deuxième génération validée est conservée dans
+  `autosave.json.bak`. Aucun slot manuel ne peut être écrasé par
+  l'autosauvegarde.
+- Chaque mutation réellement acceptée du moteur par le Player (création
+  d'une nouvelle partie, choix narratif, exploration, interactions, début
+  et retour de mission, action tactique, progression ennemie) déclenche une
+  sauvegarde atomique vérifiée. Les seules interactions d'UI
+  (sélection, prévision, clavier, options) n'écrivent pas sur le disque.
+  Les actions ennemies groupées n'effectuent qu'un checkpoint en fin de
+  traitement, plutôt qu'une écriture à chaque micro-commande.
+- **Continuer** choisit le checkpoint principal **valide le plus récent**
+  entre autosauvegarde et slots manuels. Il n'utilise jamais implicitement
+  un `.bak`. Les fichiers invalides sont signalés, conservés tels quels,
+  et ne bloquent pas la reprise depuis un autre checkpoint principal valide.
+  La lecture refait une validation même si le catalogue avait été calculé.
+- **Charger autosauvegarde** permet de choisir explicitement l'autosave
+  valide, même si un emplacement manuel est plus récent. **Restaurer
+  auto (.bak)** est une action séparée : elle valide le secours et préserve
+  `autosave.json.damaged` en cas de corruption du fichier principal.
+  Le mécanisme refuse d'effacer une sauvegarde `.damaged` préexistante.
+- Les erreurs d'écriture/validation de l'autosauvegarde sont **non destructives** :
+  elles ne reviennent pas sur un coup valide en mémoire, conservent les
+  fichiers existants et affichent un avertissement persistant au bas
+  de l'écran. Le joueur peut toujours utiliser un emplacement manuel.
+  Une autosauvegarde corrompue ne peut pas être remplacée silencieusement.
+- Les métadonnées du menu (sources valides/invalides, secours disponibles,
+  date locale du dernier fichier) sont une inspection **en lecture seule**,
+  mise en cache et invalidée lorsque les générations sur disque changent.
+  Le rendu Qt ne modifie jamais les fichiers durant l'inspection.
+
+Les écritures utilisent les fichiers temporaires, `fsync`, remplacement
+atomique et verrou d'écrivain déjà assurés par R1.8 / `GameSession`.
+En cas de panne disque prolongée, aucune application ne peut garantir la
+persistance d'une action non enregistrée : le Player prévient explicitement
+l'utilisateur plutôt que de déclarer à tort « sauvegardé ».
+
+Tests :
+```bash
+python -m unittest tests_standalone.test_drawtemp5_r12_save_manager -v
+python -m unittest tests_standalone.test_drawtemp5_r12 -v
+```
+
+Couverture : autosauvegarde sur les transitions, reprise Jeanne après
+redémarrage, isolation des slots, rejet de source corrompue, restauration
+explicite et conservation des octets `.damaged`, fichiers de secours
+orphelins, absence d'écriture sur une prévisualisation, échec disque
+non destructif.
