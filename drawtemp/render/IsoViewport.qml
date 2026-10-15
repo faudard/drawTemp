@@ -24,6 +24,10 @@ Item {
     }
     property bool showLegend: interactionMode === "pan"
     property var hoveredCell: ({})
+    // Editor-only, detached preview of brush footprint and adjacent blends.
+    property var previewCells: []
+    signal cellHovered(int x, int y)
+    signal hoverLeft()
     readonly property var camera: renderer.cameraState
     signal strokeStarted(int x, int y)
     signal strokeMoved(int x, int y)
@@ -97,6 +101,26 @@ Item {
                 fillMode: Image.Stretch
                 smooth: false
                 asynchronous: false
+            }
+            // R5.4: GPU scenegraph polygons derived from the same canonical
+            // AutoBlend rules for Studio and Player (no CPU Canvas fallback).
+            Repeater {
+                model: tile.blends || []
+                delegate: Shape {
+                    required property var modelData
+                    anchors.fill: parent
+                    opacity: root.layerEnabled("Terrain") ? root.layerAlpha("Terrain") : 0
+                    ShapePath {
+                        strokeWidth: 0
+                        fillColor: modelData.color
+                        startX: modelData.points[0][0]
+                        startY: modelData.points[0][1]
+                        PathLine { x: modelData.points[1][0]; y: modelData.points[1][1] }
+                        PathLine { x: modelData.points[2][0]; y: modelData.points[2][1] }
+                        PathLine { x: modelData.points[3][0]; y: modelData.points[3][1] }
+                        PathLine { x: modelData.points[0][0]; y: modelData.points[0][1] }
+                    }
+                }
             }
             Shape {
                 visible: highlighted || (tile.goal && root.layerEnabled("Objectifs"))
@@ -218,6 +242,38 @@ Item {
         }
     }
 
+    // Preview overlays are non-interactive: the R3 camera/picking path remains
+    // authoritative for both ghost stamps and actual commits.
+    Repeater {
+        model: root.previewCells
+        delegate: Item {
+            required property var modelData
+            property var preview: modelData
+            x: root.width/2 + root.camera.panX + preview.sx * root.camera.zoom
+               - 48*root.camera.zoom
+            y: root.height/2 + root.camera.panY + preview.sy * root.camera.zoom
+               - 24*root.camera.zoom
+            width: 96; height: 48
+            scale: root.camera.zoom
+            transformOrigin: Item.TopLeft
+            z: 1000000
+            Shape {
+                anchors.fill: parent
+                opacity: preview.painted ? 0.64 : 0.46
+                ShapePath {
+                    strokeWidth: preview.painted ? 2.5 : 1.5
+                    strokeColor: preview.painted ? "#ffe294" : "#64c3c8"
+                    fillColor: preview.painted ? preview.color : "transparent"
+                    startX: 48; startY: 0
+                    PathLine { x: 96; y: 24 }
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 48; y: 0 }
+                }
+            }
+        }
+    }
+
     MouseArea {
         id: pointer
         anchors.fill: parent
@@ -229,6 +285,7 @@ Item {
         property real downY: 0
         property bool editing: false
         property var lastCell: ({})
+        property string previewKey: ""
 
         function valid(cell) {
             return cell && cell.x !== undefined && cell.y !== undefined
@@ -249,6 +306,12 @@ Item {
         onPositionChanged: function(mouse) {
             var cell = renderer.cellAt(mouse.x, mouse.y)
             root.hoveredCell = valid(cell) ? cell : ({})
+            const key = valid(cell) ? cell.x + ":" + cell.y : ""
+            if (key !== previewKey) {
+                previewKey = key
+                if (valid(cell)) root.cellHovered(cell.x, cell.y)
+                else root.hoverLeft()
+            }
             var panning = (mouse.buttons & Qt.RightButton) ||
                           (root.interactionMode !== "edit" && (mouse.buttons & Qt.LeftButton))
             if (panning) {
@@ -279,7 +342,11 @@ Item {
             if (editing) root.strokeCancelled()
             editing = false
         }
-        onExited: root.hoveredCell = ({})
+        onExited: {
+            root.hoveredCell = ({})
+            previewKey = ""
+            root.hoverLeft()
+        }
         onWheel: function(wheel) {
             renderer.zoomAt(wheel.angleDelta.y, wheel.x, wheel.y)
             wheel.accepted = true
