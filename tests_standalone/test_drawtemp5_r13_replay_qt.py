@@ -72,6 +72,9 @@ class R13ReplayQtTests(unittest.TestCase):
         panel.show()
         panel.set_report(model)
         app.processEvents()
+        self.assertEqual(panel.canvas.step, 4)  # Full map available immediately.
+        panel.full_battle.setChecked(False)
+        self.assertEqual(panel.canvas.step, 0)
         self.assertEqual(panel.report["levels"], [0, 1])
         self.assertFalse(panel.canvas.grab().isNull())
         panel.mode.setCurrentIndex(1)
