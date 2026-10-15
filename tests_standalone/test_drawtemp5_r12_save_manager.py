@@ -62,6 +62,18 @@ class SaveManagerR1210Tests(unittest.TestCase):
         self.assertEqual(resumed.session.recording(), latest_record)
         self.assertEqual(manual.read_bytes(), preserved)
 
+    def test_recovery_never_overwrites_a_valid_primary(self):
+        self._new()
+        self.player.choose("enter")
+        primary = self.auto.read_bytes()
+        backup = self.auto.with_suffix(".json.bak").read_bytes()
+        with self.assertRaises(SlotError) as error:
+            self.player.restore_autosave_backup()
+        self.assertEqual(error.exception.code, "primary_valid")
+        self.assertEqual(self.auto.read_bytes(), primary)
+        self.assertEqual(self.auto.with_suffix(".json.bak").read_bytes(), backup)
+        self.assertFalse(self.auto.with_suffix(".json.damaged").exists())
+
     def test_corrupt_primary_requires_explicit_restore_not_silent_backup(self):
         self._new()
         original_record = self.player.session.recording()
