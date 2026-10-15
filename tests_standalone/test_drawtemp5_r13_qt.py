@@ -38,6 +38,66 @@ class R13QtSmoke(unittest.TestCase):
                     self.assertIsInstance(window.map, QGraphicsView)
                     self.assertIsInstance(window.outcomes, QTableWidget)
                     self.assertTrue(window.scene.items())
+                    self.assertEqual(window.units.columnCount(), 6)
+                    self.assertEqual(window.objective.currentText(), "eliminate")
+                    self.assertFalse(window.apply_button.isEnabled())
+                    # The map click is a real Qt signal into the UI editing
+                    # path, not a direct mutation of the canonical Content.
+                    window.units.selectRow(0)
+                    window.map.tileChosen.emit(1, 1)
+                    self.assertEqual(window.units.item(0, 2).text(), "1")
+                    self.assertEqual(window.units.item(0, 3).text(), "1")
+                    window.objective.setCurrentText("extract")
+                    window.goal_cells.setText("3,3")
+                    edits = window._read_editor_changes()
+                    self.assertEqual(edits["unit_positions"], {"jeanne": [1, 1]})
+                    self.assertEqual(edits["objective"], "extract")
+                    self.assertEqual(edits["goal_cells"], [[3, 3]])
+                    self.assertEqual(content.missions["smoke"].objective, "eliminate")
+                    from sporebound.battle_lab import run_lab
+                    report = run_lab(window.content, "smoke",
+                                     seeds=(2, 5), max_commands=12)
+                    window._show_simulation_charts(report)
+                    self.assertEqual(window.charts.report["mode"], "single")
+                    self.assertEqual(window.charts.report["runs"], 2)
+                    window.reference = report
+                    window._show_simulation_charts(report)
+                    self.assertEqual(window.charts.report["mode"], "comparison")
+                    self.assertTrue(window.charts.report["comparison"]["passed"])
+                    from drawtemp.sdk.r13_combat_lab import simulate_encounter
+                    result = simulate_encounter(
+                        window.content, "smoke", seeds=(2, 5),
+                        max_commands=12, trace_seed_id=2)
+                    window._complete(window._sequence, ("simulation", result))
+                    self.assertEqual(window.combat_analytics.model["seed"], 2)
+                    self.assertEqual(window.combat_analytics.model["digest"],
+                                     result["trace"]["digest"])
+                    self.assertEqual(window.timeline.rowCount(),
+                                     len(result["trace"]["steps"]))
+                    self.assertTrue(window.timeline.rowCount())
+                    window.combat_analytics.curve.stepSelected.emit(1)
+                    self.assertEqual(window.timeline.currentRow(), 0)
+                    self.assertEqual(window.transport.step, 1)
+                    self.assertEqual(window.heatmap_panel.report["digest"],
+                                     result["trace"]["digest"])
+                    self.assertEqual(window.heatmap_panel.canvas.step,
+                                     window.heatmap_panel.report["commands"])
+                    window.heatmap_panel.full_battle.setChecked(False)
+                    self.assertEqual(window.heatmap_panel.canvas.step, 1)
+                    window.transport.play()
+                    window.transport._advance()
+                    if window.transport.maximum > 1:
+                        self.assertEqual(window.transport.step, 2)
+                        self.assertEqual(window.timeline.currentRow(), 1)
+                        self.assertEqual(window.heatmap_panel.canvas.step, 2)
+                    window.transport.pause()
+                    window.transport.seek(0)
+                    self.assertEqual(window.transport.step, 0)
+                    self.assertEqual(window.heatmap_panel.canvas.step, 0)
+                    window._refresh("smoke")
+                    self.assertEqual(window.transport.maximum, 0)
+                    self.assertFalse(window.transport.timer.isActive())
+                    self.assertIsNone(window.heatmap_panel.report)
                     captured.append(True)
                 except Exception as exc:
                     captured.append(exc)

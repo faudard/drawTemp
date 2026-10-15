@@ -61,7 +61,8 @@ def _part(structure, name, cell, vertices, z, color, *, suffix="", floor=0):
     }
 
 
-def building_surfaces(scene, projection, *, cutaway=False, active_level=0):
+def building_surfaces(scene, projection, *, cutaway=False, active_level=0,
+                      hidden_roofs=()):
     """Build visible roof, wall faces, opening and authored floor polygons.
 
     Cutaway is presentation-only. Upper floors are *not* simulated navigation
@@ -151,7 +152,8 @@ def building_surfaces(scene, projection, *, cutaway=False, active_level=0):
             if verts is not None:
                 results.append(_part(record, "door", (x0+dx,y0+dy),
                                      verts, front+46, "#675143", suffix="entry"))
-        if cutaway or active_level:
+        effective_cutaway = cutaway or bool(active_level) or record["id"] in hidden_roofs
+        if effective_cutaway:
             for f in attached:
                 if active_level not in (0, f["level"]):
                     continue
@@ -166,7 +168,7 @@ def building_surfaces(scene, projection, *, cutaway=False, active_level=0):
                                          front+43, LEVEL_PALETTE[tile["surface"]],
                                          suffix=f"{f['level']}:{dx}:{dy}",
                                          floor=f["level"]))
-        if not (cutaway or active_level):
+        if not effective_cutaway:
             roof = [p(lx,ty,top),p(rx,ty,top),p(rx,by,top),p(lx,by,top)]
             results.append(_part(record, "roof", (x0,y0),roof,
                                  front+49,roof_color,suffix="main"))
