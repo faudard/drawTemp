@@ -232,26 +232,35 @@ class PlayerController:
         return self.state()
 
     def preview(self, kind):
-        state = self._current()
-        if not state.battle or state.battle["result"]:
+        """Explain canonical probabilities and path risks, never sample future RNG."""
+        state = self.state()
+        feedback = state["tactical"]
+        if not feedback or state["battle"].get("result"):
             raise ValueError("No tactical preview")
+        focus = feedback["focus"]
         if kind == "move":
-            command = {"kind": "move", "cell": list(self.selected)}
+            move = focus["move"]
+            if move is None:
+                raise ValueError("Destination inaccessible ou déplacement indisponible")
+            risks = move["risks"]
+            self.forecast = ("Déplacement · coût " + str(move["cost"]) +
+                             " · " + str(len(risks)) + " risque(s) moteur" +
+                             (" (réactions possibles, non garanties)" if risks else ""))
         elif kind == "attack":
-            command = {"kind": "act", "skill": "attack", "cell": list(self.selected)}
+            if not focus["can_target"]:
+                raise ValueError(focus["error"] or "Cible hors de portée")
+            effects = focus["forecast"]
+            parts = [
+                str(effect["kind"]) + " " + str(effect.get("amount", "?")) +
+                " sur " + str(effect.get("unit", "?")) +
+                (" (" + str(round(effect["chance"] * 100)) + "%)"
+                 if type(effect.get("chance")) in (float, int) else "")
+                for effect in effects
+            ]
+            self.forecast = "Prévision (non garantie) : " + (
+                ", ".join(parts) if parts else "action valide")
         else:
             raise ValueError("Unsupported preview")
-        predicted = self.session.preview(command, expected_revision=state.revision)
-        old_units = {u["id"]: u for u in state.battle["units"]}
-        changes = []
-        for unit in predicted.snapshot.battle["units"]:
-            before = old_units[unit["id"]]
-            if before["hp"] != unit["hp"]:
-                changes.append(unit["id"] + " PV " + str(before["hp"]) +
-                               " → " + str(unit["hp"]))
-            if list(before["pos"]) != list(unit["pos"]):
-                changes.append(unit["id"] + " se déplace")
-        self.forecast = ", ".join(changes) or "Action validée : aucun changement de PV"
         return self.state()
 
     def advance_enemy(self, *, limit=40):
