@@ -151,7 +151,8 @@ Item {
             width: hasArt ? actor.frameWidth : 40
             height: hasArt ? actor.frameHeight : 68
             Image {
-                visible: parent.hasArt
+                id: resolvedSprite
+                visible: parent.hasArt && status !== Image.Error
                 width: parent.width
                 height: parent.height
                 source: parent.hasArt ? actor.imageUrl : ""
@@ -164,21 +165,20 @@ Item {
                 cache: true
             }
             Rectangle {
-                visible: !parent.hasArt
-
+                visible: !parent.hasArt || resolvedSprite.status === Image.Error
                 width: 34; height: 9; radius: 5
                 x: 3; y: 58
                 color: "#10191c"; opacity: 0.45
             }
             Rectangle {
-                visible: !parent.hasArt
+                visible: !parent.hasArt || resolvedSprite.status === Image.Error
                 width: 28; height: 38; radius: 9
                 x: 6; y: 19
                 color: actor.alive ? (actor.team === "enemy" ? "#af6556" : "#496cbb") : "#777c85"
                 border.width: 2; border.color: "#e2d7c4"
             }
             Rectangle {
-                visible: !parent.hasArt
+                visible: !parent.hasArt || resolvedSprite.status === Image.Error
                 width: 19; height: 19; radius: 10
                 x: 10; y: 5
                 color: "#eacaa1"; border.color: "#62504b"
