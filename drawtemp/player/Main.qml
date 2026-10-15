@@ -35,6 +35,7 @@ ApplicationWindow {
     property color ivory: highContrast ? "#ffffff" : "#efe4d2"
     property color muted: highContrast ? "#f3ead6" : "#b2b8b8"
     property color gold: "#e7c78b"
+    property bool tacticalOverlayEnabled: true
 
     function activeSkills() {
         var units = (playerData.battle && playerData.battle.units) || []
@@ -408,6 +409,8 @@ ApplicationWindow {
                     exploration: root.playerData.screen === "exploration" ?
                                      root.playerData.exploration : ({})
                     selected: root.playerData.selected
+                    tactical: root.playerData.tactical
+                    showTacticalOverlay: root.tacticalOverlayEnabled
                     showGrid: root.playerData.settings.display.show_grid
                     showHeights: root.playerData.settings.display.show_heights
                     onCellSelected: function(x, y) {
@@ -478,6 +481,137 @@ ApplicationWindow {
                             color: root.ivory
                             Layout.fillWidth: true
                         }
+                        ColumnLayout {
+                            visible: root.playerData.screen === "battle" ||
+                                     root.playerData.screen === "result"
+                            Layout.fillWidth: true
+                            Label {
+                                text: "PRÉVISION TACTIQUE · MOTEUR"
+                                color: root.gold
+                                font.bold: true
+                                font.pixelSize: 12 * root.textScale
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: root.ivory
+                                text: root.playerData.tactical.selection_summary || ""
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: root.muted
+                                text: root.playerData.tactical.focus ?
+                                  (root.playerData.tactical.focus.line_of_sight === null ?
+                                      "" : root.playerData.tactical.focus.line_of_sight ?
+                                        "Ligne de vue : dégagée" : "Ligne de vue : obstruée")
+                                  : ""
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: root.gold
+                                text: root.playerData.tactical.focus &&
+                                      root.playerData.tactical.focus.move ?
+                                  "Mouvement possible · coût " +
+                                      root.playerData.tactical.focus.move.cost +
+                                      " · risques sur le trajet : " +
+                                      root.playerData.tactical.focus.move.risks.length :
+                                  ""
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: "#f4b5a5"
+                                text: root.playerData.tactical.focus ?
+                                      (root.playerData.tactical.focus.error || "") : ""
+                            }
+                            Repeater {
+                                model: root.playerData.tactical.focus ?
+                                       (root.playerData.tactical.focus.forecast || []) : []
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: root.ivory
+                                    text: (modelData.kind || "effet") + " · " +
+                                          modelData.unit + " · " + modelData.amount +
+                                          (typeof modelData.chance === "number" ?
+                                          " · probabilité " +
+                                          Math.round(modelData.chance * 100) + "%" : "") +
+                                          (modelData.redirected_to ?
+                                          " · intercepté par " + modelData.redirected_to : "")
+                                }
+                            }
+                            Repeater {
+                                model: root.playerData.tactical.focus ?
+                                       (root.playerData.tactical.focus.danger || []) : []
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: "#f2b88e"
+                                    text: "⚠ " + modelData.kind + " · " +
+                                          (modelData.certainty === "certain" ? "certain" :
+                                           modelData.certainty === "scheduled" ? "programmé" :
+                                           modelData.certainty === "armed" ? "réaction armée" :
+                                           "possible, non garanti")
+                                }
+                            }
+                        }
+                        CheckBox {
+                            visible: root.playerData.screen === "battle" ||
+                                     root.playerData.screen === "result"
+                            text: "Afficher portées et dangers"
+                            checked: root.tacticalOverlayEnabled
+                            onClicked: root.tacticalOverlayEnabled = checked
+                        }
+                        Label {
+                            visible: root.playerData.screen === "battle"
+                            text: "PROCHAINES ACTIVATIONS · CT ESTIMÉ"
+                            color: root.gold
+                            font.bold: true
+                        }
+                        Repeater {
+                            model: root.playerData.tactical.timeline || []
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: modelData.team === "enemy" ?
+                                          "#f0aca8" : root.ivory
+                                text: (modelData.active ? "▶ " : "") +
+                                      modelData.unit + " · " +
+                                      (modelData.active ? "ACTIF" :
+                                       modelData.eta_ticks === null ? "bloqué" :
+                                       "t+" + modelData.eta_ticks + " estimé")
+                            }
+                        }
+                        Label {
+                            visible: root.playerData.screen === "battle"
+                            text: "MENACES OBSERVÉES / CONDITIONNELLES"
+                            color: root.gold
+                            font.bold: true
+                        }
+                        Repeater {
+                            model: root.playerData.tactical.casts || []
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: "#dbc0f3"
+                                text: "Sort programmé · " + modelData.unit +
+                                      " · " + modelData.skill + " · t-" +
+                                      modelData.remaining_ticks
+                            }
+                        }
+                        Repeater {
+                            model: root.playerData.tactical.charges || []
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: "#ead39b"
+                                text: "Charge possible · " + modelData.unit +
+                                      " → " + modelData.target +
+                                      " (non garantie)"
+                            }
+                        }
                         Repeater {
                             model: root.playerData.screen === "exploration" ?
                                    (root.playerData.exploration.interactions || []) : []
@@ -511,8 +645,8 @@ ApplicationWindow {
                                    root.activeSkills() : []
                             Button {
                                 Layout.fillWidth: true
-                                text: "Utiliser · " + modelData
-                                onClicked: player.useSkill(modelData)
+                                text: "Cibler · " + modelData
+                                onClicked: player.inspectSkill(modelData)
                             }
                         }
                         Label {
@@ -589,7 +723,18 @@ ApplicationWindow {
             Button { text: "Déplacer"; onClicked: player.command("move") }
             Button { text: "Attaquer"; onClicked: player.command("attack") }
             Button { text: "Aperçu déplacement"; onClicked: player.preview("move") }
-            Button { text: "Aperçu attaque"; onClicked: player.preview("attack") }
+            Button { text: "Prévision attaque"; onClicked: player.preview("attack") }
+            Button {
+                text: "Utiliser " + (root.playerData.tactical.skill || "attaque")
+                enabled: root.playerData.tactical.focus &&
+                         root.playerData.tactical.focus.can_target === true
+                onClicked: {
+                    if (root.playerData.tactical.skill === "attack")
+                        player.command("attack")
+                    else
+                        player.useSkill(root.playerData.tactical.skill)
+                }
+            }
             Button { text: "Fin du tour  " + root.binding("battle_end"); onClicked: player.command("end") }
             Button { text: "Tour ennemi"; onClicked: player.enemyTurn() }
             Item { Layout.fillWidth: true }
