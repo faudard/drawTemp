@@ -143,5 +143,47 @@ class R13ReplayQtTests(unittest.TestCase):
         panel.close()
 
 
+    def test_canonical_replay_renders_and_exports_evidence(self):
+        from PySide6.QtWidgets import QApplication
+        from drawtemp.sdk.r13_movement_heatmap import build_movement_heatmap
+        from drawtemp.studio.r13_replay_heatmap import MovementHeatmapPanel
+        from sporebound.battle_diagnostics import trace_seed
+        from sporebound.model import Board, Content, Mission, Unit
+
+        app = QApplication.instance() or QApplication([])
+        content = Content({}, {"visual": Mission(
+            "visual", "Canonical battle", Board(8, 6), [
+                Unit("hero", "Hero", "player", (0, 1)),
+                Unit("foe", "Foe", "enemy", (6, 1)),
+            ])})
+        trace = trace_seed(content, "visual", seed=11, max_commands=64)
+        self.assertTrue(trace["replay_verified"])
+        model = build_movement_heatmap(trace)
+        self.assertEqual(model["digest"], trace["digest"])
+        panel = MovementHeatmapPanel()
+        panel.resize(920, 620)
+        panel.show()
+        panel.set_report(model)
+        app.processEvents()
+        self.assertEqual(panel.canvas.step, len(trace["steps"]))
+        self.assertFalse(panel.canvas.grab().isNull())
+        evidence = os.environ.get("R13_VISUAL_EVIDENCE_DIR")
+        if evidence:
+            folder = Path(evidence)
+            folder.mkdir(parents=True, exist_ok=True)
+            self.assertTrue(panel.grab().save(
+                str(folder / "heatmap-canonical-replay.png"), "PNG"))
+            (folder / "r13_canonical_replay.json").write_text(json.dumps({
+                "kind": "r13_canonical_replay_visual_evidence",
+                "seed": trace["seed"], "mission": trace["mission"],
+                "digest": trace["digest"],
+                "replay_verified": trace["replay_verified"],
+                "observed_steps": model["commands"],
+                "observed_arrivals": len(model["entries"]),
+                "human_visual_signoff": False,
+            }, indent=2) + "\n", encoding="utf-8")
+        panel.close()
+
+
 if __name__ == "__main__":
     unittest.main()
