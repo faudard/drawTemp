@@ -19,6 +19,7 @@ from sporebound.map_authoring import (
 )
 from sporebound.map_builder4 import smart_brush_cells
 from sporebound.terrain_schema import SURFACES, FEATURES
+from .map_layers import LayerWorkspace
 
 
 BRUSHES = ("grass", "dirt", "sand", "stone", "cobble", "water", "bridge")
@@ -137,6 +138,7 @@ class MapStudio:
         if self.mission_id not in ids:
             raise RuleError("Unknown map")
         self.clipboard = None
+        self.layers = LayerWorkspace()
 
     @classmethod
     def reference(cls):
@@ -159,9 +161,14 @@ class MapStudio:
 
     def _change(self, transformation, kind="map-edit", *, mission_id=None):
         # Both documents are validated before history mutation.
+        def guarded(content, project):
+            before = deepcopy(content)
+            after = transformation(content)
+            self.layers.assert_editable(before, after)
+            return after, project
+
         plan = self.authoring.preview_pair(
-            lambda content, project: (transformation(content), project),
-            kind=kind, mission_id=mission_id)
+            guarded, kind=kind, mission_id=mission_id)
         return self.authoring.apply(plan)
 
     def create(self, mission_id, name, width=12, height=12):
