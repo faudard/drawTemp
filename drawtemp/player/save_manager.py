@@ -131,7 +131,14 @@ class SaveManager:
         return self._store("auto").load()
 
     def restore_autosave_backup(self):
+        """Recovery only: refuse to downgrade an already valid autosave."""
         with self._mutex:
+            inspection = self._store("auto").inspect()
+            if inspection.primary == "valid":
+                raise SlotError("primary_valid",
+                                "Autosauvegarde principale valide : rien à restaurer")
+            if inspection.backup != "valid":
+                raise SlotError("backup_invalid", "Aucun secours valide disponible")
             restored = self._store("auto").restore_backup()
             self._invalidate()
             return restored
