@@ -763,6 +763,17 @@ class StudioWindow(QMainWindow):
                 mid = resource.mission_id or resource.resource_id
                 child.studio.select_map(mid)
                 child.refresh_maps()
+        elif destination == "actors":
+            child = self._models.get("database")
+            if child is not None:
+                child.tree.setCurrentItem(child.tree.topLevelItem(1))
+                child._reload_items(("actors", resource.resource_id, resource.mission_id))
+        elif destination == "campaigns":
+            child = self._models.get("campaigns")
+            if child is not None:
+                row = child.campaign.findData(resource.resource_id)
+                if row >= 0:
+                    child.campaign.setCurrentIndex(row)
 
     def navigate(self, identifier):
         if identifier == "actors" and "database" in self._models:
@@ -931,6 +942,8 @@ class StudioWindow(QMainWindow):
             page.deleteLater()
         self._models.clear()
         self._selected = ()
+        self._reference_anchor = ()
+        self.reference_filter.setCurrentIndex(0)
         self.session = fresh
         self.content_path = Path(path)
         self.refresh()
