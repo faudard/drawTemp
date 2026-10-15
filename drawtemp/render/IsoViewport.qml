@@ -37,6 +37,11 @@ Item {
     property bool showLegend: interactionMode === "pan"
     property var hoveredCell: ({})
     readonly property var camera: renderer.cameraState
+    // R5.7 editor-only overlays. Empty defaults preserve Player visuals.
+    property var selectionCells: []
+    property var transformCells: []
+    signal editHover(int x, int y)
+    signal editHoverLeft()
     signal strokeStarted(int x, int y)
     signal strokeMoved(int x, int y)
     signal strokeFinished(int x, int y)
@@ -415,6 +420,66 @@ Item {
         }
     }
 
+    // Selected cells and transform ghosts share the R3 projection and camera.
+    // These scenegraph shapes accept no events and never modify Content.
+    Repeater {
+        model: root.selectionCells
+        delegate: Item {
+            required property var modelData
+            property var entry: modelData
+            x: root.width / 2 + root.camera.panX + entry.sx * root.camera.zoom
+               - 48 * root.camera.zoom
+            y: root.height / 2 + root.camera.panY + entry.sy * root.camera.zoom
+               - 24 * root.camera.zoom
+            width: 96; height: 48
+            scale: root.camera.zoom
+            transformOrigin: Item.TopLeft
+            z: 100000
+            Shape {
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: 2.5
+                    strokeColor: "#73d6e8"
+                    fillColor: "#226edbe9"
+                    startX: 48; startY: 0
+                    PathLine { x: 96; y: 24 }
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 48; y: 0 }
+                }
+            }
+        }
+    }
+    Repeater {
+        model: root.transformCells
+        delegate: Item {
+            required property var modelData
+            property var entry: modelData
+            x: root.width / 2 + root.camera.panX + entry.sx * root.camera.zoom
+               - 48 * root.camera.zoom
+            y: root.height / 2 + root.camera.panY + entry.sy * root.camera.zoom
+               - 24 * root.camera.zoom
+            width: 96; height: 48
+            scale: root.camera.zoom
+            transformOrigin: Item.TopLeft
+            z: 200000
+            Shape {
+                anchors.fill: parent
+                opacity: 0.8
+                ShapePath {
+                    strokeWidth: 2.5
+                    strokeColor: entry.invalid ? "#ff7777" : "#ffe3a3"
+                    fillColor: entry.invalid ? "#66d44c56" : entry.tint
+                    startX: 48; startY: 0
+                    PathLine { x: 96; y: 24 }
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 48; y: 0 }
+                }
+            }
+        }
+    }
+
     MouseArea {
         id: pointer
         anchors.fill: parent
@@ -426,6 +491,7 @@ Item {
         property real downY: 0
         property bool editing: false
         property var lastCell: ({})
+        property string lastEditHover: ""
 
         function valid(cell) {
             return cell && cell.x !== undefined && cell.y !== undefined
@@ -446,6 +512,12 @@ Item {
         onPositionChanged: function(mouse) {
             var cell = renderer.cellAt(mouse.x, mouse.y)
             root.hoveredCell = valid(cell) ? cell : ({})
+            const hoverKey = valid(cell) ? cell.x + ":" + cell.y : ""
+            if (hoverKey !== lastEditHover) {
+                lastEditHover = hoverKey
+                if (valid(cell)) root.editHover(cell.x, cell.y)
+                else root.editHoverLeft()
+            }
             var panning = (mouse.buttons & Qt.RightButton) ||
                           (root.interactionMode !== "edit" && (mouse.buttons & Qt.LeftButton))
             if (panning) {
@@ -476,7 +548,11 @@ Item {
             if (editing) root.strokeCancelled()
             editing = false
         }
-        onExited: root.hoveredCell = ({})
+        onExited: {
+            root.hoveredCell = ({})
+            lastEditHover = ""
+            root.editHoverLeft()
+        }
         onWheel: function(wheel) {
             renderer.zoomAt(wheel.angleDelta.y, wheel.x, wheel.y)
             wheel.accepted = true
