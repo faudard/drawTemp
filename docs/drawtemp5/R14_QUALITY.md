@@ -11,7 +11,7 @@ R14 is transverse across R0–R16. The existing Tk application is kept intact un
 | R14.2 Core Unit Tests | Existing R0/R1 simulation, authoring, replay and migration suites | Broader Core, AI, rules and schema matrix |
 | R14.3 Qt Integration Tests | Real Qt Widgets + project QML composition, resize, focus and keyboard events under offscreen | Studio/Player production models, signals, transactions and focus |
 | R14.4 GUI End-to-End | Qt Map Studio paint → undo/redo → save/reopen; production Qt Player title → dialogue → campaign → battle → F5 → title → reload (offscreen/software) | Joined Studio-authored project → Player journey on a real display, runner recordings |
-| R14.5 Visual Goldens | Framework specification | Reproducible Studio/Player scene goldens at DPI and zoom variants, diff artefacts, tolerances |
+| R14.5 Visual Goldens | Real Qt Studio/Player 1×/2× captures at zoom 0.75/1/1.5 (12 per OS), reviewed SHA-256 manifests and HTML/JSON/PNG diffs | Approval of each OS baseline plus onscreen visual sign-off; software captures alone remain partial |
 | R14.6 GPU Profiling | Reject software/offscreen profiles; validate external real-GPU frame samples and percentile computation | Real GPU measurements for CPU/GPU/VRAM/leaks/loading and repeatable runner |
 | R14.7 Large Map Scale | Require 32²/64²/128² × 24/54/96 px, ≥120 frames/scene and ≥80 actors in supplied profile | Author and benchmark representative renderer scenes and calibrate budgets |
 | R14.8 Long Session | Existing checkpointed three-mission, two-seed, two-ending integration | Prolonged soak with resume/fault cycles and memory leak detection |
@@ -134,3 +134,37 @@ assert result["passed"], result
 ```
 
 The reference must be reviewed and committed or supplied from a trusted release baseline, and matched to the tested Qt backend/DPI; generating a golden from the same run under test is not permitted.
+
+
+## R14.5 — Visual Goldens multi-DPI / multi-zoom
+
+This tranche extends the already merged compare_png comparator. It captures **real Qt Quick content**, not synthetic fixture PNGs. Each scene/DPI/zoom variant runs in a fresh Qt process so QT_SCALE_FACTOR is set before QApplication is instantiated. The Studio MapWindow and the reference R12 Player battle render through the shared R3 scene graph.
+
+**Matrix:** Studio and Player × 1× and 2× pixel density × 0.75 / 1.0 / 1.5 camera zoom: **12 screenshots per OS**, on Linux, Windows and macOS. The software-backed runners pin Python 3.12 and PySide6 6.8.3. Failure to honor the requested DPR, unexpected backend, incomplete matrix or a null frame is a hard error.
+
+Baselines are scoped to platform + Qt + backend under tests_standalone/goldens/r14/{os}-qt6.8.3-software/. A versioned manifest lists all twelve cases, dimensions, immutable SHA-256 hashes, captured commit, named human reviewer and approval time. Missing, invalid and modified approved references do not pass. A candidate capture is **never automatically promoted**.
+
+### Run capture and review
+
+~~~sh
+python -m pip install ".[qt6]"
+
+# Capture new candidate images and report; no certification implied.
+python scripts/r14_visual_goldens.py capture --output r14-goldens-report
+
+# Separately, after inspecting real images + side-by-side HTML,
+# manually approve into a new commit/PR:
+python scripts/r14_visual_goldens.py approve --capture r14-goldens-report \
+  --reviewer "human-reviewer"
+git add tests_standalone/goldens/r14
+
+# Require previously approved references when comparing a fresh run:
+python scripts/r14_visual_goldens.py capture --output r14-verified \
+  --require-approved
+~~~
+
+The separate GitHub Actions workflow (.github/workflows/drawtemp5-r14-goldens.yml) uploads per OS: actual/*.png, baseline/*.png when reviewed, diff/*.png heatmaps, metadata/*.json, per-case logs, r14-visual.json and an index.html side-by-side comparison report.
+
+**Tolerance:** a pixel changes when the maximum RGBA channel difference exceeds **12/255**; at most **0.1%** of pixels may exceed that channel limit. Exact dimensions are mandatory. Fully transparent pixels are compared by alpha only. This criterion is explicitly configurable in the existing comparison primitive but is fixed for the R14.5 release matrix. Use separate approved baselines for different OS / Qt / backend profiles, not artificially relaxed tolerances.
+
+**Fail-closed interpretation:** a capture job may be successful while the *golden comparison* is BLOCKED for want of a reviewed baseline. Strict --require-approved returns an error for missing or mismatched goldens. Even twelve passing software comparisons do not prove real GPU performance, onscreen composition, color management or accessibility. R14.5 stays partial until physical-desktop review and R14.12 stays blocked.
