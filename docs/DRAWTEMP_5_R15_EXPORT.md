@@ -25,6 +25,30 @@ Chaque plateforme construit son propre runtime : un export Linux n'est pas
 un exécutable Windows. La CI `drawtemp5-r15.yml` effectue build + smoke
 sur Windows, macOS et Linux puis conserve les prévisualisations.
 
+## Expérience Creator
+
+Dans l'éditeur Qt R5, cliquez **Nouveau / Export** pour ouvrir
+l'assistant Creator. Trois parcours y sont disponibles : choisir un modèle
+(\`blank\`, \`tactical\`, \`narrative\` ou \`jeanne\`), prévisualiser
+et importer sans modifier l'original un projet de schéma v1, ou valider
+puis exporter un Player natif. L'import crée le sous-dossier
+\`originals/\` pour permettre un retour en arrière; aucun convertisseur
+pour des schémas inconnus n'est activé.
+
+CLI équivalente :
+
+\`\`\`bash
+python -m drawtemp.export.cli template --kind tactical --output /tmp/my-tactics
+python -m drawtemp.export.cli import --content ./game.json
+python -m drawtemp.export.cli import --content ./game.json --output /tmp/imported
+python -m drawtemp.export.cli inspect-extension --manifest ./extension.json
+\`\`\`
+
+L'API d'extensions v1 ne lit que des descripteurs JSON avec
+\`api_version\`, \`id\`, \`name\` et \`capabilities\`
+(\`asset-catalog\`, \`property-panel\`, \`project-template\`).
+Aucun plugin Python non fiable n'est exécuté dans la chaîne d'export.
+
 ## Contrats et garde-fous
 
 - `Content.json` et `Content.game.json` sont soumis au validateur commun
@@ -51,11 +75,11 @@ sur Windows, macOS et Linux puis conserve les prévisualisations.
 | R15.1 Distribution Studio | Build PyInstaller multi-OS en CI; installateurs/signatures à certifier |
 | R15.2 Player Export | Bundle natif avec vérification au lancement; test machine propre à prouver |
 | R15.3 Assets & hashes | Copie contrôlée, inventaire, SHA-256, avertissements licences |
-| R15.4 Project Templates | À intégrer au Studio |
+| R15.4 Project Templates | 4 projets de départ validés, assistant Qt et CLI |
 | R15.5 Content Validation | Préflight dédié, validation canonique et diagnostics de ressources |
-| R15.6 Project Migration UI | À intégrer dans un assistant |
-| R15.7 Creator Documentation | Mode d'emploi initial, parcours complet à poursuivre |
-| R15.8 Plugin API | À spécifier, extensions non autorisées pendant l'export |
+| R15.6 Project Migration UI | Assistant Qt, aperçu, import v1 réversible; anciens schémas bloqués |
+| R15.7 Creator Documentation | Tutoriel de création/import/export; captures et guides approfondis à poursuivre |
+| R15.8 Plugin API | Manifeste v1 déclaratif, sans chargement de code tiers |
 | R15.9 Release Pipeline | Artifacts prévisualisés; publication/signatures bloquées |
 
 **Le gate R15 n'est pas réputé validé par un smoke logiciel**. Il nécessite
