@@ -29,7 +29,9 @@ class MapLayersQtTests(unittest.TestCase):
             terrain.setCheckState(1, Qt.Unchecked)
             self.assertFalse(studio.layers.view(studio.mission_id)["visible"]["Terrain"])
             qml = window.viewport.rootObject()
-            self.assertFalse(qml.property("layerVisibility")["Terrain"])
+            visibility = qml.property("layerVisibility")
+            visibility = visibility.toVariant() if hasattr(visibility, "toVariant") else visibility
+            self.assertFalse(visibility["Terrain"])
             self.assertEqual(baseline, studio.snapshot())
 
             terrain.setCheckState(2, Qt.Checked)
@@ -41,7 +43,9 @@ class MapLayersQtTests(unittest.TestCase):
             panel.tree.setCurrentItem(terrain)
             panel.opacity.setValue(55)
             self.assertEqual(studio.layers.view(studio.mission_id)["opacity"]["Terrain"], 55)
-            self.assertEqual(qml.property("layerOpacity")["Terrain"], 55)
+            opacity = qml.property("layerOpacity")
+            opacity = opacity.toVariant() if hasattr(opacity, "toVariant") else opacity
+            self.assertEqual(opacity["Terrain"], 55)
         finally:
             studio.layers.discard()
             window.close()
