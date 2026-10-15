@@ -6,6 +6,8 @@ import sys
 
 from drawtemp.core import Content, GameProject
 from drawtemp.player.controller import PlayerController
+from drawtemp.render.iso_scene import scene_from_mission, scene_from_exploration
+from drawtemp.render.qt_viewport import make_controller
 
 
 def build_controller(*, save_dir=None, reference=False):
@@ -19,6 +21,22 @@ def build_controller(*, save_dir=None, reference=False):
     campaign = project.campaigns[0]["id"]
     directory = Path(save_dir) if save_dir else Path.home() / ".drawtemp" / "player5" / campaign
     return PlayerController(content, project, campaign, directory)
+
+
+def scene_for_player(controller):
+    """Use exactly the R3 scene projection, never reassemble tiles in QML.
+
+    Current Battle and exploration views come exclusively from the R1
+    Simulation snapshot. Outside gameplay, show the first authored map.
+    """
+    if controller.session is not None:
+        snapshot = controller.session.snapshot()
+        if snapshot.battle is not None:
+            mission_id = snapshot.battle["mission_id"]
+            return scene_from_mission(controller.content.missions[mission_id], snapshot)
+        if snapshot.exploration is not None and not snapshot.exploration["completed"]:
+            return scene_from_exploration(snapshot.exploration, revision=snapshot.revision)
+    return scene_from_mission(next(iter(controller.content.missions.values())))
 
 
 def main(argv=None):
@@ -41,9 +59,10 @@ def main(argv=None):
     class PlayerBridge(QObject):
         stateChanged = Signal()
 
-        def __init__(self, controller):
+        def __init__(self, controller, renderer):
             super().__init__()
             self.controller = controller
+            self.renderer = renderer
 
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
@@ -52,6 +71,9 @@ def main(argv=None):
         def invoke(self, call, *args):
             try:
                 call(*args)
+                self.renderer.replace_scene(scene_for_player(self.controller))
+                if self.controller.session is not None:
+                    self.renderer.selectCell(*self.controller.selected)
             except Exception as exc:
                 # A rejected rule/invalid save leaves the canonical Simulation intact.
                 self.controller.message = str(exc)
@@ -130,9 +152,12 @@ def main(argv=None):
             self.invoke(self.controller.finish_battle)
 
     app = QGuiApplication([sys.argv[0]])
-    bridge = PlayerBridge(build_controller(save_dir=args.save_dir, reference=args.reference))
+    controller = build_controller(save_dir=args.save_dir, reference=args.reference)
+    renderer = make_controller(scene_for_player(controller))
+    bridge = PlayerBridge(controller, renderer)
     engine = QQmlApplicationEngine()
     engine.setInitialProperties({"smokeMode": args.smoke})
+    engine.rootContext().setContextProperty("renderer", renderer)
     engine.rootContext().setContextProperty("player", bridge)
     engine.load(QUrl.fromLocalFile(str(Path(__file__).with_name("Main.qml"))))
     if not engine.rootObjects():
