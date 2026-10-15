@@ -153,7 +153,9 @@ def plan_directional_import(registry: AssetRegistry, source: Path, asset_id: str
             or len(license_id) > 160):
         raise ValueError("License identifier required")
     source = Path(source).resolve(strict=True)
-    if source.stat().st_size > MAX_PNG_BYTES:\n        raise ValueError("PNG exceeds 32 MiB")\n    data = source.read_bytes()
+    if source.stat().st_size > MAX_PNG_BYTES:
+        raise ValueError("PNG exceeds 32 MiB")
+    data = source.read_bytes()
     dimensions = png_dimensions(data)
     layout.validate(dimensions)
     relative_path = "assets/imported/" + asset_id + ".png"
