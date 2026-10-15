@@ -35,7 +35,7 @@ SPECS = {
         ("move", "Déplacement", (0, 99)),
         ("weapon", "Arme", ("melee", "spear", "ranged", "focus", "unarmed")),
         ("skills", "Compétences (IDs)", "csv"),
-        ("behavior", "Comportement IA", tuple(sorted(default_rules().behaviors))),
+        ("behavior", "Comportement IA", tuple(sorted(key for key, _ in default_rules().behaviors.entries))),
         ("reaction", "Réaction", tuple(sorted(REACTIONS))),
         ("support", "Soutien", tuple(sorted(SUPPORTS))),
     ),
@@ -307,7 +307,7 @@ class DatabaseWindow(QMainWindow):
         try:
             if action in ("Ajouter", "Modifier"):
                 base = effects[index] if action == "Modifier" else make_effect()
-                kinds = sorted(default_rules().effects)
+                kinds = sorted(key for key, _ in default_rules().effects.entries)
                 kind, ok = QInputDialog.getItem(self, "Type d'effet", "Type",
                     kinds, kinds.index(base["kind"]) if base["kind"] in kinds else 0, False)
                 if not ok:
