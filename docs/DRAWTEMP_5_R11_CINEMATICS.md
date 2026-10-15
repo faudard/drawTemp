@@ -126,6 +126,8 @@ block and independent dragging of the white motion-key diamonds. The timing
 ruler is in seconds, the grid snaps to **100 ms** (the last valid event start
 and strict interior keyframe endpoints are clamped even off-grid), and a
 click on free timeline space seeks the Studio preview.
+Selected tracks/keyframes can also be nudged with **Left/Right (100 ms)** or
+**Shift+Left/Right (1 s)** without grabbing the mouse.
 
 An edit is **preview-only while dragging**. Exactly one transaction is
 committed on mouse release; rejected motion and stale revision operations
@@ -134,6 +136,11 @@ an existing block/key without moving it never rounds its original timestamp.
 The cursor is preserved on normal edits, and Undo/Redo returns to valid
 authoring state. Both actor/camera keyframes and audio/FX event durations
 continue to use the original schema and existing validation.
+
+Qt audio preview pause/seek now also pauses newly reconstructed tracks,
+including one-shot cues. Seek/restore and clip changes explicitly stop
+transient cues so a cutscene cannot keep speaking from an abandoned position.
+These are presentation-only changes; gameplay timing is untouched.
 
 Tests:
 ```
