@@ -102,7 +102,7 @@ def _validated_bundle(archive):
             raise ValueError(f"PNG/index dimensions mismatch: {item['id']}")
         members.append(name)
     from_manifest = {e["id"]: e for e in entries if e["kind"] == "sprite"}
-    if len(from_manifest) != 88:
+    if len(from_manifest) != len(sprites):
         raise ValueError("Pack sprite count mismatch")
     if {i["id"] for i in sprites} != set(from_manifest):
         raise ValueError("Pack sprite IDs mismatch")
