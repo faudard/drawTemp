@@ -107,6 +107,7 @@ class INT03Tests(unittest.TestCase):
 
     def test_installer_resolves_99_published_motion_frames_and_rights(self):
         from sporebound.assets import AssetRegistry
+        from sporebound.visual_motion import animation_sprite_id
         with TemporaryDirectory() as temp:
             root = Path(temp)
             pack, content, project = synthetic_99_pack(root)
@@ -121,6 +122,12 @@ class INT03Tests(unittest.TestCase):
                              "anim_jeanne_walk")
             self.assertEqual(registry.binding("animation", "jeanne_attack_west")["id"],
                              "anim_jeanne_attack")
+            self.assertEqual(
+                animation_sprite_id(registry, "jeanne", "player", "move", "south", 75),
+                "jeanne_motion_walk_00_01")
+            self.assertEqual(
+                animation_sprite_id(registry, "jeanne", "player", "attack", "west", 36),
+                "jeanne_motion_attack_00_01")
 
     def test_unlicensed_99_pack_cannot_create_output(self):
         with TemporaryDirectory() as temp:
