@@ -6,7 +6,7 @@ in Qt; all edits go through RulesWorkbench -> R1 AuthoringSession.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QBrush, QPen
+from PySide6.QtGui import QColor, QBrush, QPen, QPainterPath
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFormLayout, QGraphicsScene, QGraphicsView,
     QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox, QPushButton,
@@ -35,9 +35,10 @@ def draw_dag(view, graph, *, title):
                       end[0], end[1] + 25, pen)
     for node in graph["nodes"]:
         x, y = positions[node["id"]]
-        scene.addRoundedRect(x, y, 125, 50, 7, 7,
-                             QPen(QColor("#475569")),
-                             QBrush(QColor("#e0f2fe")))
+        path = QPainterPath()
+        path.addRoundedRect(x, y, 125, 50, 7, 7)
+        scene.addPath(path, QPen(QColor("#475569")),
+                      QBrush(QColor("#e0f2fe")))
         label = str(node.get("label", node["id"]))
         if "jp" in node:
             label += " • " + str(node["jp"]) + " JP"
