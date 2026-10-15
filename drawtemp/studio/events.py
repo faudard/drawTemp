@@ -16,7 +16,7 @@ from sporebound.event_branch_builder import author_choice_fork
 from sporebound.branch_qa_363 import (audit_branch_coverage, format_branch_qa,
                                       probe_story_choices, probe_tactical_branches)
 from drawtemp.studio.event_debug_controller import EventDebugController
-from drawtemp.studio.event_command_catalog import tactical_action
+from drawtemp.studio.event_command_catalog import tactical_action, story_effect
 from drawtemp.studio.event_presentation import add_event_cue
 from drawtemp.render.iso_scene import scene_from_mission
 from sporebound.event_context import inspect_event, preview_event, format_preview_report
@@ -128,6 +128,16 @@ class EventStudio:
                     kind=kind, cue_id=cue_id,
                     start_ms=start_ms, duration_ms=duration_ms,
                     fields=fields)))
+
+    def add_story_effect(self, mission_id, scene_id, choice_id, kind, fields):
+        """Change a REAL StoryBook choice's variables/items as one R1 transaction."""
+        payload = story_effect(kind, fields)
+        return self._pair(
+            mission_id, "story-choice-effect",
+            lambda data, project: (
+                data, story_authoring.add_effect(
+                    project, Content.from_dict(data), scene_id, choice_id,
+                    payload)))
 
     def iso_scene(self, mission_id):
         """Canonical Content → shared R3 Renderer scene, detached from the editor."""
