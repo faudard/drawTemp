@@ -157,6 +157,14 @@ class SharedRendererQtSmoke(unittest.TestCase):
             [sys.executable, "-m", "drawtemp.player.qt_app", "--reference", "--smoke"],
             cwd=ROOT, env=env, capture_output=True, text=True, timeout=30)
         self.assertEqual(completed.returncode, 0, completed.stderr)
+        for scene, reference in (("battle", True), ("exploration", False)):
+            args = [sys.executable, "-m", "drawtemp.player.qt_app", "--smoke",
+                    "--smoke-scene", scene]
+            if reference:
+                args.append("--reference")
+            live = subprocess.run(args, cwd=ROOT, env=env, capture_output=True,
+                                  text=True, timeout=30)
+            self.assertEqual(live.returncode, 0, f"{scene}: {live.stderr}")
 
 
 if __name__ == "__main__":
