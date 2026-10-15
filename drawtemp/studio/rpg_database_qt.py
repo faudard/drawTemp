@@ -124,6 +124,8 @@ class DatabaseWindow(QMainWindow):
         talent_action.triggered.connect(self._open_talents)
         encounter_action = toolbar.addAction("Composer une rencontre…")
         encounter_action.triggered.connect(self._open_encounter)
+        combat_action = toolbar.addAction("États et IA tactique…")
+        combat_action.triggered.connect(self._open_combat_ai)
         flags_action = toolbar.addAction("Variables / références…")
         flags_action.triggered.connect(self._show_variables)
         rename_action = toolbar.addAction("Renommer l'ID…")
@@ -300,6 +302,9 @@ class DatabaseWindow(QMainWindow):
                 encounter_button = QPushButton("Composer la rencontre de cette mission")
                 encounter_button.clicked.connect(self._open_encounter)
                 self.form.addRow(encounter_button)
+                combat_button = QPushButton("États, réactions et stratégie IA…")
+                combat_button.clicked.connect(self._open_combat_ai)
+                self.form.addRow(combat_button)
         refs = self.editor.references(family, key)
         self.references.setPlainText(
             "\n".join(refs) if refs else "Aucune référence directe connue.")
@@ -416,6 +421,15 @@ class DatabaseWindow(QMainWindow):
             self._reload()
         except (RuleError, TypeError, ValueError) as exc:
             QMessageBox.warning(self, "Lot rejeté sans modification", str(exc))
+
+    def _open_combat_ai(self):
+        from drawtemp.studio.r8_combat_ai_qt import CombatAIDialog
+        mission = self.selected[2] if self.selected and self.selected[0] == "actors" else ""
+        actor = self.selected[1] if self.selected and self.selected[0] == "actors" else ""
+        dialog = CombatAIDialog(self.editor.session, mission_id=mission,
+                                actor_id=actor, on_change=self._reload, parent=self)
+        dialog.exec()
+        self._reload()
 
     def _open_talents(self):
         from drawtemp.studio.r8_workbenches_qt import TalentDialog

@@ -8,6 +8,7 @@ on:
       - 'tests_standalone/test_drawtemp5_r8*.py'
       - 'docs/drawtemp5/R8_RPG_DATABASE.md'
       - 'docs/drawtemp5/R8_B_TALENTS_ENCOUNTERS.md'
+      - 'docs/drawtemp5/R8_D_COMBAT_AI.md'
       - 'pyproject.toml'
       - '.github/workflows/drawtemp5-r8.yml'
   push:
@@ -44,6 +45,8 @@ jobs:
         run: python -m unittest discover -s tests_standalone -p "test_drawtemp5_r8b.py" -v
       - name: R8.C referential integrity and variable regressions
         run: python -m unittest discover -s tests_standalone -p "test_drawtemp5_r8c.py" -v
+      - name: R8.D canonical combat and AI authoring
+        run: python -m unittest discover -s tests_standalone -p "test_drawtemp5_r8d.py" -v
       - name: Qt Widgets offscreen regression (Linux)
         if: runner.os == 'Linux'
         env:
@@ -52,4 +55,5 @@ jobs:
           python -m unittest discover -s tests_standalone -p "test_drawtemp5_r8_qt.py" -v
           python -m unittest discover -s tests_standalone -p "test_drawtemp5_r8b_qt.py" -v
           python -m unittest discover -s tests_standalone -p "test_drawtemp5_r8c_qt.py" -v
+          python -m unittest discover -s tests_standalone -p "test_drawtemp5_r8d_qt.py" -v
           python -m drawtemp.studio.rpg_database_qt --smoke

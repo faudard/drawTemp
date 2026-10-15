@@ -13,6 +13,9 @@ IsoViewport {
     readonly property real zoom: renderer.cameraState.zoom
     interactionMode: "select"
     showLegend: false
+    // R3.C repositions the *actual* atlas/actor delegate, not a duplicate ghost.
+    activeVisualClip: board.playing ? board.currentClip : ({})
+    activeVisualPhase: board.phase
 
     // R12.7: animation clips represent *committed* GameSession events. The
     // R3 scene is already authoritative at the final state; this temporary
@@ -109,6 +112,9 @@ IsoViewport {
                 board.height / 2 + renderer.cameraState.panY +
                 ((point[0] + point[1]) * 24 - elevation(point) * 12) * zoom]
     }
+
+    // No separate fake character: R3's Image/actor node follows the same
+    // validated R12 animation clip while remaining at the correct feet depth.
 
     // The exact R4 asset frames are resolved by the R3 renderer. Movement
     // and attacks use their authored directional poses; missing bindings keep

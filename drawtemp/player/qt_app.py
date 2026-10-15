@@ -154,6 +154,18 @@ def create_bridge(controller, renderer):
         def newGame(self):
             self.invoke(self.controller.new_game)
 
+        @Slot()
+        def continueGame(self):
+            self.invoke(self.controller.continue_game)
+
+        @Slot()
+        def loadAutosave(self):
+            self.invoke(self.controller.load_autosave)
+
+        @Slot()
+        def restoreAutosaveBackup(self):
+            self.invoke(self.controller.restore_autosave_backup)
+
         @Slot(int)
         def loadGame(self, slot):
             self.invoke(self.controller.load, slot)
@@ -242,6 +254,19 @@ def main(argv=None):
     parser.add_argument("--campaign", help="Campaign ID from the selected project")
     args = parser.parse_args(argv)
 
+    # R15: a frozen Player must never run unverified or substitute game data.
+    if getattr(sys, "frozen", False):
+        from drawtemp.export.r15 import verify_bundle
+        bundle = Path(sys.executable).resolve().parent.parent
+        try:
+            if args.reference or args.content or args.project:
+                raise ValueError("Native Player only accepts its verified game bundle")
+            manifest = verify_bundle(bundle)
+            args.content = bundle / manifest["content"]
+        except (OSError, ValueError) as exc:
+            print("Standalone game integrity failure: " + str(exc), file=sys.stderr)
+            return 1
+
     try:
         from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QUrl
         from PySide6.QtGui import QGuiApplication
@@ -279,6 +304,7 @@ def main(argv=None):
     renderer = make_controller(scene_for_player(controller), assets=presentation)
     bridge = create_bridge(controller, renderer)
     engine = QQmlApplicationEngine()
+    renderer.attach_engine(engine)
     engine.setInitialProperties({"smokeMode": args.smoke})
     engine.rootContext().setContextProperty("renderer", renderer)
     engine.rootContext().setContextProperty("player", bridge)

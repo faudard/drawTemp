@@ -11,21 +11,22 @@ import logging
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QSettings, QSortFilterProxyModel, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QFont, QKeySequence, QPalette, QStandardItem, QStandardItemModel
+from PySide6.QtCore import QItemSelectionModel, QSettings, QSortFilterProxyModel, Qt, QTimer
+from PySide6.QtGui import QAction, QColor, QFont, QIntValidator, QKeySequence, QPalette, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QComboBox, QDialog, QDockWidget, QFileDialog,
-    QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
-    QMainWindow, QMessageBox, QPushButton, QSplitter, QStackedWidget, QStyleFactory,
-    QToolBar, QTreeView, QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDockWidget,
+    QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
+    QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
+    QSplitter, QStackedWidget, QStyleFactory, QToolBar, QTreeView, QVBoxLayout, QWidget,
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.reference import reference_project
-from drawtemp.studio.workspace_model import (
-    FAMILY_LABELS, common_name, edit_names, editable_name, reference_hints,
-    resources,
+from drawtemp.studio.workspace_model import FAMILY_LABELS, resources
+from drawtemp.studio.inspector_model import (
+    InspectorError, common_value, edit_properties, shared_specs,
 )
+from drawtemp.studio.resource_links import connections
 
 log = logging.getLogger(__name__)
 WORKSPACES = ("project", "maps", "actors", "database", "events",
@@ -75,24 +76,34 @@ def apply_theme(app, name, scale=100):
 
 
 class ResourceProxy(QSortFilterProxyModel):
-    """Recursive search plus optional favorites, both UI-only filters."""
+    """Recursive text/family/mission/reference filters, applied to stable keys."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.favorite_only = False
         self.favorites = set()
+        self.family_filter = ""
+        self.mission_filter = ""
+        self.related_keys = None
         self.setRecursiveFilteringEnabled(True)
         self.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
     def filterAcceptsRow(self, source_row, source_parent):
         index = self.sourceModel().index(source_row, 0, source_parent)
         identity = index.data(Qt.UserRole)
-        if identity is not None and self.favorite_only:
-            if identity not in self.favorites:
-                return False
-        elif identity is None and self.favorite_only:
+        if identity is None:
             return any(self.filterAcceptsRow(row, index)
                        for row in range(self.sourceModel().rowCount(index)))
+        family, mission, identifier = identity.split("|", 2)
+        if self.favorite_only and identity not in self.favorites:
+            return False
+        if self.family_filter and family != self.family_filter:
+            return False
+        if self.mission_filter and self.mission_filter not in (mission,
+                                                               identifier if family == "maps" else ""):
+            return False
+        if self.related_keys is not None and (family, mission, identifier) not in self.related_keys:
+            return False
         return super().filterAcceptsRow(source_row, source_parent)
 
 
@@ -213,9 +224,19 @@ class StudioWindow(QMainWindow):
         layout = QVBoxLayout(host)
         self.search = QLineEdit()
         self.search.setClearButtonEnabled(True)
-        self.search.setPlaceholderText("Rechercher cartes, personnages, événements…")
+        self.search.setPlaceholderText("Rechercher nom, ID ou mission…")
         self.search.setAccessibleName("Recherche de ressources")
         layout.addWidget(self.search)
+        self.family_filter = QComboBox()
+        self.family_filter.setAccessibleName("Famille de ressources")
+        self.family_filter.addItem("Toutes les familles", "")
+        for family, label in FAMILY_LABELS.items():
+            self.family_filter.addItem(label, family)
+        layout.addWidget(self.family_filter)
+        self.mission_filter = QComboBox()
+        self.mission_filter.setAccessibleName("Carte ou mission")
+        self.mission_filter.addItem("Toutes les cartes", "")
+        layout.addWidget(self.mission_filter)
         row = QHBoxLayout()
         self.filter = QComboBox()
         self.filter.addItems(("Toutes les ressources", "Favoris"))
@@ -226,6 +247,13 @@ class StudioWindow(QMainWindow):
         self.favorite_button.clicked.connect(self.toggle_favorite)
         row.addWidget(self.favorite_button)
         layout.addLayout(row)
+        self.reference_filter = QComboBox()
+        self.reference_filter.setAccessibleName("Relations de la sélection")
+        self.reference_filter.addItems((
+            "Toutes les relations", "Ressources qui la référencent",
+            "Ressources qu'elle référence"))
+        layout.addWidget(self.reference_filter)
+
         self.resource_model = QStandardItemModel(self)
         self.resource_model.setHorizontalHeaderLabels(["Ressources"])
         self.proxy = ResourceProxy(self)
@@ -235,12 +263,17 @@ class StudioWindow(QMainWindow):
         self.resource_view.setHeaderHidden(True)
         self.resource_view.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.resource_view.setAccessibleName("Explorateur du projet")
+        self.resource_view.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.resource_view.customContextMenuRequested.connect(self.resource_context_menu)
         self.resource_view.selectionModel().selectionChanged.connect(
             lambda *_: self._update_selection())
         self.resource_view.doubleClicked.connect(self._open_selected_resource)
         layout.addWidget(self.resource_view, 1)
         self.search.textChanged.connect(self.proxy.setFilterFixedString)
         self.filter.currentIndexChanged.connect(self._set_favorites_only)
+        self.family_filter.currentIndexChanged.connect(self._update_resource_filters)
+        self.mission_filter.currentIndexChanged.connect(self._update_resource_filters)
+        self.reference_filter.currentIndexChanged.connect(self._reference_mode_changed)
         self.resource_dock = self._dock(
             "Explorateur", "r2-resource-dock", host, Qt.LeftDockWidgetArea)
 
@@ -251,17 +284,28 @@ class StudioWindow(QMainWindow):
         layout.addWidget(self.inspector_title)
         self.form = QFormLayout()
         layout.addLayout(self.form)
-        self.name_edit = QLineEdit()
-        self.name_edit.setAccessibleName("Nom des ressources sélectionnées")
-        self.form.addRow("Nom", self.name_edit)
-        self.apply_button = QPushButton("Appliquer à la sélection")
+        self.name_edit = None
+        self.property_widgets = {}
+        self._edited_fields = set()
+        self._inspector_revision = self.session.revision
+        self.apply_button = QPushButton("Appliquer les propriétés")
         self.apply_button.clicked.connect(self.apply_selection)
+        self.apply_button.setEnabled(False)
         layout.addWidget(self.apply_button)
+        self.inspector_error = QLabel("")
+        self.inspector_error.setWordWrap(True)
+        self.inspector_error.setAccessibleName("Erreur de validation des propriétés")
+        layout.addWidget(self.inspector_error)
         self.references = QLabel("Aucune sélection")
         self.references.setWordWrap(True)
         self.references.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(self.references)
-        layout.addStretch(1)
+        layout.addWidget(QLabel("Références croisées — double-cliquer pour naviguer"))
+        self.links = QListWidget()
+        self.links.setAccessibleName("Références entrantes et sortantes")
+        self.links.itemActivated.connect(self.follow_reference)
+        self.links.itemDoubleClicked.connect(self.follow_reference)
+        layout.addWidget(self.links, 1)
         self.inspector_dock = self._dock(
             "Inspecteur", "r2-inspector-dock", host, Qt.RightDockWidgetArea)
 
@@ -292,7 +336,7 @@ class StudioWindow(QMainWindow):
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
-                     lambda: self.name_edit.setFocus())
+                     lambda: (self.name_edit or self.resource_view).setFocus())
         for identifier in WORKSPACES:
             self._action("go_" + identifier, "Atelier : " + LABELS[identifier],
                          lambda _checked=False, key=identifier: self.navigate(key))
@@ -401,6 +445,29 @@ class StudioWindow(QMainWindow):
         self.proxy.favorite_only = index == 1
         self.proxy.invalidateFilter()
 
+    def _reference_mode_changed(self, _index):
+        # Freeze anchor while displaying related resources; selecting another
+        # result must not silently change the scope of the query.
+        self._reference_anchor = tuple(self._selected)
+        self._update_resource_filters()
+
+    def _update_resource_filters(self, *_):
+        self.proxy.family_filter = self.family_filter.currentData() or ""
+        self.proxy.mission_filter = self.mission_filter.currentData() or ""
+        mode = self.reference_filter.currentIndex()
+        if mode:
+            anchor = getattr(self, "_reference_anchor", ())
+            direction = "incoming" if mode == 1 else "outgoing"
+            rows = connections(self.session.snapshot(), anchor, direction)
+            self.proxy.related_keys = {
+                (edge.source.key if mode == 1 else edge.target.key)
+                for edge in rows
+            }
+        else:
+            self.proxy.related_keys = None
+        self.proxy.invalidateFilter()
+        self.resource_view.expandAll()
+
     @staticmethod
     def _identity(resource):
         return "|".join(resource.key)
@@ -412,11 +479,10 @@ class StudioWindow(QMainWindow):
         return set(stored or [])
 
     def toggle_favorite(self):
-        chosen = self._selected
-        if not chosen:
+        if not self._selected:
             return
         favorites = self._favorites()
-        for resource in chosen:
+        for resource in self._selected:
             key = self._identity(resource)
             if key in favorites:
                 favorites.remove(key)
@@ -426,10 +492,28 @@ class StudioWindow(QMainWindow):
         self.proxy.favorites = favorites
         self.proxy.invalidateFilter()
 
+    def resource_context_menu(self, point):
+        index = self.resource_view.indexAt(point)
+        if not index.isValid():
+            return
+        self.resource_view.setCurrentIndex(index)
+        menu = QMenu(self.resource_view)
+        menu.addAction("Ouvrir la ressource",
+                       lambda: self._open_selected_resource(index))
+        menu.addAction("Ajouter / retirer des favoris", self.toggle_favorite)
+        menu.addSeparator()
+        menu.addAction("Qui référence cette ressource ?",
+                       lambda: self.reference_filter.setCurrentIndex(1))
+        menu.addAction("Références utilisées",
+                       lambda: self.reference_filter.setCurrentIndex(2))
+        menu.exec(self.resource_view.viewport().mapToGlobal(point))
+
     def refresh(self):
         snapshot = self.session.snapshot()
         selected_keys = {r.key for r in self._selected}
         self._resource_by_key = {r.key: r for r in resources(snapshot)}
+        selection = self.resource_view.selectionModel()
+        selection.blockSignals(True)
         self.resource_model.clear()
         self.resource_model.setHorizontalHeaderLabels(["Ressources"])
         for family, title in FAMILY_LABELS.items():
@@ -438,7 +522,7 @@ class StudioWindow(QMainWindow):
             for resource in self._resource_by_key.values():
                 if resource.family != family:
                     continue
-                label = resource.title
+                label = resource.title + " · " + resource.resource_id
                 if resource.mission_id:
                     label += "  [" + resource.mission_id + "]"
                 child = QStandardItem(label)
@@ -448,11 +532,34 @@ class StudioWindow(QMainWindow):
                 parent.appendRow(child)
             if parent.rowCount():
                 self.resource_model.appendRow(parent)
+        # Family, mission and favorite filters are UI preferences, not part of
+        # GameProject. A project switch preserves the type filter, but clears an
+        # invalid mission scope.
+        mission = self.mission_filter.currentData() or ""
+        self.mission_filter.blockSignals(True)
+        self.mission_filter.clear()
+        self.mission_filter.addItem("Toutes les cartes", "")
+        for resource in self._resource_by_key.values():
+            if resource.family == "maps":
+                self.mission_filter.addItem(resource.title, resource.resource_id)
+        pos = self.mission_filter.findData(mission)
+        self.mission_filter.setCurrentIndex(max(0, pos))
+        self.mission_filter.blockSignals(False)
         self.proxy.favorites = self._favorites()
-        self.proxy.invalidateFilter()
-        self.resource_view.expandAll()
+        self._update_resource_filters()
         self._selected = tuple(r for k, r in self._resource_by_key.items()
                                if k in selected_keys)
+        for row in range(self.resource_model.rowCount()):
+            parent = self.resource_model.item(row)
+            for j in range(parent.rowCount()):
+                child = parent.child(j)
+                identity = child.data(Qt.UserRole)
+                if identity and tuple(identity.split("|", 2)) in selected_keys:
+                    mapped = self.proxy.mapFromSource(child.index())
+                    if mapped.isValid():
+                        selection.select(mapped, QItemSelectionModel.Select |
+                                         QItemSelectionModel.Rows)
+        selection.blockSignals(False)
         self.last_revision = snapshot.revision
         self._show_inspector()
         self._update_title()
@@ -485,39 +592,160 @@ class StudioWindow(QMainWindow):
         for index in self.resource_view.selectionModel().selectedRows(0):
             identity = index.data(Qt.UserRole)
             if identity:
-                parts = identity.split("|")
-                key = (parts[0], parts[1], parts[2])
+                key = tuple(identity.split("|", 2))
                 if key in self._resource_by_key:
                     selected.append(self._resource_by_key[key])
-        self._selected = tuple(selected)
+        # An active relation filter retains its original selection even when
+        # the anchor is itself hidden by the filtered result set.
+        if selected:
+            self._selected = tuple(selected)
+        elif self.reference_filter.currentIndex() == 0:
+            self._selected = ()
         self._show_inspector()
+
+    def _mark_property_edit(self, key):
+        self._edited_fields.add(key)
+        self.inspector_error.setText("")
+        self.apply_button.setEnabled(True)
 
     def _show_inspector(self):
         chosen = self._selected
+        snapshot = self.session.snapshot()
+        self._inspector_revision = snapshot.revision
+        self._edited_fields = set()
+        self.property_widgets.clear()
+        self.name_edit = None
+        while self.form.rowCount():
+            self.form.removeRow(0)
+        self.inspector_error.setText("")
+        self.apply_button.setEnabled(False)
         self.inspector_title.setText(
             str(len(chosen)) + " ressource(s) sélectionnée(s)" if chosen else
             "Sélectionnez une ressource dans l'explorateur")
-        can_edit = editable_name(chosen)
-        self.name_edit.setEnabled(can_edit)
-        self.apply_button.setEnabled(can_edit)
-        value, mixed = common_name(chosen)
-        self.name_edit.setPlaceholderText("Valeurs multiples" if mixed else "Nom")
-        self.name_edit.setText(value)
-        if len(chosen) == 1:
-            hints = reference_hints(self.session.snapshot(), chosen[0])
-            self.references.setText("ID stable : " + chosen[0].resource_id +
-                "\nRéférences indicatives :\n" +
-                ("\n".join(hints) if hints else "Aucune référence connue"))
-        else:
-            self.references.setText("Modifications de nom atomiques (un Undo)."
-                                    if can_edit else "Lecture seule / sélection mixte.")
+        self.links.clear()
+        if not chosen:
+            self.references.setText("Aucune sélection")
+            return
+        try:
+            specs = shared_specs(snapshot, chosen)
+            for spec in specs:
+                value, mixed = common_value(snapshot, chosen, spec.key)
+                if spec.kind == "int" and not mixed:
+                    widget = QSpinBox()
+                    widget.setRange(spec.minimum, spec.maximum)
+                    widget.setValue(value)
+                    widget.valueChanged.connect(
+                        lambda _v, key=spec.key: self._mark_property_edit(key))
+                elif spec.kind == "int":
+                    widget = QLineEdit()
+                    widget.setValidator(QIntValidator(spec.minimum, spec.maximum, widget))
+                    widget.setPlaceholderText("Valeurs multiples — saisir un entier")
+                    widget.textEdited.connect(
+                        lambda _v, key=spec.key: self._mark_property_edit(key))
+                elif spec.kind == "bool":
+                    widget = QCheckBox()
+                    widget.setTristate(mixed)
+                    widget.setCheckState(Qt.PartiallyChecked if mixed else
+                                         (Qt.Checked if value else Qt.Unchecked))
+                    widget.stateChanged.connect(
+                        lambda _v, key=spec.key: self._mark_property_edit(key))
+                elif spec.kind == "multiline":
+                    widget = QPlainTextEdit()
+                    widget.setFixedHeight(100)
+                    widget.setPlainText("" if mixed else value)
+                    if mixed:
+                        widget.setPlaceholderText("Valeurs multiples")
+                    widget.textChanged.connect(
+                        lambda key=spec.key: self._mark_property_edit(key))
+                else:
+                    widget = QLineEdit("" if mixed else value)
+                    if mixed:
+                        widget.setPlaceholderText("Valeurs multiples")
+                    widget.textEdited.connect(
+                        lambda _v, key=spec.key: self._mark_property_edit(key))
+                widget.setAccessibleName(spec.label)
+                self.form.addRow(spec.label, widget)
+                self.property_widgets[spec.key] = (widget, spec)
+                if spec.key in ("name", "title") and self.name_edit is None:
+                    self.name_edit = widget
+            self.references.setText(
+                "Identifiant(s) stable(s) : " +
+                ", ".join(r.resource_id for r in chosen) +
+                "\nLes identifiants et références ne sont pas modifiés par l'inspecteur.")
+            for direction, title in (("incoming", "← Référencée par"),
+                                     ("outgoing", "→ Référence")):
+                for edge in connections(snapshot, chosen, direction):
+                    other = edge.source if direction == "incoming" else edge.target
+                    item = self._link_item(
+                        title + " : " + other.title + " (" + other.family + ")",
+                        other.key, edge.path)
+                    self.links.addItem(item)
+        except (InspectorError, ValueError) as exc:
+            self.inspector_error.setText(str(exc))
+
+    def _link_item(self, title, identity, path):
+        from PySide6.QtWidgets import QListWidgetItem
+        item = QListWidgetItem(title)
+        item.setData(Qt.UserRole, identity)
+        item.setToolTip(path)
+        return item
+
+    def _field_value(self, widget, spec):
+        if isinstance(widget, QSpinBox):
+            return widget.value()
+        if isinstance(widget, QCheckBox):
+            if widget.checkState() == Qt.PartiallyChecked:
+                raise InspectorError(spec.label + " : choisir Oui ou Non")
+            return widget.isChecked()
+        if isinstance(widget, QPlainTextEdit):
+            return widget.toPlainText()
+        if spec.kind == "int":
+            try:
+                return int(widget.text().strip())
+            except ValueError as exc:
+                raise InspectorError(spec.label + " : entier attendu") from exc
+        return widget.text()
 
     def apply_selection(self):
+        if not self._edited_fields:
+            return
         try:
-            edit_names(self.session, self._selected, self.name_edit.text())
+            updates = {key: self._field_value(*self.property_widgets[key])
+                       for key in self._edited_fields}
+            edit_properties(self.session, self._selected, updates,
+                            expected_revision=self._inspector_revision)
             self.refresh()
-        except (AuthoringError, ValueError) as exc:
-            self.report_error(exc)
+        except (AuthoringError, InspectorError, ValueError) as exc:
+            self.inspector_error.setText(str(exc))
+            self.problems.addItem("Inspecteur : " + str(exc))
+            self.statusBar().showMessage(str(exc))
+
+    def follow_reference(self, item):
+        identity = item.data(Qt.UserRole)
+        if identity:
+            self.focus_resource(tuple(identity))
+
+    def focus_resource(self, identity):
+        """Reveal one resource across all facets, then navigate precisely."""
+        self.search.clear()
+        self.reference_filter.setCurrentIndex(0)
+        self.filter.setCurrentIndex(0)
+        self.family_filter.setCurrentIndex(0)
+        self.mission_filter.setCurrentIndex(0)
+        for row in range(self.resource_model.rowCount()):
+            parent = self.resource_model.item(row)
+            for j in range(parent.rowCount()):
+                child = parent.child(j)
+                if tuple(child.data(Qt.UserRole).split("|", 2)) == identity:
+                    index = self.proxy.mapFromSource(child.index())
+                    if index.isValid():
+                        self.resource_view.selectionModel().setCurrentIndex(
+                            index, QItemSelectionModel.ClearAndSelect |
+                            QItemSelectionModel.Rows)
+                        self.resource_view.scrollTo(index)
+                        self.resource_view.setFocus()
+                        return True
+        return False
 
     def _open_selected_resource(self, _index):
         if not self._selected:
@@ -535,6 +763,17 @@ class StudioWindow(QMainWindow):
                 mid = resource.mission_id or resource.resource_id
                 child.studio.select_map(mid)
                 child.refresh_maps()
+        elif destination == "actors":
+            child = self._models.get("database")
+            if child is not None:
+                child.tree.setCurrentItem(child.tree.topLevelItem(1))
+                child._reload_items(("actors", resource.resource_id, resource.mission_id))
+        elif destination == "campaigns":
+            child = self._models.get("campaigns")
+            if child is not None:
+                row = child.campaign.findData(resource.resource_id)
+                if row >= 0:
+                    child.campaign.setCurrentIndex(row)
 
     def navigate(self, identifier):
         if identifier == "actors" and "database" in self._models:
@@ -703,6 +942,8 @@ class StudioWindow(QMainWindow):
             page.deleteLater()
         self._models.clear()
         self._selected = ()
+        self._reference_anchor = ()
+        self.reference_filter.setCurrentIndex(0)
         self.session = fresh
         self.content_path = Path(path)
         self.refresh()

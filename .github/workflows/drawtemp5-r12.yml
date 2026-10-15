@@ -26,6 +26,7 @@ jobs:
           tests_standalone.test_drawtemp5_r12_preferences
           tests_standalone.test_drawtemp5_r12_tactical
           tests_standalone.test_drawtemp5_r12_animation
+          tests_standalone.test_drawtemp5_r12_save_manager
           -v
   qt-player-smoke:
     runs-on: ${{ matrix.os }}
@@ -52,3 +53,4 @@ jobs:
           python -m drawtemp.player.qt_app --smoke
           python -m drawtemp.player.qt_app --reference --smoke --smoke-scene battle
           python -m drawtemp.player.qt_app --smoke --smoke-scene exploration
+          python -m unittest tests_standalone.test_drawtemp5_r12_save_manager_qt -v

@@ -5,6 +5,11 @@
 > simulation A/B et l'intégration aux transactions R1 (appliquer, annuler,
 > refaire, enregistrer). Le gate humain et la finition visuelle restent ouverts.
 
+> **R13.8 — Heatmaps et replay animé** :
+> [guide de lecture et certification](R13_8_HEATMAP_REPLAY_CERTIFICATION.md).
+> Les tests fonctionnels et les captures Qt automatisées ne remplacent pas
+> une inspection visuelle humaine sur les OS cibles.
+
 ## Périmètre livré sur cette branche
 
 Le lot R13 s'appuie exclusivement sur les règles `sporebound.engine.Battle`,

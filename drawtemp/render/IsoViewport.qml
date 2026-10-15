@@ -25,9 +25,23 @@ Item {
     // Player-only presentation: briefly conceal the static actor while its
     // committed move / attack clip is displayed. Studio defaults to none.
     property var concealedActorIds: []
+    property var activeVisualClip: ({})
+    property real activeVisualPhase: 1
+
+    function actorMotion(row) {
+        if (row.kind !== "actor" || !activeVisualClip ||
+            row.id !== activeVisualClip.actor)
+            return ({})
+        return renderer.motionPoint(activeVisualClip, activeVisualPhase)
+    }
     property bool showLegend: interactionMode === "pan"
     property var hoveredCell: ({})
     readonly property var camera: renderer.cameraState
+    // R5.7 editor-only overlays. Empty defaults preserve Player visuals.
+    property var selectionCells: []
+    property var transformCells: []
+    signal editHover(int x, int y)
+    signal editHoverLeft()
     signal strokeStarted(int x, int y)
     signal strokeMoved(int x, int y)
     signal strokeFinished(int x, int y)
@@ -36,6 +50,8 @@ Item {
 
     Rectangle {
         anchors.fill: parent
+        // Must be below chunk textures (z=-1) and all dynamic scene layers.
+        z: -100000
         color: "#1d2831"
         gradient: Gradient {
             GradientStop { position: 0; color: "#263c45" }
@@ -51,10 +67,33 @@ Item {
         onTriggered: renderer.advanceVisual(125)
     }
 
+    // R3.D: one QSG texture node per static 8x8 terrain chunk instead of
+    // a Shape/Image/ShapePath hierarchy for every simple cell. Terrain with
+    // relief, props, walls or hazards retains its original QML node pipeline.
+    // Qt Quick uploads composited QImages through the single image provider.
+    Repeater {
+        model: root.showGrid && renderer.textureBatching ? renderer.tileBatches : []
+        delegate: Image {
+            required property var modelData
+            readonly property real ratio: root.camera.zoom
+            x: root.width / 2 + root.camera.panX + modelData.sx * ratio
+            y: root.height / 2 + root.camera.panY + modelData.sy * ratio
+            width: modelData.width * ratio
+            height: modelData.height * ratio
+            source: modelData.url
+            fillMode: Image.Stretch
+            smooth: false
+            asynchronous: false
+            cache: false  // Let the bounded provider own CPU images, not QML cache.
+            z: -1
+        }
+    }
+
     // Projection, clipping, depth and atlas coordinates are supplied by R3.
     // Delegates use Qt Quick scene-graph nodes; never QML Canvas or CPU paint.
     Repeater {
-        model: renderer.items
+        model: root.showGrid && renderer.textureBatching
+            ? renderer.displayItems : renderer.items
         delegate: Loader {
             id: renderDelegate
             required property var modelData
@@ -62,20 +101,60 @@ Item {
             property real scaleFactor: root.camera.zoom
             property bool isTile: row.kind === "tile"
             property bool isActor: row.kind === "actor"
-            visible: isActor
+            property bool isBuilding: row.kind === "building"
+            readonly property var motion: isActor ? root.actorMotion(row) : ({})
+            readonly property real renderSX: motion.sx !== undefined ? motion.sx : row.sx
+            readonly property real renderSY: motion.sy !== undefined ? motion.sy : row.sy
+            visible: isBuilding ? root.layerEnabled("Bâtiments")
+                     : isActor
                      ? (root.showActors && root.layerEnabled("Unités") &&
                         root.concealedActorIds.indexOf(row.id) < 0)
                      : isTile ? true : root.layerEnabled("Objets")
-            opacity: isActor ? root.layerAlpha("Unités")
+            opacity: isBuilding ? root.layerAlpha("Bâtiments")
+                     : isActor ? root.layerAlpha("Unités")
                      : isTile ? 1.0 : root.layerAlpha("Objets")
-            sourceComponent: isTile ? tileComponent : (isActor ? actorComponent : objectComponent)
-            x: root.width / 2 + root.camera.panX + row.sx * scaleFactor
-               - (isTile ? 48 : isActor ? (row.imageUrl ? row.pivotX : 20) : 15) * scaleFactor
-            y: root.height / 2 + root.camera.panY + row.sy * scaleFactor
-               - (isTile ? 24 : isActor ? (row.imageUrl ? row.pivotY : 68) : 40) * scaleFactor
+            sourceComponent: isTile ? tileComponent :
+                (isActor ? actorComponent : (isBuilding ? buildingComponent : objectComponent))
+            x: root.width / 2 + root.camera.panX + renderSX * scaleFactor
+               - (isTile ? 48 : isActor ? (row.imageUrl ? row.pivotX : 20) :
+                  isBuilding ? 0 : 15) * scaleFactor
+            y: root.height / 2 + root.camera.panY + renderSY * scaleFactor
+               - (isTile ? 24 : isActor ? (row.imageUrl ? row.pivotY : 68) :
+                  isBuilding ? 0 : 40) * scaleFactor
             scale: scaleFactor
             transformOrigin: Item.TopLeft
-            z: row.zOrder
+            // Render moving actors at their interpolated feet depth.
+            z: isActor && motion.worldX !== undefined ?
+                (motion.worldX + motion.worldY) * 100 + 60 : row.zOrder
+        }
+    }
+
+    // Hover stays interactive even when its static ground tile is batched.
+    Item {
+        id: batchHover
+        readonly property var cell: root.hoveredCell
+        readonly property real ratio: root.camera.zoom
+        visible: root.showGrid && renderer.textureBatching &&
+                 cell.x !== undefined && cell.y !== undefined &&
+                 renderer.isBatchedCell(cell.x, cell.y)
+        x: root.width/2 + root.camera.panX + (cell.x - cell.y) * 48 * ratio - 48 * ratio
+        y: root.height/2 + root.camera.panY + (cell.x + cell.y) * 24 * ratio - 24 * ratio
+        width: 96 * ratio
+        height: 48 * ratio
+        z: (cell.x + cell.y) * 100 + 5
+        Shape {
+            anchors.fill: parent
+            ShapePath {
+                strokeWidth: 2
+                strokeColor: "#ffe080"
+                fillColor: "#22ffe080"
+                startX: batchHover.width / 2
+                startY: 0
+                PathLine { x: batchHover.width; y: batchHover.height / 2 }
+                PathLine { x: batchHover.width / 2; y: batchHover.height }
+                PathLine { x: 0; y: batchHover.height / 2 }
+                PathLine { x: batchHover.width / 2; y: 0 }
+            }
         }
     }
 
@@ -222,6 +301,31 @@ Item {
         }
     }
 
+    // The same projected polygons are used for drawing and surface picking.
+    // A roof is omitted by the renderer when a living unit enters the house.
+    Component {
+        id: buildingComponent
+        Item {
+            property var structure: parent.row
+            width: structure.spanX
+            height: structure.spanY
+            Shape {
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: structure.part === "roof" ? 1.6 : 0.8
+                    strokeColor: structure.part === "roof" ? "#efcf9d" : "#5d514d"
+                    fillColor: structure.color
+                    startX: structure.points[0][0]
+                    startY: structure.points[0][1]
+                    PathLine { x: structure.points[1][0]; y: structure.points[1][1] }
+                    PathLine { x: structure.points[2][0]; y: structure.points[2][1] }
+                    PathLine { x: structure.points[3][0]; y: structure.points[3][1] }
+                    PathLine { x: structure.points[0][0]; y: structure.points[0][1] }
+                }
+            }
+        }
+    }
+
     Component {
         id: actorComponent
         Item {
@@ -261,6 +365,14 @@ Item {
                 width: 19; height: 19; radius: 10
                 x: 10; y: 5
                 color: "#eacaa1"; border.color: "#62504b"
+            }
+            Rectangle {
+                visible: root.activeVisualClip.actor === actor.id &&
+                         root.activeVisualClip.kind === "attack"
+                x: parent.width * 0.70; y: parent.height * 0.28
+                width: 28; height: 4; rotation: -30 + 70 * root.activeVisualPhase
+                radius: 1
+                color: "#f2e4b6"
             }
             Text {
                 text: actor.label || actor.id
@@ -308,6 +420,66 @@ Item {
         }
     }
 
+    // Selected cells and transform ghosts share the R3 projection and camera.
+    // These scenegraph shapes accept no events and never modify Content.
+    Repeater {
+        model: root.selectionCells
+        delegate: Item {
+            required property var modelData
+            property var entry: modelData
+            x: root.width / 2 + root.camera.panX + entry.sx * root.camera.zoom
+               - 48 * root.camera.zoom
+            y: root.height / 2 + root.camera.panY + entry.sy * root.camera.zoom
+               - 24 * root.camera.zoom
+            width: 96; height: 48
+            scale: root.camera.zoom
+            transformOrigin: Item.TopLeft
+            z: 100000
+            Shape {
+                anchors.fill: parent
+                ShapePath {
+                    strokeWidth: 2.5
+                    strokeColor: "#73d6e8"
+                    fillColor: "#226edbe9"
+                    startX: 48; startY: 0
+                    PathLine { x: 96; y: 24 }
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 48; y: 0 }
+                }
+            }
+        }
+    }
+    Repeater {
+        model: root.transformCells
+        delegate: Item {
+            required property var modelData
+            property var entry: modelData
+            x: root.width / 2 + root.camera.panX + entry.sx * root.camera.zoom
+               - 48 * root.camera.zoom
+            y: root.height / 2 + root.camera.panY + entry.sy * root.camera.zoom
+               - 24 * root.camera.zoom
+            width: 96; height: 48
+            scale: root.camera.zoom
+            transformOrigin: Item.TopLeft
+            z: 200000
+            Shape {
+                anchors.fill: parent
+                opacity: 0.8
+                ShapePath {
+                    strokeWidth: 2.5
+                    strokeColor: entry.invalid ? "#ff7777" : "#ffe3a3"
+                    fillColor: entry.invalid ? "#66d44c56" : entry.tint
+                    startX: 48; startY: 0
+                    PathLine { x: 96; y: 24 }
+                    PathLine { x: 48; y: 48 }
+                    PathLine { x: 0; y: 24 }
+                    PathLine { x: 48; y: 0 }
+                }
+            }
+        }
+    }
+
     MouseArea {
         id: pointer
         anchors.fill: parent
@@ -319,6 +491,7 @@ Item {
         property real downY: 0
         property bool editing: false
         property var lastCell: ({})
+        property string lastEditHover: ""
 
         function valid(cell) {
             return cell && cell.x !== undefined && cell.y !== undefined
@@ -339,6 +512,12 @@ Item {
         onPositionChanged: function(mouse) {
             var cell = renderer.cellAt(mouse.x, mouse.y)
             root.hoveredCell = valid(cell) ? cell : ({})
+            const hoverKey = valid(cell) ? cell.x + ":" + cell.y : ""
+            if (hoverKey !== lastEditHover) {
+                lastEditHover = hoverKey
+                if (valid(cell)) root.editHover(cell.x, cell.y)
+                else root.editHoverLeft()
+            }
             var panning = (mouse.buttons & Qt.RightButton) ||
                           (root.interactionMode !== "edit" && (mouse.buttons & Qt.LeftButton))
             if (panning) {
@@ -369,7 +548,11 @@ Item {
             if (editing) root.strokeCancelled()
             editing = false
         }
-        onExited: root.hoveredCell = ({})
+        onExited: {
+            root.hoveredCell = ({})
+            lastEditHover = ""
+            root.editHoverLeft()
+        }
         onWheel: function(wheel) {
             renderer.zoomAt(wheel.angleDelta.y, wheel.x, wheel.y)
             wheel.accepted = true

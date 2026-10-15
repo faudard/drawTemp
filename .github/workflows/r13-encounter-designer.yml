@@ -5,18 +5,30 @@ on:
     paths:
       - "drawtemp/sdk/r13_encounter_authoring.py"
       - "drawtemp/sdk/r13_visual_metrics.py"
+      - "drawtemp/sdk/r13_ai_combat_visuals.py"
+      - "drawtemp/sdk/r13_movement_heatmap.py"
+      - "drawtemp/studio/r13_replay_heatmap.py"
+      - "drawtemp/studio/r13_ai_combat_panel.py"
       - "drawtemp/studio/r13_charts.py"
       - "drawtemp/studio/r13_workbench.py"
       - "tests_standalone/test_drawtemp5_r13_encounter_designer.py"
       - "tests_standalone/test_drawtemp5_r13_qt.py"
       - "tests_standalone/test_drawtemp5_r13_visual_metrics.py"
       - "tests_standalone/test_drawtemp5_r13_visual_qt.py"
+      - "tests_standalone/test_drawtemp5_r13_ai_combat_visuals.py"
+      - "tests_standalone/test_drawtemp5_r13_ai_combat_qt.py"
+      - "tests_standalone/test_drawtemp5_r13_heatmap.py"
+      - "tests_standalone/test_drawtemp5_r13_replay_qt.py"
       - ".github/workflows/r13-encounter-designer.yml"
   push:
     branches: [master]
     paths:
       - "drawtemp/sdk/r13_encounter_authoring.py"
       - "drawtemp/sdk/r13_visual_metrics.py"
+      - "drawtemp/sdk/r13_ai_combat_visuals.py"
+      - "drawtemp/sdk/r13_movement_heatmap.py"
+      - "drawtemp/studio/r13_replay_heatmap.py"
+      - "drawtemp/studio/r13_ai_combat_panel.py"
       - "drawtemp/studio/r13_charts.py"
       - "drawtemp/studio/r13_workbench.py"
       - "tests_standalone/test_drawtemp5_r13_encounter_designer.py"
@@ -43,15 +55,24 @@ jobs:
         run: python -m unittest tests_standalone.test_drawtemp5_r13_encounter_designer -v
       - name: R13.8 paired metric models and invalid reports
         run: python -m unittest tests_standalone.test_drawtemp5_r13_visual_metrics -v
+      - name: R13.8 verified AI decisions, damage and healing curves
+        run: python -m unittest tests_standalone.test_drawtemp5_r13_ai_combat_visuals -v
+      - name: R13.8 verified movement heatmaps, spawns and floors
+        run: python -m unittest tests_standalone.test_drawtemp5_r13_heatmap -v
       - name: R13 previous invariants
         run: python -m unittest tests_standalone.test_drawtemp5_r13 -v
 
   qt-encounter:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     env:
       QT_QPA_PLATFORM: offscreen
       QT_QUICK_BACKEND: software
+      R13_VISUAL_EVIDENCE_DIR: ci-evidence/r13
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -62,3 +83,15 @@ jobs:
         run: python -m unittest tests_standalone.test_drawtemp5_r13_qt -v
       - name: R13.8 visual bars offscreen rendering, click and metric selection
         run: python -m unittest tests_standalone.test_drawtemp5_r13_visual_qt -v
+      - name: R13.8 AI decision and damage/heal Qt plots
+        run: python -m unittest tests_standalone.test_drawtemp5_r13_ai_combat_qt -v
+      - name: R13.8 animated replay and heatmap visual/functional checks
+        run: python -m unittest tests_standalone.test_drawtemp5_r13_replay_qt -v
+      - name: Preserve R13 offscreen visual evidence for human inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r13-visual-evidence-${{ matrix.os }}
+          path: ci-evidence/r13/
+          if-no-files-found: warn
+          retention-days: 14
