@@ -181,6 +181,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None):
                      "blocked": t.get("blocked", False), "cover": t.get("cover", 0),
                      "hazard": t.get("hazard", 0), "goal": t.get("goal", False),
                      "blends": t.get("blends", ()),
+                     "bridgeAxis": t.get("bridgeAxis"),
                      "zOrder": (x + y) * 100})
     for o in scene["objects"]:
         x, y = o["x"], o["y"]
