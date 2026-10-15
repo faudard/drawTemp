@@ -267,7 +267,8 @@ ApplicationWindow {
                 }
                 Button {
                     text: "Restaurer auto (.bak)"
-                    enabled: root.playerData.save_manager.autosave.recoverable
+                    enabled: root.playerData.save_manager.autosave.recoverable &&
+                             root.playerData.save_manager.autosave.status !== "valid"
                     onClicked: player.restoreAutosaveBackup()
                 }
             }
