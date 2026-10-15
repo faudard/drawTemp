@@ -47,6 +47,8 @@ def main(argv=None):
     parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration"),
                         default="title", help="Exercise a real game scene during Qt smoke")
     parser.add_argument("--save-dir", type=Path, help="Separate persistent save directory")
+    parser.add_argument("--character-pack", type=Path, help="Published R7 atlas export directory")
+    parser.add_argument("--character-variant", help="Initial authored outfit ID")
     args = parser.parse_args(argv)
 
     try:
@@ -70,12 +72,14 @@ def main(argv=None):
         def view(self):
             return self.controller.state()
 
-        def invoke(self, call, *args):
+        def invoke(self, call, *args, visual=None):
             try:
                 call(*args)
                 self.renderer.replace_scene(scene_for_player(self.controller))
                 if self.controller.session is not None:
                     self.renderer.selectCell(*self.controller.selected)
+                if visual is not None:
+                    self.renderer.play_actor(*visual)
             except Exception as exc:
                 # A rejected rule/invalid save leaves the canonical Simulation intact.
                 self.controller.message = str(exc)
@@ -111,7 +115,8 @@ def main(argv=None):
 
         @Slot(int, int)
         def exploreMove(self, dx, dy):
-            self.invoke(self.controller.explore_move, dx, dy)
+            self.invoke(self.controller.explore_move, dx, dy,
+                        visual=("jeanne", "walk"))
 
         @Slot(str)
         def exploreInteract(self, target):
@@ -127,7 +132,23 @@ def main(argv=None):
 
         @Slot(str)
         def command(self, kind):
-            self.invoke(self.controller.command, kind)
+            actor_id = ""
+            if self.controller.session is not None:
+                battle = self.controller.session.snapshot().battle
+                if battle is not None:
+                    actor_id = battle.get("active", "")
+            visual = ((actor_id, "walk" if kind == "move" else "attack")
+                      if actor_id and kind in ("move", "attack") else None)
+            self.invoke(self.controller.command, kind, visual=visual)
+
+        @Slot(str, str)
+        def previewOutfit(self, actor_id, variant):
+            """Presentation-only preview; equipment and saves remain canonical."""
+            try:
+                self.renderer.set_outfit(actor_id, variant)
+            except ValueError as exc:
+                self.controller.message = str(exc)
+            self.stateChanged.emit()
 
         @Slot(str)
         def useSkill(self, skill):
@@ -168,7 +189,9 @@ def main(argv=None):
         controller.new_game()
         if controller.state()["screen"] != "exploration":
             parser.error("No exploration stage in the current campaign")
-    renderer = make_controller(scene_for_player(controller))
+    renderer = make_controller(scene_for_player(controller),
+                               character_pack=args.character_pack,
+                               character_variant=args.character_variant)
     bridge = PlayerBridge(controller, renderer)
     engine = QQmlApplicationEngine()
     engine.setInitialProperties({"smokeMode": args.smoke})
