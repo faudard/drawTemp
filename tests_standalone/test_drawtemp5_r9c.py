@@ -159,6 +159,33 @@ class R9CCanonicalCommands(unittest.TestCase):
 @unittest.skipUnless(importlib.util.find_spec("PySide6") is not None,
                      "Optional Qt 6 dependency not available")
 class R9CQtSceneSmoke(unittest.TestCase):
+    def test_two_click_graph_link_uses_real_source_and_target(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QApplication
+        from drawtemp.studio.event_graph_qt import EventGraphView
+        app = QApplication.instance() or QApplication([])
+        view = EventGraphView()
+        view.resize(930, 440)
+        view.render_events([
+            {"id": "first", "condition": "tick",
+             "actions": [{"kind": "message"}]},
+            {"id": "second", "condition": "tick",
+             "actions": [{"kind": "hazard"}]},
+        ], MISSION)
+        found = []
+        view.connectRequested.connect(
+            lambda src, dst, any_of: found.append((src, dst, any_of)))
+        view.show()
+        app.processEvents()
+        view.set_connect_mode(True, any_of=True)
+        QTest.mouseClick(view.viewport(), Qt.LeftButton,
+                         pos=view.mapFromScene(95, 95))
+        QTest.mouseClick(view.viewport(), Qt.LeftButton,
+                         pos=view.mapFromScene(443, 95))
+        self.assertEqual(found, [("first", "second", True)])
+        view.close()
+
     def test_offscreen_qml_shared_viewport_and_graph(self):
         env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
                    QT_QUICK_BACKEND="software")
