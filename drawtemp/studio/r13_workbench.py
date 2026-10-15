@@ -18,12 +18,17 @@ def launch(content_path):
     from PySide6.QtGui import QColor, QBrush, QPen
     from PySide6.QtWidgets import (
         QApplication, QFileDialog, QFormLayout, QGraphicsScene,
-        QGraphicsView, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+        QGraphicsView, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
         QPushButton, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem,
         QTabWidget, QVBoxLayout, QWidget, QComboBox, QTextEdit,
     )
 
     from sporebound.model import Content
+    from sporebound.rules import default_rules
+    from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
+    from drawtemp.sdk.r13_encounter_authoring import (
+        compare_draft, preview_authoring,
+    )
     from drawtemp.sdk.r13_combat_lab import (
         compare_encounters, evaluate_variant, human_review,
         inspect_encounter, simulate_encounter, trace_timeline,
@@ -33,10 +38,32 @@ def launch(content_path):
         ready = Signal(int, object)
         failed = Signal(int, str)
 
+    class TilePicker(QGraphicsView):
+        """Click a map tile to move the currently selected actor in the draft."""
+        tileChosen = Signal(int, int)
+
+        def __init__(self, scene):
+            super().__init__(scene)
+            self.tile_size = 24
+            self.tile_dims = (0, 0)
+
+        def mousePressEvent(self, event):
+            if event.button() == Qt.MouseButton.LeftButton:
+                point = self.mapToScene(event.position().toPoint())
+                x = int(point.x() // self.tile_size)
+                y = int(point.y() // self.tile_size)
+                if 0 <= x < self.tile_dims[0] and 0 <= y < self.tile_dims[1]:
+                    self.tileChosen.emit(x, y)
+                    event.accept()
+                    return
+            super().mousePressEvent(event)
+
     class Workbench(QMainWindow):
-        def __init__(self, content):
+        def __init__(self, content, authoring=None):
             super().__init__()
             self.content = content
+            self.authoring = authoring
+            self._approved_edits = None
             self.reference = None
             self.current = None
             self.inspection = None
@@ -76,20 +103,58 @@ def launch(content_path):
             self.tabs.addTab(designer, "Encounter Designer")
             design_layout = QVBoxLayout(designer)
             design_layout.addWidget(QLabel(
-                "Placement visuel simplifié · changements essayés en copie, jamais écrits dans la mission"))
+                "Cliquer une case pour déplacer l'unité sélectionnée. Prévisualisation non destructive ; "
+                "application uniquement après validation explicite."))
+            options = QHBoxLayout()
+            design_layout.addLayout(options)
+            options.addWidget(QLabel("Objectif"))
+            self.objective = QComboBox()
+            self.objective.addItems([key for key, _ in default_rules().objectives.entries])
+            options.addWidget(self.objective)
+            options.addWidget(QLabel("Cases d'objectif (x,y; x,y)"))
+            self.goal_cells = QLineEdit()
+            self.goal_cells.setPlaceholderText("2,3; 4,3")
+            options.addWidget(self.goal_cells, 1)
+            options.addWidget(QLabel("Ticks"))
+            self.target_ticks = QSpinBox()
+            self.target_ticks.setRange(1, 100000)
+            options.addWidget(self.target_ticks)
+            options.addWidget(QLabel("Protéger"))
+            self.protected = QComboBox()
+            options.addWidget(self.protected)
             split = QSplitter(Qt.Orientation.Horizontal)
             design_layout.addWidget(split, 1)
             self.scene = QGraphicsScene()
-            self.map = QGraphicsView(self.scene)
+            self.map = TilePicker(self.scene)
+            self.map.tileChosen.connect(self._move_selected_unit)
             split.addWidget(self.map)
             right = QWidget()
             right_layout = QVBoxLayout(right)
-            self.units = QTableWidget(0, 4)
-            self.units.setHorizontalHeaderLabels(["Unité", "Équipe", "X", "Y"])
+            self.units = QTableWidget(0, 6)
+            self.units.setHorizontalHeaderLabels(
+                ["Unité", "Équipe", "X", "Y", "Arme", "IA"])
             right_layout.addWidget(self.units, 1)
-            self.trial = QPushButton("Simuler la variante de placement")
+            self.trial = QPushButton("Prévisualiser & simuler A/B")
             self.trial.clicked.connect(self._start_trial)
             right_layout.addWidget(self.trial)
+            author_actions = QHBoxLayout()
+            right_layout.addLayout(author_actions)
+            self.apply_button = QPushButton("Appliquer")
+            self.apply_button.clicked.connect(self._apply_draft)
+            author_actions.addWidget(self.apply_button)
+            self.undo_button = QPushButton("Annuler")
+            self.undo_button.clicked.connect(self._undo)
+            author_actions.addWidget(self.undo_button)
+            self.redo_button = QPushButton("Refaire")
+            self.redo_button.clicked.connect(self._redo)
+            author_actions.addWidget(self.redo_button)
+            self.save_button = QPushButton("Enregistrer")
+            self.save_button.clicked.connect(self._save_authoring)
+            author_actions.addWidget(self.save_button)
+            for widget in (self.apply_button, self.undo_button,
+                           self.redo_button, self.save_button):
+                widget.setEnabled(self.authoring is not None)
+            self.apply_button.setEnabled(False)
             self.trial_result = QTextEdit()
             self.trial_result.setReadOnly(True)
             right_layout.addWidget(self.trial_result, 1)
@@ -128,6 +193,9 @@ def launch(content_path):
                 "#", "Acteur", "Action", "Position", "Événements"])
             lab_layout.addWidget(self.timeline, 1)
             self._refresh(self.mission.currentText())
+            if self.authoring is None:
+                self.status.setText(
+                    "Essai uniquement : projet R1 non ouvert (GameProject manquant ou incompatible).")
 
         def _refresh(self, mission_id):
             if not mission_id:
@@ -137,15 +205,29 @@ def launch(content_path):
             self.run_button.setEnabled(True)
             self.trial.setEnabled(True)
             self.status.setText("Mission : " + mission_id)
+            self._approved_edits = None
+            self.apply_button.setEnabled(False)
             try:
                 self.inspection = inspect_encounter(self.content, mission_id)
             except Exception as exc:
                 self._show_error(str(exc))
                 return
+            mission = self.content.missions[mission_id]
+            self.objective.setCurrentText(mission.objective)
+            self.goal_cells.setText("; ".join(
+                "{},{}".format(*cell) for cell in mission.goal))
+            self.target_ticks.setValue(mission.target_ticks)
+            self.protected.clear()
+            self.protected.addItem("")
+            self.protected.addItems([u.id for u in mission.units
+                                     if u.team == "player"])
+            self.protected.setCurrentText(mission.protected_id)
             units = self.inspection["profile"]["units"]
             self.units.setRowCount(len(units))
+            authored = {u.id: u for u in mission.units}
             for index, unit in enumerate(units):
-                fields = [unit["id"], unit["team"], *map(str, unit["pos"])]
+                fields = [unit["id"], unit["team"], *map(str, unit["pos"]),
+                          authored[unit["id"]].weapon, authored[unit["id"]].behavior]
                 for col, value in enumerate(fields):
                     item = QTableWidgetItem(value)
                     if col < 2:
@@ -192,6 +274,8 @@ def launch(content_path):
                 self.scene.addEllipse(x*cell+3, y*cell+3, cell-6, cell-6,
                                       QPen(QColor("#202020")), QBrush(QColor(color)))
             self.scene.setSceneRect(0, 0, cell*width, cell*height)
+            self.map.tile_size = cell
+            self.map.tile_dims = (width, height)
 
         def _read_placements(self):
             updates = {}
