@@ -49,7 +49,9 @@ class EventStudio:
 
     def inspect(self, mission_id, event_id):
         state = self.documents()
-        content = Content.from_dict(state["content"])
+        from sporebound.tactical_rpg3 import authored_rules_for_document
+        content = Content.from_dict(
+            state["content"], rules=authored_rules_for_document(state["content"]))
         project = GameProject.from_dict(state["project"], content)
         return inspect_event(state["content"], mission_id, event_id, project)
 
