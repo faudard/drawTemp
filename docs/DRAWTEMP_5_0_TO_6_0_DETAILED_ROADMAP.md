@@ -24,6 +24,8 @@
 
 ## 1. Baseline vérifiée et risques de fusion
 
+**Addendum du 17 octobre 2026 — [R17.A / INT-CROSS-01](drawtemp5/R17_MERGE_LEDGER.md) :** audit reproductible dans [#277](https://github.com/faudard/drawTemp/pull/277). La fusion #248 est désormais dans master ; #264 y est ancêtre. En revanche, les merge commits #263 (R9.C) et #273 (R9.D) ne sont toujours pas ancêtres de master et plusieurs fichiers d'événements sont absents : restauration R17.C requise avant fermeture du gate. Il s'agit d'une *preuve d'historique et de fichiers*, pas d'une certification fonctionnelle.
+
 État ponctuel GitHub au 15/10/2026 :
 - [#248 R7.B](https://github.com/faudard/drawTemp/pull/248) est la PR encore ouverte lors de la vérification. Son état de mergeabilité peut changer : contrôler sa base et sa CI avant fusion.
 - [#264 R7.C](https://github.com/faudard/drawTemp/pull/264), costumes Jeanne/équipement, a été fusionnée **vers la branche de #248**, et non directement vers master ; prouver sa présence après intégration finale.
