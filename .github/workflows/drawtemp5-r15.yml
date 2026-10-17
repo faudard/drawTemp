@@ -108,6 +108,10 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       # Deliberately NO checkout, setup-python, pip, or Studio in this job.
+      # libEGL/libOpenGL are documented OS runtime prerequisites, not Python.
+      - name: Linux Qt system runtime (no Python/Studio install)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
       - name: Download only the released game archive
         uses: actions/download-artifact@v4
         with:
@@ -123,9 +127,14 @@ jobs:
           PYTHONNOUSERSITE: '1'
         run: |
           set -euo pipefail
-          dest="$RUNNER_TEMP/r17-fresh-player"
+          runtime_temp="$RUNNER_TEMP"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # Git Bash tar interprets D:/... as a remote archive; use POSIX path.
+            runtime_temp="$(cygpath -u "$RUNNER_TEMP")"
+          fi
+          dest="$runtime_temp/r17-fresh-player"
           mkdir -p "$dest"
-          tar -xzf "$RUNNER_TEMP/r17-game-download/r15-bundle-${{ runner.os }}.tar.gz" -C "$dest"
+          tar -xzf "$runtime_temp/r17-game-download/r15-bundle-${{ runner.os }}.tar.gz" -C "$dest"
           cd "$dest/Jeanne"
           test -f manifest.json
           test -f game/jeanne.json
@@ -142,13 +151,13 @@ jobs:
           "$player" --smoke --smoke-scene exploration
           printf '\nTamper rejection (mandatory):\n'
           printf '\nR17-NEGATIVE-TAMPER\n' >> game/jeanne.json
-          if "$player" --smoke > "$RUNNER_TEMP/r17-tamper.log" 2>&1; then
+          if "$player" --smoke > "$runtime_temp/r17-tamper.log" 2>&1; then
             echo "FAIL: native Player accepted modified game assets"
             exit 1
           fi
-          if ! grep -qi "integrity failure" "$RUNNER_TEMP/r17-tamper.log"; then
+          if ! grep -qi "integrity failure" "$runtime_temp/r17-tamper.log"; then
             echo "FAIL: expected integrity failure, got:"
-            cat "$RUNNER_TEMP/r17-tamper.log"
+            cat "$runtime_temp/r17-tamper.log"
             exit 1
           fi
           echo "R17.8 isolated-runner smoke + fail-closed tamper gate passed"
