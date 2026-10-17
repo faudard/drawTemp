@@ -73,6 +73,8 @@
 
 ## 3. R17 — Post-merge Integration & Release Readiness
 
+> **Avancement du 17 octobre 2026, code en PR non fusionné :** [#280 R17.C1](https://github.com/faudard/drawTemp/pull/280) restitue le moteur R9.D (pages, priorité, activation, répétition, replay et édition transactionnelle) et son workflow dédiée ; [#281 R17.C2](https://github.com/faudard/drawTemp/pull/281), empilée sur #280, restitue le graphe Qt, les commandes typées, la présentation narrative et les marqueurs ISO. La CI R17.C1 a réussi sur le dernier SHA examiné ; la matrice complète, la certification GUI/GPU et l'E2E porte/levier/Player/export restent **ouverts**. Ces deux PR ne constituent pas encore un jalon R17.3 validé dans master.
+
 **But :** terminer les contrats 5.0, fermer les écarts d'intégration, sans ajouter une nouvelle architecture.
 
 | ID | Priorité | Livrable vérifiable et comportement attendu | Dépendances et preuves |
