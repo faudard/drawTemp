@@ -85,4 +85,8 @@ def authored_rules_for_document(data):
     if r6_objective:
         from .tactical_r6 import tactical_r6_rules
         rules = tactical_r6_rules()
+    # Opt-in R9.D pages cannot change legacy rule manifests or old replays.
+    from .event_pages import has_pages, page_rules
+    if has_pages(data):
+        rules = page_rules(rules)
     return rules
