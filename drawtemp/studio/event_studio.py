@@ -144,6 +144,42 @@ def main(argv=None):
             basic_form.addRow(self.button("Modifier déclencheur", self.set_condition))
             self.tabs.addTab(basics, "Propriétés")
 
+            # R9.D: pages share the canonical trigger identity. The highest
+            # eligible priority wins; policies are validated in Content.
+            page_tab = QWidget()
+            page_form = QFormLayout(page_tab)
+            self.page_list = QComboBox()
+            self.page_list.currentIndexChanged.connect(self.page_selected)
+            self.page_priority = QSpinBox()
+            self.page_priority.setRange(-100, 100)
+            self.page_enabled = QCheckBox("Page active")
+            self.page_repeat = QCheckBox("Répéter (une fois par cooldown)")
+            self.page_cooldown = QSpinBox()
+            self.page_cooldown.setRange(1, 10000)
+            self.page_cooldown.setValue(1)
+            self.page_condition = QComboBox()
+            self.page_condition.addItems(["tick", "interact", "enter", "defeated",
+                                          "hp_below", "wave_capacity"])
+            self.page_value = QLineEdit("0")
+            self.page_value.setPlaceholderText("0 | levier | x,y | unité | unité,%")
+            self.page_actions = QListWidget()
+            self.page_actions.setMaximumHeight(115)
+            page_form.addRow("Page", self.page_list)
+            page_form.addRow("Priorité", self.page_priority)
+            page_form.addRow(self.page_enabled)
+            page_form.addRow(self.page_repeat)
+            page_form.addRow("Cooldown (ticks)", self.page_cooldown)
+            page_form.addRow("Condition de la page", self.page_condition)
+            page_form.addRow("Valeur", self.page_value)
+            page_form.addRow("Actions de la page", self.page_actions)
+            page_form.addRow(self.button("Créer une page…", self.create_page))
+            page_form.addRow(self.button("Appliquer la politique", self.configure_page))
+            page_form.addRow(self.button("Modifier la condition", self.set_page_condition))
+            page_form.addRow(self.button("Ajouter une action…", self.add_page_action))
+            page_form.addRow(self.button("Retirer l'action sélectionnée", self.remove_page_action))
+            page_form.addRow(self.button("Supprimer la page", self.delete_page))
+            self.tabs.addTab(page_tab, "Pages & états")
+
             predicates = QWidget()
             predicates_form = QFormLayout(predicates)
             self.pred_kind = QComboBox()
@@ -382,8 +418,113 @@ def main(argv=None):
             else:
                 self.event_label.setText("Sélectionnez un événement")
                 self.pred_summary.clear()
+            self.refresh_pages()
             self.render_graph()
             self.render_map()
+
+        def refresh_pages(self):
+            self.page_list.blockSignals(True)
+            chosen = self.page_list.currentData()
+            self.page_list.clear()
+            if self.eid():
+                for page in self.studio.event_pages(self.mid(), self.eid()):
+                    self.page_list.addItem(
+                        page["id"] + " (priorité " +
+                        str(page.get("priority", 0)) + ")", page["id"])
+            match = self.page_list.findData(chosen)
+            self.page_list.setCurrentIndex(max(0, match))
+            self.page_list.blockSignals(False)
+            self.page_selected()
+
+        def page_selected(self, *_):
+            if not self.eid():
+                return
+            chosen = self.page_list.currentData() or "base"
+            page = next((p for p in self.studio.event_pages(self.mid(), self.eid())
+                         if p["id"] == chosen), None)
+            if page is None:
+                return
+            self.page_priority.setValue(page.get("priority", 0))
+            self.page_priority.setEnabled(chosen != "base")
+            self.page_enabled.setChecked(page.get("enabled", True))
+            self.page_repeat.setChecked(page.get("repeat", False))
+            self.page_cooldown.setValue(page.get("cooldown_ticks", 1))
+            self.page_condition.setCurrentText(page["condition"])
+            self.page_actions.clear()
+            for action in page["actions"]:
+                self.page_actions.addItem(action_title(action))
+
+        def create_page(self):
+            if not self.eid():
+                return
+            page_id, ok = QInputDialog.getText(
+                self, "Nouvelle page", "ID unique de la page")
+            if not ok or not page_id.strip():
+                return
+            self.perform(lambda: self.studio.add_page(
+                self.mid(), self.eid(), page_id=page_id.strip(),
+                priority=self.page_priority.value(),
+                condition=make_condition(self.page_condition.currentText(),
+                                         self.page_value.text()),
+                actions=[action("message", text="Nouvelle page")],
+                enabled=self.page_enabled.isChecked(),
+                repeat=self.page_repeat.isChecked(),
+                cooldown_ticks=self.page_cooldown.value()))
+
+        def configure_page(self):
+            if self.eid() and self.page_list.currentData():
+                page_id = self.page_list.currentData()
+                priority = self.page_priority.value() if page_id != "base" else None
+                self.perform(lambda: self.studio.configure_page(
+                    self.mid(), self.eid(), page_id, priority=priority,
+                    enabled=self.page_enabled.isChecked(),
+                    repeat=self.page_repeat.isChecked(),
+                    cooldown_ticks=(self.page_cooldown.value()
+                                    if self.page_repeat.isChecked() else None)))
+
+        def set_page_condition(self):
+            if not self.eid() or self.page_list.currentData() == "base":
+                return
+            self.perform(lambda: self.studio.edit_page(
+                self.mid(), self.eid(), self.page_list.currentData(),
+                condition=make_condition(self.page_condition.currentText(),
+                                         self.page_value.text())))
+
+        def add_page_action(self):
+            if not self.eid() or self.page_list.currentData() == "base":
+                return
+            try:
+                edited = self._command_dialog()
+                if edited:
+                    from drawtemp.studio.event_command_catalog import tactical_action
+                    kind, fields = edited
+                    page_id = self.page_list.currentData()
+                    page = next(p for p in self.studio.event_pages(
+                        self.mid(), self.eid()) if p["id"] == page_id)
+                    actions = page["actions"] + [tactical_action(kind, fields)]
+                    self.perform(lambda: self.studio.edit_page(
+                        self.mid(), self.eid(), page_id, actions=actions))
+            except Exception as exc:
+                QMessageBox.warning(self, "Commande invalide", str(exc))
+
+        def remove_page_action(self):
+            if not self.eid() or self.page_list.currentData() == "base":
+                return
+            index = self.page_actions.currentRow()
+            if index < 0:
+                return
+            page_id = self.page_list.currentData()
+            page = next(p for p in self.studio.event_pages(
+                self.mid(), self.eid()) if p["id"] == page_id)
+            self.perform(lambda: self.studio.edit_page(
+                self.mid(), self.eid(), page_id,
+                actions=[a for i, a in enumerate(page["actions"]) if i != index]))
+
+        def delete_page(self):
+            if self.eid() and self.page_list.currentData() not in (None, "base"):
+                page_id = self.page_list.currentData()
+                self.perform(lambda: self.studio.delete_page(
+                    self.mid(), self.eid(), page_id))
 
         def create_event(self):
             mid = self.mid()
@@ -458,6 +599,11 @@ def main(argv=None):
                     editor.setRange(0, 10000)
                     editor.setValue(int(value) if value != "" else
                                     (14 if key == "max_active" else 1))
+                elif type_name == "boolean":
+                    editor = QComboBox()
+                    editor.addItems(["true", "false"])
+                    editor.setCurrentText("true" if value is True else
+                                          "false" if value is False else "true")
                 elif type_name == "team":
                     editor = QComboBox()
                     editor.addItems(["enemy", "player"])
@@ -478,7 +624,7 @@ def main(argv=None):
             for key, _, type_name in action_catalogue()[kind]:
                 editor = editors[key]
                 raw[key] = (editor.value() if type_name == "integer" else
-                            editor.currentText() if type_name == "team" else
+                            editor.currentText() if type_name in ("team", "boolean") else
                             editor.text())
             return kind, raw
 
