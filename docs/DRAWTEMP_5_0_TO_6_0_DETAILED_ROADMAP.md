@@ -73,6 +73,8 @@
 
 ## 3. R17 — Post-merge Integration & Release Readiness
 
+> **R17.D — test de liaison Studio→Player, ouvert en [#282](https://github.com/faudard/drawTemp/pull/282)** (base #281, dépend de #280) : parcours automatisé levier/porte/page prioritaire/scène/cinématique, persistance de la paire Content+GameProject, replay/journal, Player sauvegarde et reprise, plus chargement QML de la même mission. Corrige aussi la validation des règles R9.D dans les transactions croisées `EventStudio`. **Ne clôt ni R17.3 ni R17.12 :** validation onscreen et export réellement autonome non certifiés ; CI de #282 à examiner au SHA final. Voir [rapport R17.D](drawtemp5/R17D_STUDIO_PLAYER_E2E.md).
+
 > **Avancement du 17 octobre 2026, code en PR non fusionné :** [#280 R17.C1](https://github.com/faudard/drawTemp/pull/280) restitue le moteur R9.D (pages, priorité, activation, répétition, replay et édition transactionnelle) et son workflow dédiée ; [#281 R17.C2](https://github.com/faudard/drawTemp/pull/281), empilée sur #280, restitue le graphe Qt, les commandes typées, la présentation narrative et les marqueurs ISO. La CI R17.C1 a réussi sur le dernier SHA examiné ; la matrice complète, la certification GUI/GPU et l'E2E porte/levier/Player/export restent **ouverts**. Ces deux PR ne constituent pas encore un jalon R17.3 validé dans master.
 
 **But :** terminer les contrats 5.0, fermer les écarts d'intégration, sans ajouter une nouvelle architecture.
