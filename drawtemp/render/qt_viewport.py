@@ -44,6 +44,10 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self._building_cutaway = False
             self._items = []
             self._base_items = []
+            # Keep the R4-decorated visual baseline separate from R7 per-frame
+            # overrides. Missing frames must restore the baseline, not retain
+            # an old sprite's imageUrl/atlas rectangle from the prior tick.
+            self._visual_base_items = []
             self._elapsed_ms = 0
             self.assets = assets
             self._index = TileChunkIndex(scene)
@@ -146,6 +150,8 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                 self._batch_rows, self._batched_ids = self._batch.prepare(self._items)
             else:
                 self._batch_rows, self._batched_ids = [], set()
+            self._visual_base_items = self._items
+            self._items = [dict(row) for row in self._visual_base_items]
             self.decorate_frames(self._items)
             self._filter_visible_items()
             self.sceneChanged.emit()
@@ -183,7 +189,9 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             """Tick just the actor frames; do not recompute/cull terrain at 12 Hz."""
             if self._character is None:
                 return
-            rows = [dict(row) for row in self._items]
+            # Re-sample from undecorated R4 rows rather than the previous
+            # R7 frame; a missing idle/death frame must not display stale art.
+            rows = [dict(row) for row in self._visual_base_items]
             self.decorate_frames(rows)
             if rows != self._items:
                 self._items = rows
@@ -295,8 +303,9 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                 return
             if self.assets is not None and self.assets.has_animations:
                 self._elapsed_ms += delta_ms
-                self._items = self.assets.decorate(
+                self._visual_base_items = self.assets.decorate(
                     self._base_items, elapsed_ms=self._elapsed_ms)
+                self._items = [dict(row) for row in self._visual_base_items]
                 self.decorate_frames(self._items)
                 self._filter_visible_items()
                 self.sceneChanged.emit()
