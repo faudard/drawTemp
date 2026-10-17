@@ -23,6 +23,16 @@ from sporebound.event_context import inspect_event, preview_event, format_previe
 from sporebound.event_debugger import EventDebugger, format_debug_report
 
 
+def _authored_content(data):
+    """Validate current Content with its opt-in R6/R9 rule manifest.
+
+    Story and cinematic edits must use the same contract as AuthoringSession.
+    Falling back to default_rules() rejects already-authored event pages.
+    """
+    from sporebound.tactical_rpg3 import authored_rules_for_document
+    return Content.from_dict(data, rules=authored_rules_for_document(data))
+
+
 class EventStudio:
     """Headless view-model shared by the Qt event workspace and its tests."""
 
@@ -52,9 +62,7 @@ class EventStudio:
 
     def inspect(self, mission_id, event_id):
         state = self.documents()
-        from sporebound.tactical_rpg3 import authored_rules_for_document
-        content = Content.from_dict(
-            state["content"], rules=authored_rules_for_document(state["content"]))
+        content = _authored_content(state["content"])
         project = GameProject.from_dict(state["project"], content)
         return inspect_event(state["content"], mission_id, event_id, project)
 
@@ -139,14 +147,13 @@ class EventStudio:
             mission_id, "story-choice-effect",
             lambda data, project: (
                 data, story_authoring.add_effect(
-                    project, Content.from_dict(data), scene_id, choice_id,
+                    project, _authored_content(data), scene_id, choice_id,
                     payload)))
 
     def iso_scene(self, mission_id):
         """Canonical Content → shared R3 Renderer scene, detached from the editor."""
-        from sporebound.tactical_rpg3 import authored_rules_for_document
         data = self.documents()["content"]
-        content = Content.from_dict(data, rules=authored_rules_for_document(data))
+        content = _authored_content(data)
         return scene_from_mission(content.missions[mission_id])
 
 
@@ -234,7 +241,7 @@ class EventStudio:
 
     def _pair(self, mission_id, kind, edit):
         def transform(content, project):
-            game_project = GameProject.from_dict(project, Content.from_dict(content))
+            game_project = GameProject.from_dict(project, _authored_content(content))
             new_content, new_project = edit(content, game_project)
             if isinstance(new_project, GameProject):
                 new_project = new_project.to_dict()
@@ -247,13 +254,13 @@ class EventStudio:
         """A scene is stored only in GameProject.story; event references remain canonical."""
         return self._pair(mission_id, "scene", lambda data, project:
                           (data, story_authoring.create_scene(
-                              project, Content.from_dict(data), scene_id, title, text,
+                              project, _authored_content(data), scene_id, title, text,
                               speaker=speaker)))
 
     def bind_scene(self, mission_id, event_id, scene_id):
         return self._pair(mission_id, "scene-binding", lambda data, project:
                           (data, story_authoring.set_tactical_scene(
-                              project, Content.from_dict(data), mission_id,
+                              project, _authored_content(data), mission_id,
                               event_id, scene_id)))
 
     def gate_wizard(self, mission_id, **kwargs):
@@ -292,7 +299,7 @@ class EventStudio:
         """Read-only branch diagnostics; synthetic previews are not replay proof."""
         state = self.documents()
         content = state["content"]
-        project = GameProject.from_dict(state["project"], Content.from_dict(content))
+        project = GameProject.from_dict(state["project"], _authored_content(content))
         structural = audit_branch_coverage(project.story, content, mission_id)
         results = [structural]
         if probe:
@@ -376,7 +383,7 @@ class EventStudio:
     def debugger(self, mission_id, event_id, *, scenario="satisfied"):
         state = self.documents()
         game_project = GameProject.from_dict(
-            state["project"], Content.from_dict(state["content"]))
+            state["project"], _authored_content(state["content"]))
         engine = EventDebugger(state["content"], mission_id, event_id,
                                project=game_project, scenario=scenario)
         for _ in range(len(engine.chain)):
