@@ -153,7 +153,8 @@ def certify_trace(content, project, campaign_id, commands, *,
                     *deepcopy(command.args), **deepcopy(command.kwargs))
                 recorded = continuous.recording()
                 second = replayed.recording()
-                if (_without_ephemeral_ids(recorded, continuous_ids) !=\n                        _without_ephemeral_ids(second, resumed_ids)):
+                if (_without_ephemeral_ids(recorded, continuous_ids) !=
+                        _without_ephemeral_ids(second, resumed_ids)):
                     raise CertificationError("runtime_divergence",
                                              "Continuous and independently resumed engines differ")
                 # Verify CT, RNG, event streams and front timelines *before*
