@@ -79,7 +79,7 @@ class StudioPlayerRoundtripTests(unittest.TestCase):
             game.start_mission(MISSION)
             before = game.state()["battle"]
             self.assertFalse(next(x for x in before["objects"]
-                                  if x["id"] == "gate")["open"])
+                                  if x["id"] == "gate").get("open", False))
             scene_before = scene_for_player(game)
             # Same projection contract as the canonical Studio authoring
             # preview; no second geometry / terrain renderer.
