@@ -73,6 +73,8 @@
 
 ## 3. R17 — Post-merge Integration & Release Readiness
 
+> **R17.8 — correction d'export en [PR #283](https://github.com/faudard/drawTemp/pull/283), non fusionnée :** un atlas PNG partagé par plusieurs régions de sprites ne doit être exporté qu'une fois. Le validateur conserve les erreurs sur fichiers absents, collisions de casse, licences et SHA. La workflow R15 ajoute un deuxième runner sans checkout et sans installation du Studio/Python développeur pour lancer le Player extrait et vérifier le refus d'un bundle modifié (Windows/Linux/macOS). La certification *machine utilisateur vierge*, les signatures et les licences restent ouvertes ; **ne pas fermer R17.8/R17.12 sur les seuls smokes offscreen**. Voir [détails R17.8](drawtemp5/R17_8_ISOLATED_NATIVE_EXPORT.md).
+
 **But :** terminer les contrats 5.0, fermer les écarts d'intégration, sans ajouter une nouvelle architecture.
 
 | ID | Priorité | Livrable vérifiable et comportement attendu | Dépendances et preuves |
