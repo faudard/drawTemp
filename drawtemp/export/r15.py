@@ -50,17 +50,25 @@ def preflight(content_path, *, require_licenses=False):
         result["missions"] = [m["id"] for m in content["missions"]]
         result["errors"].extend(
             issue["message"] for issue in registry.diagnostics(source.parent))
-        seen = set()
+        # Several sprite regions legitimately share one atlas PNG. Export a
+        # physical file once, but refuse ambiguous case-folding collisions
+        # that would overwrite a different file on Windows/macOS.
+        seen = {}
         for entry in registry.to_dict()["entries"]:
             if entry["kind"] == "animation":
                 continue
             relative = entry["path"]
-            if relative.casefold() in seen:
-                result["errors"].append("Duplicate asset path: " + relative)
+            folded = relative.casefold()
+            previous = seen.get(folded)
+            if previous is not None:
+                if previous != relative:
+                    result["errors"].append(
+                        "Non-portable asset path collision: " + previous +
+                        " vs " + relative)
                 continue
-            seen.add(relative.casefold())
+            seen[folded] = relative
             try:
-                asset = safe_asset_path(source.parent, relative)
+                safe_asset_path(source.parent, relative)
             except (ValueError, OSError) as exc:
                 result["errors"].append(f"{relative}: {exc}")
                 continue
