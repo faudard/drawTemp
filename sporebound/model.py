@@ -522,6 +522,12 @@ class Content:
                     validate_composite(context, trigger['when'])
                 for action in trigger['actions']:
                     rules.trigger_actions.get(action['kind']).validate(context, action)
+            # Extra event pages are opt-in, but use the SAME rule registries
+            # and cross-reference tables as existing Mission.triggers.
+            from .rules.triggers import ValidationContext
+            from .event_pages import validate_pages
+            validate_pages(m, ValidationContext(
+                b, ids, rules, self.archetypes, object_ids), rules)
             from .editor_groups import validate_editor_groups
             validate_editor_groups(m)
         def unlock_rule(rule):
