@@ -73,6 +73,8 @@
 
 ## 3. R17 — Post-merge Integration & Release Readiness
 
+> **R17.5 — contrôle de parité en [#284](https://github.com/faudard/drawTemp/pull/284), PR ouverte :** les vrais `RendererController` R3 de Studio R5 et Player R12 sont comparés sur leurs scènes visuelles, ordre/délégués, atlas, couches, relief, caméra et picking. Un test Qt instancie les deux façades QML de production et produit des captures et un PNG de différences Windows/Linux/macOS. Test négatif obligatoire sur altitude modifiée. **Statut : tests CI à confirmer, goldens approuvés et GPU matériel toujours ouverts** ; ne pas marquer R17.5 ni R17.9 comme certifiés. Voir [rapport R17.5](drawtemp5/R17_5_RENDERER_PARITY.md).
+
 **But :** terminer les contrats 5.0, fermer les écarts d'intégration, sans ajouter une nouvelle architecture.
 
 | ID | Priorité | Livrable vérifiable et comportement attendu | Dépendances et preuves |

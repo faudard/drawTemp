@@ -1,0 +1,60 @@
+name: DrawTemp R17.5 Renderer Equivalence
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/quality/r17_renderer_parity.py'
+      - 'tests_standalone/test_r17_renderer_parity.py'
+      - 'docs/drawtemp5/R17_5_RENDERER_PARITY.md'
+      - '.github/workflows/drawtemp-r17-renderer-parity.yml'
+      - 'drawtemp/render/**'
+      - 'drawtemp/studio/map_editor.py'
+      - 'drawtemp/player/qt_app.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Visual source contracts and fail-closed mismatch detection
+        run: python -m unittest tests_standalone.test_r17_renderer_parity.RendererParityContracts -v
+  real-qt-renderers:
+    name: Studio Widget vs Player TacticalBoard / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt EGL/OpenGL system prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]"
+      - name: R17.5 real QML pixels and real Controller comparison
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          DRAWTEMP_R17_PARITY_DIR: ${{ github.workspace }}/artifacts/r17-parity
+        run: python -m unittest tests_standalone.test_r17_renderer_parity -v
+      - name: Existing shared renderer smoke
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_drawtemp5_shared_viewport.SharedRendererContractTests tests_standalone.test_drawtemp5_shared_viewport.SharedRendererQtSmoke -v
+      - name: Collect render evidence (not approved goldens)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r17-parity-${{ runner.os }}
+          path: artifacts/r17-parity/**
+          if-no-files-found: warn
