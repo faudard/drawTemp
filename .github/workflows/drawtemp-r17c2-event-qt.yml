@@ -1,0 +1,48 @@
+name: DrawTemp R17.C2 Event Studio Qt
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/event_studio.py'
+      - 'drawtemp/studio/events.py'
+      - 'drawtemp/studio/event_graph_qt.py'
+      - 'drawtemp/studio/event_command_catalog.py'
+      - 'drawtemp/studio/event_presentation.py'
+      - 'drawtemp/render/event_overlay.py'
+      - 'drawtemp/render/qt_viewport.py'
+      - 'drawtemp/render/IsoViewport.qml'
+      - 'tests_standalone/test_drawtemp5_r9c.py'
+      - '.github/workflows/drawtemp-r17c2-event-qt.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  command-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e .
+      - name: R9.C typed commands, presentation hooks and R9.D page rules
+        run: python -m unittest tests_standalone.test_drawtemp5_r9c tests_standalone.test_drawtemp5_r9d tests_standalone.test_r17c_event_integration -v
+  qt-event-studio:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt graphical dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]"
+      - name: Real graph gesture and shared viewport
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_drawtemp5_r9c tests_standalone.test_drawtemp5_r9 -v
