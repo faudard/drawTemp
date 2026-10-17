@@ -134,6 +134,9 @@ class R9DPageContracts(unittest.TestCase):
         content = Content.from_dict(data["content"], rules=rules)
         project = GameProject.from_dict(data["project"], content)
         session = GameSession.new(content, project, "main")
+        # The reference campaign locks the encounter behind its first story
+        # choice. Start via the same path a real Player must use.
+        session.choose_story_option("enter")
         session.start_mission(MISSION)
         before = session.recording()
         restored = GameSession.from_recording(before, content, project)
