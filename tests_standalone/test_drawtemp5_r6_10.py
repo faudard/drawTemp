@@ -64,8 +64,13 @@ class BuildingGameplayR610Tests(unittest.TestCase):
         self.assertTrue(any(obj["kind"] == "door" and tuple(obj["pos"]) == landing
                             for obj in mission["objects"]))
         workspace.undo()
-        self.assertFalse(any(o["kind"] == "door" for o in
-                             session.snapshot().to_dict()["content"]["missions"][0]["objects"]))
+        # R0's fixture already owns a switch-linked gate. Undo must remove
+        # only the newly authored building entrance, never that original door.
+        undone = next(m for m in session.snapshot().to_dict()["content"]["missions"]
+                      if m["id"] == MISSION)
+        self.assertFalse(any(o["id"] != "gate" and o["kind"] == "door"
+                             for o in undone["objects"]))
+        self.assertTrue(any(o["id"] == "gate" for o in undone["objects"]))
         workspace.redo()
         self.assertEqual(len(workspace.inspect().levels), 2)
         with TemporaryDirectory() as folder:
@@ -144,7 +149,9 @@ class BuildingGameplayR610Tests(unittest.TestCase):
             b.execute({"kind": "door_toggle", "object": door})
         self.assertEqual(b.digest(), before)
         self.assertFalse(b.board.tile((4, 5)).blocked)
-        actor.pos = (4, 6)
+        # A rejected Battle.execute rolls back by restoring its own deep copy.
+        # The old local 'actor' is detached from the restored Battle object.
+        b.active.pos = (4, 6)
         before = b.digest()
         with self.assertRaises(RuleError):
             b.execute({"kind": "door_toggle", "object": "missing"})
