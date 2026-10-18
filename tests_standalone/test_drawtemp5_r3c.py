@@ -115,7 +115,12 @@ class SharedCompositorTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         board = (root / "drawtemp/render/TacticalBoard.qml").read_text()
         viewport = (root / "drawtemp/render/IsoViewport.qml").read_text()
-        self.assertNotIn("id: motionGhost", board)
+        # R12.7 introduces a transient presentation sprite while an action
+        # is playing. It is not a second persistent terrain/actor renderer:
+        # the shared R3 actor is concealed during the committed clip.
+        self.assertIn('objectName: "r12-motion-ghost"', board)
+        self.assertIn("visible: board.playing &&", board)
+        self.assertIn("concealedActorIds =", board)
         self.assertIn("activeVisualClip:", board)
         self.assertIn("renderer.motionPoint", viewport)
         self.assertIn("id: buildingComponent", viewport)
