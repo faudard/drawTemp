@@ -258,9 +258,17 @@ class ProjectWorkspaceTab:
         ui_started = begin_ui()
         model = self.model()
         sections = model.sections
+        # Other Studio tabs (notably the cinematic trigger editor) can cause
+        # Tk virtual selection events while the Workspace is being refreshed.
+        # An obsolete/persisted family is a UI selection, not an invalid
+        # project document: recover to 'all' instead of raising in a callback.
+        family = self.family_filter.get()
+        if family != 'all' and family not in sections:
+            family = 'all'
+            self.family_filter.set(family)
         shown = self.explorer.shown(
             model, self.query.get(),
-            kind=self.family_filter.get(), scope=self.scope_filter.get())
+            kind=family, scope=self.scope_filter.get())
         self._populate_tree(self.tree, sections, shown)
         if self.sidebar_tree is not None:
             self._populate_tree(self.sidebar_tree, sections, shown)
