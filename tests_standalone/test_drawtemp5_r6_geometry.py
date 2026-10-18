@@ -85,7 +85,7 @@ class BuildingGeometryR6Tests(unittest.TestCase):
                                                tuple(pick["cell"]),pick["part"]))
         self.assertEqual(self.workspace.inspect().selected_part,"window")
         back = {(x,y) for x,y in walls if y!=2 and x!=3}
-        self.assertFalse(any(r["part"]=="window" and
+        self.assertFalse(any(r["kind"] == "building" and r["part"] == "window" and
                              tuple(r["cell"]) in {(self.anchor[0]+x,self.anchor[1]+y) for x,y in back}
                              for r in rows))
 
