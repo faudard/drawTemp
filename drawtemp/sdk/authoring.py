@@ -199,7 +199,7 @@ class AuthoringSession:
                                  "Preview belongs to a different editor session")
         if plan.source_revision != self._revision:
             raise AuthoringError("stale_revision", "apply",
-                                 "The editor changed; create a new preview")
+                                 "stale preview: the editor changed; create a new preview")
         try:
             data, project = validate_pair(thaw(plan.content), thaw(plan.project))
         except (RuleError, ValueError, TypeError, KeyError) as exc:
