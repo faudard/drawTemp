@@ -1,5 +1,6 @@
 """R7.C art/equipment gates: real distinct costumes, canonical save inputs."""
 from pathlib import Path
+import importlib.util
 import json
 import tempfile
 import unittest
@@ -14,6 +15,8 @@ from drawtemp.assets.character_runtime import CharacterPack
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@unittest.skipUnless(importlib.util.find_spec("PIL") is not None,
+                     "Jeanne raster authoring requires optional Pillow (R7C CI installs it)")
 class JeanneArtTests(unittest.TestCase):
     def test_four_directional_outfits_are_visibly_distinct_without_image_relabel(self):
         from PIL import ImageChops
