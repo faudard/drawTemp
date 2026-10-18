@@ -24,6 +24,8 @@
 
 ## 1. Baseline vérifiée et risques de fusion
 
+**Addendum R17.A, 18 octobre 2026 — [Merge Ledger](drawtemp5/R17_MERGE_LEDGER.md) :** les anciens merge commits #263/#273 vers une branche intermédiaire ne sont pas automatiquement des ancêtres de `master`. Les fonctionnalités R9 sont réintégrées sur la base de `master` par les commits des PR #280–#282 ; la preuve de présence et les tests doivent être vérifiés sur le SHA consolidé, puis après fusion.
+
 État ponctuel GitHub au 15/10/2026 :
 - [#248 R7.B](https://github.com/faudard/drawTemp/pull/248) est la PR encore ouverte lors de la vérification. Son état de mergeabilité peut changer : contrôler sa base et sa CI avant fusion.
 - [#264 R7.C](https://github.com/faudard/drawTemp/pull/264), costumes Jeanne/équipement, a été fusionnée **vers la branche de #248**, et non directement vers master ; prouver sa présence après intégration finale.
@@ -73,9 +75,7 @@
 
 ## 3. R17 — Post-merge Integration & Release Readiness
 
-> **R17.D — test de liaison Studio→Player, ouvert en [#282](https://github.com/faudard/drawTemp/pull/282)** (base #281, dépend de #280) : parcours automatisé levier/porte/page prioritaire/scène/cinématique, persistance de la paire Content+GameProject, replay/journal, Player sauvegarde et reprise, plus chargement QML de la même mission. Corrige aussi la validation des règles R9.D dans les transactions croisées `EventStudio`. **Ne clôt ni R17.3 ni R17.12 :** validation onscreen et export réellement autonome non certifiés ; CI de #282 à examiner au SHA final. Voir [rapport R17.D](drawtemp5/R17D_STUDIO_PLAYER_E2E.md).
-
-> **Avancement du 17 octobre 2026, code en PR non fusionné :** [#280 R17.C1](https://github.com/faudard/drawTemp/pull/280) restitue le moteur R9.D (pages, priorité, activation, répétition, replay et édition transactionnelle) et son workflow dédiée ; [#281 R17.C2](https://github.com/faudard/drawTemp/pull/281), empilée sur #280, restitue le graphe Qt, les commandes typées, la présentation narrative et les marqueurs ISO. La CI R17.C1 a réussi sur le dernier SHA examiné ; la matrice complète, la certification GUI/GPU et l'E2E porte/levier/Player/export restent **ouverts**. Ces deux PR ne constituent pas encore un jalon R17.3 validé dans master.
+> **Intégration consolidée R17, 18 octobre 2026 (PR unique, depuis master) :** les développements des PR #277 à #284 sont rassemblés dans une branche contenant leurs commits d'origine. Inclus : registre réel des fusions, correctif R7 de fallback atlas, réparation de syntaxe certification, moteur pages R9.D, Studio Qt R9.C, E2E Studio→Player, export natif multi-OS avec runner séparé, et parité visuelle R3. Les anciennes PR sont remplacées par la PR de consolidation ; les statuts historiques intermédiaires ne constituent pas une certification globale. **R17.8 et R17.5** sont validés seulement sur les éléments couverts par la CI logicielle : licences, signatures, GPU physique, goldens humains, autres gates P0 et audit release restent ouverts. Voir les dossiers `docs/drawtemp5/R17_*.md`.
 
 **But :** terminer les contrats 5.0, fermer les écarts d'intégration, sans ajouter une nouvelle architecture.
 

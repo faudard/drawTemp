@@ -66,6 +66,57 @@ class R7QtIntegrationTests(unittest.TestCase):
             self.assertNotEqual(dead["spriteRegion"], north["spriteRegion"])
             controller._sprite_timer.stop()
 
+    def test_expired_attack_with_missing_idle_restores_baseline_instead_of_stale_art(self):
+        """R17.B: partial packs may omit a facing; do not leave old R7 texture."""
+        from drawtemp.assets.character_runtime import CharacterPack
+        from drawtemp.render.qt_viewport import make_controller
+        with tempfile.TemporaryDirectory() as folder:
+            pack_dir = Path(folder)
+            export_pack(starter_library()["jeanne"], ROOT, pack_dir)
+            pack = CharacterPack(pack_dir)
+            # Production packs can omit an animation; the runtime supports
+            # this explicitly. Attack art exists but idle west is unavailable.
+            pack._clips.pop(("historical", "idle", "west"))
+            scene = {
+                "mission": "r17_partial_sprite", "width": 1, "height": 1,
+                "revision": 0,
+                "tiles": [{"x": 0, "y": 0, "height": 0, "surface": "grass",
+                           "feature": "", "blocked": False, "cover": 0,
+                           "hazard": 0, "goal": False}],
+                "actors": [{"id": "jeanne", "name": "Jeanne", "x": 0, "y": 0,
+                            "level": 0, "team": "player", "alive": True,
+                            "direction": "west"}],
+                "objects": [],
+            }
+            controller = make_controller(scene, character_pack=pack)
+            try:
+                fallback = dict(next(x for x in controller.items
+                                     if x["kind"] == "actor"))
+                self.assertNotIn("spriteReady", fallback)
+                self.assertTrue(controller.play_actor("jeanne", "attack"))
+                attacking = next(x for x in controller.items
+                                 if x["kind"] == "actor")
+                self.assertTrue(attacking["spriteReady"])
+                self.assertNotEqual(attacking.get("imageUrl"),
+                                    fallback.get("imageUrl"))
+                duration = pack.duration("historical", "attack", "west")
+                self.assertGreater(duration, 0)
+                controller._action_begins["jeanne"] = (
+                    "attack", controller._clock.elapsed() - duration - 1)
+                controller.advance_frames()
+                resting = next(x for x in controller.items
+                               if x["kind"] == "actor")
+                self.assertNotIn("spriteReady", resting)
+                for key in ("imageUrl", "atlasX", "atlasY", "frameWidth",
+                            "frameHeight", "pivotX", "pivotY"):
+                    self.assertEqual(resting.get(key), fallback.get(key), key)
+                # Subsequent ticks cannot revive the old attack frame.
+                controller.advance_frames()
+                self.assertEqual(resting, next(x for x in controller.items
+                                               if x["kind"] == "actor"))
+            finally:
+                controller._sprite_timer.stop()
+
     def test_saved_equipment_sync_and_unsaved_outfit_preview(self):
         from drawtemp.assets.jeanne_art import build_jeanne_art
         from drawtemp.render.qt_viewport import make_controller

@@ -29,6 +29,29 @@ class R15ExportTests(unittest.TestCase):
         self.assertTrue(result["passed"], result["errors"])
         self.assertIn("p0_01_lame", result["missions"])
 
+    def test_multiple_sprite_regions_share_one_verified_atlas_file(self):
+        """R17.8: one PNG can back dozens of independently named frames."""
+        from sporebound.assets import AssetRegistry
+        document = json.loads(
+            project_path(self.content).read_text(encoding="utf-8"))
+        registry = AssetRegistry(document["assets"])
+        atlas = "art/jeanne/jeanne_atlas.png"
+        references = [entry for entry in registry.to_dict()["entries"]
+                      if entry.get("path") == atlas]
+        self.assertGreater(len(references), 2)
+        self.assertTrue(all(entry["kind"] == "sprite" for entry in references))
+        report = preflight(self.content)
+        self.assertTrue(report["passed"], report["errors"])
+        self.assertEqual(report["assets"].count(atlas), 1)
+        self.assertEqual(len(report["assets"]),
+                         len({path.casefold() for path in report["assets"]}))
+        target = self.root / "multiple-regions"
+        export_game(self.content, self.runtime, target)
+        manifest = verify_bundle(target)
+        self.assertEqual(sum(
+            entry["path"] == "game/" + atlas for entry in manifest["files"]), 1)
+        self.assertTrue((target / "game" / atlas).is_file())
+
     def test_export_roundtrip_and_hash_integrity(self):
         target = self.root / "Jeanne"
         export_game(self.content, self.runtime, target)
