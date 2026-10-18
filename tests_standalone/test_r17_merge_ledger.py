@@ -67,7 +67,10 @@ class R17MergeLedgerTests(unittest.TestCase):
         self.commit("feature/shared.py", "class Feature: pass\n")
         unrelated = self.git("rev-parse", "HEAD")
         self.git("checkout", "-q", "master")
-        self.commit("feature/shared.py", "class Feature: pass\n")
+        # Same symbol, different *tree*: two commits made in the same second
+        # with identical parent/message/file could otherwise have identical
+        # Git object IDs, making "foreign" indistinguishable from master.
+        self.commit("feature/shared.py", "class Feature: pass\n# independent implementation\n")
         report = audit(self.root, "master", (
             PRSpec(12, "R9", unrelated,
                    (("feature/shared.py", "class Feature"),)),))
