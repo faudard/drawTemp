@@ -53,4 +53,8 @@ jobs:
           python -m drawtemp.player.qt_app --smoke
           python -m drawtemp.player.qt_app --reference --smoke --smoke-scene battle
           python -m drawtemp.player.qt_app --smoke --smoke-scene exploration
-          python -m unittest tests_standalone.test_drawtemp5_r12_save_manager_qt -v
+      - name: R12 Qt Save Manager tests from checked-out sources
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_drawtemp5_r12_save_manager_qt -v
