@@ -12,6 +12,9 @@ vertical slice + GPU/clean-machine gate) are **not delivered** by this change.
   Individual abilities have `schema_version=1` and strict fields.
 - Legacy manifests without the extension are read as an empty catalogue. No
   implicit write, migration, or GameProject version bump occurs.
+- Canonical project load rejects a TACTICAL_CT catalog entry if its
+  compiled native Skill is missing, stale or differs from the authoring source.
+  Out-of-band native edits fail closed at validation, including Studio preview.
 - A TACTICAL_CT ability is lowered to the **existing**
   `Content.skills` /`sporebound.model.Skill` representation, using the
   existing native `Effect` and `Battle` engine. This is a derived record,
