@@ -316,6 +316,8 @@ Les familles de références (FFT, Zelda, JRPG classiques, etc.) ne sont que des
 
 **Suivi R49.A — premier incrément non certifiant :** [contrats de commandes, détection des raccourcis concurrents et métriques UX locales](drawtemp5/R49A_CREATOR_EXPERIENCE.md). Le contrôle des commandes est structurel seulement ; p95/p99 observés sur une session Qt ne constituent ni benchmarks matériels ni validation auteur tiers. R49.B/C et le gate VS-49 restent ouverts.
 
+**Suivi R49.B1 — UX Qt incrémentale, non certifiante :** [focus par atelier, navigation clavier et préflight Creator lisible](drawtemp5/R49B1_WORKSPACE_CREATOR_UX.md). Il conserve les modèles existants, laisse indisponibles les profils non intégrés et ne clôt ni l'inspecteur multi-ateliers ni le retour du Player. R49.B2/B3 et le gate R49.C restent ouverts.
+
 **Gate R49 :** Un auteur tiers crée mini-jeu depuis template, modifie cartes/règles/dialogues, lance playtest et exporte sans JSON; erreurs P0 d'UX et commandes inactives supprimées.
 
 **Vertical slice :** VS-49 — Premier jeu en Studio : nouveau projet → scène → action → export.
