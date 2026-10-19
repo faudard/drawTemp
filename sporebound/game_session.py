@@ -239,6 +239,12 @@ class GameSession:
         require(self._advanced_ai is not None, "R37 advanced AI is not enabled")
         return self._advanced_ai.state(actor_id)
 
+    def _ai_suspicion(self, actor_id):
+        value = self._advanced_ai.state(actor_id)["values"].get("suspicion", 0)
+        require(type(value) is int and 0 <= value <= 3,
+                "R37 suspicion must be an integer in 0..3")
+        return value
+
     def ai_decision_context(self, actor_id):
         """Derive observable facts from canonical CT or R35 exploration state.
 
@@ -289,7 +295,7 @@ class GameSession:
                 else:
                     facts.update({
                         "enemy_visible": False, "noise_heard": False,
-                        "alert": bool(memory.get("suspicion", 0)),
+                        "alert": self._ai_suspicion(actor_id) > 0,
                         "target_reachable": False,
                     })
         board = self._advanced_ai.state(actor_id)
@@ -328,7 +334,7 @@ class GameSession:
                 "R37 NPC is not positioned in the player's scene")
         memory = self._advanced_ai.state(actor_id)["values"]
         prior = None
-        if memory.get("suspicion", 0) > 0:
+        if self._ai_suspicion(actor_id) > 0:
             if "last_known_x" in memory and "last_known_y" in memory:
                 prior = [memory["last_known_x"], memory["last_known_y"]]
         movement = False
@@ -367,7 +373,7 @@ class GameSession:
         memory = self._advanced_ai.state(actor_id)["values"]
         signal = observation["signal"]
         suspicion = (3 if signal == "seen" else 2 if signal == "heard"
-                     else max(0, memory.get("suspicion", 0) - 1))
+                     else max(0, self._ai_suspicion(actor_id) - 1))
         changes = {"suspicion": suspicion, "alert": suspicion > 0,
                    "observation_kind": signal,
                    "heard_noise": observation["heard"]}
