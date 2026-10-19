@@ -68,6 +68,16 @@ class R45EconomyQtTests(unittest.TestCase):
         self.assertEqual(self.editor.revision, 1)
         self.assertIn("modification appliquée", dialog.diagnostics.toPlainText())
 
+    def test_unsaved_widget_values_cannot_be_silently_discarded(self):
+        dialog = self.dialog
+        dialog.recipe_gold.setValue(dialog.recipe_gold.value() + 1)
+        self.assertFalse(dialog._preview())
+        self.assertIn("Conserver", dialog.diagnostics.toPlainText())
+        dialog._apply()
+        self.assertEqual(self.editor.revision, 0)
+        dialog._save_recipe()
+        self.assertTrue(dialog._preview(), dialog.diagnostics.toPlainText())
+
     def test_new_recipe_with_typed_rows_and_delete_without_commit(self):
         dialog = self.dialog
         dialog._new_recipe()
