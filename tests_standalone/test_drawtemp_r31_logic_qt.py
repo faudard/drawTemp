@@ -229,6 +229,44 @@ class VisualLogicQtTests(unittest.TestCase):
         finally:
             view.close()
 
+    def test_typed_variable_qt_editor_and_native_preview(self):
+        from PySide6.QtWidgets import QInputDialog
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        session = new_session()
+        view = LogicGraphDialog(session)
+        try:
+            with patch.object(QInputDialog, "getText",
+                              return_value=("qt_variable", True)):
+                view.new_graph()
+            view.choose_node("message")
+            with patch.object(view, "_prompt_variable_name",
+                              return_value="r31_door"), \
+                 patch.object(QInputDialog, "getItem",
+                              return_value=("Affecter booléen", True)), \
+                 patch.object(view, "_prompt_variable_value", return_value=True):
+                view.add_variable()
+            self.assertEqual(view.draft.graph["schema_version"], 4)
+            self.assertEqual(view.draft.node("variable1")["params"]["kind"],
+                             "logic_set")
+            view.choose_node("variable1")
+            with patch.object(view, "_prompt_variable_name",
+                              return_value="r31_door"), \
+                 patch.object(QInputDialog, "getItem",
+                              side_effect=[("eq", True), ("Booléen", True)]), \
+                 patch.object(view, "_prompt_variable_value", return_value=True):
+                view.add_variable_check()
+            self.assertIn("check1", view.canvas._cards)
+            self.assertTrue(view.preview())
+            self.assertIn("r31_qt_variable_s1", view.diagnostics.toPlainText())
+            self.assertTrue(view.apply_changes())
+            self.assertTrue(view.start_debug())
+            self.assertTrue(view.debug_step())
+            self.assertEqual(
+                view.debug_session.report()["report"]["battle_variables"],
+                {"r31_door": True})
+        finally:
+            view.close()
+
     def test_wait_gate_qt_edit_preview_and_debug_schedule(self):
         from PySide6.QtWidgets import QInputDialog
         from drawtemp.studio.logic_graph_qt import LogicGraphDialog
