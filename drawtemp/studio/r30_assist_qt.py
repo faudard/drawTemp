@@ -128,7 +128,8 @@ class R30AssistDialog(QDialog):
         self.status.setText(
             f"{len(preview.tiles)} case(s) modifiée(s), "
             f"{len(preview.object_ids)} objet(s) proposés, "
-            f"{preview.protected_count} cellule(s) réservée(s). "
+            f"{preview.protected_count} cellule(s) occupée(s) et "
+            f"{len(preview.preserved_cells)} case(s) déjà peintes préservées. "
             "Enigme accessible au niveau du levier : " +
             ("oui" if preview.switch_reachable else "sans objet") +
             ". Application : un seul Undo, aucune écriture disque.")
@@ -138,6 +139,8 @@ class R30AssistDialog(QDialog):
         x, y, width, height = report.rectangle
         changed = {(cell.x, cell.y): cell.after for cell in report.tiles}
         objects = {(px, py): kind for kind, px, py in report.object_cells}
+        preserved = set(report.preserved_cells)
+        occupied = set(report.occupied_cells)
         self.preview_grid.setRowCount(height)
         self.preview_grid.setColumnCount(width)
         self.preview_grid.setVerticalHeaderLabels(
@@ -151,11 +154,14 @@ class R30AssistDialog(QDialog):
                 kind = objects.get(key)
                 cell = QTableWidgetItem(
                     ("Porte" if kind == "door" else "Levier") if kind else
-                    (surface or "·"))
+                    (surface or ("Occupée" if key in occupied else
+                                 "Existante" if key in preserved else "·")))
                 cell.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 if kind:
                     cell.setBackground(QColor("#8dd3ca" if kind == "switch" else "#dc988b"))
                     cell.setForeground(QColor("#111111"))
+                elif key in occupied or key in preserved:
+                    cell.setBackground(QColor("#a8a8a8"))
                 elif surface:
                     cell.setBackground(QColor({
                         "grass": "#598e56", "dirt": "#aa825b",
