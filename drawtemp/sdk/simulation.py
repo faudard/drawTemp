@@ -192,6 +192,17 @@ class Simulation:
             return None
         return freeze(self._session.rpg_state())
 
+    def rpg_route_state(self, *, expected_revision=None):
+        """Read the canonical route scene during combat for shared R3 rendering.
+
+        R41's battle UI never invents an independent map or world cursor.
+        """
+        self._check_revision(expected_revision, "rpg_route_state")
+        session = self._session
+        if session.mode != "rpg" or not session.scene_router.enabled:
+            return None
+        return freeze(session.route_state())
+
     def rpg_start(self, encounter_id, *, expected_revision=None):
         return self._apply("rpg_start", encounter_id,
                            expected_revision=expected_revision)
