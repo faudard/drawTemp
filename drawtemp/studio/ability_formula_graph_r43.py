@@ -35,6 +35,8 @@ def _check_path(path):
 def node_at(formula, path):
     """Return detached node addressed by structural keys, never an alias."""
     p = _check_path(path)
+    # Validate before traversing or copying untrusted ASTs.
+    evaluate_formula(formula, DEFAULT_STATS)
     value = formula
     for key in p:
         if type(value) is not dict or key not in CHILD_KEYS.get(value.get("op"), ()):
@@ -128,7 +130,10 @@ def balance_lab(ability, *, cases=CASES):
     if type(cases) not in (list, tuple) or not 1 <= len(cases) <= 12:
         raise AbilityError("invalid_cases", "Balance Lab needs 1..12 profiles")
     output = []
-    for label, stats in cases:
+    for entry in cases:
+        if type(entry) not in (tuple, list) or len(entry) != 2:
+            raise AbilityError("invalid_case", "Expected (label, stats) pair")
+        label, stats = entry
         if type(label) is not str or not 1 <= len(label.strip()) <= 64:
             raise AbilityError("invalid_case", "Invalid profile label")
         powers = [
