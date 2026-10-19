@@ -51,7 +51,8 @@ class ActionEncounter:
 
     def step(self, command):
         require(not self.finished, "Action encounter was already committed")
-        self._unchanged()
+        # Check campaign identity at save/commit boundaries; hashing an
+        # entire large campaign on every 60 Hz action tick is too expensive.
         return self.runtime.step(command)
 
     def can_complete(self):
