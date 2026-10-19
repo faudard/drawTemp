@@ -162,6 +162,7 @@ class GameSession:
                 and self.scene_profile(self.route_scene)["movement"] == "FREE_REALTIME",
                 "No active free movement scene")
         stage = self.exploration.state(self.progress, self.route_scene)
+        require(not stage["completed"], "Exploration stage already completed")
         movement = FreeMovement(stage)
         position = (list(self._rt_position) if self._rt_position is not None
                     else movement.center(stage["position"]))
@@ -989,6 +990,8 @@ class GameSession:
                     position = movement.advance(position, cmd["dx"], cmd["dy"])
                 return {"scene": saved["scene"], "position": list(position)}
             journal = FixedTickJournal.replay(saved["journal"], verify_tick)
+            require(journal.rate == 60 and journal.seed == session.seed,
+                    "Realtime replay seed/rate mismatch")
             require(journal.tick > 0 and saved["position"] == position,
                     "Realtime replay position diverged")
             stage = session.exploration.state(session.progress, saved["scene"])
