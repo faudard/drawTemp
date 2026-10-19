@@ -42,7 +42,7 @@ EN = {
     "cinematics": "Cinematics", "analysis": "Analysis",
 }
 DEFAULT_SHORTCUTS = {
-    "save": "Ctrl+S", "open": "Ctrl+O", "undo": "Ctrl+Z", "redo": "Ctrl+Shift+Z",
+    "save": "Ctrl+S", "open": "Ctrl+O", "new": "Ctrl+N", "undo": "Ctrl+Z", "redo": "Ctrl+Shift+Z",
     "palette": "Ctrl+Shift+P", "focus_resources": "Ctrl+1",
     "focus_inspector": "Ctrl+2",
 }
@@ -193,6 +193,10 @@ class StudioWindow(QMainWindow):
         title.setFont(font)
         panel.addWidget(title)
         panel.addWidget(QLabel("Projet Jeanne • édition sans JSON • Content / GameProject partagés"))
+        new_project = QPushButton("Nouveau projet…")
+        new_project.setAccessibleName("Créer un jeu depuis un modèle")
+        new_project.clicked.connect(self.new_document)
+        panel.addWidget(new_project)
         for group in (("Créer", ("maps", "actors", "database", "events")),
                       ("Organiser", ("campaigns", "cinematics", "analysis"))):
             panel.addWidget(QLabel(group[0]))
@@ -327,6 +331,7 @@ class StudioWindow(QMainWindow):
         return action
 
     def _build_commands(self):
+        self._action("new", "Nouveau projet…", self.new_document)
         self._action("open", "Ouvrir un projet…", self.open_document)
         self._action("save", "Enregistrer le projet", self.save_document)
         self._action("save_as", "Enregistrer sous…", self.save_document_as)
@@ -343,7 +348,7 @@ class StudioWindow(QMainWindow):
 
     def _build_menus(self):
         file_menu = self.menuBar().addMenu("&Fichier")
-        for key in ("open", "save", "save_as"):
+        for key in ("new", "open", "save", "save_as"):
             file_menu.addAction(self.commands[key])
         edit_menu = self.menuBar().addMenu("&Édition")
         for key in ("undo", "redo", "palette"):
@@ -921,18 +926,29 @@ class StudioWindow(QMainWindow):
             return self.save_document()
         return True
 
+    def new_document(self):
+        if not self._confirm_leave():
+            return False
+        from drawtemp.studio.r15_creator import CreatorDialog
+        dialog = CreatorDialog(self)
+        if dialog.exec() != QDialog.Accepted or dialog.created_content_path is None:
+            return False
+        return self._load_document(dialog.created_content_path)
+
     def open_document(self):
         if not self._confirm_leave():
-            return
+            return False
         path, _ = QFileDialog.getOpenFileName(
             self, "Ouvrir Content + GameProject", "", "Content JSON (*.json)")
-        if not path:
-            return
+        return self._load_document(path) if path else False
+
+    def _load_document(self, path):
+        """Replace the single canonical session only after a successful open."""
         try:
             fresh = AuthoringSession.open(path)
         except (AuthoringError, OSError, ValueError) as exc:
             self.report_error(exc)
-            return
+            return False
         self.workspace_tabs.setCurrentWidget(self.pages["project"])
         old_pages = {page for name, page in self.pages.items() if name != "project"}
         self.pages = {"project": self.pages["project"]}
@@ -947,6 +963,7 @@ class StudioWindow(QMainWindow):
         self.session = fresh
         self.content_path = Path(path)
         self.refresh()
+        return True
 
     def closeEvent(self, event):
         if not self._confirm_leave():

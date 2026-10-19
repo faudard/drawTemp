@@ -9,20 +9,22 @@ import json
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout,
-    QLabel, QLineEdit, QMessageBox, QPushButton, QTextEdit, QVBoxLayout,
+    QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout,
+    QLabel, QLineEdit, QMessageBox, QPushButton, QSpinBox, QTextEdit, QVBoxLayout,
     QWidget,
 )
 
 from drawtemp.export.r15 import export_game, preflight
 from drawtemp.export.migration import migration_preview, import_project
-from drawtemp.export.templates import TEMPLATES, create_template
+from drawtemp.export.templates import TEMPLATES
+from drawtemp.studio.project_wizard import ProjectSpec, create_project, project_preview
 
 
 class CreatorDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("DrawTemp 5 — Projets et export")
+        self.created_content_path = None
         self.resize(780, 520)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(
@@ -35,6 +37,24 @@ class CreatorDialog(QDialog):
         self.template = QComboBox()
         self.template.addItems(list(TEMPLATES))
         form.addRow("Modèle", self.template)
+        self.game_title = QLineEdit()
+        self.game_title.setPlaceholderText("Titre par défaut du modèle")
+        self.game_title.setAccessibleName("Titre du nouveau jeu")
+        form.addRow("Titre du jeu", self.game_title)
+        self.game_subtitle = QLineEdit()
+        self.game_subtitle.setPlaceholderText("Sous-titre par défaut")
+        self.game_subtitle.setAccessibleName("Sous-titre du nouveau jeu")
+        form.addRow("Sous-titre", self.game_subtitle)
+        self.language = QComboBox()
+        self.language.addItem("Français", "fr")
+        self.language.addItem("English", "en")
+        form.addRow("Langue", self.language)
+        self.save_slots = QSpinBox()
+        self.save_slots.setRange(1, 9)
+        self.save_slots.setValue(3)
+        form.addRow("Emplacements de sauvegarde", self.save_slots)
+        self.fullscreen = QCheckBox("Activer au lancement")
+        form.addRow("Plein écran", self.fullscreen)
         self.source = QLineEdit()
         source_row = QHBoxLayout()
         source_row.addWidget(self.source)
@@ -75,6 +95,9 @@ class CreatorDialog(QDialog):
         is_new = self.mode.currentIndex() == 0
         is_export = self.mode.currentIndex() == 2
         self.template.setEnabled(is_new)
+        for widget in (self.game_title, self.game_subtitle, self.language,
+                       self.save_slots, self.fullscreen):
+            widget.setEnabled(is_new)
         self.source.setEnabled(not is_new)
         self.runtime.setEnabled(is_export)
         self.log.clear()
@@ -101,12 +124,21 @@ class CreatorDialog(QDialog):
         if path:
             self.destination.setText(str(Path(path) / "DrawTempProject"))
 
+    def project_spec(self):
+        return ProjectSpec(
+            template=self.template.currentText(),
+            destination=self.destination.text(),
+            title=self.game_title.text().strip() or None,
+            subtitle=self.game_subtitle.text() or None,
+            language=self.language.currentData(),
+            save_slots=self.save_slots.value(),
+            fullscreen=self.fullscreen.isChecked(),
+        )
+
     def preview(self):
         try:
             if self.mode.currentIndex() == 0:
-                report = {"template": self.template.currentText(),
-                          "destination": self.destination.text(),
-                          "note": "Validation canonique après création; aucun écrasement"}
+                report = project_preview(self.project_spec())
             elif self.mode.currentIndex() == 1:
                 report = migration_preview(self.source.text())
             else:
@@ -132,7 +164,8 @@ class CreatorDialog(QDialog):
         try:
             dest = self.destination.text()
             if self.mode.currentIndex() == 0:
-                path = create_template(self.template.currentText(), dest)
+                path = create_project(self.project_spec())
+                self.created_content_path = Path(path)
             elif self.mode.currentIndex() == 1:
                 path = import_project(self.source.text(), dest)
             else:
@@ -143,6 +176,8 @@ class CreatorDialog(QDialog):
             return
         self.log.append("\nCréation réussie : " + str(path))
         QMessageBox.information(self, "Opération terminée", str(path))
+        if self.created_content_path is not None:
+            self.accept()
 
 
 def open_creator(parent=None):

@@ -19,10 +19,28 @@ _TITLES = {"blank": "Nouveau RPG", "tactical": "Prototype tactique",
            "jeanne": "Jeanne d'Arc — Les Cendres du Royaume"}
 
 
-def create_template(kind, destination):
-    """Create a detached, playable starter; never touch an existing project."""
+def create_template(kind, destination, *, title=None, subtitle=None,
+                    language=None, save_slots=None, fullscreen=None):
+    """Create a detached starter using the canonical two-file project schema.
+
+    Validate identity/options before making directories; the content + assets
+    are published together only after the staging preflight passes.
+    """
     if kind not in TEMPLATES:
         raise ExportError("Unknown creator template: " + str(kind))
+    if title is not None and (not isinstance(title, str) or
+                              not 0 < len(title.strip()) <= 120):
+        raise ExportError("Project title must contain 1..120 characters")
+    if subtitle is not None and (not isinstance(subtitle, str) or
+                                 len(subtitle) > 240):
+        raise ExportError("Project subtitle must have at most 240 characters")
+    if language is not None and language not in ("fr", "en"):
+        raise ExportError("Language must be fr or en")
+    if save_slots is not None and (type(save_slots) is not int or
+                                   not 1 <= save_slots <= 9):
+        raise ExportError("Save slots must be between 1 and 9")
+    if fullscreen is not None and type(fullscreen) is not bool:
+        raise ExportError("Fullscreen must be a boolean")
     output = Path(destination).absolute()
     if output.exists():
         raise ExportError("A project already exists at this destination")
@@ -70,6 +88,25 @@ def create_template(kind, destination):
                 encoding="utf-8")
             (stage / "game.game.json").write_text(
                 json.dumps(valid_project, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8")
+        if any(value is not None for value in (
+                title, subtitle, language, save_slots, fullscreen)):
+            manifest_path = stage / "game.game.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if title is not None:
+                manifest["title"] = title.strip()
+            if subtitle is not None:
+                manifest["subtitle"] = subtitle
+            if language is not None:
+                manifest["options"]["language"] = language
+            if save_slots is not None:
+                manifest["save_slots"] = save_slots
+            if fullscreen is not None:
+                manifest["options"]["fullscreen"] = fullscreen
+            content_data = json.loads((stage / "game.json").read_text(encoding="utf-8"))
+            _, canonical_project = validate_pair(content_data, manifest)
+            manifest_path.write_text(
+                json.dumps(canonical_project, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8")
         report = preflight(stage / "game.json")
         if not report["passed"]:
