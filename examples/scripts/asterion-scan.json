@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "asterion-scan",
+  "namespace": "org.drawtemp.example.asterion.hooks",
+  "sdk_api": [
+    1,
+    0
+  ],
+  "permissions": [
+    "story.flags.write",
+    "campaign.gold.write"
+  ],
+  "hooks": [
+    {
+      "id": "briefing-scan",
+      "trigger": "story.choice",
+      "scene": "briefing",
+      "choice": "launch",
+      "effects": [
+        {
+          "kind": "set_flag",
+          "flag": "signal_scan",
+          "value": true
+        },
+        {
+          "kind": "gold",
+          "amount": 15
+        }
+      ]
+    }
+  ]
+}
