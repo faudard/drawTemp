@@ -112,7 +112,7 @@ def active_leg(npc, story_flags, minute, *, skip_conditions=True):
     return prior, following, prior_minute, next_minute
 
 
-def resolve_npc(npc, flags, minute, exploration):
+def resolve_npc(npc, flags, minute, exploration, *, routes=None):
     """Find actual cell at arbitrary tick, with no per-tick NPC mutation."""
     positional = "pos" in npc["schedule"][0]
     # For positional NPCs the geometry is independent from story flags.
@@ -131,21 +131,19 @@ def resolve_npc(npc, flags, minute, exploration):
     result = {"scene": prior["scene"], "activity": activity}
     if "pos" not in prior:
         return result  # Legacy schedule shape is preserved.
-    result.update({"pos": list(prior["pos"]), "moving": False})
-    if prior["scene"] != following["scene"]:
-        result["handoff_pending"] = True
-        return result
-    path = shortest_path(exploration[prior["scene"]],
-                         prior["pos"], following["pos"])
-    require(path is not None, "Validated NPC path became disconnected")
-    duration = len(path) - 1
-    departure = arrival - duration
-    if minute > departure and duration:
-        # A positional actor leaves their previous activity during travel.
-        traversed = min(duration, minute - departure)
-        result["pos"] = path[traversed]
-        result["activity"] = "travel"
-        result["moving"] = True
+    # R35.D2: geometry is compiled once from the canonical project. No
+    # obstacle search runs on repeated frame refreshes or off-focus queries.
+    from .living_world_transfers import project_leg, compile_legs
+    if routes is None:
+        routes = compile_legs({"npcs": [npc]}, exploration)
+    leg_data = routes.get((npc["id"], prior["minute"]))
+    require(leg_data is not None, "Missing compiled NPC leg")
+    result = project_leg(prior, following, leg_data, minute, arrival, activity)
+    # Story conditions never affect physical routes. They may close a shop
+    # or disable an NPC activity after its positional schedule transition.
+    if result["activity"] == following["activity"] and "when" in following:
+        if flags.get(following["when"]["flag"], False) is not following["when"]["eq"]:
+            result["activity"] = "unavailable"
     return result
 
 
