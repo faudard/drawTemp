@@ -38,11 +38,11 @@ class R41PartyStudioQtTests(unittest.TestCase):
         self.assertEqual(editor.revision, 1)
         self.assertFalse(dialog.apply_button.isEnabled())
         project = editor.snapshot().to_dict()["project"]
-        self.assertEqual(project["extensions"]["drawtemp.party_rpg"][
+        self.assertEqual(project["extensions"]["drawtemp.partyrpg"][
             "data"]["campaigns"]["main"]["max_active"], 3)
         editor.undo()
         self.assertEqual(editor.snapshot().to_dict()["project"][
-            "extensions"]["drawtemp.party_rpg"]["data"]["campaigns"]["main"][
+            "extensions"]["drawtemp.partyrpg"]["data"]["campaigns"]["main"][
                 "max_active"], 2)
         dialog.refresh()
         self.assertEqual(dialog.capacity.value(), 2)
