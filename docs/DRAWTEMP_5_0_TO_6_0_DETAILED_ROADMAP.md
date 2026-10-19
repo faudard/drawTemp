@@ -223,6 +223,8 @@
 
 **Quatrième tranche :** [R23.D — installateurs natifs Windows, Linux et macOS](drawtemp5/R23D_NATIVE_INSTALLERS.md) produit un installateur Inno Setup per-user, un paquet Debian/Ubuntu DEB et un DMG avec application macOS. Les trois parcours CI effectuent l'installation, le lancement des binaires exportés, le rejet d'un asset falsifié et la désinstallation sur runner isolé. Les paquets restent **non signés** et la 5.5 **non certifiée** : signatures, notarisation, licences, essais hardware/offline et Go/No-go humain restent à réaliser.
 
+**Cinquième tranche :** [R23.E — contrôle des signatures, droits et dossier Go/No-go](drawtemp5/R23E_SIGNING_RIGHTS_RELEASE_GATE.md) inventorie les licences et empreintes des assets **effectivement exportés** sur trois OS, fournit des vérifications Authenticode/Apple/GPG en lecture seule avec identités de confiance épinglées, et collecte les douze gates dans un dossier `NO-GO` basé sur le même commit. Aucune licence déclarée ne vaut approbation juridique, et aucun certificat, notarisation, test physique ou signature de décision n'est fabriqué.
+
 **But :** publier un produit de création utilisable et maintenable, pas une succession de builds.
 
 | ID | Priorité | Livrable vérifiable et comportement attendu | Dépendances et preuves |
