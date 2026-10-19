@@ -88,6 +88,14 @@ class GameSession:
         self.story = StoryBook(project.story, content, project.campaigns)
         self.exploration = Exploration(project.exploration, project.story)
         self.progress = project.new_game(campaign_id, content)
+        from .classic_party import EXTENSION as PARTY_EXTENSION, ClassicParty
+        party = self.project.extensions.get(PARTY_EXTENSION)
+        config = (party["data"]["campaigns"].get(campaign_id)
+                  if party is not None else None)
+        self._classic_party = ClassicParty(config) if config is not None else None
+        if self._classic_party is not None:
+            for hero_id in self._classic_party.members:
+                self.progress.hero(hero_id)  # canonical R8 HeroProgress, not a second RPG database
         from .scene_router import SceneRouter
         self.scene_router = SceneRouter(self.project.scene_routes, self.content, self.project)
         self.route_scene = self.scene_router.start
@@ -152,6 +160,37 @@ class GameSession:
                     "Unknown game mode scene")
         from .game_modes import resolve_scene_profile
         return resolve_scene_profile(self.project.game_modes, scene_id)
+
+    def party_state(self):
+        """Detached R41 roster selection; HeroProgress/inventory stay in Campaign."""
+        require(self._classic_party is not None,
+                "This campaign has no RPG_TURN party configured")
+        return self._classic_party.snapshot()
+
+    def _party_edit_allowed(self):
+        require(self._classic_party is not None
+                and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R41 party changes require an idle campaign without dialogue")
+
+    def party_recruit(self, hero_id):
+        """One transaction across party membership and existing HeroProgress."""
+        self._party_edit_allowed()
+        candidate = deepcopy(self._classic_party)
+        candidate.recruit(hero_id)
+        progress = deepcopy(self.progress)
+        progress.hero(hero_id)
+        self.progress, self._classic_party = progress, candidate
+        return self.party_state()
+
+    def party_set_active(self, hero_ids):
+        """Change active/reserve assignment without cloning hero stats/items."""
+        self._party_edit_allowed()
+        candidate = deepcopy(self._classic_party)
+        candidate.set_active(hero_ids)
+        self._classic_party = candidate
+        return self.party_state()
 
     def roguelite_state(self):
         """Detached run/meta snapshot; never expose mutable gameplay state."""
@@ -978,6 +1017,8 @@ class GameSession:
                 "journal": self._rt_journal.recording()}
         if self._living_world is not None:
             data["living_world"] = self._living_world.snapshot()
+        if self._classic_party is not None:
+            data["classic_party"] = self._classic_party.snapshot()
         if self._roguelite is not None:
             data["roguelite"] = self._roguelite.recording()
         if self.siege_id is not None:
@@ -1004,7 +1045,7 @@ class GameSession:
         require(isinstance(data, dict) and type(data.get("version")) is int
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
-        require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
+        require(set(data) - {"classic_party", "front_battle_ids", "siege_id", "scene_route",
                              "scene_realtime", "scene_platform", "living_world", "roguelite", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
@@ -1047,6 +1088,15 @@ class GameSession:
             require("roguelite" not in data,
                     "Unexpected R34 state in a legacy session")
         session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
+        if session._classic_party is None:
+            require("classic_party" not in data,
+                    "Unexpected R41 party state in legacy checkpoint")
+        else:
+            require("classic_party" in data,
+                    "Missing party state for enabled RPG_TURN campaign")
+            session._classic_party.restore(data["classic_party"])
+            require(set(session._classic_party.members) <= set(session.progress.heroes),
+                    "Party recruitment has no canonical HeroProgress")
         verify_flow_save(session.progress, project.campaign_flow)
         session.story.initialize(session.progress, session.campaign_id)
         require(set(session.progress.unlocked + session.progress.completed)
