@@ -1,0 +1,2743 @@
+{
+  "version": 1,
+  "title": "Jeanne d'Arc — Les Cendres du Royaume (R20.C)",
+  "subtitle": "Acte I : exploration, révélations, cinématiques et choix persistants",
+  "campaigns": [
+    {
+      "id": "jeanne",
+      "name": "Les Cendres — Prologue et Acte I",
+      "description": "De Domrémy à Vaucouleurs : recrutement, équipement, choix des archives ou des otages et ouverture de l'acte II.",
+      "start_mission": "p0_01_lame"
+    }
+  ],
+  "options": {
+    "language": "fr",
+    "music_volume": 70,
+    "effects_volume": 75,
+    "fullscreen": false
+  },
+  "save_slots": 3,
+  "story": {
+    "entry_scenes": {
+      "jeanne": "sc_p0_champs"
+    },
+    "after_mission": {
+      "p0_01_lame": "sc_p0_apres_lecon",
+      "p0_02_incendie": "sc_p0_cendres",
+      "p0_03a_secours": "sc_p0_apres_branche",
+      "p0_03b_poursuite": "sc_p0_apres_branche",
+      "p0_04_fuite": "sc_p0_au_revoir",
+      "a1_01_route": "sc_a1_pont",
+      "a1_02_pont": "sc_a1_hospice",
+      "a1_03_hospice": "sc_a1_dilemme",
+      "a1_04a_archives": "sc_r20c_archives",
+      "a1_04b_otages": "sc_r20c_otages",
+      "a1_05_vaucouleurs": "sc_a1_fin"
+    },
+    "scenes": [
+      {
+        "id": "sc_p0_champs",
+        "title": "1428 — Les champs de Domrémy",
+        "speaker": "Jeanne",
+        "text": "Le vent caresse les blés. Mon père attend mon retour. Pourtant les oiseaux se taisent, et quelqu'un murmure mon nom entre deux rangs de céréales.",
+        "choices": [
+          {
+            "id": "ecouter",
+            "label": "Écouter les voix.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "civilians_saved",
+                "value": 0
+              },
+              {
+                "kind": "set_flag",
+                "flag": "evidence",
+                "value": 0
+              },
+              {
+                "kind": "set_flag",
+                "flag": "voices_response",
+                "value": "listen"
+              }
+            ],
+            "next_scene": "sc_p0_visions"
+          },
+          {
+            "id": "resister",
+            "label": "Faire taire la peur et continuer.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "civilians_saved",
+                "value": 0
+              },
+              {
+                "kind": "set_flag",
+                "flag": "evidence",
+                "value": 0
+              },
+              {
+                "kind": "set_flag",
+                "flag": "voices_response",
+                "value": "resist"
+              }
+            ],
+            "next_scene": "sc_p0_visions"
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_visions",
+        "title": "Une bannière, une couronne, un bûcher",
+        "speaker": "Les Voix",
+        "text": "Une couronne tachée de sang. Une armée sous une bannière claire. Puis un feu immense. « Tu traverseras les cendres, Jeanne. Le royaume aura besoin de toi. »",
+        "choices": [
+          {
+            "id": "repondre",
+            "label": "« Qui êtes-vous ? »",
+            "effects": [],
+            "next_scene": "sc_p0_fumee"
+          },
+          {
+            "id": "fuir_vision",
+            "label": "Détourner les yeux.",
+            "effects": [],
+            "next_scene": "sc_p0_fumee"
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_fumee",
+        "title": "La fumée au-dessus du village",
+        "speaker": "Jeanne",
+        "text": "Une fumée noire monte de Domrémy. Les cloches sonnent trop vite. Je reconnais le toit de notre maison. Je cours, mais mes jambes se souviennent d'abord de la première fois où Renaud m'a tendu une épée.",
+        "choices": [
+          {
+            "id": "souvenir",
+            "label": "Revivre l'entraînement de Renaud. La leçon d'armes commence.",
+            "effects": []
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_apres_lecon",
+        "title": "Fin du souvenir",
+        "speaker": "Renaud",
+        "text": "« Ne frappe jamais parce que tu es en colère. Frappe seulement lorsque tu sais ce que tu protèges. » Le souvenir se brise. Domrémy brûle réellement.",
+        "choices": [
+          {
+            "id": "courir",
+            "label": "Rejoindre le village.",
+            "effects": [
+              {
+                "kind": "unlock_mission",
+                "mission": "p0_02_incendie"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_cendres",
+        "title": "Les cendres de Domrémy",
+        "speaker": "Jeanne",
+        "text": "Mon père est mort. Les soldats fouillent ses papiers. Des appels viennent d'une grange ; à l'est, le messager qui transportait un sceau prend la fuite. Je ne pourrai pas être aux deux endroits.",
+        "choices": [
+          {
+            "id": "secourir",
+            "label": "Rester pour sauver les villageois.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "prologue_path",
+                "value": "secours"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "civilians_saved",
+                "amount": 10
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "p0_03a_secours"
+              }
+            ]
+          },
+          {
+            "id": "poursuivre",
+            "label": "Poursuivre le messager et récupérer une preuve.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "prologue_path",
+                "value": "poursuite"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "evidence",
+                "amount": 10
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "p0_03b_poursuite"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_apres_branche",
+        "title": "La fuite des survivants",
+        "speaker": "Jeanne",
+        "text": "La nuit tombe sur les ruines. Rien ne ramènera mon père. Ceux qui respirent encore ont besoin d'un chemin vers les collines. Les routes sont surveillées.",
+        "choices": [
+          {
+            "id": "partir",
+            "label": "Ouvrir la route aux rescapés.",
+            "effects": [
+              {
+                "kind": "unlock_mission",
+                "mission": "p0_04_fuite"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_p0_au_revoir",
+        "title": "Une promesse devant les cendres",
+        "speaker": "Jeanne",
+        "text": "De la colline, Domrémy ressemble à une braise dans l'obscurité. Je serre l'épée de mon père. Un jour, je saurai qui a donné l'ordre. Mais, pour l'instant, je dois protéger les vivants.",
+        "choices": [
+          {
+            "id": "promesse",
+            "label": "« Je retrouverai les responsables. »",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "prologue_complete",
+                "value": true
+              }
+            ],
+            "next_scene": "sc_a1_camp"
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_camp",
+        "title": "Acte I — Le camp des réfugiés",
+        "speaker": "Jeanne",
+        "text": "La forêt abrite les derniers survivants. Les vivres manquent et les blessés réclament de l'aide. Deux volontaires proposent de suivre Jeanne : Étienne, un écuyer privé de son seigneur, et Agnès, une hospitalière qui a sauvé des enfants. Elle ne peut armer qu'un volontaire pour la route.",
+        "choices": [
+          {
+            "id": "engager_etienne",
+            "label": "Recruter Étienne et lui confier un gambison.",
+            "effects": [
+              {
+                "kind": "recruit_hero",
+                "hero": "etienne"
+              },
+              {
+                "kind": "grant_item",
+                "item": "gambison_ecuyer",
+                "quantity": 1
+              },
+              {
+                "kind": "equip_hero",
+                "hero": "etienne",
+                "item": "gambison_ecuyer"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "compagnon_acte1",
+                "value": "etienne"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "trust_etienne",
+                "amount": 15
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_01_route"
+              }
+            ]
+          },
+          {
+            "id": "engager_agnes",
+            "label": "Recruter Agnès et lui confier le bâton de l'hospice.",
+            "effects": [
+              {
+                "kind": "recruit_hero",
+                "hero": "agnes"
+              },
+              {
+                "kind": "grant_item",
+                "item": "baton_hospice",
+                "quantity": 1
+              },
+              {
+                "kind": "equip_hero",
+                "hero": "agnes",
+                "item": "baton_hospice"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "compagnon_acte1",
+                "value": "agnes"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "trust_agnes",
+                "amount": 15
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_01_route"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_pont",
+        "title": "Les routes barrées",
+        "speaker": "Étienne / Agnès",
+        "text": "La patrouille dispersée, le groupe aperçoit le vieux pont de la Brume. Les réfugiés risquent d'être découverts si Jeanne ne sécurise pas les deux rives.",
+        "choices": [
+          {
+            "id": "tenir_passage",
+            "label": "Choisir de couvrir le passage des familles.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "pont_plan",
+                "value": "protection"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "trust_refugies",
+                "amount": 10
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_02_pont"
+              }
+            ]
+          },
+          {
+            "id": "contourner",
+            "label": "Surprendre les gardes en empruntant le sentier des meuniers.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "pont_plan",
+                "value": "surprise"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "renseignement",
+                "amount": 10
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_02_pont"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_hospice",
+        "title": "Le prix de l'hospitalité",
+        "speaker": "Frère Michel",
+        "text": "Après le pont, l'hospice offre un abri. Frère Michel soigne les arrivants, mais les dernières potions doivent être réparties avant l'arrivée de la milice.",
+        "choices": [
+          {
+            "id": "ravitailler",
+            "label": "Donner priorité aux blessés et organiser leur départ.",
+            "effects": [
+              {
+                "kind": "add_flag",
+                "flag": "trust_refugies",
+                "amount": 10
+              },
+              {
+                "kind": "set_flag",
+                "flag": "hospice_aide",
+                "value": 1
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_03_hospice"
+              }
+            ]
+          },
+          {
+            "id": "proteger_dossiers",
+            "label": "Conserver les registres des réfugiés comme preuves.",
+            "effects": [
+              {
+                "kind": "add_flag",
+                "flag": "renseignement",
+                "amount": 10
+              },
+              {
+                "kind": "set_flag",
+                "flag": "hospice_aide",
+                "value": 0
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_03_hospice"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_dilemme",
+        "title": "Archives ou otages",
+        "speaker": "Jeanne",
+        "text": "L'attaque repoussée, deux nouvelles parviennent au camp. Le bailli détient les archives sur le massacre de Domrémy ; dans la tour voisine, des otages attendent leur exécution. Jeanne ne pourra mener qu'un assaut.",
+        "choices": [
+          {
+            "id": "prendre_archives",
+            "label": "S'emparer des archives pour remonter aux commanditaires.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "acte1_choix",
+                "value": "archives"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "evidence",
+                "amount": 15
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_04a_archives"
+              }
+            ]
+          },
+          {
+            "id": "liberer_otages",
+            "label": "Sauver les otages et obtenir leur témoignage.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "acte1_choix",
+                "value": "otages"
+              },
+              {
+                "kind": "add_flag",
+                "flag": "trust_refugies",
+                "amount": 15
+              },
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_04b_otages"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_debrief",
+        "title": "La route de Vaucouleurs",
+        "speaker": "Jeanne",
+        "text": "Le groupe a quitté le domaine du bailli. Les archives ou les survivants auront un prix politique. La seule chance d'obtenir une audience est désormais de rejoindre Vaucouleurs.",
+        "choices": [
+          {
+            "id": "avancer_vaucouleurs",
+            "label": "Prendre la route de Vaucouleurs.",
+            "effects": [
+              {
+                "kind": "unlock_mission",
+                "mission": "a1_05_vaucouleurs"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_a1_fin",
+        "title": "Fin de l'Acte I — Vaucouleurs",
+        "speaker": "Robert de Baudricourt",
+        "text": "Les hommes du capitaine repoussent les derniers assaillants. Jeanne se présente, couverte de poussière, avec ses compagnons. « Je ne demande pas qu'on me croie, seulement qu'on me laisse défendre le royaume. » Les routes de l'Acte II mènent vers Orléans et vers le sacre.",
+        "choices": [
+          {
+            "id": "preuve_officielle",
+            "label": "Présenter les archives et demander une audience officielle.",
+            "when": {
+              "flag": "acte1_choix",
+              "eq": "archives"
+            },
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "acte1_complete",
+                "value": true
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_appui",
+                "value": "archives"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_route_ouverte",
+                "value": true
+              }
+            ],
+            "next_scene": "sc_r20c_fin_archives"
+          },
+          {
+            "id": "parole_otages",
+            "label": "Faire témoigner les personnes libérées.",
+            "when": {
+              "flag": "acte1_choix",
+              "eq": "otages"
+            },
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "acte1_complete",
+                "value": true
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_appui",
+                "value": "temoins"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_route_ouverte",
+                "value": true
+              }
+            ],
+            "next_scene": "sc_r20c_fin_otages"
+          },
+          {
+            "id": "appel_de_jeanne",
+            "label": "S'en remettre aux convictions de Jeanne pour ouvrir la route d'Orléans.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "acte1_complete",
+                "value": true
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_appui",
+                "value": "foi"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "acte2_route_ouverte",
+                "value": true
+              }
+            ],
+            "next_scene": "sc_r20c_fin_foi"
+          }
+        ]
+      },
+      {
+        "id": "sc_r20c_archives",
+        "title": "Les archives noircies",
+        "speaker": "Agnès",
+        "text": "Sous les cendres du poste, Agnès lit le sceau de Bracourt et une date qui précède l'incendie de Domrémy. La preuve accuse des hommes vivants, pas une apparition. Jeanne décide comment la transmettre.",
+        "choices": [
+          {
+            "id": "consigner",
+            "label": "Confier une copie scellée à Agnès pour la cour.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "r20c_route_after",
+                "value": "archives"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "r20c_preuve_public",
+                "value": false
+              },
+              {
+                "kind": "set_flag",
+                "flag": "r20c_preuve_protegee",
+                "value": true
+              }
+            ],
+            "next_scene": "sc_a1_debrief"
+          },
+          {
+            "id": "publier",
+            "label": "Faire connaître la preuve aux réfugiés malgré le risque.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "r20c_route_after",
+                "value": "archives"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "r20c_preuve_public",
+                "value": true
+              },
+              {
+                "kind": "set_flag",
+                "flag": "r20c_preuve_protegee",
+                "value": false
+              }
+            ],
+            "next_scene": "sc_a1_debrief"
+          }
+        ]
+      },
+      {
+        "id": "sc_r20c_otages",
+        "title": "La parole des otages",
+        "speaker": "Margot",
+        "text": "Les familles libérées n'ont pas vu le commanditaire. Elles ont entendu un ordre, reconnu un blason et perdu des proches. Margot demande de ne pas les réduire à des pièces à conviction.",
+        "choices": [
+          {
+            "id": "accueillir",
+            "label": "Organiser la protection et l'accueil des témoins.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "r20c_route_after",
+                "value": "otages"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "r20c_temoins_proteges",
+                "value": true
+              }
+            ],
+            "next_scene": "sc_a1_debrief"
+          },
+          {
+            "id": "deposer",
+            "label": "Préparer leurs dépositions pour Vaucouleurs.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "r20c_route_after",
+                "value": "otages"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "r20c_temoins_proteges",
+                "value": false
+              }
+            ],
+            "next_scene": "sc_a1_debrief"
+          }
+        ]
+      },
+      {
+        "id": "sc_r20c_fin_archives",
+        "title": "Acte I — La promesse des archives",
+        "speaker": "Jeanne",
+        "text": "Les feuillets porteront la cause de Domrémy jusqu'à la cour. Jeanne comprend que la vérité elle-même peut mettre des vies en danger. Le dossier part avec ceux qui le protègent.",
+        "choices": [
+          {
+            "id": "sceller_dossier",
+            "label": "Sceller le dossier et préparer le voyage de Chinon.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "r20c_act1_conclusion",
+                "value": "preuves"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "r20c_chinon_priorite",
+                "value": "enquete"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_r20c_fin_otages",
+        "title": "Acte I — Les voix des survivants",
+        "speaker": "Jeanne",
+        "text": "Les familles sauront qui a choisi de revenir les chercher. Leur parole sera présentée devant Baudricourt. Jeanne ne promet pas de punir sans procès.",
+        "choices": [
+          {
+            "id": "tenir_parole",
+            "label": "Promettre de garantir le témoignage devant la cour.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "r20c_act1_conclusion",
+                "value": "temoins"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "r20c_chinon_priorite",
+                "value": "protection"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sc_r20c_fin_foi",
+        "title": "Acte I — Le serment de Jeanne",
+        "speaker": "Jeanne",
+        "text": "Sans dossier décisif, la route reste ouverte par son courage et la confiance de Baudricourt. Jeanne refuse de prêter aux voix des certitudes que les vivants n'ont pas.",
+        "choices": [
+          {
+            "id": "partir_libre",
+            "label": "Partir vers Chinon sans prêter un serment imposé.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "r20c_act1_conclusion",
+                "value": "libre_arbitre"
+              },
+              {
+                "kind": "set_flag",
+                "flag": "r20c_chinon_priorite",
+                "value": "independance"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "exploration": {
+    "sc_p0_champs": {
+      "title": "Les champs de Domrémy — avant les flammes",
+      "theme": "fields",
+      "width": 10,
+      "height": 7,
+      "start": [
+        1,
+        5
+      ],
+      "blocked": [
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          6,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          6,
+          2
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "interactions": [
+        {
+          "id": "ble",
+          "title": "Les blés mûrs",
+          "text": "Les épis ploient sous la brise. Jeanne reconnaît les sillons tracés avec son père, année après année.",
+          "pos": [
+            3,
+            5
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "medaillon",
+          "title": "Le médaillon de Jacques",
+          "text": "Un médaillon oublié sous l'arbre. Jacques lui a souvent répété : « Une lame ne vaut rien sans quelqu'un à protéger. »",
+          "pos": [
+            5,
+            3
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "fleurs",
+          "title": "Les fleurs de Margot",
+          "text": "Quelques fleurs sauvages pour l'hospice. Ce matin paraissait ordinaire.",
+          "pos": [
+            1,
+            2
+          ],
+          "required": false,
+          "exit": false
+        },
+        {
+          "id": "chene",
+          "title": "Le vieux chêne",
+          "text": "Les oiseaux se taisent. Une voix prononce son prénom. Le monde semble s'immobiliser.",
+          "pos": [
+            8,
+            4
+          ],
+          "required": false,
+          "exit": true
+        }
+      ]
+    },
+    "sc_p0_cendres": {
+      "title": "Domrémy — chercher parmi les cendres",
+      "theme": "village",
+      "width": 10,
+      "height": 7,
+      "start": [
+        1,
+        5
+      ],
+      "blocked": [
+        [
+          3,
+          1
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          6,
+          2
+        ],
+        [
+          7,
+          2
+        ],
+        [
+          6,
+          3
+        ]
+      ],
+      "interactions": [
+        {
+          "id": "maison",
+          "title": "La maison de Jacques",
+          "text": "La maison n'est plus qu'un squelette noir. Sous les poutres, Jeanne retrouve un morceau de tissu brodé par son père.",
+          "pos": [
+            2,
+            3
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "grange",
+          "title": "Les appels de la grange",
+          "text": "Derrière la grange, on appelle au secours. Une femme serre un enfant contre elle. Jeanne n'a que quelques instants pour choisir.",
+          "pos": [
+            5,
+            5
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "traces",
+          "title": "Des traces de bottes",
+          "text": "Des chevaux et des hommes d'armes ont quitté la place vers le chemin de l'est. La patrouille cherchait quelque chose de précis.",
+          "pos": [
+            8,
+            2
+          ],
+          "required": false,
+          "exit": false
+        },
+        {
+          "id": "carrefour",
+          "title": "Le carrefour",
+          "text": "D'un côté, le feu et les survivants. De l'autre, les cavaliers qui emportent le sceau. Jeanne doit décider.",
+          "pos": [
+            8,
+            5
+          ],
+          "required": false,
+          "exit": true
+        }
+      ],
+      "actors": [
+        {
+          "id": "colin",
+          "name": "Colin, apprenti boulanger",
+          "kind": "civilian",
+          "route": [
+            [
+              2,
+              5
+            ],
+            [
+              2,
+              4
+            ],
+            [
+              2,
+              5
+            ]
+          ],
+          "dialogue": "« Ma mère est restée près du four ! Je ne sais plus où courir… »",
+          "rescue_text": "Jeanne montre le passage vers la colline. Colin part chercher les autres survivants et promet de rapporter des bandages.",
+          "deadline": 16,
+          "rescue_flag": "village_rescued"
+        },
+        {
+          "id": "isabeau",
+          "name": "Isabeau, villageoise",
+          "kind": "civilian",
+          "route": [
+            [
+              5,
+              6
+            ],
+            [
+              6,
+              6
+            ],
+            [
+              7,
+              6
+            ]
+          ],
+          "dialogue": "« Le toit va s'effondrer. J'ai besoin d'aide pour sortir ! »",
+          "rescue_text": "Jeanne dégage l'issue. Isabeau rassemble les enfants et emporte les dernières réserves de l'hospice.",
+          "deadline": 26,
+          "rescue_flag": "village_rescued"
+        },
+        {
+          "id": "loise",
+          "name": "Loïse, fille du forgeron",
+          "kind": "civilian",
+          "route": [
+            [
+              4,
+              3
+            ],
+            [
+              5,
+              3
+            ],
+            [
+              5,
+              4
+            ]
+          ],
+          "dialogue": "« Ils ont arrêté mon frère. Pourquoi cherchaient-ils ton père ? »",
+          "rescue_text": "Jeanne l'accompagne jusqu'à une rue sûre. Loïse transmet les noms des gardes qu'elle a reconnus.",
+          "deadline": 19,
+          "rescue_flag": "village_rescued"
+        },
+        {
+          "id": "michel",
+          "name": "Frère Michel, témoin",
+          "kind": "witness",
+          "route": [
+            [
+              8,
+              4
+            ],
+            [
+              8,
+              5
+            ],
+            [
+              8,
+              4
+            ]
+          ],
+          "dialogue": "« J'ai vu une bague noire au doigt du capitaine. La troupe cherchait des feuillets, pas des provisions. »",
+          "rescue_text": "Le religieux vous bénit et reste pour secourir les blessés.",
+          "deadline": 0,
+          "rescue_flag": ""
+        }
+      ]
+    },
+    "sc_a1_camp": {
+      "title": "R20.B — Camp des rescapés, l'aube sous les arbres",
+      "theme": "forest",
+      "width": 8,
+      "height": 6,
+      "start": [
+        1,
+        4
+      ],
+      "blocked": [
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          6,
+          3
+        ]
+      ],
+      "interactions": [
+        {
+          "id": "foyer",
+          "title": "Le foyer encore chaud",
+          "text": "Des mains anonymes ont entretenu le feu durant la nuit. Jeanne comprend que survivre ensemble sera aussi une bataille.",
+          "pos": [
+            2,
+            4
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "provisions",
+          "title": "Les provisions",
+          "text": "Une ration pour une journée. Étienne réclame une garde armée, Agnès des médicaments. Le prochain combat dépendra de ces choix.",
+          "pos": [
+            4,
+            4
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "liste",
+          "title": "Les noms des absents",
+          "text": "Jeanne relit les noms de Domrémy. Sa promesse demeure, mais l'urgence est de conduire les vivants.",
+          "pos": [
+            6,
+            4
+          ],
+          "required": false,
+          "exit": false
+        },
+        {
+          "id": "depart",
+          "title": "Le sentier des fugitifs",
+          "text": "La route est libre pour le moment. Jeanne doit choisir qui l'accompagnera.",
+          "pos": [
+            7,
+            4
+          ],
+          "required": false,
+          "exit": true
+        }
+      ],
+      "actors": [
+        {
+          "id": "eline",
+          "name": "Éline, messagère blessée",
+          "kind": "civilian",
+          "route": [
+            [
+              1,
+              3
+            ],
+            [
+              2,
+              3
+            ],
+            [
+              2,
+              4
+            ],
+            [
+              1,
+              4
+            ]
+          ],
+          "dialogue": "« J'ai porté le message jusqu'ici. Je n'arrive plus à marcher. »",
+          "rescue_text": "Jeanne aide Éline jusqu'au foyer ; elle remet une petite trousse de pansements aux défenseurs de la route.",
+          "deadline": 16,
+          "rescue_flag": "camp_rescued"
+        },
+        {
+          "id": "margot_camp",
+          "name": "Margot, guérisseuse",
+          "kind": "witness",
+          "route": [
+            [
+              5,
+              5
+            ]
+          ],
+          "dialogue": "« Nous manquons de bras. Tu ne sauveras pas tous les blessés avec une épée. »",
+          "rescue_text": "Margot partage ses notes sur les rescapés.",
+          "deadline": 0,
+          "rescue_flag": ""
+        }
+      ]
+    },
+    "sc_a1_pont": {
+      "title": "R20.B — La forêt et les rives du pont de la Brume",
+      "theme": "forest",
+      "width": 9,
+      "height": 7,
+      "start": [
+        1,
+        5
+      ],
+      "blocked": [
+        [
+          4,
+          1
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          7,
+          2
+        ]
+      ],
+      "interactions": [
+        {
+          "id": "pistes",
+          "title": "Les pistes des patrouilles",
+          "text": "Des bottes lourdes remontent vers le gué. Les gardes se déploient comme s'ils attendaient les réfugiés.",
+          "pos": [
+            2,
+            4
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "passage",
+          "title": "La passerelle abîmée",
+          "text": "Une ancienne travée peut servir de diversion. Le passage est étroit : le terrain importe autant que la force.",
+          "pos": [
+            5,
+            4
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "roseaux",
+          "title": "Les roseaux",
+          "text": "Des silhouettes se cachent en contrebas. Certaines fuient les armes ; d'autres connaissent le chemin secret.",
+          "pos": [
+            7,
+            5
+          ],
+          "required": false,
+          "exit": false
+        },
+        {
+          "id": "avant_pont",
+          "title": "Avant le pont",
+          "text": "Jeanne doit décider de couvrir les familles ou d'avancer par surprise avant la bataille.",
+          "pos": [
+            8,
+            5
+          ],
+          "required": false,
+          "exit": true
+        }
+      ],
+      "actors": [
+        {
+          "id": "luc",
+          "name": "Luc, porteur épuisé",
+          "kind": "civilian",
+          "route": [
+            [
+              2,
+              5
+            ],
+            [
+              2,
+              4
+            ],
+            [
+              2,
+              5
+            ]
+          ],
+          "dialogue": "« Les vivres sont tombés dans le ravin ; je ne pourrai pas rejoindre le groupe seul. »",
+          "rescue_text": "Luc retrouve le convoi. Les réfugiés lui confient une potion supplémentaire pour la défense du pont.",
+          "deadline": 20,
+          "rescue_flag": "forest_rescued"
+        },
+        {
+          "id": "passeur",
+          "name": "Le passeur",
+          "kind": "witness",
+          "route": [
+            [
+              6,
+              6
+            ]
+          ],
+          "dialogue": "« Un officier attend sur l'autre rive. Le vieux chemin permet de surprendre sa garde, mais laisse les familles exposées. »",
+          "rescue_text": "Le passeur indique le chemin des meuniers.",
+          "deadline": 0,
+          "rescue_flag": ""
+        }
+      ]
+    },
+    "sc_a1_hospice": {
+      "title": "R20.B — L'hospice des derniers blessés",
+      "theme": "stone",
+      "width": 8,
+      "height": 7,
+      "start": [
+        1,
+        5
+      ],
+      "blocked": [
+        [
+          3,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          4
+        ]
+      ],
+      "interactions": [
+        {
+          "id": "remedes",
+          "title": "La réserve de remèdes",
+          "text": "Il reste quelques flacons. Les donner aux blessés apaise les familles, garder les registres éclaire l'enquête.",
+          "pos": [
+            2,
+            5
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "registres",
+          "title": "Le registre des voyageurs",
+          "text": "Des noms ont été rayés à l'encre noire. L'un des sceaux correspond aux ordres donnés près de Domrémy.",
+          "pos": [
+            5,
+            3
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "priere",
+          "title": "La petite chapelle",
+          "text": "Les voix ne donnent pas de réponse simple. Jeanne décide de juger les actes des hommes plutôt que leurs serments.",
+          "pos": [
+            6,
+            5
+          ],
+          "required": false,
+          "exit": false
+        },
+        {
+          "id": "porte",
+          "title": "La porte de l'hospice",
+          "text": "La milice approche. Le dialogue qui suit déterminera les priorités de la défense.",
+          "pos": [
+            7,
+            5
+          ],
+          "required": false,
+          "exit": true
+        }
+      ],
+      "actors": [
+        {
+          "id": "lucie",
+          "name": "Lucie, jeune aide",
+          "kind": "civilian",
+          "route": [
+            [
+              1,
+              4
+            ],
+            [
+              2,
+              4
+            ]
+          ],
+          "dialogue": "« Les blessés vont être enfermés ici. Je peux encore rejoindre la cour ! »",
+          "rescue_text": "Jeanne ouvre un passage à Lucie. Les soignants lui laissent un remède de secours pour l'attaque.",
+          "deadline": 22,
+          "rescue_flag": "refuge_rescued"
+        },
+        {
+          "id": "pere_michel",
+          "name": "Frère Michel",
+          "kind": "witness",
+          "route": [
+            [
+              6,
+              3
+            ]
+          ],
+          "dialogue": "« Les registres ne parlent pas d'une patrouille ordinaire. Quelqu'un a demandé les papiers de Jacques. »",
+          "rescue_text": "Le religieux confirme sa version des faits.",
+          "deadline": 0,
+          "rescue_flag": ""
+        }
+      ]
+    },
+    "sc_a1_dilemme": {
+      "title": "R20.B — La place dévastée et le choix des archives",
+      "theme": "village",
+      "width": 8,
+      "height": 6,
+      "start": [
+        1,
+        4
+      ],
+      "blocked": [
+        [
+          3,
+          1
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          5,
+          2
+        ]
+      ],
+      "interactions": [
+        {
+          "id": "sceau",
+          "title": "Un courrier scellé",
+          "text": "Le sceau noir relie la milice à l'intendant de Bracourt. Les archives pourraient le prouver devant la cour.",
+          "pos": [
+            2,
+            3
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "voix",
+          "title": "Les voix des familles",
+          "text": "Des otages sont enfermés dans une tour proche. Leur vie ne doit pas devenir une simple variable stratégique.",
+          "pos": [
+            5,
+            4
+          ],
+          "required": true,
+          "exit": false
+        },
+        {
+          "id": "tour",
+          "title": "La silhouette de la tour",
+          "text": "Un feu de garde clignote entre deux meurtrières. L'assaut de la tour ne permettra pas de récupérer les registres.",
+          "pos": [
+            6,
+            1
+          ],
+          "required": false,
+          "exit": false
+        },
+        {
+          "id": "choisir",
+          "title": "Le carrefour",
+          "text": "Jeanne ne peut mener qu'un seul assaut : saisir les preuves ou secourir les otages.",
+          "pos": [
+            7,
+            4
+          ],
+          "required": false,
+          "exit": true
+        }
+      ],
+      "actors": [
+        {
+          "id": "coursier",
+          "name": "Un coursier hagard",
+          "kind": "witness",
+          "route": [
+            [
+              4,
+              5
+            ]
+          ],
+          "dialogue": "« Les soldats ont reçu l'ordre de brûler les registres dès qu'ils verront une bannière arriver. »",
+          "rescue_text": "Le coursier se réfugie derrière les charrettes.",
+          "deadline": 0,
+          "rescue_flag": ""
+        }
+      ]
+    }
+  },
+  "battle_support": [
+    {
+      "mission": "p0_03a_secours",
+      "flag": "village_rescued",
+      "gte": 1,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "p0_03a_secours",
+      "flag": "village_rescued",
+      "gte": 2,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "p0_04_fuite",
+      "flag": "village_rescued",
+      "gte": 2,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "a1_01_route",
+      "flag": "village_rescued",
+      "gte": 2,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "a1_02_pont",
+      "flag": "trust_refugies",
+      "gte": 10,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "a1_03_hospice",
+      "flag": "trust_refugies",
+      "gte": 10,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "a1_05_vaucouleurs",
+      "flag": "renseignement",
+      "gte": 10,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "a1_01_route",
+      "flag": "camp_rescued",
+      "gte": 1,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "a1_02_pont",
+      "flag": "forest_rescued",
+      "gte": 1,
+      "potion_bonus": 1
+    },
+    {
+      "mission": "a1_03_hospice",
+      "flag": "refuge_rescued",
+      "gte": 1,
+      "potion_bonus": 1
+    }
+  ],
+  "assets": {
+    "version": 1,
+    "entries": [
+      {
+        "id": "jeanne_south_idle_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          0,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_idle_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          64,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_move_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          128,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_move_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          192,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_attack_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          256,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_attack_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          320,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_hit_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          384,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_defeat_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          0,
+          448,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_south_idle",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_south_idle_0",
+            "duration_ms": 280
+          },
+          {
+            "sprite": "jeanne_south_idle_1",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_south_move",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_south_move_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_south_move_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_south_attack",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_south_attack_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_south_attack_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_south_hit",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_south_hit_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_south_defeat",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_south_defeat_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_north_idle_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          0,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_idle_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          64,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_move_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          128,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_move_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          192,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_attack_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          256,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_attack_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          320,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_hit_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          384,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_defeat_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          64,
+          448,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_north_idle",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_north_idle_0",
+            "duration_ms": 280
+          },
+          {
+            "sprite": "jeanne_north_idle_1",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_north_move",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_north_move_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_north_move_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_north_attack",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_north_attack_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_north_attack_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_north_hit",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_north_hit_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_north_defeat",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_north_defeat_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_east_idle_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          0,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_idle_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          64,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_move_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          128,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_move_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          192,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_attack_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          256,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_attack_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          320,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_hit_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          384,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_defeat_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          128,
+          448,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_east_idle",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_east_idle_0",
+            "duration_ms": 280
+          },
+          {
+            "sprite": "jeanne_east_idle_1",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_east_move",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_east_move_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_east_move_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_east_attack",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_east_attack_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_east_attack_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_east_hit",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_east_hit_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_east_defeat",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_east_defeat_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_west_idle_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          0,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_idle_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          64,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_move_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          128,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_move_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          192,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_attack_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          256,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_attack_1",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          320,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_hit_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          384,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_defeat_0",
+        "kind": "sprite",
+        "path": "art/jeanne/jeanne_atlas.png",
+        "region": [
+          192,
+          448,
+          64,
+          64
+        ]
+      },
+      {
+        "id": "jeanne_west_idle",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_west_idle_0",
+            "duration_ms": 280
+          },
+          {
+            "sprite": "jeanne_west_idle_1",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_west_move",
+        "kind": "animation",
+        "loop": true,
+        "frames": [
+          {
+            "sprite": "jeanne_west_move_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_west_move_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_west_attack",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_west_attack_0",
+            "duration_ms": 140
+          },
+          {
+            "sprite": "jeanne_west_attack_1",
+            "duration_ms": 140
+          }
+        ]
+      },
+      {
+        "id": "jeanne_west_hit",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_west_hit_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_west_defeat",
+        "kind": "animation",
+        "loop": false,
+        "frames": [
+          {
+            "sprite": "jeanne_west_defeat_0",
+            "duration_ms": 280
+          }
+        ]
+      },
+      {
+        "id": "jeanne_portrait",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_portrait.png"
+      },
+      {
+        "id": "jeanne_neutral",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_neutral.png"
+      },
+      {
+        "id": "jeanne_smile",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_smile.png"
+      },
+      {
+        "id": "jeanne_determined",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_determined.png"
+      },
+      {
+        "id": "jeanne_battle_shout",
+        "kind": "portrait",
+        "path": "art/jeanne/jeanne_battle_shout.png"
+      }
+    ],
+    "bindings": {
+      "animation": {
+        "jeanne_idle_south": "jeanne_south_idle",
+        "jeanne_move_south": "jeanne_south_move",
+        "jeanne_attack_south": "jeanne_south_attack",
+        "jeanne_hit_south": "jeanne_south_hit",
+        "jeanne_defeat_south": "jeanne_south_defeat",
+        "jeanne_idle_north": "jeanne_north_idle",
+        "jeanne_move_north": "jeanne_north_move",
+        "jeanne_attack_north": "jeanne_north_attack",
+        "jeanne_hit_north": "jeanne_north_hit",
+        "jeanne_defeat_north": "jeanne_north_defeat",
+        "jeanne_idle_east": "jeanne_east_idle",
+        "jeanne_move_east": "jeanne_east_move",
+        "jeanne_attack_east": "jeanne_east_attack",
+        "jeanne_hit_east": "jeanne_east_hit",
+        "jeanne_defeat_east": "jeanne_east_defeat",
+        "jeanne_idle_west": "jeanne_west_idle",
+        "jeanne_move_west": "jeanne_west_move",
+        "jeanne_attack_west": "jeanne_west_attack",
+        "jeanne_hit_west": "jeanne_west_hit",
+        "jeanne_defeat_west": "jeanne_west_defeat"
+      },
+      "sprite": {
+        "jeanne": "jeanne_south_idle_0"
+      },
+      "portrait": {
+        "Jeanne": "jeanne_portrait",
+        "Jeanne_neutral": "jeanne_neutral",
+        "Jeanne_smile": "jeanne_smile",
+        "Jeanne_determined": "jeanne_determined",
+        "Jeanne_battle_shout": "jeanne_battle_shout"
+      }
+    }
+  },
+  "cinematics": [
+    {
+      "id": "r20c_ouverture",
+      "name": "Le champ et les voix",
+      "trigger": {
+        "kind": "scene",
+        "target": "sc_p0_champs"
+      },
+      "duration_ms": 6300,
+      "events": [
+        {
+          "id": "matin",
+          "kind": "background",
+          "start_ms": 0,
+          "duration_ms": 6300,
+          "color": "#243c56"
+        },
+        {
+          "id": "sur_les_champs",
+          "kind": "camera",
+          "start_ms": 0,
+          "duration_ms": 6300,
+          "from": [
+            0,
+            -0.1
+          ],
+          "to": [
+            0.12,
+            0.02
+          ],
+          "zoom_from": 1,
+          "zoom_to": 1.18,
+          "easing": "ease_in_out",
+          "shot": "sur_les_champs",
+          "transition": "dissolve"
+        },
+        {
+          "id": "jeanne_au_champ",
+          "kind": "actor",
+          "start_ms": 800,
+          "duration_ms": 4500,
+          "actor": "jeanne",
+          "from": [
+            0.08,
+            0.7
+          ],
+          "to": [
+            0.45,
+            0.63
+          ],
+          "easing": "ease_in_out"
+        },
+        {
+          "id": "les_voix",
+          "kind": "dialogue",
+          "start_ms": 1750,
+          "duration_ms": 3300,
+          "speaker": "Une voix",
+          "text": "Une couronne. Une bannière. Et les cendres.",
+          "expression": "neutral",
+          "chars_per_second": 0
+        },
+        {
+          "id": "closing_fade",
+          "kind": "fade",
+          "start_ms": 5450,
+          "duration_ms": 850,
+          "color": "#101a2b",
+          "easing": "ease_in_out"
+        }
+      ]
+    },
+    {
+      "id": "r20c_domremy",
+      "name": "Les cendres de Domrémy",
+      "trigger": {
+        "kind": "scene",
+        "target": "sc_p0_cendres"
+      },
+      "duration_ms": 5800,
+      "events": [
+        {
+          "id": "braises",
+          "kind": "background",
+          "start_ms": 0,
+          "duration_ms": 5800,
+          "color": "#39232b"
+        },
+        {
+          "id": "fumee_domremy",
+          "kind": "camera",
+          "start_ms": 0,
+          "duration_ms": 5800,
+          "from": [
+            0,
+            0
+          ],
+          "to": [
+            0.13,
+            -0.08
+          ],
+          "zoom_from": 1,
+          "zoom_to": 1.12,
+          "easing": "ease_in_out",
+          "shot": "fumee_domremy",
+          "transition": "dissolve"
+        },
+        {
+          "id": "feu",
+          "kind": "fx",
+          "start_ms": 500,
+          "duration_ms": 3900,
+          "effect": "fire",
+          "intensity": 0.7,
+          "seed": 210,
+          "at": [
+            0.66,
+            0.56
+          ]
+        },
+        {
+          "id": "fumee",
+          "kind": "fx",
+          "start_ms": 0,
+          "duration_ms": 4400,
+          "effect": "smoke",
+          "intensity": 0.52,
+          "seed": 212,
+          "at": [
+            0.53,
+            0.4
+          ]
+        },
+        {
+          "id": "jeanne_decide",
+          "kind": "dialogue",
+          "start_ms": 1800,
+          "duration_ms": 3200,
+          "speaker": "Jeanne",
+          "text": "Je ne peux pas sauver les morts. Les vivants attendent.",
+          "expression": "determined",
+          "chars_per_second": 0
+        },
+        {
+          "id": "closing_fade",
+          "kind": "fade",
+          "start_ms": 4950,
+          "duration_ms": 850,
+          "color": "#101a2b",
+          "easing": "ease_in_out"
+        }
+      ]
+    },
+    {
+      "id": "r20c_hospice",
+      "name": "La veille des blessés",
+      "trigger": {
+        "kind": "scene",
+        "target": "sc_a1_hospice"
+      },
+      "duration_ms": 5600,
+      "events": [
+        {
+          "id": "pierre",
+          "kind": "background",
+          "start_ms": 0,
+          "duration_ms": 5600,
+          "color": "#24343c"
+        },
+        {
+          "id": "hospice_camera",
+          "kind": "camera",
+          "start_ms": 0,
+          "duration_ms": 5600,
+          "from": [
+            0,
+            0.02
+          ],
+          "to": [
+            0.08,
+            -0.03
+          ],
+          "zoom_from": 1,
+          "zoom_to": 1.18,
+          "easing": "ease_in_out",
+          "shot": "hospice_camera",
+          "transition": "dissolve"
+        },
+        {
+          "id": "agnes_aux_blesses",
+          "kind": "actor",
+          "start_ms": 400,
+          "duration_ms": 4100,
+          "actor": "agnes",
+          "from": [
+            0.75,
+            0.7
+          ],
+          "to": [
+            0.57,
+            0.64
+          ],
+          "easing": "ease_in_out"
+        },
+        {
+          "id": "hospice_paroles",
+          "kind": "dialogue",
+          "start_ms": 1200,
+          "duration_ms": 3400,
+          "speaker": "Frère Michel",
+          "text": "Un sceau a été apposé avant l'incendie. Qui donnait les ordres ?",
+          "expression": "neutral",
+          "chars_per_second": 0
+        },
+        {
+          "id": "closing_fade",
+          "kind": "fade",
+          "start_ms": 4750,
+          "duration_ms": 850,
+          "color": "#101a2b",
+          "easing": "ease_in_out"
+        }
+      ]
+    },
+    {
+      "id": "r20c_choix",
+      "name": "Une seule nuit, deux chemins",
+      "trigger": {
+        "kind": "scene",
+        "target": "sc_a1_dilemme"
+      },
+      "duration_ms": 6400,
+      "events": [
+        {
+          "id": "carrefour",
+          "kind": "background",
+          "start_ms": 0,
+          "duration_ms": 6400,
+          "color": "#292b35"
+        },
+        {
+          "id": "carrefour_camera",
+          "kind": "camera",
+          "start_ms": 0,
+          "duration_ms": 6400,
+          "from": [
+            0,
+            0
+          ],
+          "to": [
+            0.2,
+            -0.1
+          ],
+          "zoom_from": 1,
+          "zoom_to": 1.18,
+          "easing": "ease_in_out",
+          "shot": "carrefour_camera",
+          "transition": "dissolve"
+        },
+        {
+          "id": "jeanne_au_carrefour",
+          "kind": "actor",
+          "start_ms": 850,
+          "duration_ms": 3800,
+          "actor": "jeanne",
+          "from": [
+            0.2,
+            0.68
+          ],
+          "to": [
+            0.44,
+            0.62
+          ],
+          "easing": "ease_in_out"
+        },
+        {
+          "id": "choix_de_jeanne",
+          "kind": "dialogue",
+          "start_ms": 2000,
+          "duration_ms": 3500,
+          "speaker": "Jeanne",
+          "text": "Les archives ou les otages. Choisir n'effacera aucune de ces vies.",
+          "expression": "determined",
+          "chars_per_second": 0
+        },
+        {
+          "id": "closing_fade",
+          "kind": "fade",
+          "start_ms": 5550,
+          "duration_ms": 850,
+          "color": "#101a2b",
+          "easing": "ease_in_out"
+        }
+      ]
+    },
+    {
+      "id": "r20c_preuves",
+      "name": "Le sceau de Bracourt",
+      "trigger": {
+        "kind": "scene",
+        "target": "sc_r20c_archives"
+      },
+      "duration_ms": 5400,
+      "events": [
+        {
+          "id": "archives_bg",
+          "kind": "background",
+          "start_ms": 0,
+          "duration_ms": 5400,
+          "color": "#28343b"
+        },
+        {
+          "id": "archives_camera",
+          "kind": "camera",
+          "start_ms": 0,
+          "duration_ms": 5400,
+          "from": [
+            0,
+            0
+          ],
+          "to": [
+            0.07,
+            0.06
+          ],
+          "zoom_from": 1,
+          "zoom_to": 1.18,
+          "easing": "ease_in_out",
+          "shot": "archives_camera",
+          "transition": "dissolve"
+        },
+        {
+          "id": "agnes_revelation",
+          "kind": "dialogue",
+          "start_ms": 1000,
+          "duration_ms": 3300,
+          "speaker": "Agnès",
+          "text": "Ce sceau a servi avant le massacre. Je peux en attester.",
+          "expression": "determined",
+          "chars_per_second": 0
+        },
+        {
+          "id": "closing_fade",
+          "kind": "fade",
+          "start_ms": 4550,
+          "duration_ms": 850,
+          "color": "#101a2b",
+          "easing": "ease_in_out"
+        }
+      ]
+    },
+    {
+      "id": "r20c_survivants",
+      "name": "Ceux que l'on a sauvés",
+      "trigger": {
+        "kind": "scene",
+        "target": "sc_r20c_otages"
+      },
+      "duration_ms": 5400,
+      "events": [
+        {
+          "id": "otages_bg",
+          "kind": "background",
+          "start_ms": 0,
+          "duration_ms": 5400,
+          "color": "#42362e"
+        },
+        {
+          "id": "otages_camera",
+          "kind": "camera",
+          "start_ms": 0,
+          "duration_ms": 5400,
+          "from": [
+            0,
+            0
+          ],
+          "to": [
+            0.1,
+            0.05
+          ],
+          "zoom_from": 1,
+          "zoom_to": 1.18,
+          "easing": "ease_in_out",
+          "shot": "otages_camera",
+          "transition": "dissolve"
+        },
+        {
+          "id": "margot_temoignage",
+          "kind": "dialogue",
+          "start_ms": 1000,
+          "duration_ms": 3300,
+          "speaker": "Margot",
+          "text": "Leurs noms doivent survivre au procès et à nos batailles.",
+          "expression": "sad",
+          "chars_per_second": 0
+        },
+        {
+          "id": "closing_fade",
+          "kind": "fade",
+          "start_ms": 4550,
+          "duration_ms": 850,
+          "color": "#101a2b",
+          "easing": "ease_in_out"
+        }
+      ]
+    },
+    {
+      "id": "r20c_vaucouleurs",
+      "name": "La bannière de Vaucouleurs",
+      "trigger": {
+        "kind": "scene",
+        "target": "sc_a1_fin"
+      },
+      "duration_ms": 6500,
+      "events": [
+        {
+          "id": "porte",
+          "kind": "background",
+          "start_ms": 0,
+          "duration_ms": 6500,
+          "color": "#283344"
+        },
+        {
+          "id": "vaucouleurs_camera",
+          "kind": "camera",
+          "start_ms": 0,
+          "duration_ms": 6500,
+          "from": [
+            0,
+            0
+          ],
+          "to": [
+            0.13,
+            -0.08
+          ],
+          "zoom_from": 1,
+          "zoom_to": 1.18,
+          "easing": "ease_in_out",
+          "shot": "vaucouleurs_camera",
+          "transition": "dissolve"
+        },
+        {
+          "id": "jeanne_audience",
+          "kind": "actor",
+          "start_ms": 1200,
+          "duration_ms": 3800,
+          "actor": "jeanne",
+          "from": [
+            0.2,
+            0.72
+          ],
+          "to": [
+            0.49,
+            0.62
+          ],
+          "easing": "ease_in_out"
+        },
+        {
+          "id": "audience",
+          "kind": "dialogue",
+          "start_ms": 1900,
+          "duration_ms": 3400,
+          "speaker": "Robert de Baudricourt",
+          "text": "La route est ouverte. Le royaume exigera des preuves ou une parole courageuse.",
+          "expression": "neutral",
+          "chars_per_second": 0
+        },
+        {
+          "id": "closing_fade",
+          "kind": "fade",
+          "start_ms": 5650,
+          "duration_ms": 850,
+          "color": "#101a2b",
+          "easing": "ease_in_out"
+        }
+      ]
+    },
+    {
+      "id": "r20c_fin_preuves",
+      "name": "Un dossier pour Chinon",
+      "trigger": {
+        "kind": "scene",
+        "target": "sc_r20c_fin_archives"
+      },
+      "duration_ms": 5100,
+      "events": [
+        {
+          "id": "fin_preuves",
+          "kind": "background",
+          "start_ms": 0,
+          "duration_ms": 5100,
+          "color": "#283c44"
+        },
+        {
+          "id": "jeanne_preuves",
+          "kind": "dialogue",
+          "start_ms": 900,
+          "duration_ms": 3350,
+          "speaker": "Jeanne",
+          "text": "Je porterai les preuves, et leurs risques, jusqu'à la cour.",
+          "expression": "determined",
+          "chars_per_second": 0
+        },
+        {
+          "id": "closing_fade",
+          "kind": "fade",
+          "start_ms": 4250,
+          "duration_ms": 850,
+          "color": "#101a2b",
+          "easing": "ease_in_out"
+        }
+      ]
+    },
+    {
+      "id": "r20c_fin_temoins",
+      "name": "Un serment aux survivants",
+      "trigger": {
+        "kind": "scene",
+        "target": "sc_r20c_fin_otages"
+      },
+      "duration_ms": 5100,
+      "events": [
+        {
+          "id": "fin_temoins",
+          "kind": "background",
+          "start_ms": 0,
+          "duration_ms": 5100,
+          "color": "#334039"
+        },
+        {
+          "id": "jeanne_temoins",
+          "kind": "dialogue",
+          "start_ms": 900,
+          "duration_ms": 3350,
+          "speaker": "Jeanne",
+          "text": "Je porterai leurs voix. Leurs noms ne seront pas oubliés.",
+          "expression": "determined",
+          "chars_per_second": 0
+        },
+        {
+          "id": "closing_fade",
+          "kind": "fade",
+          "start_ms": 4250,
+          "duration_ms": 850,
+          "color": "#101a2b",
+          "easing": "ease_in_out"
+        }
+      ]
+    },
+    {
+      "id": "r20c_fin_libre",
+      "name": "Le chemin sans certitude",
+      "trigger": {
+        "kind": "scene",
+        "target": "sc_r20c_fin_foi"
+      },
+      "duration_ms": 5100,
+      "events": [
+        {
+          "id": "fin_libre",
+          "kind": "background",
+          "start_ms": 0,
+          "duration_ms": 5100,
+          "color": "#343444"
+        },
+        {
+          "id": "jeanne_libre",
+          "kind": "dialogue",
+          "start_ms": 900,
+          "duration_ms": 3350,
+          "speaker": "Jeanne",
+          "text": "Je servirai les vivants sans céder ma volonté aux voix.",
+          "expression": "determined",
+          "chars_per_second": 0
+        },
+        {
+          "id": "closing_fade",
+          "kind": "fade",
+          "start_ms": 4250,
+          "duration_ms": 850,
+          "color": "#101a2b",
+          "easing": "ease_in_out"
+        }
+      ]
+    }
+  ]
+}
