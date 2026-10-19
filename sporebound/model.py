@@ -226,6 +226,11 @@ class Content:
                 missions[m.id] = m
             result = cls(skills, missions, data.get("jobs", {}), data.get("equipment", {}),
                          data.get("tactic_unlocks", []), data.get("archetypes", {}))
+            if rules is None:
+                from .logic_variables import has_logic_variables
+                if has_logic_variables(data):
+                    from .tactical_rpg3 import authored_rules_for_document
+                    rules = authored_rules_for_document(data)
             result.validate(rules=rules)
             return result
         except (KeyError, TypeError, AttributeError) as exc:
@@ -250,6 +255,12 @@ class Content:
 
     def validate(self, *, rules=None) -> None:
         from .rules import default_rules
+        if rules is None:
+            from .logic_variables import has_logic_variables
+            raw = self.to_dict()
+            if has_logic_variables(raw):
+                from .tactical_rpg3 import authored_rules_for_document
+                rules = authored_rules_for_document(raw)
         rules = rules if rules is not None else default_rules()
         def integer(value, low, high, label):
             require(type(value) is int and low <= value <= high, f"{label}: expected integer {low}..{high}")
