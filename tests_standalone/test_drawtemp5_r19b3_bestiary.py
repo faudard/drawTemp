@@ -94,7 +94,8 @@ class BestiaryR19Tests(unittest.TestCase):
                 first = pack.sample(variant="default", action=action,
                                     direction=direction, elapsed_ms=0)
                 last = pack.sample(variant="default", action=action,
-                                   direction=direction, elapsed_ms=200)
+                                   direction=direction,
+                                   elapsed_ms=pack.duration("default", action, direction) // 2)
                 self.assertTrue(first["spriteReady"])
                 self.assertNotEqual(first["spriteRegion"], last["spriteRegion"])
                 self.assertEqual(first["spritePivot"], [32, 63])
