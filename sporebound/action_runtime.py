@@ -295,7 +295,8 @@ class ActionRuntime:
                         self._hurt_hero(1, name, guard)
                     continue
                 tx, ty = hero["pos"]
-            elif home_dx * home_dx + home_dy * home_dy > 120 ** 2:
+            elif (enemy["state"] in ("chase", "attack", "return")
+                  and home_dx * home_dx + home_dy * home_dy > 120 ** 2):
                 enemy["state"] = "return"
                 tx, ty = enemy["home"]
             else:
