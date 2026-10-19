@@ -126,6 +126,58 @@ class LogicGraphDraft:
         self.graph = new
         return branch
 
+    def insert_gate_after(self, action_id, *, kind, params):
+        """Splice a wait/flag after one action, preserving a valid linear path.
+
+        An end-of-sequence gate creates a typed message placeholder for its
+        mandatory second action stage. The R1 project is not mutated.
+        """
+        if self.graph["schema_version"] not in (1, 3):
+            _error("invalid_sequence", "Only linear graphs accept wait/flag gates")
+        if self.node(action_id)["kind"] != "action":
+            _error("port_type", "Select an action before inserting a gate")
+        from drawtemp.sdk.logic_sequence import validate_gate_params
+        validate_gate_params(kind, params)
+        validate_graph(self.graph)
+        next_edge = next((edge for edge in self.graph["edges"]
+                          if edge["from"] == action_id), None)
+        extra = 1 if next_edge is not None else 2
+        if len(self.graph["nodes"]) + extra > MAX_NODES:
+            _error("node_budget", "A wait/flag would exceed 64 nodes")
+        candidate = deepcopy(self.graph)
+        existing_ids = {node["id"] for node in candidate["nodes"]}
+        gate_id = self._next_id("wait" if kind == "wait" else "flag")
+        existing_ids.add(gate_id)
+        candidate["nodes"].append({
+            "id": gate_id, "kind": kind, "params": deepcopy(params)})
+        if next_edge is not None:
+            candidate["edges"].remove(next_edge)
+            target_id = next_edge["to"]
+        else:
+            target_id = next("message" + str(index)
+                             for index in range(1, MAX_NODES + 2)
+                             if "message" + str(index) not in existing_ids)
+            candidate["nodes"].append({
+                "id": target_id, "kind": "action",
+                "params": {"kind": "message", "text": "Après attente" if kind == "wait"
+                           else "Après événement"}})
+        candidate["edges"].extend([
+            {"from": action_id, "out": "next", "to": gate_id, "in": "flow"},
+            {"from": gate_id, "out": "next", "to": target_id, "in": "flow"},
+        ])
+        candidate["schema_version"] = 3
+        validate_graph(candidate)
+        self.graph = candidate
+        return gate_id
+
+    def add_wait_after(self, action_id, ticks=1):
+        return self.insert_gate_after(action_id, kind="wait",
+                                      params={"kind": "ticks", "ticks": ticks})
+
+    def add_flag_after(self, action_id, event_id):
+        return self.insert_gate_after(action_id, kind="flag", params={
+            "kind": "event_fired", "event_id": event_id})
+
     def copy_action(self, node_id):
         node = self.node(node_id)
         if node["kind"] != "action":
@@ -135,7 +187,10 @@ class LogicGraphDraft:
     def edit_node(self, node_id, params):
         node = self.node(node_id)
         from drawtemp.sdk.logic_graph import _validate_params
-        if node["kind"] == "branch":
+        if node["kind"] in ("wait", "flag"):
+            from drawtemp.sdk.logic_sequence import validate_gate_params
+            validate_gate_params(node["kind"], params)
+        elif node["kind"] == "branch":
             from drawtemp.sdk.logic_branches import validate_expression
             if type(params) is not dict or set(params) != {"kind", "predicate"} or params["kind"] != "if":
                 _error("typed_expression", "Expected IF with pure boolean predicate")
@@ -183,7 +238,7 @@ class LogicGraphDraft:
 
     def remove_action(self, node_id):
         if self.node(node_id)["kind"] != "action":
-            _error("invalid_operation", "Cannot delete event or IF node")
+            _error("invalid_operation", "Cannot delete event or control node")
         self.graph["nodes"] = [n for n in self.graph["nodes"]
                                if n["id"] != node_id]
         self.graph["edges"] = [e for e in self.graph["edges"]
