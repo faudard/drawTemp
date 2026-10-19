@@ -94,3 +94,60 @@ l'idempotence de quêtes, le debugger interactif, le QA de reachability complet,
 la localisation et le vertical slice *La loyauté du capitaine* restent à livrer
 sur R42.B/C ou incréments Core supplémentaires. Les preuves d'acceptation
 ne doivent pas être cochées avant validation sur le SHA final de master.
+
+
+## R42.B1 — Narrative Graph Qt (premier atelier visuel)
+
+Le menu **Outils → Narrative Studio R42…** ouvre
+`drawtemp.studio.narrative_qt_r42.NarrativeStudioDialog` sur **la même**
+`AuthoringSession` que le Studio. Le contrôleur headless
+`drawtemp.studio.narrative_workbench_r42.NarrativeWorkbench` expose :
+
+- migration v1→v2 **sur demande** (aperçu d'abord, puis application),
+- graphe Qt de scènes et liens, sélection, inspection des choix/effets,
+  inspection des références entrantes, noms de sous-graphes,
+- création de scènes, édition des répliques (IDs stables, locuteurs et texte),
+  liens `next_scene`, déclarations de variables typées par formulaires Qt,
+- validation canonique à chaque preview; apply en une transaction R1,
+  Undo/Redo sur l'historique unique de l'application.
+
+Le graphe est une **projection read-only**, sans modèle d'événements secondaire.
+Le support de glisser-déposer, l'inspection des conditions profondes et le
+debugger narratif interactif complet restent des étapes R42.B ultérieures.
+L'éditeur n'écrit aucun JSON lui-même.
+
+## R42.B2 — Player Qt Quick et reprise multi-lignes
+
+Une scène R42 v2 peut maintenant être lue ligne par ligne dans le **Player Qt
+Quick existant** : le speaker et le texte affichés proviennent de la ligne
+courante, le bouton « Suite de la conversation » passe à la suivante, et les
+choix n'apparaissent qu'après la dernière ligne. Le Core refuse également
+toute tentative de choisir prématurément par une API non graphique.
+
+Le curseur `r42_line_cursor` (0..31) est stocké dans
+`Campaign.story_flags` **uniquement** pour un graphe v2 ; chaque avance
+constitue une révision de `Simulation`, passe par l'autosave normal,
+et se restaure par `GameSession.from_recording`. Les sauvegardes v1 et le CT
+historique restent sans ce champ. Après un choix, le curseur est remis à 0
+avant la prochaine scène. Un curseur corrompu ou hors des lignes de la scène
+est rejeté même si le checksum du fichier a été recalculé.
+
+Cette fonctionnalité couvre les lignes textuelles ; **elle ne fournit pas**
+encore de localisation traduite par ID, de portrait animé par ligne ni de
+points d'arrêt visuels pendant le dialogue. Les preuves onscreen et Player
+packagé restent nécessaires.
+
+## Vérifications R42.B
+
+```bash
+python -m unittest \
+  tests_standalone.test_r42_narrative_workbench \
+  tests_standalone.test_r42_narrative_player -v
+
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  python -m unittest tests_standalone.test_r42_narrative_qt -v
+```
+
+La CI inclut les régressions R9/Jeanne et `test_game_session`. Les tests
+offscreen **ne prouvent pas** la qualité UX sur écran réel, ni le GPU matériel,
+la distribution propre sur 3 OS ou la certification du gate R42.C.
