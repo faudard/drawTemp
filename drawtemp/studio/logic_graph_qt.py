@@ -11,13 +11,14 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QBrush, QPainterPath, QPen, QPainter
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QGraphicsView, QGraphicsScene, QHBoxLayout,
-    QInputDialog, QLabel, QLineEdit, QMessageBox, QPlainTextEdit,
+    QInputDialog, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QSpinBox,
     QPushButton, QSplitter, QVBoxLayout, QWidget,
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.logic_graph import LogicGraphError, graphs_from_project
 from drawtemp.studio.logic_graph_draft import LogicGraphDraft
+from drawtemp.studio.logic_debugger import LogicGraphDebugger
 
 
 class LogicCanvas(QGraphicsView):
@@ -33,6 +34,9 @@ class LogicCanvas(QGraphicsView):
         self._cards = {}
         self._selected = ""
         self._query = ""
+        self._debug_states = {}
+        self._paused_node = ""
+        self._breakpoint_nodes = set()
 
     def render_graph(self, graph):
         scene = self.scene()
@@ -100,8 +104,20 @@ class LogicCanvas(QGraphicsView):
         self._selected = node_id
         for identifier, item in self._cards.items():
             selected = identifier == node_id
-            item.setPen(QPen(QColor("#ffcc73" if selected else "#8ca9d0"),
-                             4 if selected else 2))
+            state = self._debug_states.get(identifier, "")
+            color = ("#ffcc73" if selected else
+                     "#ff765c" if identifier == self._paused_node else
+                     "#ae8cf0" if identifier in self._breakpoint_nodes else
+                     "#54c49a" if state in ("executed", "fired") else
+                     "#78818e" if state == "cancelled" else "#8ca9d0")
+            item.setPen(QPen(QColor(color), 4 if selected or
+                             identifier == self._paused_node else 2))
+
+    def set_debug_state(self, states=None, *, paused=None, breakpoints=()):
+        self._debug_states = dict(states or {})
+        self._paused_node = paused or ""
+        self._breakpoint_nodes = set(breakpoints)
+        self.highlight(self._selected)
 
     def search(self, query):
         self._query = query.casefold()
@@ -122,6 +138,8 @@ class LogicGraphDialog(QDialog):
         self._baseline = None
         self.selected_node = ""
         self.link_start = ""
+        self.debug_session = None
+        self._debug_nodes = set()
         self.setObjectName("r31-logic-dialog")
         self.setWindowTitle("DrawTemp · Game Logic Studio R31.B")
         self.resize(1040, 700)
@@ -164,6 +182,34 @@ class LogicGraphDialog(QDialog):
             toolbar.addWidget(button)
             self.buttons[key] = button
         root.addLayout(toolbar)
+        debugger_bar = QHBoxLayout()
+        debugger_bar.addWidget(QLabel("Scénario test"))
+        self.debug_scenario = QComboBox()
+        self.debug_scenario.setObjectName("r31-debug-scenario")
+        self.debug_scenario.setAccessibleName("État initial du diagnostic R9")
+        for caption, value in (("Initial", "initial"),
+                               ("Condition satisfaite", "satisfied"),
+                               ("Condition non satisfaite", "unsatisfied")):
+            self.debug_scenario.addItem(caption, value)
+        debugger_bar.addWidget(self.debug_scenario)
+        debugger_bar.addWidget(QLabel("Tick"))
+        self.debug_tick = QSpinBox()
+        self.debug_tick.setObjectName("r31-debug-tick")
+        self.debug_tick.setRange(0, 100000)
+        debugger_bar.addWidget(self.debug_tick)
+        for key, label, callback in (
+                ("debug_start", "Démarrer debug", self.start_debug),
+                ("debug_bp", "Point d'arrêt", self.toggle_breakpoint),
+                ("debug_step", "Pas événement", self.debug_step),
+                ("debug_resume", "Continuer", self.debug_resume),
+                ("debug_inspect", "Inspecter", self.debug_inspect),
+        ):
+            button = QPushButton(label)
+            button.setObjectName("r31-" + key.replace("_", "-"))
+            button.clicked.connect(callback)
+            debugger_bar.addWidget(button)
+            self.buttons[key] = button
+        root.addLayout(debugger_bar)
 
         splitter = QSplitter(Qt.Horizontal)
         root.addWidget(splitter, 1)
@@ -240,6 +286,7 @@ class LogicGraphDialog(QDialog):
             self._baseline = None
         self.link_start = ""
         self.selected_node = ""
+        self._reset_debug()
         self._render()
 
     def new_graph(self):
@@ -265,7 +312,13 @@ class LogicGraphDialog(QDialog):
         self._baseline = None
         self.selected_node = "start"
         self.link_start = ""
+        self._reset_debug()
         self._render()
+
+    def _reset_debug(self):
+        self.debug_session = None
+        self._debug_nodes.clear()
+        self.canvas.set_debug_state()
 
     def _render(self):
         if self.draft is None:
@@ -276,7 +329,16 @@ class LogicGraphDialog(QDialog):
             self.canvas.highlight(self.selected_node)
             self._inspect()
         self.mission.setEnabled(self.draft is None)
+        if self.debug_session is not None and (
+                self.draft is None or self.draft.graph["id"] != self.debug_session.graph_id
+                or self._has_unsaved_draft()
+                or self.session.revision != self.debug_session.source_revision):
+            self._reset_debug()
         self.buttons["apply"].setEnabled(self.draft is not None)
+        for key in ("debug_bp", "debug_step", "debug_resume", "debug_inspect"):
+            self.buttons[key].setEnabled(self.debug_session is not None)
+        self.buttons["debug_start"].setEnabled(
+            self.draft is not None and not self._has_unsaved_draft())
         for key in ("add", "branch", "copy", "edit", "remove", "connect", "true", "false", "disconnect", "preview"):
             self.buttons[key].setEnabled(self.draft is not None)
 
@@ -289,6 +351,98 @@ class LogicGraphDialog(QDialog):
             node["id"] + " · " + node["kind"] + "\n"
             + ", ".join(str(k) + ": " + str(v)
                         for k, v in node["params"].items()))
+
+    def _debug_result(self, state):
+        report = state["report"]
+        details = [
+            "R31.D — DEBUG DANS UN BATTLE ISOLÉ",
+            "Pas = un déclencheur R9 (PAS une action)",
+            "Replay : NON ATTESTÉ",
+            "Nœuds : " + ", ".join(node + "=" + value
+                                  for node, value in report["node_states"].items()),
+        ]
+        for event in report["timeline"]:
+            details.append("Événement " + event["event_id"] + " → " +
+                           ", ".join(event["node_ids"]))
+        self.diagnostics.setPlainText("\n".join(details + state["lines"]))
+        self.canvas.set_debug_state(
+            report["node_states"], paused=report["paused_node"],
+            breakpoints=self._debug_nodes)
+        return state
+
+    def _debug_action(self, callback):
+        if self.debug_session is None:
+            return False
+        try:
+            self._debug_result(callback())
+            return True
+        except (LogicGraphError, AuthoringError, ValueError) as exc:
+            self._reset_debug()
+            self._problem(exc)
+            return False
+
+    def start_debug(self):
+        if self.draft is None or self._has_unsaved_draft():
+            self._problem(LogicGraphError(
+                "unsaved_graph", "Appliquer le graphe avant un diagnostic Battle isolé."))
+            return False
+        try:
+            self._reset_debug()
+            self.debug_session = LogicGraphDebugger(
+                self.session, self.draft.graph["id"],
+                scenario=self.debug_scenario.currentData(),
+                tick=self.debug_tick.value())
+            self._debug_result(self.debug_session.report())
+            self._render()
+            return True
+        except (LogicGraphError, AuthoringError, ValueError) as exc:
+            self._problem(exc)
+            return False
+
+    def toggle_breakpoint(self):
+        if self.debug_session is None or not self.selected_node:
+            return False
+        node_id = self.selected_node
+        new_state = node_id not in self._debug_nodes
+        if self._debug_action(lambda: self.debug_session.breakpoint(node_id, new_state)):
+            if new_state:
+                self._debug_nodes.add(node_id)
+            else:
+                self._debug_nodes.discard(node_id)
+            self.canvas.set_debug_state(
+                self.debug_session.report()["report"]["node_states"],
+                paused=self.debug_session.report()["report"]["paused_node"],
+                breakpoints=self._debug_nodes)
+            return True
+        return False
+
+    def debug_step(self):
+        return self._debug_action(self.debug_session.step) if self.debug_session else False
+
+    def debug_resume(self):
+        return self._debug_action(self.debug_session.resume) if self.debug_session else False
+
+    def debug_inspect(self):
+        if self.debug_session is None or not self.selected_node:
+            return False
+        try:
+            state = self.debug_session.inspect(self.selected_node)
+            parts = [f"NŒUD : {state['node_id']} ({state['kind']})",
+                     "PAS R9 : déclencheur entier, jamais action individuelle",
+                     "Replay : NON ATTESTÉ"]
+            for event in state["native_events"]:
+                parts.append(event["event_id"] + " · " +
+                             event["temporal"]["state"] + " · condition : " +
+                             str(event["condition_passed"]))
+                parts.extend("  " + row["label"] + ": " + str(row["passed"])
+                             for row in event["conditions"])
+            if state["action"] is not None:
+                parts.append("Action native : " + str(state["action"]))
+            self.diagnostics.setPlainText("\n".join(parts))
+            return True
+        except (LogicGraphError, AuthoringError, ValueError) as exc:
+            self._problem(exc)
+            return False
 
     def _problem(self, error):
         code = getattr(error, "code", type(error).__name__)
