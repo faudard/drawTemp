@@ -6,7 +6,6 @@ R26 Action and R28 Classic RPG Player are not connected.
 """
 from __future__ import annotations
 
-from copy import deepcopy
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -149,7 +148,6 @@ def audit_minigame(content_path, key):
                 "La scène narrative doit garder son profil sans combat")
     else:
         require(active_scene is None, "Un mini-jeu tactique ne doit pas bloquer sur un récit")
-        mission_id = content_path.name  # unused presentation name never used as mission identity
         mission_id = next(iter(content.missions))
         game.start_mission(mission_id)
         require(game.active_battle is not None, "La mission CT ne s'est pas lancée")
