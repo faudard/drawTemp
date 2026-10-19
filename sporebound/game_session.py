@@ -256,7 +256,7 @@ class GameSession:
             opponents = sorted((unit for unit in self.battle.units
                                 if unit.alive and unit.team != actor.team),
                                key=lambda unit: unit.id)
-            facts = {"hp": actor.hp, "enemy_visible": bool(opponents)}
+            facts = {"hp": actor.hp, "has_opponents": bool(opponents)}
             if opponents:
                 facts["distance"] = min(distance(actor.pos, foe.pos)
                                         for foe in opponents)
@@ -285,7 +285,8 @@ class GameSession:
 
     def ai_decision_preview(self, actor_id):
         """Read-only R37 policy explanation. Never invoke Battle.execute."""
-        return self._advanced_ai.preview(self.ai_decision_context(actor_id))
+        context = self.ai_decision_context(actor_id)
+        return self._advanced_ai.preview(context)
 
     def ai_remember(self, actor_id, changes):
         """Journal bounded R35 NPC memory against its authoritative world tick.
