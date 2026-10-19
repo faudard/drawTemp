@@ -169,7 +169,8 @@ class GameProject:
             validate_living_world(
                 self.extensions[EXTENSION]["data"],
                 set(self.exploration) | set(content.missions),
-                exploration=self.exploration)
+                exploration=self.exploration,
+                item_ids=set(content.equipment))
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes

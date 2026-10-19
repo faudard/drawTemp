@@ -25,12 +25,12 @@ def _identifier(value):
                     for c in value))
 
 
-def validate_living_world(spec, scene_ids, *, exploration=None):
+def validate_living_world(spec, scene_ids, *, exploration=None, item_ids=None):
     """Validate optional R35 authoring data against canonical scene identities."""
     required = {"version", "start_minute", "ticks_per_minute",
                 "clock_policy", "npcs"}
     require(type(spec) is dict and required <= set(spec)
-            <= required | {"factions", "daily_quests", "shops", "transfers"},
+            <= required | {"factions", "daily_quests", "shops", "transfers", "recipes"},
             "Malformed living-world document")
     require(type(spec["version"]) is int and spec["version"] == VERSION,
             "Unsupported living-world version; explicit migration required")
@@ -117,6 +117,8 @@ def validate_living_world(spec, scene_ids, *, exploration=None):
                 "Daily quest has invalid hours or rewards")
     from .living_world_commerce import validate_shops
     validate_shops(spec, scene_ids)
+    from .living_world_crafting import validate_recipes
+    validate_recipes(spec, scene_ids, item_ids=item_ids)
     from .living_world_navigation import validate_npc_navigation
     validate_npc_navigation(spec, exploration if exploration is not None else {})
     from .living_world_transfers import compile_legs
@@ -126,8 +128,9 @@ def validate_living_world(spec, scene_ids, *, exploration=None):
 class LivingWorld:
     """Integer-time projection for all scenes, including scenes outside focus."""
 
-    def __init__(self, spec, scene_ids, *, exploration=None):
-        validate_living_world(spec, scene_ids, exploration=exploration)
+    def __init__(self, spec, scene_ids, *, exploration=None, item_ids=None):
+        validate_living_world(spec, scene_ids, exploration=exploration,
+                              item_ids=item_ids)
         self.spec = deepcopy(spec)
         self.scene_ids = frozenset(scene_ids)
         self.exploration = deepcopy(exploration or {})
@@ -142,6 +145,7 @@ class LivingWorld:
         self.events = {}
         self.claimed = {}
         self.trades = {}
+        self.crafts = {}
 
     @property
     def day(self):
@@ -174,6 +178,8 @@ class LivingWorld:
             data["claimed"] = deepcopy(self.claimed)
         if "shops" in self.spec:
             data["trades"] = deepcopy(self.trades)
+        if "recipes" in self.spec:
+            data["crafts"] = deepcopy(self.crafts)
         return data
 
     def restore(self, data):
@@ -184,6 +190,8 @@ class LivingWorld:
             expected.add("claimed")
         if "shops" in self.spec:
             expected.add("trades")
+        if "recipes" in self.spec:
+            expected.add("crafts")
         require(type(data) is dict and set(data) == expected
                 and type(data["version"]) is int and data["version"] == VERSION
                 and type(data["ticks"]) is int
@@ -220,18 +228,31 @@ class LivingWorld:
             checkpoint_day = (self.spec["start_minute"]
                               + data["ticks"] // self.spec["ticks_per_minute"]) // 1440
             validate_trades(self, data["trades"], checkpoint_day)
+        if "recipes" in self.spec:
+            from .living_world_crafting import validate_crafts
+            checkpoint_day = (self.spec["start_minute"]
+                              + data["ticks"] // self.spec["ticks_per_minute"]) // 1440
+            validate_crafts(self, data["crafts"], checkpoint_day)
         self.ticks = data["ticks"]
         self.reputation = deepcopy(reputation)
         self.events = deepcopy(events)
         self.claimed = deepcopy(claimed)
         if "shops" in self.spec:
             self.trades = deepcopy(data["trades"])
+        if "recipes" in self.spec:
+            self.crafts = deepcopy(data["crafts"])
 
     def transact(self, progress, flags, active_scene, shop_id, item_id,
                  action, quantity, transaction_id):
         from .living_world_commerce import transact
         return transact(self, progress, flags, active_scene, shop_id, item_id,
                         action, quantity, transaction_id)
+
+    def craft(self, progress, flags, active_scene, recipe_id, quantity,
+              transaction_id):
+        from .living_world_crafting import craft
+        return craft(self, progress, flags, active_scene, recipe_id, quantity,
+                     transaction_id)
 
     def adjust_reputation(self, faction, delta, event_id):
         """Commit one idempotent narrative event without a second quest registry."""
@@ -327,6 +348,9 @@ class LivingWorld:
         if "shops" in self.spec:
             from .living_world_commerce import listing
             data["shops"] = listing(self, story_flags, scene)
+        if "recipes" in self.spec:
+            from .living_world_crafting import catalogue
+            data["recipes"] = catalogue(self, story_flags, scene)
         return data
 
 
