@@ -64,6 +64,7 @@ class AbilityDesignerDialog(QDialog):
         self._loading = False
         self._active_effect = -1
         self._aim = (4, 3)
+        self._unsupported_formula_index = None
 
         outer = QVBoxLayout(self)
         top = QHBoxLayout()
@@ -328,6 +329,7 @@ class AbilityDesignerDialog(QDialog):
         _select(self.scope, row["scope"])
         self.duration.setValue(row["duration"])
         formula = row["formula"]
+        self._unsupported_formula_index = None
         if formula["op"] == "constant":
             _select(self.formula_kind, "constant")
             self.fixed_power.setValue(formula["value"])
@@ -337,6 +339,7 @@ class AbilityDesignerDialog(QDialog):
             self.percent.setValue(formula["amount"])
         else:
             # R43.B1 does NOT silently flatten nested formula graphs.
+            self._unsupported_formula_index = index
             _select(self.formula_kind, "constant")
             self.fixed_power.setValue(0)
             self.report.setPlainText(
@@ -349,6 +352,8 @@ class AbilityDesignerDialog(QDialog):
         index = self._active_effect
         if index < 0 or not self.draft:
             return
+        if index == self._unsupported_formula_index:
+            return  # Retain authored graph unchanged; block preview below.
         if self.formula_kind.currentData() == "constant":
             formula = {"op": "constant", "value": self.fixed_power.value()}
         else:
@@ -403,6 +408,16 @@ class AbilityDesignerDialog(QDialog):
 
     def _gather(self):
         self._sync_effect()
+        # Never silently rewrite a nested R43.A formula as constant zero when
+        # the simple form cannot represent the original operator tree.
+        for effect in self.draft.document["effects"]:
+            expr = effect["formula"]
+            if (expr["op"] != "constant" and
+                    not (expr["op"] == "percent" and
+                         expr["input"]["op"] == "stat")):
+                raise AbilityError(
+                    "unsupported_formula",
+                    "Formule avancée non éditable dans R43.B1 : graphe conservé")
         profiles = [key for key in ("TACTICAL_CT", "ACTION_REALTIME", "RPG_TURN")
                     if self.mode_checks[key].isChecked()]
         timing = {key: {"windup": self.windups[key].value(),
