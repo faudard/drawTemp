@@ -81,6 +81,9 @@ class R30CreatorQtTests(unittest.TestCase):
             lambda project: {**project, "title": "Local title"}))
         review = self.dialog.compare_paths(base, incoming)
         self.assertEqual(len(review.conflicts), 1)
+        self.assertEqual(self.dialog.merge_table.item(0, 0).text(), "Local")
+        self.assertEqual(self.dialog.merge_table.item(0, 3).text(), '"Local title"')
+        self.assertEqual(self.dialog.merge_table.item(0, 4).text(), "")
         self.assertFalse(self.dialog.merge_apply_button.isEnabled())
         row = self.dialog.merge_table.rowCount() - 1
         picker = self.dialog.merge_table.cellWidget(row, 5)
