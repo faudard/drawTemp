@@ -146,7 +146,7 @@ def export_game(content_path, runtime_dir, destination, *,
     if not (runtime / _native_name()).is_file():
         raise ExportError("Native Player executable is missing: " + _native_name())
     output = Path(destination).absolute()
-    if output.exists():
+    if output.exists() or output.is_symlink():
         raise ExportError("Destination exists; never overwrite an export")
     output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".drawtemp-r15-", dir=output.parent) as folder:
@@ -186,10 +186,53 @@ def export_game(content_path, runtime_dir, destination, *,
     return output
 
 
+def _manifest_pairs(pairs):
+    """Disallow duplicate JSON keys: different parsers must not see different data."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ExportError("Duplicate JSON manifest key: " + key)
+        result[key] = value
+    return result
+
+
+def _verified_manifest(root):
+    manifest = root / "manifest.json"
+    # The manifest must be a real, bounded file inside the bundle, not a
+    # symlink or an unbounded attacker-controlled input.
+    if manifest.is_symlink() or not manifest.is_file():
+        raise ExportError("Standalone manifest must be a regular file")
+    size = manifest.stat().st_size
+    if size < 1 or size > 8 * 1024 * 1024:
+        raise ExportError("Standalone manifest exceeds the 8 MiB safety limit")
+    try:
+        return json.loads(manifest.read_text(encoding="utf-8"),
+                          object_pairs_hook=_manifest_pairs)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ExportError("Malformed standalone manifest: " + str(exc)) from exc
+
+
+def _check_published_tree(root):
+    """Reject even *internal* links and special files in relocated bundles.
+
+    Symlinks are allowed in the incoming PyInstaller tree if contained, but
+    copytree materializes their bytes. Published bundles must be independent
+    of symlink resolution and safe to relocate/extract.
+    """
+    for node in root.rglob("*"):
+        if node.is_symlink():
+            raise ExportError("Symlink forbidden in published bundle: " + str(node))
+        if not node.is_file() and not node.is_dir():
+            raise ExportError("Special file forbidden in published bundle: " + str(node))
+
+
 def verify_bundle(path):
     """Reject missing, substituted, unexpected or escaping bundle files."""
     root = Path(path).resolve(strict=True)
-    manifest = _json(root / "manifest.json")
+    if not root.is_dir():
+        raise ExportError("Standalone bundle root is not a directory")
+    _check_published_tree(root)
+    manifest = _verified_manifest(root)
     if (not isinstance(manifest, dict) or manifest.get("schema") != 1 or
             manifest.get("kind") != "drawtemp5-standalone-game" or
             not isinstance(manifest.get("files"), list)):
@@ -222,4 +265,13 @@ def verify_bundle(path):
     if (not isinstance(content, str) or not isinstance(player, str) or
             content.casefold() not in listed or player.casefold() not in listed):
         raise ExportError("Bundle lacks an indexed game or native Player")
+    # Require the GameProject companion; without it the Player can silently
+    # fall back to a bundled/default ruleset instead of the authored game.
+    if (not content.startswith("game/") or not content.endswith(".json") or
+            content.endswith(".game.json") or not player.startswith("Player/") or
+            player.rsplit("/", 1)[-1] not in ("DrawTempPlayer", "DrawTempPlayer.exe")):
+        raise ExportError("Invalid Content or native Player manifest identity")
+    project = content[:-5] + ".game.json"
+    if project.casefold() not in listed:
+        raise ExportError("Bundle lacks the indexed GameProject companion")
     return manifest
