@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from drawtemp.sdk.construction import (
     ConstructionPick, ConstructionWorkspace, catalog,
 )
+from drawtemp.studio.r18_context import require_context, ContextCommandError
 from sporebound.building_visuals import FACADES, ROOFS
 from sporebound.interior_levels import FLOOR_FEATURES, FLOOR_SURFACES, MAX_INTERIOR_LEVEL
 
@@ -29,6 +30,9 @@ class ConstructionDock(QDockWidget):
     def __init__(self, workspace: ConstructionWorkspace, parent=None):
         super().__init__("Construction 2.5D", parent)
         self.workspace = workspace
+        # Standalone R6 docks remain usable. An embedding MapWindow binds
+        # this to its actual mode, not to visibility or a cached boolean.
+        self.context_enabled = lambda: True
         self.setObjectName("drawtemp5_construction_dock")
         self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         scroll = QScrollArea()
@@ -165,12 +169,22 @@ class ConstructionDock(QDockWidget):
         self.redo.clicked.connect(lambda: self._history(self.workspace.redo))
         self.refresh()
 
+    def _may_execute(self, operation):
+        try:
+            require_context(
+                "construction" if self.context_enabled() else "map", operation)
+        except ContextCommandError:
+            return False
+        return True
+
     def on_renderer_hit(self, structure_id, anchor, cell, part, level=0):
         """Bind to renderer click handling *after* real R3 geometry picking.
 
         A null ID clears selection. All other clicks are revalidated against
         the canonical structure footprint and current document revision.
         """
+        if not self._may_execute("construction.select"):
+            return
         try:
             if not structure_id:
                 self.workspace.select(None)
@@ -186,6 +200,8 @@ class ConstructionDock(QDockWidget):
         self.refresh()
 
     def _apply(self, builder):
+        if not self._may_execute("construction.edit"):
+            return None
         try:
             result = self.workspace.apply(builder())
         except (ValueError, TypeError) as exc:
@@ -195,6 +211,8 @@ class ConstructionDock(QDockWidget):
         self.refresh()
 
     def _history(self, operation):
+        if not self._may_execute("construction.history"):
+            return None
         try:
             result = operation()
         except (ValueError, TypeError) as exc:
@@ -219,6 +237,8 @@ class ConstructionDock(QDockWidget):
             self.workspace.pick.cell, present=present))
 
     def _change_floor(self):
+        if not self._may_execute("construction.level"):
+            return
         level = self.level.currentData()
         if level is None:
             return
@@ -245,6 +265,8 @@ class ConstructionDock(QDockWidget):
             feature=self.feature.currentText()))
 
     def _toggle_cutaway(self, enabled):
+        if not self._may_execute("construction.view"):
+            return
         self.workspace.set_cutaway(enabled)
         self.cutaway_changed.emit(enabled)
 
