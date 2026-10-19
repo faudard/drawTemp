@@ -52,7 +52,7 @@ else:
 
 **Outils → Collaboration / VCS → Comparer et fusionner 3 versions…**. Deux fichiers `Content JSON` sont sélectionnés, le premier pour l'ancêtre commun et le second pour la branche externe. Le Studio utilise son `AuthoringSession` en cours comme *ours*. Pour chaque entrée, le `GameProject` est lu depuis le fichier jumeau `nom.game.json`, avec validation et protections contre symlinks, JSON à clés dupliquées, fichiers trop grands et changements externes pendant la lecture.
 
-Une synthèse indique les changements locaux/distants et les conflits. S'il y a conflit, aucune application n'est possible, et jusqu'à 20 chemins/codes de conflit sont affichés. Si le merge est valide et non redondant, un dialogue demande le consentement explicite, **No par défaut**. L'application rafraîchit le Studio et peut être annulée/rétablie. L'écriture sur disque exige un Enregistrer ultérieur.
+Une synthèse indique les changements locaux/distants et les conflits. S'il y a conflit, aucune application n'est possible, et jusqu'à 20 chemins/codes de conflit sont affichés. Si le merge est valide et non redondant, un dialogue propose dans **Afficher les détails** la liste complète des chemins sémantiques distants (ajouts, suppressions et modifications) et demande le consentement explicite, **No par défaut**. L'application rafraîchit le Studio et peut être annulée/rétablie. L'écriture sur disque exige un Enregistrer ultérieur.
 
 ## 6. CLI pour worktrees / CI
 
