@@ -13,6 +13,10 @@ on:
       - 'tests_standalone/test_drawtemp5_r23a.py'
       - 'tests_standalone/test_drawtemp5_r23_evidence.py'
       - 'scripts/r23_release_gate.py'
+      - 'drawtemp/quality/r23c_release.py'
+      - 'scripts/r23c_*.py'
+      - 'tests_standalone/test_drawtemp5_r23c*.py'
+      - 'docs/drawtemp5/R23C_*.md'
   push:
     branches: [master]
   workflow_dispatch:
@@ -30,7 +34,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install .
-      - run: python -m unittest tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator tests_standalone.test_drawtemp5_r23a tests_standalone.test_drawtemp5_r23_evidence -v
+      - run: python -m unittest tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator tests_standalone.test_drawtemp5_r23a tests_standalone.test_drawtemp5_r23_evidence tests_standalone.test_drawtemp5_r23c tests_standalone.test_drawtemp5_r23c_release -v
       - run: python -m drawtemp.export.cli check --content sporebound/content/jeanne.json
 
   native-bundle:
@@ -103,6 +107,26 @@ jobs:
           --name DrawTempStudio
           --collect-data drawtemp --collect-data sporebound
           scripts/r15_studio_entry.py
+      - name: R23.C produce cross-platform portable preview + checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          if [[ "$RUNNER_OS" == "Windows" ]]; then extension="zip"; else extension="tar.gz"; fi
+          archive="release/r23c-${RUNNER_OS}.${extension}"
+          python scripts/r23c_distribution.py package --game export/Jeanne --studio dist/DrawTempStudio --output "$archive" --revision "$GITHUB_SHA" --platform "$RUNNER_OS"
+          digest="$(cut -d ' ' -f1 "$archive.sha256")"
+          python scripts/r23c_distribution.py install --archive "$archive" --destination r23c-local-install --sha256 "$digest" --revision "$GITHUB_SHA" --platform "$RUNNER_OS"
+          python scripts/r23c_distribution.py verify --destination r23c-local-install --revision "$GITHUB_SHA" --platform "$RUNNER_OS"
+          python scripts/r23c_distribution.py remove --destination r23c-local-install
+          test ! -e r23c-local-install
+      - name: Publish R23.C portable previews (unsigned, NOT installers)
+        uses: actions/upload-artifact@v4
+        with:
+          name: r23c-portable-${{ runner.os }}
+          path: release/r23c-*
+          if-no-files-found: error
+          retention-days: 14
       - name: Save preview artifacts (not a certified release)
         uses: actions/upload-artifact@v4
         if: always()
@@ -141,6 +165,120 @@ jobs:
         with:
           name: r23-release-ledger
           path: r23-release-ledger.json
+          if-no-files-found: warn
+
+  r23c-clean-runner:
+    name: R23.C portable game + Studio / ${{ matrix.os }} / isolated runner
+    needs: native-bundle
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      # Separate runner: no checkout, pip install, Studio install, or setup-python.
+      # Windows extraction uses only the Python already preinstalled on hosted
+      # CI runners; the native Player and Studio run without Python imports.
+      - name: Linux Qt OS runtime libraries only
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - uses: actions/download-artifact@v4
+        with:
+          name: r23c-portable-${{ runner.os }}
+          path: ${{ runner.temp }}/r23c-download
+      - name: Verify checksum, extract, run both apps, reject tamper and uninstall
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          PYTHONPATH: ''
+          PYTHONHOME: ''
+          PYTHONNOUSERSITE: '1'
+        run: |
+          set -euo pipefail
+          home="$RUNNER_TEMP"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then home="$(cygpath -u "$RUNNER_TEMP")"; fi
+          source_dir="$home/r23c-download"
+          dest="$home/r23c-installed"
+          cd "$source_dir"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum -c "r23c-$RUNNER_OS."*.sha256
+          else
+            shasum -a 256 -c "r23c-$RUNNER_OS."*.sha256
+          fi
+          digest="$(cut -d ' ' -f1 "r23c-$RUNNER_OS."*.sha256)"
+          mkdir -p "$dest"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            python -m zipfile -e "r23c-Windows.zip" "$dest"
+            player="$dest/DrawTemp/Jeanne/Player/DrawTempPlayer.exe"
+            studio="$dest/DrawTemp/Studio/DrawTempStudio.exe"
+          else
+            tar -xzf "r23c-$RUNNER_OS.tar.gz" -C "$dest"
+            player="$dest/DrawTemp/Jeanne/Player/DrawTempPlayer"
+            studio="$dest/DrawTemp/Studio/DrawTempStudio"
+            test -x "$player"
+            test -x "$studio"
+          fi
+          test -f "$dest/DrawTemp/release.json"
+          test -f "$dest/DrawTemp/Jeanne/manifest.json"
+          "$player" --smoke
+          "$player" --smoke --smoke-scene exploration
+          "$studio" --smoke
+          printf '\nR23C-NEGATIVE-TAMPER\n' >> "$dest/DrawTemp/Jeanne/game/jeanne.json"
+          if "$player" --smoke > "$home/r23c-tamper.log" 2>&1; then
+            echo "FAIL: modified native game was accepted"
+            exit 1
+          fi
+          if ! grep -qi "integrity failure" "$home/r23c-tamper.log"; then
+            echo "FAIL: modified game was rejected without integrity diagnostic"
+            cat "$home/r23c-tamper.log"
+            exit 1
+          fi
+          rm -rf "$dest/DrawTemp"
+          test ! -e "$dest/DrawTemp"
+          printf '{"schema":1,"kind":"drawtemp-r23c-clean-runner","revision":"%s","platform":"%s","archive_sha256":"%s","runner":"github-hosted-ephemeral-offscreen","native_installer":"not-asserted","signing":"not-asserted","checks":{"player_title":"passed","player_exploration":"passed","studio_launch":"passed","tamper_rejection":"passed","uninstall":"passed"}}\n' "$GITHUB_SHA" "$RUNNER_OS" "$digest" > "$home/r23c-clean.json"
+      - name: Preserve independent OS probe
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r23c-clean-${{ runner.os }}
+          path: ${{ runner.temp }}/r23c-clean.json
+          if-no-files-found: warn
+
+  r23c-final-assessment:
+    name: R23.C cross-OS Go-No-go report (unsigned preview NO-GO)
+    needs: [r23c-clean-runner, r23-cross-os-ledger]
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: r23c-clean-*
+          path: r23c-evidence
+          merge-multiple: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: r23-release-ledger
+          path: r23c-upstream
+      - name: Verify three distinct runners and linked R23.A evidence
+        run: >-
+          python scripts/r23c_release_gate.py
+          --directory r23c-evidence
+          --revision ${{ github.sha }}
+          --r23a r23c-upstream/r23-release-ledger.json
+          --output r23c-release-assessment.json
+      - name: Keep NO-GO decision and platform evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r23c-release-assessment
+          path: r23c-release-assessment.json
           if-no-files-found: warn
 
   relocated-player:
