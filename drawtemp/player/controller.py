@@ -199,6 +199,37 @@ class PlayerController:
         self.selected = [0, 0]
         return self._changed()
 
+    def roguelite_move(self, room_id):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        self.session.roguelite_move(room_id,
+                                    expected_revision=snapshot.revision)
+        return self._changed()
+
+    def roguelite_claim(self):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        self.session.roguelite_claim(expected_revision=snapshot.revision)
+        return self._changed()
+
+    def roguelite_checkpoint(self):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        self.session.roguelite_checkpoint(expected_revision=snapshot.revision)
+        return self._changed()
+
+    def roguelite_die(self):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        self.session.roguelite_die(expected_revision=snapshot.revision)
+        return self._changed()
+
+    def roguelite_restart(self):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        self.session.roguelite_restart(expected_revision=snapshot.revision)
+        return self._changed()
+
     def world_wait(self, ticks=1):
         """R35 player clock action, never an implicit renderer tick."""
         state = self._current()
@@ -602,6 +633,7 @@ class PlayerController:
                 "journey": {"enabled": False, "stages": [], "completed": False},
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
                 "routes": [],
+                "roguelite": {"enabled": False, "moves": [], "can_claim": False},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
                 "living_world": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
@@ -662,6 +694,29 @@ class PlayerController:
         # Preserve route buttons even when an exploration exit is completed.
         base["routes"] = thaw(self.session.route_options(
             expected_revision=snapshot.revision))
+        # Project-owned R34 recipe, GameSession-owned run/meta/journal.
+        # This is a detached QML view, not an alternate runtime/registry.
+        if "org.drawtemp.roguelite" in self.project.extensions:
+            run = thaw(self.session.roguelite_state(
+                expected_revision=snapshot.revision))
+            rooms = {room["id"]: room for room in run["layout"]["rooms"]}
+            position = run["position"]
+            held = set(run["keys"])
+            moves = []
+            for target in rooms[position]["neighbors"]:
+                lock = next((
+                    row for row in run["layout"]["locks"]
+                    if {row["a"], row["b"]} == {position, target}), None)
+                available = lock is None or lock["key"] in held
+                moves.append({"id": target, "role": rooms[target]["role"],
+                              "available": available})
+            base["roguelite"] = {
+                "enabled": True, "state": run,
+                "moves": moves,
+                "can_claim": (run["status"] == "active" and
+                              rooms[position]["loot"] > 0 and
+                              position not in run["claimed"]),
+            }
         if self.session.living_world_state() is not None:
             current = base["exploration"].get("scene_id")
             base["living_world"] = thaw(self.session.living_world_state(
