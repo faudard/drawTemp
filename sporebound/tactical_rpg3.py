@@ -89,4 +89,7 @@ def authored_rules_for_document(data):
     from .event_pages import has_pages, page_rules
     if has_pages(data):
         rules = page_rules(rules)
+    from .logic_variables import has_logic_variables, install_logic_variable_rules
+    if has_logic_variables(data):
+        rules = install_logic_variable_rules(rules)
     return rules
