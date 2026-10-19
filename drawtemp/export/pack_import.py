@@ -169,7 +169,10 @@ def _candidate(content: dict, project: dict, selections: tuple[AssetSelection, .
         })
     updated["assets"] = registry
     # Canonical R1/Content/GameProject validation, no secondary registry.
-    checked_content, checked_project = validate_pair(content, updated)
+    try:
+        checked_content, checked_project = validate_pair(content, updated)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise PackImportError("invalid_candidate", str(exc)) from exc
     if checked_content != content:
         raise PackImportError("invalid_candidate", "Import must not edit game rules")
     return checked_project
