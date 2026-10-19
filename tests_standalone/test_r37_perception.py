@@ -137,6 +137,42 @@ class R37PerceptionTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             broken.validate(content)
 
+    def test_authoring_sensor_undo_and_authored_only_diagnostics(self):
+        from drawtemp.studio.ai_sensor_authoring import AISensorDesigner
+        content, project = fixture()
+        editor = AuthoringSession.new(content, project)
+        designer = AISensorDesigner(editor)
+        source = editor.snapshot().to_dict()
+        self.assertEqual(designer.agents()[0]["id"], "traveler")
+        simulated = designer.simulate("traveler", movement=True)
+        self.assertTrue(simulated["preview_only"])
+        self.assertEqual(simulated["origin"],
+                         "first_authored_schedule_stop_and_stage_start")
+        self.assertEqual(simulated["report"]["signal"], "heard")
+        self.assertEqual(editor.snapshot().to_dict(), source)
+        changed = sensor(facing="omni", vision=4, hearing=0)
+        pending = designer.preview(
+            "traveler", changed, expected_revision=editor.revision)
+        self.assertEqual(editor.revision, 0)
+        applied = designer.apply(pending)
+        self.assertEqual(editor.revision, 1)
+        self.assertEqual(designer.agents()[0]["sensor"], changed)
+        with self.assertRaises(AuthoringError):
+            designer.apply(pending)
+        editor.undo()
+        self.assertEqual(designer.agents()[0]["sensor"], sensor())
+        editor.redo()
+        self.assertEqual(designer.agents()[0]["sensor"], changed)
+        self.assertEqual(designer.simulate("traveler")["report"]["signal"],
+                         "none")
+        with self.assertRaises(ValueError):
+            designer.preview("traveler", changed, expected_revision=0)
+        removal = designer.preview("traveler", None)
+        designer.apply(removal)
+        self.assertIsNone(designer.agents()[0]["sensor"])
+        editor.undo()
+        self.assertEqual(designer.agents()[0]["sensor"], changed)
+
     def test_canonical_world_noise_and_explicit_alert_replay(self):
         content, project = fixture()
         session = GameSession.new(content, project, "main", seed=29)
