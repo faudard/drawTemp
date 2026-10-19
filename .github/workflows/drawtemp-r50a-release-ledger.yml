@@ -1,0 +1,52 @@
+name: DrawTemp R50.A Evidence Ledger (NO-GO)
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/quality/r50_certification.py'
+      - 'tests_standalone/test_r50_certification.py'
+      - 'docs/drawtemp9/R50_A_EVIDENCE_LEDGER.md'
+      - '.github/workflows/drawtemp-r50a-release-ledger.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/quality/r50_certification.py'
+      - 'tests_standalone/test_r50_certification.py'
+      - 'docs/drawtemp9/R50_A_EVIDENCE_LEDGER.md'
+      - '.github/workflows/drawtemp-r50a-release-ledger.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: Evidence ledger regression tests
+        run: python -m unittest -v tests_standalone.test_r50_certification
+      - name: Build read-only NO-GO dossier for this checkout SHA
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts/r50a
+          python -m drawtemp.quality.r50_certification \
+            --revision '${{ github.sha }}' \
+            --evidence-dir artifacts/r50a/input \
+            --output artifacts/r50a/release-ledger.json
+          python -c 'import json; r=json.load(open("artifacts/r50a/release-ledger.json")); assert r["decision"] == "NO-GO" and r["tag_allowed"] is False'
+      - name: Upload preliminary dossier (not a release)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drawtemp-r50a-ledger-py${{ matrix.python }}
+          path: artifacts/r50a/release-ledger.json
+          if-no-files-found: error
+          retention-days: 14
