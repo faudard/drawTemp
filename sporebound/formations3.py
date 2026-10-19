@@ -15,9 +15,15 @@ def _formation_tag(unit):
     return next((t for t in unit.tags if t.startswith(PREFIX)), "")
 
 
+def _same_level(battle, actor, other):
+    """Formations use authored deck membership, not overlapping 2D coordinates."""
+    return battle.unit_levels.get(actor.id, 0) == battle.unit_levels.get(other.id, 0)
+
+
 def _allied(battle, actor, *, mode):
     return [u for u in battle.units if u.alive and u.id != actor.id
-            and u.team == actor.team and distance(u.pos, actor.pos) == 1
+            and u.team == actor.team and _same_level(battle, actor, u)
+            and distance(u.pos, actor.pos) == 1
             and _formation_tag(u) == PREFIX + mode]
 
 
@@ -35,20 +41,43 @@ def phalanx(battle, attacker):
 def escorted(battle, target):
     return any(u.alive and u.team == target.team and u.id != target.id
                and _formation_tag(u) == PREFIX + "escort:" + target.id
+               and _same_level(battle, u, target)
                and distance(u.pos, target.pos) == 1 for u in battle.units)
 
 
 def formation_preview(battle, unit_id):
-    """Pure UI/AI forecast, with no hidden formation activation."""
+    """Pure explanation of active and broken stances, including floor ownership."""
     unit = next((u for u in battle.units if u.id == unit_id), None)
     require(unit is not None, "Unknown formation unit")
     tile = battle.board.tile(unit.pos)
-    return {"unit": unit.id, "mode": _formation_tag(unit)[len(PREFIX):] or "none",
-            "shield_wall": bool(shield_wall(battle, unit)),
-            "phalanx": bool(phalanx(battle, unit)),
-            "escort": bool(escorted(battle, unit)),
+    mode = _formation_tag(unit)[len(PREFIX):] or "none"
+    wall = bool(shield_wall(battle, unit))
+    spear = bool(phalanx(battle, unit))
+    protected = bool(escorted(battle, unit))
+    target_id = mode.partition(":")[2] if mode.startswith("escort:") else ""
+    providing = any(
+        ally.id == target_id and ally.alive and ally.team == unit.team
+        and _same_level(battle, unit, ally)
+        and distance(ally.pos, unit.pos) == 1
+        for ally in battle.units) if target_id else False
+    partners = (sorted(ally.id for ally in _allied(battle, unit, mode=mode))
+                if mode in {"shield_wall", "phalanx"} else
+                ([target_id] if providing else []))
+    active = wall or spear or providing
+    reason = None
+    if mode == "shield_wall" and not wall:
+        reason = "adjacent_shield_partner_required_on_same_floor"
+    elif mode == "phalanx" and not spear:
+        reason = "adjacent_spear_partner_required_on_same_floor"
+    elif mode.startswith("escort:") and not providing:
+        reason = "escort_target_required_adjacent_on_same_floor"
+    return {"unit": unit.id, "mode": mode,
+            "level": battle.unit_levels.get(unit.id, 0),
+            "shield_wall": wall, "phalanx": spear, "escort": protected,
+            "providing_escort": providing, "formation_active": bool(active),
+            "partners": partners, "break_reason": reason,
             "terrain_cover": tile.cover, "elevation": tile.height,
-            "fortified": bool(shield_wall(battle, unit) and tile.cover >= 20)}
+            "fortified": bool(wall and tile.cover >= 20)}
 
 
 def set_formation(battle, actor, command):
@@ -64,6 +93,8 @@ def set_formation(battle, actor, command):
         require(protected is not None and protected.alive
                 and protected.team == actor.team and protected.id != actor.id,
                 "Escort target must be a living ally")
+        require(_same_level(battle, actor, protected),
+                "Escort target is on a different floor")
         require(distance(actor.pos, protected.pos) <= 2, "Escort target out of range")
     else:
         require(target is None, "Target only valid for escort")
@@ -83,7 +114,8 @@ def phalanx_hold_covers(battle, watcher, cell):
     return (phalanx(battle, watcher)
             and distance(watcher.pos, cell) <= min(
                 battle.engagement_range(watcher), battle._basic(watcher).range)
-            and battle.line_of_sight(watcher.pos, cell))
+            and battle.line_of_sight(
+                watcher.pos, cell, level=battle.unit_levels.get(watcher.id, 0)))
 
 
 def phalanx_hold_enters(battle, watcher, previous, cell):
@@ -111,9 +143,12 @@ def formation_control_map(battle, team):
         cells = [list(cell) for cell in battle.board.cells()
                  if cell != unit.pos and phalanx_hold_covers(battle, unit, cell)]
         prep = battle.prepared_reactions.get(unit.id, {})
-        result.append({"unit": unit.id, "cells": cells,
+        result.append({"unit": unit.id,
+                       "level": battle.unit_levels.get(unit.id, 0),
+                       "cells": cells,
                        "armed": prep.get("mode") == "phalanx_hold"
-                       and prep.get("charges", 0) > 0})
+                       and prep.get("charges", 0) > 0
+                       and battle._can_react(unit)})
     return result
 
 
