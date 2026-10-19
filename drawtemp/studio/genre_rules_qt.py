@@ -419,9 +419,15 @@ class GenreRulesWorkspace(QWidget):
         self.enemies = EnemyDesignerPanel(session)
         self.tabs.addTab(self.abilities, "Ability Designer")
         self.tabs.addTab(self.enemies, "Enemy Designer")
+        # R32.C shares this Gameplay tab, the R1 session and global Undo/Redo.
+        from drawtemp.studio.platform_collider_qt import ColliderEditorPanel
+        self.colliders = ColliderEditorPanel(session)
+        self.tabs.addTab(self.colliders, "Colliders 2D (R32)")
+        self.colliders.updated.connect(self.updated.emit)
         self.abilities.updated.connect(self.updated.emit)
         self.enemies.updated.connect(self.updated.emit)
 
     def refresh(self):
         self.abilities.refresh()
         self.enemies.refresh()
+        self.colliders.refresh()
