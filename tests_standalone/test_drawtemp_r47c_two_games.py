@@ -192,6 +192,11 @@ class TwoGamesTwoModsTests(unittest.TestCase):
         report = registry.audit_project(session.snapshot(), expected_pins=invalid)
         self.assertFalse(report["compatible"])
         self.assertIn("manifest_changed", report["errors"][0])
+        tampered = deepcopy(original)
+        tampered["project"]["extensions"]["org.example.r47.combat"]["data"]["family"] = "forged"
+        diagnostic = registry.audit_project(tampered, expected_pins=pins)
+        self.assertFalse(diagnostic["compatible"])
+        self.assertIn("namespace_changed", diagnostic["errors"][0])
         self.assertEqual(original, session.snapshot().to_dict())
         with self.assertRaises(ModError):
             registry.audit_project(session.snapshot(), expected_pins={"bad/id": "a" * 64})
