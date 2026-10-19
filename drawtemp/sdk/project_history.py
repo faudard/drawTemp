@@ -137,6 +137,10 @@ class RevisionGraph:
                 "ambiguous_base", "Several merge bases; choose one explicitly")
         return self.node(candidates[0])
 
+    def nodes(self) -> tuple[RevisionNode, ...]:
+        """Valid, immutable, insertion-ordered node snapshots for inspection."""
+        return tuple(self.node(node_id) for node_id in self._nodes)
+
     def __len__(self):
         return len(self._nodes)
 
