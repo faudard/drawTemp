@@ -361,7 +361,6 @@ def preview_override_instance(session, prefab, instance_id, patches):
         effective = _patches(old, patches)
         newly = {(s, row["id"], f): row[f] for s, fields in FIELDS.items()
                  for row in effective[s] for f in fields if f in row}
-        applied = set()
         mission = next(m for m in content["missions"]
                        if m["id"] == instance["mission_id"])
         for section, source_id, field in sorted(changed):
@@ -377,13 +376,13 @@ def preview_override_instance(session, prefab, instance_id, patches):
                           if row["id"] == placed_id)
             require(target.get(field) == prior, "Manual instance edit conflict")
             target[field] = deepcopy(wanted)
-            applied.add(key)
         overrides = {(p["section"], p["id"], p["field"]): p
                      for p in instance["overrides"]}
         for patch in patches:
+            # An explicit override pins the value even when it currently
+            # equals the inherited default: future template edits skip it.
             key = (patch["section"], patch["id"], patch["field"])
-            if key in applied or key in overrides:
-                overrides[key] = deepcopy(patch)
+            overrides[key] = deepcopy(patch)
         require(len(overrides) <= MAX_OVERRIDES, "Too many instance overrides")
         instance["overrides"] = [overrides[key] for key in sorted(overrides)]
         _write(project, data)
