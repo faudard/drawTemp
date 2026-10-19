@@ -75,7 +75,11 @@ def scene_for_player(controller):
             mission_id = snapshot.battle["mission_id"]
             return scene_from_mission(controller.content.missions[mission_id], snapshot)
         if snapshot.exploration is not None and not snapshot.exploration["completed"]:
-            return scene_from_exploration(snapshot.exploration, revision=snapshot.revision)
+            world = controller.session.living_world_state(
+                scene=snapshot.exploration["scene_id"])
+            return scene_from_exploration(
+                snapshot.exploration, revision=snapshot.revision,
+                living_world=world)
     return scene_from_mission(next(iter(controller.content.missions.values())))
 
 
@@ -334,6 +338,10 @@ def create_bridge(controller, renderer):
         def exploreMove(self, dx, dy):
             self.invoke(self.controller.explore_move, dx, dy,
                         visual=("jeanne", "walk"))
+
+        @Slot(int)
+        def worldWait(self, ticks):
+            self.invoke(self.controller.world_wait, ticks)
 
         @Slot(str)
         def exploreInteract(self, target):
