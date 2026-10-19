@@ -120,6 +120,12 @@ class GameSession:
 
     def scene_profile(self, scene_id=None):
         """Read the canonical project profile without changing CT state."""
+        if scene_id is not None:
+            known = (set(self.content.missions)
+                     | set(self.project.exploration)
+                     | set(self.story.scenes))
+            require(type(scene_id) is str and scene_id in known,
+                    "Unknown game mode scene")
         from .game_modes import resolve_scene_profile
         return resolve_scene_profile(self.project.game_modes, scene_id)
 
