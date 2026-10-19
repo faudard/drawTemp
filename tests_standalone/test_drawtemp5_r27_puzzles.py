@@ -53,7 +53,7 @@ class PuzzleRuntimeTests(unittest.TestCase):
     def test_key_unlocks_actual_door_and_replay_digest(self):
         self.dungeon.place_puzzle("key_a", "key", (7, 2), door_id="room_door")
         report = self.dungeon.puzzle_report()
-        self.assertTrue(report["complete"])
+        self.assertFalse(report["complete"])  # Enemy AI is explicitly outside symbolic coverage.
         self.assertEqual(report["unreachable_goals"], [])
         self.assertIn("collect key_a", report["witness"])
         battle, hero_id, rules = self.battle((7, 2))
@@ -71,7 +71,7 @@ class PuzzleRuntimeTests(unittest.TestCase):
         self.dungeon.place_puzzle("lost_key", "key", (8, 7),
                                   door_id="room_door")
         report = self.dungeon.puzzle_report()
-        self.assertTrue(report["complete"])
+        self.assertFalse(report["complete"])  # Enemy AI is explicitly outside symbolic coverage.
         self.assertEqual(report["unreachable_goals"], [[8, 8]])
         self.assertIn("lost_key", report["unreachable_objects"])
 
