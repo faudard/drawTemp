@@ -73,6 +73,9 @@ def validate_puzzles(mission):
         linked_switches = [o for o in objects
                            if o["kind"] == "switch"
                            and o.get("link") == door["id"]]
+        if has_key or has_sequence or linked_plates:
+            require(door.get("locked", False) is True,
+                    "Puzzle-controlled doors must remain locked until solved")
         require(not ((has_key and (has_sequence or linked_plates or linked_switches))
                      or (has_sequence and linked_plates)
                      or (linked_plates and linked_switches)),
