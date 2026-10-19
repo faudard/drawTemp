@@ -97,6 +97,7 @@ class R30CreatorDialog(QDialog):
         self.pack_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.pack_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.pack_table.setAccessibleName("Ressources disponibles dans le pack")
+        self.pack_table.itemChanged.connect(self._invalidate_pack)
         layout.addWidget(self.pack_table)
         actions = QHBoxLayout()
         self.pack_preview_button = QPushButton("Prévisualiser la sélection")
@@ -173,8 +174,6 @@ class R30CreatorDialog(QDialog):
                 self.pack_table.setItem(index, 5, origin)
         finally:
             self._pack_populating = False
-        self.pack_table.itemChanged.connect(self._invalidate_pack,
-                                            Qt.UniqueConnection)
         self.pack_preview_button.setEnabled(any(row.kinds for row in rows))
         self.pack_status.setText(
             f"{len(rows)} fichiers contrôlés. Sélectionnez les ressources à importer.")
