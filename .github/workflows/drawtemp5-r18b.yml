@@ -1,0 +1,55 @@
+name: DrawTemp R18.B Inspector and Context
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/inspector_model.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'drawtemp/studio/r18_context.py'
+      - 'drawtemp/studio/map_editor.py'
+      - 'drawtemp/studio/construction_dock.py'
+      - 'tests_standalone/test_drawtemp5_r18b.py'
+      - '.github/workflows/drawtemp5-r18b.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/studio/inspector_model.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'drawtemp/studio/r18_context.py'
+      - 'drawtemp/studio/map_editor.py'
+      - 'drawtemp/studio/construction_dock.py'
+      - 'tests_standalone/test_drawtemp5_r18b.py'
+      - '.github/workflows/drawtemp5-r18b.yml'
+
+jobs:
+  studio-r18b:
+    name: R18.B / Python 3.12 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libopengl0 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libdbus-1-3
+      - name: Install DrawTemp Qt
+        run: python -m pip install -e ".[qt6]"
+      - name: Inspector and map context unit/Qt regressions
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          python -m unittest tests_standalone.test_drawtemp5_r18b tests_standalone.test_drawtemp5_r2_cd tests_standalone.test_drawtemp5_r18a -v
+      - name: Construction workspace CLI smoke (Linux software Qt)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.studio.qt_shell --smoke --workspace construction
