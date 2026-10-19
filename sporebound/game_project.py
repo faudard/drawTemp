@@ -116,6 +116,9 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # R36: reject invalid controllers and dangling R28 animation IDs on load.
+        from .animation_graph import controllers_from_project
+        controllers_from_project(self)
         # R32: reject malformed geometry on load, even outside the Studio.
         from .physics_scenes import EXTENSION as PHYSICS_EXTENSION, physics_scene_ids, validate_physics_catalog
         if PHYSICS_EXTENSION in self.extensions:
