@@ -28,6 +28,37 @@ Le test génère des archives R30 de données JSON originales, sans fichiers Pyt
 
 Après installation, falsifier une archive ZIP entraîne le diagnostic `resource_changed` et un résultat `compatible: false`. Le retrait d'un module non disponible ne supprime jamais ses données du projet : l'audit annonce `missing_mod`. `rights_verified`, `native_export_verified` et `release_certified` restent toujours **false** dans ce rapport technique.
 
+## R47.C — Remplacement explicite des versions de manifests (incrément suivant)
+
+`ModRegistry.replace_version(mod_id, manifest, project=..., resource_paths=...,
+allow_downgrade=False)` permet un changement de version **sans mutation de données
+projet**. Le contrôle exige le même identifiant et namespace, un SemVer nouveau,
+une extension strictement identique et des dépendances entrantes/sortantes
+toujours compatibles. Les nouvelles archives R30 sont revérifiées intégralement
+avant le remplacement du registre en mémoire.
+
+Un downgrade est **refusé par défaut** ; il nécessite
+`allow_downgrade=True` et, dans le Studio, un dialogue de consentement indiquant
+clairement l'ancienne et la nouvelle version. Une fois la validation réussie,
+**toutes les permissions précédentes sont révoquées**, même si le manifeste
+réclame exactement les mêmes capacités. Le mod est donc inactif tant qu'il
+n'est pas réautorisé.
+
+L'état ancien est préservé si les packs sont absents/corrompus, si un module
+dépendant bloque la version, si une autorisation manque ou si l'enveloppe de
+l'extension change. Pour modifier les données, une migration `AuthoringSession`
+explicite reste obligatoire ; ce remplacement **n'est pas** une migration
+automatique de `GameProject`. L'utilisateur peut annuler le remplacement de
+métadonnées en sélectionnant **à nouveau l'ancien manifeste et ses packs**
+avec confirmation du downgrade ; aucun historique de manifests n'est persisté
+ou certifié en dehors du projet.
+
+Le SHA-256 épinglé dans un inventaire externe doit être mis à jour de façon
+délibérée après changement de version. Il n'existe ni signature vérifiée ni
+autorité de confiance automatique. Couverture :
+`tests_standalone/test_drawtemp_r47d_versions.py`, tests Qt du
+gestionnaire et matrice tri-OS R47.C.
+
 ## Commandes et matrice de couverture
 
 Sur Python 3.12 :
@@ -36,6 +67,7 @@ Sur Python 3.12 :
 python -m pip install .
 python -m unittest tests_standalone.test_drawtemp_r47c_two_games -v
 python -m unittest tests_standalone.test_drawtemp_r47a_modding -v
+python -m unittest tests_standalone.test_drawtemp_r47d_versions -v
 ~~~
 
 La CI `.github/workflows/drawtemp-r47c-two-games.yml` prévoit Windows, macOS et Ubuntu, et relance également les contrats R30 et R15, ainsi que la baseline tactique R1. Une validation Python/JSON headless ne vaut **pas** exécution sur machine utilisateur finale, sur GPU physique ou en Qt onscreen.
