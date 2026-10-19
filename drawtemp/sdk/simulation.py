@@ -207,6 +207,43 @@ class Simulation:
         operation = 'route_interact' if routed else 'explore_interact'
         return self._apply(operation, point_id, expected_revision=expected_revision)
 
+    def route_options(self, *, expected_revision=None):
+        """Read-only R25 exit catalogue for Studio/Player; no new route ledger.
+
+        Eligibility is computed by the existing SceneRouter and Campaign.
+        An unavailable route stays visible but cannot be entered; inspecting
+        the menu never mutates replay, revisions, or RNG.
+        """
+        self._check_revision(expected_revision, 'route_options')
+        session = self._session
+        if (not session.scene_router.enabled or session.mode != 'campaign'
+                or session.route_scene not in session.project.exploration
+                or session.progress.story_pending or session.tactical_story_pending):
+            return freeze([])
+        result = []
+        for link in session.project.scene_routes['links']:
+            if link['source'] != session.route_scene:
+                continue
+            try:
+                session.scene_router.destination(
+                    session.route_scene, link['id'], session.progress)
+            except RuleError:
+                available = False
+            else:
+                available = True
+            destination = link['destination']
+            title = (session.project.exploration[destination]['title']
+                     if destination in session.project.exploration
+                     else session.content.missions[destination].name)
+            result.append({'id': link['id'], 'destination': destination,
+                           'title': title, 'available': available})
+        return freeze(result)
+
+    def route_transition(self, link_id, *, expected_revision=None):
+        """Atomic R25 GameSession transition, guarded by R1 revision checks."""
+        return self._apply('route_transition', link_id,
+                           expected_revision=expected_revision)
+
     def explore_wait(self, *, expected_revision=None):
         return self._apply('explore_wait', expected_revision=expected_revision)
 
