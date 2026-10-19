@@ -46,8 +46,9 @@ def project_vfx(fx, *, reduced_motion=False, lights_enabled=True,
     for row in fx:
         if (type(row) is not dict or
                 set(row) != {"id", "kind", "actor", "x", "y", "alpha", "scale"} or
-                type(row["id"]) is not str or len(row["id"]) > 128 or
-                row["kind"] not in ALLOWED_FX or
+                type(row["id"]) is not str or not 1 <= len(row["id"]) <= 128 or
+                type(row["actor"]) is not str or not row["actor"] or
+                type(row["kind"]) is not str or row["kind"] not in ALLOWED_FX or
                 any(type(row[k]) not in (int, float) or not isfinite(row[k])
                     for k in ("x", "y", "alpha", "scale")) or
                 not 0 <= row["alpha"] <= 1 or not 0 < row["scale"] <= 2):
