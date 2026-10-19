@@ -5,7 +5,10 @@ on:
     paths:
       - 'drawtemp/sdk/collaboration.py'
       - 'drawtemp/sdk/semantic_review.py'
+      - 'drawtemp/sdk/project_refactor.py'
+      - 'drawtemp/sdk/project_audit.py'
       - 'tests_standalone/test_drawtemp_r48a_collaboration.py'
+      - 'tests_standalone/test_drawtemp_r48a2_refactor_audit.py'
       - 'docs/R48A_COLLABORATION_CORE.md'
       - '.github/workflows/drawtemp-r48a-collaboration.yml'
   push:
@@ -34,6 +37,7 @@ jobs:
         run: >-
           python -m unittest
           tests_standalone.test_drawtemp_r48a_collaboration
+          tests_standalone.test_drawtemp_r48a2_refactor_audit
           tests_standalone.test_drawtemp_r30_creator
           tests_standalone.test_drawtemp_r30c_review
           tests_standalone.test_drawtemp_r30d_git
