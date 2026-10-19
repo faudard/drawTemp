@@ -209,6 +209,15 @@ class Simulation:
         return self._apply('execute', choose_command(battle),
                            expected_revision=expected_revision)
 
+    def pending_scene_cinematic(self):
+        """Immutable authored presentation cue; never expose mutable engine data."""
+        return freeze(self._session.pending_scene_cinematic())
+
+    def acknowledge_scene_cinematic(self, clip_id, *, expected_revision=None):
+        """Revision-checked acknowledgement with canonical transaction rollback."""
+        return self._apply('acknowledge_scene_cinematic', clip_id,
+                           expected_revision=expected_revision)
+
     def choose_story_option(self, choice, *, expected_revision=None):
         return self._apply('choose_story_option', choice, expected_revision=expected_revision)
 
