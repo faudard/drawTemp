@@ -194,6 +194,8 @@
 
 **Suivi R21.C — tranche incrémentale non certifiante :** [préparation d'actions bélier/herse et visibilité des fronts](drawtemp5/R21_SIEGE_READINESS.md). Ce lot rend les actions R21.8–R21.10 inspectables via le moteur existant et leur causalité rejouable, sans déclarer livrés les parcours complets de siège, le Player Qt ou le gate R21.
 
+**Suivi R21.D — tranche incrémentale non certifiante :** [parcours de siège, déploiement, convoyage et checkpoints rejouables](drawtemp5/R21_SIEGE_JOURNEY.md). Ce lot enchaîne de vraies commandes de mission sur plusieurs fronts, puis sauvegarde/reprise vérifiée ; les parcours complets du château et leur UX Qt restent ouverts.
+
 **Gate R21 :** le siège se termine par au moins deux approches tactiques cohérentes, avec plusieurs fronts, portes/escaliers, boss et conséquences durables. L'IA ne téléporte pas les unités hors simulation et le replay reste déterministe.
 
 ## 8. R22 — Creator Studio 2.0 (5.5 beta)
