@@ -48,6 +48,13 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: python -m drawtemp.player.qt_app --reference --smoke --smoke-scene battle
+      - name: R18 targeted actions via production QML (Linux)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          python -c "import tempfile, subprocess, sys; d=tempfile.mkdtemp(prefix='r18c-target-'); rc=subprocess.call([sys.executable,'-m','drawtemp.player.qt_app','--reference','--save-dir',d,'--gui-target-journey']); sys.exit(rc)"
       - name: Existing title-to-resume QML journey (Linux)
         if: runner.os == 'Linux'
         env:
