@@ -12,6 +12,7 @@ on:
       - 'sporebound/living_world_navigation.py'
       - 'sporebound/living_world_transfers.py'
       - 'tests_standalone/test_r35_transfers.py'
+      - 'tests_standalone/test_r35_transfers_qt.py'
       - 'drawtemp/sdk/simulation.py'
       - 'drawtemp/player/controller.py'
       - 'drawtemp/player/qt_app.py'
@@ -39,6 +40,7 @@ on:
       - 'sporebound/living_world_navigation.py'
       - 'sporebound/living_world_transfers.py'
       - 'tests_standalone/test_r35_transfers.py'
+      - 'tests_standalone/test_r35_transfers_qt.py'
       - 'drawtemp/sdk/simulation.py'
       - 'drawtemp/player/controller.py'
       - 'drawtemp/player/qt_app.py'
@@ -105,4 +107,4 @@ jobs:
       - name: Qt R35.C2 offscreen UI, preview, apply and undo
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m unittest tests_standalone.test_r35_village_qt tests_standalone.test_r35_navigation_qt -v
+        run: python -m unittest tests_standalone.test_r35_village_qt tests_standalone.test_r35_navigation_qt tests_standalone.test_r35_transfers_qt -v
