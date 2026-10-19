@@ -225,6 +225,8 @@
 
 **Cinquième tranche :** [R23.E — contrôle des signatures, droits et dossier Go/No-go](drawtemp5/R23E_SIGNING_RIGHTS_RELEASE_GATE.md) inventorie les licences et empreintes des assets **effectivement exportés** sur trois OS, fournit des vérifications Authenticode/Apple/GPG en lecture seule avec identités de confiance épinglées, et collecte les douze gates dans un dossier `NO-GO` basé sur le même commit. Aucune licence déclarée ne vaut approbation juridique, et aucun certificat, notarisation, test physique ou signature de décision n'est fabriqué.
 
+**Sixième tranche :** [R23.F — répétition Release Candidate 5.5.0-rc0](drawtemp5/R23F_RELEASE_CANDIDATE.md) rejoue de vraies APIs de création d'événement et de sauvegarde Studio, export R15, délocalisation du Player, session, sauvegarde/reprise, rejet de données falsifiées sur trois OS. Le **runtime export de cette répétition est synthétique** (les binaires natifs sont vérifiés séparément par R23.D) ; la vérification des douze gates sur même SHA produit **NO-GO / tag_allowed=false** tant que licences, signature, essais externes et accord humain sont ouverts.
+
 **But :** publier un produit de création utilisable et maintenable, pas une succession de builds.
 
 | ID | Priorité | Livrable vérifiable et comportement attendu | Dépendances et preuves |
