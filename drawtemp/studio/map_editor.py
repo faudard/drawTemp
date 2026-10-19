@@ -14,6 +14,7 @@ from drawtemp.render.iso_scene import scene_from_mission
 from drawtemp.render.qt_viewport import make_controller
 from drawtemp.sdk.authoring import AuthoringError
 from drawtemp.sdk.construction import ConstructionWorkspace
+from drawtemp.studio.r18_context import ContextCommandError, require_context
 from .map_authoring import MapStudio, SURFACE_PALETTE
 
 try:
@@ -203,6 +204,7 @@ class MapWindow(QMainWindow):
         # Its dock is contextual, not a second map editor or renderer.
         self.construction = ConstructionDock(
             ConstructionWorkspace(self.studio.authoring, self.studio.mission_id), self)
+        self.construction.context_enabled = lambda: self.mode.currentIndex() == 1
         self.addDockWidget(Qt.RightDockWidgetArea, self.construction)
         self.construction.hide()
         self.mode.currentIndexChanged.connect(self._construction_mode)
@@ -217,13 +219,36 @@ class MapWindow(QMainWindow):
         from .r15_creator import open_creator
         open_creator(self)
 
+    def _map_context(self, operation):
+        mode = "construction" if self.mode.currentIndex() == 1 else "map"
+        try:
+            require_context(mode, operation)
+        except ContextCommandError as exc:
+            self.statusBar().showMessage(str(exc))
+            return False
+        return True
+
     def _construction_mode(self, *_):
         active = self.mode.currentIndex() == 1
+        self.cancel_stroke()
+        self.cancel_transform()
         root = self.viewport.rootObject()
         root.setProperty("interactionMode", "construction" if active else "edit")
         self.construction.setVisible(active)
         self.tools.setEnabled(not active)
         self.material.setEnabled(not active)
+        self.additive_selection.setEnabled(not active)
+        self.layers_panel.setEnabled(not active)
+        # QAction shortcuts may execute even when a toolbar is not focused.
+        # Disable the commands, and guard their handlers as well.
+        map_actions = (
+            "Nouvelle carte", "Dupliquer", "Renommer", "Copier", "Coller",
+            "Déplacer sélection", "Dupliquer sélection", "Rotation ↻",
+            "Rotation ↺", "Miroir horizontal", "Miroir vertical",
+            "Appliquer aperçu", "Annuler aperçu",
+        )
+        for name in map_actions:
+            self.toolbar_actions[name].setEnabled(not active)
         self._construction_view()
         self.statusBar().showMessage(
             "R6 : sélectionner directement toiture, murs, fenêtres, porte et étages"
@@ -293,6 +318,8 @@ class MapWindow(QMainWindow):
         return identifier.strip(), name.strip()
 
     def create_map(self):
+        if not self._map_context("map.create"):
+            return
         value = self._name_id("Nouvelle carte", "village")
         if value is None:
             return
@@ -300,6 +327,8 @@ class MapWindow(QMainWindow):
         self.refresh_maps()
 
     def duplicate_map(self):
+        if not self._map_context("map.duplicate"):
+            return
         value = self._name_id("Dupliquer la carte", self.studio.mission_id + "_copy")
         if value is None:
             return
@@ -307,6 +336,8 @@ class MapWindow(QMainWindow):
         self.refresh_maps()
 
     def rename_map(self):
+        if not self._map_context("map.rename"):
+            return
         name, ok = QInputDialog.getText(
             self, "Renommer", "Nouveau nom", text=self.studio.mission()["name"])
         if ok and name.strip():
@@ -366,6 +397,8 @@ class MapWindow(QMainWindow):
                     result["final_mode"], result["result"] or "En cours"))
 
     def copy_selection(self):
+        if not self._map_context("map.copy"):
+            return
         if not self.selection:
             QMessageBox.information(self, "Copier", "Sélectionnez des cases au rectangle ou au lasso.")
             return
@@ -375,6 +408,8 @@ class MapWindow(QMainWindow):
                 "Copie terrain + objectifs prête. Identités d'unités/objets non dupliquées.")
 
     def paste_selection(self):
+        if not self._map_context("map.paste"):
+            return
         if self.studio.region_clipboard is None:
             QMessageBox.information(self, "Coller", "Copiez une sélection avant le collage.")
             return
@@ -417,6 +452,8 @@ class MapWindow(QMainWindow):
             self.viewport.rootObject().setProperty("transformCells", [])
 
     def start_transform(self, operation):
+        if not self._map_context("map.transform"):
+            return
         if operation != "paste" and not self.selection:
             QMessageBox.information(self, "Sélection", "Choisissez d'abord une région.")
             return
@@ -486,6 +523,8 @@ class MapWindow(QMainWindow):
             self.viewport.rootObject().setProperty("transformCells", [])
 
     def apply_transform(self, *_):
+        if not self._map_context("map.apply_transform"):
+            return
         if self.pending_transform is None:
             QMessageBox.information(
                 self, "Placement", "Choisissez une destination valide (aperçu non rouge).")
@@ -503,6 +542,8 @@ class MapWindow(QMainWindow):
                 "Transformation validée en une transaction. Ctrl+Z pour annuler.")
 
     def change_objective(self):
+        if not self._map_context("map.objective"):
+            return
         self._safe(lambda: self.studio.set_objective(self.objective.currentText()))
 
     def _tool(self):
@@ -524,15 +565,22 @@ class MapWindow(QMainWindow):
         self.stroke = []
 
     def begin_stroke(self, x, y):
+        if not self._map_context("map.stroke"):
+            return
         self.stroke = [(x, y)]
         self.selected = (x, y)
 
     def extend_stroke(self, x, y):
+        if not self._map_context("map.stroke"):
+            return
         if self.stroke and (x, y) != self.stroke[-1]:
             self.stroke.append((x, y))
             self.selected = (x, y)
 
     def finish_stroke(self, x, y):
+        if not self._map_context("map.stroke"):
+            self.cancel_stroke()
+            return
         if not self.stroke:
             return
         self.extend_stroke(x, y)
