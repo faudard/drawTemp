@@ -92,6 +92,12 @@ class R40PlatformAbilityTests(unittest.TestCase):
         game = _collect_feather(content, project)
         with self.assertRaises(RuleError):
             game.route_transition("high_gate")  # No physical contact yet.
+        from drawtemp.sdk.simulation import Simulation, thaw
+        before_portal = Simulation(game)
+        exits = thaw(before_portal.route_options(
+            expected_revision=before_portal.snapshot().revision))
+        high = next(row for row in exits if row["id"] == "high_gate")
+        self.assertFalse(high["available"], "Earned ability alone is insufficient")
         with TemporaryDirectory() as folder:
             save_path = Path(folder) / "metroidvania.json"
             game.save(save_path)
@@ -111,6 +117,11 @@ class R40PlatformAbilityTests(unittest.TestCase):
                 resumed.route_platform_step(move=1)
             self.assertIn("high_gate",
                           resumed.route_platform_state()["available_routes"])
+            at_portal = Simulation(resumed)
+            exits = thaw(at_portal.route_options(
+                expected_revision=at_portal.snapshot().revision))
+            self.assertTrue(next(row["available"] for row in exits
+                                 if row["id"] == "high_gate"))
             resumed.save(save_path)
             verified = GameSession.load(save_path, content, project)
             self.assertEqual(verified.recording(), resumed.recording())
