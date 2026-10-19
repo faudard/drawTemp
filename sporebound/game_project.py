@@ -32,6 +32,7 @@ class GameProject:
     battle_support: list[dict] = field(default_factory=list)
     world: dict = field(default_factory=dict)
     campaign_flow: dict = field(default_factory=dict)
+    extensions: dict = field(default_factory=dict)
 
     @classmethod
     def default(cls, content):
@@ -64,7 +65,8 @@ class GameProject:
                 **({'exploration': deepcopy(self.exploration)} if self.exploration else {}),
                 **({'world': deepcopy(self.world)} if self.world else {}),
                 **({'battle_support': deepcopy(self.battle_support)} if self.battle_support else {}),
-                **({'campaign_flow': deepcopy(self.campaign_flow)} if self.campaign_flow else {})}
+                **({'campaign_flow': deepcopy(self.campaign_flow)} if self.campaign_flow else {}),
+                **({'extensions': deepcopy(self.extensions)} if self.extensions else {})}
 
     def asset_registry(self):
         from .assets import AssetRegistry
@@ -106,6 +108,8 @@ class GameProject:
                     'Campaign description too long')
             require(campaign['start_mission'] in content.missions,
                     f'Unknown starting mission: {campaign["start_mission"]}')
+        from .project_extensions import validate_project_extensions
+        validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
         from .campaign_flow import validate_flow
         validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
