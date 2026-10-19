@@ -67,7 +67,7 @@ class LogicGraphDebugger:
             ordered = _ordered_nodes(graph)
             self.event_to_actions[ids[0]] = [n["id"] for n in ordered[1:]]
             self.node_to_events[entry] = tuple(ids)
-        else:
+        elif graph["schema_version"] == 2:
             from drawtemp.sdk.logic_branches import validate_branch_graph
             paths, _ = validate_branch_graph(graph)
             self.event_to_actions = {
@@ -79,6 +79,14 @@ class LogicGraphDebugger:
             self.node_to_events[entry] = tuple(ids)
             self.node_to_events[branch] = tuple(ids)
             self._branch_node = branch
+        else:
+            from drawtemp.sdk.logic_sequence import sequence_stages
+            stages = sequence_stages(graph)
+            self.node_to_events[entry] = (ids[0],)
+            for eid, stage in zip(ids, stages):
+                self.event_to_actions[eid] = list(stage["action_nodes"])
+                if stage["gating_node"] is not None:
+                    self.node_to_events[stage["gating_node"]] = (eid,)
         for eid, node_ids in self.event_to_actions.items():
             for node_id in node_ids:
                 self.node_to_events[node_id] = (eid,)
@@ -111,8 +119,13 @@ class LogicGraphDebugger:
             if node["kind"] == "action":
                 state = "executed" if events[0] in fired else (
                     native_states[events[0]]["state"] if
-                    "cancel_after" in self._engine.by_id[events[0]]
+                    any(key in self._engine.by_id[events[0]]
+                        for key in ("cancel_after", "delay_ticks", "after"))
                     else "waiting")
+            elif node["kind"] in ("wait", "flag"):
+                state = "fired" if events[0] in fired else (
+                    "paused" if raw["paused_on"] == events[0]
+                    else native_states[events[0]]["state"])
             else:
                 state = "fired" if any(eid in fired for eid in events) else (
                     "paused" if raw["paused_on"] in events else "waiting")
