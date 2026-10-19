@@ -90,6 +90,13 @@ class GameSession:
         self.progress = project.new_game(campaign_id, content)
         from .scene_router import SceneRouter
         self.scene_router = SceneRouter(self.project.scene_routes, self.content, self.project)
+        # R44.E: validate/compile the authored graph once per immutable project.
+        # World state itself is still only in Campaign.story_flags and R25 routes.
+        from .world_graph44 import EXTENSION as WORLDGRAPH_EXTENSION, WorldGraph
+        atlas_spec = self.project.extensions.get(WORLDGRAPH_EXTENSION)
+        self._world_graph = (WorldGraph(
+            atlas_spec["data"], self.content, self.project)
+            if atlas_spec is not None else None)
         self.route_scene = self.scene_router.start
         self.route_history = []
         self._route_starting = False
@@ -249,16 +256,14 @@ class GameSession:
         GameSession remains the sole state owner and rollback authority.
         This is opt-in; historical R25/CT games are completely unchanged.
         """
-        from .world_graph44 import EXTENSION, WorldGraph
-        spec = self.project.extensions.get(EXTENSION)
-        require(spec is not None and self.scene_router.enabled
+        graph = self._world_graph
+        require(graph is not None and self.scene_router.enabled
                 and self.mode == "campaign"
                 and not self.progress.story_pending
                 and not self.tactical_story_pending
                 and self.route_scene in self.project.exploration,
                 "R44: active routed exploration and WorldGraph required")
         require(type(object_id) is str, "R44: invalid object identifier")
-        graph = WorldGraph(spec["data"], self.content, self.project)
         entry = next((row for row in graph.raw["objects"]
                       if row["scene"] == self.route_scene and row["id"] == object_id),
                      None)
@@ -294,15 +299,13 @@ class GameSession:
         This opt-in action does not bypass the R25 route condition or mission
         lifecycle. It records only the canonical R25 history in the checkpoint.
         """
-        from .world_graph44 import EXTENSION, WorldGraph
-        require(type(link_id) is str and self.project.extensions.get(EXTENSION),
+        require(type(link_id) is str and self._world_graph is not None,
                 "R44: configured atlas portal required")
         require(self.mode == "campaign"
                 and self.route_scene in self.project.exploration,
                 "R44: travel requires active routed exploration")
-        graph = WorldGraph(
-            self.project.extensions[EXTENSION]["data"], self.content, self.project)
-        portal = graph.inspect_portal(self.route_scene, link_id, self.progress)
+        portal = self._world_graph.inspect_portal(
+            self.route_scene, link_id, self.progress)
         position = self.route_state()["position"]
         require(sum(abs(a - b) for a, b in zip(position, portal["source"])) <= 1,
                 "R44: approach the authored exit before traveling")

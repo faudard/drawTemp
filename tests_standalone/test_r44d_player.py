@@ -1,6 +1,7 @@
 """R44.D Player integration: R1 facade, Player slots and GUI-facing projection."""
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 import unittest
 
 from drawtemp.player.controller import PlayerController
@@ -83,6 +84,19 @@ class WorldAtlasPlayerTests(unittest.TestCase):
             self.assertTrue(all(
                 controller.session.recording()["progress"]["story_flags"][relic_flag(sid)]
                 for sid in ids))
+
+    def test_player_does_not_revalidate_graph_on_every_projection(self):
+        sim = Simulation.new(self.content, self.project, "main", seed=44)
+        # No recompilation/revalidation on projection, input or a route.
+        # Canonical GameProject.validate has already done this at session start.
+        with patch("sporebound.world_graph44.validate_world_graph",
+                   side_effect=AssertionError("unexpected R44 revalidation")):
+            before = sim.recording()
+            self.assertEqual(thaw(sim.world_atlas_state())["scene"], "valley")
+            self.assertEqual(sim.recording(), before)
+            sim.world_interact("relic")
+            sim.world_transition("to_grove")
+            self.assertEqual(thaw(sim.world_atlas_state())["scene"], "grove")
 
     def test_old_project_has_no_world_atlas(self):
         from drawtemp.sdk.reference import reference_project

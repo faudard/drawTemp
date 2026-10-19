@@ -192,15 +192,13 @@ class Simulation:
     def world_atlas_state(self):
         """Read-only R44 projection. Never duplicate routing or saved state."""
         session = self._session
-        from sporebound.world_graph44 import EXTENSION, WorldGraph
-        spec = session.project.extensions.get(EXTENSION)
-        if (spec is None or session.mode != "campaign" or
+        graph = session._world_graph
+        if (graph is None or session.mode != "campaign" or
                 session.route_scene not in session.project.exploration or
                 session.active_scene() is not None):
             return freeze({"enabled": False, "scene": "", "region": "",
                            "region_title": "", "portals": [], "objects": [],
                            "object_ids": []})
-        graph = WorldGraph(spec["data"], session.content, session.project)
         scene = session.route_scene
         region = next(region for region in graph.raw["regions"]
                       if any(entry["id"] == scene for entry in region["scenes"]))
