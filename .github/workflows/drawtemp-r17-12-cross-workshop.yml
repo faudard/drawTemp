@@ -1,0 +1,178 @@
+name: DrawTemp R17.12 Cross-workshop Native E2E
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/quality/r17_cross_workshop.py'
+      - 'tests_standalone/test_r17_12_cross_workshop*.py'
+      - '.github/workflows/drawtemp-r17-12-cross-workshop.yml'
+      - 'docs/drawtemp5/R17_12_CROSS_WORKSHOP_E2E.md'
+      - 'drawtemp/export/**'
+      - 'drawtemp/player/**'
+      - 'drawtemp/studio/**'
+      - 'sporebound/**'
+      - 'scripts/r15_player_entry.py'
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  authoring-contract:
+    name: R17.12 author / save / export contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Actual cross-workshop contracts and regression
+        run: >-
+          python -m unittest
+          tests_standalone.test_r17_12_cross_workshop
+          tests_standalone.test_r17d_studio_player_roundtrip
+          tests_standalone.test_drawtemp5_r15
+          -v
+
+  authored-native:
+    name: R17.12 freeze / authored export / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt system dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]" "pyinstaller==6.15.0"
+      - name: Real Player Main.qml on cross-workshop mission
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: >-
+          python -m unittest
+          tests_standalone.test_r17_12_cross_workshop
+          tests_standalone.test_r17_12_cross_workshop_qt
+          -v
+      - name: Author actual game and record replay evidence
+        run: >-
+          python -m drawtemp.quality.r17_cross_workshop
+          --project-dir r1712-project --report r1712-evidence.json
+      - name: Freeze native Qt Quick Player
+        run: >-
+          python -m PyInstaller --noconfirm --clean --onedir
+          --name DrawTempPlayer
+          --collect-data drawtemp --collect-data sporebound
+          scripts/r15_player_entry.py
+      - name: Export authored game (preview, never release)
+        run: >-
+          python -m drawtemp.export.cli export
+          --content r1712-project/r1712-jeanne.json
+          --runtime-dir dist/DrawTempPlayer
+          --output export/R17Jeanne
+      - name: Read-only authored bundle manifest verification
+        run: >-
+          python -m drawtemp.quality.r17_cross_workshop
+          --project-dir r1712-project
+          --verify-bundle export/R17Jeanne
+          --report r1712-export-evidence.json
+      - name: Native Player smoke on authored bundle
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          PYTHONPATH: ''
+          PYTHONHOME: ''
+          PYTHONNOUSERSITE: '1'
+        run: |
+          set -euo pipefail
+          cd export/R17Jeanne
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            ./Player/DrawTempPlayer.exe --smoke
+          else
+            test -x ./Player/DrawTempPlayer
+            ./Player/DrawTempPlayer --smoke
+          fi
+      - name: Preserve native executable bits in relocation archive
+        shell: bash
+        run: tar -czf "r1712-bundle-${{ runner.os }}.tar.gz" -C export R17Jeanne
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1712-bundle-${{ runner.os }}
+          path: r1712-bundle-${{ runner.os }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+      - name: Evidence (explicitly NOT an attestation)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1712-evidence-${{ runner.os }}
+          path: |
+            r1712-evidence.json
+            r1712-export-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  isolated-native:
+    name: R17.12 authored Player / isolated ${{ matrix.os }}
+    needs: authored-native
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      # Deliberately NO checkout/setup-python/pip/Studio in the next job.
+      - name: Linux Qt system runtime
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1712-bundle-${{ runner.os }}
+          path: ${{ runner.temp }}/r1712-import
+      - name: Relocate and execute ONLY the authored frozen Player
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          PYTHONPATH: ''
+          PYTHONHOME: ''
+          PYTHONNOUSERSITE: '1'
+        run: |
+          set -euo pipefail
+          temp="$RUNNER_TEMP"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            temp="$(cygpath -u "$RUNNER_TEMP")"
+          fi
+          mkdir -p "$temp/r1712-clean"
+          tar -xzf "$temp/r1712-import/r1712-bundle-${{ runner.os }}.tar.gz" -C "$temp/r1712-clean"
+          cd "$temp/r1712-clean/R17Jeanne"
+          test -f manifest.json
+          test -f game/r1712-jeanne.json
+          test -f game/r1712-jeanne.game.json
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            bin="./Player/DrawTempPlayer.exe"
+          else
+            bin="./Player/DrawTempPlayer"
+            test -x "$bin"
+          fi
+          "$bin" --smoke
+          printf '\nR17.12 forced tamper\n' >> game/r1712-jeanne.json
+          if "$bin" --smoke > "$temp/r1712-tamper.log" 2>&1; then
+            echo "FAIL: frozen Player accepted a tampered authored project"
+            exit 1
+          fi
+          if ! grep -qi "integrity failure" "$temp/r1712-tamper.log"; then
+            cat "$temp/r1712-tamper.log"
+            echo "FAIL: missing integrity failure on altered authored game"
+            exit 1
+          fi
+          echo "R17.12 isolated native authored preview and tamper refusal OK"
