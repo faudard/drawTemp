@@ -25,7 +25,8 @@ from drawtemp.studio.r30_scene_gallery import load_catalog
 from drawtemp.export.r15 import project_path
 
 SCHEMA = "drawtemp-r30f-scale-v1"
-OPS = ("authoring_open", "snapshot", "resource_projection", "gallery_load", "asset_inventory")
+OPS = ("authoring_open", "snapshot", "resource_projection", "gallery_load", "asset_inventory",
+       "synthetic_resource_projection", "synthetic_asset_registry")
 MAX_ASSETS = 10000
 MAX_SAMPLES = 250
 _MAX_REPORT = 1024 * 1024
@@ -129,13 +130,26 @@ def _timed(operation, warmups, samples):
     return {**_stats(measurements), "python_traced_peak_bytes": peak}
 
 
-def collect_profile(*, content_path=None, samples=30, warmups=3):
+def collect_profile(*, content_path=None, samples=30, warmups=3,
+                    synthetic_resources=1000):
     """Measure real, canonical operations. Read-only for files and session."""
     if type(samples) is not int or not 3 <= samples <= MAX_SAMPLES:
         raise ScaleError("invalid_samples", "Choose 3..250 independent samples")
     if type(warmups) is not int or not 0 <= warmups <= 20:
         raise ScaleError("invalid_warmups", "Choose 0..20 warmup runs")
+    if type(synthetic_resources) is not int or not 10 <= synthetic_resources <= 10000:
+        raise ScaleError("invalid_synthetic_size", "Choose 10..10000 synthetic resources")
     content, project, source, source_hashes = _read_reference(content_path)
+    # Explicitly synthetic R2 projections: NOT a validated game or playable scene.
+    synthetic_document = {"content": {"missions": []},
+                          "project": {"title": "R30.F synthetic workload",
+                                      "story": {"scenes": [
+                                          {"id": f"scale_{n:05d}", "title": "Scale"}
+                                          for n in range(synthetic_resources)]}}}
+    synthetic_assets = {"assets": {"version": 1, "entries": [
+        {"id": f"scale_{n:05d}", "kind": "sprite",
+         "path": f"assets/scale_{n:05d}.png"}
+        for n in range(synthetic_resources)], "bindings": {}}}
     opened = AuthoringSession.new(content, project)
     source_copy = opened.snapshot().to_dict()
     def open_session():
@@ -152,10 +166,15 @@ def collect_profile(*, content_path=None, samples=30, warmups=3):
         "authoring_open": open_session, "snapshot": take_snapshot,
         "resource_projection": project_resources, "gallery_load": read_gallery,
         "asset_inventory": assets,
+        "synthetic_resource_projection": lambda: resources(synthetic_document),
+        "synthetic_asset_registry": lambda: _asset_inventory(synthetic_assets, None),
     }
     rows = []
     for name in OPS:
-        rows.append({"operation": name, **_timed(actions[name], warmups, samples)})
+        rows.append({"operation": name,
+                     "workload_kind": ("synthetic" if name.startswith("synthetic_")
+                                       else "canonical"),
+                     **_timed(actions[name], warmups, samples)})
     if opened.snapshot().to_dict() != source_copy:
         raise ScaleError("mutated_session", "Benchmark changed the authoring session")
     if source is not None and (
@@ -179,6 +198,7 @@ def collect_profile(*, content_path=None, samples=30, warmups=3):
         "workload": {
             "project_sha256": project_digest, "samples": samples,
             "warmups": warmups, "operations": list(OPS),
+            "synthetic_resources": synthetic_resources,
             "disk_project": source is not None,
         },
         "asset_budget": asset_budget,
@@ -213,6 +233,8 @@ def validate_report(report):
             not 3 <= workload["samples"] <= MAX_SAMPLES or
             type(workload.get("warmups")) is not int or
             not 0 <= workload["warmups"] <= 20 or
+            type(workload.get("synthetic_resources")) is not int or
+            not 10 <= workload["synthetic_resources"] <= 10000 or
             workload.get("operations") != list(OPS) or
             type(workload.get("disk_project")) is not bool):
         raise ScaleError("invalid_report", "Invalid workload parameters")
@@ -236,9 +258,10 @@ def validate_report(report):
         raise ScaleError("invalid_report", "Incomplete operation coverage")
     for row in rows:
         if (set(row) != {
-            "operation", "samples", "p50_ms", "p95_ms", "p99_ms", "max_ms",
+            "operation", "workload_kind", "samples", "p50_ms", "p95_ms", "p99_ms", "max_ms",
             "tail_exploratory", "python_traced_peak_bytes"
         } or row["samples"] != workload["samples"] or
+                row["workload_kind"] != ("synthetic" if row["operation"].startswith("synthetic_") else "canonical") or
                 row["tail_exploratory"] is not (row["samples"] < 100) or
                 type(row["python_traced_peak_bytes"]) is not int or
                 row["python_traced_peak_bytes"] < 0 or
@@ -302,6 +325,8 @@ def main(argv=None):
     parser.add_argument("--content", type=Path, help="Paired Content/GameProject; default reference Jeanne")
     parser.add_argument("--samples", type=int, default=30)
     parser.add_argument("--warmups", type=int, default=3)
+    parser.add_argument("--synthetic-resources", type=int, default=1000,
+                        help="Synthetic R2 projection and asset registry size: 10..10000")
     parser.add_argument("--output", type=Path, help="Create a NEW JSON report (never overwrite)")
     parser.add_argument("--baseline", type=Path, help="Compare with an existing JSON report")
     parser.add_argument("--max-p95-growth-pct", type=float, default=25.0)
@@ -312,7 +337,8 @@ def main(argv=None):
         parser.error("--baseline requires --output for the current report")
     try:
         report = validate_report(collect_profile(
-            content_path=args.content, samples=args.samples, warmups=args.warmups))
+            content_path=args.content, samples=args.samples,
+            warmups=args.warmups, synthetic_resources=args.synthetic_resources))
         compare = None
         if args.baseline is not None:
             compare = compare_profiles(
