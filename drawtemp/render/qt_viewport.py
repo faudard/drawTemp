@@ -315,6 +315,25 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             except (OSError, ValueError, RuntimeError):
                 return {}
 
+        @Slot("QVariantMap", float, result="QVariantMap")
+        def visualClipFrame(self, clip, phase):
+            """Sample the committed event's true R7/R4 sprite, without CT ticks.
+
+            This is shared by the Player TacticalBoard and the Studio renderer;
+            it uses the existing character outfit projection and asset registry.
+            No action pose is invented if the appropriate R7 clip is absent.
+            """
+            from .visual_clip_frames import clip_art_frame
+            if not isinstance(clip, dict):
+                return {}
+            actor = next((item for item in self.scene["actors"]
+                          if item["id"] == clip.get("actor")), None)
+            if actor is None:
+                return {}
+            return clip_art_frame(
+                clip, phase, actor=actor, character=self._character,
+                variant=self.outfit_for(actor["id"]), assets=self.assets)
+
         @Slot(int)
         def advanceVisual(self, delta_ms):
             """Animate cosmetics only; never touch the tactical simulation."""
