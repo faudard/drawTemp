@@ -59,7 +59,7 @@ def siege_journey_snapshot(session, *, max_deploy_cells=8):
             "Expected 1..32 displayed deployment cells")
     siege = siege_front_readiness(session)
     active = session.active
-    phase = ("deployed" if active.deploying else
+    phase = ("deployment" if active.deploying else
              "resolved" if active.result else "tactical")
     # Deliberately do not include whole battle snapshots or speculative future
     # actions. The journal is the authority for checkpoint/resume.
