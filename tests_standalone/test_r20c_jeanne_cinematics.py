@@ -162,11 +162,11 @@ class JeanneR20CCinematicTests(unittest.TestCase):
                     restored.choose_story_option("avancer_vaucouleurs")
                     self.win(restored, "a1_05_vaucouleurs")
                     self.assertEqual(restored.active_scene()["id"], "sc_a1_fin")
-                    self.assertNotIn(ending, {
-                        "preuve_officielle" if branch == "liberer_otages"
-                        else "parole_otages"
-                    })
-                    self.assertIn(ending, {o["id"] for o in restored.available_choices()})
+                    choices = {o["id"] for o in restored.available_choices()}
+                    self.assertIn(ending, choices)
+                    forbidden = ("preuve_officielle" if branch == "liberer_otages"
+                                 else "parole_otages")
+                    self.assertNotIn(forbidden, choices)
                     restored.choose_story_option(ending)
                     self.assertEqual(restored.active_scene()["id"], epilogue)
                     self.assertTrue(restored.progress.story_flags["acte1_complete"])
