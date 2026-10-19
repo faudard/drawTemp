@@ -214,6 +214,8 @@
 
 **Suivi incrémental R36.A (non certifiant) :** [contrôleur d'animation versionné, édition dans le Studio et tests de déterminisme](drawtemp7/R36A_ANIMATION_CONTROLLER.md). L'intégration visuelle Player, les hitboxes de gameplay et les gates GPU restent ouverts.
 
+**Suivi incrémental R36.B1 (non certifiant) :** [effets cosmétiques bornés déclenchés par événements R26 committés, overlay Qt Quick et scrubbing de contrôle](drawtemp7/R36B_COMMITTED_FX.md). Les systèmes de particules configurables, la lumière 2D, le contact précis hitbox/impact et la certification GPU ne sont pas couverts.
+
 ## 9. R37 — Advanced AI Studio (7.7)
 
 **But :** rendre les décisions ennemies conçues, expliquées et testables, sans boîte noire.
