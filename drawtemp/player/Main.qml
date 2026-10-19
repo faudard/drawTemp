@@ -578,6 +578,8 @@ ApplicationWindow {
                 Layout.preferredWidth: 310
                 Layout.fillHeight: true
                 ScrollView {
+                    id: worldGameplayScroll
+                    objectName: "r44GameplayScroll"
                     anchors.fill: parent
                     anchors.margins: 14
                     contentWidth: availableWidth

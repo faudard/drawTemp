@@ -651,6 +651,25 @@ def main(argv=None):
                             window.property("contentItem"))
                             if node.objectName() == name), None)
                         if item is not None and item.isVisible() and item.isEnabled():
+                            # Gameplay controls live in a long ScrollView.
+                            # Scroll the real Flickable into view, not a mock click.
+                            scroll = next((node for node in children(
+                                window.property("contentItem"))
+                                if node.objectName() == "r44GameplayScroll"), None)
+                            if scroll is not None and name.startswith("r44"):
+                                flick = scroll.property("contentItem")
+                                if flick is not None:
+                                    center = item.mapToScene(QPointF(
+                                        item.width() / 2, item.height() / 2))
+                                    viewport = scroll.mapToScene(QPointF(
+                                        scroll.width() / 2, scroll.height() / 2))
+                                    current = float(flick.property("contentY") or 0)
+                                    total = float(flick.property("contentHeight") or 0)
+                                    limit = max(0.0, total - float(scroll.height()))
+                                    target = min(limit, max(0.0,
+                                        current + center.y() - viewport.y()))
+                                    flick.setProperty("contentY", target)
+                                    QTest.qWait(45)
                             pos = item.mapToScene(QPointF(
                                 item.width() / 2, item.height() / 2))
                             if (pos.x() < 0 or pos.y() < 0 or

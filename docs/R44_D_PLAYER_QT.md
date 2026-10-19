@@ -24,3 +24,21 @@ QT_QPA_PLATFORM=offscreen python -m drawtemp.player.qt_app \
 Les tests Player vérifient la façade R1, le hotspot, le rejet d'une sortie verrouillée, les cinq régions, le retour sur une région visitée, le chargement d'un slot manuel et l'absence de régression de la référence Jeanne.
 
 **Gate GUI réel restant** : interaction Qt/QML via souris/clavier sur une instance native, sauvegarde depuis les raccourcis, export Player R15 et mesure de performance sur les trois OS.
+
+## Qt Quick GUI test (vraie interface)
+
+```bash
+# Utiliser deux dossiers qui n'existent pas encore.
+python -m examples.r44_five_valleys --output /tmp/r44-five-valleys
+QT_QPA_PLATFORM=offscreen python -m drawtemp.player.qt_app \
+  --gui-world-journey \
+  --content /tmp/r44-five-valleys/five_valleys.json \
+  --save-dir /tmp/r44-player-gui-test
+```
+
+`--gui-world-journey` instancie le QML production, clique les boutons réels
+`r44Object-relic` / `r44Portal-<route>` à chaque région, scrolle si nécessaire,
+sauvegarde via F5, passe par le menu pause / écran titre / Continuer puis
+vérifie le retour vers la crête avec un objet déjà activé. Une défaillance
+renvoie un code de sortie non nul et affiche l'exception. Cette commande n'est
+pas une preuve de qualification GPU tri-OS, mais constitue le gate GUI reproductible.
