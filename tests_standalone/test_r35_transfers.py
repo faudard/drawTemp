@@ -1,9 +1,13 @@
 """R35.D2: explicit cross-scene portal projection, replay, render and scale."""
 from copy import deepcopy
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import unittest
 
 from drawtemp.render.iso_scene import scene_from_exploration
+from drawtemp.player.controller import PlayerController
+from drawtemp.player.qt_app import scene_for_player
 from drawtemp.sdk.simulation import Simulation, SimulationError
 from sporebound.living_world import EXTENSION, LivingWorld
 from sporebound.model import RuleError
@@ -136,6 +140,28 @@ class R35TransferTests(unittest.TestCase):
         with self.assertRaises(SimulationError):
             sdk.living_world_advance(1, expected_revision=0)
         self.assertEqual(sdk.living_world_state()["ticks"], 2)
+
+    def test_routed_player_exploration_moves_displays_and_waits(self):
+        content, project = positional_village()
+        with TemporaryDirectory() as temporary:
+            controller = PlayerController(
+                content, project, "main", Path(temporary), seed=11)
+            controller.new_game()
+            initial = controller.state()
+            self.assertEqual(initial["screen"], "exploration")
+            self.assertEqual(initial["exploration"]["scene_id"], "arrival")
+            self.assertEqual(initial["living_world"]["minute"], 475)
+            rendered = scene_for_player(controller)
+            self.assertIn("world:merchant",
+                          [actor["id"] for actor in rendered["actors"]])
+            controller.explore_move(1, 0)
+            self.assertEqual(controller.state()["exploration"]["position"], [1, 1])
+            controller.world_wait(2)
+            current = controller.state()
+            self.assertEqual(current["living_world"]["minute"], 476)
+            controller.explore_interact("exit")
+            self.assertEqual(controller.state()["screen"], "campaign")
+            self.assertEqual(controller.session.recording()["living_world"]["ticks"], 2)
 
     def test_256_off_focus_npcs_and_same_route_share_data(self):
         spec, stages = two_village_world()
