@@ -153,10 +153,36 @@ def certify_trace(content, project, campaign_id, commands, *,
                     *deepcopy(command.args), **deepcopy(command.kwargs))
                 recorded = continuous.recording()
                 second = replayed.recording()
-                if (_without_ephemeral_ids(recorded, continuous_ids) !=
-                        _without_ephemeral_ids(second, resumed_ids)):
-                    raise CertificationError("runtime_divergence",
-                                             "Continuous and independently resumed engines differ")
+                normal_continuous = _without_ephemeral_ids(recorded, continuous_ids)
+                normal_resumed = _without_ephemeral_ids(second, resumed_ids)
+                if normal_continuous != normal_resumed:
+                    # Identify the first real mismatching field without
+                    # weakening exact comparison of the two authenticated
+                    # recordings. This diagnostics-only path is especially
+                    # useful for UUID and campaign-progress regressions.
+                    def first_difference(left, right, location="$"):
+                        if type(left) is not type(right):
+                            return location + " (type)"
+                        if isinstance(left, dict):
+                            if set(left) != set(right):
+                                return location + " (keys " + repr(
+                                    sorted(set(left) ^ set(right))) + ")"
+                            for key in sorted(left):
+                                if left[key] != right[key]:
+                                    return first_difference(
+                                        left[key], right[key], location + "." + str(key))
+                        elif isinstance(left, list):
+                            if len(left) != len(right):
+                                return location + " (length)"
+                            for offset, (a, b) in enumerate(zip(left, right)):
+                                if a != b:
+                                    return first_difference(
+                                        a, b, location + "[" + str(offset) + "]")
+                        return location
+                    raise CertificationError(
+                        "runtime_divergence",
+                        "Continuous and independently resumed engines differ at " +
+                        first_difference(normal_continuous, normal_resumed))
                 # Verify CT, RNG, event streams and front timelines *before*
                 # re-binding the resumed handle to the canonical source UUID.
                 left = _witness(index, command.operation, continuous, recorded)
