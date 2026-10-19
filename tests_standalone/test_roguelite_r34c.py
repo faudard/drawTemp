@@ -104,7 +104,8 @@ class RogueliteSessionTests(unittest.TestCase):
             loaded = GameSession.load(checkpoint, self.content, self.project)
             self.assertEqual(loaded.recording(), self.session.recording())
             self.assertEqual(loaded.roguelite_state(), self.session.roguelite_state())
-            self.finish(loaded)
+            for room_id in loaded.roguelite_state()["layout"]["route"][2:]:
+                loaded.roguelite_move(room_id)
             self.assertEqual(loaded.roguelite_state()["meta"]["wins"], 1)
             self.assertEqual(self.session.roguelite_state()["meta"]["wins"], 0)
         vanilla = GameProject.default(self.content)
