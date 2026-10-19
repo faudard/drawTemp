@@ -205,15 +205,6 @@ def _generate(content, mission_id, rectangle, mode, seed, namespace):
             raise AssistError("duplicate_object", "Existing puzzle ids; change namespace")
         # The reachable switch must be accessible *without crossing the new
         # gate* or an old closed door. No promise the gate blocks all routes.
-        for loc in candidates:
-            # Avoid using authored goal or actor positions (already protected).
-            adjacent = [
-                (loc[0] + dx, loc[1] + dy)
-                for dx, dy in ((1, 0), (0, 1), (-1, 0), (0, -1))
-                if (loc[0] + dx, loc[1] + dy) in candidates
-            ]
-            if adjacent:
-                pass
         reachable_map = _walkable(mission, set())
         possible = [
             (switch, door) for switch in candidates for door in candidates
@@ -271,7 +262,7 @@ class AssistController:
         plan = self.session.preview_pair(
             lambda _content, project: (candidate, project),
             kind="r30g-assisted-generation", mission_id=mission_id,
-            views=("workspace", "inspector", "map"),
+            views=("workspace", "inspector", "renderer", "minimap"),
         )
         report = AssistPreview(
             before["revision"], mission_id, mode, seed, tuple(rectangle),
