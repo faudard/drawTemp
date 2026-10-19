@@ -64,7 +64,11 @@ def _read_reference(content_path):
 def _asset_inventory(project, content_path):
     """Budget only: no decoding, licensing inference or image rendering."""
     from sporebound.assets import AssetRegistry
-    registry = AssetRegistry(project.get("assets") or None).to_dict()
+    from drawtemp.core import RuleError
+    try:
+        registry = AssetRegistry(project.get("assets") or None).to_dict()
+    except (RuleError, ValueError, TypeError) as exc:
+        raise ScaleError("invalid_assets", str(exc)) from exc
     entries = registry["entries"]
     if len(entries) > MAX_ASSETS:
         raise ScaleError("too_many_assets", "Asset inventory budget exceeded")
@@ -78,8 +82,11 @@ def _asset_inventory(project, content_path):
             # Reference fixture is memory-only; no asset is claimed present.
             indexed.append({"kind": entry["kind"], "size_bytes": None})
             continue
-        target = safe_asset_path(content_path.parent, entry["path"])
-        size = target.stat().st_size
+        try:
+            target = safe_asset_path(content_path.parent, entry["path"])
+            size = target.stat().st_size
+        except (OSError, ValueError) as exc:
+            raise ScaleError("unsafe_asset", str(exc)) from exc
         total_bytes += size
         indexed.append({"kind": entry["kind"], "size_bytes": size})
     return {
