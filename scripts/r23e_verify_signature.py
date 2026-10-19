@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 
 SHA40 = re.compile(r"[a-f0-9]{40}\Z")
 SHA64 = re.compile(r"[a-f0-9]{64}\Z")
@@ -50,9 +51,10 @@ def _inputs(artifact, expected_sha256, *, revision, platform):
         raise SignatureError("Invalid signature platform")
     if not isinstance(expected_sha256, str) or not SHA64.fullmatch(expected_sha256):
         raise SignatureError("Independently pinned installer SHA-256 required")
-    artifact = Path(artifact).resolve(strict=True)
-    if not artifact.is_file() or artifact.is_symlink():
+    artifact = Path(artifact)
+    if artifact.is_symlink() or not artifact.is_file():
         raise SignatureError("Installer is not a regular file")
+    artifact = artifact.resolve(strict=True)
     if _hash(artifact) != expected_sha256:
         raise SignatureError("Installer digest differs from pinned value")
     return artifact
@@ -77,27 +79,32 @@ def verify_windows(artifact, *, expected_sha256, revision, publisher_thumbprint)
                    publisher_thumbprint.lower())
 
 
-def verify_macos(dmg, app, *, expected_sha256, revision, developer_team_id):
+def verify_macos(dmg, *, expected_sha256, revision, developer_team_id):
+    """Verify the .app mounted directly from the independently pinned DMG."""
     if sys.platform != "darwin":
         raise SignatureError("Gatekeeper/notarization requires macOS")
-    if (type(developer_team_id) is not str or
-            not re.fullmatch(r"[A-Z0-9]{10}", developer_team_id)):
+    if type(developer_team_id) is not str or not re.fullmatch(r"[A-Z0-9]{10}", developer_team_id):
         raise SignatureError("Expected Apple Developer Team ID required")
     dmg = _inputs(dmg, expected_sha256, revision=revision, platform="macOS")
     if dmg.suffix.lower() != ".dmg":
         raise SignatureError("Expected DMG")
-    app = Path(app).resolve(strict=True)
-    if not app.is_dir() or app.suffix != ".app":
-        raise SignatureError("Expected extracted signed .app directory")
-    _run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)])
-    details = _run(["codesign", "-dv", "--verbose=4", str(app)])
-    if "TeamIdentifier=" + developer_team_id not in details.splitlines():
-        raise SignatureError("Apple signing identity differs from pinned team")
-    _run(["spctl", "--assess", "--type", "execute", "--verbose=4", str(app)])
     _run(["xcrun", "stapler", "validate", str(dmg)])
-    return _result(dmg, revision, "macOS", "developer-id-notarized-dmg",
-                   developer_team_id)
-
+    with TemporaryDirectory(prefix="r23e-dmg-") as folder:
+        mount = Path(folder) / "mounted"
+        mount.mkdir()
+        _run(["hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", str(mount), str(dmg)])
+        try:
+            app = mount / "DrawTemp Studio 5.5 Preview.app"
+            if not app.is_dir() or app.is_symlink():
+                raise SignatureError("Expected .app missing from mounted signed DMG")
+            _run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)])
+            details = _run(["codesign", "-dv", "--verbose=4", str(app)])
+            if "TeamIdentifier=" + developer_team_id not in details.splitlines():
+                raise SignatureError("Apple signing identity differs from pinned team")
+            _run(["spctl", "--assess", "--type", "execute", "--verbose=4", str(app)])
+        finally:
+            _run(["hdiutil", "detach", str(mount)])
+    return _result(dmg, revision, "macOS", "developer-id-notarized-dmg", developer_team_id)
 
 def verify_linux(deb, signature, keyring, *, expected_sha256, revision,
                  trusted_keyring_sha256, signing_key_fingerprint):
@@ -150,7 +157,6 @@ def main(argv=None):
     parser.add_argument("--revision", required=True)
     parser.add_argument("--publisher-thumbprint")
     parser.add_argument("--team-id")
-    parser.add_argument("--app", type=Path)
     parser.add_argument("--signature", type=Path)
     parser.add_argument("--keyring", type=Path)
     parser.add_argument("--keyring-sha256")
@@ -164,7 +170,7 @@ def main(argv=None):
                 revision=args.revision, publisher_thumbprint=args.publisher_thumbprint)
         elif args.platform == "macOS":
             report = verify_macos(
-                args.artifact, args.app, expected_sha256=args.sha256,
+                args.artifact, expected_sha256=args.sha256,
                 revision=args.revision, developer_team_id=args.team_id)
         else:
             report = verify_linux(
