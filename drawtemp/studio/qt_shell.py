@@ -33,7 +33,7 @@ WORKSPACES = ("project", "profiles", "gameplay", "maps", "actors", "database", "
               "campaigns", "cinematics", "analysis")
 LABELS = {
     "project": "Projet", "profiles": "Profils de jeu", "gameplay": "Gameplay", "maps": "Carte", "actors": "Personnages",
-    "database": "Base RPG", "events": "Événements", "campaigns": "Campagne",
+    "database": "Base RPG", "events": "Événements / Animation", "campaigns": "Campagne",
     "cinematics": "Cinématiques", "analysis": "Analyse",
 }
 EN = {
@@ -563,7 +563,7 @@ class StudioWindow(QMainWindow):
         self.last_revision = snapshot.revision
         self._show_inspector()
         self._update_title()
-        for name in ("profiles", "gameplay"):
+        for name in ("profiles", "gameplay", "events"):
             if name in self._models:
                 self._models[name].refresh()
         self.commands["undo"].setEnabled(snapshot.can_undo)
@@ -812,6 +812,10 @@ class StudioWindow(QMainWindow):
             from drawtemp.studio.genre_rules_qt import GenreRulesWorkspace
             child = GenreRulesWorkspace(self.session)
             child.updated.connect(self.refresh)
+        elif identifier == "events":
+            from drawtemp.studio.r28d_workflow_qt import R28DWorkspace
+            child = R28DWorkspace(self.session)
+            child.updated.connect(self.refresh)
         elif identifier == "maps":
             from drawtemp.studio.map_authoring import MapStudio
             from drawtemp.studio.map_editor import MapWindow
@@ -835,7 +839,7 @@ class StudioWindow(QMainWindow):
                                    opened=bool(self.content_path))
         else:
             child = self._overview(identifier)
-        if identifier in ("profiles", "gameplay", "maps", "database", "campaigns"):
+        if identifier in ("profiles", "gameplay", "events", "maps", "database", "campaigns"):
             self._models[identifier] = child
             # Embedded editors must never swap the shared AuthoringSession:
             # opening/saving a project is a shell responsibility.
