@@ -20,6 +20,7 @@ _PUBLIC = {
     "read_script_manifest": "controlled_scripting",
     "preview_script": "controlled_scripting",
     "install_script": "controlled_scripting",
+    "verify_compiled_scripts": "controlled_scripting",
     "SDKCompatibilityError": "compatibility",
     "negotiate_sdk": "compatibility",
     "ProjectExtensionError": "project_extensions",

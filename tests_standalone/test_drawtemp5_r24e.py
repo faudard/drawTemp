@@ -16,7 +16,7 @@ from drawtemp.core import Content, GameProject
 from drawtemp.sdk import (
     AuthoringError, AuthoringSession, Simulation, certify_trace,
     SDK_FEATURES, install_script, preview_script, read_script_manifest,
-    validate_script_manifest, StudioScriptError,
+    validate_script_manifest, StudioScriptError, verify_compiled_scripts,
 )
 from drawtemp.sdk.replay import ReplayCommand, verify_recording, verify_sequence
 from drawtemp.quality.r24_platform import source_paths
@@ -224,6 +224,26 @@ class CompiledHookTests(unittest.TestCase):
                 self.assertEqual(report.steps[-1].mode, "battle")
                 self.assertIsNotNone(report.steps[-1].rng_sha256)
                 self.assertIsNotNone(report.steps[-1].ct_sha256)
+
+
+    def test_compilation_integrity_blocks_export_if_effects_are_changed(self):
+        from drawtemp.export.r15 import preflight
+        self.install()
+        project = self.authoring.snapshot().to_dict()["project"]
+        self.assertEqual(verify_compiled_scripts(project), [])
+        with TemporaryDirectory() as folder:
+            target = Path(folder) / "game.json"
+            self.authoring.save_as(target)
+            self.assertTrue(preflight(target)["passed"])
+            path = target.with_name("game.game.json")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["story"]["scenes"][0]["choices"][0]["effects"][-1]["amount"] = 99
+            path.write_text(json.dumps(data), encoding="utf-8")
+            self.assertTrue(verify_compiled_scripts(data))
+            report = preflight(target)
+            self.assertFalse(report["passed"])
+            self.assertTrue(any("Compiled effects differ" in x
+                                for x in report["errors"]))
 
     def test_headless_no_third_party_import(self):
         program = """

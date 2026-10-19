@@ -183,7 +183,10 @@ def _bind(project, script):
     for spec in extensions.values():
         if type(spec) is dict and type(spec.get("data")) is dict and (
                 spec["data"].get("kind") == "r24e.story-choice-hooks"):
-            for row in spec["data"].get("bindings", []):
+            bindings = spec["data"].get("bindings", [])
+            if type(bindings) is not list or any(type(row) is not dict for row in bindings):
+                _fail("invalid_receipt", "Existing hook receipt has invalid bindings")
+            for row in bindings:
                 occupied.add((row.get("scene"), row.get("choice")))
     story = project.get("story")
     if type(story) is not dict or type(story.get("scenes")) is not list:
@@ -240,3 +243,73 @@ def install_script(session: AuthoringSession, document, *,
     plan = preview_script(session, document, granted_permissions=granted_permissions,
                           expected_revision=expected_revision)
     return session.apply(plan)
+
+
+def verify_compiled_scripts(project):
+    """Report stale compiled-effect receipts, including after manual JSON edits.
+
+    This read-only export gate never executes a hook or treats receipt hashes
+    as cryptographic proof of publisher identity.
+    """
+    manifest = project.to_dict() if hasattr(project, "to_dict") else project
+    errors = []
+    try:
+        if type(manifest) is not dict or type(manifest.get("story", {})) is not dict:
+            _fail("invalid_project", "Expected a canonical GameProject document")
+        extensions = manifest.get("extensions", {})
+        if type(extensions) is not dict:
+            _fail("invalid_project", "Invalid GameProject.extensions")
+        stories = manifest.get("story", {}).get("scenes", [])
+        if type(stories) is not list:
+            _fail("invalid_project", "Invalid GameProject.story.scenes")
+        known = {(scene["id"], choice["id"]): choice
+                 for scene in stories for choice in scene["choices"]}
+        seen = set()
+        for namespace, extension in sorted(extensions.items()):
+            if type(extension) is not dict or type(extension.get("data")) is not dict:
+                continue
+            info = extension["data"]
+            if info.get("kind") != "r24e.story-choice-hooks":
+                continue
+            if (extension.get("schema_version") != 1 or
+                    set(info) != {"kind", "script_id", "source_sha256",
+                                  "permissions", "bindings"} or
+                    type(info["bindings"]) is not list or
+                    not 1 <= len(info["bindings"]) <= MAX_HOOKS):
+                _fail("invalid_receipt", "Malformed controlled-hook receipt: " + namespace)
+            _identifier(info["script_id"], "receipt script ID")
+            hashes = (info["source_sha256"],)
+            if any(type(h) is not str or not re.fullmatch(r"[0-9a-f]{64}", h)
+                   for h in hashes):
+                _fail("invalid_receipt", "Invalid source SHA-256 in " + namespace)
+            if (type(info["permissions"]) is not list or
+                    any(type(p) is not str or p not in PERMISSIONS
+                        for p in info["permissions"]) or
+                    len(info["permissions"]) != len(set(info["permissions"]))):
+                _fail("invalid_receipt", "Invalid compiled-hook permissions")
+            for binding in info["bindings"]:
+                if type(binding) is not dict or set(binding) != {
+                        "id", "scene", "choice", "index", "count", "sha256"}:
+                    _fail("invalid_receipt", "Malformed hook binding")
+                _identifier(binding["id"], "receipt hook ID")
+                target = binding["scene"], binding["choice"]
+                if (any(type(v) is not str for v in target) or
+                        target in seen or target not in known):
+                    _fail("invalid_receipt", "Duplicate/unknown hook target")
+                seen.add(target)
+                start, count = binding["index"], binding["count"]
+                if (type(start) is not int or type(count) is not int or
+                        start < 0 or not 1 <= count <= MAX_EFFECTS):
+                    _fail("invalid_receipt", "Invalid hook range")
+                effects = known[target].get("effects", [])
+                if type(effects) is not list or start + count > len(effects):
+                    _fail("stale_compilation", "Compiled hook was removed: " + str(target))
+                actual = effects[start:start + count]
+                expected = binding["sha256"]
+                if (type(expected) is not str or not re.fullmatch(r"[0-9a-f]{64}", expected)
+                        or _digest(actual) != expected):
+                    _fail("stale_compilation", "Compiled effects differ: " + str(target))
+    except (StudioScriptError, TypeError, KeyError, ValueError,
+            UnicodeError, RecursionError) as exc:
+        errors.append("Controlled scripting: " + str(exc))
+    return errors
