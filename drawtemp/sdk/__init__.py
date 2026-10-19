@@ -12,11 +12,12 @@ SDK_FEATURES = frozenset({
     "simulation.v1", "authoring.v1", "migration.v0-envelope-to-v1",
     "replay.v1", "player-slots.v1", "workers.v1", "certification.v1",
     "sdk-negotiation.v1", "project-extensions.v1", "controlled-scripting.v1",
-    "massive-simulation.v1", "semantic-vcs.v1", "ai-decision.v1",
+    "massive-simulation.v1", "semantic-vcs.v1", "ai-decision.v1", "ai-session.v1",
 })
 
 _PUBLIC = {
     "AIDecisionError": "ai_decision",
+    "validate_policies": "ai_decision",
     "validate_context": "ai_decision",
     "new_blackboard": "ai_decision",
     "validate_blackboard": "ai_decision",
