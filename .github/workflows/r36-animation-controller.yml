@@ -9,6 +9,13 @@ on:
       - 'drawtemp/studio/animation_timeline_authoring.py'
       - 'drawtemp/studio/animation_timeline_qt.py'
       - 'drawtemp/render/vfx2d.py'
+      - 'drawtemp/player/animation_presentation.py'
+      - 'drawtemp/player/action_app.py'
+      - 'drawtemp/render/r32_contact_trace.py'
+      - 'drawtemp/render/iso_scene.py'
+      - 'drawtemp/render/TopDownViewport.qml'
+      - 'tests_standalone/test_r36_action_actor_binding.py'
+      - 'tests_standalone/test_r36_r32_contact_trace.py'
       - 'tests_standalone/test_r36_animation_timeline.py'
       - 'tests_standalone/test_r36_animation_timeline_qt.py'
       - 'tests_standalone/test_r36_vfx2d.py'
@@ -32,6 +39,13 @@ on:
       - 'drawtemp/studio/animation_timeline_authoring.py'
       - 'drawtemp/studio/animation_timeline_qt.py'
       - 'drawtemp/render/vfx2d.py'
+      - 'drawtemp/player/animation_presentation.py'
+      - 'drawtemp/player/action_app.py'
+      - 'drawtemp/render/r32_contact_trace.py'
+      - 'drawtemp/render/iso_scene.py'
+      - 'drawtemp/render/TopDownViewport.qml'
+      - 'tests_standalone/test_r36_action_actor_binding.py'
+      - 'tests_standalone/test_r36_r32_contact_trace.py'
       - 'tests_standalone/test_r36_animation_timeline.py'
       - 'tests_standalone/test_r36_animation_timeline_qt.py'
       - 'tests_standalone/test_r36_vfx2d.py'
@@ -67,13 +81,17 @@ jobs:
       - name: Install
         run: python -m pip install -e .
       - name: Compile touched modules
-        run: python -m compileall -q sporebound/animation_graph.py drawtemp/studio/animation_graph_authoring.py drawtemp/studio/animation_graph_qt.py drawtemp/studio/r28d_workflow_qt.py drawtemp/render/committed_fx.py drawtemp/player/action_controller.py sporebound/animation_timeline.py drawtemp/studio/animation_timeline_authoring.py drawtemp/studio/animation_timeline_qt.py drawtemp/render/vfx2d.py
+        run: python -m compileall -q sporebound/animation_graph.py drawtemp/studio/animation_graph_authoring.py drawtemp/studio/animation_graph_qt.py drawtemp/studio/r28d_workflow_qt.py drawtemp/render/committed_fx.py drawtemp/player/action_controller.py sporebound/animation_timeline.py drawtemp/studio/animation_timeline_authoring.py drawtemp/studio/animation_timeline_qt.py drawtemp/render/vfx2d.py drawtemp/player/animation_presentation.py drawtemp/render/r32_contact_trace.py drawtemp/player/action_app.py drawtemp/render/iso_scene.py
       - name: Animation graph deterministic and canonical persistence
         run: python -m unittest tests_standalone.test_r36_animation_graph -v
       - name: R36.B1 committed impact timing, recovery, budgets and replay
         run: python -m unittest tests_standalone.test_r36_committed_fx -v
       - name: R36.B2 timeline cues and CPU light/particle bounds
         run: python -m unittest tests_standalone.test_r36_animation_timeline tests_standalone.test_r36_vfx2d -v
+      - name: R36.B3 actor pose, marker events and R32 collider contact tracing
+        run: python -m unittest tests_standalone.test_r36_action_actor_binding tests_standalone.test_r36_r32_contact_trace -v
+      - name: R32 platform collision regression
+        run: python -m unittest tests_standalone.test_platform_physics_r32 -v
       - name: Legacy R28 and R12 animation regressions
         run: python -m unittest tests_standalone.test_r28d_animation_events_roundtrip tests_standalone.test_drawtemp5_r12_animation -v
       - name: R26 Action Player regressions
