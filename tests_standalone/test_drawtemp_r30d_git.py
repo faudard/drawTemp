@@ -138,6 +138,28 @@ class GitReviewTests(unittest.TestCase):
             controller.apply({})
         self.assertEqual(self.session.snapshot().to_dict(), before)
 
+    def test_local_head_moved_even_when_incoming_tag_is_stable(self):
+        self.commit_incoming(subtitle="Incoming on pinned tag")
+        self.git("tag", "incoming")
+        controller = GitReviewController(self.session, self.source)
+        controller.compare_refs("base", "incoming")
+        self.git("commit", "--allow-empty", "-qm", "local HEAD advanced")
+        before = self.session.snapshot().to_dict()
+        with self.assertRaises(GitReviewError) as caught:
+            controller.apply({})
+        self.assertEqual(caught.exception.code, "ref_moved")
+        self.assertEqual(self.session.snapshot().to_dict(), before)
+
+    def test_git_base_must_be_ancestor_of_both_branches(self):
+        self.commit_incoming(subtitle="Incoming title")
+        # A historical tag is not descended from the new HEAD. Using HEAD
+        # as "base" for that older incoming revision is not a 3-way merge.
+        controller = GitReviewController(self.session, self.source)
+        with self.assertRaises(GitReviewError) as caught:
+            controller.compare_refs("HEAD", "base")
+        self.assertEqual(caught.exception.code, "unrelated_history")
+        self.assertIsNone(controller.refs)
+
     def test_git_injection_and_unknown_refs_rejected(self):
         repo = LocalGitProject(self.source)
         for ref in ("-c", "--help", "HEAD~1", "HEAD:path", "../HEAD",
