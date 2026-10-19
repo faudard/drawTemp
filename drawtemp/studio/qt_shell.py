@@ -45,6 +45,7 @@ log = logging.getLogger(__name__)
 DEFAULT_SHORTCUTS = {
     "save": "Ctrl+S", "open": "Ctrl+O", "undo": "Ctrl+Z", "redo": "Ctrl+Shift+Z",
     "palette": "Ctrl+Shift+P", "guide": "Ctrl+Shift+G",
+    "global_search": "Ctrl+Shift+F",
     "focus_resources": "Ctrl+1",
     "focus_inspector": "Ctrl+2", "new": "Ctrl+Shift+N",
     "new_project": "Ctrl+N", "new_template": "Ctrl+Alt+N",
@@ -424,6 +425,8 @@ class StudioWindow(QMainWindow):
         self._action("undo", "Annuler", self.undo)
         self._action("redo", "Rétablir", self.redo)
         self._action("palette", "Palette de commandes…", self.open_palette)
+        self._action("global_search", "R38 • Recherche globale et utilisations…",
+                     self.open_global_search)
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
@@ -482,6 +485,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r30_assist"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
+        tools_menu.addAction(self.commands["global_search"])
         tools_menu.addAction(self.commands["r35_world"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
@@ -572,6 +576,11 @@ class StudioWindow(QMainWindow):
 
     def open_palette(self):
         CommandPalette(self).exec()
+
+    def open_global_search(self):
+        """R38 index rebuilt from the current R1 revision; inspection only."""
+        from drawtemp.studio.r38_search_qt import GlobalSearchDialog
+        GlobalSearchDialog(self).exec()
 
     def open_creator_review(self):
         """One shared editor session; packs are always exported as new copies."""
