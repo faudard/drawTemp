@@ -1,5 +1,6 @@
 """R47.A: declarative SDK mod contracts, permissions, tamper and safety cases."""
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -156,6 +157,40 @@ class RegistryTests(unittest.TestCase):
             with self.assertRaises(ModError) as caught:
                 self.registry.install(another, resource_paths={"art-pack": path})
             self.assertEqual(caught.exception.code, "invalid_resource")
+
+
+    def test_valid_r30_pack_digest_and_tampering(self):
+        from drawtemp.export.creator_packs import build_pack, inspect_pack
+        doc = manifest("art-mod", "org.example.art")
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "source"
+            (source / "terrain").mkdir(parents=True)
+            payload = b"original unit-test pixels"
+            (source / "terrain/grass.png").write_bytes(payload)
+            pack_manifest = {
+                "schema": 1, "id": "sample-terrain", "version": "1.0.0",
+                "kind": "terrain",
+                "requires": {"min_api": "1.0.0", "max_api": "2.0.0",
+                             "features": ["authoring.v1"]},
+                "files": [{"path": "terrain/grass.png", "size": len(payload),
+                           "sha256": hashlib.sha256(payload).hexdigest(),
+                           "license": "CC0-1.0", "origin": "original test data"}],
+            }
+            pack = build_pack(source, root / "pack.zip", pack_manifest)
+            report = inspect_pack(pack)
+            doc["resources"] = [{"id": "sample-terrain", "version": "1.0.0",
+                                 "sha256": report.archive_sha256}]
+            self.assertFalse(self.registry.install(
+                doc, resource_paths={"sample-terrain": pack})["rights_verified"])
+            incorrect = deepcopy(doc)
+            incorrect["id"] = "tampered-mod"
+            incorrect["namespace"] = "org.example.tampered"
+            incorrect["resources"][0]["sha256"] = "f" * 64
+            with self.assertRaises(ModError) as caught:
+                self.registry.install(
+                    incorrect, resource_paths={"sample-terrain": pack})
+            self.assertEqual(caught.exception.code, "resource_mismatch")
 
 
 if __name__ == "__main__":
