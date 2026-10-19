@@ -70,11 +70,12 @@ def validate_puzzles(mission):
             require(all(o["id"] in seq for o in objects
                         if o["kind"] == "switch" and o.get("link") == door["id"]),
                     "Every linked switch must be in the door sequence")
-        require(not ((has_key and has_sequence) or
-                     (linked_plates and (has_key or has_sequence)) or
-                     (linked_plates and any(o["kind"] == "switch"
-                                            and o.get("link") == door["id"]
-                                            for o in objects))),
+        linked_switches = [o for o in objects
+                           if o["kind"] == "switch"
+                           and o.get("link") == door["id"]]
+        require(not ((has_key and (has_sequence or linked_plates or linked_switches))
+                     or (has_sequence and linked_plates)
+                     or (linked_plates and linked_switches)),
                 "Use one gate policy per door: key, sequence, plates or legacy lever")
     for key in (o for o in objects if o["kind"] == "key"):
         require(by_id[key["link"]].get("key") == key["id"],
