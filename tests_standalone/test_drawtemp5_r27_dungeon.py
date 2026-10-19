@@ -75,6 +75,33 @@ class R27DungeonStudioTests(unittest.TestCase):
         self.maps.redo()
         self.assertEqual(self.dungeon.puzzle_report()["unreachable_goals"], [])
 
+    def test_authored_lever_opens_real_player_battle_door(self):
+        from sporebound.engine import Battle
+        from sporebound.tactical_rpg3 import authored_rules_for_document
+        self.room()
+        self.dungeon.place_object("lever1", "switch", (7, 2),
+                                  link="room_door")
+        actor = next(u for u in self.maps.mission()["units"]
+                     if u["team"] == "player")
+        self.maps.move_actor(actor["id"], (7, 1))
+        raw = self.maps.snapshot()["content"]
+        rules = authored_rules_for_document(raw)
+        content = Content.from_dict(raw, rules=rules)
+        battle = Battle(content, "r27_ruins", seed=71, rules=rules)
+        hero = battle.unit(actor["id"])
+        battle.active_id = hero.id
+        hero.ct = 100
+        hero.acted = False
+        self.assertTrue(battle.board.tile((7, 3)).blocked)
+        battle.execute({"kind": "interact", "unit": hero.id,
+                        "object": "lever1"})
+        self.assertFalse(battle.board.tile((7, 3)).blocked)
+        self.assertTrue(next(o for o in battle.mission.objects
+                             if o["id"] == "room_door")["open"])
+        self.assertTrue(any(e["kind"] == "interact"
+                            and e.get("object") == "lever1"
+                            for e in battle.events))
+
     def test_switch_inside_a_locked_room_reports_softlock_risk(self):
         self.room()
         self.dungeon.place_object("lever1", "switch", (7, 5), link="room_door")
