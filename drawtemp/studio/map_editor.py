@@ -433,6 +433,11 @@ class MapWindow(QMainWindow):
         self.generator_dock = self._dock(
             "R22 — Génération de carte", panel, Qt.RightDockWidgetArea)
         self.generator_dock.hide()
+        # Changing any input invalidates the prior visible, validated preview.
+        self.gen_biome.currentIndexChanged.connect(self.cancel_generation)
+        self.gen_seed.valueChanged.connect(self.cancel_generation)
+        self.gen_coverage.valueChanged.connect(self.cancel_generation)
+        self.gen_selected_only.toggled.connect(self.cancel_generation)
 
     def show_generator(self):
         self.generator_dock.show()
