@@ -581,6 +581,57 @@ ApplicationWindow {
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
+                        ColumnLayout {
+                            visible: root.playerData.screen === "exploration" &&
+                                     root.playerData.living_world !== null &&
+                                     root.playerData.living_world !== undefined
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                text: "MONDE VIVANT · JOUR " +
+                                      (root.playerData.living_world ?
+                                       root.playerData.living_world.day + 1 : 1)
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Label {
+                                text: {
+                                    var w = root.playerData.living_world
+                                    if (!w) return ""
+                                    var h = Math.floor(w.minute / 60)
+                                    var m = w.minute % 60
+                                    return ("0" + h).slice(-2) + ":" +
+                                           ("0" + m).slice(-2) + " · " +
+                                           (w.npcs || []).length + " PNJ dans cette zone"
+                                }
+                                color: root.ivory
+                                Layout.fillWidth: true
+                            }
+                            Button {
+                                text: "Attendre 1 minute"
+                                enabled: !root.inputLocked
+                                Layout.fillWidth: true
+                                onClicked: {
+                                    var w = root.playerData.living_world
+                                    if (w) {
+                                        // Project ticks/minute is authored, not hardcoded.
+                                        // worldMinuteWait is provided in the projection.
+                                        player.worldWait(w.ticks_per_minute || 1)
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: root.playerData.living_world ?
+                                       (root.playerData.living_world.npcs || []) : []
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: root.muted
+                                    text: modelData.id + " · " + modelData.activity
+                                }
+                            }
+                        }
                         Label {
                             visible: root.playerData.screen !== "exploration"
                             text: "CT · tour " + (root.playerData.battle.tick || 0) +
