@@ -88,7 +88,10 @@ class R1712CrossWorkshopTests(unittest.TestCase):
         fresh = build_controller(content_path=content,
                                  save_dir=self.root / "saves", campaign_id="main")
         fresh.load(1)
-        battle = fresh.session._session.active_battle
+        from sporebound.game_session import GameSession
+        battle = GameSession.load(
+            self.root / "saves" / "slot_1.json",
+            fresh.content, fresh.project).active_battle
         clips, _ = triggered_tactical_cinematics(fresh.project, battle)
         self.assertIn(CINEMATIC_ID, [clip["id"] for clip in clips])
         save = self.root / "saves" / "slot_1.json"
