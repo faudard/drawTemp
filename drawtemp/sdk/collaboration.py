@@ -62,8 +62,8 @@ def make_revision(content, project, *, author: str, parents=()) -> ProjectRevisi
                          sort_keys=True, ensure_ascii=False, allow_nan=False,
                          separators=(",", ":")).encode("utf-8")
     digest = sha256(payload).hexdigest()
-    if digest in parents:
-        raise CollaborationError("cyclic_revision", "Revision cannot be its own parent")
+    # A branch may contain no document edits; its content digest can equal
+    # the declared parent's digest without implying a revision-graph cycle.
     return ProjectRevision(SCHEMA, author.strip(), tuple(parents), digest, payload)
 
 
