@@ -12,6 +12,7 @@ on:
       - 'tests_standalone/test_r41_party_studio.py'
       - 'tests_standalone/test_r41_encounter.py'
       - 'tests_standalone/test_r41_routed_encounter.py'
+      - 'tests_standalone/test_r41_routed_qt.py'
       - 'sporebound/scene_router.py'
       - 'tests_standalone/test_r41_encounter_qt.py'
       - 'sporebound/classic_encounter.py'
@@ -38,6 +39,7 @@ on:
       - 'tests_standalone/test_r41_party_studio.py'
       - 'tests_standalone/test_r41_encounter.py'
       - 'tests_standalone/test_r41_routed_encounter.py'
+      - 'tests_standalone/test_r41_routed_qt.py'
       - 'sporebound/scene_router.py'
       - 'tests_standalone/test_r41_encounter_qt.py'
       - 'sporebound/classic_encounter.py'
@@ -102,3 +104,5 @@ jobs:
         run: python -m unittest tests_standalone.test_r41_party_qt -v
       - name: R41.B2 Qt Encounter Studio smoke
         run: python -m unittest tests_standalone.test_r41_encounter_qt -v
+      - name: R41.B3 routed Player QML actual smoke
+        run: python -m unittest tests_standalone.test_r41_routed_qt -v
