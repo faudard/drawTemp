@@ -155,6 +155,28 @@ class NarrativeStateR42Tests(unittest.TestCase):
             state_effect(second.story, identifier='admitted', scope='scene',
                          owner='arrival', action='add', value=1)
 
+    def test_malformed_scope_and_collision_are_rejected_without_partial_mutation(self):
+        project = self.project_with_relation(0)
+        invalid = project.to_dict()
+        invalid['story']['state'][0]['scope'] = ['campaign']
+        with self.assertRaises(RuleError):
+            GameProject.from_dict(invalid, self.content)
+
+        from sporebound.campaign import Campaign
+        from sporebound.narrative import StoryBook
+        extra = declare_state(project, self.content,
+                              identifier='another', kind='bool',
+                              scope='scene', owner='arrival', initial=False)
+        first, second = extra.story['state']
+        blocked = Campaign(unlocked=[next(iter(self.content.missions))],
+                           story_flags={state_key(second): True})
+        original = deepcopy(blocked)
+        with self.assertRaises(RuleError):
+            StoryBook(extra.story, self.content, extra.campaigns).initialize(
+                blocked, 'main')
+        self.assertEqual(blocked, original)
+        self.assertNotIn(state_key(first), blocked.story_flags)
+
     def test_legacy_jeanne_session_does_not_gain_new_flags(self):
         session = GameSession.new(self.content, self.legacy, 'main')
         self.assertEqual(session.narrative_state(), ())
