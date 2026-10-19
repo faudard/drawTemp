@@ -1,0 +1,76 @@
+name: DrawTemp R30.G Assisted Terrain and Puzzles
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/r30_assist_generation.py'
+      - 'drawtemp/studio/r30_assist_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_drawtemp_r30g_assist.py'
+      - 'tests_standalone/test_drawtemp_r30g_qt.py'
+      - 'docs/drawtemp5/R30_G_ASSISTED_GENERATION.md'
+      - '.github/workflows/drawtemp-r30g-assist.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonical:
+    name: R30.G deterministic generation and R1 regression / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Generator contracts and past edit/performance gates
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp_r30g_assist
+          tests_standalone.test_drawtemp5_r1_authoring
+          tests_standalone.test_drawtemp_r30f_scale
+          -v
+      - name: Unchanged Jeanne replay/CT baseline
+        run: >-
+          python -m drawtemp.sdk.migration
+          --verify-baseline docs/drawtemp5/reference-baseline.json
+
+  qt:
+    name: R30.G Qt assistant review / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]"
+      - name: Inspect preview and undo without real GUI/GPU certification
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp_r30g_qt
+          tests_standalone.test_drawtemp_r30f_qt
+          -v
+      - name: Studio smoke
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.studio.qt_shell --smoke
