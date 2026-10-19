@@ -8,6 +8,7 @@ _HAS_QT = importlib.util.find_spec("PySide6") is not None
 
 from drawtemp.sdk.authoring import AuthoringSession
 from tests_standalone.test_r41_classic_party import party_fixture
+from drawtemp.studio.party_authoring import party_heroes
 
 if _HAS_QT:
     from PySide6.QtWidgets import QApplication
@@ -25,7 +26,7 @@ class R41PartyStudioQtTests(unittest.TestCase):
         dialog = PartyStudioDialog(editor)
         self.addCleanup(dialog.close)
         self.assertEqual(dialog.objectName(), "r41-party-studio")
-        self.assertEqual(dialog.members.rowCount(), 2)
+        self.assertEqual(dialog.members.rowCount(), len(party_heroes(editor.snapshot())))
         self.assertFalse(dialog.apply_button.isEnabled())
         dialog.capacity.setValue(3)
         self.assertFalse(dialog.apply_button.isEnabled())
