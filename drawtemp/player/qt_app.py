@@ -439,6 +439,11 @@ def main(argv=None):
     # Player, its canonical save slots, or native bundle verification.
     if argv is None:
         argv = sys.argv[1:]
+    if "--platform-demo" in argv:
+        if getattr(sys, "frozen", False):
+            raise ValueError("R32 diagnostic platform preview is not a certified native bundle")
+        from drawtemp.player.platform_app import main as platform_main
+        return platform_main([arg for arg in argv if arg != "--platform-demo"])
     if "--action-demo" in argv:
         if getattr(sys, "frozen", False):
             raise ValueError("Experimental action preview is not a certified native bundle")
