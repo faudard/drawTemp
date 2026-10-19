@@ -116,8 +116,10 @@ def resolve_npc(npc, flags, minute, exploration):
     """Find actual cell at arbitrary tick, with no per-tick NPC mutation."""
     leg = active_leg(npc, flags, minute)
     if leg is None:
-        return {"scene": None, "activity": "unavailable", "pos": None,
-                "moving": False}
+        result = {"scene": None, "activity": "unavailable"}
+        if "pos" in npc["schedule"][0]:
+            result.update({"pos": None, "moving": False})
+        return result
     prior, following, _, arrival = leg
     result = {"scene": prior["scene"], "activity": prior["activity"]}
     if "pos" not in prior:
