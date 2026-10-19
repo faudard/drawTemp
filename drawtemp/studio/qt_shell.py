@@ -1921,6 +1921,10 @@ class StudioWindow(QMainWindow):
         return self.open_path(dialog.created_content_path)
 
     def save_document(self):
+        if self._r49_playtest.active:
+            self.statusBar().showMessage(
+                "Enregistrement indisponible pendant un playtest en cours.")
+            return False
         try:
             if self.content_path is None:
                 return self.save_document_as()
@@ -1934,6 +1938,8 @@ class StudioWindow(QMainWindow):
             return False
 
     def save_document_as(self):
+        if self._r49_playtest.active:
+            return False
         path, _ = QFileDialog.getSaveFileName(
             self, "Enregistrer Content et GameProject",
             "jeanne.json", "Content JSON (*.json)")
@@ -1976,7 +1982,8 @@ class StudioWindow(QMainWindow):
                       context is not None and
                       context.matches(self.session, self.content_path))
         self.commands["return_playtest"].setEnabled(can_return)
-        for key in ("new", "new_project", "new_template", "open"):
+        for key in ("new", "new_project", "new_template", "open",
+                    "save", "save_as", "export"):
             self.commands[key].setEnabled(not active)
         if hasattr(self, "_r49_publication_play"):
             self._r49_publication_play.setEnabled(not active)
@@ -2009,7 +2016,14 @@ class StudioWindow(QMainWindow):
         self.statusBar().showMessage("Démarrage du Player Qt demandé…")
         # Program and arguments come only from the Studio. Project data must
         # never supply a command, shell script or replacement executable.
-        self._start_player_process(process)
+        try:
+            self._start_player_process(process)
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._r49_playtest.failed_to_start(str(exc))
+            self.problems.addItem("R49.B3 : lancement refusé : " + str(exc)[:300])
+            self._cleanup_player_process()
+            self._sync_playtest_commands()
+            return False
         return True
 
     def _start_player_process(self, process):
@@ -2114,8 +2128,8 @@ class StudioWindow(QMainWindow):
             return False
         restored = 0
         if context.resource_keys:
-            for i, identity in enumerate(context.resource_keys):
-                if i == 0:
+            for identity in context.resource_keys:
+                if restored == 0:
                     if not self.focus_resource(identity):
                         continue
                     restored += 1
@@ -2167,6 +2181,10 @@ class StudioWindow(QMainWindow):
         return True
 
     def export_player(self):
+        if self._r49_playtest.active:
+            self.statusBar().showMessage(
+                "Attendez la fin du Player avant de lancer l'export.")
+            return False
         if not self._saved_for_player():
             return False
         from drawtemp.studio.r15_creator import CreatorDialog
