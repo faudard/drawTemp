@@ -1,0 +1,31 @@
+name: DrawTemp R17.E Asset Rights Gate
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/export/**'
+      - 'tests_standalone/test_r17_asset_rights.py'
+      - '.github/workflows/drawtemp-r17e-asset-rights.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rights-contract:
+    name: R17.6 rights/manifest / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Fail-closed R17.6 and regression R15
+        run: python -m unittest tests_standalone.test_r17_asset_rights tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator -v
+      - name: Jeanne preview is not silently called a release
+        run: python -m drawtemp.export.cli check --content sporebound/content/jeanne.json
