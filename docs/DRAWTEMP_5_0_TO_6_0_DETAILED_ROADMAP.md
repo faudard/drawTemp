@@ -188,6 +188,8 @@
 | R21.13 Fins de siège | P0 | Victoire, accord, défaite cohérents et persistés ; aucune fin inaccessible par défaut de script | R10 ; path validation |
 | R21.14 Balance Lab | P0 | Analyse seeds, distribution pertes/durée, heatmaps et statistiques couplées au replay exact | R13 ; QA humaine et CI |
 
+**Suivi R21.A — tranche incrémentale (non-certifiante) :** [télégraphie des menaces superposées et compteurs HUD](drawtemp5/R21_TACTICAL_THREATS.md). Cette modification couvre une partie de R21.1 sans déclarer R21.1–R21.14 terminés ; exécuter les tests du document et contrôler la CI sur le SHA final, puis certifier les parcours siège/Qt/UX séparément.
+
 **Gate R21 :** le siège se termine par au moins deux approches tactiques cohérentes, avec plusieurs fronts, portes/escaliers, boss et conséquences durables. L'IA ne téléporte pas les unités hors simulation et le replay reste déterministe.
 
 ## 8. R22 — Creator Studio 2.0 (5.5 beta)
