@@ -118,6 +118,11 @@ class GameSession:
     def active_scene(self):
         return self.story.active_scene(self.progress)
 
+    def scene_profile(self, scene_id=None):
+        """Read the canonical project profile without changing CT state."""
+        from .game_modes import resolve_scene_profile
+        return resolve_scene_profile(self.project.game_modes, scene_id)
+
     def _tactical_story_progress(self):
         require(bool(self.tactical_story_pending), "No tactical dialogue pending")
         require(not self.progress.story_pending,
