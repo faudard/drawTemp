@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 
 from drawtemp.quality.r14 import verify_report
-from drawtemp.export.r15 import preflight, verify_bundle
+from drawtemp.export.r15 import preflight, project_path, verify_bundle
 
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 SHA64 = re.compile(r"[0-9a-f]{64}\Z")
@@ -190,8 +190,13 @@ def build_dossier(*, revision, artifacts=None, checks=None, cross=None, r14=None
                 raise EvidenceError("Reserved artifact name: " + name)
             paths[name] = value
     if content_path is not None:
+        if "authored-content" in paths or "authored-project" in paths:
+            raise EvidenceError("Reserved authored artifact names")
         paths["authored-content"] = content_path
+        paths["authored-project"] = project_path(content_path)
     if bundle_path is not None:
+        if "bundle-manifest" in paths:
+            raise EvidenceError("Reserved bundle artifact name")
         paths["bundle-manifest"] = Path(bundle_path) / "manifest.json"
     indexed = index_artifacts(paths)
     gates = {key: _gate(key) for key in RELEASE_GATES}
@@ -228,11 +233,28 @@ def build_dossier(*, revision, artifacts=None, checks=None, cross=None, r14=None
         except (OSError, ValueError, TypeError, KeyError) as exc:
             components["bundle"] = {"verified": False, "reason": str(exc)}
         else:
+            matched = True
+            if content_path is not None:
+                expected = Path(content_path)
+                source_pair = project_path(expected)
+                exported_pair = (Path(bundle_path) / "game" / source_pair.name)
+                matched = (
+                    manifest["content"] == "game/" + expected.name
+                    and exported_pair.is_file()
+                    and not exported_pair.is_symlink()
+                    and _hash_file(expected) ==
+                        _hash_file(Path(bundle_path) / manifest["content"])
+                    and _hash_file(source_pair) == _hash_file(exported_pair))
             components["bundle"] = {
-                "verified": True, "content": manifest["content"],
+                "verified": bool(matched), "content": manifest["content"],
                 "file_count": len(manifest["files"]),
+                "authored_pair_identical": matched if content_path is not None else None,
                 "certification": manifest.get("certification", "unknown")}
-            if gates["R17.8"]["status"] == "blocked":
+            if not matched:
+                components["bundle"]["reason"] = (
+                    "R15 bundle does not match the exact authored Content/GameProject pair")
+                gates["R17.8"]["detail"] = "Export belongs to another authored project"
+            elif gates["R17.8"]["status"] == "blocked":
                 gates["R17.8"] = _gate(
                     "R17.8", "partial",
                     "Local R15 manifest verified; native installation unproven")
