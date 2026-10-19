@@ -8,6 +8,7 @@ from .r15 import ExportError, export_game, preflight, verify_bundle
 from .templates import create_template, TEMPLATES
 from .migration import migration_preview, import_project
 from .extensions import inspect_extension
+from .publishing import GAME_FAMILIES, PC_TARGETS, publication_plan
 
 
 def main(argv=None):
@@ -36,8 +37,30 @@ def main(argv=None):
     migrate.add_argument("--output", type=Path)
     plugin = cmd.add_parser("inspect-extension", help="Validate declarative extension API")
     plugin.add_argument("--manifest", type=Path, required=True)
+    publish = cmd.add_parser("publish-plan", help="R39 PC publication preflight (not certification)")
+    publish.add_argument("--bundle", required=True, type=Path)
+    publish.add_argument("--provenance", required=True, type=Path)
+    publish.add_argument("--revision", required=True)
+    publish.add_argument("--target", required=True, choices=PC_TARGETS)
+    publish.add_argument("--family", required=True, choices=GAME_FAMILIES)
     args = parser.parse_args(argv)
     try:
+        if args.command == "publish-plan":
+            if args.provenance.stat().st_size > 8 * 1024 * 1024:
+                raise ExportError("Build provenance exceeds 8 MiB")
+            def unique(pairs):
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ExportError("Duplicate provenance key: " + key)
+                    result[key] = value
+                return result
+            provenance = json.loads(args.provenance.read_text(encoding="utf-8"),
+                                    object_pairs_hook=unique)
+            result = publication_plan(args.bundle, provenance, revision=args.revision,
+                                      target=args.target, family=args.family)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
         if args.command == "template":
             print(create_template(args.kind, args.output))
             return 0

@@ -256,6 +256,9 @@
 
 ## 11. R39 — Publishing Everywhere (7.9)
 
+Premier incrément R39.A : [profils PC et précontrôle de publication](R39_PUBLISHING.md).
+Implémentation partielle : intégrité/droits/provenance déclarée ; certification matérielle et multi-OS non acquise.
+
 **But :** fiabiliser la diffusion et rendre les plateformes supplémentaires *mesurables*, sans annonces irréalistes.
 
 | ID | P | Livrable vérifiable | Dépendances et tests |
