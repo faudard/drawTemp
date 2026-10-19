@@ -10,6 +10,9 @@ on:
       - 'pyproject.toml'
       - 'sporebound/**'
       - 'tests_standalone/test_drawtemp5_r15.py'
+      - 'tests_standalone/test_drawtemp5_r23a.py'
+      - 'tests_standalone/test_drawtemp5_r23_evidence.py'
+      - 'scripts/r23_release_gate.py'
   push:
     branches: [master]
   workflow_dispatch:
@@ -27,7 +30,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install .
-      - run: python -m unittest tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator -v
+      - run: python -m unittest tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator tests_standalone.test_drawtemp5_r23a tests_standalone.test_drawtemp5_r23_evidence -v
       - run: python -m drawtemp.export.cli check --content sporebound/content/jeanne.json
 
   native-bundle:
@@ -60,6 +63,19 @@ jobs:
           --runtime-dir dist/DrawTempPlayer
           --output export/Jeanne
       - run: python -m drawtemp.export.cli verify --bundle export/Jeanne
+      - name: R23.A record actual native bundle integrity for this commit
+        run: >-
+          python scripts/r23_release_gate.py native
+          --bundle export/Jeanne
+          --platform ${{ runner.os }}
+          --revision ${{ github.sha }}
+          --report r23-native.json
+      - name: Store per-OS native integrity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: r23-native-${{ runner.os }}
+          path: r23-native.json
+          if-no-files-found: error
       - name: Smoke frozen Player outside the source tree
         shell: bash
         env:
@@ -95,6 +111,36 @@ jobs:
           path: |
             export/Jeanne/**
             dist/DrawTempStudio/**
+          if-no-files-found: warn
+
+  r23-cross-os-ledger:
+    name: R23.A commit-pinned release ledger (NO-GO)
+    needs: native-bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: r23-native-*
+          path: r23-evidence
+          merge-multiple: false
+      - name: Require the three platforms and identical Git SHA
+        run: >-
+          python scripts/r23_release_gate.py aggregate
+          --directory r23-evidence
+          --revision ${{ github.sha }}
+          --report r23-release-ledger.json
+      - name: Retain incomplete-release decision and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r23-release-ledger
+          path: r23-release-ledger.json
           if-no-files-found: warn
 
   relocated-player:

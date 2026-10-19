@@ -1,0 +1,35 @@
+name: DrawTemp R24.A SDK contracts
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/project_extensions.py'
+      - 'sporebound/game_project.py'
+      - 'drawtemp/sdk/**'
+      - 'tests_standalone/test_drawtemp5_r24a.py'
+      - '.github/workflows/drawtemp-r24a-contracts.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'sporebound/project_extensions.py'
+      - 'sporebound/game_project.py'
+      - 'drawtemp/sdk/**'
+      - 'tests_standalone/test_drawtemp5_r24a.py'
+      - '.github/workflows/drawtemp-r24a-contracts.yml'
+
+jobs:
+  headless-compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install editable package
+        run: python -m pip install -e .
+      - name: SDK, migration and plugin compatibility
+        run: python -m unittest tests_standalone.test_drawtemp5_r24a tests_standalone.test_drawtemp5_r1d tests_standalone.test_drawtemp5_r15_creator

@@ -1,7 +1,7 @@
 # Jeanne d'Arc — Les Cendres du Royaume
 ## Bible narrative de référence v1.0 (proposition de canon)
 
-Statut : **conception narrative, non encore implémentée**. Ce document constitue la source de référence du récit ; les identifiants, missions et règles de traduction vers drawTemp figurent dans les deux documents complémentaires de ce dossier.
+Statut : **bible de référence pour la saga complète, en partie implémentée**. Le prologue et l'Acte I existent déjà dans la paire canonique `sporebound/content/jeanne.json` et `jeanne.game.json` ; les actes II–V et de nombreux éléments dramatiques restent des intentions de conception, non certifiées comme jouables. Voir le [contrat de production R20.A](R20_ACT_I_PRODUCTION_CONTRACT.md) pour séparer l'existant des objectifs.
 
 > **Nature du récit :** uchronie fantastique librement inspirée de Jeanne d'Arc et de la guerre de Cent Ans. Les changements de biographie, les personnages inventés, le château de Valcroix, les apparitions, les conspirations et les événements alternatifs ne sont **pas** des affirmations historiques.
 

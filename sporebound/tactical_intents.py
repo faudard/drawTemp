@@ -49,10 +49,13 @@ def tactical_intents(battle, *, max_cells=1024):
     if battle.result or battle.deploying:
         return result
 
+    # Multiple units may threaten the same tile. Retain each source rather
+    # than silently overwriting earlier casts, charges or armed reactions.
+    # A single source still contributes at most one row per kind and cell.
     danger = {}
     for cell, tile in sorted(battle.board.tiles.items()):
         if tile.hazard:
-            danger[("hazard", cell)] = {
+            danger[("hazard", cell, "")] = {
                 "kind": "hazard", "cell": list(cell),
                 "amount": tile.hazard, "certainty": "certain"}
 
@@ -107,7 +110,7 @@ def tactical_intents(battle, *, max_cells=1024):
                 "certainty": "scheduled"})
             if actor.team == "enemy":
                 for pos in cells:
-                    danger[("cast", pos)] = {"kind": "cast", "cell": list(pos),
+                    danger[("cast", pos, actor.id)] = {"kind": "cast", "cell": list(pos),
                                             "unit": actor.id, "certainty": "scheduled"}
         # All melee enemies may threaten a charge, not just phase bosses.
         # This is a CONDITIONAL corridor if they chose charge immediately,
@@ -127,7 +130,7 @@ def tactical_intents(battle, *, max_cells=1024):
                     "path": [list(pos) for pos in corridor],
                     "certainty": "possible"})
                 for cell in [*corridor, option["cell"]]:
-                    danger[("charge", tuple(cell))] = {
+                    danger[("charge", tuple(cell), actor.id)] = {
                         "kind": "charge", "cell": list(cell),
                         "unit": actor.id, "certainty": "possible"}
 
@@ -143,7 +146,7 @@ def tactical_intents(battle, *, max_cells=1024):
                 watcher = battle.unit(uid)
                 if battle.rules.preparations.get(prep["mode"]).covers(
                         battle, watcher, cell):
-                    danger[("prepared", cell)] = {
+                    danger[("prepared", cell, uid)] = {
                         "kind": "prepared", "cell": list(cell), "unit": uid,
                         "certainty": "armed"}
         result["prepared"] = [{"unit": uid, "mode": prep["mode"],

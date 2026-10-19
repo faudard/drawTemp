@@ -13,6 +13,7 @@ from drawtemp.core import Content, RuleError
 from drawtemp.render.iso_scene import scene_from_mission
 from drawtemp.render.qt_viewport import make_controller
 from drawtemp.sdk.authoring import AuthoringError
+from sporebound.studio_transaction import StudioTransactionStore
 from drawtemp.sdk.construction import ConstructionWorkspace
 from .map_authoring import MapStudio, SURFACE_PALETTE
 
@@ -61,6 +62,8 @@ class MapWindow(QMainWindow):
             ("Renommer", self.rename_map),
             ("Ouvrir", self.open_map),
             ("Enregistrer", self.save_map),
+            ("Enregistrer une copie", self.save_map_as),
+            ("Récupérer projet", self.recover_project),
             ("Annuler", self.undo),
             ("Rétablir", self.redo),
             ("Copier", self.copy_selection),
@@ -313,36 +316,176 @@ class MapWindow(QMainWindow):
             self._safe(lambda: self.studio.rename(name))
             self.refresh_maps()
 
+    def _has_unsaved(self):
+        return self.studio.authoring.snapshot().dirty or self.studio.layers.dirty
+
+    def _load_verified_project(self, path):
+        # Construct both the canonical pair and layer workspace successfully
+        # before replacing the live project. Failed reload must not discard
+        # unsaved in-memory maps, undo history or active selection.
+        loaded = MapStudio.open(path)
+        self.studio = loaded
+        self.layers_panel.set_workspace(loaded.layers)
+        self.selection = []
+        self.cancel_transform()
+        self.refresh_maps()
+
+    def _allow_discard_unsaved(self):
+        if not self._has_unsaved():
+            return True
+        response = QMessageBox.warning(
+            self, "Modifications non enregistrées",
+            "Recharger ce projet abandonnera les modifications locales non "
+            "enregistrées (carte et calques). Enregistrer une copie d'abord "
+            "si vous souhaitez les conserver. Continuer ?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        return response == QMessageBox.Yes
+
     def open_map(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Ouvrir un contenu avec manifeste .game.json", "", "Content JSON (*.json)")
         if not path:
             return
-        if self.studio.authoring.snapshot().dirty or self.studio.layers.dirty:
-            QMessageBox.information(self, "Carte modifiée",
-                                    "Enregistrez avant d'ouvrir un autre projet.")
+        if self._has_unsaved():
+            QMessageBox.information(
+                self, "Carte modifiée",
+                "Enregistrez une copie avant d'ouvrir un autre projet.")
             return
-        def open_document():
-            self.studio = MapStudio.open(path)
-            self.layers_panel.set_workspace(self.studio.layers)
-            self.selection = []
-            self.cancel_transform()
-            self.refresh_maps()
-        self._safe(open_document)
+        if StudioTransactionStore(path).pending:
+            self.recover_project(path)
+            return
+        self._safe(lambda: self._load_verified_project(path))
+
+    def recover_project(self, path=None):
+        """R17.11 explicit two-file journal recovery with immutable review."""
+        # QAction.triggered may forward its checked bool, not a filename.
+        if not isinstance(path, (str, Path)):
+            current = self.studio.authoring.storage_status()
+            if current["has_destination"] and current["pending"]:
+                path = current["path"]
+            else:
+                path, _ = QFileDialog.getOpenFileName(
+                    self, "Projet avec journal .studio-recovery.json", "",
+                    "Content JSON (*.json)")
+        if not path:
+            return
+        store = StudioTransactionStore(path)
+        try:
+            report = store.inspect_recovery()
+        except (RuleError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Récupération indisponible",
+                                "Aucun fichier n'a été remplacé. " + str(exc))
+            return
+
+        choice_box = QMessageBox(self)
+        choice_box.setObjectName("r17StudioRecoveryReview")
+        choice_box.setWindowTitle("Récupération du projet interrompu")
+        choice_box.setIcon(QMessageBox.Warning)
+        choice_box.setText("Deux fichiers Content + GameProject et un journal "
+                           "de transaction seront vérifiés avant toute écriture.")
+        choices = report["choices"]
+        choice_box.setInformativeText(
+            str(store.content_path) + "\n\n" +
+            "Terminer l'enregistrement : " +
+            ("possible" if choices["complete"]["available"]
+             else choices["complete"]["reason"]) + "\n" +
+            "Revenir à la sauvegarde précédente : " +
+            ("possible" if choices["rollback"]["available"]
+             else choices["rollback"]["reason"]))
+        finish = choice_box.addButton(
+            "Terminer l'enregistrement", QMessageBox.AcceptRole)
+        rollback = choice_box.addButton(
+            "Revenir en arrière", QMessageBox.AcceptRole)
+        cancel = choice_box.addButton("Annuler", QMessageBox.RejectRole)
+        finish.setEnabled(choices["complete"]["available"])
+        rollback.setEnabled(choices["rollback"]["available"])
+        choice_box.setDefaultButton(cancel)
+        choice_box.exec()
+        clicked = choice_box.clickedButton()
+        if clicked not in (finish, rollback):
+            return
+        if not self._allow_discard_unsaved():
+            return
+        selected = "complete" if clicked is finish else "rollback"
+        try:
+            # Mandatory second fingerprint comparison in the canonical store.
+            store.recover(selected, expected_fingerprints=report["fingerprints"])
+            if all(p.is_file() for p in store.paths):
+                self._load_verified_project(path)
+            else:
+                QMessageBox.information(
+                    self, "Récupération terminée",
+                    "L'annulation de la première sauvegarde a restauré "
+                    "l'absence du projet. Aucun projet n'a été ouvert.")
+                return
+        except (RuleError, AuthoringError, OSError, ValueError) as exc:
+            QMessageBox.critical(
+                self, "Récupération interrompue",
+                "Aucune décision automatique n'a été prise. Si des fichiers "
+                "ont déjà été remplacés, le journal reste disponible pour "
+                "une nouvelle inspection.\n" + str(exc))
+            return
+        self.statusBar().showMessage(
+            "Projet restauré (" + selected + ") et rechargé", 7000)
+
+    def save_map_as(self, *_):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Enregistrer une copie de Content + GameProject",
+            "jeanne-village-copie.json", "Content JSON (*.json)")
+        if not path:
+            return
+        self._safe(lambda: self.studio.save_as(path))
+
+    def _save_conflict(self, error):
+        """Explicit choices only. Never retry save() on conflicting documents."""
+        try:
+            status = self.studio.authoring.storage_status()
+        except (OSError, RuleError) as exc:
+            QMessageBox.warning(self, "Échec d'enregistrement",
+                                str(error) + "\n" + str(exc))
+            return
+        if status["pending"]:
+            answer = QMessageBox.question(
+                self, "Sauvegarde interrompue",
+                "Un journal de récupération a été détecté. Examiner les "
+                "deux fichiers avant toute nouvelle sauvegarde ?\n" + str(error),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if answer == QMessageBox.Yes:
+                self.recover_project(status["path"])
+            return
+        if not status["external_change"]:
+            QMessageBox.warning(self, "Échec d'enregistrement", str(error))
+            return
+        conflict = QMessageBox(self)
+        conflict.setObjectName("r17StudioSaveConflict")
+        conflict.setWindowTitle("Conflit de fichiers externes")
+        conflict.setIcon(QMessageBox.Warning)
+        conflict.setText("Content ou GameProject a été modifié sur disque "
+                         "par une autre application. L'enregistrement est bloqué.")
+        conflict.setInformativeText(
+            "Pour conserver vos modifications locales : Enregistrer une copie.\n"
+            "Pour utiliser la version externe : Recharger (après confirmation).\n"
+            "Aucun fichier du projet courant ne sera écrasé par ce dialogue.")
+        copy_button = conflict.addButton("Enregistrer une copie", QMessageBox.AcceptRole)
+        reload_button = conflict.addButton("Recharger du disque", QMessageBox.ActionRole)
+        cancel = conflict.addButton("Annuler", QMessageBox.RejectRole)
+        conflict.setDefaultButton(cancel)
+        conflict.exec()
+        clicked = conflict.clickedButton()
+        if clicked is copy_button:
+            self.save_map_as()
+        elif clicked is reload_button and self._allow_discard_unsaved():
+            self._safe(lambda: self._load_verified_project(status["path"]))
 
     def save_map(self):
-        def action():
-            try:
-                return self.studio.save()
-            except AuthoringError as exc:
-                if exc.code != "no_destination":
-                    raise
-                path, _ = QFileDialog.getSaveFileName(
-                    self, "Enregistrer contenu + projet", "jeanne-village.json",
-                    "Content JSON (*.json)")
-                if path:
-                    return self.studio.save_as(path)
-        self._safe(action)
+        try:
+            return self.studio.save()
+        except AuthoringError as exc:
+            if exc.code == "no_destination":
+                return self.save_map_as()
+            self._save_conflict(exc)
+        except (RuleError, OSError, ValueError) as exc:
+            self._save_conflict(exc)
 
     def undo(self):
         self.cancel_transform()

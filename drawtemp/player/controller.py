@@ -65,12 +65,14 @@ class PlayerController:
                                if source == "auto" else None)
         return self.state()
 
-    def restore_backup(self, slot=1):
-        verified = self._store(slot).restore_backup()
+    def restore_backup(self, slot=1, *, expected_fingerprints=None):
+        verified = self._store(slot).restore_backup(
+            expected_fingerprints=expected_fingerprints)
         return self._activate_save(verified, "Sauvegarde de secours restaurée")
 
-    def restore_autosave_backup(self):
-        verified = self.saves.restore_autosave_backup()
+    def restore_autosave_backup(self, *, expected_fingerprints=None):
+        verified = self.saves.restore_autosave_backup(
+            expected_fingerprints=expected_fingerprints)
         return self._activate_save(verified, "Autosauvegarde de secours restaurée",
                                    source="auto")
 

@@ -1,5 +1,5 @@
 # Jeanne — Catalogue de missions, embranchements et structure de campagne
-**Version de conception 1.0.** Toute la campagne décrite ci-dessous est **prévue** et non considérée comme codée.
+**Version de conception 1.0, avec état d'intégration actualisé.** Le prologue et l'Acte I sont déjà encodés et testés dans le contenu canonique ; les actes II–V et la plupart des opérations de siège restent des objectifs de production. Le tableau des IDs est historique : dans le contenu réel, la branche des otages utilise `a1_04b_otages` (et non `a1_04b_familles`). Voir le [pack de production R20.A](R20_ACT_I_PRODUCTION_CONTRACT.md).
 
 Références : [Bible narrative](NARRATIVE_BIBLE.md), [Relations et décisions](RELATIONSHIPS_AND_IMPLEMENTATION.md).
 

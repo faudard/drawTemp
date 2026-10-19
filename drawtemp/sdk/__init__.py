@@ -11,9 +11,14 @@ SDK_API_STATUS = "provisional"  # Stabilization candidate, not final 5.0 certifi
 SDK_FEATURES = frozenset({
     "simulation.v1", "authoring.v1", "migration.v0-envelope-to-v1",
     "replay.v1", "player-slots.v1", "workers.v1", "certification.v1",
+    "sdk-negotiation.v1", "project-extensions.v1",
 })
 
 _PUBLIC = {
+    "SDKCompatibilityError": "compatibility",
+    "negotiate_sdk": "compatibility",
+    "ProjectExtensionError": "project_extensions",
+    "validate_project_extensions": "project_extensions",
     "Simulation": "simulation",
     "SimulationError": "simulation",
     "StateSnapshot": "simulation",
