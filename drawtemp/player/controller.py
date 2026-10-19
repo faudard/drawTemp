@@ -188,6 +188,17 @@ class PlayerController:
         self.session.explore_move(dx, dy, expected_revision=state.revision)
         return self._changed()
 
+    def route_transition(self, link_id):
+        """R40.B.2: use the Player's authoritative R25 scene-routing path."""
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        if snapshot.mode != "campaign" or snapshot.scene is not None:
+            raise ValueError("Resolve the current encounter before travelling")
+        self.session.route_transition(link_id,
+                                      expected_revision=snapshot.revision)
+        self.selected = [0, 0]
+        return self._changed()
+
     def world_wait(self, ticks=1):
         """R35 player clock action, never an implicit renderer tick."""
         state = self._current()
@@ -590,6 +601,7 @@ class PlayerController:
                 "settings": self.preferences.view(),
                 "journey": {"enabled": False, "stages": [], "completed": False},
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
+                "routes": [],
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
                 "living_world": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
@@ -646,6 +658,10 @@ class PlayerController:
         }
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
+        # Optional read-only R25 routes, never a second Player-owned cursor.
+        # Preserve route buttons even when an exploration exit is completed.
+        base["routes"] = thaw(self.session.route_options(
+            expected_revision=snapshot.revision))
         if self.session.living_world_state() is not None:
             current = base["exploration"].get("scene_id")
             base["living_world"] = thaw(self.session.living_world_state(
