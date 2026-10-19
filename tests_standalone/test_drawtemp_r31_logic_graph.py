@@ -60,7 +60,7 @@ class LogicGraphContractTests(unittest.TestCase):
 
     def test_rejects_invalid_graphs_and_untrusted_code(self):
         invalid = [
-            ("unsupported_schema", lambda g: g.update(schema_version=3)),
+            ("unsupported_schema", lambda g: g.update(schema_version=4)),
             ("unsupported_schema", lambda g: g.update(schema_version=True)),
             ("invalid_shape", lambda g: g.update(shell="exec")),
             ("invalid_id", lambda g: g.update(id="../../unsafe")),
