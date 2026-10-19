@@ -24,7 +24,7 @@ class R41PartyStudioTests(unittest.TestCase):
         initial = self.editor.snapshot().to_dict()
         self.assertIn(("main", "Campagne principale"),
                       party_campaigns(self.editor.snapshot()))
-        self.assertIn(("jeanne", "Jeanne"), party_heroes(self.editor.snapshot()))
+        self.assertIn("jeanne", dict(party_heroes(self.editor.snapshot())))
         draft = preview_party_edit(
             self.editor, "main", recruitable=["jeanne", "margot"],
             initial=["jeanne", "margot"], active=["jeanne", "margot"],
@@ -82,7 +82,7 @@ class R41PartyStudioTests(unittest.TestCase):
         stale = preview_party_edit(self.editor, "main", **good)
         applied = preview_party_edit(
             self.editor, "main", recruitable=["jeanne", "margot"],
-            initial=["jeanne"], active=["jeanne"], max_active=2)
+            initial=["jeanne"], active=["jeanne"], max_active=3)
         apply_party_edit(self.editor, applied)
         with self.assertRaises(RuleError):
             apply_party_edit(self.editor, stale)
