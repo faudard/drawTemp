@@ -9,17 +9,17 @@ import os
 from pathlib import Path
 
 WORKSPACES = (
-    "project", "profiles", "gameplay", "maps", "construction", "actors", "database", "events",
+    "project", "minigames", "profiles", "gameplay", "maps", "construction", "actors", "database", "events",
     "campaigns", "cinematics", "analysis", "publication",
 )
 LABELS = {
-    "project": "Projet", "profiles": "Profils de jeu", "gameplay": "Gameplay", "maps": "Carte", "construction": "Construction",
-    "actors": "Personnages", "database": "Base RPG", "events": "Événements",
+    "project": "Projet", "minigames": "Mini-jeux R28", "profiles": "Profils de jeu", "gameplay": "Gameplay", "maps": "Carte", "construction": "Construction",
+    "actors": "Personnages", "database": "Base RPG", "events": "Événements / Animation",
     "campaigns": "Campagne", "cinematics": "Cinématiques",
     "analysis": "Analyse", "publication": "Publication",
 }
 EN = {
-    "project": "Project", "profiles": "Game profiles", "gameplay": "Gameplay", "maps": "Map", "construction": "Construction",
+    "project": "Project", "minigames": "Mini-games R28", "profiles": "Game profiles", "gameplay": "Gameplay", "maps": "Map", "construction": "Construction",
     "actors": "Characters", "database": "RPG Database", "events": "Events",
     "campaigns": "Campaign", "cinematics": "Cinematics",
     "analysis": "Analysis", "publication": "Publish",
