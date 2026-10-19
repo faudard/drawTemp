@@ -8,6 +8,8 @@ on:
       - 'sporebound/game_project.py'
       - 'tests_standalone/test_r35_living_world.py'
       - 'tests_standalone/test_r35_factions_quests.py'
+      - 'sporebound/living_world_commerce.py'
+      - 'tests_standalone/test_r35_commerce.py'
       - '.github/workflows/r35-living-world.yml'
   push:
     branches: [master]
@@ -17,6 +19,8 @@ on:
       - 'sporebound/game_project.py'
       - 'tests_standalone/test_r35_living_world.py'
       - 'tests_standalone/test_r35_factions_quests.py'
+      - 'sporebound/living_world_commerce.py'
+      - 'tests_standalone/test_r35_commerce.py'
   workflow_dispatch:
 
 permissions:
@@ -45,5 +49,7 @@ jobs:
         run: python -m unittest tests_standalone.test_r35_living_world -v
       - name: R35.B1 reputation and daily quest receipts
         run: python -m unittest tests_standalone.test_r35_factions_quests -v
+      - name: R35.B2 merchant receipts and daily inventory
+        run: python -m unittest tests_standalone.test_r35_commerce -v
       - name: R25 and legacy GameSession regressions
         run: python -m unittest tests_standalone.test_r25_scene_router tests_standalone.test_r25_fixed_realtime tests_standalone.test_game_session -v
