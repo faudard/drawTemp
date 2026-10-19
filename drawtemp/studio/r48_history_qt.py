@@ -14,8 +14,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QFileDialog, QHBoxLayout,
-    QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from drawtemp.sdk.audit_reconciliation import reconcile_audit
@@ -57,7 +57,17 @@ class ProjectHistoryDialog(QDialog):
         self._notes_head = None
         self._note_anchor = None
 
-        layout = QVBoxLayout(self)
+        # Keep every review/annotation control keyboard-reachable even on
+        # laptop-height screens; never allow a fixed-height dialog to clip notes.
+        outer = QVBoxLayout(self)
+        scroller = QScrollArea(self)
+        scroller.setObjectName("r48-history-scroll")
+        scroller.setAccessibleName("Contenu défilant de la revue R48")
+        scroller.setWidgetResizable(True)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        scroller.setWidget(content)
+        outer.addWidget(scroller)
         description = QLabel(
             "Historique LOCAL en mémoire. La filiation est déclarée, non vérifiée "
             "par Git. Importer une paire Content/GameProject, comparer deux "
