@@ -242,6 +242,52 @@ class GameSession:
                 "Routed exploration interactions require an active scene")
         return self.exploration.interact(self.progress, self.route_scene, point_id)
 
+    def route_world_interact(self, object_id):
+        """R44.C: activate a declared world object via canonical exploration.
+
+        Only an existing non-exit interaction can change a world flag.
+        GameSession remains the sole state owner and rollback authority.
+        This is opt-in; historical R25/CT games are completely unchanged.
+        """
+        from .world_graph44 import EXTENSION, WorldGraph
+        spec = self.project.extensions.get(EXTENSION)
+        require(spec is not None and self.scene_router.enabled
+                and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending
+                and self.route_scene in self.project.exploration,
+                "R44: active routed exploration and WorldGraph required")
+        require(type(object_id) is str, "R44: invalid object identifier")
+        graph = WorldGraph(spec["data"], self.content, self.project)
+        entry = next((row for row in graph.raw["objects"]
+                      if row["scene"] == self.route_scene and row["id"] == object_id),
+                     None)
+        require(entry is not None and entry["kind"] in ("chest", "door", "switch"),
+                "R44: object is not an activatable exploration interaction")
+        point = next((row for row in self.project.exploration[self.route_scene]
+                      ["interactions"] if row["id"] == object_id), None)
+        require(point is not None and point["exit"] is False,
+                "R44: persistent objects must use an authored non-exit hotspot")
+        flag = entry["flag"]
+        activated = self.progress.story_flags.get(flag, False)
+        require(type(activated) is bool, "R44: invalid persistent object flag")
+        # Resolve position/proximity even for a repeated action.
+        stage = self.route_state()
+        require(not stage["completed"] and
+                sum(abs(a - b) for a, b in zip(stage["position"], point["pos"])) <= 1,
+                "R44: move closer to activate the object")
+        if activated:
+            return {"id": object_id, "world_flag": flag,
+                    "already_activated": True, "finished": False}
+        previous = deepcopy(self.progress)
+        try:
+            result = self.route_interact(object_id)
+            self.progress.story_flags[flag] = True
+            return {**result, "world_flag": flag, "already_activated": False}
+        except Exception:
+            self.progress = previous
+            raise
+
     def route_move(self, dx, dy):
         """Legacy cardinal exploration remains available before free movement starts."""
         require(self.scene_router.enabled and self.mode == "campaign"
