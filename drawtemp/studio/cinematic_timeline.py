@@ -62,7 +62,8 @@ class TimelineView(QGraphicsView):
 
 
 class TimelineBlock(QGraphicsRectItem):
-    def __init__(self, event, scale, lane_y, revision, move_callback, color):
+    def __init__(self, event, scale, lane_y, revision, move_callback, color,
+                 trim_callback=None):
         super().__init__(0, 0, max(5, scale.width_for(event["duration_ms"])), 21)
         self.event_id = event["id"]
         self.original_ms = event["start_ms"]
@@ -83,6 +84,9 @@ class TimelineBlock(QGraphicsRectItem):
         caption.setBrush(QBrush(QColor("#f5f1e9")))
         caption.setPos(4, 1)
         caption.setAcceptedMouseButtons(Qt.NoButton)
+        if trim_callback is not None:
+            self.trim_handle = TimelineTrimHandle(
+                event, scale, self, revision, trim_callback)
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange and self.scene() is not None:
@@ -156,3 +160,48 @@ class TimelineKeyframe(QGraphicsPolygonItem):
         else:
             QTimer.singleShot(0, lambda: self.move_callback(
                 self.event_id, self.old_local, target, self.base_revision))
+
+
+class TimelineTrimHandle(QGraphicsRectItem):
+    """Transient right trim handle; only mouse release commits a document edit."""
+
+    def __init__(self, event, scale, parent, revision, trim_callback):
+        super().__init__(-4, 0, 8, 21, parent)
+        self.event_id = event["id"]
+        self.original_duration = event["duration_ms"]
+        self.max_duration = scale.duration_ms - event["start_ms"]
+        self.scale = scale
+        self.base_revision = revision
+        self.trim_callback = trim_callback
+        self._initial_width = scale.width_for(self.original_duration)
+        self.setPos(self._initial_width, 0)
+        self.setPen(QPen(QColor("#f8f1dd")))
+        self.setBrush(QBrush(QColor("#ffffff")))
+        self.setZValue(4)
+        self.setCursor(Qt.SizeHorCursor)
+        self.setToolTip("Raccourcir / prolonger la piste · validation au relâchement")
+        self.setFlag(QGraphicsItem.ItemIsMovable, True)
+        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, True)
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionChange and self.scene() is not None:
+            x = max(self.scale.width_for(1), min(
+                self.scale.width_for(self.max_duration), value.x()))
+            return QPointF(x, 0)
+        return super().itemChange(change, value)
+
+    def mousePressEvent(self, event):
+        self._pressed_x = self.pos().x()
+        self.parentItem().setSelected(True)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        moved = abs(self.pos().x() - getattr(self, "_pressed_x", self.pos().x()))
+        duration = self.scale.duration_at_width(self.pos().x(), self.max_duration)
+        # Do not leave a ghost after a failed or stale transaction.
+        self.setPos(self._initial_width, 0)
+        if moved < 2 or duration == self.original_duration:
+            return
+        QTimer.singleShot(0, lambda: self.trim_callback(
+            self.event_id, duration, self.base_revision))
