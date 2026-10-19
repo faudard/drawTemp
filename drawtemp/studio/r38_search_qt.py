@@ -134,6 +134,7 @@ class GlobalSearchDialog(QDialog):
                                                    "prefab_variants", "prefab_instances"))
         self.open_button.setText(
             "Ouvrir Game Logic Studio" if hit.family in ("logic_graphs", "graph_nodes")
+            else "Ouvrir Prefabs R38" if hit.family in ("prefab_variants", "prefab_instances")
             else "Sélectionner dans l'explorateur")
 
     def open_selection(self, *_args):
