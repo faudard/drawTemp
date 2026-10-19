@@ -116,6 +116,7 @@ class LogicGraphDialog(QDialog):
             raise TypeError("A shared AuthoringSession is required")
         self.session = session
         self.draft = None
+        self._baseline = None
         self.selected_node = ""
         self.link_start = ""
         self.setObjectName("r31-logic-dialog")
@@ -201,31 +202,61 @@ class LogicGraphDialog(QDialog):
         self.graphs.setCurrentIndex(max(index, 0))
         self.graphs.blockSignals(False)
 
+    def _has_unsaved_draft(self):
+        return self.draft is not None and (
+            self._baseline is None or self.draft.document() != self._baseline)
+
+    def _can_discard_draft(self):
+        if not self._has_unsaved_draft():
+            return True
+        response = QMessageBox.question(
+            self, "Brouillon R31", "Abandonner les modifications non appliquées ?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        return response == QMessageBox.Yes
+
     def load_selected_graph(self, *_):
+        if not self._can_discard_draft():
+            previous = self.draft.graph["id"]
+            index = self.graphs.findData(previous)
+            self.graphs.blockSignals(True)
+            self.graphs.setCurrentIndex(max(0, index))
+            self.graphs.blockSignals(False)
+            return
         identifier = self.graphs.currentData()
         if identifier:
             self.draft = LogicGraphDraft.load(self.session, identifier)
+            self._baseline = self.draft.document()
             target = self.mission.findData(self.draft.graph["mission_id"])
             if target >= 0:
                 self.mission.setCurrentIndex(target)
         else:
             self.draft = None
+            self._baseline = None
         self.link_start = ""
         self.selected_node = ""
         self._render()
 
     def new_graph(self):
+        if not self._can_discard_draft():
+            return
         mission_id = self.mission.currentData()
         identifier, accepted = QInputDialog.getText(
             self, "Nouveau graphe", "Identifiant stable (minuscules, lettres/chiffres)",
             text="nouveau_graphe")
         if not accepted:
             return
+        identifier = identifier.strip()
+        if any(row["id"] == identifier for row in graphs_from_project(
+                self.session.snapshot().to_dict()["project"])):
+            self._problem(LogicGraphError(
+                "duplicate_graph", "Un graphe enregistré porte déjà cet identifiant."))
+            return
         self.graphs.blockSignals(True)
         self.graphs.setCurrentIndex(0)
         self.graphs.blockSignals(False)
         self.draft = LogicGraphDraft.new(
-            mission_id, identifier.strip(), source_revision=self.session.revision)
+            mission_id, identifier, source_revision=self.session.revision)
+        self._baseline = None
         self.selected_node = "start"
         self.link_start = ""
         self._render()
@@ -392,6 +423,7 @@ class LogicGraphDialog(QDialog):
             self.draft.apply(self.session)
             self.reload_graph_choices(graph_id)
             self.draft = LogicGraphDraft.load(self.session, graph_id)
+            self._baseline = self.draft.document()
             self.link_start = ""
             self.diagnostics.setPlainText("APPLIQUÉ : Content + GameProject (une transaction).")
             self._render()
@@ -402,6 +434,8 @@ class LogicGraphDialog(QDialog):
             return False
 
     def _history(self, direction):
+        if not self._can_discard_draft():
+            return
         try:
             getattr(self.session, direction)()
             self.reload_graph_choices()
