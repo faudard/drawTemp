@@ -302,7 +302,7 @@ def _reject_nonfinite(token):
     _fail("invalid_json", "Nonfinite number in document: " + token)
 
 
-def _read_json(path):
+def _read_json(path, *, with_hash=False):
     target = Path(path)
     if target.is_symlink() or not target.is_file():
         _fail("unsafe_path", "Expected a regular JSON document")
@@ -311,9 +311,10 @@ def _read_json(path):
             raw = stream.read(MAX_DOCUMENT_BYTES + 1)
         if len(raw) > MAX_DOCUMENT_BYTES:
             _fail("size_limit", "Input document exceeds 16 MiB")
-        return json.loads(raw.decode("utf-8"),
+        data = json.loads(raw.decode("utf-8"),
                           object_pairs_hook=_reject_duplicate_keys,
                           parse_constant=_reject_nonfinite)
+        return (data, sha256(raw).hexdigest()) if with_hash else data
     except SemanticMergeError:
         raise
     except (OSError, UnicodeError, ValueError, TypeError, RecursionError) as exc:
@@ -330,10 +331,14 @@ def read_pair(content_path):
     project_path = source.with_suffix(".game.json")
     if source.resolve() == project_path.resolve():
         _fail("unsafe_path", "Content and GameProject paths must differ")
-    raw_content, raw_project = _read_json(source), _read_json(project_path)
+    raw_content, original_content_sha = _read_json(source, with_hash=True)
+    raw_project, original_project_sha = _read_json(project_path, with_hash=True)
     pair = _check_pair({"content": raw_content, "project": raw_project})
-    # Re-read exact bytes on return; an external edit during validation cannot
-    # silently become the basis of a merge/commit preview.
-    if raw_content != _read_json(source) or raw_project != _read_json(project_path):
+    # Even a whitespace-only concurrent edit changes the source bytes. Do not
+    # silently adopt stale content as the common VCS ancestor.
+    _, now_content_sha = _read_json(source, with_hash=True)
+    _, now_project_sha = _read_json(project_path, with_hash=True)
+    if ((original_content_sha, original_project_sha) !=
+            (now_content_sha, now_project_sha)):
         _fail("external_change", "Input documents changed during validation")
     return pair
