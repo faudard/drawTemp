@@ -323,6 +323,10 @@ class StoryBook:
         """Apply one validated choice to a copy; no partial story mutations."""
         scene = self.active_scene(progress)
         require(scene is not None, 'No active story scene')
+        if self.raw.get('schema_version') == 2:
+            from .narrative_playback_r42 import current_line
+            require(current_line(progress, scene)['complete'],
+                    'Read all dialogue lines before choosing')
         selected = next((c for c in self.choices(progress) if c['id'] == choice_id), None)
         require(selected is not None, 'Choice is unavailable')
         updated = deepcopy(progress)
