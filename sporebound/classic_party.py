@@ -33,7 +33,8 @@ def validate_classic_party(data, *, content, project):
     Unknown keys, bool integers, non-player IDs and unsupported future schemas
     are errors, not migrations. Legacy projects do not need this extension.
     """
-    require(type(data) is dict and set(data) == {"version", "campaigns"}
+    require(type(data) is dict and {"version", "campaigns"} <= set(data)
+            and set(data) <= {"version", "campaigns", "encounters"}
             and type(data["version"]) is int and data["version"] == VERSION,
             "Unsupported R41 party schema")
     campaigns = data["campaigns"]
@@ -65,6 +66,9 @@ def validate_classic_party(data, *, content, project):
                 and set(active) <= set(initial) <= set(recruitable)
                 and set(recruitable) <= players,
                 "Invalid active/initial/recruitable hero references")
+    if "encounters" in data:
+        from .classic_encounter import validate_encounters
+        validate_encounters(data["encounters"], content=content, project=project)
     return deepcopy(data)
 
 
