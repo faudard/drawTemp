@@ -1177,6 +1177,7 @@ class GameSession:
             require(session._classic_party is not None
                     and not session.scene_router.enabled
                     and type(data.get("rpg_encounter")) is dict
+                    and type(data["rpg_encounter"].get("id")) is str
                     and data["tactical"] is None and not data["finalized"]
                     and not data["settled_fronts"]
                     and not session.progress.story_pending
