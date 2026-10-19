@@ -19,8 +19,9 @@ def validate_cursor(progress, scene=None):
     cursor = progress.story_flags.get(CURSOR)
     require(type(cursor) is int and 0 <= cursor <= 31,
             'Missing or corrupted R42 dialogue line cursor')
-    count = len(scene['lines']) if scene is not None else 1
-    require(cursor < count, 'R42 saved cursor is beyond the dialogue lines')
+    if scene is not None:
+        require(cursor < len(scene['lines']),
+                'R42 saved cursor is beyond the dialogue lines')
     return cursor
 
 
