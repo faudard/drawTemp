@@ -5,6 +5,7 @@ aliases never create additional document or rendering models.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 WORKSPACES = (
@@ -51,7 +52,7 @@ def recent_projects(stored, *, selected=None, limit=RECENT_LIMIT):
             absolute = str(Path(candidate).expanduser().resolve(strict=False))
         except (OSError, RuntimeError, ValueError, TypeError):
             continue
-        key = absolute.casefold()
+        key = os.path.normcase(absolute)
         if key in seen:
             continue
         seen.add(key)
