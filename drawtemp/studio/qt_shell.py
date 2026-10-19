@@ -432,6 +432,7 @@ class StudioWindow(QMainWindow):
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
         self._action("r41_party", "R41 • Groupe RPG classique…", self.open_party_studio)
+        self._action("r41_encounter", "R41 • Rencontres RPG classiques…", self.open_encounter_studio)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
@@ -485,6 +486,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r35_world"])
         tools_menu.addAction(self.commands["r41_party"])
+        tools_menu.addAction(self.commands["r41_encounter"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
@@ -598,6 +600,16 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.party_qt import PartyStudioDialog
         revision = self.session.revision
         dialog = PartyStudioDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_encounter_studio(self):
+        """R41.B2 shares the original R1 transactional Studio state."""
+        from drawtemp.studio.encounter_qt import EncounterStudioDialog
+        revision = self.session.revision
+        dialog = EncounterStudioDialog(self.session, parent=self)
         dialog.updated.connect(self.refresh)
         dialog.exec()
         if self.session.revision != revision:
