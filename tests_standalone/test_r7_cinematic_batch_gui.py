@@ -29,7 +29,8 @@ class CinematicBatchGuiTests(unittest.TestCase):
                 owner = SimpleNamespace(
                     tk=tk, ttk=ttk, project=GameProject.default(content),
                     project_path=Path(folder)/"studio.game.json",
-                    project_status=Mock(), _content=lambda: content,
+                    project_status=Mock(), save_project=Mock(),
+                    _content=lambda: content,
                     _run=lambda fn: fn(), capture_history=Mock())
                 tabs = ttk.Notebook(root)
                 tabs.pack(fill="both", expand=True)
@@ -168,7 +169,8 @@ class CinematicBatchGuiTests(unittest.TestCase):
             owner = SimpleNamespace(
                 tk=tk, ttk=ttk, project=GameProject.default(content),
                 project_path=Path.cwd()/"unused.game.json",
-                project_status=Mock(), _content=lambda: content,
+                project_status=Mock(), save_project=Mock(),
+                    _content=lambda: content,
                 _run=lambda fn: fn(), capture_history=Mock(),
                 history=object(), undo_global=Mock(), redo_global=Mock())
             tabs = ttk.Notebook(root)
