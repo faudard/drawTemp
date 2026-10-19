@@ -228,15 +228,20 @@ def build_pack(source_dir: str | Path, output: str | Path, manifest: dict) -> Pa
     if len(manifest_bytes) > MAX_MANIFEST_BYTES:
         raise PackError("pack_too_large", "Manifest too large")
     output.parent.mkdir(parents=True, exist_ok=True)
+    created = False
     try:
-        with output.open("xb") as sink, zipfile.ZipFile(sink, "w") as archive:
-            for name, data in [("manifest.json", manifest_bytes), *sorted(files_data)]:
-                info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
-                info.compress_type = zipfile.ZIP_DEFLATED
-                info.external_attr = 0o100644 << 16
-                archive.writestr(info, data)
+        # Exclusive creation: even a concurrent writer's existing pack survives.
+        with output.open("xb") as sink:
+            created = True
+            with zipfile.ZipFile(sink, "w") as archive:
+                for name, data in [("manifest.json", manifest_bytes), *sorted(files_data)]:
+                    info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    info.external_attr = 0o100644 << 16
+                    archive.writestr(info, data)
         inspect_pack(output)
     except Exception:
-        output.unlink(missing_ok=True)
+        if created:
+            output.unlink(missing_ok=True)
         raise
     return output
