@@ -68,6 +68,9 @@ def _validate_params(kind, params):
         elif action == "despawn":
             _exact(params, {"kind", "unit"}, "despawn action")
             _bounded_text(params["unit"], "unit", 64)
+        elif action in ("logic_set", "logic_add"):
+            from sporebound.logic_variables import validate_set, validate_add
+            (validate_set if action == "logic_set" else validate_add)(None, params)
         elif action == "hazard":
             _exact(params, {"kind", "pos", "amount"}, "hazard action")
             pos = params["pos"]
@@ -136,8 +139,8 @@ def validate_graph(graph):
     """Validate a detached JSON-compatible R31.1 authoring document."""
     _exact(graph, {"schema_version", "id", "mission_id", "entry",
                    "nodes", "edges"}, "graph")
-    if type(graph["schema_version"]) is not int or graph["schema_version"] not in (1, 2, 3):
-        _fail("unsupported_schema", "Only visual graph schemas 1, 2 and 3 are supported")
+    if type(graph["schema_version"]) is not int or graph["schema_version"] not in (1, 2, 3, 4):
+        _fail("unsupported_schema", "Only visual graph schemas 1..4 are supported")
     _id(graph["id"], "graph id")
     _id(graph["mission_id"], "mission id")
     _id(graph["entry"], "entry id")
