@@ -2,6 +2,8 @@
 
 La cible est désormais Studio Qt Widgets/PySide6, Player Qt Quick/PySide6,
 renderer partagé et Tactical Core Python indépendant.
+
+**Vision Creator Studio étendue :** la cible long terme est un éditeur **multi-genres 2D/2.5D**, non limité au tactical RPG : SRPG, RPG classique, action-aventure top-down (inspiration Zelda), aventure narrative et hybride. Voir la [roadmap multi-genres 6.0–7.0 (R25–R30)](docs/DRAWTEMP_MULTI_GENRE_CREATOR_ROADMAP.md). Les chantiers R0–R24 existants restent la base de compatibilité et le chemin critique ; ce document conserve l'historique 2.x/3.x.
 Voir [R0 : fondation, décisions, migration et gates](docs/drawtemp5/R0_FOUNDATION.md).
 Suite livrée pour revue : [R1.A — cœur indépendant et API de simulation](docs/drawtemp5/R1_SDK.md).
 Les sections ci-dessous conservent l’historique du runtime et des chantiers réutilisables.
