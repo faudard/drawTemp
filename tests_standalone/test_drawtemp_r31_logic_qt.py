@@ -229,6 +229,59 @@ class VisualLogicQtTests(unittest.TestCase):
         finally:
             view.close()
 
+    def test_debugger_ui_breakpoint_step_inspect_and_stale_revision(self):
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        session = new_session()
+        draft = LogicGraphDraft.new(
+            MISSION, "qt_debug", source_revision=session.revision)
+        draft.add_branch({"condition": "tick", "value": 0})
+        draft.apply(session)
+        before = session.snapshot().to_dict()
+        view = LogicGraphDialog(session)
+        try:
+            index = view.graphs.findData("qt_debug")
+            self.assertGreaterEqual(index, 0)
+            view.graphs.setCurrentIndex(index)
+            self.assertIsNotNone(view.draft)
+            self.assertTrue(view.buttons["debug_start"].isEnabled())
+            view.choose_node("if1")
+            self.assertTrue(view.start_debug())
+            self.assertTrue(view.toggle_breakpoint())
+            self.assertTrue(view.debug_resume())
+            self.assertIn("POINT D’ARRÊT", view.diagnostics.toPlainText())
+            self.assertEqual(view.debug_session.report()["report"]["paused_node"], "if1")
+            self.assertTrue(view.debug_inspect())
+            self.assertIn("condition", view.diagnostics.toPlainText())
+            self.assertTrue(view.debug_step())
+            self.assertIn("r31_qt_debug_yes", view.diagnostics.toPlainText())
+            self.assertEqual(session.snapshot().to_dict(), before)
+            view.choose_node("message")
+            self.assertFalse(view.toggle_breakpoint())
+            self.assertIn("breakpoint_granularity", view.diagnostics.toPlainText())
+            session.undo()
+            self.assertFalse(view.debug_step())
+            self.assertIn("stale_revision", view.diagnostics.toPlainText())
+            self.assertIsNone(view.debug_session)
+        finally:
+            view.close()
+
+    def test_debug_rejects_unapplied_graph_and_preserves_session(self):
+        from PySide6.QtWidgets import QInputDialog
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        session = new_session()
+        initial = session.snapshot().to_dict()
+        view = LogicGraphDialog(session)
+        try:
+            with patch.object(QInputDialog, "getText",
+                              return_value=("unsaved_qt", True)):
+                view.new_graph()
+            self.assertFalse(view.start_debug())
+            self.assertIn("unsaved_graph", view.diagnostics.toPlainText())
+            self.assertIsNone(view.debug_session)
+            self.assertEqual(session.snapshot().to_dict(), initial)
+        finally:
+            view.close()
+
     def test_studio_shell_menu_shares_owner_and_rejects_stale_preview(self):
         from PySide6.QtCore import QSettings
         from drawtemp.studio.qt_shell import StudioWindow
