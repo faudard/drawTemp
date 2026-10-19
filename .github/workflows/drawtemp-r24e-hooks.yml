@@ -5,6 +5,7 @@ on:
     paths:
       - 'drawtemp/sdk/controlled_scripting.py'
       - 'drawtemp/sdk/__init__.py'
+      - 'drawtemp/export/r15.py'
       - 'drawtemp/studio/qt_shell.py'
       - 'examples/scripts/**'
       - 'tests_standalone/test_drawtemp5_r24e.py'

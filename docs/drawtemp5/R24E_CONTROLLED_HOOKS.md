@@ -60,3 +60,7 @@ Les workflows R24.E font une matrice Python 3.10/3.12 Linux et Python 3.12 Windo
 ## Non inclus et suite
 
 R24.5 ne couvre ici que les hooks narratifs **précompilés**. Un futur ajout de hooks de combat, tick ou post-battle devrait passer par de nouvelles commandes natives explicitement journalisées/rejouables avec budgets CPU et politique de capacités, ou être refusé. La conception R24.F pourra traiter R24.6/7 (scale et simulations), puis R24.G R24.8 (diff sémantique) et R24.10 sécurité de distribution. Les travaux de certification R24.12 restent ouverts jusqu'aux preuves hardware/légales/clean-machine et aux gates des PR empilées sur master.
+
+## Validation du reçu après compilation
+
+`verify_compiled_scripts(project)` compare l'empreinte des effets présents dans les choix narratifs à celle de chaque reçu R24.E. Le préflight d'export R15 appelle ce contrôle : des actions supprimées, déplacées ou modifiées sans recompilation bloquent l'export. Cette empreinte n'est **pas** une signature d'éditeur ou une preuve d'origine du manifeste ; le digest `GameProject` protège séparément la compatibilité des sauvegardes. Les permissions du reçu sont également confrontées aux effets natifs effectivement injectés.

@@ -309,6 +309,8 @@ def verify_compiled_scripts(project):
                 if (type(expected) is not str or not re.fullmatch(r"[0-9a-f]{64}", expected)
                         or _digest(actual) != expected):
                     _fail("stale_compilation", "Compiled effects differ: " + str(target))
+                if not set(info["permissions"]) >= {_effect(effect) for effect in actual}:
+                    _fail("invalid_receipt", "Receipt is missing effect permissions")
     except (StudioScriptError, TypeError, KeyError, ValueError,
             UnicodeError, RecursionError) as exc:
         errors.append("Controlled scripting: " + str(exc))
