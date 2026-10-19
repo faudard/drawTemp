@@ -93,6 +93,7 @@ class GameSession:
         config = (party["data"]["campaigns"].get(campaign_id)
                   if party is not None else None)
         self._classic_party = ClassicParty(config) if config is not None else None
+        self._rpg_encounter = None  # R41.B2 opt-in, GameSession owns combat
         if self._classic_party is not None:
             for hero_id in self._classic_party.members:
                 self.progress.hero(hero_id)  # canonical R8 HeroProgress, not a second RPG database
@@ -136,7 +137,8 @@ class GameSession:
     @property
     def mode(self):
         return "fronts" if self.fronts is not None else (
-            "battle" if self.battle is not None else "campaign")
+            "battle" if self.battle is not None else (
+                "rpg" if self._rpg_encounter is not None else "campaign"))
 
     @property
     def active_battle(self):
@@ -191,6 +193,68 @@ class GameSession:
         candidate.set_active(hero_ids)
         self._classic_party = candidate
         return self.party_state()
+
+    def rpg_available(self):
+        """Discover only eligible, authored RPG encounters (no implicit routing)."""
+        from .classic_party import EXTENSION
+        spec = self.project.extensions.get(EXTENSION)
+        if (spec is None or self._classic_party is None
+                or self.scene_router.enabled or self.mode != "campaign"
+                or self.progress.story_pending or self.tactical_story_pending):
+            return []
+        catalogue = spec["data"].get("encounters", {})
+        return sorted(eid for eid in catalogue
+                      if not self.progress.story_flags.get("r41:" + eid, False))
+
+    def rpg_start(self, encounter_id):
+        """Begin a bounded RPG_TURN encounter; R25 routed integration is R41.C."""
+        from .classic_encounter import ClassicEncounter
+        require(type(encounter_id) is str and encounter_id in self.rpg_available(),
+                "R41 encounter unavailable or already rewarded")
+        require(self._rt_journal is None and self._platform is None,
+                "R41 encounter cannot overlap a realtime/platform episode")
+        from .classic_party import EXTENSION
+        config = self.project.extensions[EXTENSION]["data"]["encounters"][encounter_id]
+        require(self.scene_profile(config["scene"])["combat"] == "RPG_TURN",
+                "R41 encounter is not in an RPG_TURN scene")
+        candidate = ClassicEncounter(
+            encounter_id, config, self._classic_party.active,
+            self.content, self.progress.inventory)
+        self._rpg_encounter = candidate
+        return self.rpg_state()
+
+    def rpg_state(self):
+        require(self._rpg_encounter is not None, "No active RPG_TURN encounter")
+        return self._rpg_encounter.view()
+
+    def rpg_action(self, action):
+        """One atomic R41 action, including campaign potion consumption."""
+        require(self.mode == "rpg", "No active RPG_TURN encounter")
+        candidate = deepcopy(self._rpg_encounter)
+        candidate.command(deepcopy(action))
+        progress = deepcopy(self.progress)
+        progress.inventory = deepcopy(candidate.inventory)
+        self.progress, self._rpg_encounter = progress, candidate
+        return self.rpg_state()
+
+    def rpg_finish(self):
+        """Exit a resolved encounter; victory rewards settle once in Campaign."""
+        require(self.mode == "rpg" and self._rpg_encounter.result is not None,
+                "Resolve RPG_TURN combat before returning to campaign")
+        candidate = deepcopy(self.progress)
+        encounter = self._rpg_encounter
+        flag = "r41:" + encounter.id
+        if encounter.result == "victory":
+            require(not candidate.story_flags.get(flag, False),
+                    "R41 encounter reward was already settled")
+            candidate.story_flags[flag] = True
+            candidate.gold += encounter.reward_gold
+            for uid in encounter.party:
+                candidate.hero(uid).xp += 50
+        self.progress = candidate
+        self._rpg_encounter = None
+        return {"id": encounter.id, "result": encounter.result,
+                "gold": candidate.gold}
 
     def roguelite_state(self):
         """Detached run/meta snapshot; never expose mutable gameplay state."""
@@ -1019,6 +1083,10 @@ class GameSession:
             data["living_world"] = self._living_world.snapshot()
         if self._classic_party is not None:
             data["classic_party"] = self._classic_party.snapshot()
+        if self._rpg_encounter is not None:
+            require(self.progress.inventory == self._rpg_encounter.inventory,
+                    "R41 checkpoint inventory diverges from canonical Campaign")
+            data["rpg_encounter"] = self._rpg_encounter.recording()
         if self._roguelite is not None:
             data["roguelite"] = self._roguelite.recording()
         if self.siege_id is not None:
@@ -1045,7 +1113,7 @@ class GameSession:
         require(isinstance(data, dict) and type(data.get("version")) is int
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
-        require(set(data) - {"classic_party", "front_battle_ids", "siege_id", "scene_route",
+        require(set(data) - {"classic_party", "rpg_encounter", "front_battle_ids", "siege_id", "scene_route",
                              "scene_realtime", "scene_platform", "living_world", "roguelite", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
@@ -1102,7 +1170,32 @@ class GameSession:
         require(set(session.progress.unlocked + session.progress.completed)
                 <= set(session.content.missions), "Unknown campaign mission")
         mode = data["mode"]
-        require(mode in {"campaign", "battle", "fronts"}, "Invalid session mode")
+        require(mode in {"campaign", "battle", "fronts", "rpg"}, "Invalid session mode")
+        if mode == "rpg":
+            from .classic_party import EXTENSION
+            from .classic_encounter import ClassicEncounter
+            require(session._classic_party is not None
+                    and not session.scene_router.enabled
+                    and "rpg_encounter" in data
+                    and data["tactical"] is None and not data["finalized"]
+                    and not data["settled_fronts"]
+                    and not session.progress.story_pending
+                    and not session.progress.story_flags.get(
+                        "r41:" + str(data["rpg_encounter"].get("id", "")), False),
+                    "Invalid R41 encounter mode/checkpoint")
+            encounter_id = data["rpg_encounter"]["id"]
+            spec = session.project.extensions[EXTENSION]["data"].get(
+                "encounters", {}).get(encounter_id)
+            require(spec is not None, "Unknown saved RPG encounter")
+            session._rpg_encounter = ClassicEncounter.replay(
+                data["rpg_encounter"], encounter_id=encounter_id,
+                config=spec, party=session._classic_party.active,
+                content=session.content)
+            require(session._rpg_encounter.inventory == session.progress.inventory,
+                    "R41 replay inventory disagrees with canonical Campaign")
+        else:
+            require("rpg_encounter" not in data,
+                    "Unexpected R41 encounter state outside RPG mode")
         pending = data.get("tactical_story_pending", "")
         queue = data.get("tactical_story_queue", [])
         require(isinstance(pending, str) and
@@ -1129,9 +1222,9 @@ class GameSession:
         require(isinstance(settled, list) and all(isinstance(s, str) for s in settled)
                 and len(set(settled)) == len(settled), "Invalid settlement log")
         require(type(data["finalized"]) is bool, "Invalid finalization flag")
-        if mode == "campaign":
+        if mode in ("campaign", "rpg"):
             require(data["tactical"] is None and not data["finalized"] and not settled,
-                    "Idle session has tactical state")
+                    "Non-tactical session has tactical state")
         elif mode == "battle":
             require(isinstance(data["tactical"], dict) and not settled,
                     "Invalid standalone battle state")
