@@ -122,7 +122,17 @@ class R23BAcceptanceTests(unittest.TestCase):
         self.assertEqual(result["retests"], "not-asserted")
         matrix = [evidence(osname) for osname in ("Linux", "Windows", "macOS")]
         assessment = aggregate_ci(matrix, revision=REV, human_reports=[report])
-        self.assertEqual(assessment["checks"]["R23.8"]["status"], "partial")
+        self.assertEqual(assessment["checks"]["R23.8"]["status"], "blocked")
+        # An actual local recorder observation is distinct from an empty
+        # exported file, but never counts as a signed UX retest.
+        from tests_standalone.test_playtest_384 import Battle
+        recorder.enable(Battle())
+        recorder.finish("abandoned")
+        with_session = recorder.report()
+        reviewed = aggregate_ci(matrix, revision=REV,
+                                human_reports=[with_session])
+        self.assertEqual(reviewed["checks"]["R23.8"]["status"], "partial")
+        self.assertEqual(reviewed["playtests"]["observed_sessions"], 1)
         self.assertEqual(assessment["decision"], "NO-GO")
         with self.assertRaises(ValueError):
             summarize_human_reports([dict(report, opt_in=False)])
