@@ -11,6 +11,7 @@ from pathlib import Path
 
 from sporebound.action_runtime import ActionRuntime, SCALE, validate_scene
 from drawtemp.render.committed_fx import CommittedFxDirector
+from drawtemp.render.vfx2d import project_vfx
 
 
 def demo_scene():
@@ -80,6 +81,7 @@ class ActionPlayerController:
         snapshot["message"] = self.message
         snapshot["events"] = deepcopy(self.events)
         snapshot["fx"] = self.fx.snapshot()
+        snapshot["vfx"] = project_vfx(snapshot["fx"])
         snapshot["fx_warning"] = self.fx_warning
         return snapshot
 
