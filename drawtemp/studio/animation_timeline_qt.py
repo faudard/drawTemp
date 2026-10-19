@@ -82,9 +82,12 @@ class AnimationTimelinePanel(QWidget):
         self.apply_button = QPushButton("Appliquer (Undo/Redo R1)")
         self.apply_button.setEnabled(False)
         self.apply_button.clicked.connect(self.apply)
+        self.delete_button = QPushButton("Supprimer timeline")
+        self.delete_button.clicked.connect(self.delete_timeline)
         actions.addWidget(sample)
         actions.addWidget(preview)
         actions.addWidget(self.apply_button)
+        actions.addWidget(self.delete_button)
         layout.addLayout(actions)
         self.report = QPlainTextEdit()
         self.report.setReadOnly(True)
@@ -211,6 +214,22 @@ class AnimationTimelinePanel(QWidget):
         except (ValueError, TypeError) as exc:
             self._invalidate()
             self._show("Application refusée : " + str(exc))
+
+    def delete_timeline(self):
+        try:
+            saved = next((row for row in self.editor.timelines()
+                          if row["controller_id"] == self.controllers.currentData()), None)
+            if saved is None:
+                self._show("Aucune timeline enregistrée pour ce contrôleur.")
+                return
+            plan = self.editor.preview_remove(
+                saved["id"], expected_revision=self._revision)
+            self.editor.apply(plan)
+            self.refresh()
+            self.updated.emit()
+        except (ValueError, TypeError) as exc:
+            self._invalidate()
+            self._show("Suppression refusée : " + str(exc))
 
     def sample(self):
         try:
