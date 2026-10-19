@@ -116,6 +116,8 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        from .logic_campaign_bridge import validate_bridge
+        validate_bridge(self, content)
         # R32: reject malformed geometry on load, even outside the Studio.
         from .physics_scenes import EXTENSION as PHYSICS_EXTENSION, physics_scene_ids, validate_physics_catalog
         if PHYSICS_EXTENSION in self.extensions:
