@@ -27,6 +27,8 @@ ApplicationWindow {
     property bool dodgeQueued: false
     property bool guardHeld: false
     property bool interactQueued: false
+    // Presentation preference only: no change to canonical R26 game state.
+    property bool reducedFlashes: false
 
     Connections {
         target: action
@@ -86,6 +88,8 @@ ApplicationWindow {
                 action.load()
             else if (event.key === Qt.Key_R)
                 action.respawn()
+            else if (event.key === Qt.Key_M)
+                root.reducedFlashes = !root.reducedFlashes
             else
                 return
             event.accepted = true
@@ -122,6 +126,42 @@ ApplicationWindow {
             TopDownViewport {
                 id: sharedViewport
                 anchors.fill: parent
+            }
+            // R36.B1: cosmetic bursts positioned by the *same R3 camera*
+            // and the committed R26 event tick. Never create gameplay hits.
+            Item {
+                id: fxLayer
+                anchors.fill: parent
+                z: 5
+                Repeater {
+                    model: root.actionData.fx || []
+                    delegate: Rectangle {
+                        required property var modelData
+                        readonly property real unit: renderer.cameraState.zoom
+                        readonly property real sizePixels: (modelData.kind === "defeat" ? 48 : 28)
+                                                          * unit * modelData.scale
+                        x: fxLayer.width / 2 + renderer.cameraState.panX
+                           + modelData.x * 64 * unit - sizePixels / 2
+                        y: fxLayer.height / 2 + renderer.cameraState.panY
+                           + modelData.y * 64 * unit - sizePixels / 2
+                        width: sizePixels
+                        height: sizePixels
+                        radius: width / 2
+                        z: 50
+                        visible: !root.reducedFlashes ||
+                                 (modelData.kind !== "impact" &&
+                                  modelData.kind !== "spark")
+                        color: modelData.kind === "slash" ? "#f9d58b"
+                             : modelData.kind === "impact" ? "#fc8a75"
+                             : modelData.kind === "guard" ? "#a4d2f6"
+                             : modelData.kind === "defeat" ? "#7e7ea4"
+                             : modelData.kind === "dust" ? "#d9c4a1"
+                             : "#e7d97f"
+                        opacity: Math.min(0.65, modelData.alpha * 0.65)
+                        border.color: "#fdf5e3"
+                        border.width: Math.max(1, 2 * unit)
+                    }
+                }
             }
             Rectangle {
                 anchors.top: parent.top
@@ -180,7 +220,8 @@ ApplicationWindow {
             }
             Text {
                 color: "#a9c5bc"
-                text: "P : pause    F5 : sauvegarde action    F9 : recharger    R : réapparaître    Inventaire : "
+                text: "P : pause    F5 : sauvegarde action    F9 : recharger    R : réapparaître    M : effets réduits "
+                      + (root.reducedFlashes ? "(ON)" : "(OFF)") + "    Inventaire : "
                       + JSON.stringify(root.actionData.inventory)
                 font.pixelSize: 13
                 Layout.fillWidth: true
