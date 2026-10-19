@@ -255,11 +255,73 @@ Les commentaires/reviews persistants attachés aux IDs, les invitations,
 la collaboration en temps réel et les tests GUI *onscreen* sont hors lot.
 La suite R48.B2 doit traiter ces fonctions et les gates d'accessibilité.
 
+## R48.B2 : fils de revue persistants et accessibilité clavier
+
+Les annotations de revue sont **séparées** du jeu et des choix de fusion :
+`drawtemp/sdk/review_notes.py::ReviewNoteStore` conserve les commentaires
+dans un journal JSONL local facultatif, dont le chemin est choisi par l'auteur
+dans la fenêtre R48. Chaque entrée a un numéro, un SHA-256 chaîné, le
+`node_id` du snapshot, son SHA Content/GameProject, un **chemin d'ancrage
+typé** et un auteur déclaré. L'ancrage pointe soit vers le projet, soit vers
+une ressource existant dans le snapshot : mission, scène, campagne ou
+cinématique identifiée par ID stable.
+
+- Un clic sur une ligne de différence permet d'identifier la ressource dans
+  la **version annotée choisie**. Les ressources supprimées et les IDs
+  inconnus ne peuvent recevoir de nouveaux commentaires sur ce snapshot.
+  Les anciennes notes historiques ne sont **jamais réattribuées** par
+  substitution de texte après un renommage.
+- Publier une note, répondre à un fil, résoudre et rouvrir un fil sont des
+  **événements explicites** dans le journal. Les commentaires et réponses
+  restent lisibles séparément ; ils n'autorisent jamais une fusion.
+- Une écriture requiert le **HEAD attendu**, un verrou local exclusif et
+  un contrôle intégral du fichier déjà enregistré ; données corrompues,
+  modification externe ou dernier événement tronqué bloquent l'écriture.
+  Il n'y a **ni correction ni effacement automatique**, même après crash.
+- La limite par fichier est 4 Mio et 2 048 événements. Les messages sont
+  limités à 2 000 caractères et ne contiennent ni script ni HTML exécutable
+  dans le Qt Studio (`QPlainTextEdit`/`QTableWidgetItem`).
+- Le fichier est **optionnel et advisory**. Une chaîne SHA valide n'authentifie
+  pas ses auteurs ; le HEAD doit être conservé dans un support externe
+  pour détecter une troncature totale. L'ajout de notes n'est pas atomique
+  avec une sauvegarde Content/GameProject.
+- Le panneau Qt propose un aperçu accessible de chaque réponse, avec
+  navigation clavier dans la table, **Alt+C** pour comparer,
+  **Alt+P** ou **Ctrl+Entrée** pour publier et un formulaire défilant
+  sur les petits écrans. L'ensemble reste à vérifier avec NVDA/VoiceOver
+  et lors d'une vraie session onscreen.
+
+Contrats et tests :
+
+```python
+from drawtemp.sdk.review_notes import ReviewNoteStore, anchor_from_path
+
+anchor = anchor_from_path("/project/story/scenes/arrival/title")
+store = ReviewNoteStore("project.review.jsonl")
+observed = store.inspect()["head"]
+entry = store.append(graph.node(revision_id), expected_head=observed,
+                     anchor=anchor, author="alice",
+                     text="Clarifier le titre de cette scène")
+# Réponse : thread=entry["sequence"] (le fil initial).
+# État d'un fil : kind="resolve" / kind="reopen", thread=ID.
+```
+
+```bash
+python -m unittest tests_standalone.test_drawtemp_r48b2_review_notes -v
+```
+
+**Limites :** la persistance des commentaires ne rend **pas** le DAG lui-même
+persistant (R48.A4). Après fermeture, il faut reconstruire/importer la même
+identité de nœud pour rattacher exactement les notes ; les données n'ont pas
+disparu du JSONL. La revue collaborative distante, l'authentification des
+auteurs, les commentaires sur ressources non reconnues et les gates
+QTest/onscreen certifiés restent hors R48.B2.
+
 ## Tranches restantes
 
 - **R48.A4** : rebase documentaire automatique contrôlé, publication durable
   des nœuds et crash/recovery, cas de parents aux digests identiques.
-- **R48.B2** : annotations/reviews attachées aux IDs, persistance explicite
-  et sûreté des liens, contrôles clavier/screen readers, tests GUI onscreen.
+- **R48.B3** : validations NVDA/VoiceOver, commentaires avec identité
+  attestée et UX onscreen ; éventuelles vues d'ensemble multi-révisions.
 - **R48.C** : fixture deux auteurs (carte + dialogue/quête), tests perturbations,
   sauvegarde et replay, export reproductible et gate d'intégration final.
