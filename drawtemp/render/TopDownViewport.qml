@@ -67,6 +67,16 @@ Item {
                     font.pixelSize: Math.max(10, 20 * projected.unit)
                     text: row.team === "player" ? "★" : "●"
                 }
+                // R36.B3: semantic pose comes from a committed-tick
+                // animation binding; R28 sprite loading is still opt-in.
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.bottom
+                    text: row.animationState || ""
+                    visible: text.length > 0
+                    color: "#fff4cf"
+                    font.pixelSize: Math.max(8, 10 * projected.unit)
+                }
             }
             Rectangle {
                 anchors.fill: parent
