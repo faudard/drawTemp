@@ -195,6 +195,51 @@ class GameSession:
              self.tactical_story_queue, self.finalized) = previous
             raise
 
+    def _scene_cinematic_key(self, clip):
+        """Stable per-visit acknowledgement inside the existing verified save.
+
+        Scope by the narrative decision count AND mission completion count:
+        returning to a scene in a later chapter plays its clip again. No
+        parallel save ledger and no untrusted cinematic callbacks.
+        """
+        scene = self.active_scene()
+        require(scene is not None, "No cinematic narrative scene")
+        identity = (self.campaign_id + "|" + scene["id"] + "|" + clip["id"]
+                    + "|" + str(len(self.progress.story_history))
+                    + "|" + str(len(self.progress.completed)))
+        return "cine_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
+
+    def pending_scene_cinematic(self):
+        """First unacknowledged scene clip, pure projection (no clock)."""
+        if self.mode != "campaign":
+            return None
+        scene = self.active_scene()
+        if scene is None:
+            return None
+        from .cinematics import matching_cinematics
+        for clip in matching_cinematics(self.project, "scene", scene["id"]):
+            if self.progress.story_flags.get(self._scene_cinematic_key(clip)) is not True:
+                return clip
+        return None
+
+    def acknowledge_scene_cinematic(self, clip_id):
+        """Mark only the next currently visible clip as played or skipped.
+
+        Acknowledgement is part of Campaign.story_flags and is serialised by
+        normal GameSession recording. No narrative effects, rewards or Battle
+        commands are executed here. Simulation supplies rollback/revisions.
+        """
+        require(isinstance(clip_id, str), "Invalid cinematic identifier")
+        clip = self.pending_scene_cinematic()
+        require(clip is not None and clip["id"] == clip_id,
+                "Cinematic is not the next active clip")
+        key = self._scene_cinematic_key(clip)
+        require(key not in self.progress.story_flags, "Cinematic already acknowledged")
+        require(len(self.progress.story_flags) < 1000,
+                "Campaign flag budget exhausted")
+        self.progress.story_flags[key] = True
+        return self.pending_scene_cinematic()
+
     def exploration_state(self):
         scene = self.active_scene()
         return self.exploration.state(self.progress, scene["id"]) if scene else None
