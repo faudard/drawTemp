@@ -1,10 +1,15 @@
-name: DrawTemp R31.ABCDE Visual Logic Studio
+name: DrawTemp R31.ABCDEF Visual Logic Studio
 on:
   pull_request:
     paths:
       - 'drawtemp/sdk/logic_graph.py'
       - 'drawtemp/sdk/logic_branches.py'
       - 'drawtemp/sdk/logic_sequence.py'
+      - 'sporebound/logic_variables.py'
+      - 'sporebound/tactical_rpg3.py'
+      - 'sporebound/engine.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/model.py'
       - 'drawtemp/studio/logic_graph_draft.py'
       - 'drawtemp/studio/logic_debugger.py'
       - 'sporebound/event_debugger.py'
@@ -14,12 +19,14 @@ on:
       - 'tests_standalone/test_drawtemp_r31_logic_branches.py'
       - 'tests_standalone/test_drawtemp_r31_logic_debugger.py'
       - 'tests_standalone/test_drawtemp_r31_logic_sequence.py'
+      - 'tests_standalone/test_drawtemp_r31_logic_variables.py'
       - 'tests_standalone/test_drawtemp_r31_logic_qt.py'
       - 'docs/drawtemp5/R31A_VISUAL_GRAPH_ADR.md'
       - 'docs/drawtemp5/R31B_LOGIC_STUDIO.md'
       - 'docs/drawtemp5/R31C_TYPED_BRANCHES.md'
       - 'docs/drawtemp5/R31D_VISUAL_DEBUGGER.md'
       - 'docs/drawtemp5/R31E_NATIVE_WAITS_FLAGS.md'
+      - 'docs/drawtemp5/R31F_TYPED_BATTLE_VARIABLES.md'
       - '.github/workflows/r31-visual-graph.yml'
   push:
     branches: [master]
@@ -58,9 +65,11 @@ jobs:
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_debugger -v
       - name: R31.E native waits, journal flags and authenticated Battle replay
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_sequence -v
+      - name: R31.F typed combat variables, canonical journal replay and old-manifest preservation
+        run: python -m unittest tests_standalone.test_drawtemp_r31_logic_variables -v
 
   studio-qt:
-    name: R31.BCDE Qt offscreen / ${{ matrix.os }}
+    name: R31.BCDEF Qt offscreen / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
