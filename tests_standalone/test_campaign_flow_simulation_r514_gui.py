@@ -82,8 +82,8 @@ class CampaignSimulationGUITests(unittest.TestCase):
                     self.assertEqual(callback_errors, [])
                     self.assertEqual(path.read_bytes(), content_before)
                     self.assertEqual(game_path.read_bytes(), project_before)
-                    self.assertEqual(list(root_path.rglob("*.json")),
-                                     [path, game_path])
+                    self.assertCountEqual(list(root_path.rglob("*.json")),
+                                          [path, game_path])
                 finally:
                     root.destroy()
 
