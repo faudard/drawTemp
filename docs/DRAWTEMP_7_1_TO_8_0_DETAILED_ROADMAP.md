@@ -212,6 +212,8 @@
 
 **Gate R36 :** créer une animation attaque / esquive / impact / mort dans le Studio et la voir identique dans Player action et dans les usages tactiques compatibles, avec hitboxes exactes et profilage matériel sans faux vert offscreen.
 
+**Suivi incrémental R36.A (non certifiant) :** [contrôleur d'animation versionné, édition dans le Studio et tests de déterminisme](drawtemp7/R36A_ANIMATION_CONTROLLER.md). L'intégration visuelle Player, les hitboxes de gameplay et les gates GPU restent ouverts.
+
 ## 9. R37 — Advanced AI Studio (7.7)
 
 **But :** rendre les décisions ennemies conçues, expliquées et testables, sans boîte noire.
