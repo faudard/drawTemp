@@ -47,6 +47,19 @@ def enriched_pair():
                        "to": "act", "in": "flow"}],
         }]},
     }
+    pair["project"]["extensions"]["org.drawtemp.livingworld"] = {
+        "schema_version": 1, "data": {
+            "version": 1, "start_minute": 480, "ticks_per_minute": 2,
+            "clock_policy": "exploration_only", "npcs": [],
+            "factions": [{"id": "guild", "initial": 0}],
+            "daily_quests": [{
+                "id": "delivery", "faction": "guild", "min_reputation": -10,
+                "start_minute": 480, "end_minute": 1000,
+                "completion_flag": "delivery_day", "reward_gold": 10,
+                "reputation_delta": 3,
+            }],
+        },
+    }
     return pair, mid, actor
 
 
@@ -59,6 +72,8 @@ class GlobalSearchHeadlessTests(unittest.TestCase):
         self.assertEqual(one.usages, two.usages)
         self.assertEqual(data, before)
         self.assertTrue(one.search("hero-sprite", families=("assets",)))
+        self.assertEqual(one.search("delivery", families=("quests",))[0].resource_id,
+                         "delivery")
         self.assertTrue(one.search("gate-logic", families=("logic_graphs",),
                                    mission_id=mid))
         self.assertEqual(one.search("gate-logic", families=("assets",)), ())
@@ -82,6 +97,9 @@ class GlobalSearchHeadlessTests(unittest.TestCase):
                             for e in index.references(("assets", "", "hero-sprite"))))
         self.assertTrue(any(e.field == "asset_binding"
                             for e in index.references(("assets", "", "hero-sprite"))))
+        self.assertTrue(any(e.source == ("quests", "", "delivery") and
+                            e.field == "faction" for e in
+                            index.references(("factions", "", "guild"))))
         graph = ("logic_graphs", mid, "gate-logic")
         node = ("graph_nodes", mid, "gate-logic/start")
         self.assertTrue(any(e.source == graph for e in index.references(node)))
