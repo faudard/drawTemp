@@ -20,10 +20,20 @@ from tests_standalone.test_r41_classic_party import party_fixture
 
 def encounter_fixture():
     content, project = party_fixture()
+    project.story = {
+        "scenes": [{"id": "inn", "title": "Village", "speaker": "",
+                    "text": "À l'auberge", "choices": [
+                        {"id": "continue", "label": "Continuer"}]}],
+        "entry_scenes": {}, "after_mission": {},
+    }
     project.exploration["inn"] = {
         "title": "Village", "theme": "village",
-        "width": 4, "height": 4, "start": [0, 1],
-        "blocked": [], "interactions": [],
+        "width": 4, "height": 4, "start": [0, 1], "blocked": [],
+        "interactions": [{
+            "id": "exit", "title": "Place du village",
+            "text": "Sortir de l'auberge", "pos": [1, 2],
+            "required": False, "exit": True,
+        }],
     }
     project.extensions[EXTENSION]["data"]["encounters"] = {
         "sparring": {
