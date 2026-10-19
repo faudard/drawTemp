@@ -1,0 +1,45 @@
+name: DrawTemp R48.A Collaboration Core
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/collaboration.py'
+      - 'drawtemp/sdk/semantic_review.py'
+      - 'tests_standalone/test_drawtemp_r48a_collaboration.py'
+      - 'docs/R48A_COLLABORATION_CORE.md'
+      - '.github/workflows/drawtemp-r48a-collaboration.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collaboration-headless:
+    name: R48.A semantic collaboration / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Two-author merges and R30/R1 regression
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp_r48a_collaboration
+          tests_standalone.test_drawtemp_r30_creator
+          tests_standalone.test_drawtemp_r30c_review
+          tests_standalone.test_drawtemp_r30d_git
+          tests_standalone.test_drawtemp5_r1_authoring
+          -v
+      - name: Deterministic Jeanne gameplay baseline
+        run: >-
+          python -m drawtemp.sdk.migration
+          --verify-baseline docs/drawtemp5/reference-baseline.json
