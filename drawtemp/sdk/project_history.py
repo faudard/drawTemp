@@ -73,7 +73,7 @@ class RevisionGraph:
         # Declared content parents and explicit graph identities are separate.
         # An unchanged child can have exactly the same content digest as a
         # parent, while its node_id remains different.
-        declared = tuple(self._nodes[parent].revision.digest for parent in parent_ids)
+        declared = tuple(self.node(parent).revision.digest for parent in parent_ids)
         if revision.parents != declared:
             raise CollaborationError(
                 "unrelated_history", "Declared document parents differ from graph parents")
