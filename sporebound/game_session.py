@@ -157,6 +157,19 @@ class GameSession:
                 "Living-world clock is paused outside exploration")
         return self._living_world.advance(ticks)
 
+    def living_world_reputation_event(self, faction, delta, event_id):
+        """Apply an idempotent, explicit faction event to the session checkpoint."""
+        require(self._living_world is not None,
+                "Living world is not configured")
+        return self._living_world.adjust_reputation(faction, delta, event_id)
+
+    def living_world_finish_daily_quest(self, quest_id):
+        """Award canonical Campaign gold exactly once per day and quest."""
+        require(self._living_world is not None and self.mode == "campaign"
+                and not self.progress.story_pending,
+                "Daily quests require an active exploration session")
+        return self._living_world.finish_daily_quest(quest_id, self.progress)
+
     def route_state(self):
         """Return the active exploration state from canonical Campaign flags."""
         require(self.scene_router.enabled, "Scene routing is not enabled")
