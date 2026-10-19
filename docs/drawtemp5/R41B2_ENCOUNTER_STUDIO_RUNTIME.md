@@ -4,7 +4,7 @@
 
 ## Contrat canonique
 
-- Dans `GameProject.extensions["drawtemp.party_rpg"].data`, le champ **optionnel** `encounters` est un dictionnaire de 64 rencontres maximum. Son absence préserve les manifests R41.A, les projets précédents et les digests existants.
+- Dans `GameProject.extensions["drawtemp.partyrpg"].data`, le champ **optionnel** `encounters` est un dictionnaire de 64 rencontres maximum. Son absence préserve les manifests R41.A, les projets précédents et les digests existants.
 - Chaque rencontre est versionnée par l'enveloppe R24 et référence un ID stable, une scène **existante en profil RPG_TURN**, jusqu'à 12 IDs **ennemis de Content**, et un entier `reward_gold` borné. Aucune duplication de définition de héros/ennemi/compétence.
 - Le Studio écrit les rencontres par `AuthoringSession.preview_project/apply` ; une modification = une transaction Undo/Redo. `EncounterStudioDialog` fournit un formulaire Qt accessible et refuse les prévisualisations obsolètes.
 - `ClassicEncounter` a un ordre de jeu déterministe (vitesse puis ID), journal borné à **256 actions de joueur**, IA ennemie déterministe limitée à **32 tours automatiques** par décision, et vérification intégrale du replay à la reprise.
@@ -12,7 +12,7 @@
 - `GameSession` possède le mode et l'état `rpg`. La sauvegarde contient un bloc opt-in `rpg_encounter` qui est **rejoué** sur les entrées du journal. Les potions sont rapprochées de `Campaign.inventory` à chaque commande et au chargement. Sur victoire, **une seule** transaction attribue l'or de la rencontre et 50 XP aux héros engagés, puis pose le flag `r41:<id>`. Une récompense déjà attribuée ne peut pas être rejouée.
 - `Simulation` porte les mutations sous contrôle de révision avec rollback. Le Player Qt Quick utilise le même GameSession, sans moteur de sauvegarde, renderer ni base d'inventaire parallèles.
 
-## Format auteur (dans data du namespace drawtemp.party_rpg)
+## Format auteur (dans data du namespace drawtemp.partyrpg)
 
 ```json
 {
