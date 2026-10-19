@@ -21,9 +21,13 @@ def main(argv=None):
     export.add_argument("--runtime-dir", required=True, type=Path)
     export.add_argument("--output", required=True, type=Path)
     export.add_argument("--require-licenses", action="store_true")
+    export.add_argument("--release", action="store_true",
+                        help="Require strict rights + certified R14 evidence")
     export.add_argument("--r14-report", type=Path)
     verify = cmd.add_parser("verify", help="Verify a standalone Player bundle")
     verify.add_argument("--bundle", type=Path, required=True)
+    verify.add_argument("--require-release", action="store_true",
+                        help="Reject preview bundles without release evidence")
     create = cmd.add_parser("template", help="Create a validated Creator project")
     create.add_argument("--kind", choices=TEMPLATES, required=True)
     create.add_argument("--output", type=Path, required=True)
@@ -52,11 +56,12 @@ def main(argv=None):
             return 0 if result["passed"] else 1
         if args.command == "export":
             result = export_game(args.content, args.runtime_dir, args.output,
-                                 require_licenses=args.require_licenses,
-                                 r14_report=args.r14_report)
+                                 require_licenses=args.require_licenses or args.release,
+                                 r14_report=args.r14_report,
+                                 release=args.release)
             print(result)
             return 0
-        manifest = verify_bundle(args.bundle)
+        manifest = verify_bundle(args.bundle, require_release=args.require_release)
         print(json.dumps({"verified": True, "files": len(manifest["files"])},
                          ensure_ascii=False))
         return 0
