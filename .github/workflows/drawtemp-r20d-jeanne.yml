@@ -1,0 +1,81 @@
+name: R20.D Jeanne Act I full journey and distribution gates
+
+on:
+  pull_request:
+    paths:
+      - "scripts/certify_r20d_jeanne.py"
+      - "scripts/prepare_r20d_jeanne_demo.py"
+      - "drawtemp/player/qt_app.py"
+      - "sporebound/content/jeanne.r20c.game.json"
+      - "sporebound/game_session.py"
+      - "drawtemp/player/controller.py"
+      - "tests_standalone/test_r20d_jeanne_release.py"
+      - ".github/workflows/drawtemp-r20d-jeanne.yml"
+  workflow_dispatch:
+
+jobs:
+  portable-source-contract:
+    name: Content, assets, safety / ${{ matrix.os }} py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e .
+      - name: Check content-only export and fail-closed release constraints
+        run: python -m unittest tests_standalone.test_r20d_jeanne_release tests_standalone.test_r20c1_player_scene_cinematics -v
+
+  real-act-one-journey:
+    name: Nine real battles and checkpoints / ${{ matrix.route }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        route:
+          - archives_secours
+          - otages_poursuite
+          - foi_secours
+          - archives_poursuite
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e .
+      - name: Play from NEW game through Vaucouleurs using actual Battle commands
+        run: python scripts/certify_r20d_jeanne.py --case ${{ matrix.route }} --report r20d-${{ matrix.route }}.json
+      - name: Preserve acceptance evidence even when a gate fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r20d-${{ matrix.route }}
+          path: r20d-${{ matrix.route }}.json
+          if-no-files-found: warn
+
+  qt-player-cinematic-smoke:
+    name: Qt Player authored cinematic offscreen smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[qt6]"
+      - name: QML root and real authored cinematic state (no GUI certification)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: >-
+          python -m drawtemp.player.qt_app --smoke --smoke-scene cinematic
+          --content sporebound/content/jeanne.json
+          --project sporebound/content/jeanne.r20c.game.json
+          --campaign jeanne
