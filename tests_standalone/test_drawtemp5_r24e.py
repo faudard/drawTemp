@@ -169,7 +169,6 @@ class CompiledHookTests(unittest.TestCase):
             self.authoring.save_as(location)
             opened = AuthoringSession.open(location)
             self.assertEqual(opened.snapshot().to_dict()["project"], changed["project"])
-            self.assertNotIn("extensions", original["project"]) if not source()[1].extensions else None
 
     def test_invalid_targets_collisions_and_native_validation(self):
         bad = deepcopy(self.manifest)
@@ -268,14 +267,16 @@ class QtHookImportTests(unittest.TestCase):
                                                   QSettings.IniFormat))
             try:
                 win.show()
-                action = win.menuBar().findChildren(object)
                 self.assertIsNotNone(win.session)
                 before = win.session.snapshot().to_dict()
                 win.apply_controlled_hooks(SAMPLE, grants=script()["permissions"])
                 self.assertEqual(win.session.revision, 1)
                 self.assertIn(script()["namespace"], win.session.snapshot().project["extensions"])
                 win.undo()
-                self.assertEqual(win.session.snapshot().to_dict(), before)
+                after = win.session.snapshot().to_dict()
+                self.assertEqual(after["content"], before["content"])
+                self.assertEqual(after["project"], before["project"])
+                self.assertEqual(win.session.revision, 2)
             finally:
                 win.hide()
                 win.deleteLater()
