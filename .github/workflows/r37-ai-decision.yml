@@ -5,6 +5,8 @@ on:
     paths:
       - 'sporebound/advanced_ai.py'
       - 'sporebound/ai_perception.py'
+      - 'drawtemp/studio/ai_sensor_authoring.py'
+      - 'drawtemp/studio/ai_sensor_qt.py'
       - 'sporebound/game_session.py'
       - 'sporebound/game_project.py'
       - 'drawtemp/sdk/ai_decision.py'
@@ -18,12 +20,15 @@ on:
       - 'tests_standalone/test_r37_behavior_tree.py'
       - 'tests_standalone/test_r37_behavior_tree_qt.py'
       - 'tests_standalone/test_r37_perception.py'
+      - 'tests_standalone/test_r37_perception_qt.py'
       - '.github/workflows/r37-ai-decision.yml'
   push:
     branches: [master]
     paths:
       - 'sporebound/advanced_ai.py'
       - 'sporebound/ai_perception.py'
+      - 'drawtemp/studio/ai_sensor_authoring.py'
+      - 'drawtemp/studio/ai_sensor_qt.py'
       - 'sporebound/game_session.py'
       - 'sporebound/game_project.py'
       - 'drawtemp/sdk/ai_decision.py'
@@ -37,6 +42,7 @@ on:
       - 'tests_standalone/test_r37_behavior_tree.py'
       - 'tests_standalone/test_r37_behavior_tree_qt.py'
       - 'tests_standalone/test_r37_perception.py'
+      - 'tests_standalone/test_r37_perception_qt.py'
       - '.github/workflows/r37-ai-decision.yml'
   workflow_dispatch:
 
@@ -88,4 +94,4 @@ jobs:
       - name: R37.C visual tree, diagnostics and Undo/Redo
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m unittest tests_standalone.test_r37_behavior_tree_qt -v
+        run: python -m unittest tests_standalone.test_r37_behavior_tree_qt tests_standalone.test_r37_perception_qt -v
