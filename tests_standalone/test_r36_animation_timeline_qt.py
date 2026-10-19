@@ -48,6 +48,12 @@ class TimelineQtTests(unittest.TestCase):
         session.undo()
         widget.refresh()
         self.assertEqual(AnimationTimelineAuthoring(session).timelines(), [])
+        session.redo()
+        widget.refresh()
+        widget.delete_timeline()
+        self.assertEqual(AnimationTimelineAuthoring(session).timelines(), [])
+        session.undo()
+        self.assertEqual(len(AnimationTimelineAuthoring(session).timelines()), 1)
         widget.close()
 
 
