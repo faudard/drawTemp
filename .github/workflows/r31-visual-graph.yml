@@ -1,15 +1,18 @@
-name: DrawTemp R31.AB Visual Logic Studio
+name: DrawTemp R31.ABC Visual Logic Studio
 on:
   pull_request:
     paths:
       - 'drawtemp/sdk/logic_graph.py'
+      - 'drawtemp/sdk/logic_branches.py'
       - 'drawtemp/studio/logic_graph_draft.py'
       - 'drawtemp/studio/logic_graph_qt.py'
       - 'drawtemp/studio/qt_shell.py'
       - 'tests_standalone/test_drawtemp_r31_logic_graph.py'
+      - 'tests_standalone/test_drawtemp_r31_logic_branches.py'
       - 'tests_standalone/test_drawtemp_r31_logic_qt.py'
       - 'docs/drawtemp5/R31A_VISUAL_GRAPH_ADR.md'
       - 'docs/drawtemp5/R31B_LOGIC_STUDIO.md'
+      - 'docs/drawtemp5/R31C_TYPED_BRANCHES.md'
       - '.github/workflows/r31-visual-graph.yml'
   push:
     branches: [master]
@@ -42,9 +45,11 @@ jobs:
 
       - name: R31.B detached draft graph editing and stale preview
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_qt.LogicDraftTests -v
+      - name: R31.C pure predicates, exclusive native branch dispatch and undo
+        run: python -m unittest tests_standalone.test_drawtemp_r31_logic_branches -v
 
   studio-qt:
-    name: R31.B Qt offscreen / ${{ matrix.os }}
+    name: R31.BC Qt offscreen / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
