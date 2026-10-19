@@ -55,7 +55,7 @@ def _configure(content, project):
     project["scene_routes"] = {
         "version": 1, "start": SCENE, "links": [],
     }
-    project["extensions"][EXTENSION] = {
+    project.setdefault("extensions", {})[EXTENSION] = {
         "schema_version": 1,
         "data": {
             "version": 1,
