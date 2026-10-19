@@ -6,6 +6,10 @@ on:
       - art/jeanne-motion-complete-20261014
       - consolidate/drawtemp5-r3-r14-20261015
       - feat/drawtemp5-int03-jeanne-asset-release-20261015
+      # Publish the same SHA-pinned derivatives into the consolidated R17 PR.
+      # The publishing job remains technical-only; rights and goldens are
+      # separately gated and cannot be self-approved here.
+      - integration/r17-consolidated-277-284-20261018
   workflow_dispatch:
 
 permissions:
