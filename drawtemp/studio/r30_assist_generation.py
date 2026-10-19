@@ -47,6 +47,8 @@ class AssistPreview:
     object_ids: tuple[str, ...]
     object_cells: tuple[tuple[str, int, int], ...]
     protected_count: int
+    preserved_cells: tuple[tuple[int, int], ...]
+    occupied_cells: tuple[tuple[int, int], ...]
     switch_reachable: bool | None
 
     def to_dict(self):
@@ -58,6 +60,8 @@ class AssistPreview:
             "object_ids": list(self.object_ids),
             "object_cells": [list(cell) for cell in self.object_cells],
             "protected_count": self.protected_count,
+            "preserved_cells": [list(cell) for cell in self.preserved_cells],
+            "occupied_cells": [list(cell) for cell in self.occupied_cells],
             "switch_reachable": self.switch_reachable,
             "applied": False, "gameplay_certified": False,
         }
@@ -208,10 +212,12 @@ def _generate(content, mission_id, rectangle, mode, seed, namespace):
             raise AssistError("duplicate_object", "Existing puzzle ids; change namespace")
         # The reachable switch must be accessible *without crossing the new
         # gate* or an old closed door. No promise the gate blocks all routes.
-        reachable_map = _walkable(mission, set())
+        # A switch must remain reachable even if the newly placed gate is
+        # impassable. Cache BFS by possible gate cell (at most 256 checks).
+        reach_after_door = {door: _walkable(mission, {door}) for door in candidates}
         possible = [
             (switch, door) for switch in candidates for door in candidates
-            if switch != door and switch in reachable_map and
+            if switch in reach_after_door[door] and
             (abs(switch[0] - door[0]) + abs(switch[1] - door[1])) == 1
         ]
         if not possible:
@@ -227,8 +233,10 @@ def _generate(content, mission_id, rectangle, mode, seed, namespace):
         object_cells = [("door", door[0], door[1]),
                         ("switch", switch[0], switch[1])]
         reachable = True
+    preserved = tuple(loc for loc in allowed if loc in explicit)
+    occupied = tuple(loc for loc in allowed if loc in protected)
     return (updated, tuple(painted), tuple(new_ids), tuple(object_cells),
-            len(set(allowed) & protected), reachable)
+            len(occupied), preserved, occupied, reachable)
 
 
 def _trail(candidates, rng):
@@ -263,7 +271,8 @@ class AssistController:
                 namespace="sample"):
         self.invalidate()
         before = self.session.snapshot().to_dict()
-        candidate, cells, objects, object_cells, protected_count, reachable = _generate(
+        (candidate, cells, objects, object_cells, protected_count,
+         preserved, occupied, reachable) = _generate(
             before["content"], mission_id, rectangle, mode, seed, namespace)
         plan = self.session.preview_pair(
             lambda _content, project: (candidate, project),
@@ -272,7 +281,8 @@ class AssistController:
         )
         report = AssistPreview(
             before["revision"], mission_id, mode, seed, tuple(rectangle),
-            cells, objects, object_cells, protected_count, reachable,
+            cells, objects, object_cells, protected_count,
+            preserved, occupied, reachable,
         )
         self._plan = plan
         self._preview = report
