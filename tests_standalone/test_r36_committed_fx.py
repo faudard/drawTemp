@@ -91,8 +91,8 @@ class CommittedFxTests(unittest.TestCase):
             events = [{"tick": tick, "kind": "hero_attack"} for _ in range(125)]
             fx.observe(state, events)
             self.assertLessEqual(len(fx.snapshot()), MAX_ACTIVE)
-            self.assertEqual(len(fx.snapshot()), min(8, tick) * MAX_EMITS_PER_TICK
-                             if tick <= 3 else len(fx.snapshot()))
+            self.assertEqual(len(fx.snapshot()),
+                             min(tick * MAX_EMITS_PER_TICK, MAX_ACTIVE))
         self.assertEqual(len(fx.snapshot()), MAX_ACTIVE)
         fx.reset(runtime.tick)
         self.assertEqual(fx.snapshot(), [])
