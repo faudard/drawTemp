@@ -93,7 +93,7 @@ class ActionPlayerController:
         snapshot["animation_cues"] = (
             self.animation.cues() if self.animation is not None else [])
         snapshot["vfx"] = project_vfx(
-            (snapshot["fx"] + snapshot["animation_cues"])[-96:])
+            (snapshot["animation_cues"] + snapshot["fx"])[-96:])
         snapshot["fx_warning"] = self.fx_warning
         return snapshot
 
