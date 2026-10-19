@@ -239,6 +239,22 @@ class AuthoringSession:
     def redo(self):
         return self._restore("redo")
 
+    def storage_status(self):
+        """Read-only disk conflict status for the Studio recovery UI.
+
+        Never authorize an overwrite using this diagnostic; save() still
+        compares the complete pair of previously observed SHA-256 digests.
+        """
+        if self._store is None:
+            return {"has_destination": False, "path": "", "pending": False,
+                    "external_change": False}
+        return {
+            "has_destination": True,
+            "path": str(self._store.content_path),
+            "pending": self._store.pending,
+            "external_change": self._store.revisions() != self._disk_revision,
+        }
+
     def save(self):
         if self._store is None:
             raise AuthoringError("no_destination", "save",
