@@ -277,6 +277,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
     from .tile_chunks import TileChunkIndex
 
     index = tile_index if tile_index is not None else TileChunkIndex(scene)
+    top_down = isinstance(projection, TopDownProjection)
     elev = index.elevations
     lo_x, hi_x, lo_y, hi_y = index.visible_bounds(camera, projection)
     overlay_by_cell = {}
@@ -311,14 +312,16 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                      "feature": t.get("feature", ""),
                      "blocked": t.get("blocked", False), "cover": t.get("cover", 0),
                      "hazard": t.get("hazard", 0), "goal": t.get("goal", False),
-                     "zOrder": (x + y) * 100})
+                     "zOrder": -100000 if top_down else (x + y) * 100})
     for o in scene["objects"]:
         x, y = o["x"], o["y"]
         if lo_x - 1 <= x <= hi_x + 1 and lo_y - 1 <= y <= hi_y + 1:
             sx, sy = projection.project(x, y, elev.get((x, y), 0))
             rows.append({"kind": "object", "id": o["id"], "label": o["kind"],
                          "open": o.get("open", False),
-                         "sx": sx, "sy": sy, "zOrder": (x + y) * 100 + 30})
+                         "sx": sx, "sy": sy,
+                         "zOrder": int(y * 100) + 30 if top_down
+                         else (x + y) * 100 + 30})
     for a in scene["actors"]:
         x, y = a["x"], a["y"]
         if lo_x - 1 <= x <= hi_x + 1 and lo_y - 1 <= y <= hi_y + 1:
@@ -328,7 +331,8 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                          "alive": a["alive"], "sx": sx, "sy": sy,
                          "direction": a.get("direction", "south"),
                          "hp": a.get("hp"), "combatState": a.get("combat_state", ""),
-                         "zOrder": (x + y) * 100 + 60})
+                         "zOrder": int(y * 100) + 60 if top_down
+                         else (x + y) * 100 + 60})
     from .building_geometry import building_surfaces
     from .visual_compositor import automatic_cutaway
     hidden_roofs = automatic_cutaway(
@@ -355,12 +359,23 @@ def pick(scene, camera, sx, sy, projection=IsoProjection(), *,
     for a in scene["actors"]:
         x, y = a["x"], a["y"]
         px, py = projection.project(x, y, elevations.get((int(x), int(y)), 0) + a["level"] * 4)
-        if abs(wx - px) < projection.width * .25 and py - projection.height * 1.2 < wy < py:
-            hits.append(((x + y) * 100 + 60, {"kind": "actor", "id": a["id"]}))
+        if ((abs(wx - px) <= projection.width * .4 and
+             abs(wy - py) <= projection.height * .4)
+                if isinstance(projection, TopDownProjection) else
+                (abs(wx - px) < projection.width * .25 and
+                 py - projection.height * 1.2 < wy < py)):
+            depth = int(y * 100) + 60 if isinstance(projection, TopDownProjection) else (x + y) * 100 + 60
+            hits.append((depth, {"kind": "actor", "id": a["id"]}))
     for o in scene["objects"]:
         px, py = projection.project(o["x"], o["y"], elevations.get((o["x"], o["y"]), 0))
-        if abs(wx - px) < projection.width * .2 and py - projection.height < wy < py:
-            hits.append(((o["x"] + o["y"]) * 100 + 30, {"kind": "object", "id": o["id"]}))
+        if ((abs(wx - px) <= projection.width * .35 and
+             abs(wy - py) <= projection.height * .35)
+                if isinstance(projection, TopDownProjection) else
+                (abs(wx - px) < projection.width * .2 and
+                 py - projection.height < wy < py)):
+            depth = (o["y"] * 100 + 30 if isinstance(projection, TopDownProjection)
+                     else (o["x"] + o["y"]) * 100 + 30)
+            hits.append((depth, {"kind": "object", "id": o["id"]}))
     if hits:
         return max(hits, key=lambda row: row[0])[1]
     from .building_geometry import building_surfaces, pick_surface
