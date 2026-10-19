@@ -139,11 +139,10 @@ def second_game_software_report(*, content_path=None, seeds=DEFAULT_SEEDS):
                     raise PlatformGateError("replay_failed", "Incomplete tactical certification")
                 fast_report = verify_sequence(content, project, R24_CAMPAIGN,
                                               R24_TRACE, seed=seed)
-                if not fast_report.verified or fast_report.final_digest != report.final_sha256:
-                    # Internal game IDs/digests can be normalized differently
-                    # by the witness; both reports need independent validity.
-                    if not fast_report.verified:
-                        raise PlatformGateError("replay_failed", "Replayed simulation rejected")
+                if (not fast_report.verified or
+                        len(fast_report.checkpoints) != len(R24_TRACE) + 1):
+                    raise PlatformGateError(
+                        "replay_failed", "Independent replay checkpoints incomplete")
                 seeds_report.append({
                     "seed": seed, "commands": len(R24_TRACE),
                     "disk_resumed_each_step": True,
