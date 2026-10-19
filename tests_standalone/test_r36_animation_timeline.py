@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 import unittest
 
-from drawtemp.sdk.authoring import AuthoringSession
+from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.reference import reference_project
 from drawtemp.studio.animation_graph_authoring import AnimationControllerAuthoring
 from drawtemp.studio.animation_timeline_authoring import AnimationTimelineAuthoring
@@ -97,7 +97,7 @@ class AnimationTimelineTests(unittest.TestCase):
         self.assertEqual(editor.timelines(), [timeline()])
         with self.assertRaises(AnimationGraphError):
             editor.preview(timeline(), expected_revision=0)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AuthoringError):
             controller.preview_remove("hero_animation")
             # An orphaned timeline must not survive an R1 transaction.
         session.undo()
