@@ -758,6 +758,11 @@ class StudioWindow(QMainWindow):
 
     @measure_studio("studio.refresh")
     def refresh(self):
+        # Other-workshop callbacks must not silently destroy unsaved property
+        # widgets. A stale draft stays visible until explicitly discarded.
+        if self._edited_fields:
+            self._validate_inspector_draft()
+            return
         snapshot = self.session.snapshot()
         selected_keys = {r.key for r in self._selected}
         self._resource_by_key = {r.key: r for r in resources(snapshot)}
@@ -855,6 +860,13 @@ class StudioWindow(QMainWindow):
                 key = tuple(identity.split("|", 2))
                 if key in self._resource_by_key:
                     selected.append(self._resource_by_key[key])
+        # A programmatic selection change may arrive despite the disabled
+        # resource view. Keep the old draft and canonical resource identities.
+        if (self._edited_fields and
+                {r.key for r in selected} != {r.key for r in self._selected}):
+            self.inspector_error.setText(
+                "Terminez ou ignorez la saisie avant de changer de sélection.")
+            return
         # An active relation filter retains its original selection even when
         # the anchor is itself hidden by the filtered result set.
         if selected:
