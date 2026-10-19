@@ -269,7 +269,7 @@ class StudioWindow(QMainWindow):
             button.setAccessibleName(label)
             button.clicked.connect(callback)
             panel.addWidget(button)
-        for group in (("Créer", ("profiles", "gameplay", "maps", "construction", "actors", "database", "events")),
+        for group in (("Créer", ("minigames", "profiles", "gameplay", "maps", "construction", "actors", "database", "events")),
                       ("Organiser", ("campaigns", "cinematics", "analysis", "publication"))):
             panel.addWidget(QLabel(group[0]))
             buttons = QGridLayout()
@@ -733,7 +733,7 @@ class StudioWindow(QMainWindow):
         selection.blockSignals(False)
         self.last_revision = snapshot.revision
         self._refresh_plugins(snapshot)
-        for name in ("profiles", "gameplay"):
+        for name in ("profiles", "gameplay", "events"):
             if name in self._models:
                 self._models[name].refresh()
         self._show_inspector()
@@ -1061,13 +1061,21 @@ class StudioWindow(QMainWindow):
             if identifier == "actors":
                 child.tree.setCurrentItem(child.tree.topLevelItem(1))
             return
-        if identifier == "profiles":
+        if identifier == "minigames":
+            from drawtemp.studio.r28e_minigames_qt import MiniGameGallery
+            child = MiniGameGallery()
+            child.openRequested.connect(self.open_path)
+        elif identifier == "profiles":
             from drawtemp.studio.profile_editor_qt import ProfileEditorWidget
             child = ProfileEditorWidget(self.session)
             child.updated.connect(self.refresh)
         elif identifier == "gameplay":
             from drawtemp.studio.genre_rules_qt import GenreRulesWorkspace
             child = GenreRulesWorkspace(self.session)
+            child.updated.connect(self.refresh)
+        elif identifier == "events":
+            from drawtemp.studio.r28d_workflow_qt import R28DWorkspace
+            child = R28DWorkspace(self.session)
             child.updated.connect(self.refresh)
         elif identifier == "maps":
             from drawtemp.studio.map_authoring import MapStudio
@@ -1094,7 +1102,7 @@ class StudioWindow(QMainWindow):
             child = self._publication_page()
         else:
             child = self._overview(identifier)
-        if identifier in ("profiles", "gameplay", "maps", "database", "campaigns"):
+        if identifier in ("profiles", "gameplay", "events", "maps", "database", "campaigns"):
             self._models[identifier] = child
             # Embedded editors must never swap the shared AuthoringSession:
             # opening/saving a project is a shell responsibility.
