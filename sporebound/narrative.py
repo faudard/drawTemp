@@ -274,9 +274,15 @@ class StoryBook:
     def initialize(self, progress, campaign_id):
         if progress.story_started:
             require(progress.story_digest == self.digest, 'Story definition differs from saved campaign')
+            if self.raw.get('schema_version') == 2:
+                from .narrative_state_r42 import verify_state
+                verify_state(self.raw, progress)
             return
         require(not progress.story_digest or progress.story_digest == self.digest,
                 'Story definition differs from saved campaign')
+        if self.raw.get('schema_version') == 2:
+            from .narrative_state_r42 import initialize_state
+            initialize_state(self.raw, progress)
         progress.story_started = True
         progress.story_digest = self.digest
         # A legacy saved campaign with finished missions does not restart an intro.
@@ -351,4 +357,7 @@ class StoryBook:
         updated.story_history.append({'scene': scene['id'], 'choice': selected['id']})
         require(len(updated.story_history) <= 10000, 'Too many narrative decisions')
         updated.story_pending = selected.get('next_scene', '')
+        if self.raw.get('schema_version') == 2:
+            from .narrative_state_r42 import verify_state
+            verify_state(self.raw, updated)
         return updated
