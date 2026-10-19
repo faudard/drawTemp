@@ -15,9 +15,9 @@ from PySide6.QtCore import QItemSelectionModel, QProcess, QSettings, QSortFilter
 from PySide6.QtGui import QAction, QColor, QFont, QIntValidator, QKeySequence, QPalette, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDockWidget,
-    QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
+    QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
-    QSplitter, QStackedWidget, QStyleFactory, QToolBar, QTreeView, QVBoxLayout, QWidget,
+    QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QToolBar, QTreeView, QVBoxLayout, QWidget,
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
@@ -191,8 +191,13 @@ class StudioWindow(QMainWindow):
         self._activate("project")
 
     def _make_home(self):
-        page = QWidget()
-        panel = QVBoxLayout(page)
+        page = QScrollArea()
+        page.setObjectName("r18-home-scroll")
+        page.setAccessibleName("Page Projet défilante")
+        page.setWidgetResizable(True)
+        self.home_scroll = page
+        content = QWidget()
+        panel = QVBoxLayout(content)
         title = QLabel("DrawTemp Studio 5.0")
         title.setObjectName("studio-heading")
         font = title.font()
@@ -248,15 +253,16 @@ class StudioWindow(QMainWindow):
         for group in (("Créer", ("maps", "construction", "actors", "database", "events")),
                       ("Organiser", ("campaigns", "cinematics", "analysis", "publication"))):
             panel.addWidget(QLabel(group[0]))
-            buttons = QHBoxLayout()
-            for identifier in group[1]:
+            buttons = QGridLayout()
+            for index, identifier in enumerate(group[1]):
                 button = QPushButton(LABELS[identifier])
                 button.setAccessibleName("Atelier " + LABELS[identifier])
                 button.clicked.connect(lambda _checked=False, key=identifier:
                                        self.navigate(key))
-                buttons.addWidget(button)
+                buttons.addWidget(button, index // 2, index % 2)
             panel.addLayout(buttons)
         panel.addStretch(1)
+        page.setWidget(content)
         self.workspace_tabs.addWidget(page)
         self.pages["project"] = page
 
@@ -1177,6 +1183,7 @@ class StudioWindow(QMainWindow):
         self.settings.setValue("onboarding/hidden", False)
         self.navigate("project")
         self._update_guide()
+        self.home_scroll.ensureWidgetVisible(self.guide_next_button)
         self.guide_next_button.setFocus(Qt.ShortcutFocusReason)
 
     def hide_guide(self):
