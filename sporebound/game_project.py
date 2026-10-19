@@ -137,6 +137,13 @@ class GameProject:
                 self.extensions["drawtemp.metroidvania"]["data"],
                 scene_ids=self.exploration,
             )
+        # R34 is opt-in project-owned declarative data; malformed recipes must
+        # be rejected during canonical project validation, not at Player launch.
+        from .roguelite import EXTENSION as ROGUELITE_EXTENSION, validate_roguelite_spec
+        if ROGUELITE_EXTENSION in self.extensions:
+            validate_roguelite_spec(
+                self.extensions[ROGUELITE_EXTENSION]["data"],
+                content=content, project=self)
         from .campaign_flow import validate_flow
         validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
