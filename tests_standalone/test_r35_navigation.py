@@ -78,11 +78,25 @@ class R35NavigationTests(unittest.TestCase):
     def test_disabled_conditional_stop_and_all_or_none_waypoints(self):
         content, project = positional_village()
         game = GameSession.new(content, project, "main")
-        game.living_world_advance(8)
+        game.living_world_advance(8)  # Minute 479: before the opening.
         merchant = next(n for n in game.living_world_state()["npcs"]
                         if n["id"] == "merchant")
-        self.assertEqual(merchant["pos"], [1, 1])
-        self.assertFalse(merchant["moving"])
+        self.assertEqual(merchant["pos"], [3, 0])
+        self.assertTrue(merchant["moving"])
+        game.progress.story_flags["market_open"] = True
+        same_cell = next(n for n in game.living_world_state()["npcs"]
+                         if n["id"] == "merchant")
+        self.assertEqual(same_cell["pos"], [3, 0])
+        game.living_world_advance(2)
+        arrived = next(n for n in game.living_world_state()["npcs"]
+                       if n["id"] == "merchant")
+        self.assertEqual(arrived["pos"], [3, 1])
+        self.assertEqual(arrived["activity"], "trade")
+        game.progress.story_flags["market_open"] = False
+        inactive = next(n for n in game.living_world_state()["npcs"]
+                        if n["id"] == "merchant")
+        self.assertEqual(inactive["pos"], [3, 1])
+        self.assertEqual(inactive["activity"], "unavailable")
         invalid = deepcopy(project)
         del invalid.extensions[EXTENSION]["data"]["npcs"][0]["schedule"][0]["pos"]
         with self.assertRaises(RuleError):
