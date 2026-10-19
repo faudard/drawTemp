@@ -165,7 +165,7 @@
 | R20.13 QA Acte I | P0 | Parcours des branches, dialogues, sauvegarde/reprise, récompenses non dupliquées, zéro softlock connu | R14 ; tests E2E |
 | R20.14 Démo distribuable | P0 | Début/fin de l'acte I via Player autonome, menus, options, sauvegardes et feedback de testeurs | R15/R23 précoce ; rapport |
 
-**Références de production :** [R20.A — contrat narratif canonique](jeanne/R20_ACT_I_PRODUCTION_CONTRACT.md) et [R20.B — pack jouable camp/forêt/hospice/village](jeanne/R20_B_PLAYABLE_VILLAGE_FOREST_REFUGE.md). R20.B propose un **GameProject distinct** afin de préserver les sauvegardes du jeu de référence. Les cartes explorables sont implémentées ; rendu artistique, cinématiques, test utilisateur, export et certification de release restent à prouver.
+**Références de production :** [R20.A — contrat narratif canonique](jeanne/R20_ACT_I_PRODUCTION_CONTRACT.md), [R20.B — exploration Acte I](jeanne/R20_B_PLAYABLE_VILLAGE_FOREST_REFUGE.md) et [R20.C — cinématiques et embranchements sauvegardés](jeanne/R20_C_CINEMATICS_AND_PERSISTENCE.md). R20.B et R20.C restent deux **GameProject distincts** pour préserver les sauvegardes antérieures. Les séquences R20.C sont authorées et prévisualisables ; leur auto-déclenchement dans le vrai Player Qt, l'UX, les preuves GPU, l'export et la certification release restent à prouver.
 
 **Gate R20 :** trois missions narratives liées au minimum, une bifurcation réellement persistante, une fin d'acte identifiable, et un joueur externe peut tout terminer sans Studio ni compréhension des formats. La qualité narrative est revue humainement, pas « prouvée » par des tests de graphe seuls.
 
