@@ -117,14 +117,17 @@ class StudioGuideQtTests(unittest.TestCase):
             window = self.window(folder)
             try:
                 self.assertEqual(window.guide_list.count(), 5)
-                self.assertTrue(window.guide_panel.isVisibleTo(window.pages["project"]))
+                self.assertFalse(window._onboarding_hidden)
+                self.assertFalse(window.guide_panel.isHidden())
                 self.assertIn("0/5", window.guide_title.text())
                 self.assertFalse(window._onboarding_done)
                 self.assertTrue(window.open_path(path))
                 self.assertIn("project", window._onboarding_done)
                 self._fake_map_and_actor(window)
-                window.navigate("maps")
-                window.navigate("actors")
+                window.guide_next()  # next wizard step: Carte
+                self.assertEqual(window._active_workspace, "maps")
+                window.guide_next()  # next wizard step: Personnages
+                self.assertEqual(window._active_workspace, "actors")
                 self.assertEqual(window._onboarding_done,
                                  {"project", "map", "actor"})
                 self.assertTrue(window.save_document())
@@ -142,6 +145,9 @@ class StudioGuideQtTests(unittest.TestCase):
                 self.assertFalse(window._onboarding_hidden)
                 self.assertEqual(window._active_workspace, "project")
                 self.assertTrue(window.guide_next_button.hasFocus())
+                window.set_language("en")
+                self.assertIn("Getting started", window.guide_title.text())
+                self.assertEqual(window.guide_hide_button.text(), "Hide guide")
             finally:
                 window.close()
             reopened = self.window(folder)
