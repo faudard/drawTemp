@@ -106,6 +106,8 @@ def _ordered_nodes(graph):
     for edge in graph["edges"]:
         _exact(edge, {"from", "out", "to", "in"}, "edge")
         source, target = edge["from"], edge["to"]
+        if type(source) is not str or type(target) is not str:
+            _fail("invalid_shape", "Edge endpoints must be node ID strings")
         if source not in nodes or target not in nodes:
             _fail("dangling_edge", "Edge references an unknown node")
         if edge["out"] != "next" or edge["in"] != "flow":
@@ -170,7 +172,10 @@ def compile_r9_trigger(graph):
 
 
 def _stored_graphs(project):
-    spec = project.get("extensions", {}).get(NAMESPACE)
+    extensions = project.get("extensions", {})
+    if type(extensions) is not dict:
+        _fail("invalid_storage", "GameProject extensions must be an object")
+    spec = extensions.get(NAMESPACE)
     if spec is None:
         return []
     if (type(spec) is not dict or spec.get("schema_version") != 1 or
