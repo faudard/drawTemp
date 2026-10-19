@@ -28,7 +28,8 @@ class CinematicStudio4GUITests(unittest.TestCase):
                 owner = SimpleNamespace(
                     tk=tk, ttk=ttk, project=GameProject.default(content),
                     project_path=Path(folder)/"studio.game.json",
-                    project_status=Mock(), _content=lambda: content,
+                    project_status=Mock(), save_project=Mock(),
+                    _content=lambda: content,
                     _run=lambda fn: fn(), capture_history=Mock())
                 notebook = ttk.Notebook(root)
                 notebook.pack(fill="both", expand=True)
@@ -102,7 +103,8 @@ class CinematicStudio4GUITests(unittest.TestCase):
             owner = SimpleNamespace(
                 tk=tk, ttk=ttk, project=GameProject.default(content),
                 project_path=Path.cwd()/"unused.game.json",
-                project_status=Mock(), _content=lambda: content,
+                project_status=Mock(), save_project=Mock(),
+                _content=lambda: content,
                 _run=lambda fn: fn(), capture_history=Mock())
             notebook = ttk.Notebook(root)
             notebook.pack()
