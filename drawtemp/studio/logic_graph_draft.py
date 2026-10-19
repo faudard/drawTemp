@@ -132,7 +132,7 @@ class LogicGraphDraft:
         An end-of-sequence gate creates a typed message placeholder for its
         mandatory second action stage. The R1 project is not mutated.
         """
-        if self.graph["schema_version"] not in (1, 3):
+        if self.graph["schema_version"] not in (1, 3, 4):
             _error("invalid_sequence", "Only linear graphs accept wait/flag gates")
         if self.node(action_id)["kind"] != "action":
             _error("port_type", "Select an action before inserting a gate")
@@ -146,7 +146,7 @@ class LogicGraphDraft:
             _error("node_budget", "A wait/flag would exceed 64 nodes")
         candidate = deepcopy(self.graph)
         existing_ids = {node["id"] for node in candidate["nodes"]}
-        gate_id = self._next_id("wait" if kind == "wait" else "flag")
+        gate_id = self._next_id(kind)
         existing_ids.add(gate_id)
         candidate["nodes"].append({
             "id": gate_id, "kind": kind, "params": deepcopy(params)})
@@ -165,7 +165,8 @@ class LogicGraphDraft:
             {"from": action_id, "out": "next", "to": gate_id, "in": "flow"},
             {"from": gate_id, "out": "next", "to": target_id, "in": "flow"},
         ])
-        candidate["schema_version"] = 3
+        candidate["schema_version"] = (4 if self.graph["schema_version"] == 4
+                                       or kind == "check" else 3)
         validate_graph(candidate)
         self.graph = candidate
         return gate_id
@@ -178,6 +179,47 @@ class LogicGraphDraft:
         return self.insert_gate_after(action_id, kind="flag", params={
             "kind": "event_fired", "event_id": event_id})
 
+    def add_check_after(self, action_id, name, operator="eq", value=True):
+        return self.insert_gate_after(action_id, kind="check", params={
+            "kind": "logic_compare", "name": name,
+            "operator": operator, "value": value})
+
+    def add_variable_after(self, action_id, name, *, mode="set", value=True):
+        """Splice a canonical R9 variable mutation after an existing action."""
+        if self.graph["schema_version"] not in (1, 3, 4):
+            _error("invalid_sequence", "Variables require a linear graph")
+        if self.node(action_id)["kind"] != "action":
+            _error("port_type", "Select an action first")
+        if mode not in ("set", "add"):
+            _error("invalid_parameter", "Variable mode must be set or add")
+        kind = "logic_set" if mode == "set" else "logic_add"
+        payload = ({"kind": kind, "name": name, "value": value}
+                   if mode == "set" else
+                   {"kind": kind, "name": name, "amount": value})
+        from drawtemp.sdk.logic_graph import _validate_params
+        _validate_params("action", payload)
+        validate_graph(self.graph)
+        if len(self.graph["nodes"]) >= MAX_NODES:
+            _error("node_budget", "Graph exceeds 64 nodes")
+        candidate = deepcopy(self.graph)
+        next_edge = next((edge for edge in candidate["edges"]
+                          if edge["from"] == action_id), None)
+        name_id = self._next_id("variable")
+        candidate["nodes"].append({
+            "id": name_id, "kind": "action", "params": deepcopy(payload)})
+        if next_edge is not None:
+            candidate["edges"].remove(next_edge)
+            candidate["edges"].append({
+                "from": name_id, "out": "next",
+                "to": next_edge["to"], "in": "flow"})
+        candidate["edges"].append({
+            "from": action_id, "out": "next",
+            "to": name_id, "in": "flow"})
+        candidate["schema_version"] = 4
+        validate_graph(candidate)
+        self.graph = candidate
+        return name_id
+
     def copy_action(self, node_id):
         node = self.node(node_id)
         if node["kind"] != "action":
@@ -187,7 +229,7 @@ class LogicGraphDraft:
     def edit_node(self, node_id, params):
         node = self.node(node_id)
         from drawtemp.sdk.logic_graph import _validate_params
-        if node["kind"] in ("wait", "flag"):
+        if node["kind"] in ("wait", "flag", "check"):
             from drawtemp.sdk.logic_sequence import validate_gate_params
             validate_gate_params(node["kind"], params)
         elif node["kind"] == "branch":
