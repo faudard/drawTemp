@@ -44,7 +44,7 @@ EN = {
 DEFAULT_SHORTCUTS = {
     "save": "Ctrl+S", "open": "Ctrl+O", "undo": "Ctrl+Z", "redo": "Ctrl+Shift+Z",
     "palette": "Ctrl+Shift+P", "focus_resources": "Ctrl+1",
-    "focus_inspector": "Ctrl+2",
+    "focus_inspector": "Ctrl+2", "new_project": "Ctrl+N",
 }
 
 
@@ -193,6 +193,10 @@ class StudioWindow(QMainWindow):
         title.setFont(font)
         panel.addWidget(title)
         panel.addWidget(QLabel("Projet Jeanne • édition sans JSON • Content / GameProject partagés"))
+        new_button = QPushButton("Nouveau projet multi-genres...")
+        new_button.setAccessibleName("Assistant de creation de jeu")
+        new_button.clicked.connect(self.new_project)
+        panel.addWidget(new_button)
         for group in (("Créer", ("maps", "actors", "database", "events")),
                       ("Organiser", ("campaigns", "cinematics", "analysis"))):
             panel.addWidget(QLabel(group[0]))
@@ -327,6 +331,7 @@ class StudioWindow(QMainWindow):
         return action
 
     def _build_commands(self):
+        self._action("new_project", "Nouveau projet multi-genres...", self.new_project)
         self._action("open", "Ouvrir un projet…", self.open_document)
         self._action("save", "Enregistrer le projet", self.save_document)
         self._action("save_as", "Enregistrer sous…", self.save_document_as)
@@ -343,7 +348,7 @@ class StudioWindow(QMainWindow):
 
     def _build_menus(self):
         file_menu = self.menuBar().addMenu("&Fichier")
-        for key in ("open", "save", "save_as"):
+        for key in ("new_project", "open", "save", "save_as"):
             file_menu.addAction(self.commands[key])
         edit_menu = self.menuBar().addMenu("&Édition")
         for key in ("undo", "redo", "palette"):
@@ -921,6 +926,21 @@ class StudioWindow(QMainWindow):
             return self.save_document()
         return True
 
+    def new_project(self):
+        """R28 wizard creates a validated R15 project, then opens via R1."""
+        if not self._confirm_leave():
+            return
+        from drawtemp.studio.genre_wizard_qt import GenreProjectWizard
+        dialog = GenreProjectWizard(self)
+        if dialog.exec() != QDialog.Accepted or dialog.created_content_path is None:
+            return
+        try:
+            fresh = AuthoringSession.open(dialog.created_content_path)
+        except (AuthoringError, OSError, ValueError) as exc:
+            self.report_error(exc)
+            return
+        self._replace_session(fresh, dialog.created_content_path)
+
     def open_document(self):
         if not self._confirm_leave():
             return
@@ -933,6 +953,10 @@ class StudioWindow(QMainWindow):
         except (AuthoringError, OSError, ValueError) as exc:
             self.report_error(exc)
             return
+        self._replace_session(fresh, path)
+
+    def _replace_session(self, fresh, path):
+        """Drop embedded editors; never let them retain an old R1 session."""
         self.workspace_tabs.setCurrentWidget(self.pages["project"])
         old_pages = {page for name, page in self.pages.items() if name != "project"}
         self.pages = {"project": self.pages["project"]}
