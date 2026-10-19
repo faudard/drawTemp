@@ -1,0 +1,36 @@
+name: DrawTemp R31.A Visual Graph Contract
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/logic_graph.py'
+      - 'tests_standalone/test_drawtemp_r31_logic_graph.py'
+      - 'docs/drawtemp5/R31A_VISUAL_GRAPH_ADR.md'
+      - '.github/workflows/r31-visual-graph.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  graph-r9-contract:
+    name: Visual graph / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Visual graph schema, R9 compiler, sandbox and atomic persistence
+        run: python -m unittest tests_standalone.test_drawtemp_r31_logic_graph -v
+      - name: Preserve canonical R9 Event Graph contract
+        run: python -m unittest tests_standalone.test_drawtemp5_r9 -v
+      - name: Preserve canonical R1 authoring transactions
+        run: python -m unittest tests_standalone.test_drawtemp5_r1_authoring -v
