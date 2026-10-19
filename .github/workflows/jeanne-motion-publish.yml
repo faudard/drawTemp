@@ -11,6 +11,11 @@ on:
       # separately gated and cannot be self-approved here.
       - integration/r17-consolidated-277-284-20261018
   workflow_dispatch:
+  # GitHub's PR synchronization also runs when a connector updates the branch.
+  # Publishing stays restricted to this same-repository integration head.
+  pull_request:
+    types: [synchronize]
+    branches: [master]
 
 permissions:
   contents: write
@@ -21,12 +26,15 @@ concurrency:
 
 jobs:
   generate-and-publish:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'integration/r17-consolidated-277-284-20261018') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: true
+          # Do not publish binaries against GitHub's synthetic PR merge commit.
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -49,5 +57,5 @@ jobs:
           git add assets/watercolor/index.json assets/watercolor/registry.json assets/watercolor/provenance.json assets/watercolor/sprites/jeanne_motion
           if ! git diff --cached --quiet; then
             git commit -m "art(jeanne): publish PNG motion frames (8 walk, 12 attack)"
-            git push origin "HEAD:$GITHUB_REF_NAME"
+            git push origin "HEAD:${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           fi
