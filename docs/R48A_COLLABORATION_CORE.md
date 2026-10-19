@@ -127,10 +127,93 @@ python -m unittest tests_standalone.test_drawtemp_r48a2_refactor_audit -v
 et gate R48.C restent ouverts.** La CI du SHA de la branche doit être
 validée avant tout statut « prêt à fusionner ».
 
+## R48.A3 : DAG local, historique multi-générations et rapprochement d'audit
+
+Le nouveau `drawtemp/sdk/project_history.py` définit un `RevisionGraph`
+**borné à 2 048 nœuds**. Chaque nœud contient une `ProjectRevision`
+canonique validée et un identifiant de **nœud** distinct du SHA-256 du
+**contenu** ; deux branches avec les mêmes documents ne sont donc pas
+confondues. Les parents doivent être présents, déclarés et validés avant
+l'ajout ; cet index est **local et en mémoire**, pas un dépôt Git, une
+signature d'auteur, ni une base de données de sauvegarde.
+
+`HistoryReviewController.compare_history(local_id, incoming_id,
+base_id=None)` cherche les ancêtres réellement enregistrés dans le DAG.
+Un seul ancêtre commun maximal est sélectionné automatiquement ; aucun
+ancêtre donne `unrelated_history`. Plusieurs bases maximales (historique
+entrecroisé) donnent `ambiguous_base`, sauf si l'auteur choisit
+explicitement **une base maximale**. L'ancien contrôleur R48.A1 conserve sa
+règle de parent immédiat; le contrôleur historique utilise le même moteur
+R30 de merge typé et la même transaction R1/Undo. Le DAG ne prouve pas
+l'ascendance **Git** : utiliser l'adaptateur R30.D pour cela.
+
+Exemple headless :
+
+```python
+from drawtemp.sdk.collaboration import make_revision
+from drawtemp.sdk.project_history import RevisionGraph, HistoryReviewController
+
+graph = RevisionGraph()
+base = make_revision(content0, project0, author="system")
+base_node = graph.add(base, label="root")
+alice = make_revision(content_alice, project_alice, author="alice",
+                      parents=(base.digest,))
+alice_node = graph.add(alice, parents=(base_node.node_id,), label="A1")
+bob = make_revision(content_bob, project_bob, author="bob",
+                    parents=(base.digest,))
+bob_node = graph.add(bob, parents=(base_node.node_id,), label="B1")
+controller = HistoryReviewController(local_session, graph)
+review = controller.compare_history(alice_node.node_id, bob_node.node_id)
+# Après revue interactive de chaque conflit :
+transition = controller.apply(review, decisions)
+```
+
+Le module `drawtemp/sdk/audit_reconciliation.py` rapproche les lignes
+d'audit avec les digests du Studio et une liste **explicite** de
+`ProjectRevision` historiques. Il expose `empty`, `aligned`,
+`partial_evidence` et `drift`, ainsi que les numéros d'entrées dont les
+preuves manquent ou dont les liens ne sont pas continus. Le paramètre
+`expected_head` est facultatif et peut déceler un journal supprimé ou
+remplacé depuis une inspection antérieure. Il ne modifie jamais le contenu,
+ne récupère pas automatiquement les sauvegardes et **ne transforme pas un
+audit en preuve d'exhaustivité**. Une chaîne valide intégralement tronquée
+reste indétectable sans HEAD conservé ailleurs.
+
+```python
+from drawtemp.sdk.audit_reconciliation import reconcile_audit
+
+head = audit.inspect()["head"]  # conserver cette empreinte pour la revue
+status = reconcile_audit(audit, local_session, known_revisions=(base, alice),
+                         expected_head=head)
+# status.state est un diagnostic, jamais une autorisation d'écrasement.
+```
+
+### Limites du lot
+
+Les `parents` des révisions sont déclaratifs, sans vérification d'identité
+ou signature. Deux commits dont les documents sont identiques peuvent avoir
+des IDs de nœuds différents ; l'ancienne API `make_revision` refuse encore
+deux parents ayant exactement le même digest de **contenu**, même si les
+nœuds du graphe diffèrent. Un rebase qui réécrit les documents et la
+publication durable/synchronisée des nœuds ne sont pas implémentés : R48.A3
+offre pour l'instant un **merge multi-générations révisable**, et non un
+rebase automatique.
+
+Tests :
+
+```bash
+python -m unittest tests_standalone.test_drawtemp_r48a3_history_audit -v
+```
+
+**R48.B** : interface Qt qui exploite cet historique, sélectionne les
+bases et décisions manuelles, et examine la provenance et l'audit.
+**R48.C** : test réel 2 auteurs/2 branches, journaux crash/recovery,
+références, sauvegardes/replay et Player/export sur plusieurs OS.
+
 ## Tranches restantes
 
-- **R48.A3** : rebase multi-générations et résolution d'ancêtres, audit
-  rapproché des snapshots canoniques, tests adversariaux de reprise après crash.
+- **R48.A4** : rebase documentaire automatique contrôlé, publication durable
+  des nœuds et crash/recovery, cas de parents aux digests identiques.
 - **R48.B** : panneau Qt Project History & Review, détail des conflits,
   provenance et commentaires localisés aux IDs, QTest et review onscreen.
 - **R48.C** : fixture deux auteurs (carte + dialogue/quête), tests perturbations,
