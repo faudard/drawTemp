@@ -78,21 +78,17 @@ def tactical_intents(battle, *, max_cells=1024):
         role_name = squad_role(actor)
         if actor.team == "enemy" and (role_name or "protector" in actor.tags):
             stance = formation_preview(battle, actor.id)
-            # An escort provider protects its target; stance["escort"] alone
-            # describes whether the provider is itself being escorted.
-            escort_target = stance["mode"].partition(":")[2]
-            providing_escort = bool(escort_target and any(
-                ally.id == escort_target and ally.alive and ally.team == actor.team
-                and distance(ally.pos, actor.pos) == 1 for ally in battle.units))
+            # Both stance providers and recipients must share an authored deck.
+            # The canonical formation predicate owns this decision.
             objective = battle.mission.objective
             contest = objective in {"extract", "hold", "crown", "capture",
                                     "escort", "retreat"} and bool(battle.mission.goal)
             result["squads"].append({
                 "unit": actor.id, "role": role_name or "protector",
                 "formation": stance["mode"],
-                "formation_active": bool(stance["shield_wall"] or
-                                         stance["phalanx"] or stance["escort"] or
-                                         providing_escort),
+                "formation_active": stance["formation_active"] or stance["escort"],
+                "formation_break_reason": stance["break_reason"],
+                "level": stance["level"],
                 "intent": "contest_goal" if contest else "coordinate",
                 "goal_cells": [list(c) for c in sorted(battle.mission.goal)] if contest else [],
                 "certainty": "possible"})
@@ -105,10 +101,13 @@ def tactical_intents(battle, *, max_cells=1024):
             cells = sorted(battle._area(cell, skill))
             result["casts"].append({
                 "unit": actor.id, "team": actor.team,
+                "level": battle.unit_levels.get(actor.id, 0),
                 "skill": skill.id, "remaining_ticks": cast["remaining"],
                 "cell": list(cell), "cells": [list(c) for c in cells],
                 "certainty": "scheduled"})
-            if actor.team == "enemy":
+            # The legacy 2D danger overlay only paints ground-level tiles.
+            # Upstairs casts remain present in "casts" with their level.
+            if actor.team == "enemy" and battle.unit_levels.get(actor.id, 0) == 0:
                 for pos in cells:
                     danger[("cast", pos, actor.id)] = {"kind": "cast", "cell": list(pos),
                                             "unit": actor.id, "certainty": "scheduled"}
@@ -144,12 +143,16 @@ def tactical_intents(battle, *, max_cells=1024):
         for cell in tiles[:max_cells]:
             for uid, prep in armed:
                 watcher = battle.unit(uid)
+                # A watcher on an upper deck cannot threaten ground cells.
+                if battle.unit_levels.get(uid, 0) != 0:
+                    continue
                 if battle.rules.preparations.get(prep["mode"]).covers(
                         battle, watcher, cell):
                     danger[("prepared", cell, uid)] = {
                         "kind": "prepared", "cell": list(cell), "unit": uid,
                         "certainty": "armed"}
         result["prepared"] = [{"unit": uid, "mode": prep["mode"],
+                               "level": battle.unit_levels.get(uid, 0),
                                "charges": prep["charges"]}
                               for uid, prep in armed]
 

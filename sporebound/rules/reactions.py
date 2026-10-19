@@ -5,11 +5,21 @@ from copy import deepcopy
 from . import statuses
 from ..model import Cell, Unit, distance, require
 
-def reaction_threats(battle, cell: Cell, moving_team: str) -> list[dict]:
+def reaction_threats(battle, cell: Cell, moving_team: str, *, level=0) -> list[dict]:
+    """Read-only prepared control for the requested floor (ground by default).
+
+    A watcher upstairs must not appear to threaten the ground-floor overlay.
+    Runtime triggering already enforces the same-floor requirement.
+    """
+    require(type(level) is int and 0 <= level <= 3,
+            'Invalid reaction threat level')
     result = []
     for uid, prep in sorted(battle.prepared_reactions.items()):
         watcher = battle.unit(uid)
-        if not watcher.alive or watcher.team == moving_team or not battle._can_react(watcher):
+        if (not watcher.alive or watcher.team == moving_team
+                or battle.unit_levels.get(uid, 0) != level
+                or not battle._can_react(watcher)
+                or prep.get('charges', 0) <= 0):
             continue
         if battle.rules.preparations.get(prep['mode']).covers(battle, watcher, cell):
             result.append({'unit': uid, 'kind': prep['mode'], 'cell': cell})
