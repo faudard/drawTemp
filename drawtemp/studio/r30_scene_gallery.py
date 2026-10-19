@@ -87,7 +87,7 @@ def validate_catalog(document) -> dict:
                 template_id in ids):
             raise GalleryError("invalid_entry", "Duplicate or invalid template id")
         ids.add(template_id)
-        if entry["genre"] not in _GENRES:
+        if not isinstance(entry["genre"], str) or entry["genre"] not in _GENRES:
             raise GalleryError("invalid_genre", "No supported discovery tag")
         if entry["readiness"] != "narrative-scene-only":
             raise GalleryError("invalid_readiness", "Cannot claim unqualified gameplay")
@@ -203,7 +203,7 @@ class GalleryController:
         if not isinstance(namespace, str) or not _NAMESPACE.fullmatch(namespace):
             raise GalleryError("invalid_namespace", "Namespace: 1..16 lower-case chars")
         snap = self.session.snapshot().to_dict()
-        content, project = snap["content"], deepcopy(snap["project"])
+        project = deepcopy(snap["project"])
         story = project.get("story", {}) or {}
         if not isinstance(story, dict):
             raise GalleryError("invalid_story", "Invalid existing story")
