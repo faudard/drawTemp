@@ -269,6 +269,7 @@ class LogicGraphDialog(QDialog):
             self.canvas.render_graph(self.draft.graph)
             self.canvas.highlight(self.selected_node)
             self._inspect()
+        self.mission.setEnabled(self.draft is None)
         self.buttons["apply"].setEnabled(self.draft is not None)
         for key in ("add", "copy", "edit", "remove", "connect", "disconnect", "preview"):
             self.buttons[key].setEnabled(self.draft is not None)
@@ -359,6 +360,16 @@ class LogicGraphDialog(QDialog):
         params = deepcopy(node["params"])
         kind = params["kind"]
         try:
+            if node["kind"] == "event":
+                selected, ok = QInputDialog.getItem(
+                    self, "Type de déclencheur", "Événement R9",
+                    ["tick", "interact"], 0 if kind == "tick" else 1, False)
+                if not ok:
+                    return
+                if selected != kind:
+                    params = ({"kind": "tick", "tick": 0} if selected == "tick"
+                              else {"kind": "interact", "object_id": "lever"})
+                    kind = selected
             if kind == "tick":
                 value, ok = QInputDialog.getInt(
                     self, "Déclencheur", "Tick logique", params["tick"], 0, 1000000)
