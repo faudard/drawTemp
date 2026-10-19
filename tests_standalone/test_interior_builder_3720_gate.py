@@ -77,7 +77,9 @@ class InteriorBuilderTowerGate(unittest.TestCase):
     def test_upper_floor_edit_does_not_mutate_ground_or_legacy_schema(self):
         ground = asdict(self.mission.board.tile((4, 4)))
         sid = self.mission.structures[0]['id']
-        updated = edit_interior_tile(self.data, self.mid, sid, 1, (4, 4),
+        # Leave the occupied upper-floor enemy at (4,4) untouched: a crate
+        # on its spawn is correctly rejected by canonical level validation.
+        updated = edit_interior_tile(self.data, self.mid, sid, 1, (5, 4),
                                      feature='crate')
         new_mission = Content.from_dict(updated).missions[self.mid]
         self.assertEqual(asdict(new_mission.board.tile((4, 4))), ground)
