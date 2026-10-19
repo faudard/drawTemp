@@ -56,6 +56,8 @@ class ActionPlayerController:
         hero = self.runtime.hero
         candidates = []
         for obj in self.scene["objects"]:
+            if obj["kind"] != "sign" and self.runtime.objects[obj["id"]]["opened"]:
+                continue
             x = obj["pos"][0] * SCALE + SCALE // 2
             y = obj["pos"][1] * SCALE + SCALE // 2
             dx, dy = hero["pos"][0] - x, hero["pos"][1] - y
@@ -117,7 +119,13 @@ class ActionPlayerController:
         if self.runtime.hero["alive"]:
             raise ValueError("Respawn is only available after defeat")
         if self.save_path is not None and self.save_path.is_file():
-            return self.load()
+            verified = ActionRuntime.load(self.save_path, expected_scene=self.scene)
+            if verified.hero["alive"]:
+                self.runtime = verified
+                self.paused = False
+                self.events = ()
+                self.message = "Réapparition au point de sauvegarde."
+                return self.state()
         self.runtime = ActionRuntime(self.scene)
         self.paused = False
         self.events = ()
