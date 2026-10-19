@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
 from drawtemp.studio.platform_collider_authoring import (
     ColliderAuthoringError, PlatformColliderStudio,
 )
+from drawtemp.sdk.authoring import AuthoringError
+from sporebound.model import RuleError
 
 
 def _spin(value, *, minimum=0, maximum=128000):
@@ -208,7 +210,8 @@ class ColliderEditorPanel(QWidget):
             self.diagnostics.setPlainText("Aperçu valide à révision "
                                           + str(self._pending.source_revision)
                                           + " — aucun changement appliqué.")
-        except (ColliderAuthoringError, ValueError, TypeError, KeyError) as exc:
+        except (ColliderAuthoringError, AuthoringError, RuleError,
+                ValueError, TypeError, KeyError) as exc:
             self._pending = None
             self.apply_button.setEnabled(False)
             self.diagnostics.setPlainText("Modification refusée : " + str(exc))
