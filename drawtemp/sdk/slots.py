@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from hashlib import sha256
 
 from drawtemp.core import RuleError
 from drawtemp.sdk.simulation import Simulation
@@ -52,6 +53,26 @@ class PlayerSlotStore:
         if loaded.recording()["campaign_id"] != self.campaign_id:
             raise SlotError("wrong_campaign", "Save belongs to another campaign")
         return loaded
+
+    def _file_digest(self, path):
+        """SHA-256 snapshot for an explicit recovery approval (None = absent).
+
+        Refuse symlinks; do not expose recovery material in a UI field.
+        A fresh comparison is performed under the writer lock at commit.
+        """
+        self._safe(path)
+        digest = sha256()
+        try:
+            with path.open("rb") as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(block)
+        except FileNotFoundError:
+            return None
+        return digest.hexdigest()
+
+    def recovery_fingerprints(self):
+        """Read-only primary/backup identities for the confirmation dialog."""
+        return (self._file_digest(self.path), self._file_digest(self.backup))
 
     def inspect(self):
         """Read-only; corruption and compatibility errors are never repaired."""
@@ -108,13 +129,23 @@ class PlayerSlotStore:
                 raise SlotError("verification_failed", "Saved checkpoint differs from live game")
         return self.path
 
-    def restore_backup(self):
+    def restore_backup(self, *, expected_fingerprints=None):
         """Explicit user action, preserving corrupt primary bytes as evidence."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with session_writer_lock(self.path):
             self._safe(self.path)
             self._safe(self.backup)
             self._safe(self.damaged)
+            if expected_fingerprints is not None:
+                if (not isinstance(expected_fingerprints, tuple) or
+                        len(expected_fingerprints) != 2 or
+                        any(value is not None and
+                            (not isinstance(value, str) or len(value) != 64)
+                            for value in expected_fingerprints)):
+                    raise SlotError("invalid_recovery", "Invalid recovery confirmation")
+                if self.recovery_fingerprints() != expected_fingerprints:
+                    raise SlotError("stale_recovery",
+                                    "Checkpoint changed after confirmation; inspect again")
             if not self.backup.is_file():
                 raise SlotError("backup_missing", "No backup to restore")
             loaded = self._load(self.backup)
