@@ -38,11 +38,53 @@ migration. Ne jamais charger automatiquement une ancienne sauvegarde avec le
 nouveau manifeste; conserver l'ancien projet et ses sauvegardes, ou démarrer une
 nouvelle partie. Un migrateur de sauvegardes certifié est hors périmètre.
 
+## R42.A2 — Variables typées, relations et portées déclaratives
+
+- `GameProject.story.state` est facultatif, v2 uniquement, et contient au plus 128
+  déclarations `id / kind / scope / owner / initial`.
+- Types : `bool`, `int`, `text`, `relation` (valeur entière -100..100).
+  Portées : `campaign` (owner = campagne), `scene` (owner = scène) et
+  `mission` (owner = mission, pour les branches de quête adossées à R10).
+- **Portée = espace de noms durable**, pas durée de vie automatique : aucun
+  reset silencieux en sortie de scène. La durée de vie contextuelle, les
+  conversions et la réputation de faction R35 seront traitées explicitement.
+- Les clés stables `r42_<scope>_<owner>_<id>` vivent **dans le même
+  `Campaign.story_flags`**, sans nouveau magasin ou schéma de checkpoint.
+  R9 `matches`, `set_flag` et `add_flag` restent la seule exécution.
+- `StoryBook.initialize` installe une fois les valeurs initiales après
+  vérification de collision. À la reprise, `verify_state` rejette tout
+  champ absent, mauvais type ou relation hors bornes, même si le checksum
+  a été recalculé. `StoryBook.choose` vérifie également les bornes après
+  un choix, avant tout commit : pas de mutation partielle.
+- Les constructeurs `state_condition`, `state_effect` génèrent des
+  prédicats/effets R9 ordinaires, validés au chargement du projet et
+  inspectables via `GameSession.narrative_state()` (projection détachée).
+- La réputation **économique/de faction** de R35 reste exclusivement dans
+  `LivingWorld` ; aucun miroir R42 de cette réputation n'est créé.
+  Le raccordement des déclencheurs de quêtes idempotents R10 viendra dans
+  un incrément distinct.
+
+Exemple d'authoring (à soumettre ensuite à l'AuthoringSession) :
+
+```python
+from sporebound.narrative_state_r42 import (
+    declare_state, state_condition, state_effect,
+)
+new = declare_state(upgraded, content, identifier="captain", kind="relation",
+                    scope="campaign", owner="main", initial=0)
+predicate = state_condition(new.story, identifier="captain",
+                            scope="campaign", owner="main",
+                            operator="gte", value=30)
+effect = state_effect(new.story, identifier="captain",
+                      scope="campaign", owner="main", action="add", value=10)
+# Utiliser les helpers de story_authoring pour attacher les effets/conditions.
+```
+
 ## Vérifications
 
 ```bash
-python -m unittest tests_standalone.test_r42_narrative_contracts -v
-python -m unittest tests_standalone.test_narrative tests_standalone.test_story_graph -v
+python -m unittest tests_standalone.test_r42_narrative_contracts tests_standalone.test_r42_narrative_state -v
+python -m unittest tests_standalone.test_narrative tests_standalone.test_story_graph tests_standalone.test_game_session -v
 ```
 
 La CI R42.A couvre trois OS en headless. **Elle ne certifie pas** le Player Qt,
