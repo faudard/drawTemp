@@ -214,7 +214,10 @@ def package_preview(game, studio, destination, *, revision, platform):
                         info = zipfile.ZipInfo(rel, (1980, 1, 1, 0, 0, 0))
                         info.compress_type = zipfile.ZIP_DEFLATED
                         info.external_attr = (stat.S_IMODE(node.stat().st_mode) & 0o777) << 16
-                        output.writestr(info, node.read_bytes(), compress_type=zipfile.ZIP_DEFLATED)
+                        # Stream large Qt runtimes: avoid buffering a whole
+                        # shared library or executable in Python heap.
+                        with node.open("rb") as source, output.open(info, "w") as target:
+                            shutil.copyfileobj(source, target, length=1024 * 1024)
             else:
                 with gzip.GzipFile(filename="", mode="wb", fileobj=stream,
                                    mtime=0) as gz:
@@ -300,27 +303,33 @@ def install_preview(archive, destination, *, expected_sha256, revision=None, pla
             return result
 
         if zip_format:
-            with zipfile.ZipFile(archive) as content:
-                for item in content.infolist():
-                    if item.is_dir():
-                        raise ReleaseError("Unexpected archive directory entry")
-                    unix_mode = item.external_attr >> 16
-                    if stat.S_IFMT(unix_mode) not in (0, stat.S_IFREG):
-                        raise ReleaseError("Archive link or special file forbidden")
-                    target = checked(item.filename, item.file_size)
-                    with content.open(item, "r") as stream:
-                        _stream_file(stream, target, item.file_size)
-                    if os.name != "nt":
-                        target.chmod(unix_mode & 0o777 or 0o644)
+            try:
+                with zipfile.ZipFile(archive) as content:
+                    for item in content.infolist():
+                        if item.is_dir():
+                            raise ReleaseError("Unexpected archive directory entry")
+                        unix_mode = item.external_attr >> 16
+                        if stat.S_IFMT(unix_mode) not in (0, stat.S_IFREG):
+                            raise ReleaseError("Archive link or special file forbidden")
+                        target = checked(item.filename, item.file_size)
+                        with content.open(item, "r") as stream:
+                            _stream_file(stream, target, item.file_size)
+                        if os.name != "nt":
+                            target.chmod(unix_mode & 0o777 or 0o644)
+            except (zipfile.BadZipFile, RuntimeError) as exc:
+                raise ReleaseError("Malformed portable zip archive") from exc
         else:
-            with tarfile.open(archive, "r:gz") as content:
-                for item in content:
-                    if not item.isfile():
-                        raise ReleaseError("Archive link or special file forbidden")
-                    target = checked(item.name, item.size)
-                    with content.extractfile(item) as stream:
-                        _stream_file(stream, target, item.size)
-                    target.chmod(item.mode & 0o777)
+            try:
+                with tarfile.open(archive, "r:gz") as content:
+                    for item in content:
+                        if not item.isfile():
+                            raise ReleaseError("Archive link or special file forbidden")
+                        target = checked(item.name, item.size)
+                        with content.extractfile(item) as stream:
+                            _stream_file(stream, target, item.size)
+                        target.chmod(item.mode & 0o777)
+            except tarfile.TarError as exc:
+                raise ReleaseError("Malformed portable tar archive") from exc
         verify_portable(stage, revision=revision, platform=platform)
         os.replace(stage, destination)
     return destination
