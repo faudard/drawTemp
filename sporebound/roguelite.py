@@ -18,7 +18,7 @@ MAX_RUNS = 256
 
 def validate_roguelite_spec(spec, *, content, project):
     """Fail closed on unsupported versions, references and unsolvable prefabs."""
-    from drawtemp.sdk.procgen import ProcGenRecipe
+    from drawtemp.sdk.procgen import ProcGenError, ProcGenRecipe
     from drawtemp.sdk.procgen_prefabs import generate_with_prefabs, validate_library
 
     require(type(spec) is dict and set(spec) ==
@@ -31,12 +31,15 @@ def validate_roguelite_spec(spec, *, content, project):
             "R34 meta reward must be an integer in 0..1000")
     require(type(spec["biome"]) is str and bool(spec["biome"]),
             "R34 biome is required")
-    recipe = ProcGenRecipe.from_dict(spec["recipe"])
-    require(recipe.seed + MAX_RUNS <= (1 << 63) - 1,
-            "R34 seed range exceeds deterministic run budget")
-    library = validate_library(spec["library"], content=content, project=project)
-    generate_with_prefabs(recipe, library, biome=spec["biome"],
-                          content=content, project=project)
+    try:
+        recipe = ProcGenRecipe.from_dict(spec["recipe"])
+        require(recipe.seed + MAX_RUNS <= (1 << 63) - 1,
+                "R34 seed range exceeds deterministic run budget")
+        library = validate_library(spec["library"], content=content, project=project)
+        generate_with_prefabs(recipe, library, biome=spec["biome"],
+                              content=content, project=project)
+    except ProcGenError as exc:
+        raise RuleError("Invalid R34 project recipe: " + str(exc)) from exc
     return deepcopy(spec)
 
 
@@ -65,9 +68,12 @@ class RogueliteRun:
         from drawtemp.sdk.procgen_prefabs import generate_with_prefabs
 
         recipe = replace(self._recipe, seed=self._recipe.seed + self._run_index)
-        self._layout = generate_with_prefabs(
-            recipe, self.spec["library"], biome=self.spec["biome"],
-            content=self._content, project=self._project)
+        try:
+            self._layout = generate_with_prefabs(
+                recipe, self.spec["library"], biome=self.spec["biome"],
+                content=self._content, project=self._project)
+        except ValueError as exc:
+            raise RuleError("R34 run seed cannot be generated: " + str(exc)) from exc
         self._rooms = {room["id"]: room for room in self._layout["rooms"]}
         self._position = next(room["id"] for room in self._rooms.values()
                               if room["role"] == "entry")
