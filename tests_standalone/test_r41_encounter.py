@@ -110,6 +110,12 @@ class R41EncounterTests(unittest.TestCase):
                                    if k != "digest"})
         with self.assertRaises(RuleError):
             GameSession.from_recording(broken, self.content, self.project)
+        broken = deepcopy(original)
+        broken["rpg_encounter"] = []
+        broken["digest"] = digest({k: v for k, v in broken.items()
+                                   if k != "digest"})
+        with self.assertRaises(RuleError):
+            GameSession.from_recording(broken, self.content, self.project)
 
     def test_guard_potion_and_wrong_turn_rollback(self):
         self.session.progress.inventory["potion"] = 1
