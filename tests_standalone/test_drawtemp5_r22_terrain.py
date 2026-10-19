@@ -68,18 +68,27 @@ class TerrainGenerationTests(unittest.TestCase):
         self.studio.paint([(9, 9)], "goal")
         mission = self.studio.mission()
         actor_cell = tuple(mission["units"][0]["pos"])
-        obj_cell = tuple(mission["objects"][0]["pos"])
         previous = self.studio.snapshot()
         self.studio.generate(seed=3, biome="Prairie", coverage=100)
         after = self.studio.mission()
         self.assertEqual(tiles(self.studio)[(8, 8)]["surface"], "stone")
         self.assertIn([9, 9], after["goal"])
         self.assertFalse(actor_cell in tiles(self.studio))
-        self.assertFalse(obj_cell in tiles(self.studio))
         self.assertEqual(after["units"], mission["units"])
         self.assertEqual(after["objects"], mission["objects"])
         self.studio.undo()
         self.assertEqual(self.studio.snapshot()["content"], previous["content"])
+        # The canonical reference mission contains lever/gate objects. They
+        # are protected even if the user selects exactly their occupied cells.
+        self.studio.select_map(self.studio.map_ids()[0])
+        reference = self.studio.mission()
+        obj_cell = tuple(reference["objects"][0]["pos"])
+        ref_actor = tuple(reference["units"][0]["pos"])
+        with self.assertRaises(RuleError):
+            self.studio.preview_generation(
+                seed=3, biome="Prairie", coverage=100,
+                cells=[obj_cell, ref_actor]
+            )
 
     def test_stale_preview_rejected_after_edit_undo_or_map_switch(self):
         preview = self.studio.preview_generation(
