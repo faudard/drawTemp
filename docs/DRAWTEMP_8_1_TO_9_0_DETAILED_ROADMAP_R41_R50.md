@@ -314,6 +314,8 @@ Les familles de références (FFT, Zelda, JRPG classiques, etc.) ne sont que des
 - **R49.B — Studio/Player (P0)** : Onboarding/templates, recherche, inspecteurs, commandes et outils contextuels cohérents. Test Qt offscreen pour non-régression et **onscreen + vrai Player** pour validation utilisateur.
 - **R49.C — Intégration/Gate (P0)** : Études de créateurs tiers sur scénarios guidés et libres, focus/accessibilité/profiler, corrections P0. Replays/sauvegardes, matrice tri-OS, assets et captures GPU réels lorsqu'applicables.
 
+**Suivi R49.A — premier incrément non certifiant :** [contrats de commandes, détection des raccourcis concurrents et métriques UX locales](drawtemp5/R49A_CREATOR_EXPERIENCE.md). Le contrôle des commandes est structurel seulement ; p95/p99 observés sur une session Qt ne constituent ni benchmarks matériels ni validation auteur tiers. R49.B/C et le gate VS-49 restent ouverts.
+
 **Gate R49 :** Un auteur tiers crée mini-jeu depuis template, modifie cartes/règles/dialogues, lance playtest et exporte sans JSON; erreurs P0 d'UX et commandes inactives supprimées.
 
 **Vertical slice :** VS-49 — Premier jeu en Studio : nouveau projet → scène → action → export.
