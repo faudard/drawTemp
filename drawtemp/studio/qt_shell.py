@@ -424,6 +424,7 @@ class StudioWindow(QMainWindow):
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
+        self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
@@ -469,6 +470,7 @@ class StudioWindow(QMainWindow):
         tools_menu = self.menuBar().addMenu("&Outils")
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r31_logic"])
+        tools_menu.addAction(self.commands["r35_world"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
@@ -566,6 +568,15 @@ class StudioWindow(QMainWindow):
         dialog = R30CreatorDialog(self.session, content_path=self.content_path, parent=self)
         dialog.exec()
         if self.session.revision != initial_revision:
+            self.refresh()
+
+    def open_living_world(self):
+        """R35 world schedules: use the one authoritative R1 editor history."""
+        from drawtemp.studio.living_world_qt import LivingWorldDialog
+        revision = self.session.revision
+        dialog = LivingWorldDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
             self.refresh()
 
     def open_logic_graph(self):
