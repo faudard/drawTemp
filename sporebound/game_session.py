@@ -75,9 +75,12 @@ class GameSession:
     def __init__(self, content, project, campaign_id, *, seed=1, rules=None):
         if rules is None:
             from .event_pages import has_pages
+            from .logic_variables import has_logic_variables
             from .tactical_rpg3 import authored_rules_for_document
             raw = content.to_dict()
-            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
+            rules = (authored_rules_for_document(raw)
+                     if has_pages(raw) or has_logic_variables(raw)
+                     else default_rules())
         self.rules = rules
         content.validate(rules=self.rules)
         project.validate(content)
@@ -1015,9 +1018,12 @@ class GameSession:
                                          if k != "digest"}), "Game session checksum mismatch")
         if rules is None:
             from .event_pages import has_pages
+            from .logic_variables import has_logic_variables
             from .tactical_rpg3 import authored_rules_for_document
             raw = content.to_dict()
-            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
+            rules = (authored_rules_for_document(raw)
+                     if has_pages(raw) or has_logic_variables(raw)
+                     else default_rules())
         current_content = digest(content.to_dict())
         current_project = gameplay_project_digest(project)
         current_rules = rules.manifest()
