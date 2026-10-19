@@ -131,6 +131,8 @@ def preflight(content_path, *, require_licenses=False):
         result["missions"] = [m["id"] for m in content["missions"]]
         result["errors"].extend(
             issue["message"] for issue in registry.diagnostics(source.parent))
+        from drawtemp.assets.packs import verify_installed_packs
+        result["errors"].extend(verify_installed_packs(source.parent, project))
         # Several sprite regions legitimately share one atlas PNG. Export a
         # physical file once, but refuse ambiguous case-folding collisions
         # that would overwrite a different file on Windows/macOS.
