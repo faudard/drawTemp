@@ -7,6 +7,8 @@
 > **Documents complémentaires :** [roadmap canonique 5.0 (R0–R16)](DRAWTEMP_5_0_ROADMAP.md) · [consolidation 5.0–6.0 (R17–R24)](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md) · [roadmap historique](../ROADMAP.md).
 >
 > **Règle :** ne pas transformer DrawTemp en clone de FFT ni en clone de Zelda, ne pas créer de second moteur concurrent. L'éditeur est **multi-genres par composition de capacités et de profils de jeu**. La continuité de Jeanne et du SRPG reste un contrat de compatibilité.
+>
+> **Suite après R30 (nouvelle proposition)** : [roadmap détaillée DrawTemp 7.1 → 8.0, R31–R40](DRAWTEMP_7_1_TO_8_0_DETAILED_ROADMAP.md) : visual scripting, physique 2D, metroidvania, roguelite, monde vivant, animation/VFX, IA, outils pro, publication et certification. Les lots R31–R40 dépendent des gates R25–R30, ils ne sont pas déjà livrés.
 
 ## 0. Décision de produit et périmètre réel
 
@@ -93,6 +95,8 @@ Les profils ne sont **pas** des branches irréconciliables du moteur. Un même j
 **Priorité d'ordonnancement :** R17 stable → UX R18/R22 minimum → contrats R24 → R25 → R26 → R27/R28 en parallèle maîtrisé → R29 → R30. Les tests d'export, licences, QA et migration sont continus. On peut prototyper R25 avant la fin de toutes les options P2 de R24, mais jamais contourner les gates P0 de sauvegarde et de données.
 
 ## 5. R25 — Game Modes Foundation (6.1)
+
+> **Avancement R25.A — [PR #298](https://github.com/faudard/drawTemp/pull/298) (proposée, non certifiée)** : schéma opt-in `game_modes` dans `GameProject`, presets stricts et résolution read-only dans `GameSession` (R25.1/R25.2), primitive headless `FixedTickJournal` pour les commandes/ticks/replay (fondation R25.4), tests et workflow 3 OS. **Pas encore livrés :** SceneRouter et transitions effectives, couplage de l'horloge au moteur, rendu top-down/caméra, input/HUD, sauvegarde inter-modes, parcours Studio no-JSON et gate 6.1. Voir [ADR R25](drawtemp5/R25_GAME_MODES_ADR.md). Ne pas transformer le statut de la PR en statut de certification.
 
 **But :** rendre l'architecture réellement multi-genres, sans régression tactique.
 

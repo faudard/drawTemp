@@ -1,0 +1,201 @@
+"""R30.4 — conservative, headless Content/GameProject semantic review.
+
+Only top-level missions are matched by stable ID. All other arrays (event order,
+choices, unit order, layers and action sequences) are atomic to avoid corrupting
+their semantics. Three-way merging never writes to the project.
+"""
+from __future__ import annotations
+
+from copy import deepcopy
+from dataclasses import dataclass
+import hashlib
+import json
+
+_MISSING = object()
+
+
+@dataclass(frozen=True)
+class Change:
+    path: str
+    kind: str
+    before: object
+    after: object
+
+    def to_dict(self):
+        return {"path": self.path, "kind": self.kind,
+                "before": deepcopy(self.before), "after": deepcopy(self.after)}
+
+
+@dataclass(frozen=True)
+class Conflict:
+    path: str
+    base: object
+    local: object
+    incoming: object
+
+    def to_dict(self):
+        return {"path": self.path, "base": deepcopy(self.base),
+                "local": deepcopy(self.local),
+                "incoming": deepcopy(self.incoming)}
+
+
+@dataclass(frozen=True)
+class MergePreview:
+    local_changes: tuple[Change, ...]
+    incoming_changes: tuple[Change, ...]
+    conflicts: tuple[Conflict, ...]
+    content: dict | None
+    project: dict | None
+    local_fingerprint: str
+    candidate_fingerprint: str | None
+
+    @property
+    def can_apply(self) -> bool:
+        return not self.conflicts and self.content is not None and self.project is not None
+
+
+def _document(value):
+    result = value.to_dict() if hasattr(value, "to_dict") else deepcopy(value)
+    if not isinstance(result, dict):
+        raise ValueError("Expected canonical document dictionary")
+    return deepcopy(result)
+
+
+def _pointer(parent: str, key: str) -> str:
+    return parent + "/" + str(key).replace("~", "~0").replace("/", "~1")
+
+
+def _value(value):
+    return {"$missing": True} if value is _MISSING else deepcopy(value)
+
+
+def _mission_index(value):
+    if not isinstance(value, list):
+        return None
+    result = {}
+    for row in value:
+        if (not isinstance(row, dict) or not isinstance(row.get("id"), str) or
+                not row["id"] or row["id"] in result):
+            return None
+        result[row["id"]] = row
+    return result
+
+
+def _diff(before, after, path, changes):
+    if before == after:
+        return
+    if isinstance(before, dict) and isinstance(after, dict):
+        for key in sorted(before.keys() | after.keys()):
+            _diff(before.get(key, _MISSING), after.get(key, _MISSING),
+                  _pointer(path, key), changes)
+        return
+    if path == "/content/missions":
+        left, right = _mission_index(before), _mission_index(after)
+        if left is not None and right is not None:
+            for key in sorted(left.keys() | right.keys()):
+                _diff(left.get(key, _MISSING), right.get(key, _MISSING),
+                      _pointer(path, key), changes)
+            before_ids = [row["id"] for row in before]
+            after_ids = [row["id"] for row in after]
+            if before_ids != after_ids:
+                changes.append(Change(_pointer(path, "@order"), "reorder",
+                                      before_ids, after_ids))
+            return
+    kind = ("add" if before is _MISSING else
+            "delete" if after is _MISSING else "replace")
+    changes.append(Change(path, kind, _value(before), _value(after)))
+
+
+def semantic_diff(before_content, before_project, after_content, after_project) -> tuple[Change, ...]:
+    """Return detached changes, keyed by mission ID rather than array index."""
+    changes = []
+    for name, before, after in (
+            ("content", before_content, after_content),
+            ("project", before_project, after_project)):
+        _diff(_document(before), _document(after), "/" + name, changes)
+    return tuple(sorted(changes, key=lambda change: (change.path, change.kind)))
+
+
+def _merge(base, local, incoming, path, conflicts):
+    # These cases also handle new properties and deletions without resurrecting
+    # removed keys or silently overwriting an independent edit.
+    if local == incoming:
+        return deepcopy(local) if local is not _MISSING else _MISSING
+    if local == base:
+        return deepcopy(incoming) if incoming is not _MISSING else _MISSING
+    if incoming == base:
+        return deepcopy(local) if local is not _MISSING else _MISSING
+
+    if all(isinstance(value, dict) for value in (base, local, incoming)):
+        result = {}
+        for key in sorted(base.keys() | local.keys() | incoming.keys()):
+            value = _merge(base.get(key, _MISSING),
+                           local.get(key, _MISSING),
+                           incoming.get(key, _MISSING),
+                           _pointer(path, key), conflicts)
+            if value is not _MISSING:
+                result[key] = value
+        return result
+
+    # Reordering, deleting or adding missions concurrently is intentionally
+    # atomic. With equal IDs/order, independent mission fields can merge.
+    if path == "/content/missions":
+        maps = [_mission_index(value) for value in (base, local, incoming)]
+        if all(item is not None for item in maps):
+            orders = [[row["id"] for row in value]
+                      for value in (base, local, incoming)]
+            if orders[0] == orders[1] == orders[2]:
+                return [_merge(maps[0][name], maps[1][name], maps[2][name],
+                               _pointer(path, name), conflicts)
+                        for name in orders[0]]
+    conflicts.append(Conflict(path, _value(base), _value(local), _value(incoming)))
+    return _MISSING
+
+
+def fingerprint_pair(content, project) -> str:
+    raw = json.dumps({"content": _document(content), "project": _document(project)},
+                     sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def preview_merge(base_content, base_project,
+                  local_content, local_project,
+                  incoming_content, incoming_project) -> MergePreview:
+    """Perform a no-side-effect three-way preview; never guess conflict resolution."""
+    b_content, b_project = _document(base_content), _document(base_project)
+    l_content, l_project = _document(local_content), _document(local_project)
+    r_content, r_project = _document(incoming_content), _document(incoming_project)
+    conflicts = []
+    content = _merge(b_content, l_content, r_content, "/content", conflicts)
+    project = _merge(b_project, l_project, r_project, "/project", conflicts)
+    return MergePreview(
+        semantic_diff(b_content, b_project, l_content, l_project),
+        semantic_diff(b_content, b_project, r_content, r_project),
+        tuple(sorted(conflicts, key=lambda entry: entry.path)),
+        deepcopy(content) if not conflicts else None,
+        deepcopy(project) if not conflicts else None,
+        fingerprint_pair(l_content, l_project),
+        fingerprint_pair(content, project) if not conflicts else None,
+    )
+
+
+def stage_merge(session, preview: MergePreview, *, expected_revision: int):
+    """Stage for the existing R1 AuthoringSession preview/apply/Undo transaction.
+
+    Returns an AuthoringPlan; the caller must review and explicitly apply it.
+    Both the session revision and exact local document fingerprint are checked.
+    """
+    if not isinstance(preview, MergePreview) or not preview.can_apply:
+        raise ValueError("Unresolved or invalid merge preview")
+    if fingerprint_pair(preview.content, preview.project) != preview.candidate_fingerprint:
+        raise ValueError("Merge candidate changed after review")
+    snapshot = session.snapshot()
+    if (snapshot.revision != expected_revision or
+            fingerprint_pair(snapshot.to_dict()["content"],
+                             snapshot.to_dict()["project"]) != preview.local_fingerprint):
+        raise ValueError("Stale merge review; refresh before applying")
+    return session.preview_pair(
+        lambda _content, _project: (deepcopy(preview.content),
+                                    deepcopy(preview.project)),
+        kind="r30-semantic-merge",
+    )

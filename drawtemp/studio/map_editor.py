@@ -101,7 +101,7 @@ class MapWindow(QMainWindow):
         ])
         toolbar.addSeparator()
         self.mode = QComboBox()
-        self.mode.addItems(["Édition carte", "Construction 2.5D"])
+        self.mode.addItems(["Édition carte", "Construction 2.5D", "Donjons / énigmes"])
         toolbar.addWidget(QLabel(" Espace "))
         toolbar.addWidget(self.mode)
         toolbar.addWidget(QLabel(" Outil "))
@@ -208,6 +208,10 @@ class MapWindow(QMainWindow):
             ConstructionWorkspace(self.studio.authoring, self.studio.mission_id), self)
         self.addDockWidget(Qt.RightDockWidgetArea, self.construction)
         self.construction.hide()
+        from .dungeon_dock import DungeonDock
+        self.dungeon = DungeonDock(self)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.dungeon)
+        self.dungeon.hide()
         self.mode.currentIndexChanged.connect(self._construction_mode)
         self.construction.committed.connect(lambda _change: self.refresh())
         self.construction.level_changed.connect(self._construction_view)
@@ -221,16 +225,20 @@ class MapWindow(QMainWindow):
         open_creator(self)
 
     def _construction_mode(self, *_):
-        active = self.mode.currentIndex() == 1
+        current = self.mode.currentIndex()
+        active = current == 1
         root = self.viewport.rootObject()
         root.setProperty("interactionMode", "construction" if active else "edit")
         self.construction.setVisible(active)
-        self.tools.setEnabled(not active)
-        self.material.setEnabled(not active)
+        self.dungeon.setVisible(current == 2)
+        self.tools.setEnabled(current == 0)
+        self.material.setEnabled(current == 0)
         self._construction_view()
         self.statusBar().showMessage(
             "R6 : sélectionner directement toiture, murs, fenêtres, porte et étages"
-            if active else "R5 : édition de carte et terrain")
+            if active else (
+                "R27 : cliquer une case pour positionner une interaction, puis valider dans le panneau"
+                if current == 2 else "R5 : édition de carte et terrain"))
 
     def _construction_view(self, *_):
         active = self.mode.currentIndex() == 1
@@ -681,6 +689,11 @@ class MapWindow(QMainWindow):
         self.extend_stroke(x, y)
         cells = self.stroke
         self.stroke = []
+        if self.mode.currentIndex() == 2:
+            self.dungeon.set_position(x, y)
+            self.statusBar().showMessage(
+                "R27 : interaction positionnée en ({}, {}). Valider dans le panneau.".format(x, y))
+            return
         tool = self._tool()
         first, last = cells[0], cells[-1]
         def apply():
@@ -740,6 +753,8 @@ class MapWindow(QMainWindow):
         self.renderer.replace_scene(self._render_scene())
         if hasattr(self, "construction"):
             self._construction_view()
+        if hasattr(self, "dungeon"):
+            self.dungeon.refresh()
         root = self.viewport.rootObject()
         self._render_selection()
         root.setProperty("showGrid", self.show_grid.isChecked())

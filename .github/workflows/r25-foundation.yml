@@ -1,0 +1,47 @@
+name: R25 Game Modes Foundation
+on:
+  pull_request:
+    paths:
+      - 'sporebound/game_modes.py'
+      - 'sporebound/game_project.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/fixed_clock.py'
+      - 'tests_standalone/test_r25_foundation.py'
+      - '.github/workflows/r25-foundation.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'sporebound/game_modes.py'
+      - 'sporebound/game_project.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/fixed_clock.py'
+      - 'tests_standalone/test_r25_foundation.py'
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  headless-compat:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.12']
+        include:
+          - os: ubuntu-latest
+            python: '3.10'
+          - os: ubuntu-latest
+            python: '3.14'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: R25 profiles, legacy migration and deterministic replay
+        run: python -m unittest tests_standalone.test_r25_foundation -v
+      - name: Canonical GameSession replay and Jeanne compatibility
+        run: python -m unittest tests_standalone.test_game_session -v

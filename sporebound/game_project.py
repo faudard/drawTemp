@@ -33,6 +33,8 @@ class GameProject:
     world: dict = field(default_factory=dict)
     campaign_flow: dict = field(default_factory=dict)
     extensions: dict = field(default_factory=dict)
+    # Optional R25 profile manifest; omission preserves legacy v1 JSON and digests.
+    game_modes: dict = field(default_factory=dict)
 
     @classmethod
     def default(cls, content):
@@ -66,7 +68,8 @@ class GameProject:
                 **({'world': deepcopy(self.world)} if self.world else {}),
                 **({'battle_support': deepcopy(self.battle_support)} if self.battle_support else {}),
                 **({'campaign_flow': deepcopy(self.campaign_flow)} if self.campaign_flow else {}),
-                **({'extensions': deepcopy(self.extensions)} if self.extensions else {})}
+                **({'extensions': deepcopy(self.extensions)} if self.extensions else {}),
+                **({'game_modes': deepcopy(self.game_modes)} if self.game_modes else {})}
 
     def asset_registry(self):
         from .assets import AssetRegistry
@@ -132,6 +135,8 @@ class GameProject:
         validate_exploration(self.exploration, self.story)
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
+        from .game_modes import validate_game_modes
+        validate_game_modes(self.game_modes, content, self)
         require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
                 'Invalid battle support rules')
         for spec in self.battle_support:
