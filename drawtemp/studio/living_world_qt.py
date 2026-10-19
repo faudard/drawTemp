@@ -121,7 +121,7 @@ class LivingWorldDialog(QDialog):
     def _load_npcs(self, key=None):
         self.npc_select.blockSignals(True)
         self.npc_select.clear()
-        self.npc_select.addItems(npc["id"] for npc in self.document["npcs"])
+        self.npc_select.addItems([npc["id"] for npc in self.document["npcs"]])
         if key:
             self.npc_select.setCurrentText(key)
         self.npc_select.blockSignals(False)
