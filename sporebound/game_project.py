@@ -151,6 +151,12 @@ class GameProject:
         from .cinematics import validate_cinematics
         validate_cinematics(self.cinematics, content, self.campaigns,
                             self.story.get("scenes", []))
+        # R46.A: optional, versioned bindings onto R11 event identities.
+        # Keep the v1 cinematic array canonical and all legacy manifests inert.
+        from .cinematic_pro import EXTENSION as CINEMATIC_PRO_EXTENSION, validate_cinematic_pro
+        if CINEMATIC_PRO_EXTENSION in self.extensions:
+            validate_cinematic_pro(
+                self.extensions[CINEMATIC_PRO_EXTENSION]["data"], self.cinematics)
         from .narrative import validate_story
         validate_story(self.story, content, self.campaigns)
         # Only a verified node in the authored siege may trigger a narrative scene.
