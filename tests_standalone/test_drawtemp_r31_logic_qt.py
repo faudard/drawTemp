@@ -63,7 +63,7 @@ class LogicDraftTests(unittest.TestCase):
         with self.assertRaises(LogicGraphError):
             self.draft.prepare(self.session)
         self.draft.remove_action(copied)
-        self.draft.connect(added, self.draft.add_action("despawn"))
+        self.draft.connect(added, self.draft.add_action("message"))
         self.assertEqual(len(self.draft.prepare(self.session)[1]["actions"]), 3)
 
     def test_rejects_bad_links_before_mutation_and_stale_drafts(self):
