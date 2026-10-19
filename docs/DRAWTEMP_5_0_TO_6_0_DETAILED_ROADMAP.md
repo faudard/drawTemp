@@ -219,6 +219,8 @@
 
 **Suite empilée :** [R23.B — endurance, accessibilité et QA utilisateurs](drawtemp5/R23B_ENDURANCE_ACCESSIBILITY_QA.md) ajoute des mesures headless de reprise/réexécution des sauvegardes, une vérification des réglages Player et l'acceptation de rapports humains opt-in. Les tests Qt offscreen/Tk Xvfb restent distincts de la certification sur écran/GPU réel. Le verdict reste **NO-GO** sans endurance de plusieurs heures et retests externes.
 
+**Troisième tranche :** [R23.C — archives natives portables, installation isolée et bilan de release](drawtemp5/R23C_DISTRIBUTION_CERTIFICATION.md) ajoute checksums de transfert, validation/extraction bornée, le Player **et** le Studio sur des runners distincts, tamper rejection et désinstallation du dossier portable. Ces archives ne sont pas des MSI/DEB/DMG signés ; l'ensemble R23 conserve le statut **NO-GO** en attendant tests physiques, licences, mesures et approbation finale.
+
 **But :** publier un produit de création utilisable et maintenable, pas une succession de builds.
 
 | ID | Priorité | Livrable vérifiable et comportement attendu | Dépendances et preuves |
