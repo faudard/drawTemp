@@ -73,17 +73,34 @@ def asset_inventory(bundle, *, revision, platform):
                             "; ".join(report["errors"]))
     declared_path = content.parent / "asset-licenses.json"
     declared = _json(declared_path) if declared_path.exists() else None
-    if declared is not None and (type(declared) is not dict or
-            any(not isinstance(k, str) or not isinstance(v, str)
-                for k, v in declared.items())):
+    if declared is not None and type(declared) is not dict:
         raise EvidenceError("Invalid asset-licenses.json structure")
+    # R17.E uses a structured attestation contract. Legacy flat-string
+    # indexes are not legal authorization and are recorded as claims only.
+    if declared is not None and set(declared) == {"schema", "assets"}:
+        if type(declared["schema"]) is not int or declared["schema"] != 1 or (
+                type(declared["assets"]) is not dict):
+            raise EvidenceError("Invalid R17.E structured rights index")
+        rights = declared["assets"]
+        if any(type(path) is not str or type(entry) is not dict
+               for path, entry in rights.items()):
+            raise EvidenceError("Invalid structured asset rights entry")
+        claims = {key: entry.get("license_id") for key, entry in rights.items()}
+    else:
+        claims = declared or {}
+        if any(type(path) is not str or type(value) is not str
+               for path, value in claims.items()):
+            raise EvidenceError("Invalid legacy asset license declarations")
     checked_files = {row["path"]: row["sha256"] for row in manifest["files"]}
     rows = []
     for relative in sorted(set(report["assets"])):
         indexed = "game/" + relative
         if indexed not in checked_files:
             raise EvidenceError("Asset missing from verified R15 file index: " + relative)
-        license_info = declared.get(relative, "").strip() if declared is not None else ""
+        raw_license = claims.get(relative)
+        if raw_license is not None and type(raw_license) is not str:
+            raise EvidenceError("Invalid rights license declaration: " + relative)
+        license_info = raw_license.strip() if raw_license is not None else ""
         rows.append({
             "path": indexed,
             "sha256": checked_files[indexed],
@@ -93,7 +110,7 @@ def asset_inventory(bundle, *, revision, platform):
             "attribution_approved": "not-asserted",
         })
     if declared is not None:
-        surplus = set(declared) - set(report["assets"])
+        surplus = set(claims) - set(report["assets"])
         if surplus:
             raise EvidenceError("Undeclared/non-exported asset license entries: " +
                                 ", ".join(sorted(surplus)[:5]))
