@@ -199,15 +199,18 @@ class GameSession:
         from .classic_party import EXTENSION
         spec = self.project.extensions.get(EXTENSION)
         if (spec is None or self._classic_party is None
-                or self.scene_router.enabled or self.mode != "campaign"
+                or self.mode != "campaign"
                 or self.progress.story_pending or self.tactical_story_pending):
             return []
         catalogue = spec["data"].get("encounters", {})
-        return sorted(eid for eid in catalogue
-                      if not self.progress.story_flags.get("r41:" + eid, False))
+        return sorted(eid for eid, row in catalogue.items()
+                      if (not self.scene_router.enabled
+                          or (self.route_scene == row["scene"]
+                              and self.route_scene in self.project.exploration))
+                      and not self.progress.story_flags.get("r41:" + eid, False))
 
     def rpg_start(self, encounter_id):
-        """Begin a bounded RPG_TURN encounter; R25 routed integration is R41.C."""
+        """Begin RPG_TURN combat at the current routed exploration checkpoint."""
         from .classic_encounter import ClassicEncounter
         require(type(encounter_id) is str and encounter_id in self.rpg_available(),
                 "R41 encounter unavailable or already rewarded")
@@ -217,6 +220,10 @@ class GameSession:
         config = self.project.extensions[EXTENSION]["data"]["encounters"][encounter_id]
         require(self.scene_profile(config["scene"])["combat"] == "RPG_TURN",
                 "R41 encounter is not in an RPG_TURN scene")
+        if self.scene_router.enabled:
+            require(self.route_scene == config["scene"]
+                    and self.route_scene in self.project.exploration,
+                    "R41 encounter must start in its authored route scene")
         candidate = ClassicEncounter(
             encounter_id, config, self._classic_party.active,
             self.content, self.progress.inventory)
@@ -1175,7 +1182,6 @@ class GameSession:
             from .classic_party import EXTENSION
             from .classic_encounter import ClassicEncounter
             require(session._classic_party is not None
-                    and not session.scene_router.enabled
                     and type(data.get("rpg_encounter")) is dict
                     and type(data["rpg_encounter"].get("id")) is str
                     and data["tactical"] is None and not data["finalized"]
@@ -1322,7 +1328,9 @@ class GameSession:
             require("scene_route" in data,
                     "Routed project checkpoint is missing scene state")
             session.route_scene = session.scene_router.validate_checkpoint(
-                data["scene_route"], mode=mode, battle=session.battle)
+                data["scene_route"], mode=mode, battle=session.battle,
+                rpg_scene=(session._rpg_encounter.scene
+                           if session._rpg_encounter is not None else None))
             session.route_history = list(data["scene_route"]["history"])
             if session.route_scene in session.project.exploration:
                 session.exploration.state(session.progress, session.route_scene)
