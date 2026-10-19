@@ -17,6 +17,11 @@ on:
       - 'scripts/r23c_*.py'
       - 'tests_standalone/test_drawtemp5_r23c*.py'
       - 'docs/drawtemp5/R23C_*.md'
+      - 'drawtemp/quality/r23d_release.py'
+      - 'packaging/r23d/**'
+      - 'scripts/r23d_*.py'
+      - 'tests_standalone/test_drawtemp5_r23d*.py'
+      - 'docs/drawtemp5/R23D_*.md'
   push:
     branches: [master]
   workflow_dispatch:
@@ -34,13 +39,13 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install .
-      - run: python -m unittest tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator tests_standalone.test_drawtemp5_r23a tests_standalone.test_drawtemp5_r23_evidence tests_standalone.test_drawtemp5_r23c tests_standalone.test_drawtemp5_r23c_release -v
+      - run: python -m unittest tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator tests_standalone.test_drawtemp5_r23a tests_standalone.test_drawtemp5_r23_evidence tests_standalone.test_drawtemp5_r23c tests_standalone.test_drawtemp5_r23c_release tests_standalone.test_drawtemp5_r23d -v
       - run: python -m drawtemp.export.cli check --content sporebound/content/jeanne.json
 
   native-bundle:
     name: R15 native Player + Studio / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 65
     strategy:
       fail-fast: false
       matrix:
@@ -125,6 +130,38 @@ jobs:
         with:
           name: r23c-portable-${{ runner.os }}
           path: release/r23c-*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Windows Inno Setup 6 packaging prerequisite (no signing credentials)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install innosetup --no-progress --yes
+      - name: R23.D native system installer from verified R23.C payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            archive="release/r23c-Windows.zip"
+            package="release/DrawTempStudio-5.5-preview-Windows.exe"
+          elif [[ "$RUNNER_OS" == "Linux" ]]; then
+            archive="release/r23c-Linux.tar.gz"
+            package="release/DrawTempStudio-5.5-preview-Linux.deb"
+          else
+            archive="release/r23c-macOS.tar.gz"
+            package="release/DrawTempStudio-5.5-preview-macOS.dmg"
+          fi
+          digest="$(cut -d ' ' -f1 "$archive.sha256")"
+          python scripts/r23c_distribution.py install --archive "$archive" --destination r23d-stage --sha256 "$digest" --revision "$GITHUB_SHA" --platform "$RUNNER_OS"
+          python scripts/r23d_native_installer.py --source r23d-stage --output "$package" --revision "$GITHUB_SHA" --platform "$RUNNER_OS" --report release/r23d-builder.json
+          python scripts/r23c_distribution.py remove --destination r23d-stage
+          test ! -e r23d-stage
+      - name: Publish native OS installer previews (NOT signed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: r23d-installer-${{ runner.os }}
+          path: |
+            release/DrawTempStudio-5.5-preview-*
+            release/r23d-builder.json
           if-no-files-found: error
           retention-days: 14
       - name: Save preview artifacts (not a certified release)
@@ -279,6 +316,170 @@ jobs:
         with:
           name: r23c-release-assessment
           path: r23c-release-assessment.json
+          if-no-files-found: warn
+
+  r23d-clean-install:
+    name: R23.D native installer / ${{ matrix.os }} / clean runner
+    needs: native-bundle
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+      PYTHONPATH: ''
+      PYTHONHOME: ''
+      PYTHONNOUSERSITE: '1'
+    steps:
+      # Intentionally NO checkout, pip, Python setup or Studio installation.
+      - uses: actions/download-artifact@v4
+        with:
+          name: r23d-installer-${{ runner.os }}
+          path: ${{ runner.temp }}/r23d-download
+
+      - name: Debian root install, native executable smoke, negative tamper, purge
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libopengl0
+          cd "$RUNNER_TEMP/r23d-download"
+          installer="DrawTempStudio-5.5-preview-Linux.deb"
+          sha256sum -c "$installer.sha256"
+          digest="$(cut -d ' ' -f1 "$installer.sha256")"
+          sudo dpkg -i "$installer"
+          studio="/opt/drawtemp-studio-preview/Studio/DrawTempStudio"
+          player="/opt/drawtemp-studio-preview/Jeanne/Player/DrawTempPlayer"
+          test -x "$studio" && test -x "$player"
+          "$player" --smoke
+          "$player" --smoke --smoke-scene exploration
+          "$studio" --smoke
+          sudo sh -c 'printf "\nR23D-NEGATIVE-TAMPER\n" >> /opt/drawtemp-studio-preview/Jeanne/game/jeanne.json'
+          if "$player" --smoke > "$RUNNER_TEMP/r23d-tamper.log" 2>&1; then
+            echo "FAIL: tampered installed Player was accepted"
+            exit 1
+          fi
+          grep -qi "integrity failure" "$RUNNER_TEMP/r23d-tamper.log"
+          sudo dpkg --purge drawtemp-studio-preview
+          test ! -e /opt/drawtemp-studio-preview
+          printf '{"schema":1,"kind":"drawtemp-r23d-clean-install","revision":"%s","platform":"Linux","format":"deb","installer_sha256":"%s","signed":false,"notarized":false,"runner":"hosted-ephemeral-offscreen","checks":{"digest":"passed","install":"passed","player_title":"passed","player_exploration":"passed","studio_launch":"passed","tamper_rejection":"passed","uninstall":"passed"}}\n' "$GITHUB_SHA" "$digest" > "$RUNNER_TEMP/r23d-clean.json"
+
+      - name: Inno per-user install, native smoke, negative tamper, uninstall
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # A negative Player integrity test intentionally returns nonzero.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $base = Join-Path $env:RUNNER_TEMP 'r23d-download'
+          $exe = Join-Path $base 'DrawTempStudio-5.5-preview-Windows.exe'
+          $digest = ((Get-Content "$exe.sha256" -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLowerInvariant()
+          if ($actual -ne $digest) { throw 'Native installer SHA-256 mismatch' }
+          $dest = Join-Path $env:RUNNER_TEMP 'DrawTempStudio55'
+          $setup = Start-Process -FilePath $exe -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dest") -PassThru -Wait
+          if ($setup.ExitCode -ne 0) { throw "Inno setup failed: $($setup.ExitCode)" }
+          $player = Join-Path $dest 'Jeanne/Player/DrawTempPlayer.exe'
+          $studio = Join-Path $dest 'Studio/DrawTempStudio.exe'
+          if (!(Test-Path $player) -or !(Test-Path $studio)) { throw 'Missing installed executable' }
+          & $player --smoke
+          if ($LASTEXITCODE -ne 0) { throw 'Player title failed' }
+          & $player --smoke --smoke-scene exploration
+          if ($LASTEXITCODE -ne 0) { throw 'Player exploration failed' }
+          & $studio --smoke
+          if ($LASTEXITCODE -ne 0) { throw 'Studio startup failed' }
+          Add-Content -Path (Join-Path $dest 'Jeanne/game/jeanne.json') -Value 'R23D-NEGATIVE-TAMPER'
+          $log = Join-Path $env:RUNNER_TEMP 'r23d-tamper.log'
+          & $player --smoke *> $log
+          if ($LASTEXITCODE -eq 0 -or !(Select-String -Path $log -Pattern 'integrity failure' -Quiet)) {
+            throw 'Tampered installed Player was accepted or lacked diagnostic'
+          }
+          $uninstaller = Join-Path $dest 'unins000.exe'
+          if (!(Test-Path $uninstaller)) { throw 'Uninstaller missing' }
+          $removed = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -PassThru -Wait
+          if ($removed.ExitCode -ne 0) { throw "Uninstaller failed: $($removed.ExitCode)" }
+          for ($i=0; $i -lt 20 -and (Test-Path $studio); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path $studio) { throw 'Studio files remain after uninstall' }
+          $report = @{schema=1;kind='drawtemp-r23d-clean-install';revision=$env:GITHUB_SHA;platform='Windows';format='inno-setup';installer_sha256=$digest;signed=$false;notarized=$false;runner='hosted-ephemeral-offscreen';checks=@{digest='passed';install='passed';player_title='passed';player_exploration='passed';studio_launch='passed';tamper_rejection='passed';uninstall='passed'}}
+          $report | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $env:RUNNER_TEMP 'r23d-clean.json') -Encoding utf8
+
+      - name: Mount DMG, copy .app, smoke both binaries, reject tamper, remove
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/r23d-download"
+          installer="DrawTempStudio-5.5-preview-macOS.dmg"
+          shasum -a 256 -c "$installer.sha256"
+          digest="$(cut -d ' ' -f1 "$installer.sha256")"
+          mount="$RUNNER_TEMP/r23d-mounted"
+          installed="$RUNNER_TEMP/r23d-app"
+          mkdir -p "$mount" "$installed"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount" "$installer"
+          cp -R "$mount/DrawTemp Studio 5.5 Preview.app" "$installed/"
+          hdiutil detach "$mount"
+          app="$installed/DrawTemp Studio 5.5 Preview.app"
+          studio="$app/Contents/MacOS/DrawTempStudio"
+          player="$app/Contents/Resources/Jeanne/Player/DrawTempPlayer"
+          test -x "$studio" && test -x "$player"
+          "$player" --smoke
+          "$player" --smoke --smoke-scene exploration
+          "$studio" --smoke
+          printf '\nR23D-NEGATIVE-TAMPER\n' >> "$app/Contents/Resources/Jeanne/game/jeanne.json"
+          if "$player" --smoke > "$RUNNER_TEMP/r23d-tamper.log" 2>&1; then
+            echo "FAIL: tampered Player inside .app was accepted"
+            exit 1
+          fi
+          grep -qi "integrity failure" "$RUNNER_TEMP/r23d-tamper.log"
+          rm -rf "$app"
+          test ! -e "$app"
+          printf '{"schema":1,"kind":"drawtemp-r23d-clean-install","revision":"%s","platform":"macOS","format":"dmg","installer_sha256":"%s","signed":false,"notarized":false,"runner":"hosted-ephemeral-offscreen","checks":{"digest":"passed","install":"passed","player_title":"passed","player_exploration":"passed","studio_launch":"passed","tamper_rejection":"passed","uninstall":"passed"}}\n' "$GITHUB_SHA" "$digest" > "$RUNNER_TEMP/r23d-clean.json"
+
+      - name: Persist measured clean-install report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r23d-clean-${{ runner.os }}
+          path: ${{ runner.temp }}/r23d-clean.json
+          if-no-files-found: warn
+
+  r23d-aggregate:
+    name: R23.D installer ledger and release NO-GO
+    needs: [r23d-clean-install, r23c-final-assessment]
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: r23d-clean-*
+          path: r23d-evidence
+          merge-multiple: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: r23c-release-assessment
+          path: r23d-upstream
+      - name: Verify clean-install 3-OS ledger on exact same SHA
+        run: >-
+          python scripts/r23d_release_gate.py
+          --directory r23d-evidence
+          --revision ${{ github.sha }}
+          --r23c r23d-upstream/r23c-release-assessment.json
+          --output r23d-release-assessment.json
+      - name: Archive unreleased NO-GO dossier
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r23d-release-assessment
+          path: r23d-release-assessment.json
           if-no-files-found: warn
 
   relocated-player:

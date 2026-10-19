@@ -231,6 +231,8 @@
 
 **Troisième tranche :** [R23.C — archives natives portables, installation isolée et bilan de release](drawtemp5/R23C_DISTRIBUTION_CERTIFICATION.md) ajoute checksums de transfert, validation/extraction bornée, le Player **et** le Studio sur des runners distincts, tamper rejection et désinstallation du dossier portable. Ces archives ne sont pas des MSI/DEB/DMG signés ; l'ensemble R23 conserve le statut **NO-GO** en attendant tests physiques, licences, mesures et approbation finale.
 
+**Quatrième tranche :** [R23.D — installateurs natifs Windows, Linux et macOS](drawtemp5/R23D_NATIVE_INSTALLERS.md) produit un installateur Inno Setup per-user, un paquet Debian/Ubuntu DEB et un DMG avec application macOS. Les trois parcours CI effectuent l'installation, le lancement des binaires exportés, le rejet d'un asset falsifié et la désinstallation sur runner isolé. Les paquets restent **non signés** et la 5.5 **non certifiée** : signatures, notarisation, licences, essais hardware/offline et Go/No-go humain restent à réaliser.
+
 **But :** publier un produit de création utilisable et maintenable, pas une succession de builds.
 
 | ID | Priorité | Livrable vérifiable et comportement attendu | Dépendances et preuves |
