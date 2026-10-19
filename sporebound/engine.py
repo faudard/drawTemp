@@ -267,8 +267,8 @@ class Battle:
     def engagement_threats(self, cell: Cell, moving_team: str) -> list[dict]:
         return movement.engagement_threats(self, cell, moving_team)
 
-    def reaction_threats(self, cell: Cell, moving_team: str) -> list[dict]:
-        return reaction_rules.reaction_threats(self, cell, moving_team)
+    def reaction_threats(self, cell: Cell, moving_team: str, *, level: int = 0) -> list[dict]:
+        return reaction_rules.reaction_threats(self, cell, moving_team, level=level)
 
     def movement_threats(self, u: Unit, path: list[Cell]) -> list[dict]:
         return reaction_rules.movement_threats(self, u, path)
