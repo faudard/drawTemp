@@ -147,8 +147,18 @@ class GameProject:
         # R43: opt-in Ability schema is validated on every canonical load.
         # Legacy project JSON and native tactical skills remain untouched.
         if "org.drawtemp.abilities" in self.extensions:
-            from drawtemp.sdk.ability_contracts import validate_catalog
-            validate_catalog(self.extensions["org.drawtemp.abilities"]["data"])
+            from dataclasses import asdict
+            from drawtemp.sdk.ability_contracts import (
+                validate_catalog, compile_ct_skill,
+            )
+            abilities = validate_catalog(
+                self.extensions["org.drawtemp.abilities"]["data"])["abilities"]
+            for ability in abilities:
+                if "TACTICAL_CT" in ability["profiles"]:
+                    native = content.skills.get(ability["id"])
+                    require(native is not None and
+                            asdict(native) == compile_ct_skill(ability),
+                            "R43 CT ability must match its compiled native Content skill")
         from .campaign_flow import validate_flow
         validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
