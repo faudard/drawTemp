@@ -3,18 +3,22 @@ on:
   pull_request:
     paths:
       - 'drawtemp/studio/r50b_catalog.py'
+      - 'drawtemp/studio/r50b_player_journey.py'
       - 'drawtemp/studio/r50b_catalog_qt.py'
       - 'drawtemp/studio/qt_shell.py'
       - 'tests_standalone/test_r50b_catalog.py'
+      - 'tests_standalone/test_r50b_player_journey.py'
       - 'docs/drawtemp9/R50_B_CREATOR_CATALOG.md'
       - '.github/workflows/drawtemp-r50b-creator-catalog.yml'
   push:
     branches: [master]
     paths:
       - 'drawtemp/studio/r50b_catalog.py'
+      - 'drawtemp/studio/r50b_player_journey.py'
       - 'drawtemp/studio/r50b_catalog_qt.py'
       - 'drawtemp/studio/qt_shell.py'
       - 'tests_standalone/test_r50b_catalog.py'
+      - 'tests_standalone/test_r50b_player_journey.py'
       - 'docs/drawtemp9/R50_B_CREATOR_CATALOG.md'
       - '.github/workflows/drawtemp-r50b-creator-catalog.yml'
   workflow_dispatch:
@@ -46,7 +50,7 @@ jobs:
           fi
       - name: Compile R50.B modules and Qt integration
         run: |
-          python -m compileall -q drawtemp/studio/r50b_catalog.py drawtemp/studio/r50b_catalog_qt.py drawtemp/studio/qt_shell.py tests_standalone/test_r50b_catalog.py
+          python -m compileall -q drawtemp/studio/r50b_catalog.py drawtemp/studio/r50b_catalog_qt.py drawtemp/studio/r50b_player_journey.py drawtemp/studio/qt_shell.py tests_standalone/test_r50b_catalog.py tests_standalone/test_r50b_player_journey.py
       - name: Authoring / replay / Qt offscreen regression
         run: |
           python -m unittest -v             tests_standalone.test_r50b_catalog             tests_standalone.test_r28e_minigames_certification
