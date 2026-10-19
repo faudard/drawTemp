@@ -146,7 +146,7 @@ class AIContractTests(unittest.TestCase):
         self.assert_code("invalid_shape", lambda:
                          evaluate_decision(context(), board,
                                            [{**row, "python": "exec"}]))
-        self.assert_code("invalid_reference", lambda:
+        self.assert_code("invalid_id", lambda:
                          evaluate_decision(context(), board,
                                            [{**row, "terms": {"blackboard.": 1}}]))
         self.assert_code("invalid_number", lambda:
