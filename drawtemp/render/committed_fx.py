@@ -35,8 +35,10 @@ class CommittedFxDirector:
     def __init__(self):
         self.reset()
 
-    def reset(self):
-        self._tick = 0
+    def reset(self, tick=0):
+        if type(tick) is not int or tick < 0:
+            raise ValueError("FX reset requires a nonnegative simulation tick")
+        self._tick = tick
         self._active = []
 
     def observe(self, snapshot, events):
