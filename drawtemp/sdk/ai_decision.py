@@ -158,6 +158,12 @@ def _compile_policies(policies):
     return sorted(compiled, key=lambda p: p["id"])
 
 
+def _digest(value):
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=True).encode("utf-8")
+    return sha256(canonical).hexdigest()
+
+
 def evaluate_decision(context, blackboard, policies, *, fallback="wait"):
     """Evaluate a bounded, deterministic and explainable *proposal*.
 
@@ -220,9 +226,13 @@ def evaluate_decision(context, blackboard, policies, *, fallback="wait"):
               "policy_id": best[1] if best else None,
               "score": best[0] if best else None,
               "used_fallback": best is None, "candidates": traces}
-    canonical = json.dumps(report, sort_keys=True, separators=(",", ":"),
-                           ensure_ascii=True).encode("utf-8")
-    report["digest"] = sha256(canonical).hexdigest()
+    # Commit to *all* inputs, including ignored memory, not only the winner.
+    # Replay tooling can detect a changed context/policy even if an action
+    # happened to stay the same. Policies are normalized by stable ID first.
+    report["inputs_digest"] = _digest({
+        "context": context, "blackboard": blackboard,
+        "policies": policy_list, "fallback": fallback})
+    report["digest"] = _digest(report)
     return report
 
 
