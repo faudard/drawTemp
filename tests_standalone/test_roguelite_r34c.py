@@ -152,6 +152,36 @@ class RogueliteSessionTests(unittest.TestCase):
             self.session.roguelite_die()
         self.assertEqual(self.session.roguelite_state()["meta"]["deaths"], 0)
 
+    def test_100_seeds_replay_to_same_meta_rewards(self):
+        from sporebound.roguelite import RogueliteRun
+        source = self.project.extensions[EXTENSION]["data"]
+        for seed in range(100):
+            with self.subTest(seed=seed):
+                spec = deepcopy(source)
+                spec["recipe"]["seed"] = seed
+                run = RogueliteRun(spec, content=self.content, project=self.project)
+                layout = run.snapshot()["layout"]
+                for room_id in layout["route"][1:]:
+                    run.action("move", room_id)
+                self.assertEqual(run.snapshot()["status"], "won")
+                self.assertEqual(run.snapshot()["meta"]["coins"], 7)
+                restored = RogueliteRun.from_recording(
+                    spec, run.recording(), content=self.content, project=self.project)
+                self.assertEqual(restored.snapshot(), run.snapshot())
+
+    def test_revision_checked_sdk_and_stale_actions(self):
+        from drawtemp.sdk.simulation import Simulation, SimulationError
+        sim = Simulation.new(self.content, self.project, "main", seed=19)
+        first = sim.roguelite_state(expected_revision=0)
+        next_room = first["layout"]["route"][1]
+        result = sim.roguelite_move(next_room, expected_revision=0)
+        self.assertEqual(result.snapshot.revision, 1)
+        with self.assertRaises(SimulationError) as exc:
+            sim.roguelite_move(next_room, expected_revision=0)
+        self.assertEqual(exc.exception.code, "stale_revision")
+        self.assertEqual(sim.roguelite_state(expected_revision=1)["position"],
+                         next_room)
+
     def test_authoring_validation_fails_closed(self):
         extension = self.project.extensions[EXTENSION]["data"]
         for mutated in (
