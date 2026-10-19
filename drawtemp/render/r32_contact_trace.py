@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from sporebound.platform_physics import SCALE, TICK_HZ, validate_platform_scene
+from sporebound.platform_physics import (
+    SCALE, TICK_HZ, PlatformPhysics, validate_platform_scene,
+)
 
 CONTACT_EVENTS = frozenset(("wall", "land", "ceiling"))
 MAX_EVENTS = 64
@@ -110,3 +112,15 @@ def trace_platform_contacts(scene, snapshot, events):
             "origin": "r32_committed_collision",
         })
     return deepcopy(result)
+
+
+def trace_committed_platform_step(runtime):
+    """Safe public entry: read the engine's own successful step event log.
+
+    Pure trace_platform_contacts() is suitable for trusted detached snapshots;
+    this entrypoint additionally ties it to a real PlatformPhysics instance.
+    """
+    if not isinstance(runtime, PlatformPhysics):
+        raise ValueError("Expected authoritative R32 PlatformPhysics instance")
+    return trace_platform_contacts(
+        runtime.scene, runtime.snapshot(), runtime.last_events)
