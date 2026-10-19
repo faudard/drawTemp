@@ -396,14 +396,22 @@ Item {
                 radius: 5
                 color: entry.label === "door" ?
                            (entry.open ? "#4e8f76" : "#866445") :
+                       entry.label === "key" ? "#bb9548" :
+                       entry.label === "plate" ? (entry.used ? "#4c936f" : "#657f9a") :
+                       entry.label === "block" ? "#71818f" :
                        entry.label === "marker" ? "#d5a35f" : "#6b807c"
+                opacity: entry.label === "key" && entry.used ? 0.4 : 1.0
                 border.color: "#d0bd92"; border.width: 2
             }
             Text {
                 anchors.centerIn: parent
                 text: entry.label === "door" ?
-                      (entry.open ? "✓" : "P") :
-                      entry.label === "switch" ? "L" :
+                      (entry.open ? "✓" : entry.gate === "key" ? "🔑" :
+                       entry.gate === "sequence" ? "Σ" : "P") :
+                      entry.label === "switch" ? (entry.used ? "✓" : "L") :
+                      entry.label === "key" ? (entry.used ? "✓" : "K") :
+                      entry.label === "plate" ? (entry.used ? "✓" : "◉") :
+                      entry.label === "block" ? "▣" :
                       entry.label === "marker" ? "!" : "•"
                 color: "#faf0de"; font.bold: true
             }

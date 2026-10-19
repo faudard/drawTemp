@@ -32,6 +32,8 @@ def build_feedback(battle, selected, skill_id="attack", *, revision=0):
     frame = battle_frame(shadow, selected=cell, skill=skill_id)
     hud = combat_hud(frame, shadow.mission.objective, cell)
     active = shadow.active
+    from .puzzle_context import contextual_puzzle
+    puzzle = contextual_puzzle(shadow, selected=cell)
     can_act = bool(active and active.alive and active.team == "player" and
                    not shadow.deploying and not shadow.result)
     reachable = {}
@@ -106,4 +108,5 @@ def build_feedback(battle, selected, skill_id="attack", *, revision=0):
             "danger": [deepcopy(row) for row in frame.danger],
             "reachable": [list(point) for point in sorted(reachable)],
             "focus": focus, "markers": markers,
-            "result": shadow.result, "deploying": shadow.deploying}
+            "result": shadow.result, "deploying": shadow.deploying,
+            "puzzle": puzzle}

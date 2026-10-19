@@ -149,7 +149,13 @@ def scene_from_mission(mission, snapshot=None):
     objects = [{"id": str(o["id"]), "kind": str(o["kind"]),
                 "x": int(o["pos"][0]), "y": int(o["pos"][1]),
                 **({"open": bool(o.get("open", False))}
-                   if o["kind"] == "door" else {})}
+                   if o["kind"] == "door" else {}),
+                **({"used": bool(o.get("used", False))}
+                   if o["kind"] in ("key", "plate", "switch") else {}),
+                **({"gate": "key" if "key" in o else
+                            "sequence" if "sequence" in o else ""}
+                   if o["kind"] == "door" and
+                   ("key" in o or "sequence" in o) else {})}
                for o in (battle["objects"] if battle else mission.objects)]
     return {"mission": mission.id, "width": mission.board.width,
             "height": mission.board.height,
@@ -342,6 +348,8 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
             sx, sy = projection.project(x, y, elev.get((x, y), 0))
             rows.append({"kind": "object", "id": o["id"], "label": o["kind"],
                          "open": o.get("open", False),
+                         **({"used": o["used"]} if "used" in o else {}),
+                         **({"gate": o["gate"]} if "gate" in o else {}),
                          "sx": sx, "sy": sy,
                          "zOrder": int(y * 100) + 30 if top_down
                          else (x + y) * 100 + 30})
