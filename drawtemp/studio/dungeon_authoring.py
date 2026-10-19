@@ -86,7 +86,10 @@ class DungeonStudio:
     def world_graph(self):
         documents = self.maps.snapshot()
         from drawtemp.core import Content
-        content = Content.from_dict(documents["content"])
+        from sporebound.tactical_rpg3 import authored_rules_for_document
+        content = Content.from_dict(
+            documents["content"],
+            rules=authored_rules_for_document(documents["content"]))
         starts = [row["start_mission"]
                   for row in documents["project"]["campaigns"]]
         return inspect_graph(content, starts)
