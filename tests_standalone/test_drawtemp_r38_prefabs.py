@@ -29,9 +29,13 @@ def setup():
     data = content.to_dict()
     source = next(m["id"] for m in data["missions"])
     data = add_blank_mission(data, "variant_target", "Variant target", 32, 32)
+    existing = {g["id"] for g in next(m for m in data["missions"]
+                                  if m["id"] == source).get("editor_groups", ())}
     data = create_editor_group(data, source, "Mechanics",
                                cells=((2, 4), (3, 4)))
-    base = capture_group_prefab(data, source, ("group_1",), "Gate assembly")
+    groups = next(m for m in data["missions"] if m["id"] == source)["editor_groups"]
+    new_ids = [g["id"] for g in groups if g["id"] not in existing]
+    base = capture_group_prefab(data, source, tuple(new_ids), "Gate assembly")
     content = Content.from_dict(data)
     project = GameProject.default(content)
     return AuthoringSession.new(content, project), base
