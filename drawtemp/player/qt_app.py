@@ -327,7 +327,7 @@ def main(argv=None):
     parser.add_argument("--smoke", action="store_true", help="Load the QML root and quit")
     parser.add_argument("--reference", action="store_true",
                         help="Run the deterministic R0 reference campaign")
-    parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration"),
+    parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration", "cinematic"),
                         default="title", help="Exercise a real game scene during Qt smoke")
     parser.add_argument("--save-dir", type=Path, help="Separate persistent save directory")
     parser.add_argument("--content", type=Path, help="Custom canonical Content JSON")
@@ -385,6 +385,15 @@ def main(argv=None):
         controller.new_game()
         if controller.state()["screen"] != "exploration":
             parser.error("No exploration stage in the current campaign")
+    elif args.smoke and args.smoke_scene == "cinematic":
+        if args.reference:
+            parser.error("--smoke-scene cinematic requires authored scene clips")
+        controller.new_game()
+        scene = controller.state()
+        if not scene["cinematic"].get("id"):
+            parser.error("No authored scene cinematic in the selected campaign")
+        if not scene["cinematic"].get("frame"):
+            parser.error("No cinematic frame available for QML projection")
     presentation = (PresentationAssets.for_project(
         controller.project, controller.asset_project_path)
         if controller.asset_project_path is not None else None)
