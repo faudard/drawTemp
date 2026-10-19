@@ -11,7 +11,7 @@ from copy import deepcopy
 from .game_modes import resolve_scene_profile
 from .model import require
 
-EXTENSION = "drawtemp.party_rpg"
+EXTENSION = "drawtemp.partyrpg"
 VERSION = 1
 MAX_PARTY_EVENTS = 512
 
