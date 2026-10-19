@@ -13,6 +13,17 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
+
+# This command is intentionally supported both as
+#   python scripts/certify_int03_assets.py ...
+# and as
+#   python -m scripts.certify_int03_assets ...
+# In the direct-file form Python places scripts/ rather than the repository
+# root on sys.path. Ensure its sibling scripts and in-tree runtime are
+# importable without depending on a developer-specific PYTHONPATH.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from drawtemp.assets.resolver import AssetResolver
 from scripts.generate_jeanne_motion import TRANSITIONS
