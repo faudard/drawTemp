@@ -93,6 +93,10 @@ class GameSession:
         self.route_scene = self.scene_router.start
         self.route_history = []
         self._route_starting = False
+        # Opt-in per-scene movement journal; absent in all legacy recordings.
+        self._rt_origin = None
+        self._rt_position = None
+        self._rt_journal = None
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -142,11 +146,70 @@ class GameSession:
         return self.exploration.state(self.progress, self.route_scene)
 
     def route_move(self, dx, dy):
-        """R25.B uses existing cardinal Exploration; not real-time movement."""
+        """Legacy cardinal exploration remains available before free movement starts."""
         require(self.scene_router.enabled and self.mode == "campaign"
-                and not self.progress.story_pending,
-                "Resolve encounter or dialogue before route movement")
+                and not self.progress.story_pending
+                and self._rt_journal is None,
+                "Resolve encounter or free movement before cardinal movement")
         return self.exploration.move(self.progress, self.route_scene, dx, dy)
+
+    def route_realtime_state(self):
+        """Detached subcell position for Player/Studio; no Qt dependency."""
+        from .fixed_realtime import FreeMovement
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and self.route_scene in self.project.exploration
+                and self.scene_profile(self.route_scene)["movement"] == "FREE_REALTIME",
+                "No active free movement scene")
+        stage = self.exploration.state(self.progress, self.route_scene)
+        require(not stage["completed"], "Exploration stage already completed")
+        movement = FreeMovement(stage)
+        position = (list(self._rt_position) if self._rt_position is not None
+                    else movement.center(stage["position"]))
+        return {"scene": self.route_scene, "position": position,
+                "cell": movement.cell(position),
+                "tick": self._rt_journal.tick if self._rt_journal else 0}
+
+    def route_realtime_step(self, dx=0, dy=0):
+        """Apply exactly one fixed simulation tick; no wall-clock delta accepted.
+
+        A failed command leaves both the journal and Campaign unchanged.
+        The FixedTickJournal is local to the active exploration scene.
+        """
+        from .fixed_clock import FixedTickJournal
+        from .fixed_realtime import FreeMovement
+        current = self.route_realtime_state()
+        require(type(dx) is int and type(dy) is int
+                and dx in (-1, 0, 1) and dy in (-1, 0, 1),
+                "Invalid free movement input")
+        scene = current["scene"]
+        movement = FreeMovement(self.project.exploration[scene])
+        origin = (list(self._rt_origin) if self._rt_origin is not None
+                  else list(current["position"]))
+        # A private journal copy makes input submission and step atomic even
+        # if a handler, digest, or validation unexpectedly fails.
+        journal = (deepcopy(self._rt_journal) if self._rt_journal is not None
+                   else FixedTickJournal(rate=60, seed=self.seed))
+        pos = list(current["position"])
+        journal.submit(journal.tick + 1, "hero",
+                       {"kind": "move", "dx": dx, "dy": dy})
+        def handler(tick, commands):
+            nonlocal pos
+            for event in commands:
+                require(event["source"] == "hero", "Unknown free movement source")
+                cmd = event["command"]
+                require(set(cmd) == {"kind", "dx", "dy"}
+                        and cmd["kind"] == "move",
+                        "Invalid free movement command")
+                pos = movement.advance(pos, cmd["dx"], cmd["dy"])
+            return {"scene": scene, "position": list(pos)}
+        snapshot = journal.step(handler)
+        from .exploration import _key
+        cell = movement.cell(snapshot["position"])
+        self.progress.story_flags[_key(scene, "pos")] = ",".join(map(str, cell))
+        self._rt_origin, self._rt_position, self._rt_journal = (
+            origin, snapshot["position"], journal)
+        return self.route_realtime_state()
 
     def route_transition(self, link_id):
         """One atomic navigation command; tactical startup uses the real CT core."""
@@ -161,7 +224,8 @@ class GameSession:
         before = deepcopy((self.progress, self.battle, self.fronts, self.finalized,
                            self.settled_fronts, self.siege_id, self.route_scene,
                            self.route_history, self.tactical_story_pending,
-                           self.tactical_story_queue))
+                           self.tactical_story_queue, self._rt_origin,
+                           self._rt_position, self._rt_journal))
         try:
             dest = route["destination"]
             if dest in self.content.missions:
@@ -178,13 +242,19 @@ class GameSession:
                 self.exploration.state(self.progress, dest)
             self.route_scene = dest
             self.route_history.append(route["id"])
+            # The next exploration segment starts a fresh tick log.
+            # R25.E will certify continuous replay spanning mode boundaries.
+            self._rt_origin = None
+            self._rt_position = None
+            self._rt_journal = None
             return {"scene": dest, "profile": self.scene_profile(dest),
                     "spawn": list(route["spawn"]), "mode": self.mode}
         except Exception:
             (self.progress, self.battle, self.fronts, self.finalized,
              self.settled_fronts, self.siege_id, self.route_scene,
              self.route_history, self.tactical_story_pending,
-             self.tactical_story_queue) = before
+             self.tactical_story_queue, self._rt_origin,
+             self._rt_position, self._rt_journal) = before
             raise
 
     def _tactical_story_progress(self):
@@ -690,6 +760,15 @@ class GameSession:
             data["scene_route"] = {
                 "version": 1, "current": self.route_scene,
                 "history": list(self.route_history)}
+        if self._rt_journal is not None:
+            require(self.scene_router.enabled and self.mode == "campaign"
+                    and self.route_scene in self.project.exploration,
+                    "Realtime checkpoint requires active exploration")
+            data["scene_realtime"] = {
+                "version": 1, "scene": self.route_scene,
+                "origin": list(self._rt_origin),
+                "position": list(self._rt_position),
+                "journal": self._rt_journal.recording()}
         if self.siege_id is not None:
             data["siege_id"] = self.siege_id
         if self.tactical_story_pending:
@@ -715,7 +794,8 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "tactical_story_pending", "tactical_story_queue"} ==
+                             "scene_realtime", "tactical_story_pending",
+                             "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
                 "mode", "tactical", "finalized", "settled_fronts", "digest"},
@@ -877,6 +957,49 @@ class GameSession:
         else:
             require("scene_route" not in data,
                     "Unexpected scene state in legacy checkpoint")
+        if "scene_realtime" in data:
+            from .fixed_clock import FixedTickJournal
+            from .fixed_realtime import FreeMovement
+            saved = data["scene_realtime"]
+            require(type(saved) is dict
+                    and set(saved) == {"version", "scene", "origin",
+                                       "position", "journal"}
+                    and type(saved["version"]) is int
+                    and saved["version"] == 1
+                    and saved["scene"] == session.route_scene
+                    and mode == "campaign"
+                    and session.scene_router.enabled
+                    and saved["scene"] in project.exploration
+                    and session.scene_profile(saved["scene"])["movement"]
+                    == "FREE_REALTIME",
+                    "Invalid realtime checkpoint metadata")
+            movement = FreeMovement(project.exploration[saved["scene"]])
+            origin = movement.center(movement.cell(saved["origin"]))
+            require(origin == saved["origin"],
+                    "Realtime journal origin must be an unblocked tile center")
+            position = list(origin)
+            def verify_tick(tick, commands):
+                nonlocal position
+                for event in commands:
+                    cmd = event["command"]
+                    require(event["source"] == "hero"
+                            and type(cmd) is dict
+                            and set(cmd) == {"kind", "dx", "dy"}
+                            and cmd["kind"] == "move",
+                            "Invalid replayed movement command")
+                    position = movement.advance(position, cmd["dx"], cmd["dy"])
+                return {"scene": saved["scene"], "position": list(position)}
+            journal = FixedTickJournal.replay(saved["journal"], verify_tick)
+            require(journal.rate == 60 and journal.seed == session.seed,
+                    "Realtime replay seed/rate mismatch")
+            require(journal.tick > 0 and saved["position"] == position,
+                    "Realtime replay position diverged")
+            stage = session.exploration.state(session.progress, saved["scene"])
+            require(stage["position"] == movement.cell(position),
+                    "Realtime and campaign exploration positions disagree")
+            session._rt_origin = origin
+            session._rt_position = list(position)
+            session._rt_journal = journal
         # World map travel is optional, but an existing cursor must never be
         # accepted from a malformed or inaccessible persisted route.
         session.world_state()
