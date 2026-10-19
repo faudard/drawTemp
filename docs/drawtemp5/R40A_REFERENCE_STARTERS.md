@@ -122,6 +122,56 @@ Player bundles. The metroidvania static double-jump graph remains separate
 from physical side-view control and cannot qualify as completed gameplay.
 R40.12 stays **NO-GO** even if all these tests are green.
 
+## R40.B.3 — Authored physical R32/R33 metroidvania preview
+
+The R40 metroidvania starter now contains **three real side-view R32 physics
+scenes** in its canonical GameProject extension `drawtemp.physics`. The R33
+`feather` pickup is a collidable trigger in the ruins. Entering it records the
+ability in canonical Campaign.story_flags, and returning to the village
+activates **one optional midair jump** in R32 PlatformPhysics.
+
+The high portal is not an arbitrary menu shortcut: the `high_gate`
+R25 route requires both the earned R33 feather and overlap with an
+authenticated R32 portal trigger. A destination can be rejected even if
+its narrative flag is present, when the player has not physically arrived.
+The extra air jump is reset by genuine ground contact, has an explicit
+one-jump budget, is simulated at a fixed 60 Hz, and is replay-validated
+through the existing R32/GameSession checkpoint. Original R32 records
+without the optional ability keep the same snapshot and disk schema.
+
+Original example journey:
+
+1. Start in village; walk right to the physical waystone and ruins portal.
+2. Press Enter at the active portal to visit the ruins; walk onto the
+   `feather` trigger and acquire double jump.
+3. Enter the return portal; the canonical R33 flag now enables one air jump
+   in the village platform scene.
+4. Jump again while airborne to reach the elevated high portal; Enter takes
+   the real R25 route to the citadel.
+5. Save/load at any active platform checkpoint using the existing
+   GameSession save contract.
+
+Launch the **existing** R32 Qt Widgets side-view diagnostic with the new
+starter (software preview, not packaged Player certification):
+
+    python -m drawtemp.player.platform_app --r40-metroidvania
+
+Controls: A/D or left/right = move; Space = jump; Enter = use currently
+overlapped portal; Ctrl+S / Ctrl+L = save/load; P = pause.
+
+Automated headless source / replay checks:
+
+    python -m unittest tests_standalone.test_r40_platform_ability -v
+    python -m unittest tests_standalone.test_platform_physics_r32 tests_standalone.test_platform_journey_r32 -v
+
+**Important limits:** R40.A's earlier narrative `to_citadel` shortcut from
+the ruins remains in the starter for compatibility; it is not an 8.0-certified
+metroidvania traversal gate. The new `high_gate` is *physically gated*; the
+project as a whole is **not yet softlock-proof in the playable implementation**.
+Likewise this slice does not provide authentic enemies, damage, side-view boss
+phases, a final character-asset pipeline or an installed three-OS Qt Player.
+R40.B.3 physical proof is a partial milestone only; R40.12 remains NO-GO.
+
 ## Remaining R40.B and R40.C gates
 
 1. Deliver four complete independent authored games with actual game loops,
