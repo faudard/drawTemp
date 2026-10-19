@@ -246,10 +246,11 @@ class PlayerController:
                        " risque(s) possible(s), non garanti(s)")
         else:
             # Engine validation (range, LOS and cost), without sampling RNG.
-            if kind == "skill":
-                projected = self.session.tactical_presentation(
-                    self.selected, skill_id, expected_revision=view["revision"])
-                focus = thaw(projected).get("focus") or {}
+            # The inspector may currently highlight a *different* skill.
+            effective_skill = "attack" if kind == "attack" else skill_id
+            projected = self.session.tactical_presentation(
+                self.selected, effective_skill, expected_revision=view["revision"])
+            focus = thaw(projected).get("focus") or {}
             if not focus.get("can_target"):
                 raise ValueError(focus.get("error") or "Cible indisponible")
             forecast = focus.get("forecast") or []
