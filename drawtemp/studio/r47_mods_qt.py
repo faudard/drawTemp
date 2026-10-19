@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from drawtemp.sdk.authoring import AuthoringError
 from drawtemp.sdk.modding import ModError, read_mod_manifest
+from drawtemp.sdk.capability_contracts import parse_semver
 
 
 class ModManagerDialog(QDialog):
@@ -55,15 +56,17 @@ class ModManagerDialog(QDialog):
         self.install_button = QPushButton("Importer…")
         self.enable_button = QPushButton("Autoriser / activer")
         self.disable_button = QPushButton("Désactiver")
+        self.version_button = QPushButton("Changer de version…")
         self.apply_button = QPushButton("Prévisualiser / appliquer")
         self.remove_button = QPushButton("Retirer")
         for button in (self.install_button, self.enable_button, self.disable_button,
-                       self.apply_button, self.remove_button):
+                       self.version_button, self.apply_button, self.remove_button):
             actions.addWidget(button)
         root.addLayout(actions)
         self.install_button.clicked.connect(self._import_clicked)
         self.enable_button.clicked.connect(self._enable_clicked)
         self.disable_button.clicked.connect(self._disable_clicked)
+        self.version_button.clicked.connect(self._replace_clicked)
         self.apply_button.clicked.connect(self._apply_clicked)
         self.remove_button.clicked.connect(self._remove_clicked)
 
@@ -106,8 +109,8 @@ class ModManagerDialog(QDialog):
     def _update_details(self, _row=None):
         mod_id = self._selected()
         active = mod_id is not None
-        for button in (self.enable_button, self.disable_button, self.apply_button,
-                       self.remove_button):
+        for button in (self.enable_button, self.disable_button, self.version_button,
+                       self.apply_button, self.remove_button):
             button.setEnabled(active)
         if not active:
             self.details.setPlainText("Aucun module installé.")
@@ -235,6 +238,70 @@ class ModManagerDialog(QDialog):
             self.notice.setText("Permissions révoquées : " + mod_id)
             self.refresh(mod_id)
         except ModError as exc:
+            self._error(exc)
+
+    def replace_descriptor(self, document, resource_paths=None, *,
+                           allow_downgrade=False):
+        """Single host action: metadata-only version switch, grants revoked."""
+        mod_id = self._selected()
+        if mod_id is None:
+            raise ModError("unknown_mod", "Select a mod before replacing it")
+        result = self.registry.replace_version(
+            mod_id, document, project=self.owner.session.snapshot(),
+            resource_paths=resource_paths, allow_downgrade=allow_downgrade)
+        self.notice.setText(
+            "Version {} → {} ; toutes les autorisations sont révoquées."
+            .format(result["previous_version"], result["version"]))
+        self.refresh(mod_id)
+        return result
+
+    def _replace_clicked(self):
+        mod_id = self._selected()
+        if mod_id is None:
+            return
+        path, _filter = QFileDialog.getOpenFileName(
+            self, "Manifeste de nouvelle version (JSON)", "", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            old = self.registry.manifest(mod_id)
+            candidate = read_mod_manifest(path)
+            if candidate["id"] != mod_id or candidate["namespace"] != old["namespace"]:
+                raise ModError("identity_changed", "Mod id/namespace cannot change")
+            downgrade = parse_semver(candidate["version"]) < parse_semver(old["version"])
+            grants = set(self.registry.status(mod_id)["grants"])
+            requested = set(candidate["permissions"])
+            question = (
+                "Module : {}\nVersion : {} → {}{}\n\n"
+                "Autorisations nouvelles : {}\nAutorisations retirées : {}\n"
+                "Toutes les autorisations seront révoquées après remplacement.\n"
+                "Aucune donnée du projet ne sera modifiée.\n"
+                "Le changement de schéma ou d'extension nécessite une migration.\n\n"
+                "Confirmer ce remplacement de manifeste ?"
+            ).format(
+                mod_id, old["version"], candidate["version"],
+                " (RETOUR ARRIÈRE)" if downgrade else "",
+                ", ".join(sorted(requested - grants)) or "(aucune)",
+                ", ".join(sorted(grants - requested)) or "(aucune)"
+            )
+            if not self._confirm("R47 • Version / rollback explicite", question):
+                self.notice.setText("Changement de version annulé.")
+                return
+            # Resource changes are selected explicitly; no ZIP path is read
+            # from untrusted JSON. A missing/tampered pack aborts atomically.
+            paths = {}
+            for resource in candidate["resources"]:
+                file_path, _filter = QFileDialog.getOpenFileName(
+                    self, "ZIP pour {} ({})".format(
+                        resource["id"], resource["version"]),
+                    str(Path(path).parent), "ZIP (*.zip)")
+                if not file_path:
+                    self.notice.setText("Remplacement annulé : pack manquant.")
+                    return
+                paths[resource["id"]] = Path(file_path)
+            self.replace_descriptor(
+                candidate, paths, allow_downgrade=downgrade)
+        except (ModError, OSError, ValueError) as exc:
             self._error(exc)
 
     def _apply_clicked(self):
