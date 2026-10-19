@@ -78,6 +78,8 @@ class LogicGraphDraft:
             "message": {"kind": "message", "text": "Nouveau message"},
             "despawn": {"kind": "despawn", "unit": "enemy"},
             "hazard": {"kind": "hazard", "pos": [0, 0], "amount": 1},
+            "logic_set": {"kind": "logic_set", "name": "r31_var", "value": True},
+            "logic_add": {"kind": "logic_add", "name": "r31_var", "amount": 1},
         }
         if kind not in presets:
             _error("unsupported_node", "Unknown visual action")
@@ -87,6 +89,8 @@ class LogicGraphDraft:
         if payload["kind"] != kind:
             _error("invalid_parameter", "Mismatched action kind")
         identifier = self._next_id(kind)
+        if kind in ("logic_set", "logic_add") and self.graph["schema_version"] != 4:
+            _error("invalid_sequence", "Variable actions require a schema v4 graph")
         self.graph["nodes"].append(
             {"id": identifier, "kind": "action", "params": payload})
         return identifier
