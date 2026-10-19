@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "prefabs": [
+    {
+      "id": "forest_gate",
+      "roles": [
+        "entry"
+      ],
+      "biomes": [
+        "forest"
+      ],
+      "ports": [
+        "wood",
+        "wood",
+        "wood",
+        "wood"
+      ],
+      "tags": [
+        "spawn",
+        "safe"
+      ]
+    },
+    {
+      "id": "forest_hall",
+      "roles": [
+        "normal"
+      ],
+      "biomes": [
+        "forest"
+      ],
+      "ports": [
+        "wood",
+        "wood",
+        "wood",
+        "wood"
+      ],
+      "tags": [
+        "traversal"
+      ]
+    },
+    {
+      "id": "forest_cache",
+      "roles": [
+        "key"
+      ],
+      "biomes": [
+        "forest"
+      ],
+      "ports": [
+        "wood",
+        "wood"
+      ],
+      "tags": [
+        "puzzle",
+        "key"
+      ]
+    },
+    {
+      "id": "forest_guardian",
+      "roles": [
+        "goal"
+      ],
+      "biomes": [
+        "forest"
+      ],
+      "ports": [
+        "wood",
+        "wood"
+      ],
+      "tags": [
+        "boss"
+      ]
+    },
+    {
+      "id": "forest_out",
+      "roles": [
+        "exit"
+      ],
+      "biomes": [
+        "forest"
+      ],
+      "ports": [
+        "wood",
+        "wood"
+      ],
+      "tags": [
+        "exit"
+      ]
+    },
+    {
+      "id": "ruins_gate",
+      "roles": [
+        "entry"
+      ],
+      "biomes": [
+        "ruins"
+      ],
+      "ports": [
+        "arch",
+        "arch",
+        "arch",
+        "arch"
+      ],
+      "tags": [
+        "spawn",
+        "safe"
+      ]
+    },
+    {
+      "id": "ruins_hall",
+      "roles": [
+        "normal"
+      ],
+      "biomes": [
+        "ruins"
+      ],
+      "ports": [
+        "arch",
+        "arch",
+        "arch",
+        "arch"
+      ],
+      "tags": [
+        "traversal"
+      ]
+    },
+    {
+      "id": "ruins_cache",
+      "roles": [
+        "key"
+      ],
+      "biomes": [
+        "ruins"
+      ],
+      "ports": [
+        "arch",
+        "arch"
+      ],
+      "tags": [
+        "puzzle",
+        "key"
+      ]
+    },
+    {
+      "id": "ruins_guardian",
+      "roles": [
+        "goal"
+      ],
+      "biomes": [
+        "ruins"
+      ],
+      "ports": [
+        "arch",
+        "arch"
+      ],
+      "tags": [
+        "boss"
+      ]
+    },
+    {
+      "id": "ruins_out",
+      "roles": [
+        "exit"
+      ],
+      "biomes": [
+        "ruins"
+      ],
+      "ports": [
+        "arch",
+        "arch"
+      ],
+      "tags": [
+        "exit"
+      ]
+    }
+  ]
+}
