@@ -22,6 +22,11 @@ on:
       - 'scripts/r23d_*.py'
       - 'tests_standalone/test_drawtemp5_r23d*.py'
       - 'docs/drawtemp5/R23D_*.md'
+      - 'drawtemp/quality/r23e.py'
+      - 'scripts/r23e_*.py'
+      - 'scripts/r23e_verify_authenticode.ps1'
+      - 'tests_standalone/test_drawtemp5_r23e.py'
+      - 'docs/drawtemp5/R23E_*.md'
   push:
     branches: [master]
   workflow_dispatch:
@@ -39,7 +44,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install .
-      - run: python -m unittest tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator tests_standalone.test_drawtemp5_r23a tests_standalone.test_drawtemp5_r23_evidence tests_standalone.test_drawtemp5_r23c tests_standalone.test_drawtemp5_r23c_release tests_standalone.test_drawtemp5_r23d -v
+      - run: python -m unittest tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator tests_standalone.test_drawtemp5_r23a tests_standalone.test_drawtemp5_r23_evidence tests_standalone.test_drawtemp5_r23c tests_standalone.test_drawtemp5_r23c_release tests_standalone.test_drawtemp5_r23d tests_standalone.test_drawtemp5_r23e -v
       - run: python -m drawtemp.export.cli check --content sporebound/content/jeanne.json
 
   native-bundle:
@@ -79,6 +84,20 @@ jobs:
           --platform ${{ runner.os }}
           --revision ${{ github.sha }}
           --report r23-native.json
+      - name: R23.E inventory actual exported game assets and legal declarations
+        run: >-
+          python scripts/r23e_release_dossier.py inventory
+          --bundle export/Jeanne
+          --revision ${{ github.sha }}
+          --platform ${{ runner.os }}
+          --report r23e-assets.json
+      - name: Store R23.E rights inventory (not legal clearance)
+        uses: actions/upload-artifact@v4
+        with:
+          name: r23e-assets-${{ runner.os }}
+          path: r23e-assets.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Store per-OS native integrity evidence
         uses: actions/upload-artifact@v4
         with:
@@ -480,6 +499,41 @@ jobs:
         with:
           name: r23d-release-assessment
           path: r23d-release-assessment.json
+          if-no-files-found: warn
+
+  r23e-dossier:
+    name: R23.E legal evidence + full R23 NO-GO dossier
+    needs: [native-bundle, r23d-aggregate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: r23e-assets-*
+          path: r23e-rights
+          merge-multiple: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: r23d-release-assessment
+          path: r23e-upstream
+      - name: Crosscheck licenses and native installers pinned to same Git SHA
+        run: >-
+          python scripts/r23e_release_dossier.py dossier
+          --asset-directory r23e-rights
+          --r23d r23e-upstream/r23d-release-assessment.json
+          --revision ${{ github.sha }}
+          --report r23e-release-dossier.json
+      - name: Save NO-GO release dossier for independent human review
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r23e-release-dossier
+          path: r23e-release-dossier.json
           if-no-files-found: warn
 
   relocated-player:
