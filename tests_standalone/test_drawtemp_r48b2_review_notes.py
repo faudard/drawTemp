@@ -3,6 +3,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -140,6 +141,27 @@ class ReviewNotesTests(unittest.TestCase):
             parent_id=self.root.node_id, author="alice", label="renamed")
         self.assertEqual(self.store.threads(node_id=child.node_id), ())
         self.assertEqual(len(self.store.threads(node_id=self.root.node_id)), 1)
+
+    def test_forged_revision_node_and_dangling_anchor_refused(self):
+        forged = replace(self.root, node_id="0" * 64)
+        with self.assertRaises(ReviewNoteError) as caught:
+            self.store.append(forged, expected_head=None, anchor="/project",
+                              author="alice", text="Fake")
+        self.assertEqual(caught.exception.code, "invalid_node")
+        with self.assertRaises(ReviewNoteError) as caught:
+            self.store.append(self.root, expected_head=None,
+                              anchor="/project/story/scenes/unknown",
+                              author="alice", text="Dangling")
+        self.assertEqual(caught.exception.code, "unknown_resource")
+        self.assertFalse(self.path.exists())
+        self.assertEqual(self.session.snapshot().to_dict(), self.original)
+
+    def test_reject_unsupported_or_script_like_anchor_without_writing(self):
+        with self.assertRaises(ReviewNoteError):
+            self.store.append(self.root, expected_head=None,
+                              anchor="/project/../../another",
+                              author="alice", text="Never accept a path traversal")
+        self.assertFalse(self.path.exists())
 
     def test_untrusted_json_duplicate_keys_rejected(self):
         self.append()
