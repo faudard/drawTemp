@@ -282,7 +282,7 @@ def preview_place_variant(session, prefab, variant_id, mission_id, anchor,
 
     return session.preview_pair(transform, mission_id=mission_id,
                                 kind="r38.prefab.place",
-                                views=("workspace", "inspector", "map"))
+                                views=("workspace", "inspector", "renderer", "minimap"))
 
 
 def _patch_map(prefab, variant):
@@ -338,7 +338,7 @@ def preview_update_variant(session, prefab, replacement):
         return content, project
 
     return session.preview_pair(transform, kind="r38.prefab.update",
-                                views=("workspace", "inspector", "map"))
+                                views=("workspace", "inspector", "renderer", "minimap"))
 
 
 def preview_override_instance(session, prefab, instance_id, patches):
@@ -390,4 +390,4 @@ def preview_override_instance(session, prefab, instance_id, patches):
         return content, project
 
     return session.preview_pair(transform, kind="r38.prefab.override",
-                                views=("workspace", "inspector", "map"))
+                                views=("workspace", "inspector", "renderer", "minimap"))
