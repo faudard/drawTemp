@@ -142,3 +142,62 @@ QT_QPA_PLATFORM=offscreen python -m drawtemp.studio.qt_shell --smoke --workspace
 Les gates R32.C ne sont **pas** clos tant que le routeur/Player, l'édition
 visuelle avancée, la reprise interscène, la validation Qt onscreen et les
 tests utilisateurs/hardware n'ont pas été exécutés.
+
+## R32.D — Jouer le trajet plateforme / switch / CT (slice expérimentale)
+
+Implémentation opt-in sur la même PR de consolidation :
+- Les colliders `trigger=true` acceptent **un seul** des liens typés
+  `opens=<id collider solide>` et `route=<id d'une route R25 de cette scène>`.
+  Ces références sont validées par le Core et le GameProject ; une route
+  inconnue ou liée à une mauvaise scène est rejetée.
+- `PlatformPhysics.step({tick,move,jump,interact})` ouvre une porte une fois
+  lorsque le personnage chevauche le switch. Les collisions n'utilisent plus
+  ce collider solide ; la position et les entrées sont rejouables sur 60 Hz.
+  `available_routes` annonce uniquement les liens dont le capteur est occupé.
+- `GameSession.route_platform_state/step/travel` réutilisent **SceneRouter**,
+  le même Content et la même Campaign. Les portes ouvertes sont des flags
+  de campagne courts et déterministes, restaurés lors d'un retour de scène.
+  Le routeur envoie dans le vrai moteur CT quand la destination est tactique.
+- Le checkpoint **canonique** `GameSession` peut inclure le champ facultatif
+  `scene_platform`, avec la définition et les commandes d'inputs. Le load
+  rejoue les ticks, vérifie les empreintes et refuse un désaccord avec les
+  flags de campagne. Les sauvegardes historiques sans extension sont inchangées.
+- `drawtemp/player/platform_reference.py` crée la référence réelle à partir
+  du Content/GameProject Jeanne. `drawtemp/player/platform_app.py` expose
+  un **prototype visuel Qt Widgets** interactif sans moteur parallèle.
+
+### Démonstration locale (Qt requis)
+
+```sh
+python -m pip install -e ".[qt6]"
+python -m drawtemp.player.qt_app --platform-demo
+# ou CI Qt offscreen:
+QT_QPA_PLATFORM=offscreen python -m drawtemp.player.qt_app --platform-demo --smoke
+```
+
+Commandes : **A/D ou ←/→** déplacement, **Espace** saut, **E** levier,
+**Entrée** portail si occupé, **P** pause, **Ctrl+S** sauvegarde,
+**Ctrl+L** reprise. Dans l'écran CT, **R** abandonne le combat et revient à
+l'exploration via la route réelle (pas une victoire simulée).
+
+**Limites / NO-GO :** le Player R32 n'est qu'un aperçu technique 2D
+`QGraphicsView`, **pas** le renderer commun R3/Qt Quick ou un Player
+distribuable ; les contrôles CT complets ne sont pas visibles dans cette vue.
+Les formats de sauvegarde R32 expérimentaux ne sont pas encore une garantie
+de compatibilité de release. Les triggers n'exécutent pas encore le graphe
+typé R31. Les validations CI, Qt onscreen, GPU physique et tests de parcours
+créateur restent distinctes. Les benchmarks 30/60/120 FPS et la matrice
+multi-OS sont nécessaires au gate complet R32.
+
+Tests :
+```sh
+python -m unittest tests_standalone.test_platform_physics_r32 -v
+python -m unittest tests_standalone.test_platform_collider_authoring_r32 -v
+python -m unittest tests_standalone.test_platform_journey_r32 -v
+python -m unittest tests_standalone.test_r25_scene_router -v
+python -m unittest tests_standalone.test_game_session -v
+```
+
+**Statut : R32.D implémentation initiale non certifiée** ; conserver
+la PR #339 en brouillon tant que les suites et les preuves de Player
+réel ne sont pas obtenues.
