@@ -24,7 +24,7 @@ from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.reference import reference_project
 from drawtemp.studio.workspace_model import FAMILY_LABELS, resources
 from drawtemp.studio.inspector_model import (
-    InspectorError, common_value, edit_properties, shared_specs,
+    InspectorError, common_value, edit_properties, shared_specs, validate_draft,
 )
 from drawtemp.studio.resource_links import connections
 from drawtemp.studio.r18_navigation import (WORKSPACES, LABELS, EN, recent_projects, workspace_host)
@@ -284,12 +284,20 @@ class StudioWindow(QMainWindow):
         layout.addLayout(self.form)
         self.name_edit = None
         self.property_widgets = {}
+        self._property_error_labels = {}
         self._edited_fields = set()
         self._inspector_revision = self.session.revision
+        self.pending_label = QLabel("")
+        self.pending_label.setAccessibleName("État des modifications de l'inspecteur")
+        layout.addWidget(self.pending_label)
         self.apply_button = QPushButton("Appliquer les propriétés")
         self.apply_button.clicked.connect(self.apply_selection)
         self.apply_button.setEnabled(False)
         layout.addWidget(self.apply_button)
+        self.discard_button = QPushButton("Ignorer les modifications de l'inspecteur")
+        self.discard_button.clicked.connect(self.discard_inspector_changes)
+        self.discard_button.setEnabled(False)
+        layout.addWidget(self.discard_button)
         self.inspector_error = QLabel("")
         self.inspector_error.setWordWrap(True)
         self.inspector_error.setAccessibleName("Erreur de validation des propriétés")
@@ -585,7 +593,13 @@ class StudioWindow(QMainWindow):
 
     def _refresh_if_changed(self):
         if self.last_revision != self.session.revision:
-            self.refresh()
+            if self._edited_fields:
+                # A background revision must not silently overwrite an
+                # uncommitted form. Keep it visible, but block stale commits.
+                self.last_revision = self.session.revision
+                self._validate_inspector_draft()
+            else:
+                self.refresh()
             for name, child in self._models.items():
                 try:
                     if name == "maps":
@@ -622,8 +636,57 @@ class StudioWindow(QMainWindow):
 
     def _mark_property_edit(self, key):
         self._edited_fields.add(key)
-        self.inspector_error.setText("")
-        self.apply_button.setEnabled(True)
+        self._validate_inspector_draft()
+
+    def _validate_inspector_draft(self):
+        for label in self._property_error_labels.values():
+            label.clear()
+        if not self._edited_fields:
+            self.inspector_error.setText("")
+            self.pending_label.setText("")
+            self.apply_button.setEnabled(False)
+            self.discard_button.setEnabled(False)
+            return False
+        self.discard_button.setEnabled(True)
+        if self.session.revision != self._inspector_revision:
+            self.inspector_error.setText(
+                "Le projet a changé pendant la saisie. Ignorez les modifications "
+                "de l'inspecteur puis recommencez sur les données actualisées.")
+            self.pending_label.setText("Saisie obsolète — application bloquée")
+            self.apply_button.setEnabled(False)
+            return False
+        updates, parsing_errors = {}, {}
+        for key in sorted(self._edited_fields):
+            widget, spec = self.property_widgets[key]
+            try:
+                updates[key] = self._field_value(widget, spec)
+            except InspectorError as exc:
+                parsing_errors[key] = str(exc)
+        errors = dict(parsing_errors)
+        if updates:
+            try:
+                _, invalid = validate_draft(
+                    self.session.snapshot(), self._selected, updates)
+                errors.update(invalid)
+            except InspectorError as exc:
+                self.inspector_error.setText(str(exc))
+                self.apply_button.setEnabled(False)
+                return False
+        for key, message in errors.items():
+            self._property_error_labels[key].setText(message)
+            self.property_widgets[key][0].setToolTip(message)
+        for key in self._edited_fields - set(errors):
+            self.property_widgets[key][0].setToolTip("")
+        self.pending_label.setText(
+            str(len(self._edited_fields)) + " propriété(s) à appliquer "
+            "sur " + str(len(self._selected)) + " ressource(s)")
+        self.inspector_error.setText(next(iter(errors.values()), ""))
+        self.apply_button.setEnabled(not errors)
+        return not errors
+
+    def discard_inspector_changes(self):
+        """Explicitly discard only staged widgets; never undo R1 content."""
+        self.refresh()
 
     def _show_inspector(self):
         chosen = self._selected
@@ -631,11 +694,14 @@ class StudioWindow(QMainWindow):
         self._inspector_revision = snapshot.revision
         self._edited_fields = set()
         self.property_widgets.clear()
+        self._property_error_labels.clear()
         self.name_edit = None
         while self.form.rowCount():
             self.form.removeRow(0)
         self.inspector_error.setText("")
         self.apply_button.setEnabled(False)
+        self.discard_button.setEnabled(False)
+        self.pending_label.setText("")
         self.inspector_title.setText(
             str(len(chosen)) + " ressource(s) sélectionnée(s)" if chosen else
             "Sélectionnez une ressource dans l'explorateur")
@@ -681,8 +747,20 @@ class StudioWindow(QMainWindow):
                     widget.textEdited.connect(
                         lambda _v, key=spec.key: self._mark_property_edit(key))
                 widget.setAccessibleName(spec.label)
-                self.form.addRow(spec.label, widget)
+                holder = QWidget()
+                holder_layout = QVBoxLayout(holder)
+                holder_layout.setContentsMargins(0, 0, 0, 0)
+                holder_layout.setSpacing(2)
+                holder_layout.addWidget(widget)
+                field_error = QLabel("")
+                field_error.setWordWrap(True)
+                field_error.setStyleSheet("color: #d35454")
+                field_error.setAccessibleName(
+                    "Erreur de validation : " + spec.label)
+                holder_layout.addWidget(field_error)
+                self.form.addRow(spec.label, holder)
                 self.property_widgets[spec.key] = (widget, spec)
+                self._property_error_labels[spec.key] = field_error
                 if spec.key in ("name", "title") and self.name_edit is None:
                     self.name_edit = widget
             self.references.setText(
@@ -724,18 +802,20 @@ class StudioWindow(QMainWindow):
         return widget.text()
 
     def apply_selection(self):
-        if not self._edited_fields:
-            return
+        if not self._validate_inspector_draft():
+            return False
         try:
             updates = {key: self._field_value(*self.property_widgets[key])
                        for key in self._edited_fields}
             edit_properties(self.session, self._selected, updates,
                             expected_revision=self._inspector_revision)
             self.refresh()
+            return True
         except (AuthoringError, InspectorError, ValueError) as exc:
             self.inspector_error.setText(str(exc))
             self.problems.addItem("Inspecteur : " + str(exc))
             self.statusBar().showMessage(str(exc))
+            return False
 
     def follow_reference(self, item):
         identity = item.data(Qt.UserRole)
