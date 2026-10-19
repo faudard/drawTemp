@@ -13,6 +13,7 @@ from drawtemp.sdk.reference import reference_project
 from sporebound.exploration import _key
 from sporebound.metroidvania import analyze_metroidvania
 from sporebound.roguelite import EXTENSION as ROGUELITE_EXTENSION
+from sporebound.physics_scenes import EXTENSION as PHYSICS_EXTENSION
 
 
 # Order is meaningful in the Studio's existing project-creation dialog.
@@ -50,6 +51,44 @@ def _stage(title: str, theme: str) -> dict:
              "text": "Le chemin reste ouvert.",
              "pos": [4, 3], "required": False, "exit": True},
         ],
+    }
+
+
+def _collider(ident: str, rect: list[int], *,
+              trigger: bool = False, one_way: bool = False, route=None) -> dict:
+    row = {"id": ident, "rect": rect, "layer": 1, "mask": 1,
+           "trigger": trigger, "one_way": one_way}
+    if route is not None:
+        row["route"] = route
+    return row
+
+
+def _platform_room(identifier: str, *, ruin: bool = False,
+                   citadel: bool = False) -> dict:
+    """R32 physics with original simple geometry, fixed 60 Hz stepping.
+
+    The high ledge in the village is too high for one jump (250, gravity 40).
+    A real midair double jump can reach it after the feather is collected.
+    """
+    colliders = [_collider("floor", [0, 4000, 6000, 1000])]
+    if identifier == "arrival":
+        colliders.extend([
+            _collider("upper_ledge", [3400, 2850, 2350, 100], one_way=True),
+            _collider("high_portal", [4400, 2070, 600, 650],
+                      trigger=True, route="high_gate"),
+        ])
+    if ruin:
+        colliders.append(_collider(
+            "feather", [1550, 3200, 400, 700], trigger=True))
+    if citadel:
+        colliders.append(_collider(
+            "citadel_marker", [2800, 3200, 500, 700], trigger=True))
+    return {
+        "id": identifier, "width": 6000, "height": 5000, "gravity": 40,
+        "hero": {"pos": [1000, 3200], "size": [500, 800],
+                 "speed": 180, "jump": 250, "max_fall": 800,
+                 "coyote": 4},
+        "colliders": colliders,
     }
 
 
@@ -121,6 +160,23 @@ def create_starter_pair(kind: str):
         }
 
     if kind == "r40-metroidvania":
+        # Keep the R40.A narrative routes for backward-compatible source
+        # previews; the high_gate is an additional physical-only route.
+        # Unlike the narrative shortcut, it must be reached by actual R32
+        # contact and a verified pickup. Its existence does not certify 8.0.
+        project.scene_routes["links"].append({
+            "id": "high_gate", "source": "arrival",
+            "destination": "r40_citadel", "spawn": [1, 1],
+            "when": {"flag": "r33_pickup_feather", "eq": True},
+        })
+        project.extensions[PHYSICS_EXTENSION] = {
+            "schema_version": 1,
+            "data": {"scenes": {
+                "arrival": _platform_room("arrival"),
+                "r40_ruins": _platform_room("r40_ruins", ruin=True),
+                "r40_citadel": _platform_room("r40_citadel", citadel=True),
+            }},
+        }
         graph = {
             "version": 1,
             "rooms": ["arrival", "r40_ruins", "r40_citadel"],
