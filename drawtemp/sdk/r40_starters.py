@@ -10,6 +10,7 @@ from copy import deepcopy
 
 from drawtemp.sdk.procgen_prefabs import demo_library
 from drawtemp.sdk.reference import reference_project
+from sporebound.exploration import _key
 from sporebound.metroidvania import analyze_metroidvania
 from sporebound.roguelite import EXTENSION as ROGUELITE_EXTENSION
 
@@ -74,15 +75,41 @@ def create_starter_pair(kind: str):
     project.subtitle = STARTER_INFO[kind]["scope"]
 
     if kind in ("r40-adventure", "r40-metroidvania"):
-        project.story["scenes"].extend([
-            _story_scene("r40_ruins", "La cour des ruines"),
-            _story_scene("r40_citadel", "La chambre des gardiens"),
-        ])
+        # The action examples have an original standalone narrative; the
+        # historical Jeanne story remains exclusive to the SRPG starter.
+        project.story = {
+            "entry_scenes": {}, "after_mission": {},
+            "scenes": [
+                _story_scene("arrival", "Le départ du village"),
+                _story_scene("r40_ruins", "La cour des ruines"),
+                _story_scene("r40_citadel", "La chambre des gardiens"),
+            ],
+        }
         project.exploration = {
             "arrival": _stage("Village des lisières", "village"),
             "r40_ruins": _stage("Ruines envahies", "forest"),
             "r40_citadel": _stage("Citadelle oubliée", "stone"),
         }
+        # Real GameSession scene routing (not a second game or save schema).
+        # Conditions use flags written by Exploration.interact(), and can
+        # therefore be checked after save/restore without special scripting.
+        project.scene_routes = {
+            "version": 1, "start": "arrival",
+            "links": [
+                {"id": "to_ruins", "source": "arrival",
+                 "destination": "r40_ruins", "spawn": [1, 1],
+                 "when": {"flag": _key("arrival", "waystone"), "eq": True}},
+                {"id": "back_to_village", "source": "r40_ruins",
+                 "destination": "arrival", "spawn": [1, 1]},
+                {"id": "to_citadel", "source": "r40_ruins",
+                 "destination": "r40_citadel", "spawn": [1, 1],
+                 "when": {"flag": _key("r40_ruins", "waystone"), "eq": True}},
+                {"id": "back_to_ruins", "source": "r40_citadel",
+                 "destination": "r40_ruins", "spawn": [1, 1]},
+            ],
+        }
+        # These are narrative waystone routes. The separate R33 ability
+        # graph is still a preflight proof, NOT integrated platform physics.
         # The existing Content tactical mission stays GRID_CT/TACTICAL_CT.
         # Only these *exploration* scenes opt into real-time profiles.
         project.game_modes = {
