@@ -206,6 +206,20 @@ class PackInstallTests(unittest.TestCase):
             install_pack(base, self.editor, self.root)
         self.assertEqual(self.editor.revision, 2)
 
+    def test_corrupted_dependency_blocks_followup_pack_install(self):
+        primary = self.pack()
+        dependency = self.pack("dependent-pack", deps=[
+            {"id": "forest-pack", "version": "1.0.0", "sha256": primary.sha256}])
+        install_pack(primary, self.editor, self.root)
+        current = self.editor.snapshot().to_dict()
+        receipt = current["project"]["extensions"][RECEIPT_NAMESPACE]["data"]["packs"][0]
+        (self.root / receipt["files"][0]["path"]).write_bytes(PNG + b"altered")
+        with self.assertRaises(ResourcePackError) as caught:
+            install_pack(dependency, self.editor, self.root)
+        self.assertEqual(caught.exception.code, "invalid_receipts")
+        self.assertEqual(self.editor.revision, 1)
+        self.assertFalse((self.root / "assets/packs/dependent-pack").exists())
+
     def test_rollback_on_apply_fault_does_not_change_existing_bytes(self):
         preview = self.pack()
         unchanged = self.editor.snapshot().to_dict()
