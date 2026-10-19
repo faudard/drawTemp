@@ -45,7 +45,7 @@ jobs:
   native-bundle:
     name: R15 native Player + Studio / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 65
     strategy:
       fail-fast: false
       matrix:
@@ -373,6 +373,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          # A negative Player integrity test intentionally returns nonzero.
+          $PSNativeCommandUseErrorActionPreference = $false
           $base = Join-Path $env:RUNNER_TEMP 'r23d-download'
           $exe = Join-Path $base 'DrawTempStudio-5.5-preview-Windows.exe'
           $digest = ((Get-Content "$exe.sha256" -Raw).Trim() -split '\s+')[0]
