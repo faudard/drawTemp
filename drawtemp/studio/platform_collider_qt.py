@@ -71,6 +71,16 @@ class ColliderEditorPanel(QWidget):
         self.mask = _spin(1, maximum=65535)
         form.addRow("Layer", self.layer)
         form.addRow("Mask", self.mask)
+        self.action_kind = QComboBox()
+        self.action_kind.setObjectName("r32-trigger-action")
+        self.action_kind.addItem("Aucune", "")
+        self.action_kind.addItem("Ouvrir une porte", "opens")
+        self.action_kind.addItem("Portail SceneRouter", "route")
+        self.action_ref = QLineEdit()
+        self.action_ref.setObjectName("r32-trigger-target")
+        self.action_ref.setPlaceholderText("ID du collider ou de la route")
+        form.addRow("Action du capteur", self.action_kind)
+        form.addRow("Référence", self.action_ref)
         self.trigger = QCheckBox("Déclencheur (sans collision)")
         self.one_way = QCheckBox("Plateforme sens unique")
         form.addRow("", self.trigger)
@@ -120,6 +130,8 @@ class ColliderEditorPanel(QWidget):
         for checkbox in (self.trigger, self.one_way):
             checkbox.toggled.connect(self._dirty)
         self.identifier.textChanged.connect(self._dirty)
+        self.action_kind.currentIndexChanged.connect(self._dirty)
+        self.action_ref.textChanged.connect(self._dirty)
         self.refresh()
 
     def _dirty(self, *_):
@@ -171,6 +183,9 @@ class ColliderEditorPanel(QWidget):
             self.mask.setValue(row["mask"])
             self.trigger.setChecked(row["trigger"])
             self.one_way.setChecked(row["one_way"])
+            name = "opens" if "opens" in row else ("route" if "route" in row else "")
+            self.action_kind.setCurrentIndex(self.action_kind.findData(name))
+            self.action_ref.setText(row.get(name, ""))
             self.velocity.setValue(row.get("velocity", 0))
             travel = row.get("travel", [0, 0])
             self.travel_min.setValue(travel[0])
@@ -230,6 +245,9 @@ class ColliderEditorPanel(QWidget):
             "trigger": self.trigger.isChecked(),
             "one_way": self.one_way.isChecked(),
         }
+        kind = self.action_kind.currentData()
+        if kind:
+            collider[kind] = self.action_ref.text().strip()
         if self.velocity.value():
             collider["velocity"] = self.velocity.value()
             collider["travel"] = [self.travel_min.value(), self.travel_max.value()]
