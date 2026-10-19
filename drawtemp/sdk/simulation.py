@@ -149,7 +149,10 @@ class Simulation:
             raise
 
     def choices(self):
-        """Only currently permitted story choices; never expose rule internals."""
+        """Only currently permitted choices, including R42 line completion."""
+        line = self._session.narrative_line()
+        if line is not None and not line['complete']:
+            return freeze([])
         if self._session.tactical_story_pending:
             return freeze(self._session.tactical_choices())
         return freeze(self._session.available_choices())
