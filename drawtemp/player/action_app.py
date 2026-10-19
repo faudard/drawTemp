@@ -43,7 +43,11 @@ def create_bridge(controller, renderer):
             target = (hero["pos"][0] / SCALE - .5,
                       hero["pos"][1] / SCALE - .5)
             self.renderer.replace_scene(
-                scene_from_action(self.controller.runtime), follow_world=target)
+                scene_from_action(
+                    self.controller.runtime,
+                    animation_frames=(self.controller.animation.frames()
+                                      if self.controller.animation is not None else None)),
+                follow_world=target)
             self.stateChanged.emit()
 
         def _resync(self):
