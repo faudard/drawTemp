@@ -159,6 +159,30 @@ class Simulation:
         return self._apply("living_world_advance", ticks,
                            expected_revision=expected_revision)
 
+    def roguelite_state(self, *, expected_revision=None):
+        """Read-only deterministic R34 run view (not an alternate save schema)."""
+        self._check_revision(expected_revision, 'roguelite_state')
+        try:
+            return freeze(self._session.roguelite_state())
+        except RuleError as exc:
+            raise SimulationError('invalid_action', 'roguelite_state', str(exc)) from exc
+
+    def roguelite_move(self, room_id, *, expected_revision=None):
+        return self._apply('roguelite_move', room_id,
+                           expected_revision=expected_revision)
+
+    def roguelite_claim(self, *, expected_revision=None):
+        return self._apply('roguelite_claim', expected_revision=expected_revision)
+
+    def roguelite_checkpoint(self, *, expected_revision=None):
+        return self._apply('roguelite_checkpoint', expected_revision=expected_revision)
+
+    def roguelite_die(self, *, expected_revision=None):
+        return self._apply('roguelite_die', expected_revision=expected_revision)
+
+    def roguelite_restart(self, *, expected_revision=None):
+        return self._apply('roguelite_restart', expected_revision=expected_revision)
+
     def explore_move(self, dx, dy, *, expected_revision=None):
         return self._apply('explore_move', dx, dy, expected_revision=expected_revision)
 
