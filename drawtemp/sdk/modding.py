@@ -202,6 +202,14 @@ class ModRegistry:
             _fail("unknown_mod", "Mod not installed")
         return self._entries[mod_id]
 
+    def manifest(self, mod_id):
+        """A detached, inert descriptor for consent screens and inspection."""
+        return deepcopy(self._entry(mod_id)["manifest"])
+
+    def statuses(self):
+        """Stable snapshot for host-managed plugin inspectors."""
+        return tuple(self.status(mod_id) for mod_id in sorted(self._entries))
+
     def status(self, mod_id):
         entry = self._entry(mod_id)
         doc = entry["manifest"]
