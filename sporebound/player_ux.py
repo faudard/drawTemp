@@ -197,8 +197,16 @@ def combat_hud(frame, objective="", cell=None):
             "prepared": "réaction armée",
             "charge": "charge possible, non garantie",
         }
-        warnings.extend(certainty.get(row["kind"], row["kind"])
-                        for row in dangers)
+        # Keep every overlapping threat source visible to the player.
+        # Presentation never infers a second attack or changes combat rules.
+        grouped = {}
+        for row in dangers:
+            kind = row["kind"]
+            grouped.setdefault(kind, set()).add(row.get("unit", "terrain"))
+        warnings.extend(
+            certainty.get(kind, kind) +
+            (" ×" + str(len(sources)) if len(sources) > 1 else "")
+            for kind, sources in grouped.items())
         if warnings:
             selection += " · " + "; ".join(dict.fromkeys(warnings))
     return CombatHUD(headline, str(objective), selection, roster, timeline,
