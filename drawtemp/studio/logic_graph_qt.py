@@ -149,7 +149,7 @@ class LogicGraphDialog(QDialog):
                 ("copy", "Dupliquer", self.copy_action),
                 ("edit", "Propriétés…", self.edit_node),
                 ("remove", "Supprimer", self.remove_action),
-                ("connect", "Relier", self.start_connect),
+                ("connect", "Relier", lambda: self.start_connect()),
                 ("true", "Relier SI", lambda: self.start_connect("true")),
                 ("false", "Relier SINON", lambda: self.start_connect("false")),
                 ("disconnect", "Délier", self.start_disconnect),
