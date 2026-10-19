@@ -320,6 +320,8 @@ Les familles de références (FFT, Zelda, JRPG classiques, etc.) ne sont que des
 
 **Suivi R49.B2 — inspecteur et références, non certifiant :** [audit des références typées et protection des brouillons](drawtemp5/R49B2_INSPECTOR_INTEGRITY.md). Le scanner est advisory et borné, les erreurs sources navigables, mais ne remplace ni validation canonique complète ni certification des ateliers R41–R48. Le retour Playtest R49.B3 et R49.C restent ouverts.
 
+**Suivi R49.B3 — retour Playtest supervisé, non certifiant :** [cycle de vie QProcess, diagnostics locaux et contexte Studio restaurable](drawtemp5/R49B3_STUDIO_PLAYER_RETURN.md). Le succès du démarrage ne vaut plus succès du playtest ; un code 0 prouve seulement la fin normale du processus. Tests vrai Player Qt onscreen, packaging, crash et VS-49 restent ouverts.
+
 **Gate R49 :** Un auteur tiers crée mini-jeu depuis template, modifie cartes/règles/dialogues, lance playtest et exporte sans JSON; erreurs P0 d'UX et commandes inactives supprimées.
 
 **Vertical slice :** VS-49 — Premier jeu en Studio : nouveau projet → scène → action → export.
