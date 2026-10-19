@@ -8,6 +8,7 @@ import sys
 from drawtemp.core import Content, GameProject
 from drawtemp.assets.runtime import PresentationAssets
 from drawtemp.player.controller import PlayerController
+from drawtemp.sdk.simulation import thaw
 from drawtemp.player.animation_controller import AnimationDirector
 from drawtemp.render.iso_scene import scene_from_mission, scene_from_exploration
 from drawtemp.render.qt_viewport import make_controller
@@ -79,7 +80,7 @@ def scene_for_player(controller):
                 scene=snapshot.exploration["scene_id"])
             return scene_from_exploration(
                 snapshot.exploration, revision=snapshot.revision,
-                living_world=world)
+                living_world=thaw(world) if world is not None else None)
     return scene_from_mission(next(iter(controller.content.missions.values())))
 
 
