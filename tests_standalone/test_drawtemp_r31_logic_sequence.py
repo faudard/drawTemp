@@ -126,6 +126,37 @@ class SequenceContractTests(unittest.TestCase):
             apply_graph(self.session, graph.graph)
         self.assertEqual(self.session.snapshot().to_dict(), before)
 
+    def test_flags_cannot_reference_future_own_stages(self):
+        draft = LogicGraphDraft.new(MISSION, "future", source_revision=0)
+        draft.add_flag_after("message", "r31_future_s1")
+        before = self.session.snapshot().to_dict()
+        with self.assertRaises(LogicGraphError) as error:
+            draft.prepare(self.session)
+        self.assertEqual(error.exception.code, "invalid_flag")
+        self.assertEqual(self.session.snapshot().to_dict(), before)
+
+    def test_wait_event_never_runs_before_its_exact_scheduled_tick(self):
+        session = new_session()
+        apply_graph(session, wait_graph("precise", ticks=200))
+        data = session.snapshot().to_dict()["content"]
+        battle = Battle(Content.from_dict(data), MISSION,
+                        seed=9, battle_id="precise-ticks")
+        first = next(row for row in battle.events
+                     if row["kind"] == "trigger"
+                     and row.get("id") == "r31_precise_s0")
+        scheduled = first["tick"] + 200
+        stage = next(row for row in battle.mission.triggers
+                     if row["id"] == "r31_precise_s1")
+        self.assertNotIn("r31_precise_s1", battle.fired)
+        battle.tick = scheduled - 1
+        self.assertEqual(temporal_status(battle, stage)["remaining_ticks"], 1)
+        dispatch(battle)
+        self.assertNotIn("r31_precise_s1", battle.fired)
+        battle.tick = scheduled
+        dispatch(battle)
+        self.assertEqual(temporal_status(battle, stage)["state"], "fired")
+        self.assertEqual(battle.fired.count("r31_precise_s1"), 1)
+
     def test_invalid_waits_and_drafts_rejected_before_mutating_project(self):
         for value in (0, -1, True, "8", 10001):
             with self.subTest(value=value):
