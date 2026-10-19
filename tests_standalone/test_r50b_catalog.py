@@ -83,6 +83,14 @@ class R50BCatalogTests(unittest.TestCase):
                 self.assertTrue(result["proof"]["undo_redo"])
                 self.assertTrue(result["proof"]["saved_and_reopened"])
                 self.assertTrue(result["proof"]["gamesession_checkpoint_roundtrip"])
+                self.assertTrue(result["proof"]["headless_player_controller_tested"])
+                self.assertTrue(result["proof"]["player_save_reload_equal"])
+                self.assertEqual(
+                    result["proof"]["player_intent"],
+                    "tactical-mission-start" if key == "srpg"
+                    else "narrative-choice-committed",
+                )
+                self.assertFalse(result["proof"]["qt_onscreen_tested"])
                 path = Path(result["content_path"])
                 self.assertTrue(path.is_file())
                 self.assertTrue(path.with_name("game.game.json").is_file())
@@ -93,6 +101,16 @@ class R50BCatalogTests(unittest.TestCase):
                         "Atelier R50.B"))
                 digests[key] = result["proof"]["checkpoint_digest"]
         self.assertNotEqual(digests["srpg"], digests["narrative_prototype"])
+
+    def test_player_failure_does_not_publish_partial_project(self):
+        output = self.root / "failed_player"
+        with patch(
+                "drawtemp.studio.r50b_player_journey.check_player_journey",
+                side_effect=ValueError("Player replay mismatch")):
+            with self.assertRaisesRegex(CatalogError, "Player replay mismatch"):
+                create_starter("srpg", output)
+        self.assertFalse(output.exists())
+        self.assertEqual(list(self.root.iterdir()), [])
 
     def test_failure_cleans_staged_work_not_user_directory(self):
         output = self.root / "failure"
