@@ -131,8 +131,15 @@ class ActionRuntime:
     Callers may draw zero, one or many frames between step() calls.
     """
 
-    def __init__(self, scene):
+    def __init__(self, scene, *, initial_inventory=None):
         self.scene = validate_scene(scene)
+        if initial_inventory is None:
+            initial_inventory = {}
+        _check(type(initial_inventory) is dict and len(initial_inventory) <= 256
+               and all(_id(k) and type(n) is int and 0 <= n <= 1000000
+                       for k, n in initial_inventory.items()),
+               "Invalid canonical initial inventory")
+        self.initial_inventory = deepcopy(initial_inventory)
         self.scene_digest = _digest(self.scene)
         self._walls = frozenset(tuple(cell) for cell in self.scene["walls"])
         self._enemy_specs = {row["id"]: row for row in self.scene["enemies"]}
@@ -151,7 +158,7 @@ class ActionRuntime:
             for row in self.scene["enemies"]
         }
         self.objects = {row["id"]: {"opened": False} for row in self.scene["objects"]}
-        self.inventory = {}
+        self.inventory = deepcopy(self.initial_inventory)
         self.flags = {}
         self.commands = []
         self.last_events = []
@@ -368,20 +375,24 @@ class ActionRuntime:
     def recording(self):
         return {"version": VERSION, "scene": deepcopy(self.scene),
                 "scene_digest": self.scene_digest, "commands": deepcopy(self.commands),
+                **({"initial_inventory": deepcopy(self.initial_inventory)}
+                   if self.initial_inventory else {}),
                 "state_digest": self.digest()}
 
     @classmethod
     def from_recording(cls, recorded, *, expected_scene=None):
-        _check(type(recorded) is dict and set(recorded) == {
-            "version", "scene", "scene_digest", "commands", "state_digest"
-        } and type(recorded["version"]) is int and recorded["version"] == VERSION,
+        _check(type(recorded) is dict and
+               set(recorded) - {"initial_inventory"} == {
+                   "version", "scene", "scene_digest", "commands", "state_digest"
+               } and type(recorded["version"]) is int and recorded["version"] == VERSION,
                "Unsupported action replay format")
         _check(type(recorded["scene_digest"]) is str and
                type(recorded["state_digest"]) is str, "Invalid replay digest")
         if expected_scene is not None:
             _check(_digest(validate_scene(expected_scene)) == recorded["scene_digest"],
                    "Action replay belongs to different scene/rules")
-        runner = cls(recorded["scene"])
+        runner = cls(recorded["scene"],
+                     initial_inventory=recorded.get("initial_inventory"))
         _check(runner.scene_digest == recorded["scene_digest"],
                "Action scene checksum mismatch")
         commands = recorded["commands"]

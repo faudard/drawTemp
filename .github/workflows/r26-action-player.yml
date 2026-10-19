@@ -1,0 +1,46 @@
+name: R26 B Action Player & Campaign Handoff
+on:
+  pull_request:
+    paths:
+      - "drawtemp/player/action_*.py"
+      - "drawtemp/player/ActionPreview.qml"
+      - "drawtemp/player/qt_app.py"
+      - "drawtemp/sdk/action_encounter.py"
+      - "sporebound/action_runtime.py"
+      - "tests_standalone/test_action_player_r26b.py"
+      - ".github/workflows/r26-action-player.yml"
+  push:
+    branches:
+      - feat/r26b-player-campaign-adapter
+      - master
+permissions:
+  contents: read
+jobs:
+  headless:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.10', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: Action R26 A and B replay/campaign tests
+        run: python -m unittest tests_standalone.test_action_runtime_r26 tests_standalone.test_action_player_r26b tests_standalone.test_game_session -v
+  qt-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[qt6]'
+      - name: Offscreen actual R26 QtQuick root
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.player.qt_app --action-demo --smoke --save-dir "${{ runner.temp }}/action"

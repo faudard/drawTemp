@@ -220,6 +220,11 @@ class DungeonStudio:
         narrative conditions, transitions or checkpoint crash recovery.
         """
         mission = self.maps.mission()
+        if (any(o["kind"] in {"key", "plate", "block"} for o in mission["objects"])
+                or any("sequence" in o for o in mission["objects"]
+                       if o["kind"] == "door")):
+            from .puzzle_debugger import analyze_puzzle
+            return analyze_puzzle(mission, state_budget=state_budget)
         width, height = mission["board"]["width"], mission["board"]["height"]
         tiles = _tile_map(mission)
         objects = mission["objects"]
@@ -307,3 +312,88 @@ class DungeonStudio:
                 "unreachable_goals": missing_goals,
                 "unreachable_objects": missing_objects,
                 "warnings": warnings, "states": len(seen)}
+
+    def place_puzzle(self, identifier, kind, cell, *, door_id="", latch=True):
+        """Opt-in R27.B key/plate/block authored as real Mission.objects."""
+        identifier = _identifier(identifier)
+        if kind not in ("key", "plate", "block"):
+            raise RuleError("Unknown R27.B puzzle kind")
+        if type(latch) is not bool:
+            raise RuleError("Plate latch must be boolean")
+        def edit(data):
+            mission = _mission(data, self.maps.mission_id)
+            position = _position(mission, cell)
+            if any(identifier == o["id"] or
+                   tuple(o["pos"]) == position and o["kind"] != "plate"
+                   for o in mission["objects"]):
+                raise RuleError("Puzzle id/position already occupied")
+            if any(identifier == u["id"] for u in mission["units"]):
+                raise RuleError("Puzzle ID collides with an actor")
+            tiles = _tile_map(mission)
+            if tiles.get(position, {}).get("blocked", False):
+                raise RuleError("Puzzle must be on a walkable tile")
+            obj = {"id": identifier, "kind": kind, "pos": list(position)}
+            if kind in ("key", "plate"):
+                door = next((o for o in mission["objects"]
+                             if o["kind"] == "door" and o["id"] == door_id), None)
+                if door is None:
+                    raise RuleError("Select an existing puzzle door")
+                if kind == "key":
+                    if "key" in door:
+                        raise RuleError("Door already has a key")
+                    obj["link"] = door["id"]
+                    door["key"] = identifier
+                    door["locked"] = True
+                else:
+                    obj.update(link=door["id"], latch=latch)
+                    door["locked"] = True
+            mission["objects"].append(obj)
+            return data
+        return self._change(edit, "place-puzzle-" + kind)
+
+    def set_sequence(self, door_id, switch_ids, *, reset_on_error=True):
+        """Configure an ordered set of existing linked switches atomically."""
+        if (type(reset_on_error) is not bool or
+                not isinstance(switch_ids, (tuple, list))):
+            raise RuleError("Invalid sequence options")
+        identifiers = list(switch_ids)
+        if (not 2 <= len(identifiers) <= 8
+                or len(set(identifiers)) != len(identifiers)):
+            raise RuleError("Sequence requires 2..8 distinct switch IDs")
+        def edit(data):
+            mission = _mission(data, self.maps.mission_id)
+            door = next((o for o in mission["objects"]
+                         if o["kind"] == "door" and o["id"] == door_id), None)
+            if door is None:
+                raise RuleError("Unknown sequence door")
+            linked = {o["id"] for o in mission["objects"]
+                      if o["kind"] == "switch" and o.get("link") == door_id}
+            if linked != set(identifiers):
+                raise RuleError("All linked switches must appear exactly once")
+            door.update(sequence=identifiers, sequence_progress=0,
+                        reset_on_error=reset_on_error, locked=True)
+            return data
+        return self._change(edit, "configure-sequence")
+
+    def puzzle_graph(self):
+        """Read-only typed links for the Qt inspector (never a second schema)."""
+        mission = self.maps.mission()
+        nodes = [{"id": obj["id"], "kind": obj["kind"],
+                  "pos": list(obj["pos"])}
+                 for obj in mission["objects"]
+                 if obj["kind"] in ("door", "switch", "chest", "key", "plate", "block")]
+        edges = []
+        for obj in mission["objects"]:
+            if obj["kind"] in ("switch", "key", "plate"):
+                edges.append({"from": obj["id"], "to": obj["link"],
+                              "type": obj["kind"]})
+            if obj["kind"] == "door" and "sequence" in obj:
+                for index, switch in enumerate(obj["sequence"]):
+                    edges.append({"from": switch, "to": obj["id"],
+                                  "type": "sequence", "order": index + 1})
+        return {"revision": self.maps.authoring.revision,
+                "nodes": nodes, "edges": edges}
+
+    def puzzle_debug(self, *, state_budget=50000):
+        """Run a bounded detached search without altering the editor."""
+        return self.puzzle_report(state_budget=state_budget)

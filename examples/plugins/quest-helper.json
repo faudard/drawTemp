@@ -1,0 +1,24 @@
+{
+  "api_version": 2,
+  "id": "quest-helper",
+  "name": "Quest Helper",
+  "namespace": "org.example.quest",
+  "sdk_api": [1, 0],
+  "required_sdk_features": ["sdk-negotiation.v1", "project-extensions.v1"],
+  "capabilities": ["property-panel", "project-template"],
+  "permissions": ["project.read", "project.extensions.write"],
+  "contributions": {
+    "panels": [{
+      "id": "overview",
+      "title": "Projet et missions",
+      "description": "Résumé en lecture seule du projet ouvert.",
+      "fields": ["project.title", "project.campaign_count", "content.mission_count"]
+    }],
+    "templates": [{
+      "id": "first-quest",
+      "label": "Initialiser les quêtes",
+      "data": {"chapter": 1, "completed": []},
+      "references": [{"kind": "campaign", "id": "main"}]
+    }]
+  }
+}

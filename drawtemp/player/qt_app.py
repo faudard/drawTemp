@@ -419,6 +419,15 @@ def create_bridge(controller, renderer):
     return PlayerBridge(controller, renderer)
 
 def main(argv=None):
+    # Opt-in R26 development preview. Do not alter the default tactical
+    # Player, its canonical save slots, or native bundle verification.
+    if argv is None:
+        argv = sys.argv[1:]
+    if "--action-demo" in argv:
+        if getattr(sys, "frozen", False):
+            raise ValueError("Experimental action preview is not a certified native bundle")
+        from drawtemp.player.action_app import main as action_main
+        return action_main([arg for arg in argv if arg != "--action-demo"])
     parser = argparse.ArgumentParser(description="DrawTemp 5 — Qt Quick Player (R12)")
     parser.add_argument("--smoke", action="store_true", help="Load the QML root and quit")
     parser.add_argument("--reference", action="store_true",

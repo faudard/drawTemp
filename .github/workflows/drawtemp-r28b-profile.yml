@@ -1,0 +1,68 @@
+name: DrawTemp R28.B profile inspector
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/game_modes.py'
+      - 'drawtemp/studio/profile_authoring.py'
+      - 'drawtemp/studio/profile_editor_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r28_profile_inspector.py'
+      - '.github/workflows/drawtemp-r28b-profile.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/studio/profile_authoring.py'
+      - 'drawtemp/studio/profile_editor_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r28_profile_inspector.py'
+      - '.github/workflows/drawtemp-r28b-profile.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  headless:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e .
+      - name: R25 profiles and R28.B transactions
+        run: python -m unittest tests_standalone.test_r25_foundation tests_standalone.test_r28_profile_inspector -v
+      - name: Legacy R1 regression
+        run: python -m unittest tests_standalone.test_drawtemp5_r1_authoring -v
+
+  qt-inspector:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt runtime dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libopengl0 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libdbus-1-3
+      - run: python -m pip install -e ".[qt6]"
+      - name: Qt profile inspector and Studio R2 regression
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_r28_profile_inspector tests_standalone.test_drawtemp5_r2 -v
+      - name: Launch Studio on profiles workspace (offscreen)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.studio.qt_shell --smoke --workspace profiles
