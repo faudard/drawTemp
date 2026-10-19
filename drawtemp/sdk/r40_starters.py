@@ -73,13 +73,19 @@ def _platform_room(identifier: str, *, ruin: bool = False,
     colliders = [_collider("floor", [0, 4000, 6000, 1000])]
     if identifier == "arrival":
         colliders.extend([
+            _collider("waystone", [1800, 3200, 400, 700], trigger=True),
+            _collider("ruins_portal", [2400, 3200, 500, 700],
+                      trigger=True, route="to_ruins"),
             _collider("upper_ledge", [3400, 2850, 2350, 100], one_way=True),
             _collider("high_portal", [4400, 2070, 600, 650],
                       trigger=True, route="high_gate"),
         ])
     if ruin:
-        colliders.append(_collider(
-            "feather", [1550, 3200, 400, 700], trigger=True))
+        colliders.extend([
+            _collider("feather", [1550, 3200, 400, 700], trigger=True),
+            _collider("return_portal", [2400, 3200, 500, 700],
+                      trigger=True, route="back_to_village"),
+        ])
     if citadel:
         colliders.append(_collider(
             "citadel_marker", [2800, 3200, 500, 700], trigger=True))
