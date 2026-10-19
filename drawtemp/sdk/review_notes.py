@@ -14,7 +14,8 @@ import os
 from pathlib import Path
 import re
 
-from drawtemp.sdk.project_history import RevisionNode
+from drawtemp.sdk.collaboration import _checked
+from drawtemp.sdk.project_history import RevisionNode, _node_identity
 from sporebound.session_lock import session_writer_lock
 
 SCHEMA = 1
@@ -24,6 +25,11 @@ MAX_EVENTS = 2048
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 _ID = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
 _EVENTS = frozenset(("comment", "resolve", "reopen"))
+_ANCHOR = re.compile(
+    r"(?:/(?:project|content)|/content/missions/[A-Za-z0-9_-]{1,64}"
+    r"|/project/story/scenes/[A-Za-z0-9_-]{1,64}"
+    r"|/project/(?:campaigns|cinematics)/[A-Za-z0-9_-]{1,64})\\Z"
+)
 _FIELDS = frozenset(("schema", "sequence", "previous", "kind", "node",
                      "document", "anchor", "author", "text", "thread", "digest"))
 
@@ -74,8 +80,17 @@ def anchor_from_path(path: str) -> str:
 
 def validate_anchor(node: RevisionNode, anchor: str):
     """Fail closed on dangling typed anchors; no fuzzy ID/token matching."""
-    if not isinstance(node, RevisionNode) or not _SHA.fullmatch(node.node_id):
+    if (not isinstance(node, RevisionNode) or
+            not isinstance(node.node_id, str) or
+            not _SHA.fullmatch(node.node_id)):
         raise ReviewNoteError("invalid_node", "A validated history node is required")
+    try:
+        _checked(node.revision)
+        valid_id = _node_identity(node.revision, node.parents, node.label)
+    except (ValueError, TypeError, AttributeError, KeyError) as exc:
+        raise ReviewNoteError("invalid_node", "Revision node is invalid") from exc
+    if node.node_id != valid_id:
+        raise ReviewNoteError("invalid_node", "Revision node identity mismatch")
     if not isinstance(anchor, str):
         raise ReviewNoteError("invalid_anchor", "A canonical resource anchor is required")
     content, project = node.revision.documents()
@@ -107,7 +122,7 @@ def _check_record(entry, number, prior):
             not all(isinstance(entry[field], str) and _SHA.fullmatch(entry[field])
                     for field in ("node", "document", "digest")) or
             not isinstance(entry["anchor"], str) or
-            not (1 <= len(entry["anchor"]) <= 180) or
+            not _ANCHOR.fullmatch(entry["anchor"]) or
             not isinstance(entry["author"], str) or
             not 1 <= len(entry["author"].strip()) <= 80 or
             not isinstance(entry["text"], str) or
