@@ -931,6 +931,7 @@ class StudioWindow(QMainWindow):
 
     def discard_inspector_changes(self):
         """Explicitly discard only staged widgets; never undo R1 content."""
+        self._edited_fields.clear()
         self.refresh()
 
     def _show_inspector(self):
