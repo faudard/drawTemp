@@ -45,6 +45,7 @@ class AssistPreview:
     rectangle: tuple[int, int, int, int]
     tiles: tuple[GeneratedCell, ...]
     object_ids: tuple[str, ...]
+    object_cells: tuple[tuple[str, int, int], ...]
     protected_count: int
     switch_reachable: bool | None
 
@@ -55,6 +56,7 @@ class AssistPreview:
             "rectangle": list(self.rectangle),
             "tiles": [vars(cell).copy() for cell in self.tiles],
             "object_ids": list(self.object_ids),
+            "object_cells": [list(cell) for cell in self.object_cells],
             "protected_count": self.protected_count,
             "switch_reachable": self.switch_reachable,
             "applied": False, "gameplay_certified": False,
@@ -183,6 +185,7 @@ def _generate(content, mission_id, rectangle, mode, seed, namespace):
     rng = Random(seed)
     painted = []
     new_ids = []
+    object_cells = []
     reachable = None
     if mode in ("clearing", "trail"):
         cells = candidates if mode == "clearing" else _trail(candidates, rng)
@@ -221,8 +224,11 @@ def _generate(content, mission_id, rectangle, mode, seed, namespace):
              "link": door_id},
         ])
         new_ids = [door_id, switch_id]
+        object_cells = [("door", door[0], door[1]),
+                        ("switch", switch[0], switch[1])]
         reachable = True
-    return updated, tuple(painted), tuple(new_ids), len(set(allowed) & protected), reachable
+    return (updated, tuple(painted), tuple(new_ids), tuple(object_cells),
+            len(set(allowed) & protected), reachable)
 
 
 def _trail(candidates, rng):
@@ -257,7 +263,7 @@ class AssistController:
                 namespace="sample"):
         self.invalidate()
         before = self.session.snapshot().to_dict()
-        candidate, cells, objects, protected_count, reachable = _generate(
+        candidate, cells, objects, object_cells, protected_count, reachable = _generate(
             before["content"], mission_id, rectangle, mode, seed, namespace)
         plan = self.session.preview_pair(
             lambda _content, project: (candidate, project),
@@ -266,7 +272,7 @@ class AssistController:
         )
         report = AssistPreview(
             before["revision"], mission_id, mode, seed, tuple(rectangle),
-            cells, objects, protected_count, reachable,
+            cells, objects, object_cells, protected_count, reachable,
         )
         self._plan = plan
         self._preview = report
