@@ -108,6 +108,9 @@ class LogicGraphDebugger:
         for eid in self.event_ids:
             event = self._engine.by_id[eid]
             native_states[eid] = temporal_status(self._engine.battle, event)
+        from sporebound.logic_variables import variables_from_journal
+        raw["battle_variables"] = variables_from_journal(self._engine.battle)
+        raw["variable_scope"] = "battle"
         for event in raw["timeline"]:
             event["node_ids"] = list(self.event_to_actions[event["event_id"]])
             event["scope"] = "whole_native_trigger"
@@ -122,7 +125,7 @@ class LogicGraphDebugger:
                     any(key in self._engine.by_id[events[0]]
                         for key in ("cancel_after", "delay_ticks", "after"))
                     else "waiting")
-            elif node["kind"] in ("wait", "flag"):
+            elif node["kind"] in ("wait", "flag", "check"):
                 state = "fired" if events[0] in fired else (
                     "paused" if raw["paused_on"] == events[0]
                     else native_states[events[0]]["state"])
