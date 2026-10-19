@@ -11,10 +11,15 @@ SDK_API_STATUS = "provisional"  # Stabilization candidate, not final 5.0 certifi
 SDK_FEATURES = frozenset({
     "simulation.v1", "authoring.v1", "migration.v0-envelope-to-v1",
     "replay.v1", "player-slots.v1", "workers.v1", "certification.v1",
-    "sdk-negotiation.v1", "project-extensions.v1",
+    "sdk-negotiation.v1", "project-extensions.v1", "controlled-scripting.v1",
 })
 
 _PUBLIC = {
+    "StudioScriptError": "controlled_scripting",
+    "validate_script_manifest": "controlled_scripting",
+    "read_script_manifest": "controlled_scripting",
+    "preview_script": "controlled_scripting",
+    "install_script": "controlled_scripting",
     "SDKCompatibilityError": "compatibility",
     "negotiate_sdk": "compatibility",
     "ProjectExtensionError": "project_extensions",
