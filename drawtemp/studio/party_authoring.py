@@ -80,6 +80,8 @@ def preview_party_edit(session: AuthoringSession, campaign_id, *,
                 "Party preview is stale; refresh the Studio session")
     require(before["rpg_default"] or before["rpg_scenes"],
             "Enable classic_rpg on project or exploration first (R28 profiles)")
+    require(all(type(ids) is list for ids in (recruitable, initial, active)),
+            "R41 party authoring requires explicit ordered lists")
     data = {"recruitable": list(recruitable), "initial": list(initial),
             "active": list(active), "max_active": max_active}
 
