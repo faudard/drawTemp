@@ -16,7 +16,8 @@ import os
 from pathlib import Path, PureWindowsPath
 import re
 import stat
-from zipfile import BadZipFile, ZipFile
+from zipfile import BadZipFile, ZipFile, ZipInfo, ZIP_STORED
+from tempfile import NamedTemporaryFile
 
 from drawtemp.sdk.simulation import freeze, thaw
 from sporebound.assets import AssetRegistry
@@ -298,6 +299,8 @@ def _make_transform(manifest, archive_sha):
                 type(stored["data"].get("packs")) is not list):
             fail("invalid_receipts", "Unrecognized pack receipt schema")
         installed = stored["data"]["packs"]
+        if any(type(row) is not dict for row in installed):
+            fail("invalid_receipts", "Malformed installed pack receipt")
         if any(row.get("id") == manifest["id"] for row in installed):
             fail("already_installed", "Pack ID already installed")
         for dep in manifest["dependencies"]:
@@ -396,6 +399,11 @@ def install_pack(preview, editor, project_root, *, expected_revision=None):
                     os.fsync(out.fileno())
                 if sha256(destination.read_bytes()).hexdigest() != file["sha256"]:
                     fail("hash_mismatch", "Published bytes changed during installation")
+        added = AssetRegistry({"version": 1, "entries": _new_entries(manifest),
+                               "bindings": {}})
+        problems = added.diagnostics(root)
+        if problems:
+            fail("invalid_asset", str(problems[0]["message"]))
         return editor.apply(plan)
     except BaseException:
         for destination in reversed(created):
@@ -442,6 +450,7 @@ def verify_installed_packs(project_root, project):
                 if type(aid) is not str or not aid.startswith(pack["id"] + ".") or aid in own_ids or aid not in ids:
                     fail("invalid_receipts", "Missing or duplicate installed asset ID")
                 own_ids.add(aid)
+            own_paths = set()
             for file in pack["files"]:
                 _exact(file, {"path", "sha256", "license"}, "receipt file")
                 relative = _path(file["path"])
@@ -449,7 +458,16 @@ def verify_installed_packs(project_root, project):
                 if not relative.startswith(prefix) or relative.casefold() in seen_paths:
                     fail("invalid_receipts", "Invalid or repeated installed pack path")
                 seen_paths.add(relative.casefold())
+                own_paths.add(relative.casefold())
                 _hash(file["sha256"])
+                license = file["license"]
+                _exact(license, {"id", "rights_holder", "evidence",
+                                 "redistributable", "modifiable"}, "receipt license")
+                if (any(type(license[name]) is not str or not license[name].strip()
+                        for name in ("id", "rights_holder", "evidence")) or
+                        license["redistributable"] is not True or
+                        type(license["modifiable"]) is not bool):
+                    fail("invalid_receipts", "Invalid installed license assertion")
                 if not any(row.get("path") == relative for row in
                            (ids[aid] for aid in own_ids)):
                     fail("invalid_receipts", "Installed file not referenced by asset registry")
@@ -462,8 +480,72 @@ def verify_installed_packs(project_root, project):
                     issues.append(relative + ": installed SHA-256 mismatch")
             for aid in own_ids:
                 asset = ids[aid]
-                if asset["kind"] != "animation" and asset["path"].casefold() not in seen_paths:
+                if asset["kind"] != "animation" and asset["path"].casefold() not in own_paths:
                     fail("invalid_receipts", "Untracked asset in installed pack")
     except (ResourcePackError, OSError, ValueError, KeyError, TypeError) as exc:
         issues.append("Resource pack integrity: " + str(exc))
     return issues
+
+
+def publish_pack(source_root, destination):
+    """Create a reproducible ZIP from pack.json + listed files, without overwrite.
+
+    SHA-256 and license assertions must already be present in pack.json.
+    Never infers or approves intellectual-property rights automatically.
+    """
+    root = Path(source_root).resolve(strict=True)
+    target = Path(destination)
+    if not root.is_dir() or not target.parent.is_dir():
+        fail("invalid_path", "Existing source root and output parent required")
+    manifest_path = root / "pack.json"
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        fail("invalid_manifest", "Missing regular pack.json")
+    manifest = validate_pack_manifest(_manifest(manifest_path.read_bytes()))
+    payloads = {}
+    size = 0
+    for row in manifest["files"]:
+        relative = "files/" + row["path"]
+        current = root
+        for part in relative.split("/"):
+            current = current / part
+            if current.is_symlink():
+                fail("unsafe_path", "Pack input contains a symlink")
+        path = root / relative
+        if not path.is_file() or not path.resolve().is_relative_to(root):
+            fail("unsafe_path", "Pack input is missing or outside source root")
+        if path.stat().st_size != row["bytes"]:
+            fail("hash_mismatch", "Pack input size differs from manifest")
+        payload = path.read_bytes()
+        size += len(payload)
+        if size > MAX_TOTAL_BYTES or sha256(payload).hexdigest() != row["sha256"]:
+            fail("hash_mismatch", "Pack input hash differs from manifest")
+        payloads[relative] = payload
+    manifest_bytes = json.dumps(manifest, sort_keys=True, ensure_ascii=False,
+                                separators=(",", ":")).encode("utf-8")
+    if len(manifest_bytes) > MAX_MANIFEST_BYTES:
+        fail("size_limit", "Serialized manifest too large")
+    if target.exists() or target.is_symlink():
+        fail("already_exists", "Output archive already exists")
+    temporary = None
+    try:
+        with NamedTemporaryFile(mode="w+b", prefix=".drawtemp-pack-", suffix=".tmp",
+                                dir=target.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            with ZipFile(stream, mode="w", compression=ZIP_STORED) as archive:
+                for name, payload in [("pack.json", manifest_bytes)] + sorted(payloads.items()):
+                    info = ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+                    info.compress_type = ZIP_STORED
+                    info.external_attr = 0o100644 << 16
+                    archive.writestr(info, payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        inspect_pack(temporary)
+        # Atomic no-overwrite publish. Hardlink failure aborts rather than
+        # falling back to a rename that could overwrite another publisher.
+        os.link(temporary, target)
+        return inspect_pack(target)
+    except FileExistsError as exc:
+        raise ResourcePackError("already_exists", "Output archive appeared during publication") from exc
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
