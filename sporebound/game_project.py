@@ -141,7 +141,8 @@ class GameProject:
         if EXTENSION in self.extensions:
             validate_living_world(
                 self.extensions[EXTENSION]["data"],
-                set(self.exploration) | set(content.missions))
+                set(self.exploration) | set(content.missions),
+                exploration=self.exploration)
         from .campaign_flow import validate_flow
         validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
