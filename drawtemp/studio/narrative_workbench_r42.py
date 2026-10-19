@@ -25,7 +25,9 @@ class NarrativeWorkbench:
         return deepcopy(snapshot['project'].get('story', {}))
 
     def _content(self):
-        return Content.from_dict(self.session.snapshot().to_dict()['content'])
+        raw = self.session.snapshot().to_dict()['content']
+        from sporebound.tactical_rpg3 import authored_rules_for_document
+        return Content.from_dict(raw, rules=authored_rules_for_document(raw))
 
     def _edit(self, operation, *, kind):
         return self.session.preview_project(
