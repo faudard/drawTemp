@@ -1,0 +1,32 @@
+name: R20.C.1 Qt Player Scene Cinematics
+
+on:
+  pull_request:
+    paths:
+      - "sporebound/game_session.py"
+      - "drawtemp/sdk/simulation.py"
+      - "drawtemp/player/controller.py"
+      - "drawtemp/player/qt_app.py"
+      - "drawtemp/player/Main.qml"
+      - "tests_standalone/test_r20c1_player_scene_cinematics.py"
+      - ".github/workflows/drawtemp-r20c1-player.yml"
+  workflow_dispatch:
+
+jobs:
+  r20c1:
+    name: Scene playback state and persistence / ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: python -m pip install -e .
+      - name: Verify R20.C.1 and full Jeanne regression headless
+        run: python -m unittest tests_standalone.test_r20c1_player_scene_cinematics tests_standalone.test_r20c_jeanne_cinematics tests_standalone.test_r20b_jeanne_playable tests_standalone.test_jeanne_acte1 tests_standalone.test_jeanne_prologue -v

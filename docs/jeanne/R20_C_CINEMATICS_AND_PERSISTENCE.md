@@ -44,13 +44,7 @@ Le prévisualiseur utilise `CinematicStage`, `frame_at` et
 une cinématique **n'applique jamais de choix narratif**, n'accorde pas de
 récompense et n'écrit pas de checkpoint de campagne.
 
-**Limite explicite importante :** le Player Qt `drawtemp.player.qt_app`
-ne déclenche pas encore automatiquement ces clips lors de l'entrée dans
-une scène. Le contenu narratif est bien jouable et sérialisé ; les clips
-sont disponibles dans le prévisualiseur Qt et les outils d'authoring.
-L'intégration UX de l'auto-déclenchement, de la file d'attente de clips
-et de l'acquittement après reprise Player est **un travail restant avant
-toute certification R20.10 / R20.D**.
+**Suite R20.C.1 :** [intégration des clips `scene` directement dans le Player Qt](R20_C1_PLAYER_CINEMATICS.md). L'affichage QML, le saut et l'acquittement persisté sont implémentés dans une PR empilée distincte. Les clips des autres types de trigger, la parité visuelle/audio et le smoke GPU restent à certifier.
 
 ## Jouer la variante R20.C
 
