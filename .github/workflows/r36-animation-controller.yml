@@ -80,5 +80,5 @@ jobs:
       - name: R36.B1 action viewport QML overlay smoke (software only)
         env:
           QT_QPA_PLATFORM: offscreen
-          QSG_RHI_BACKEND: software
+          QT_QUICK_BACKEND: software
         run: python -m unittest tests_standalone.test_r36_committed_fx_qt -v
