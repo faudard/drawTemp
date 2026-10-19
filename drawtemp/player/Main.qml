@@ -144,12 +144,12 @@ ApplicationWindow {
     Shortcut {
         sequence: root.binding("battle_move")
         enabled: root.playerData.screen === "battle" && !root.inputLocked
-        onActivated: player.command("move")
+        onActivated: player.requestTarget("move", "")
     }
     Shortcut {
         sequence: root.binding("battle_attack")
         enabled: root.playerData.screen === "battle" && !root.inputLocked
-        onActivated: player.command("attack")
+        onActivated: player.requestTarget("attack", "")
     }
     Shortcut {
         sequence: root.binding("battle_end")
@@ -162,8 +162,21 @@ ApplicationWindow {
         onActivated: player.saveGame(root.currentSlot)
     }
     Shortcut {
+        sequence: "Return"
+        enabled: root.playerData.screen === "battle" && !root.inputLocked &&
+                 root.playerData.pending_target.valid === true
+        onActivated: player.confirmTarget()
+    }
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.playerData.screen === "battle" && !root.inputLocked &&
+                 !!root.playerData.pending_target.kind
+        onActivated: player.cancelTarget()
+    }
+    Shortcut {
         sequence: root.binding("pause")
-        enabled: root.playerData.screen !== "title" && !root.inputLocked
+        enabled: root.playerData.screen !== "title" && !root.inputLocked &&
+                 !root.playerData.pending_target.kind
         onActivated: pausePopup.open()
     }
 
@@ -561,7 +574,9 @@ ApplicationWindow {
                             visible: root.playerData.screen !== "exploration"
                             text: "CT · tour " + (root.playerData.battle.tick || 0) +
                                   "\nUnité active : " + (root.playerData.battle.active || "—") +
-                                  "\nCible : " + root.playerData.selected.join(", ")
+                                  "\nCase sélectionnée : " + root.playerData.selected.join(", ") +
+                                  "\nSélectionner ≠ agir : Déplacer/Attaquer, puis Confirmer (Entrée)" +
+                                  "\nLa prévision n'est pas un résultat garanti."
                             color: root.ivory
                             Layout.fillWidth: true
                         }
@@ -806,8 +821,16 @@ ApplicationWindow {
                 visible: root.playerData.battle.deploying === true
                 onClicked: player.command("deploy")
             }
-            Button { text: "Déplacer"; onClicked: player.command("move") }
-            Button { text: "Attaquer"; onClicked: player.command("attack") }
+            Button {
+                objectName: "r18RequestMove"
+                text: "Déplacer"
+                onClicked: player.requestTarget("move", "")
+            }
+            Button {
+                objectName: "r18RequestAttack"
+                text: "Attaquer"
+                onClicked: player.requestTarget("attack", "")
+            }
             Button { text: "Aperçu déplacement"; onClicked: player.preview("move") }
             Button { text: "Prévision attaque"; onClicked: player.preview("attack") }
             Button {
@@ -817,14 +840,56 @@ ApplicationWindow {
                             root.playerData.tactical.focus.can_target === true)
                 onClicked: {
                     if (root.playerData.tactical.skill === "attack")
-                        player.command("attack")
+                        player.requestTarget("attack", "")
                     else
-                        player.useSkill(root.playerData.tactical.skill)
+                        player.requestTarget("skill", root.playerData.tactical.skill)
                 }
             }
             Button { text: "Fin du tour  " + root.binding("battle_end"); onClicked: player.command("end") }
             Button { text: "Tour ennemi"; onClicked: player.enemyTurn() }
             Item { Layout.fillWidth: true }
+        }
+
+        Rectangle {
+            objectName: "r18TargetConfirmation"
+            visible: root.playerData.screen === "battle" &&
+                     !!root.playerData.pending_target.kind
+            Layout.fillWidth: true
+            implicitHeight: targetPanel.implicitHeight + 20
+            radius: 8
+            color: "#263b43"
+            border.color: root.playerData.pending_target.valid ? "#e7c78b" : "#f0aca8"
+            RowLayout {
+                id: targetPanel
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 12
+                Label {
+                    text: "Action : " + (root.playerData.pending_target.kind || "") +
+                          " · case " + (root.playerData.pending_target.cell || []).join(", ") +
+                          "\n" + (root.playerData.pending_target.details || "") +
+                          (root.playerData.pending_target.valid ? "" :
+                           "\nLe tour a changé : annulez et choisissez une nouvelle action.")
+                    color: root.ivory
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    font.pixelSize: 13 * root.textScale
+                    Accessible.name: text
+                }
+                Button {
+                    objectName: "r18ConfirmTarget"
+                    text: "Confirmer · Entrée"
+                    enabled: root.playerData.pending_target.valid === true
+                    onClicked: player.confirmTarget()
+                    Accessible.name: "Confirmer l'action ciblée"
+                }
+                Button {
+                    objectName: "r18CancelTarget"
+                    text: "Annuler · Échap"
+                    onClicked: player.cancelTarget()
+                    Accessible.name: "Annuler l'action ciblée"
+                }
+            }
         }
 
         RowLayout {
