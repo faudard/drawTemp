@@ -65,9 +65,9 @@ runs with **no jobs created**, so tests have **not** been certified.
   undo transactions with dedicated viewport golden snapshots.
 - R36.5–7: emitter authoring presets, adaptive CPU/GPU batches, occluder
   geometry, true light/shadow, weather/water/fog and backend fallbacks.
-- R36.8–12: complete deterministic end-to-end synchronization, tested
-  Godot/Qt? **No Godot target is claimed**; hardware GPU baselines,
-  reduced-flash audit and licensed-export asset provenance.
+- R36.8–12: complete deterministic end-to-end synchronization,
+  multi-backend Qt visual baselines, hardware GPU metrics, reduced-flash
+  accessibility audit and licensed-export asset provenance.
 
 Never mark the R36 release gate complete based solely on software/offscreen
 view instantiation.
