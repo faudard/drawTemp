@@ -65,7 +65,7 @@ def preview_genre_project(key: str, destination: str | Path) -> dict:
         path = None
     else:
         path = Path(destination).expanduser().absolute()
-        if path.exists():
+        if path.exists() or path.is_symlink():
             errors.append("La destination existe deja : aucun ecrasement autorise.")
         elif path.parent == path:
             errors.append("La racine du disque n'est pas une destination valide.")
