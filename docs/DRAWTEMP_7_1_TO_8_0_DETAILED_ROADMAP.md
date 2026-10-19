@@ -405,3 +405,7 @@ Ne pas ouvrir une PR de code géante : construire des incréments de petite tail
 **Après 8.0 (R41+) :** sujets d'étude possibles — plateformes supplémentaires (si faisables), nouveaux templates simulation/gestion, outils de collaboration mieux intégrés, tests et assistance à la création, marketplace de packs conformes, scénarios de grands projets. Ils ne sont ni jalons approuvés ni dépendances de 8.0 ; les prioriser à partir d'usage réel et de retours de créateurs plutôt que de spéculer sur une 3D universelle.
 
 **Prochaine étape d'ingénierie :** finir R25–R30 et les gates réels ; ouvrir **R31.A — ADR du visual scripting et capacités du Core** uniquement lorsque les dépendances nécessaires sont sur master. Ce document ne change pas le code de gameplay.
+
+## 17. Proposition de continuation : R41–R50 (DrawTemp 8.1–9.0)
+
+Une [roadmap détaillée R41–R50](DRAWTEMP_8_1_TO_9_0_DETAILED_ROADMAP_R41_R50.md) formalise le pont après 8.0 vers le Studio 9.0 : RPG classique, narration, combat multi-genres, World Builder, monde vivant, cinématiques, SDK, collaboration et UX. **Il s'agit uniquement de propositions** ; elles ne certifient ni R40 ni les gates de R41–R50. La roadmap prospective R51–R80 est présentée dans la [PR #368](https://github.com/faudard/drawTemp/pull/368).

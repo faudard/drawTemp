@@ -9,6 +9,7 @@ DrawTemp vise à terme un **éditeur de jeux 2D/2.5D multi-genres** : SRPG tacti
 - [Roadmap multi-genres (R25–R30, cible 6.0–7.0)](docs/DRAWTEMP_MULTI_GENRE_CREATOR_ROADMAP.md) : modes de jeu, architecture, ateliers, vertical slices, livraisons et critères de certification.
 - [Roadmap Creator Engine détaillée (R31–R40, cible 7.1–8.0)](docs/DRAWTEMP_7_1_TO_8_0_DETAILED_ROADMAP.md) : scripting visuel, physique, metroidvania, roguelite, monde vivant, VFX, IA et publication (jalons proposés).
 - [Roadmap 5.0 et consolidation R17–R24](docs/DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md) : fondations et dépendances préalables ; les jalons futurs sont proposés, non livrés.
+- [Roadmap Creator Studio 8.1–9.0 (R41–R50)](docs/DRAWTEMP_8_1_TO_9_0_DETAILED_ROADMAP_R41_R50.md) : RPG classique, narration, combat, mondes, simulation, cinématiques, SDK, collaboration, UX et certification ; **jalons futurs non implémentés**.
 
 ## Jouer à Jeanne d'Arc
 
