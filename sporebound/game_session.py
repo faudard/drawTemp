@@ -332,6 +332,29 @@ class GameSession:
         payload = (self.route_scene + ":" + collider).encode("utf-8")
         return "r32_open_" + hashlib.sha256(payload).hexdigest()[:24]
 
+    def _metroidvania_air_jumps(self):
+        """One opt-in R33 ability in canonical Campaign flags, never CT."""
+        spec = self.project.extensions.get("drawtemp.metroidvania")
+        if spec is None:
+            return 0
+        for pickup in spec["data"]["pickups"]:
+            if ("double_jump" in pickup["grants"] and
+                    self.progress.story_flags.get("r33_pickup_" + pickup["id"]) is True):
+                return 1
+        return 0
+
+    def _metroidvania_collect(self, events):
+        """Accept a pickup only when the real R32 trigger was entered."""
+        spec = self.project.extensions.get("drawtemp.metroidvania")
+        if spec is None:
+            return
+        room = self.route_scene
+        candidates = {p["id"] for p in spec["data"]["pickups"] if p["room"] == room}
+        entered = {event["collider"] for event in events
+                   if event["kind"] == "trigger_enter"}
+        for pickup in candidates & entered:
+            self.progress.story_flags["r33_pickup_" + pickup] = True
+
     def _active_platform(self):
         from .platform_physics import PlatformPhysics
         authored = self._platform_definition()
@@ -339,8 +362,9 @@ class GameSession:
             opened = [row["opens"] for row in authored["colliders"]
                       if "opens" in row and
                       self.progress.story_flags.get(self._platform_flag(row["opens"])) is True]
-            self._platform = PlatformPhysics(authored,
-                                             initial_disabled=sorted(set(opened)))
+            self._platform = PlatformPhysics(
+                authored, initial_disabled=sorted(set(opened)),
+                max_air_jumps=self._metroidvania_air_jumps())
         return self._platform
 
     def route_platform_state(self):
@@ -357,6 +381,7 @@ class GameSession:
         for event in events:
             if event["kind"] == "door_open":
                 self.progress.story_flags[self._platform_flag(event["collider"])] = True
+        self._metroidvania_collect(events)
         if self._living_world is not None:
             self._living_world.advance(1)
         return {"state": runtime.snapshot(), "events": events}
@@ -378,6 +403,15 @@ class GameSession:
         require(len(self.route_history) < MAX_HISTORY,
                 "Scene transition history limit reached")
         route = self.scene_router.destination(self.route_scene, link_id, self.progress)
+        # R40.B.3 opt-in physical high-gate cannot be entered via a direct R25
+        # transition: only an authenticated R32 trigger can unlock travel.
+        if (link_id == "high_gate" and
+                "drawtemp.metroidvania" in self.project.extensions):
+            require(self._metroidvania_air_jumps() > 0,
+                    "The high gate requires the earned double-jump ability")
+            require(self._platform is not None and
+                    link_id in self._platform.available_routes(),
+                    "The high-gate portal requires physical contact")
         before = deepcopy((self.progress, self.battle, self.fronts, self.finalized,
                            self.settled_fronts, self.siege_id, self.route_scene,
                            self.route_history, self.tactical_story_pending,
@@ -1238,6 +1272,8 @@ class GameSession:
             authored = session._platform_definition()
             platform = PlatformPhysics.from_recording(saved["physics"],
                                                       expected_scene=authored)
+            require(platform.max_air_jumps <= session._metroidvania_air_jumps(),
+                    "R32 air jumps are not authorized by earned R33 abilities")
             authored_openable = {row["opens"] for row in authored["colliders"]
                                  if "opens" in row}
             saved_opened = {ident for ident in authored_openable
