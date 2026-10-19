@@ -160,6 +160,48 @@ class R40PlayerQtBridgeTests(unittest.TestCase):
         from PySide6.QtGui import QGuiApplication
         cls.app = QGuiApplication.instance() or QGuiApplication([])
 
+    def test_qml_roguelite_widgets_drive_existing_player(self):
+        from PySide6.QtCore import QObject, QUrl
+        from PySide6.QtQml import QQmlApplicationEngine
+        from drawtemp.player.qt_app import create_bridge
+        from drawtemp.render.qt_viewport import make_controller
+        with TemporaryDirectory() as folder:
+            content = create_project(ProjectSpec(
+                "r40-roguelite", Path(folder) / "r40-run"))
+            controller = _player(content, folder)
+            renderer = make_controller(scene_for_player(controller))
+            bridge = create_bridge(controller, renderer)
+            engine = QQmlApplicationEngine()
+            engine.setInitialProperties({"smokeMode": True})
+            engine.rootContext().setContextProperty("renderer", renderer)
+            engine.rootContext().setContextProperty("player", bridge)
+            engine.load(QUrl.fromLocalFile(str(
+                Path(__file__).resolve().parents[1] / "drawtemp/player/Main.qml")))
+            self.assertTrue(engine.rootObjects())
+            window = engine.rootObjects()[0]
+            try:
+                bridge.newGame()
+                bridge.choose("enter")
+                self.app.processEvents()
+                state = controller.state()["roguelite"]
+                self.assertTrue(state["enabled"])
+                self.assertIsNotNone(window.findChild(QObject, "r40RogueClaim"))
+                target = next(row["id"] for row in state["moves"]
+                              if row["available"])
+                self.assertIsNotNone(window.findChild(
+                    QObject, "r40RogueRoom-" + str(target)))
+                bridge.rogueliteMove(target)
+                self.assertEqual(controller.state()["roguelite"]["state"]["position"],
+                                 target)
+                bridge.saveGame(1)
+                bridge.titleScreen()
+                bridge.loadGame(1)
+                self.assertEqual(controller.state()["roguelite"]["state"]["position"],
+                                 target)
+            finally:
+                window.close()
+                engine.deleteLater()
+
     def test_real_main_qml_bridge_routed_buttons_and_recovery(self):
         from PySide6.QtCore import QObject, QUrl
         from PySide6.QtQml import QQmlApplicationEngine
