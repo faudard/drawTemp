@@ -7,6 +7,7 @@ A self-declared SPDX identifier or source is NOT legal clearance for release.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from io import BytesIO
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
@@ -93,7 +94,7 @@ def validate_manifest(document: dict) -> dict:
         parse_semver(document["version"])
     except CapabilityError as exc:
         raise PackError(exc.code, str(exc)) from exc
-    if document["kind"] not in _KINDS:
+    if not isinstance(document["kind"], str) or document["kind"] not in _KINDS:
         raise PackError("invalid_kind", "Unknown pack kind")
     requirements = document["requires"]
     if not isinstance(requirements, dict) or set(requirements) != {
@@ -146,7 +147,7 @@ def _read_and_verify(archive: zipfile.ZipFile):
     names = {}
     for info in entries:
         if (info.is_dir() or info.flag_bits & 1 or
-                stat.S_IFMT(info.external_attr >> 16) == stat.S_IFLNK):
+                stat.S_IFMT(info.external_attr >> 16) not in (0, stat.S_IFREG)):
             raise PackError("invalid_archive", "Directory, encryption or symlink rejected")
         name = info.filename
         if name != "manifest.json":
@@ -189,9 +190,14 @@ def inspect_pack(path: str | Path) -> PackInspection:
     try:
         if path.stat().st_size > MAX_TOTAL_BYTES + MAX_MANIFEST_BYTES + 2 * 1024 * 1024:
             raise PackError("pack_too_large", "Compressed pack budget exceeded")
-        with zipfile.ZipFile(path, "r") as archive:
+        # Read one bounded snapshot: a modified ZIP cannot borrow validation
+        # from old bytes while reporting the checksum of new bytes.
+        archive_bytes = path.read_bytes()
+        if len(archive_bytes) > MAX_TOTAL_BYTES + MAX_MANIFEST_BYTES + 2 * 1024 * 1024:
+            raise PackError("pack_too_large", "Compressed pack budget exceeded")
+        with zipfile.ZipFile(BytesIO(archive_bytes), "r") as archive:
             checked = _read_and_verify(archive)
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        digest = hashlib.sha256(archive_bytes).hexdigest()
     except (OSError, zipfile.BadZipFile, RuntimeError, EOFError) as exc:
         raise PackError("invalid_archive", str(exc)) from exc
     doc = checked["manifest"]
@@ -216,8 +222,12 @@ def build_pack(source_dir: str | Path, output: str | Path, manifest: dict) -> Pa
         relative = _safe_path(item["path"])
         candidate = source.joinpath(*PurePosixPath(relative).parts)
         if (not candidate.is_file() or candidate.is_symlink() or
-                not candidate.resolve().is_relative_to(source)):
+                not candidate.resolve().is_relative_to(source) or
+                any((source / PurePosixPath(*PurePosixPath(relative).parts[:i])).is_symlink()
+                    for i in range(1, len(PurePosixPath(relative).parts)))):
             raise PackError("unsafe_source", relative)
+        if candidate.stat().st_size != item["size"]:
+            raise PackError("hash_mismatch", relative)
         data = candidate.read_bytes()
         if (len(data) != item["size"] or
                 hashlib.sha256(data).hexdigest() != item["sha256"]):
