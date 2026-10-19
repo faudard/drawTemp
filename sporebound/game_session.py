@@ -1289,7 +1289,9 @@ class GameSession:
             # cursor outside the pending scene is not a valid resumable save.
             pending = (session.tactical_scene() if session.tactical_story_pending
                        else session.active_scene())
-            validate_cursor(session.progress, pending)
+            index = validate_cursor(session.progress, pending)
+            require(pending is not None or index == 0,
+                    'R42 save has an unbound dialogue cursor')
         return session
 
     @classmethod
