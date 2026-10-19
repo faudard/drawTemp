@@ -85,6 +85,20 @@ class NarrativeDebuggerR42Tests(unittest.TestCase):
         with self.assertRaises(RuleError):
             self.debugger.step()
 
+    def test_forecast_uses_canonical_choice_without_committing_anything(self):
+        self.debugger.advance_line()
+        report = self.debugger.report()
+        preview = self.debugger.preview_choice('enter')
+        self.assertFalse(preview['committed'])
+        self.assertTrue(preview['isolated'])
+        self.assertEqual(preview['gold_delta'], 7)
+        self.assertEqual(preview['history_delta'], 1)
+        self.assertTrue(any(row['key'] == 'r42_c_main_captain'
+                            and row['after'] == 52 for row in preview['flags']))
+        self.assertEqual(self.debugger.report(), report)
+        with self.assertRaises(RuleError):
+            self.debugger.preview_choice('leave')
+
     def test_locked_or_incomplete_choices_fail_without_mutation(self):
         before = self.debugger.report()
         with self.assertRaises(RuleError):
