@@ -33,6 +33,7 @@ class BehaviorTreeDialog(QDialog):
         self.draft = None
         self.debugger = None
         self.last_report = None
+        self.breakpoints = set()
         self.setObjectName("r37-behavior-dialog")
         self.setWindowTitle("DrawTemp · Advanced AI Studio R37.C")
         self.resize(1000, 660)
@@ -62,6 +63,8 @@ class BehaviorTreeDialog(QDialog):
             ("down", "Descendre", lambda: self.reorder(1)),
             ("preview", "Diagnostiquer", self.preview),
             ("step", "Pas-à-pas", self.step),
+            ("breakpoint", "Point d'arrêt", self.toggle_breakpoint),
+            ("resume", "Continuer", self.resume),
             ("apply", "Appliquer", self.apply),
             ("undo", "Annuler", self.undo),
             ("redo", "Rétablir", self.redo),
@@ -259,7 +262,8 @@ class BehaviorTreeDialog(QDialog):
                 blackboard = new_blackboard(self.draft.actor_id)
             report = evaluate_behavior_tree(context, blackboard, tree)
             self.last_report = report
-            self.debugger = BehaviorTreeDebugger(report)
+            self.debugger = BehaviorTreeDebugger(
+                report, breakpoints=self.breakpoints)
             self.diagnostics.setPlainText(json.dumps(
                 report, ensure_ascii=False, indent=2))
         except (ValueError, KeyError, TypeError) as exc:
@@ -278,6 +282,37 @@ class BehaviorTreeDialog(QDialog):
             self.diagnostics.setPlainText(json.dumps({
                 "event": event, "cursor": self.debugger.state()},
                 ensure_ascii=False, indent=2))
+
+    def toggle_breakpoint(self):
+        identifier = self._current_id()
+        if identifier is None:
+            return
+        if identifier in self.breakpoints:
+            self.breakpoints.remove(identifier)
+        else:
+            self.breakpoints.add(identifier)
+        if self.last_report is not None:
+            state = self.debugger.state() if self.debugger else None
+            self.debugger = BehaviorTreeDebugger(
+                self.last_report, breakpoints=self.breakpoints)
+            if state:
+                for _ in range(state["cursor"]):
+                    self.debugger.step()
+        self.diagnostics.setPlainText(
+            "Points d'arrêt : " + ", ".join(sorted(self.breakpoints)))
+
+    def resume(self):
+        if self.debugger is None:
+            self.preview()
+        if self.debugger is None:
+            return
+        outcome = self.debugger.resume()
+        event = outcome["event"]
+        if event is not None:
+            self.render_tree(select_id=event["node_id"])
+        self.diagnostics.setPlainText(json.dumps({
+            "resume": outcome, "debugger": self.debugger.state()},
+            ensure_ascii=False, indent=2))
 
     def apply(self):
         if self.draft is None:
