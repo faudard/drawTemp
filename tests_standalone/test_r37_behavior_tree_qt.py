@@ -38,6 +38,10 @@ class BehaviorTreeQtTests(unittest.TestCase):
         self.assertEqual(dialog.last_report["action"], "wait")
         dialog.step()
         self.assertIn("cursor", dialog.diagnostics.toPlainText())
+        dialog.toggle_breakpoint()
+        self.assertTrue(dialog.breakpoints)
+        dialog.resume()
+        self.assertIn("resume", dialog.diagnostics.toPlainText())
         dialog.apply()
         self.assertEqual(author.revision, 1)
         modified = author.snapshot().to_dict()["project"]["extensions"][
