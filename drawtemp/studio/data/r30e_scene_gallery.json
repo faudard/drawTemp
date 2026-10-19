@@ -1,0 +1,158 @@
+{
+  "schema": 1,
+  "kind": "drawtemp-r30e-scene-gallery",
+  "entries": [
+    {
+      "id": "tactical",
+      "genre": "srpg",
+      "title": "Avant-poste tactique",
+      "description": "Dialogue de briefing entre la capitaine et un éclaireur, prêt à être relié à une campagne.",
+      "readiness": "narrative-scene-only",
+      "scenes": [
+        {
+          "id": "briefing",
+          "title": "Le guet du rempart",
+          "speaker": "Capitaine",
+          "text": "Nos sentinelles ont aperçu des mouvements à l'est. Avant de déployer l'escouade, observons le terrain.",
+          "choices": [
+            {
+              "id": "scout",
+              "label": "Envoyer un éclaireur.",
+              "next_scene": "report"
+            },
+            {
+              "id": "hold",
+              "label": "Conserver la position."
+            }
+          ]
+        },
+        {
+          "id": "report",
+          "title": "Le rapport",
+          "speaker": "Éclaireur",
+          "text": "Les arches du pont sont intactes. Le passage est dégagé pour une reconnaissance prudente.",
+          "choices": [
+            {
+              "id": "return",
+              "label": "Rejoindre le groupe."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "forest",
+      "genre": "action-adventure",
+      "title": "Le sentier oublié",
+      "description": "Scène narrative de forêt et ruines, sans déplacement temps réel ni combat d'action.",
+      "readiness": "narrative-scene-only",
+      "scenes": [
+        {
+          "id": "path",
+          "title": "À la lisière",
+          "speaker": "Gardienne",
+          "text": "Les pierres de l'ancien sentier brillent au coucher du soleil. Une clairière s'ouvre derrière les chênes.",
+          "choices": [
+            {
+              "id": "ask",
+              "label": "Demander où conduit le sentier.",
+              "next_scene": "ruins"
+            },
+            {
+              "id": "wait",
+              "label": "Observer la clairière."
+            }
+          ]
+        },
+        {
+          "id": "ruins",
+          "title": "La carte effacée",
+          "speaker": "Gardienne",
+          "text": "La fontaine marquait jadis le chemin des ruines. Les voyageurs suivaient l'eau plutôt que les flèches.",
+          "choices": [
+            {
+              "id": "thank",
+              "label": "Remercier la gardienne."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inn",
+      "genre": "classic-rpg",
+      "title": "La halte des voyageurs",
+      "description": "Dialogue d'auberge à plusieurs choix ; le combat menu et les quêtes restent hors de ce modèle.",
+      "readiness": "narrative-scene-only",
+      "scenes": [
+        {
+          "id": "counter",
+          "title": "À l'auberge",
+          "speaker": "Aubergiste",
+          "text": "Une soupe chaude ou des nouvelles de la route ? Les deux sont sur l'ardoise.",
+          "choices": [
+            {
+              "id": "news",
+              "label": "Demander des nouvelles.",
+              "next_scene": "rumors"
+            },
+            {
+              "id": "rest",
+              "label": "S'asseoir près du feu."
+            }
+          ]
+        },
+        {
+          "id": "rumors",
+          "title": "Le carnet de route",
+          "speaker": "Aubergiste",
+          "text": "Un marchand cherchait ce matin le col du nord. Il est parti avant l'orage.",
+          "choices": [
+            {
+              "id": "leave",
+              "label": "Noter l'information."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bridge",
+      "genre": "hybrid",
+      "title": "Du camp au conseil",
+      "description": "Scène de transition narrative. Aucune bascule de moteur libre/tactique n'est implémentée.",
+      "readiness": "narrative-scene-only",
+      "scenes": [
+        {
+          "id": "camp",
+          "title": "Le campement",
+          "speaker": "Messagère",
+          "text": "L'état-major attend un compte rendu. Les feux du camp s'éteignent peu à peu.",
+          "choices": [
+            {
+              "id": "council",
+              "label": "Rejoindre le conseil.",
+              "next_scene": "meeting"
+            },
+            {
+              "id": "remain",
+              "label": "Rester au camp."
+            }
+          ]
+        },
+        {
+          "id": "meeting",
+          "title": "Le conseil",
+          "speaker": "Commandante",
+          "text": "La reconnaissance a livré ses informations. Il faut maintenant décider comment protéger les villages.",
+          "choices": [
+            {
+              "id": "close",
+              "label": "Clore la réunion."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
