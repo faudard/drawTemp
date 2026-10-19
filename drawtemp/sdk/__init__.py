@@ -12,9 +12,13 @@ SDK_FEATURES = frozenset({
     "simulation.v1", "authoring.v1", "migration.v0-envelope-to-v1",
     "replay.v1", "player-slots.v1", "workers.v1", "certification.v1",
     "sdk-negotiation.v1", "project-extensions.v1", "controlled-scripting.v1",
+    "massive-simulation.v1",
 })
 
 _PUBLIC = {
+    "MassiveSimulationJob": "r24f_mass_lab",
+    "compare_massive_runs": "r24f_mass_lab",
+    "save_massive_report": "r24f_mass_lab",
     "StudioScriptError": "controlled_scripting",
     "validate_script_manifest": "controlled_scripting",
     "read_script_manifest": "controlled_scripting",
