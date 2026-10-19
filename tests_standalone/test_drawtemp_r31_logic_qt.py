@@ -153,6 +153,16 @@ class VisualLogicQtTests(unittest.TestCase):
                 view.new_graph()
             self.assertIsNotNone(view.draft)
             self.assertEqual(view.draft.graph["id"], "le_portail")
+            self.assertFalse(view.mission.isEnabled())
+            # The UI switches event types with typed dialogs, never editing JSON.
+            with patch.object(QInputDialog, "getItem",
+                              return_value=("interact", True)), \
+                 patch.object(QInputDialog, "getText",
+                              return_value=("lever", True)):
+                view.choose_node("start")
+                view.edit_node()
+            self.assertEqual(view.draft.node("start")["params"],
+                             {"kind": "interact", "object_id": "lever"})
             self.assertTrue(view.preview())
             self.assertEqual(session.snapshot().to_dict(), before)
             with patch.object(QInputDialog, "getItem",
@@ -167,6 +177,11 @@ class VisualLogicQtTests(unittest.TestCase):
             self.assertTrue(view.preview())
             self.assertTrue(view.apply_changes())
             self.assertEqual(session.revision, 1)
+            with patch.object(QInputDialog, "getText",
+                              return_value=("le_portail", True)):
+                view.new_graph()
+            self.assertIn("duplicate_graph", view.diagnostics.toPlainText())
+            self.assertEqual(view.draft.graph["id"], "le_portail")
             self.assertEqual(len(graphs_from_project(
                 session.snapshot().to_dict()["project"])), 1)
             view.choose_node("message")
