@@ -44,7 +44,7 @@ séparément dans R23.D ; le rendu Qt offscreen et la machine physique
 restent des contrôles distincts.
 
 ```bash
-python scripts/r23f_acceptance.py \
+python -m scripts.r23f_acceptance \
   --revision "$(git rev-parse HEAD)" \
   --platform Linux \
   --output r23f-journey.json
