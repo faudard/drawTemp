@@ -165,6 +165,8 @@
 | R20.13 QA Acte I | P0 | Parcours des branches, dialogues, sauvegarde/reprise, récompenses non dupliquées, zéro softlock connu | R14 ; tests E2E |
 | R20.14 Démo distribuable | P0 | Début/fin de l'acte I via Player autonome, menus, options, sauvegardes et feedback de testeurs | R15/R23 précoce ; rapport |
 
+**Références de production :** [R20.A — contrat narratif canonique](jeanne/R20_ACT_I_PRODUCTION_CONTRACT.md), [R20.B — exploration Acte I](jeanne/R20_B_PLAYABLE_VILLAGE_FOREST_REFUGE.md) et [R20.C — cinématiques et embranchements sauvegardés](jeanne/R20_C_CINEMATICS_AND_PERSISTENCE.md). R20.B et R20.C restent deux **GameProject distincts** afin de préserver les sauvegardes antérieures ; leur UX Player, tests GPU et certification restent ouverts.
+
 **Gate R20 :** trois missions narratives liées au minimum, une bifurcation réellement persistante, une fin d'acte identifiable, et un joueur externe peut tout terminer sans Studio ni compréhension des formats. La qualité narrative est revue humainement, pas « prouvée » par des tests de graphe seuls.
 
 ## 7. R21 — Tactical RPG & Castle Siege 2.0 (5.4)
@@ -187,6 +189,12 @@
 | R21.12 Salle du trône | P0 | Boss à phases télégraphiées, états environnementaux et renforts sous règles traçables | R13 ; tests multi-seeds |
 | R21.13 Fins de siège | P0 | Victoire, accord, défaite cohérents et persistés ; aucune fin inaccessible par défaut de script | R10 ; path validation |
 | R21.14 Balance Lab | P0 | Analyse seeds, distribution pertes/durée, heatmaps et statistiques couplées au replay exact | R13 ; QA humaine et CI |
+
+**Suivi R21.A — incrément non certifiant :** [menaces superposées et HUD tactique](drawtemp5/R21_TACTICAL_THREATS.md) ; la télégrafie couvre une partie de R21.1, avec CI et replay à revalider sur le SHA consolidé.
+
+**Suivi R21.B — incrément non certifiant :** [formations, réactions et étages](drawtemp5/R21_FLOOR_TACTICS.md) ; règles et escaliers canoniques, sans certification du Player multiétage.
+
+**Suivi R21.C — incrément non certifiant :** [bélier, herse et causalité des fronts](drawtemp5/R21_SIEGE_READINESS.md) ; la validation des parcours de siège complets reste ouverte.
 
 **Gate R21 :** le siège se termine par au moins deux approches tactiques cohérentes, avec plusieurs fronts, portes/escaliers, boss et conséquences durables. L'IA ne téléporte pas les unités hors simulation et le replay reste déterministe.
 
@@ -216,6 +224,8 @@
 ## 9. R23 — Public Release & Certification 5.5
 
 **Intégration en cours :** [R23.A — intégrité et journal de certification](drawtemp5/R23A_RELEASE_HARDENING.md) renforce l'export R15 et fournit des preuves CI multi-OS liées au commit. Ce n'est **pas** une certification 5.5 : les installateurs signés, licences, métriques GPU physiques, essais utilisateurs et gate Go/No-go final restent ouverts.
+
+**Suite R23.B — certification toujours NO-GO :** [endurance, accessibilité et QA utilisateurs](drawtemp5/R23B_ENDURANCE_ACCESSIBILITY_QA.md) ; les tests hors écran ne remplacent pas les essais physiques GPU, l'endurance prolongée ni la revue humaine.
 
 **But :** publier un produit de création utilisable et maintenable, pas une succession de builds.
 
