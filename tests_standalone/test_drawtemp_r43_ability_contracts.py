@@ -87,9 +87,11 @@ class AbilityContractTests(unittest.TestCase):
                     skill["effects"][0]["power"] = 20
             return content, project
 
-        self.session.apply(self.session.preview_pair(manual_edit))
         with self.assertRaises(AuthoringError):
-            preview_ability(self.session, conflict)
+            self.session.preview_pair(manual_edit)
+        self.session.apply(preview_ability(self.session, conflict))
+        self.assertEqual([s for s in self.session.snapshot().to_dict()["content"]["skills"]
+                          if s["id"] == conflict["id"]], [compile_ct_skill(conflict)])
 
     def test_rejects_native_collisions(self):
         spec = example_ability()
@@ -121,14 +123,24 @@ class AbilityContractTests(unittest.TestCase):
                               "abilities": [example_ability(), example_ability()]})
 
     def test_canonical_load_checks_extension_even_without_studio(self):
-        raw = self.project.to_dict()
-        raw["extensions"] = {
-            NAMESPACE: {"schema_version": 1, "references": [],
-                        "data": {"version": 1, "abilities": [example_ability()]}}}
-        self.assertEqual(GameProject.from_dict(raw, self.content).to_dict(), raw)
-        raw["extensions"][NAMESPACE]["data"]["abilities"][0]["cost"]["amount"] = -1
+        self.session.apply(preview_ability(self.session, example_ability()))
+        snapshot = self.session.snapshot().to_dict()
+        raw = snapshot["project"]
+        from sporebound.model import Content
+        content = Content.from_dict(snapshot["content"])
+        self.assertEqual(GameProject.from_dict(raw, content).to_dict(), raw)
+        # R43 is fail-closed if someone writes metadata but omits its native CT
+        # representation, or hand-edits the compiled skill out of band.
         with self.assertRaises(RuleError):
             GameProject.from_dict(raw, self.content)
+        tampered = Content.from_dict(snapshot["content"])
+        tampered.skills["r43_flame"].effects[0].power = 15
+        with self.assertRaises(RuleError):
+            GameProject.from_dict(raw, tampered)
+        invalid = deepcopy(raw)
+        invalid["extensions"][NAMESPACE]["data"]["abilities"][0]["cost"]["amount"] = -1
+        with self.assertRaises(RuleError):
+            GameProject.from_dict(invalid, content)
 
     def test_deterministic_integer_formula_and_profile_plans(self):
         a = {"op": "percent",
