@@ -82,15 +82,10 @@ def author_exploration_prototype(destination: str | Path) -> Path:
     if edited["project"] == before["project"]:
         raise ExplorationJourneyError("No exploration edit was applied")
     session.undo()
-    if session.snapshot().to_dict() != {
-            **before, "revision": session.revision,
-            "can_undo": False, "can_redo": True}:
-        # Revisions/history metadata may change independently of content:
-        # compare actual canonical state rather than UI metadata.
-        restored = session.snapshot().to_dict()
-        if (restored["content"], restored["project"]) != (
-                before["content"], before["project"]):
-            raise ExplorationJourneyError("Undo lost original authored state")
+    restored = session.snapshot().to_dict()
+    if (restored["content"], restored["project"]) != (
+            before["content"], before["project"]):
+        raise ExplorationJourneyError("Undo lost original authored state")
     session.redo()
     restored = session.snapshot().to_dict()
     if (restored["content"], restored["project"]) != (
