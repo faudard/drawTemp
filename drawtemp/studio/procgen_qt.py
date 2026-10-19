@@ -12,7 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QFileDialog, QFormLayout, QGraphicsScene, QGraphicsView,
+    QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QGraphicsScene, QGraphicsView,
     QHBoxLayout, QLabel, QMessageBox, QPushButton, QSpinBox, QSplitter,
     QPlainTextEdit, QVBoxLayout, QWidget,
 )
@@ -36,6 +36,7 @@ class ProcGenPreviewDialog(QDialog):
                                          content=content, project=project)
         self._last_layout = None
         self._last_recipe = None
+        self._last_biome = None
         host = QVBoxLayout(self)
         notice = QLabel("Aperçu déterministe, sans appliquer de changements à Content/GameProject.")
         notice.setWordWrap(True)
@@ -69,6 +70,11 @@ class ProcGenPreviewDialog(QDialog):
         self.loot.setRange(0, 256)
         self.loot.setValue(3)
         form.addRow("Budget loot", self.loot)
+        self.biome = QComboBox()
+        self.biome.setObjectName("r34-biome")
+        self.biome.addItems(sorted({b for p in self._library["prefabs"]
+                                   for b in p["biomes"]}))
+        form.addRow("Biome", self.biome)
         form_panel.addLayout(form)
         self.library_label = QLabel("Prefabs : démonstration (aucun asset instancié)")
         self.library_label.setWordWrap(True)
@@ -134,7 +140,14 @@ class ProcGenPreviewDialog(QDialog):
             candidate = json.loads(path.read_text(encoding="utf-8"))
             validated = validate_library(candidate, content=self._content,
                                          project=self._project)
+            previous_biome = self.biome.currentText()
             self._library = validated
+            self.biome.clear()
+            self.biome.addItems(sorted({b for p in validated["prefabs"]
+                                       for b in p["biomes"]}))
+            if previous_biome in [self.biome.itemText(i)
+                                  for i in range(self.biome.count())]:
+                self.biome.setCurrentText(previous_biome)
             self.library_label.setText(f"Bibliothèque : {path.name} — "
                                        f"{len(validated['prefabs'])} prefabs")
             self.preview()
@@ -186,12 +199,14 @@ class ProcGenPreviewDialog(QDialog):
     def preview(self) -> dict | None:
         self._last_layout = None
         self._last_recipe = None
+        self._last_biome = None
         self.graph.scene().clear()
         try:
             recipe = self._recipe()
-            result = generate_with_prefabs(recipe, self._library, biome="ruins",
+            result = generate_with_prefabs(recipe, self._library, biome=self.biome.currentText(),
                                            content=self._content, project=self._project)
             self._last_layout, self._last_recipe = result, recipe
+            self._last_biome = self.biome.currentText()
             self._render_graph(result)
             self.report.setPlainText(json.dumps({
                 "status": "preview only", "seed": recipe.seed,
@@ -210,7 +225,7 @@ class ProcGenPreviewDialog(QDialog):
         try:
             recipe = self._recipe()
             seeds = list(range(recipe.seed, min(recipe.seed + 25, (1 << 63) - 1)))
-            report = preview_seeds(recipe, self._library, seeds, biome="ruins",
+            report = preview_seeds(recipe, self._library, seeds, biome=self.biome.currentText(),
                                    content=self._content, project=self._project)
             self.report.setPlainText(json.dumps({
                 "tested": len(report),
@@ -225,7 +240,8 @@ class ProcGenPreviewDialog(QDialog):
 
     def export_repro(self) -> None:
         # Invalid or superseded previews must never be exported as successful.
-        if self._last_layout is None or self._last_recipe != self._recipe():
+        if (self._last_layout is None or self._last_recipe != self._recipe()
+                or self._last_biome != self.biome.currentText()):
             if self.preview() is None:
                 QMessageBox.warning(self, "Export refusé", "Génération invalide")
                 return
