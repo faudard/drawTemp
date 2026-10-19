@@ -49,7 +49,9 @@ class LogicCanvas(QGraphicsView):
             col, row = divmod(index, 4)
             x, y = 30 + col * 225, 35 + row * 106
             color = QColor("#225785" if node["kind"] == "event" else
-                           "#775325" if node["kind"] == "branch" else "#35465f")
+                           "#775325" if node["kind"] == "branch" else
+                           "#295943" if node["kind"] == "wait" else
+                           "#59466e" if node["kind"] == "flag" else "#35465f")
             box = scene.addRect(x, y, 186, 76, QPen(QColor("#8ca9d0"), 2),
                                 QBrush(color))
             box.setData(0, node["id"])
@@ -164,6 +166,8 @@ class LogicGraphDialog(QDialog):
                 ("new", "Nouveau", self.new_graph),
                 ("add", "+ Action", self.add_action),
                 ("branch", "+ Si / Sinon", self.add_branch),
+                ("wait", "+ Attendre", self.add_wait),
+                ("flag", "+ Drapeau", self.add_flag),
                 ("copy", "Dupliquer", self.copy_action),
                 ("edit", "Propriétés…", self.edit_node),
                 ("remove", "Supprimer", self.remove_action),
@@ -339,7 +343,7 @@ class LogicGraphDialog(QDialog):
             self.buttons[key].setEnabled(self.debug_session is not None)
         self.buttons["debug_start"].setEnabled(
             self.draft is not None and not self._has_unsaved_draft())
-        for key in ("add", "branch", "copy", "edit", "remove", "connect", "true", "false", "disconnect", "preview"):
+        for key in ("add", "branch", "wait", "flag", "copy", "edit", "remove", "connect", "true", "false", "disconnect", "preview"):
             self.buttons[key].setEnabled(self.draft is not None)
 
     def _inspect(self):
@@ -515,6 +519,42 @@ class LogicGraphDialog(QDialog):
         except (LogicGraphError, ValueError) as exc:
             self._problem(exc)
 
+    def add_wait(self):
+        if self.draft is None or not self.selected_node:
+            self._problem(LogicGraphError("invalid_sequence",
+                                         "Sélectionnez une action avant une attente."))
+            return
+        ticks, ok = QInputDialog.getInt(
+            self, "Attente logique", "Ticks de jeu", 5, 1, 10000)
+        if not ok:
+            return
+        try:
+            self.selected_node = self.draft.add_wait_after(self.selected_node, ticks)
+            self._render()
+            self.diagnostics.setPlainText(
+                "Attente insérée. Chaque phase est un déclencheur R9 journalisé.")
+        except (LogicGraphError, ValueError) as exc:
+            self._problem(exc)
+
+    def add_flag(self):
+        if self.draft is None or not self.selected_node:
+            self._problem(LogicGraphError("invalid_sequence",
+                                         "Sélectionnez une action avant le drapeau."))
+            return
+        source, ok = QInputDialog.getText(
+            self, "Variable booléenne", "ID du déclencheur R9 déjà exécuté",
+            text="r31_example")
+        if not ok:
+            return
+        try:
+            self.selected_node = self.draft.add_flag_after(
+                self.selected_node, source.strip())
+            self._render()
+            self.diagnostics.setPlainText(
+                "Drapeau lecture seule : événement R9 déjà déclenché.")
+        except (LogicGraphError, ValueError) as exc:
+            self._problem(exc)
+
     def copy_action(self):
         if self.draft is None or not self.selected_node:
             return
@@ -593,6 +633,24 @@ class LogicGraphDialog(QDialog):
         params = deepcopy(node["params"])
         kind = params["kind"]
         try:
+            if node["kind"] == "wait":
+                ticks, ok = QInputDialog.getInt(
+                    self, "Attente", "Ticks logiques", params["ticks"], 1, 10000)
+                if not ok:
+                    return
+                self.draft.edit_node(self.selected_node,
+                                     {"kind": "ticks", "ticks": ticks})
+                self._render()
+                return
+            if node["kind"] == "flag":
+                value, ok = QInputDialog.getText(
+                    self, "Drapeau journal", "ID d'événement R9", text=params["event_id"])
+                if not ok:
+                    return
+                self.draft.edit_node(self.selected_node, {
+                    "kind": "event_fired", "event_id": value.strip()})
+                self._render()
+                return
             if node["kind"] == "branch":
                 expression = self._prompt_expression(params["predicate"])
                 if expression is None:
@@ -665,7 +723,9 @@ class LogicGraphDialog(QDialog):
                           " → ".join(a["kind"] for a in t["actions"])
                           for t in triggers) +
                 ("\nSI/SINON exclusifs via cancel_after R9"
-                 if len(triggers) == 2 else ""))
+                 if self.draft.graph["schema_version"] == 2 else
+                 ("\nÉvénements R9 enchaînés via after/delay_ticks"
+                  if self.draft.graph["schema_version"] == 3 else "")))
             return True
         except (AuthoringError, LogicGraphError, ValueError) as exc:
             self._problem(exc)
