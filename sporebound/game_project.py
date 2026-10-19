@@ -164,6 +164,12 @@ class GameProject:
                     'Unknown strategic narrative trigger: ' + reference)
         from .exploration import validate_exploration
         validate_exploration(self.exploration, self.story)
+        from .action_scene_adapter import (
+            EXTENSION as ACTION_EXTENSION, validate_action_catalog,
+        )
+        if ACTION_EXTENSION in self.extensions:
+            validate_action_catalog(self.extensions[ACTION_EXTENSION]["data"],
+                                    project=self)
         from .living_world import EXTENSION, validate_living_world
         if EXTENSION in self.extensions:
             validate_living_world(
