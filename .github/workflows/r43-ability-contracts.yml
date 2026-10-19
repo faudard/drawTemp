@@ -43,6 +43,6 @@ jobs:
       - name: R1 original atomic authoring and project persistence
         run: python -m unittest tests_standalone.test_drawtemp5_r1_authoring -v
       - name: R25 legacy game-mode behavior
-        run: python -m unittest tests_standalone.test_r25_game_modes -v
+        run: python -m unittest tests_standalone.test_r25_scene_router -v
       - name: R31 narrative logic does not regress
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_graph -v
