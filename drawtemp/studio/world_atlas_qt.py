@@ -246,6 +246,9 @@ class WorldAtlasDialog(QDialog):
             self.projection.setCurrentText(region["projection"])
         finally:
             self._syncing = previous
+        # Changing the selected scene should highlight it without waiting for
+        # the next edit/preview; this is a pure QGraphics projection.
+        self._draw()
 
     def _load_portal(self, *_):
         if self._draft is None:

@@ -16,7 +16,7 @@ Studio Qt Widgets → **Outils → R44 • World Atlas 2.0…** (`drawtemp.studi
 1. Lorsque `drawtemp.worldgraph` est absent, `default_world_atlas(session)` construit un brouillon à partir des scènes accessibles par les routes canoniques R25, sans modifier le projet. Les projets non routés sont explicitement refusés.
 2. Toute modification de l'interface ne touche que ce **brouillon en mémoire**.
 3. **Prévisualiser** utilise `AuthoringSession.preview_project`, qui revalide Content/GameProject avec `validate_world_graph` et rejette régions isolées, mauvais spawn, IDs inconnus, propriétés non bornées et versions incompatibles.
-4. **Appliquer** enregistre **une seule** transaction Undo/Redo; un preview réutilisé ou dépassé est rejeté.
+4. **Appliquer** enregistre **une seule** transaction Undo/Redo; un preview réutilisé ou dépassé est rejeté. Le contenu `data` est modifié sans effacer les éventuelles `references` du conteneur d'extension R24.
 5. L'enregistrement sur disque reste l'opération commune du Studio (`AuthoringSession.save` / `save_as`) avec détection des conflits externes.
 
 ## Tests proposés

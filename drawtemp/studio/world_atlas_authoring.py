@@ -184,15 +184,18 @@ def preview_world_atlas(session: AuthoringSession, document,
         raise RuleError("R44: stale atlas editor revision")
     require(type(document) is dict, "R44: atlas document must be an object")
     data = deepcopy(document)
+    prior = snapshot.to_dict()["project"].get("extensions", {}).get(EXTENSION)
+    # Keep the R24 declarative envelope intact, especially its mission/campaign
+    # references. R44 edits the data payload, not registry metadata.
+    updated = deepcopy(prior) if prior is not None else {"schema_version": 1}
+    updated["data"] = deepcopy(data)
 
     def edit(project):
-        project.setdefault("extensions", {})[EXTENSION] = {
-            "schema_version": 1, "data": deepcopy(data)}
+        project.setdefault("extensions", {})[EXTENSION] = deepcopy(updated)
         return project
 
     plan = session.preview_project(edit, kind="r44.world-atlas")
-    prior = snapshot.to_dict()["project"].get("extensions", {}).get(EXTENSION, {})
-    changed = prior != {"schema_version": 1, "data": data}
+    changed = prior != updated
     return WorldAtlasPreview(plan, {
         "source_revision": snapshot.revision, "changed": changed,
         "regions": len(data["regions"]),

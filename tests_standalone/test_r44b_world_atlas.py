@@ -9,6 +9,7 @@ from drawtemp.studio.world_atlas_authoring import (
 from sporebound.model import RuleError
 from sporebound.world_graph44 import EXTENSION
 from tests_standalone.test_r25_scene_router import scene_fixture
+from drawtemp.sdk.reference import MISSION
 
 
 class WorldAtlasAuthoringTests(unittest.TestCase):
@@ -68,14 +69,30 @@ class WorldAtlasAuthoringTests(unittest.TestCase):
         self.assertEqual(editor.revision, 1)
 
     def test_existing_envelope_references_are_not_silently_dropped(self):
-        # A changed envelope is a transaction even when its data match.
-        self.session.apply(preview_world_atlas(self.session, self.atlas).plan)
-        data = self.session.snapshot().to_dict()
-        self.assertEqual(data["project"]["extensions"][EXTENSION]["schema_version"], 1)
-        unchanged = preview_world_atlas(self.session, self.atlas)
+        # R24 project extension references are not R44 editable fields.
+        self.project.extensions[EXTENSION] = {
+            "schema_version": 1, "data": deepcopy(self.atlas),
+            "references": [{"kind": "mission", "id": MISSION}],
+        }
+        editor = AuthoringSession.new(self.content, self.project)
+        unchanged = preview_world_atlas(editor, self.atlas)
         self.assertFalse(unchanged.report["changed"])
         with self.assertRaises(AuthoringError):
-            apply_world_atlas(self.session, unchanged)
+            apply_world_atlas(editor, unchanged)
+        altered = place_scene(self.atlas, "arrival", [42, 17])
+        initial = editor.snapshot().to_dict()
+        apply_world_atlas(editor, preview_world_atlas(editor, altered))
+        envelope = editor.snapshot().to_dict()["project"]["extensions"][EXTENSION]
+        self.assertEqual(envelope["references"], [{"kind": "mission", "id": MISSION}])
+        self.assertEqual(envelope["data"], altered)
+        editor.undo()
+        self.assertEqual(editor.snapshot().to_dict(), {
+            **initial, "revision": editor.revision,
+            "can_redo": True,
+        })
+        editor.redo()
+        self.assertEqual(editor.snapshot().to_dict()["project"]["extensions"][EXTENSION],
+                         envelope)
 
     def test_stale_preview_rejected_after_unrelated_edit(self):
         old = preview_world_atlas(self.session, self.atlas)
