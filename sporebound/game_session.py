@@ -779,6 +779,10 @@ class GameSession:
         updated = settle_campaign_flow(updated, self.project.campaign_flow,
                                       battle.mission.id, battle.result,
                                       content=self.content)
+        # Author-declared mapping; source is the authenticated Battle journal.
+        # This runs after the existing rewards and inside execute() rollback.
+        from .logic_campaign_bridge import apply_bridge
+        updated = apply_bridge(updated, self.project, battle)
         self.progress = updated
 
     def _settle(self):
