@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - "sporebound/platform_physics.py"
+      - "drawtemp/player/platform_app.py"
+      - "drawtemp/player/platform_reference.py"
+      - "drawtemp/player/qt_app.py"
+      - "tests_standalone/test_platform_journey_r32.py"
       - "sporebound/physics_scenes.py"
       - "sporebound/game_project.py"
       - "drawtemp/studio/platform_collider_authoring.py"
@@ -43,6 +47,8 @@ jobs:
         run: python -m unittest tests_standalone.test_platform_physics_r32 -v
       - name: Canonical collision authoring and recovery R32.C
         run: python -m unittest tests_standalone.test_platform_collider_authoring_r32 -v
+      - name: R32.D authentic campaign portal, switch, checkpoint and CT handoff
+        run: python -m unittest tests_standalone.test_platform_journey_r32 -v
       - name: Preserve action rules R26
         run: python -m unittest tests_standalone.test_action_runtime_r26 -v
       - name: Preserve canonical CT session
@@ -72,6 +78,11 @@ jobs:
           python -m unittest
           tests_standalone.test_platform_collider_authoring_r32
           tests_standalone.test_r28c_gameplay_designers -v
+      - name: Opt-in platform Player graphical smoke
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.player.qt_app --platform-demo --smoke
       - name: Gameplay tab startup
         env:
           QT_QPA_PLATFORM: offscreen
