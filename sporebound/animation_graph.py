@@ -67,12 +67,13 @@ def validate_controller(document, registry):
         except ValueError as exc:
             _fail("unknown_animation", str(exc))
         states[state["id"]] = state["animation"]
-    if document["initial"] not in states:
+    if type(document["initial"]) is not str or document["initial"] not in states:
         _fail("invalid_initial", "Initial state does not exist")
     keys = set()
     for edge in document["transitions"]:
         _shape(edge, ("source", "target", "on", "priority"), "transition")
-        if edge["source"] not in states or edge["target"] not in states:
+        if (type(edge["source"]) is not str or type(edge["target"]) is not str or
+                edge["source"] not in states or edge["target"] not in states):
             _fail("unknown_state", "Transition refers to an unknown state")
         _id(edge["on"], "event name")
         if type(edge["priority"]) is not int or not 0 <= edge["priority"] <= 100:
@@ -190,3 +191,35 @@ class AnimationStateController:
             _fail("checkpoint_tick", "Inconsistent checkpoint ticks")
         self.state, self.entered_tick, self.last_tick = (
             checkpoint["state"], entered, last)
+
+
+MAX_CONTROLLERS = 16
+
+
+def controllers_from_project(project):
+    """Validate the canonical R36 extension (also called by GameProject.load)."""
+    if hasattr(project, "to_dict"):
+        project = project.to_dict()
+    if type(project) is not dict:
+        _fail("invalid_project", "Expected GameProject object")
+    envelope = project.get("extensions", {}).get(NAMESPACE)
+    if envelope is None:
+        return []
+    if (type(envelope) is not dict or
+            set(envelope) != {"schema_version", "data", "references"} or
+            type(envelope["schema_version"]) is not int or
+            envelope["schema_version"] != 1 or
+            envelope["references"] != [] or
+            type(envelope["data"]) is not dict or
+            set(envelope["data"]) != {"controllers"} or
+            type(envelope["data"]["controllers"]) is not list):
+        _fail("invalid_storage", "R36 extension needs explicit migration")
+    controllers = envelope["data"]["controllers"]
+    if len(controllers) > MAX_CONTROLLERS:
+        _fail("controller_budget", "At most 16 animation controllers")
+    registry = AssetRegistry(project.get("assets") or None)
+    result = [validate_controller(row, registry) for row in controllers]
+    identifiers = [row["id"] for row in result]
+    if len(set(identifiers)) != len(identifiers):
+        _fail("duplicate_controller", "Controller IDs must be unique")
+    return result
