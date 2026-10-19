@@ -48,6 +48,9 @@ STARTERS = (
     Starter("exploration_prototype", "La vallée du guet", "exploration",
             None, "Déplacement libre + route vers CT en Player headless ; "
                   "combat temps réel, Qt onscreen et export non certifiés."),
+    Starter("action_combat_prototype", "Le guet de la clairière", "action_prototype",
+            None, "Combat R26 réel dans un Player headless et même GameSession ; "
+                  "loot Campaign, rendu Qt et export non certifiés."),
 )
 _BY_KEY = {row.key: row for row in STARTERS}
 REQUIRED_GENRES = (
@@ -57,7 +60,8 @@ REQUIRED_GENRES = (
 
 
 def _creatable(entry: Starter) -> bool:
-    return entry.minigame is not None or entry.key == "exploration_prototype"
+    return entry.minigame is not None or entry.key in (
+        "exploration_prototype", "action_combat_prototype")
 
 
 def starter(key: str) -> Starter:
@@ -192,7 +196,27 @@ def create_starter(key: str, destination: str | Path) -> dict:
     try:
         with TemporaryDirectory(prefix=".drawtemp-r50b-", dir=target.parent) as temp:
             staged = Path(temp) / "starter"
-            if entry.key == "exploration_prototype":
+            if entry.key == "action_combat_prototype":
+                from drawtemp.studio.r50b_action import (
+                    author_action_prototype, check_action_player_journey,
+                )
+                author_action_prototype(staged)
+                audit = check_action_player_journey(staged / "game.json")
+                outcome = {
+                    "transactional_edit": True, "undo_redo": True,
+                    "saved_and_reopened": True, "content_project_preflight": True,
+                    "gamesession_checkpoint_roundtrip": audit["replay_verified"],
+                    "headless_player_controller_tested": True,
+                    "player_save_reload_equal": audit["player_save_resume"],
+                    "player_intent": "action-combat-defeat-with-replay",
+                    "player_checkpoint_digest": audit["checkpoint_digest"],
+                    "checkpoint_digest": audit["checkpoint_digest"],
+                    "gameplay": "r26-action-combat",
+                    "r26_action": audit,
+                    "native_player_tested": False, "qt_onscreen_tested": False,
+                    "standalone_export_tested": False,
+                }
+            elif entry.key == "exploration_prototype":
                 from drawtemp.studio.r50b_exploration import (
                     author_exploration_prototype, check_exploration_player_journey,
                 )
