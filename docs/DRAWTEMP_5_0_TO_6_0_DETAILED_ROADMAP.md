@@ -215,6 +215,8 @@
 
 ## 9. R23 — Public Release & Certification 5.5
 
+**Intégration en cours :** [R23.A — intégrité et journal de certification](drawtemp5/R23A_RELEASE_HARDENING.md) renforce l'export R15 et fournit des preuves CI multi-OS liées au commit. Ce n'est **pas** une certification 5.5 : les installateurs signés, licences, métriques GPU physiques, essais utilisateurs et gate Go/No-go final restent ouverts.
+
 **But :** publier un produit de création utilisable et maintenable, pas une succession de builds.
 
 | ID | Priorité | Livrable vérifiable et comportement attendu | Dépendances et preuves |
