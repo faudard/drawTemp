@@ -98,6 +98,8 @@ Les profils ne sont **pas** des branches irréconciliables du moteur. Un même j
 
 > **Avancement R25.B — [PR #314](https://github.com/faudard/drawTemp/pull/314) (empilée sur #298, non certifiée)** : `SceneRouter` validé, liens et `spawn` contrôlés, conditions narratives existantes, transitions appelant le vrai `GameSession.start_mission()`, sauvegarde opt-in du curseur/historique et tests de reprise combat/campagne. **Limites :** navigation encore headless, déplacement cardinal de compatibilité, pas de runtime action temps réel/portail Player Qt ; crash recovery transactionnel et UX/Studio no-JSON restent ouverts. [Spécification et gates R25.B](drawtemp5/R25B_SCENE_ROUTER.md).\n\n**But :** rendre l'architecture réellement multi-genres, sans régression tactique.
 
+> **Avancement R25.C — PR de développement R25.C (empilée sur #314, non certifiée)** : déplacement libre headless en sous-unités entières (collisions de tuiles, diagonales et glissement), commandes à 60 ticks/s dans `GameSession.route_realtime_step`, journal R25.A intégré aux sauvegardes opt-in et vérification du replay à la reprise. Tests de compatibilité CT, collisions, corruptions et checkpoint. **Limites :** pas de caméra/viewport Qt, contrôleur, hitboxes dynamiques, combat action ni replay continu entre scènes ; R25.6–R25.10 restent ouverts. Voir [R25.C](drawtemp5/R25C_FIXED_REALTIME.md).
+
 | ID | P | Livrable et comportement vérifiable | Dépendances / preuve |
 |---|---|---|---|
 | R25.1 | P0 | ADR de capacités, profils SRPG/Action/Classic/Narrative/Hybrid et frontières d'API | R1/R24 ; revue contrats |
