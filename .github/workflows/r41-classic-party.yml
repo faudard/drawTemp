@@ -1,0 +1,49 @@
+name: R41 Classic RPG Party Foundation
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/classic_party.py'
+      - 'sporebound/game_project.py'
+      - 'sporebound/game_session.py'
+      - 'drawtemp/sdk/classic_party.py'
+      - 'drawtemp/sdk/__init__.py'
+      - 'tests_standalone/test_r41_classic_party.py'
+      - '.github/workflows/r41-classic-party.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'sporebound/classic_party.py'
+      - 'sporebound/game_project.py'
+      - 'sporebound/game_session.py'
+      - 'drawtemp/sdk/classic_party.py'
+      - 'drawtemp/sdk/__init__.py'
+      - 'tests_standalone/test_r41_classic_party.py'
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  headless-party-and-ct-compat:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.12']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: Syntax and package imports
+        run: python -m compileall -q sporebound/classic_party.py drawtemp/sdk/classic_party.py
+      - name: R41 party contracts, state replay and strict migration
+        run: python -m unittest tests_standalone.test_r41_classic_party -v
+      - name: R25 profiles and tactical unchanged
+        run: python -m unittest tests_standalone.test_r25_foundation -v
+      - name: Canonical GameSession and Jeanne replay
+        run: python -m unittest tests_standalone.test_game_session -v
