@@ -112,6 +112,11 @@ class GameSession:
                         set(self.project.exploration) | set(self.content.missions),
                         exploration=self.project.exploration)
             if spec is not None else None)
+        # R46.A is strictly opt-in: existing CT/replays omit this state.
+        from .cinematic_pro import EXTENSION as CINEMATIC_PRO_EXTENSION, CinematicProRuntime
+        self._cinematic_pro = (
+            CinematicProRuntime(self.project)
+            if CINEMATIC_PRO_EXTENSION in self.project.extensions else None)
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -179,6 +184,36 @@ class GameSession:
 
     def roguelite_checkpoint(self):
         return self._roguelite_action("checkpoint")
+
+    def cinematic_pro_state(self):
+        """Detached cursor/once-only ledger for the canonical R11 timeline."""
+        require(self._cinematic_pro is not None,
+                "R46 cinematic cues are not enabled in this project")
+        return self._cinematic_pro.snapshot()
+
+    def _cinematic_pro_action(self):
+        require(self._cinematic_pro is not None and self.mode == "campaign",
+                "R46 cinematic commands require an enabled campaign session")
+        return self._cinematic_pro
+
+    def cinematic_pro_start(self, clip_id):
+        return self._cinematic_pro_action().start(clip_id, self.progress)
+
+    def cinematic_pro_advance(self, elapsed_ms):
+        return self._cinematic_pro_action().advance(elapsed_ms, self.progress)
+
+    def cinematic_pro_pause(self):
+        return self._cinematic_pro_action().pause()
+
+    def cinematic_pro_resume(self):
+        return self._cinematic_pro_action().resume()
+
+    def cinematic_pro_seek(self, position_ms):
+        # Seeking is presentation-only; it cannot grant quest flags or loot.
+        return self._cinematic_pro_action().seek(position_ms)
+
+    def cinematic_pro_skip(self):
+        return self._cinematic_pro_action().skip(self.progress)
 
     def living_world_state(self, scene=None):
         """R35.A detached schedule projection, including off-focus scenes."""
@@ -978,6 +1013,8 @@ class GameSession:
                 "journal": self._rt_journal.recording()}
         if self._living_world is not None:
             data["living_world"] = self._living_world.snapshot()
+        if self._cinematic_pro is not None:
+            data["cinematic_pro"] = self._cinematic_pro.snapshot()
         if self._roguelite is not None:
             data["roguelite"] = self._roguelite.recording()
         if self.siege_id is not None:
@@ -1005,7 +1042,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "roguelite", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "living_world", "cinematic_pro", "roguelite", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1049,6 +1086,13 @@ class GameSession:
         session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
         verify_flow_save(session.progress, project.campaign_flow)
         session.story.initialize(session.progress, session.campaign_id)
+        if session._cinematic_pro is not None:
+            require("cinematic_pro" in data,
+                    "R46 configured project checkpoint is missing cinematic progress")
+            session._cinematic_pro.restore(data["cinematic_pro"])
+        else:
+            require("cinematic_pro" not in data,
+                    "Unexpected R46 checkpoint in legacy session")
         require(set(session.progress.unlocked + session.progress.completed)
                 <= set(session.content.missions), "Unknown campaign mission")
         mode = data["mode"]
