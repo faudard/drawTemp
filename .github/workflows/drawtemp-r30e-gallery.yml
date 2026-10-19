@@ -1,0 +1,81 @@
+name: DrawTemp R30.E Scene Gallery
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/r30_scene_gallery.py'
+      - 'drawtemp/studio/data/r30e_scene_gallery.json'
+      - 'drawtemp/studio/r30_creator_qt.py'
+      - 'tests_standalone/test_drawtemp_r30e_gallery.py'
+      - 'tests_standalone/test_drawtemp_r30e_qt.py'
+      - 'pyproject.toml'
+      - 'docs/drawtemp5/R30_E_SCENE_GALLERY.md'
+      - '.github/workflows/drawtemp-r30e-gallery.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  catalog:
+    name: R30.E canonical snippets / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Original gallery contract and inherited authoring/review gates
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp_r30_creator
+          tests_standalone.test_drawtemp_r30b_pack_import
+          tests_standalone.test_drawtemp_r30c_review
+          tests_standalone.test_drawtemp_r30d_git
+          tests_standalone.test_drawtemp_r30e_gallery
+          tests_standalone.test_drawtemp5_r1_authoring
+          -v
+      - name: Verify unchanged Jeanne battle/replay baseline
+        run: >-
+          python -m drawtemp.sdk.migration
+          --verify-baseline docs/drawtemp5/reference-baseline.json
+
+  qt:
+    name: R30.E Qt offscreen / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Qt Linux runtime
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]"
+      - name: Qt dialogs, selection and Undo without GUI display
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp_r30c_qt
+          tests_standalone.test_drawtemp_r30d_qt
+          tests_standalone.test_drawtemp_r30e_qt
+          -v
+      - name: Qt smoke; no real-GPU or cross-genre player certification
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.studio.r30_creator_qt --smoke

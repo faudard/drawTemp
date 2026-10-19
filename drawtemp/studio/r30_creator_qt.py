@@ -14,7 +14,7 @@ import sys
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QFileDialog, QHBoxLayout, QInputDialog,
-    QLabel, QLineEdit, QMessageBox, QPushButton, QTabWidget, QTableWidget,
+    QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QTabWidget, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget, QAbstractItemView,
 )
 
@@ -24,6 +24,9 @@ from drawtemp.studio.r30_creator_review import (
     MergeReviewController, PackReviewController,
 )
 from drawtemp.studio.r30_git_review import GitReviewController
+from drawtemp.studio.r30_scene_gallery import (
+    GalleryController, gallery_entries, load_catalog,
+)
 
 
 def _short(value):
@@ -51,7 +54,7 @@ class R30CreatorDialog(QDialog):
     def __init__(self, session: AuthoringSession, *, content_path=None, parent=None):
         super().__init__(parent)
         self.setObjectName("r30-creator-dialog")
-        self.setWindowTitle("DrawTemp Creator — Packs, diff et Git local (R30.D)")
+        self.setWindowTitle("DrawTemp Creator — Packs, conflits, Git et galerie (R30.E)")
         self.resize(1080, 720)
         self.session = session
         self.content_path = Path(content_path) if content_path else None
@@ -59,6 +62,8 @@ class R30CreatorDialog(QDialog):
                                 if self.content_path else None)
         self.merge_controller = MergeReviewController(self.session)
         self.git_controller = None
+        self.gallery_controller = GalleryController(self.session)
+        self._gallery_preview = None
         self._active_merge = self.merge_controller
         self._pack_populating = False
         self._merge_choices = {}
@@ -72,6 +77,7 @@ class R30CreatorDialog(QDialog):
         self._build_pack_tab()
         self._build_merge_tab()
         self._build_git_tab()
+        self._build_gallery_tab()
         close_button = QPushButton("Fermer")
         close_button.clicked.connect(self.reject)
         root.addWidget(close_button)
@@ -470,6 +476,176 @@ class R30CreatorDialog(QDialog):
             "Refs figées et vérifiées avant application. Aucune écriture Git.")
         self.tabs.setCurrentIndex(1)  # Reuse canonical diff + decision widgets.
         return self._render_merge_preview(preview)
+
+    def _build_gallery_tab(self):
+        """Offline snippets: real canonical narrative edits, no genre engine claims."""
+        page = QWidget()
+        self.tabs.addTab(page, "Galerie de modèles")
+        layout = QVBoxLayout(page)
+        intro = QLabel(
+            "Modèles de scènes NARRATIVES : SRPG, aventure, RPG classique et "
+            "hybride. Ce ne sont ni des jeux complets, ni une preuve de "
+            "déplacement temps réel, de combat menu ou d'export certifié.")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("Genre"))
+        self.gallery_filter = QComboBox()
+        self.gallery_filter.setAccessibleName("Filtre des modèles par genre")
+        self.gallery_filter.addItem("Tous les genres", "")
+        for genre, label in (
+            ("srpg", "RPG tactique"),
+            ("action-adventure", "Action-aventure (narratif uniquement)"),
+            ("classic-rpg", "RPG classique (narratif uniquement)"),
+            ("hybrid", "Hybride (narratif uniquement)"),
+        ):
+            self.gallery_filter.addItem(label, genre)
+        filter_row.addWidget(self.gallery_filter)
+        layout.addLayout(filter_row)
+        self.gallery_catalog = load_catalog()
+        self.gallery_entries = gallery_entries()
+        self.gallery_table = QTableWidget(len(self.gallery_entries), 4)
+        self.gallery_table.setHorizontalHeaderLabels(
+            ("Modèle", "Genre", "Scènes", "Identifiant"))
+        self.gallery_table.setAccessibleName("Modèles narratifs proposés")
+        self.gallery_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.gallery_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.gallery_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        for row, entry in enumerate(self.gallery_entries):
+            for col, value in enumerate((
+                entry.title, entry.genre, str(entry.scene_count), entry.template_id
+            )):
+                self.gallery_table.setItem(row, col, _item(value))
+        layout.addWidget(self.gallery_table)
+        self.gallery_description = QLabel("Sélectionnez un modèle à découvrir.")
+        self.gallery_description.setWordWrap(True)
+        layout.addWidget(self.gallery_description)
+        self.gallery_dialogues = QPlainTextEdit()
+        self.gallery_dialogues.setReadOnly(True)
+        self.gallery_dialogues.setAccessibleName("Aperçu des scènes narratives")
+        self.gallery_dialogues.setPlaceholderText("Texte et choix du modèle sélectionné")
+        layout.addWidget(self.gallery_dialogues)
+        settings = QHBoxLayout()
+        settings.addWidget(QLabel("Namespace"))
+        self.gallery_namespace = QLineEdit("exemple")
+        self.gallery_namespace.setMaxLength(16)
+        self.gallery_namespace.setAccessibleName("Préfixe isolé des nouvelles scènes")
+        settings.addWidget(self.gallery_namespace)
+        settings.addWidget(QLabel("Associer à la campagne"))
+        self.gallery_campaign = QComboBox()
+        self.gallery_campaign.setAccessibleName("Campagne à laquelle lier le modèle")
+        self.gallery_campaign.addItem("Aucune liaison automatique", None)
+        for campaign in self.session.snapshot().project["campaigns"]:
+            self.gallery_campaign.addItem(campaign["name"], campaign["id"])
+        settings.addWidget(self.gallery_campaign)
+        layout.addLayout(settings)
+        buttons = QHBoxLayout()
+        self.gallery_preview_button = QPushButton("Prévisualiser l'ajout de scènes")
+        self.gallery_preview_button.setEnabled(False)
+        self.gallery_preview_button.clicked.connect(self.preview_gallery)
+        buttons.addWidget(self.gallery_preview_button)
+        self.gallery_apply_button = QPushButton("Ajouter dans le Studio…")
+        self.gallery_apply_button.setEnabled(False)
+        self.gallery_apply_button.clicked.connect(self._apply_gallery_dialog)
+        buttons.addWidget(self.gallery_apply_button)
+        layout.addLayout(buttons)
+        self.gallery_status = QLabel(
+            "Ajout de scènes uniquement. Aucun asset, script ou moteur importé.")
+        self.gallery_status.setWordWrap(True)
+        self.gallery_status.setAccessibleName("Statut de l'ajout depuis la galerie")
+        layout.addWidget(self.gallery_status)
+        self.gallery_table.itemSelectionChanged.connect(self._gallery_selected)
+        self.gallery_filter.currentIndexChanged.connect(self._filter_gallery)
+        self.gallery_namespace.textChanged.connect(self._invalidate_gallery)
+        self.gallery_campaign.currentIndexChanged.connect(self._invalidate_gallery)
+
+    def _filter_gallery(self, *_):
+        selection = self.gallery_filter.currentData()
+        self.gallery_table.clearSelection()
+        for index, entry in enumerate(self.gallery_entries):
+            self.gallery_table.setRowHidden(
+                index, bool(selection and entry.genre != selection))
+        self._gallery_selected()
+
+    def _invalidate_gallery(self, *_):
+        self.gallery_controller.invalidate()
+        self._gallery_preview = None
+        self.gallery_apply_button.setEnabled(False)
+        self.gallery_status.setText(
+            "Nouvelle sélection : prévisualisation obligatoire avant ajout.")
+
+    def _gallery_selected(self):
+        self._invalidate_gallery()
+        rows = self.gallery_table.selectionModel().selectedRows()
+        if not rows:
+            self.gallery_preview_button.setEnabled(False)
+            self.gallery_description.setText("Sélectionnez un modèle.")
+            self.gallery_dialogues.clear()
+            return
+        entry = self.gallery_entries[rows[0].row()]
+        row = next(item for item in self.gallery_catalog["entries"]
+                   if item["id"] == entry.template_id)
+        self.gallery_description.setText(
+            entry.description + "  |  Contenu : " + entry.readiness
+            + "  |  Pas de certification de genre.")
+        lines = []
+        for scene in row["scenes"]:
+            lines.append("◈ " + scene["title"] + " — " + scene["speaker"])
+            lines.append(scene["text"])
+            lines.extend("  • " + choice["label"] +
+                         (" → " + choice["next_scene"] if "next_scene" in choice else "")
+                         for choice in scene["choices"])
+            lines.append("")
+        self.gallery_dialogues.setPlainText("\n".join(lines))
+        self.gallery_preview_button.setEnabled(True)
+
+    def preview_gallery(self):
+        self.gallery_apply_button.setEnabled(False)
+        rows = self.gallery_table.selectionModel().selectedRows()
+        if not rows:
+            return None
+        entry = self.gallery_entries[rows[0].row()]
+        try:
+            preview = self.gallery_controller.preview(
+                entry.template_id, self.gallery_namespace.text().strip(),
+                campaign_id=self.gallery_campaign.currentData())
+        except (ValueError, OSError) as exc:
+            self._error("Modèle rejeté", exc, self.gallery_status)
+            return None
+        self._gallery_preview = preview
+        self.gallery_apply_button.setEnabled(True)
+        self.gallery_status.setText(
+            f"{len(preview.scene_ids)} scènes canoniques validées ; "
+            "aucune écriture disque. Confirmez pour ajouter à la session, "
+            "puis enregistrez séparément. Undo disponible.")
+        return preview
+
+    def _apply_gallery_dialog(self):
+        if not self.gallery_apply_button.isEnabled():
+            return
+        choice = QMessageBox.question(
+            self, "Ajouter les scènes",
+            "Ajouter ces scènes narratives au GameProject de la session ?\n"
+            "Le moteur tactique, les assets et les sauvegardes restent inchangés.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if choice == QMessageBox.Yes:
+            self.apply_gallery()
+
+    def apply_gallery(self):
+        if not self.gallery_apply_button.isEnabled() or self._gallery_preview is None:
+            return None
+        preview = self._gallery_preview
+        self.gallery_apply_button.setEnabled(False)
+        self._gallery_preview = None
+        try:
+            transition = self.gallery_controller.apply(preview)
+        except (ValueError, OSError) as exc:
+            self._error("Ajout de modèle refusé", exc, self.gallery_status)
+            return None
+        self.gallery_status.setText(
+            f"Modèle ajouté (révision {transition.snapshot.revision}). "
+            "Utilisez Enregistrer ou Annuler dans le Studio.")
+        return transition
 
     def _error(self, title, error, label):
         label.setText(str(error))
