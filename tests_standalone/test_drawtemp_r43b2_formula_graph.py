@@ -63,27 +63,31 @@ class FormulaGraphTests(unittest.TestCase):
             replace_node(formula, (), op="constant", value=True)
         with self.assertRaises(AbilityError):
             replace_node(formula, (), op="percent", amount=999)
+        path = ()
         for _ in range(5):
-            formula = replace_node(formula, (), op="percent")
+            formula = replace_node(formula, path, op="percent")
+            path = (*path, "input")
         old = deepcopy(formula)
         with self.assertRaises(AbilityError) as caught:
-            replace_node(formula, (), op="percent")
+            replace_node(formula, path, op="percent")
         self.assertEqual(caught.exception.code, "formula_budget")
         self.assertEqual(formula, old)
         self.assertEqual(unchanged, {"op": "constant", "value": 8})
 
     def test_formula_node_budget_refuses_large_compositions(self):
         formula = {"op": "constant", "value": 1}
+        path = ()
         for _ in range(4):
-            formula = replace_node(formula, (), op="add")
+            formula = replace_node(formula, path, op="add")
+            path = (*path, "left")
         # Longest path depth 4 remains legal.
         self.assertEqual(len(describe_nodes(formula)), 9)
         previous = deepcopy(formula)
-        for _ in range(1):
-            formula = replace_node(formula, (), op="add")
+        formula = replace_node(formula, path, op="add")
+        path = (*path, "left")
         self.assertEqual(len(describe_nodes(formula)), 11)
         with self.assertRaises(AbilityError):
-            replace_node(formula, (), op="add")
+            replace_node(formula, path, op="add")
         self.assertEqual(len(describe_nodes(previous)), 9)
 
     def test_balance_lab_cannot_claim_runtime_damage_or_mutate_document(self):
