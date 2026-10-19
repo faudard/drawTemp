@@ -128,7 +128,7 @@ class ProfileAuthoringTests(unittest.TestCase):
         prepared = preview_profile_edit(first, "arrival", {"preset": "narrative"})
         with self.assertRaises(AuthoringError):
             apply_profile_edit(other, prepared)
-        next_edit = preview_profile_edit(first, MISSION, {"preset": "srpg"})
+        next_edit = preview_profile_edit(first, MISSION, None)
         # An unchanged edit still produces a plan, but is never committed.
         with self.assertRaises(AuthoringError):
             apply_profile_edit(first, next_edit)
