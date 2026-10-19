@@ -1,8 +1,7 @@
-"""R31.A — safe, versioned visual authoring compiled into R9 Mission.triggers.
+"""R31.A/C versioned visual authoring compiled into native R9 Mission.triggers.
 
-This is a headless authoring compiler, NOT a second gameplay scheduler or
-arbitrary Python scripting engine. Only an intentionally small linear subset
-is accepted until R31.B adds branching, typed expressions and step debugging.
+Schema v1 remains the original strict linear format; schema v2 adds one typed
+IF/ELSE branch with mutually cancelling R9 triggers, never a second runtime.
 """
 from __future__ import annotations
 
@@ -137,14 +136,18 @@ def validate_graph(graph):
     """Validate a detached JSON-compatible R31.1 authoring document."""
     _exact(graph, {"schema_version", "id", "mission_id", "entry",
                    "nodes", "edges"}, "graph")
-    if type(graph["schema_version"]) is not int or graph["schema_version"] != SCHEMA_VERSION:
-        _fail("unsupported_schema", "Graph schema requires explicit migration")
+    if type(graph["schema_version"]) is not int or graph["schema_version"] not in (1, 2):
+        _fail("unsupported_schema", "Only visual graph schemas 1 and 2 are supported")
     _id(graph["id"], "graph id")
     _id(graph["mission_id"], "mission id")
     _id(graph["entry"], "entry id")
     if type(graph["nodes"]) is not list or type(graph["edges"]) is not list:
         _fail("invalid_shape", "nodes and edges must be arrays")
-    _ordered_nodes(graph)
+    if graph["schema_version"] == 1:
+        _ordered_nodes(graph)
+    else:
+        from drawtemp.sdk.logic_branches import validate_branch_graph
+        validate_branch_graph(graph)
     return deepcopy(graph)
 
 
@@ -155,6 +158,8 @@ def compile_r9_trigger(graph):
     CT, replay and save rules. There is no visual-script runtime in R31.A.
     """
     graph = validate_graph(graph)
+    if graph["schema_version"] != 1:
+        _fail("split_branches", "Use compile_r9_triggers for IF/ELSE graphs")
     ordered = _ordered_nodes(graph)
     params = ordered[0]["params"]
     if params["kind"] == "tick":
@@ -169,6 +174,15 @@ def compile_r9_trigger(graph):
             payload["kind"], **{k: deepcopy(v) for k, v in payload.items()
                                 if k != "kind"}))
     return {"id": "r31_" + graph["id"], **condition, "actions": actions}
+
+
+def compile_r9_triggers(graph):
+    """Return stable, validated R9 trigger sequence, one or two per graph."""
+    graph = validate_graph(graph)
+    if graph["schema_version"] == 1:
+        return [compile_r9_trigger(graph)]
+    from drawtemp.sdk.logic_branches import compile_branch_triggers
+    return compile_branch_triggers(graph)
 
 
 def _stored_graphs(project):
@@ -207,7 +221,7 @@ def preview_graph(session: AuthoringSession, graph):
     if not isinstance(session, AuthoringSession):
         raise TypeError("Expected canonical AuthoringSession")
     authored = validate_graph(graph)
-    compiled = compile_r9_trigger(authored)
+    compiled = compile_r9_triggers(authored)
 
     def edit(content, project):
         graphs = _stored_graphs(project)
@@ -218,21 +232,33 @@ def preview_graph(session: AuthoringSession, graph):
                         if m["id"] == authored["mission_id"]), None)
         if mission is None:
             _fail("unknown_mission", "Graph mission does not exist")
-        current = next((row for row in mission.get("triggers", ())
-                        if row["id"] == compiled["id"]), None)
-        if previous is None and current is not None:
-            _fail("native_event_conflict", "An R9 event already owns this id")
-        if previous is not None and current != compile_r9_trigger(previous):
-            _fail("native_event_conflict", "The R9 trigger changed outside the graph")
+        old_compiled = compile_r9_triggers(previous) if previous is not None else []
+        old_by_id = {row["id"]: row for row in old_compiled}
+        events = mission.setdefault("triggers", [])
+        existing = {row["id"]: row for row in events}
+        for identifier, original in old_by_id.items():
+            if existing.get(identifier) != original:
+                _fail("native_event_conflict", "R9 event changed outside Logic Studio")
+        for row in compiled:
+            if row["id"] in existing and row["id"] not in old_by_id:
+                _fail("native_event_conflict", "R9 event id already belongs to another author")
         if previous is None and len(graphs) >= MAX_GRAPHS:
             _fail("graph_budget", "At most 16 visual graphs per project")
         if previous is not None:
             graphs = [g for g in graphs if g["id"] != authored["id"]]
         graphs.append(deepcopy(authored))
-        content = event_composer.save_event(
-            content, authored["mission_id"], compiled["id"],
-            {key: deepcopy(value) for key, value in compiled.items()
-             if key not in {"id", "actions"}}, compiled["actions"])
+        # Atomic multi-trigger update: mutual cancel_after refs must exist
+        # together during Content validation. Preserve foreign R9 order.
+        old_ids = set(old_by_id)
+        insertion = next((i for i, row in enumerate(events) if row["id"] in old_ids),
+                         len(events))
+        untouched = [row for row in events if row["id"] not in old_ids]
+        mission["triggers"] = (untouched[:insertion] + deepcopy(compiled) +
+                               untouched[insertion:])
+        from sporebound.model import Content
+        from sporebound.tactical_rpg3 import authored_rules_for_document
+        content = Content.from_dict(
+            content, rules=authored_rules_for_document(content)).to_dict()
         project.setdefault("extensions", {})[NAMESPACE] = {
             "schema_version": 1,
             "data": {"graphs": graphs},
