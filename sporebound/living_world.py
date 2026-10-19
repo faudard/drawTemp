@@ -310,7 +310,9 @@ class LivingWorld:
             if scene is None or pose["scene"] == scene:
                 rows.append({"id": npc["id"], **pose})
         data = {"version": VERSION, "day": self.day,
-                "minute": current, "ticks": self.ticks, "npcs": rows}
+                "minute": current, "ticks": self.ticks,
+                "ticks_per_minute": self.spec["ticks_per_minute"],
+                "npcs": rows}
         if "factions" in self.spec:
             data["reputation"] = deepcopy(self.reputation)
         if "daily_quests" in self.spec:
