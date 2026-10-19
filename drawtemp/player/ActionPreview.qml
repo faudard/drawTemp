@@ -143,6 +143,7 @@ ApplicationWindow {
                 Repeater {
                     model: root.actionData.vfx.lights || []
                     delegate: Item {
+                        id: lightRecord
                         required property var modelData
                         readonly property real unit: renderer.cameraState.zoom
                         readonly property real diameter: modelData.radius * 2 * unit
@@ -160,8 +161,8 @@ ApplicationWindow {
                                 width: parent.width * (1 - index * 0.23)
                                 height: width
                                 radius: width / 2
-                                color: parent.modelData.color
-                                opacity: parent.modelData.alpha * (0.35 + index * 0.15)
+                                color: lightRecord.modelData.color
+                                opacity: lightRecord.modelData.alpha * (0.35 + index * 0.15)
                             }
                         }
                     }
