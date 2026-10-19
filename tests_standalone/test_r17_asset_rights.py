@@ -8,8 +8,10 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import shutil
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from drawtemp.export.r15 import (
     ExportError, export_game, preflight, verify_bundle,
@@ -140,6 +142,24 @@ class R17AssetRightsTests(unittest.TestCase):
         strict = preflight(self.content, require_licenses=True)
         self.assertFalse(strict["passed"])
         self.assertTrue(any("Duplicate" in e for e in strict["errors"]))
+
+    def test_copy_time_asset_mutation_cannot_bypass_rights_sha(self):
+        self.write_rights()
+        target_asset = (self.project / self.assets[0]).resolve()
+        copy_real = shutil.copy2
+
+        def corrupted_copy(source, destination, *args, **kwargs):
+            result = copy_real(source, destination, *args, **kwargs)
+            if Path(source).resolve() == target_asset:
+                destination = Path(destination)
+                destination.write_bytes(destination.read_bytes() + b"tampered after preflight")
+            return result
+
+        target = self.root / "race-refused"
+        with patch("drawtemp.export.r15.shutil.copy2", side_effect=corrupted_copy):
+            with self.assertRaisesRegex(ExportError, "Staged"):
+                export_game(self.content, self.runtime, target, require_licenses=True)
+        self.assertFalse(target.exists())
 
     def test_rights_index_is_hashed_into_export_manifest(self):
         self.write_rights()
