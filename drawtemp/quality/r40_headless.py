@@ -16,7 +16,6 @@ from tempfile import TemporaryDirectory
 from drawtemp.core import GameSession
 from drawtemp.sdk.r40_starters import STARTER_KINDS, create_starter_pair
 from drawtemp.sdk.reference import MISSION
-from sporebound.ai import choose_command
 from sporebound.metroidvania import analyze_metroidvania
 from sporebound.model import RuleError
 
