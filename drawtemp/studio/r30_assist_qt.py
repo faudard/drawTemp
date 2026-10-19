@@ -137,6 +137,7 @@ class R30AssistDialog(QDialog):
     def _render(self, report):
         x, y, width, height = report.rectangle
         changed = {(cell.x, cell.y): cell.after for cell in report.tiles}
+        objects = {(px, py): kind for kind, px, py in report.object_cells}
         self.preview_grid.setRowCount(height)
         self.preview_grid.setColumnCount(width)
         self.preview_grid.setVerticalHeaderLabels(
@@ -147,9 +148,15 @@ class R30AssistDialog(QDialog):
             for col in range(width):
                 key = (x + col, y + row)
                 surface = changed.get(key)
-                cell = QTableWidgetItem(surface or "·")
+                kind = objects.get(key)
+                cell = QTableWidgetItem(
+                    ("Porte" if kind == "door" else "Levier") if kind else
+                    (surface or "·"))
                 cell.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                if surface:
+                if kind:
+                    cell.setBackground(QColor("#8dd3ca" if kind == "switch" else "#dc988b"))
+                    cell.setForeground(QColor("#111111"))
+                elif surface:
                     cell.setBackground(QColor({
                         "grass": "#598e56", "dirt": "#aa825b",
                         "sand": "#dac278", "stone": "#989ea6",
