@@ -111,6 +111,22 @@ class FormationFloorTests(unittest.TestCase):
 
 
 class ReactionFloorTests(unittest.TestCase):
+    def test_intercept_cannot_link_two_decks_then_arms_after_stairs(self):
+        battle, hero_id, upstairs_id = floor_battle(allies=True)
+        original = battle.digest()
+        with self.assertRaises(RuleError):
+            battle.execute({"kind": "prepare", "mode": "intercept",
+                            "target": upstairs_id})
+        self.assertEqual(battle.digest(), original)
+        battle.execute({"kind": "level_move", "level": 1, "cell": [4, 5]})
+        battle.execute({"kind": "prepare", "mode": "intercept",
+                        "target": upstairs_id})
+        self.assertEqual(
+            battle.prepared_reactions[hero_id]["target"], upstairs_id)
+        self.assertEqual(
+            Battle.replay(battle.recording(), rules=tactical_rpg_rules()).digest(),
+            battle.digest())
+
     def test_upper_overwatch_hidden_below_but_triggers_on_stair_landing(self):
         battle, hero_id, watcher_id = floor_battle(allies=False)
         self.assertEqual(battle.active_id, watcher_id)
@@ -128,7 +144,9 @@ class ReactionFloorTests(unittest.TestCase):
         self.assertFalse(any(
             row["kind"] == "prepared" and row["unit"] == watcher_id
             for row in intents["danger"]))
-        self.assertEqual(battle.digest(), battle.digest())
+        stable = battle.digest()
+        self.assertEqual(intents, tactical_intents(battle))
+        self.assertEqual(stable, battle.digest())
 
         battle.execute({"kind": "level_move", "level": 1, "cell": [4, 5]})
         self.assertTrue(any(e["kind"] == "prepared_triggered"
