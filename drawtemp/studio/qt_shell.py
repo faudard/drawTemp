@@ -2009,11 +2009,15 @@ class StudioWindow(QMainWindow):
         self.statusBar().showMessage("Démarrage du Player Qt demandé…")
         # Program and arguments come only from the Studio. Project data must
         # never supply a command, shell script or replacement executable.
+        self._start_player_process(process)
+        return True
+
+    def _start_player_process(self, process):
+        """Only Studio-owned arguments; override in CI with a harmless child."""
         process.start(
             sys.executable,
             ["-m", "drawtemp.player.qt_app", "--content", str(self.content_path)],
         )
-        return True
 
     def _read_playtest_output(self):
         process = self._r49_player_process
