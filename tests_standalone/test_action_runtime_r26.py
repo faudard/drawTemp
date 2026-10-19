@@ -118,6 +118,17 @@ class ActionRuntimeR26Tests(unittest.TestCase):
         self.assertIn(game.enemies["wolf"]["state"], ("attack", "chase"))
         self.assertEqual(game.digest(), ActionRuntime.from_recording(game.recording()).digest())
 
+    def test_unalerted_patrol_travels_its_route_instead_of_snapping_home(self):
+        game = ActionRuntime(scene(enemies=[
+            enemy(pos=[6, 6], hp=4, patrol=[[6, 6], [6, 5]])
+        ]))
+        for _ in range(12):
+            self.command(game)
+        self.assertLess(game.enemies["wolf"]["pos"][1], 6 * SCALE,
+                        "Patrol must be allowed to leave its home waypoint")
+        self.assertEqual(game.enemies["wolf"]["state"], "patrol")
+        self.assertEqual(game.digest(), ActionRuntime.from_recording(game.recording()).digest())
+
     def test_objects_require_distance_keys_and_one_shot_loot(self):
         game = ActionRuntime(scene(objects=[
             {"id": "chest", "kind": "chest", "pos": [1, 2],
