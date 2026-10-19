@@ -123,6 +123,28 @@ class R35NavigationTests(unittest.TestCase):
             shortest_path(stage, [2, 0], [1, 0])
         self.assertIsNone(shortest_path(stage, [1, 0], [3, 0]))
 
+    def test_midnight_and_batch_tick_projection_matches_small_steps(self):
+        content, project = positional_village()
+        batch = GameSession.new(content, project, "main", seed=47)
+        per_step = GameSession.new(content, project, "main", seed=47)
+        for session in (batch, per_step):
+            session.progress.story_flags["market_open"] = True
+        batch.living_world_advance(10)
+        for _ in range(10):
+            per_step.living_world_advance()
+        self.assertEqual(batch.living_world_state(), per_step.living_world_state())
+        self.assertEqual(batch.recording(), per_step.recording())
+        # Advance from 08:00 of day 0 to midnight of day 1.
+        jump = (1440 - 480) * 2
+        batch.living_world_advance(jump)
+        per_step.living_world_advance(jump)
+        self.assertEqual(batch.living_world_state(), per_step.living_world_state())
+        snapshot = batch.living_world_state()
+        self.assertEqual((snapshot["day"], snapshot["minute"]), (1, 0))
+        merchant = next(n for n in snapshot["npcs"] if n["id"] == "merchant")
+        self.assertEqual(merchant["pos"], [1, 1])
+        self.assertFalse(merchant["moving"])
+
     def test_optional_feature_preserves_historical_npc_shape(self):
         content, project = living_village()
         world = LivingWorld(project.extensions[EXTENSION]["data"],
