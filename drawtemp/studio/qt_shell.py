@@ -15,9 +15,9 @@ from PySide6.QtCore import QItemSelectionModel, QProcess, QSettings, QSortFilter
 from PySide6.QtGui import QAction, QColor, QFont, QIntValidator, QKeySequence, QPalette, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDockWidget,
-    QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
+    QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
-    QSplitter, QStackedWidget, QStyleFactory, QToolBar, QTreeView, QVBoxLayout, QWidget,
+    QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QToolBar, QTreeView, QVBoxLayout, QWidget,
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
@@ -34,11 +34,15 @@ from drawtemp.studio.plugins import (
     StudioPluginError, StudioPluginRegistry, read_studio_manifest,
 )
 from drawtemp.studio.r18_navigation import (WORKSPACES, LABELS, EN, recent_projects, workspace_host)
+from drawtemp.studio.r18_onboarding import (
+    GUIDE_UI, STEP_IDS, journey_steps, next_step, normalize_completed, project_key,
+)
 
 log = logging.getLogger(__name__)
 DEFAULT_SHORTCUTS = {
     "save": "Ctrl+S", "open": "Ctrl+O", "undo": "Ctrl+Z", "redo": "Ctrl+Shift+Z",
-    "palette": "Ctrl+Shift+P", "focus_resources": "Ctrl+1",
+    "palette": "Ctrl+Shift+P", "guide": "Ctrl+Shift+G",
+    "focus_resources": "Ctrl+1",
     "focus_inspector": "Ctrl+2", "new": "Ctrl+Shift+N",
     "new_project": "Ctrl+N", "new_template": "Ctrl+Alt+N",
     "playtest": "F5", "export": "Ctrl+Shift+E",
@@ -153,6 +157,12 @@ class StudioWindow(QMainWindow):
         self.session = session or AuthoringSession.new(*reference_project())
         self.content_path = Path(content_path) if content_path else None
         self.settings = settings or QSettings("DrawTemp", "Studio5")
+        self._onboarding_key = project_key(self.content_path)
+        self._onboarding_done = set(normalize_completed(
+            self.settings.value(self._onboarding_key + "/done", [])
+            if self._onboarding_key else []))
+        self._onboarding_hidden = self.settings.value(
+            "onboarding/hidden", False, type=bool)
         self.last_revision = -1
         self._models = {}
         self._resource_by_key = {}
@@ -191,8 +201,13 @@ class StudioWindow(QMainWindow):
         self._activate("project")
 
     def _make_home(self):
-        page = QWidget()
-        panel = QVBoxLayout(page)
+        page = QScrollArea()
+        page.setObjectName("r18-home-scroll")
+        page.setAccessibleName("Page Projet défilante")
+        page.setWidgetResizable(True)
+        self.home_scroll = page
+        content = QWidget()
+        panel = QVBoxLayout(content)
         title = QLabel("DrawTemp Studio 5.0")
         title.setObjectName("studio-heading")
         font = title.font()
@@ -200,7 +215,51 @@ class StudioWindow(QMainWindow):
         font.setBold(True)
         title.setFont(font)
         panel.addWidget(title)
-        panel.addWidget(QLabel("Projet Jeanne • édition sans JSON • Content / GameProject partagés"))
+        intro = QLabel(
+            "Créez un projet et découvrez les ateliers sans modifier de fichiers JSON.")
+        self.guide_intro = intro
+        intro.setWordWrap(True)
+        intro.setAccessibleName("Introduction au Studio DrawTemp")
+        panel.addWidget(intro)
+        self.guide_panel = QWidget()
+        self.guide_panel.setObjectName("r18-guide-panel")
+        self.guide_panel.setAccessibleName("Visite guidée du premier projet")
+        guide_layout = QVBoxLayout(self.guide_panel)
+        self.guide_title = QLabel("Premiers pas — projet → carte → personnages → sauvegarde → jeu")
+        self.guide_title.setWordWrap(True)
+        self.guide_title.setAccessibleName("Étapes de la visite guidée")
+        guide_layout.addWidget(self.guide_title)
+        self.guide_list = QListWidget()
+        self.guide_list.setObjectName("r18-guide-steps")
+        self.guide_list.setAccessibleName("Progression du premier projet")
+        self.guide_list.setAccessibleDescription(
+            "Les étapes sont validées après une action réussie, sans crédit fictif.")
+        self.guide_list.setMinimumHeight(150)
+        guide_layout.addWidget(self.guide_list)
+        self.guide_hint = QLabel("")
+        self.guide_hint.setWordWrap(True)
+        self.guide_hint.setAccessibleName("Instruction de la prochaine étape")
+        guide_layout.addWidget(self.guide_hint)
+        actions = QHBoxLayout()
+        self.guide_next_button = QPushButton("Démarrer ou continuer")
+        self.guide_next_button.setObjectName("r18-guide-next")
+        self.guide_next_button.setAccessibleName("Effectuer la prochaine étape")
+        self.guide_next_button.clicked.connect(self.guide_next)
+        actions.addWidget(self.guide_next_button)
+        self.guide_hide_button = QPushButton("Masquer le guide")
+        self.guide_hide_button.setObjectName("r18-guide-hide")
+        self.guide_hide_button.setAccessibleName("Masquer le guide, réouverture dans Outils")
+        self.guide_hide_button.clicked.connect(self.hide_guide)
+        actions.addWidget(self.guide_hide_button)
+        guide_layout.addLayout(actions)
+        warning = QLabel(
+            "Événements et Cinématiques : consultation possible ; "
+            "édition complète depuis le shell encore à certifier.")
+        self.guide_warning = warning
+        warning.setWordWrap(True)
+        warning.setAccessibleName("Limites actuelles des ateliers")
+        guide_layout.addWidget(warning)
+        panel.addWidget(self.guide_panel)
         for label, callback in (("Nouveau projet…", self.new_document),
                                 ("Nouveau projet multi-genres…", self.new_project)):
             button = QPushButton(label)
@@ -210,15 +269,16 @@ class StudioWindow(QMainWindow):
         for group in (("Créer", ("profiles", "gameplay", "maps", "construction", "actors", "database", "events")),
                       ("Organiser", ("campaigns", "cinematics", "analysis", "publication"))):
             panel.addWidget(QLabel(group[0]))
-            buttons = QHBoxLayout()
-            for identifier in group[1]:
+            buttons = QGridLayout()
+            for index, identifier in enumerate(group[1]):
                 button = QPushButton(LABELS[identifier])
                 button.setAccessibleName("Atelier " + LABELS[identifier])
                 button.clicked.connect(lambda _checked=False, key=identifier:
                                        self.navigate(key))
-                buttons.addWidget(button)
+                buttons.addWidget(button, index // 2, index % 2)
             panel.addLayout(buttons)
         panel.addStretch(1)
+        page.setWidget(content)
         self.workspace_tabs.addWidget(page)
         self.pages["project"] = page
 
@@ -361,6 +421,7 @@ class StudioWindow(QMainWindow):
         self._action("undo", "Annuler", self.undo)
         self._action("redo", "Rétablir", self.redo)
         self._action("palette", "Palette de commandes…", self.open_palette)
+        self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("focus_resources", "Rechercher les ressources",
@@ -412,6 +473,7 @@ class StudioWindow(QMainWindow):
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
         tools_menu.addAction(self.commands["preferences"])
+        tools_menu.addAction(self.commands["guide"])
         plugin_menu = tools_menu.addMenu("Plugins Studio")
         load_plugin = plugin_menu.addAction("Charger un manifeste…")
         load_plugin.triggered.connect(self._load_plugin_dialog)
@@ -471,6 +533,7 @@ class StudioWindow(QMainWindow):
                                                       if language == "en" else
                                                       "Atelier : " + labels[identifier])
         self.statusBar().showMessage("Langue du shell : " + language.upper())
+        self._update_guide()
 
     def configure_shortcut(self):
         keys = tuple(DEFAULT_SHORTCUTS)
@@ -643,6 +706,7 @@ class StudioWindow(QMainWindow):
         self._update_title()
         self.commands["undo"].setEnabled(snapshot.can_undo)
         self.commands["redo"].setEnabled(snapshot.can_redo)
+        self._update_guide()
 
     def _refresh_if_changed(self):
         if self.last_revision != self.session.revision:
@@ -943,6 +1007,10 @@ class StudioWindow(QMainWindow):
             self._models["maps"].mode.setCurrentIndex(
                 1 if identifier == "construction" else 0)
         self._activate(identifier)
+        if identifier == "maps":
+            self._guide_mark("map")
+        elif identifier == "actors":
+            self._guide_mark("actor")
 
     def _activate(self, identifier):
         self.workspace_tabs.setCurrentWidget(self.pages[identifier])
@@ -1046,6 +1114,15 @@ class StudioWindow(QMainWindow):
             if family is None or item.family == family:
                 listing.addItem(item.title + "  [" + item.resource_id + "]")
         layout.addWidget(listing)
+        if listing.count() == 0:
+            empty = QLabel(
+                "Aucune ressource dans cet atelier. "
+                "Créez une ressource dans l’éditeur spécialisé, "
+                "ou ouvrez un projet contenant déjà des données.")
+            empty.setObjectName("r18-empty-workspace")
+            empty.setWordWrap(True)
+            empty.setAccessibleName("Aucune ressource dans cet atelier")
+            layout.addWidget(empty)
         return page
 
     def apply_controlled_hooks(self, path, *, grants):
@@ -1224,6 +1301,115 @@ class StudioWindow(QMainWindow):
         except AuthoringError as exc:
             self.report_error(exc)
 
+    def _guide_switch_document(self, path, *, keep_visits=()):
+        """Rebind stored guide evidence after a successful document switch."""
+        self._onboarding_key = project_key(path)
+        saved = normalize_completed(
+            self.settings.value(self._onboarding_key + "/done", []))
+        self._onboarding_done = set(saved) | set(keep_visits) | {"project"}
+        self._persist_guide()
+        self._update_guide()
+
+    def _persist_guide(self):
+        if self._onboarding_key:
+            self.settings.setValue(
+                self._onboarding_key + "/done",
+                sorted(self._onboarding_done & set(STEP_IDS)))
+
+    def _guide_mark(self, identifier):
+        if not self.content_path or identifier not in STEP_IDS:
+            return
+        if identifier in self._onboarding_done:
+            return
+        # A navigation command is not evidence of an editable resource unless
+        # a corresponding canonical map/actor actually exists.
+        steps = journey_steps(
+            self.session.snapshot(), self._onboarding_done,
+            content_path=self.content_path)
+        current = next(step for step in steps if step.identifier == identifier)
+        if not current.available:
+            self._update_guide()
+            return
+        self._onboarding_done.add(identifier)
+        self._persist_guide()
+        self._update_guide()
+
+    def _update_guide(self):
+        if not hasattr(self, "guide_list"):
+            return
+        self.guide_panel.setVisible(not self._onboarding_hidden)
+        language = str(self.settings.value("language", "fr"))
+        if language not in GUIDE_UI:
+            language = "fr"
+        ui = GUIDE_UI[language]
+        self.guide_intro.setText(ui["intro"])
+        self.guide_panel.setAccessibleName(ui["panel"])
+        self.guide_list.setAccessibleName(ui["steps"])
+        self.guide_hint.setAccessibleName(ui["hint"])
+        self.guide_next_button.setAccessibleName(ui["next"])
+        self.guide_hide_button.setText(ui["hide"])
+        self.guide_warning.setText(ui["warning"])
+        steps = journey_steps(
+            self.session.snapshot(), self._onboarding_done,
+            content_path=self.content_path, language=language)
+        self.guide_list.clear()
+        completed = sum(step.done for step in steps)
+        for step in steps:
+            prefix = "✓ " if step.done else "○ "
+            self.guide_list.addItem(prefix + step.title)
+            item = self.guide_list.item(self.guide_list.count() - 1)
+            item.setToolTip(step.instructions + (
+                "\n" + step.blocker if step.blocker else ""))
+        self.guide_title.setText(ui["progress"].format(
+            done=completed, total=len(steps)))
+        upcoming = next_step(steps)
+        if upcoming is None:
+            self.guide_hint.setText(ui["complete"])
+            self.guide_next_button.setEnabled(False)
+            return
+        self.guide_hint.setText(
+            upcoming.instructions +
+            ("\n" + upcoming.blocker if upcoming.blocker else ""))
+        self.guide_next_button.setText(
+            ui["new"] if upcoming.identifier == "project" else
+            ui["workspace"] if upcoming.identifier in ("map", "actor") else
+            ui["save"] if upcoming.identifier == "save" else ui["playtest"])
+        # Project creation also remains possible when no file is yet open;
+        # missing map/actor blockers require explicit resource creation.
+        self.guide_next_button.setEnabled(
+            upcoming.available or upcoming.identifier in ("map", "actor"))
+
+    def guide_next(self):
+        steps = journey_steps(
+            self.session.snapshot(), self._onboarding_done,
+            content_path=self.content_path)
+        step = next_step(steps)
+        if step is None:
+            return
+        actions = {
+            "project": self.new_project,
+            "map": lambda: self.navigate("maps"),
+            "actor": lambda: self.navigate("actors"),
+            "save": self.save_document,
+            "playtest": self.playtest,
+        }
+        actions[step.identifier]()
+
+    def open_guide(self):
+        self._onboarding_hidden = False
+        self.settings.setValue("onboarding/hidden", False)
+        self.navigate("project")
+        self._update_guide()
+        target = (self.guide_next_button if self.guide_next_button.isEnabled()
+                  else self.guide_list)
+        self.home_scroll.ensureWidgetVisible(target)
+        target.setFocus(Qt.ShortcutFocusReason)
+
+    def hide_guide(self):
+        self._onboarding_hidden = True
+        self.settings.setValue("onboarding/hidden", True)
+        self._update_guide()
+
     def _record_recent(self, path):
         items = recent_projects(self.settings.value("files/recent", []),
                                 selected=path)
@@ -1264,6 +1450,8 @@ class StudioWindow(QMainWindow):
         self._activate("project")
         self.refresh()
         self._record_recent(path)
+        # A loaded project is proof of a completed open/create action.
+        self._guide_switch_document(path)
 
     def open_path(self, path):
         if not self._confirm_leave():
@@ -1332,6 +1520,7 @@ class StudioWindow(QMainWindow):
             self.session.save()
             self.refresh()
             self._record_recent(self.content_path)
+            self._guide_mark("save")
             return True
         except (AuthoringError, OSError) as exc:
             self.report_error(exc)
@@ -1345,9 +1534,14 @@ class StudioWindow(QMainWindow):
             return False
         try:
             self.session.save_as(path)
+            # The document identity becomes persistent only after both files
+            # have been saved successfully. Preserve prior in-memory visits.
+            previous_visits = self._onboarding_done & {"map", "actor"}
             self.content_path = Path(path)
+            self._guide_switch_document(path, keep_visits=previous_visits)
             self.refresh()
             self._record_recent(path)
+            self._guide_mark("save")
             return True
         except (AuthoringError, OSError) as exc:
             self.report_error(exc)
@@ -1371,6 +1565,10 @@ class StudioWindow(QMainWindow):
             self.report_error(exc)
             return False
         self.statusBar().showMessage("Player Qt lancé : " + str(self.content_path))
+        # A successful Player launch against a clean, persisted pair proves
+        # that the pair has been saved, even if it was opened from disk.
+        self._guide_mark("save")
+        self._guide_mark("playtest")
         return True
 
     def export_player(self):
