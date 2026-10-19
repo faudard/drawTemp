@@ -36,7 +36,8 @@ log = logging.getLogger(__name__)
 DEFAULT_SHORTCUTS = {
     "save": "Ctrl+S", "open": "Ctrl+O", "undo": "Ctrl+Z", "redo": "Ctrl+Shift+Z",
     "palette": "Ctrl+Shift+P", "focus_resources": "Ctrl+1",
-    "focus_inspector": "Ctrl+2", "new": "Ctrl+N",
+    "focus_inspector": "Ctrl+2", "new": "Ctrl+Shift+N",
+    "new_project": "Ctrl+N", "new_template": "Ctrl+Alt+N",
     "playtest": "F5", "export": "Ctrl+Shift+E",
     "go_project": "Ctrl+Alt+1", "go_maps": "Ctrl+Alt+2",
     "go_construction": "Ctrl+Alt+3", "go_actors": "Ctrl+Alt+4",
@@ -197,6 +198,12 @@ class StudioWindow(QMainWindow):
         title.setFont(font)
         panel.addWidget(title)
         panel.addWidget(QLabel("Projet Jeanne • édition sans JSON • Content / GameProject partagés"))
+        for label, callback in (("Nouveau projet…", self.new_document),
+                                ("Nouveau projet multi-genres…", self.new_project)):
+            button = QPushButton(label)
+            button.setAccessibleName(label)
+            button.clicked.connect(callback)
+            panel.addWidget(button)
         for group in (("Créer", ("profiles", "gameplay", "maps", "construction", "actors", "database", "events")),
                       ("Organiser", ("campaigns", "cinematics", "analysis", "publication"))):
             panel.addWidget(QLabel(group[0]))
@@ -339,7 +346,9 @@ class StudioWindow(QMainWindow):
         return action
 
     def _build_commands(self):
-        self._action("new", "Nouveau projet…", self.new_project)
+        self._action("new", "Nouveau projet…", self.new_document)
+        self._action("new_project", "Nouveau projet multi-genres…", self.new_project)
+        self._action("new_template", "Projet depuis un modèle rapide…", self.new_project_template)
         self._action("open", "Ouvrir un projet…", self.open_document)
         self._action("save", "Enregistrer le projet", self.save_document)
         self._action("save_as", "Enregistrer sous…", self.save_document_as)
@@ -361,7 +370,7 @@ class StudioWindow(QMainWindow):
 
     def _build_menus(self):
         file_menu = self.menuBar().addMenu("&Fichier")
-        for key in ("new", "open"):
+        for key in ("new_project", "new", "new_template", "open"):
             file_menu.addAction(self.commands[key])
         self.recent_menu = file_menu.addMenu("Projets récents")
         self.recent_menu.aboutToShow.connect(self._refresh_recent_menu)
@@ -1222,7 +1231,7 @@ class StudioWindow(QMainWindow):
         self._install_document(fresh, created / "game.json")
         return True
 
-    def new_project(self):
+    def new_project_template(self):
         from drawtemp.export.templates import TEMPLATES
         kind, accepted = QInputDialog.getItem(
             self, "Nouveau projet", "Modèle", list(TEMPLATES), 0, False)
@@ -1241,6 +1250,22 @@ class StudioWindow(QMainWindow):
             self.report_error(ValueError("Nom de dossier invalide"))
             return
         self.create_project(kind, Path(parent) / name)
+
+    def new_document(self):
+        """R22: use the canonical CreatorDialog and shared R1 session."""
+        from drawtemp.studio.r15_creator import CreatorDialog
+        dialog = CreatorDialog(self)
+        if dialog.exec() != QDialog.Accepted or dialog.created_content_path is None:
+            return False
+        return self.open_path(dialog.created_content_path)
+
+    def new_project(self):
+        """R28: guided multi-genre flow without a second Studio session."""
+        from drawtemp.studio.genre_wizard_qt import GenreProjectWizard
+        dialog = GenreProjectWizard(self)
+        if dialog.exec() != QDialog.Accepted or dialog.created_content_path is None:
+            return False
+        return self.open_path(dialog.created_content_path)
 
     def save_document(self):
         try:
