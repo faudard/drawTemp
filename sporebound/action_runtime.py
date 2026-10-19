@@ -175,6 +175,13 @@ class ActionRuntime:
             for ty in range((y - RADIUS) // SCALE, (y + RADIUS) // SCALE + 1):
                 if (tx, ty) in solid:
                     return False
+        # A closed door occupies its authored tile until an explicit interaction.
+        for obj in self.scene["objects"]:
+            if obj["kind"] != "door" or self.objects[obj["id"]]["opened"]:
+                continue
+            cx, cy = _center(obj["pos"])
+            if abs(x - cx) < SCALE // 2 + RADIUS and abs(y - cy) < SCALE // 2 + RADIUS:
+                return False
         # Enemies and hero are dynamic obstacles even without a physics engine.
         others = [("hero", self.hero)] + list(self.enemies.items())
         for name, other in others:
