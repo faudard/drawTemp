@@ -56,11 +56,12 @@ def contextual_puzzle(battle, selected=None):
                                "detail": "Ouverte" if obj.get("open", False)
                                else "Plaques inactives"})
         elif kind in ("key", "plate", "block"):
-            detail = ("Récupérée" if obj.get("used", False) else "À récupérer"
-                      if kind == "key" else
-                      "Activée" if obj.get("used", False) else "Inactive"
-                      if kind == "plate" else
-                      "Case {},{}".format(*obj["pos"]))
+            if kind == "key":
+                detail = "Récupérée" if obj.get("used", False) else "À récupérer"
+            elif kind == "plate":
+                detail = "Activée" if obj.get("used", False) else "Inactive"
+            else:
+                detail = "Case {},{}".format(*obj["pos"])
             status.append({"id": obj["id"], "kind": kind,
                            "label": {"key": "Clé", "plate": "Plaque",
                                      "block": "Bloc"}[kind] + " · " + obj["id"],
