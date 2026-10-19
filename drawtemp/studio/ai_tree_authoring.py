@@ -96,6 +96,33 @@ class BehaviorTreeDraft:
             node.update(deepcopy(properties))
         return self._edit(change)
 
+    def wrap_inverter(self, node_id):
+        """Wrap any subtree in a single-child decorator with one undoable edit."""
+        result = []
+        def change(tree):
+            node = next((n for n in tree["nodes"] if n["id"] == node_id), None)
+            if node is None:
+                raise ValueError("Unknown subtree")
+            if len(tree["nodes"]) >= 64:
+                raise ValueError("Behavior Tree budget exhausted")
+            wrapper_id = self._id(tree, "invert")
+            parent = next((n for n in tree["nodes"]
+                           if node_id in n.get("children", [])
+                           or n.get("child") == node_id), None)
+            if parent is None:
+                tree["root"] = wrapper_id
+            elif "children" in parent:
+                index = parent["children"].index(node_id)
+                parent["children"][index] = wrapper_id
+            else:
+                parent["child"] = wrapper_id
+            tree["nodes"].append({
+                "id": wrapper_id, "kind": "decorator",
+                "op": "invert", "child": node_id})
+            result.append(wrapper_id)
+        self._edit(change)
+        return result[0]
+
     def remove(self, node_id):
         def change(tree):
             if node_id == tree["root"]:
