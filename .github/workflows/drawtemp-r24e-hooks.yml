@@ -1,0 +1,57 @@
+name: DrawTemp R24.E controlled hooks
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/controlled_scripting.py'
+      - 'drawtemp/sdk/__init__.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'examples/scripts/**'
+      - 'tests_standalone/test_drawtemp5_r24e.py'
+      - '.github/workflows/drawtemp-r24e-hooks.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/sdk/controlled_scripting.py'
+      - 'drawtemp/sdk/__init__.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'examples/scripts/**'
+      - 'tests_standalone/test_drawtemp5_r24e.py'
+      - '.github/workflows/drawtemp-r24e-hooks.yml'
+
+jobs:
+  deterministic-hooks:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.10'
+          - os: ubuntu-latest
+            python: '3.12'
+          - os: windows-latest
+            python: '3.12'
+          - os: macos-latest
+            python: '3.12'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e .
+      - name: Controlled script and SDK regression
+        run: python -m unittest tests_standalone.test_drawtemp5_r24e.ManifestTests tests_standalone.test_drawtemp5_r24e.CompiledHookTests tests_standalone.test_drawtemp5_r24a
+
+  qt-hooks-offscreen:
+    runs-on: ubuntu-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e . 'PySide6==6.8.3'
+      - run: python -m unittest tests_standalone.test_drawtemp5_r24e.QtHookImportTests
