@@ -106,3 +106,39 @@ python -m unittest tests_standalone.test_platform_physics_r32 -v
 python -m unittest tests_standalone.test_action_runtime_r26 -v
 python -m unittest tests_standalone.test_game_session -v
 ```
+
+## R32.C — Progression Studio : colliders transactionnels
+
+L'atelier **Gameplay → Colliders 2D (R32)** contient maintenant :
+- un sélecteur de scène référencée par le Content/GameProject canonique ;
+- la création d'un modèle AABB, la modification/suppression des formes,
+  le snapping des champs numériques (100 sous-unités), les masques/couches,
+  les triggers et les plateformes horizontales mobiles ;
+- un **aperçu de diagnostic QGraphicsView** (ce n'est pas le rendu Player R3) ;
+- Prévisualiser → Appliquer : une transaction R1 avec révision, Undo/Redo,
+  sauvegarde double-document et reprise selon le gestionnaire R1 existant.
+
+`sporebound/physics_scenes.py` définit l'enveloppe typée facultative
+`GameProject.extensions["drawtemp.physics"]`, avec
+`{schema_version:1, data:{scenes:{...}}}`. Au chargement du GameProject,
+`validate_physics_catalog` refuse toute référence de scène inconnue et
+toute géométrie malformée ; les sauvegardes de projets historiques sans
+extension sont inchangées. Aucune clé de sauvegarde gameplay R17/R25 n'est
+ajoutée. Le modèle accepte à ce stade 8 scènes expérimentales, sous la limite
+de taille R24 des extensions.
+
+Les scènes peuvent être rattachées aux identités de missions, scènes
+narratives ou explorations déjà créées. **Cela ne change pas leur mode réel
+dans GameSession** : le Player doit encore obtenir un routage physique explicite
+et lier les triggers aux événements R31 avant qu'un platformer soit jouable.
+
+Tests ciblés :
+```sh
+python -m unittest tests_standalone.test_platform_physics_r32 -v
+python -m unittest tests_standalone.test_platform_collider_authoring_r32 -v
+QT_QPA_PLATFORM=offscreen python -m drawtemp.studio.qt_shell --smoke --workspace gameplay
+```
+
+Les gates R32.C ne sont **pas** clos tant que le routeur/Player, l'édition
+visuelle avancée, la reprise interscène, la validation Qt onscreen et les
+tests utilisateurs/hardware n'ont pas été exécutés.
