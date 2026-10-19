@@ -471,6 +471,23 @@ ApplicationWindow {
                     Accessible.description: text
                 }
             }
+            Label {
+                visible: (root.playerData.rpg_available || []).length > 0
+                text: "RENCONTRES RPG CLASSIQUE"
+                color: root.gold
+                font.bold: true
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Repeater {
+                model: root.playerData.rpg_available || []
+                Button {
+                    objectName: "r41-encounter-" + modelData
+                    text: "Combattre · " + modelData
+                    Layout.preferredWidth: 380
+                    Layout.alignment: Qt.AlignHCenter
+                    onClicked: player.startRpgEncounter(modelData)
+                }
+            }
             Repeater {
                 model: root.playerData.missions
                 Button {
@@ -519,6 +536,130 @@ ApplicationWindow {
                 }
             }
             Item { Layout.fillHeight: true }
+        }
+
+        ColumnLayout {
+            id: rpgBattle
+            objectName: "r41-rpg-battle"
+            visible: root.playerData.screen === "rpg_battle"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 12
+            function activeSkills() {
+                var data = root.playerData.rpg || ({})
+                var rows = data.actors || []
+                for (var i = 0; i < rows.length; ++i)
+                    if (rows[i].id === data.active) return rows[i].skills || []
+                return []
+            }
+            Label {
+                text: "RPG CLASSIQUE · " + (root.playerData.rpg.id || "") +
+                      " · Tour " + (root.playerData.rpg.round || 1)
+                color: root.gold
+                font.bold: true
+                font.pixelSize: 26 * root.textScale
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Label {
+                text: root.playerData.rpg.result ?
+                      "Résultat : " + root.playerData.rpg.result :
+                      "À jouer : " + (root.playerData.rpg.active || "—")
+                color: root.ivory
+                Layout.alignment: Qt.AlignHCenter
+            }
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contentWidth: availableWidth
+                ColumnLayout {
+                    width: parent.width
+                    Repeater {
+                        model: root.playerData.rpg.actors || []
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 45
+                            color: modelData.team === "party" ? "#263b43" : "#48343a"
+                            radius: 6
+                            border.color: modelData.id === root.playerData.rpg.active ?
+                                              root.gold : "#56645f"
+                            Label {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                verticalAlignment: Text.AlignVCenter
+                                color: root.ivory
+                                text: modelData.name + " · " + modelData.team +
+                                      " · PV " + modelData.hp + "/" + modelData.max_hp +
+                                      " · PM " + modelData.mp + "/" + modelData.max_mp +
+                                      (modelData.hp === 0 ? " · KO" : "") +
+                                      (modelData.guard ? " · Garde" : "")
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+                }
+            }
+            Label {
+                text: "Cible (allié ou ennemi suivant l'action)"
+                color: root.muted
+            }
+            ComboBox {
+                id: r41Target
+                objectName: "r41-target-picker"
+                Layout.fillWidth: true
+                model: root.playerData.rpg.actors || []
+                textRole: "name"
+                valueRole: "id"
+                enabled: !root.playerData.rpg.result
+            }
+            Label { text: "Compétence disponible"; color: root.muted }
+            ComboBox {
+                id: r41Skill
+                objectName: "r41-skill-picker"
+                Layout.fillWidth: true
+                model: rpgBattle.activeSkills()
+                enabled: !root.playerData.rpg.result && count > 0
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Button {
+                    text: "Attaquer"
+                    objectName: "r41-attack"
+                    enabled: !root.playerData.rpg.result
+                    onClicked: player.rpgAction("attack", r41Target.currentValue || "", "")
+                }
+                Button {
+                    text: "Garder"
+                    objectName: "r41-guard"
+                    enabled: !root.playerData.rpg.result
+                    onClicked: player.rpgAction("guard", "", "")
+                }
+                Button {
+                    text: "Compétence"
+                    objectName: "r41-skill"
+                    enabled: !root.playerData.rpg.result && r41Skill.count > 0
+                    onClicked: player.rpgAction(
+                        "skill", r41Target.currentValue || "", r41Skill.currentText)
+                }
+                Button {
+                    text: "Potion"
+                    objectName: "r41-potion"
+                    enabled: !root.playerData.rpg.result
+                    onClicked: player.rpgAction("item", r41Target.currentValue || "", "")
+                }
+                Button {
+                    text: "Fuir"
+                    objectName: "r41-flee"
+                    enabled: !root.playerData.rpg.result
+                    onClicked: player.rpgAction("flee", "", "")
+                }
+            }
+            Button {
+                objectName: "r41-finish"
+                text: "Retourner à la campagne"
+                visible: Boolean(root.playerData.rpg.result)
+                Layout.alignment: Qt.AlignHCenter
+                onClicked: player.finishRpgEncounter()
+            }
         }
 
         RowLayout {
