@@ -447,6 +447,84 @@ ApplicationWindow {
                 color: root.ivory
                 Layout.alignment: Qt.AlignHCenter
             }
+            // R40.B.2: R34 run data belongs to GameSession; Player only
+            // reads a detached snapshot and dispatches guarded commands.
+            ColumnLayout {
+                visible: root.playerData.roguelite.enabled
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 400
+                spacing: 8
+                property var run: root.playerData.roguelite.state || ({})
+                Label {
+                    text: "DONJON PROCÉDURAL · RUN " +
+                          ((parent.run.run_index || 0) + 1)
+                    color: root.gold
+                    font.bold: true
+                    font.pixelSize: 20 * root.textScale
+                    Layout.fillWidth: true
+                }
+                Label {
+                    color: root.ivory
+                    text: "Salle " + parent.run.position +
+                          " · " + (parent.run.status || "inconnu") +
+                          " · clés " + (parent.run.keys || []).join(", ") +
+                          " · butin " + ((parent.run.inventory || {}).loot || 0)
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+                Label {
+                    color: root.gold
+                    text: "Métaprogression : " +
+                          ((parent.run.meta || {}).coins || 0) + " pièces, " +
+                          ((parent.run.meta || {}).wins || 0) + " victoire(s)"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+                Repeater {
+                    model: root.playerData.roguelite.moves || []
+                    Button {
+                        objectName: "r40RogueRoom-" + modelData.id
+                        text: "Salle " + modelData.id + " · " +
+                              modelData.role +
+                              (modelData.available ? "" : " (verrouillée)")
+                        enabled: (root.playerData.roguelite.state || {}).status === "active" &&
+                                 modelData.available && !root.inputLocked
+                        Layout.fillWidth: true
+                        Accessible.description: text
+                        onClicked: player.rogueliteMove(modelData.id)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button {
+                        objectName: "r40RogueClaim"
+                        text: "Ramasser"
+                        enabled: root.playerData.roguelite.can_claim && !root.inputLocked
+                        onClicked: player.rogueliteClaim()
+                    }
+                    Button {
+                        text: "Checkpoint"
+                        enabled: (root.playerData.roguelite.state || {}).status === "active" &&
+                                 !root.inputLocked
+                        onClicked: player.rogueliteCheckpoint()
+                    }
+                    Button {
+                        text: "Abandonner"
+                        enabled: (root.playerData.roguelite.state || {}).status === "active" &&
+                                 !root.inputLocked
+                        onClicked: player.rogueliteDie()
+                    }
+                }
+                Button {
+                    objectName: "r40RogueRestart"
+                    text: "Nouvelle tentative"
+                    enabled: ["won", "dead"].indexOf(
+                                 (root.playerData.roguelite.state || {}).status) !== -1 &&
+                             !root.inputLocked
+                    Layout.fillWidth: true
+                    onClicked: player.rogueliteRestart()
+                }
+            }
             Label {
                 visible: root.playerData.journey.enabled
                 text: root.playerData.journey.completed ?
