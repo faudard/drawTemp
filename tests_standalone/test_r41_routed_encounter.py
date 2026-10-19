@@ -118,6 +118,43 @@ class R41RoutedEncounterTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             GameSession.from_recording(forged, self.content, self.project)
 
+    def test_victory_reward_survives_travel_and_reload_once(self):
+        session = GameSession.new(self.content, self.project, "main", seed=17)
+        session.progress.inventory["potion"] = 2
+        session.route_move(1, 0)
+        session.rpg_start("sparring")
+        before = session.recording()
+        with self.assertRaises(RuleError):
+            session.route_transition("to_forest")
+        self.assertEqual(session.recording(), before)
+        for _ in range(20):
+            current = session.rpg_state()
+            if current["result"]:
+                break
+            session.rpg_action({
+                "kind": "attack", "actor": current["active"],
+                "target": "renaud_mentor"})
+        self.assertEqual(session.rpg_state()["result"], "victory")
+        session.rpg_finish()
+        self.assertEqual(session.progress.gold, 17)
+        self.assertEqual(session.progress.heroes["jeanne"].xp, 50)
+        self.assertEqual(session.progress.inventory["potion"], 2)
+        self.assertEqual(session.rpg_available(), [])
+        session.route_transition("to_forest")
+        session.route_transition("back_to_inn")
+        self.assertEqual(session.rpg_available(), [])
+        with TemporaryDirectory() as directory:
+            target = Path(directory) / "r41-completed.json"
+            session.save(target)
+            loaded = GameSession.load(target, self.content, self.project)
+            self.assertEqual(loaded.recording(), session.recording())
+            self.assertEqual(loaded.progress.gold, 17)
+            self.assertEqual(loaded.progress.heroes["jeanne"].xp, 50)
+            self.assertEqual(loaded.progress.inventory["potion"], 2)
+            self.assertEqual(loaded.rpg_available(), [])
+            with self.assertRaises(RuleError):
+                loaded.rpg_start("sparring")
+
     def test_player_in_routed_exploration_actions_and_recovery(self):
         with TemporaryDirectory() as directory:
             player = PlayerController(
