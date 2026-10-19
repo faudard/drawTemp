@@ -103,7 +103,8 @@ class GameSession:
         spec = self.project.extensions.get(EXTENSION)
         self._living_world = (
             LivingWorld(spec["data"],
-                        set(self.project.exploration) | set(self.content.missions))
+                        set(self.project.exploration) | set(self.content.missions),
+                        exploration=self.project.exploration)
             if spec is not None else None)
         self.battle = None
         self.fronts = None
