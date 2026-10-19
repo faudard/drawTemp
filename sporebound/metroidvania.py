@@ -159,6 +159,7 @@ def analyze_metroidvania(raw, *, scene_ids=None, state_budget=20000):
                 pending.append(prior)
     dead = sorted(set(parents) - good)
     rooms_seen = {room for room, _ in parents}
+    unreachable_rooms = sorted(set(raw["rooms"]) - rooms_seen)
     witness = []
     if terminals:
         end = min(terminals, key=lambda s: (s[1].bit_count(), s[0], s[1]))
@@ -173,9 +174,9 @@ def analyze_metroidvania(raw, *, scene_ids=None, state_budget=20000):
         witness.reverse()
     return {
         "complete": True,
-        "safe": bool(terminals) and not dead,
+        "safe": bool(terminals) and not dead and not unreachable_rooms,
         "goal_reachable": bool(terminals),
-        "unreachable_rooms": sorted(set(raw["rooms"]) - rooms_seen),
+        "unreachable_rooms": unreachable_rooms,
         "softlock_states": [{"room": room,
                              "capabilities": [a for a in abilities if bits & cap_bits[a]]}
                             for room, bits in dead[:100]],
