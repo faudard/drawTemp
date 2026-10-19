@@ -12,6 +12,39 @@ from pathlib import Path
 
 STEP_IDS = ("project", "map", "actor", "save", "playtest")
 
+GUIDE_UI = {
+    "fr": {
+        "intro": "Créez un projet et découvrez les ateliers sans modifier de fichiers JSON.",
+        "progress": "Premiers pas — {done}/{total} étapes vérifiées",
+        "complete": "Parcours terminé : vérifiez le Player, les interactions et les diagnostics avant publication.",
+        "new": "Démarrer le projet…",
+        "workspace": "Ouvrir l'atelier",
+        "save": "Enregistrer",
+        "playtest": "Lancer le Player",
+        "hide": "Masquer le guide",
+        "panel": "Visite guidée du premier projet",
+        "steps": "Progression du premier projet",
+        "hint": "Instruction de la prochaine étape",
+        "next": "Effectuer la prochaine étape",
+        "warning": "Événements et Cinématiques : consultation possible ; édition complète depuis le shell encore à certifier.",
+    },
+    "en": {
+        "intro": "Create a project and explore the workspaces without editing JSON files.",
+        "progress": "Getting started — {done}/{total} verified steps",
+        "complete": "Journey complete: verify the Player, interactions and diagnostics before publishing.",
+        "new": "Create a project…",
+        "workspace": "Open workspace",
+        "save": "Save project",
+        "playtest": "Launch Player",
+        "hide": "Hide guide",
+        "panel": "First-project guided tour",
+        "steps": "First-project progress",
+        "hint": "Next-step instructions",
+        "next": "Perform the next step",
+        "warning": "Events and Cinematics: browsing is available; full editing in the shell still requires certification.",
+    },
+}
+
 TRANSLATIONS = {
     "fr": (
         ("Ouvrir ou créer un projet", "Fichier → Nouveau projet, ou Ouvrir. Un dossier est créé seulement après votre validation."),
