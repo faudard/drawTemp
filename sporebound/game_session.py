@@ -337,7 +337,6 @@ class GameSession:
         """
         from .action_runtime import ActionRuntime
         from .action_scene_adapter import authored_action_scene
-        from .action_runtime import ActionError
         self.route_action_state()
         scene = authored_action_scene(self.project, self.route_scene)
         runtime = self._action
@@ -357,7 +356,8 @@ class GameSession:
                 and not self.tactical_story_pending
                 and self.route_scene in self.project.exploration
                 and self.scene_profile(self.route_scene)["movement"] == "FREE_REALTIME"
-                and self._rt_journal is None,
+                and self._rt_journal is None
+                and self._action is None,
                 "Physics requires an active routed free-movement scene")
         extension = self.project.extensions.get(EXTENSION, {})
         authored = extension.get("data", {}).get("scenes", {}).get(self.route_scene)
