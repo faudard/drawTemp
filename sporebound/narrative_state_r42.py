@@ -27,7 +27,8 @@ def _identifier(value):
 
 def state_key(spec):
     """Stable name stored directly in existing Campaign.story_flags."""
-    require(type(spec) is dict and spec.get('scope') in SCOPES
+    require(type(spec) is dict and type(spec.get('scope')) is str
+            and spec['scope'] in SCOPES
             and _identifier(spec.get('owner')) and _identifier(spec.get('id')),
             'Invalid R42 variable identity')
     key = PREFIX + _CODE[spec['scope']] + '_' + spec['owner'] + '_' + spec['id']
@@ -95,7 +96,7 @@ def validate_state_catalog(story, content, campaigns):
         key = state_key(spec)
         require(spec['owner'] in ids[spec['scope']],
                 'Unknown canonical R42 state scope owner')
-        require(spec['kind'] in KINDS
+        require(type(spec['kind']) is str and spec['kind'] in KINDS
                 and _value_allowed(spec['kind'], spec['initial']),
                 'Invalid R42 typed initial value')
         require(key not in definitions, 'Duplicate R42 state variable key')
@@ -112,11 +113,12 @@ def validate_state_catalog(story, content, campaigns):
 def initialize_state(story, progress):
     """Initialize only on the first StoryBook.start; never change existing saves."""
     entries = _states(story)
-    require(len(progress.story_flags) + len(entries) <= 1000,
+    keys = [state_key(spec) for spec in entries]
+    require(len(progress.story_flags) + len(keys) <= 1000,
             'R42 initial state exceeds Campaign flag budget')
-    for spec in entries:
-        key = state_key(spec)
-        require(key not in progress.story_flags, 'R42 initial state flag collision')
+    require(all(key not in progress.story_flags for key in keys),
+            'R42 initial state flag collision')
+    for spec, key in zip(entries, keys):
         progress.story_flags[key] = deepcopy(spec['initial'])
 
 
