@@ -151,3 +151,43 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
 La CI inclut les régressions R9/Jeanne et `test_game_session`. Les tests
 offscreen **ne prouvent pas** la qualité UX sur écran réel, ni le GPU matériel,
 la distribution propre sur 3 OS ou la certification du gate R42.C.
+
+## R42.B3 — Narrative Debugger isolé (incrément)
+
+`drawtemp.studio.narrative_debugger_r42.NarrativeDebugger` démarre une
+**Simulation R1 distincte**, uniquement pour le test de dialogues v2.
+Un `AuthoringSession.revision` différent invalide immédiatement cette
+instance, y compris après une séquence édition→Undo (« ABA »). Aucun choix
+de débogage n'écrit sur disque, ne modifie l'éditeur ou le Player actif.
+
+- **Conditions** : visualisation de chaque sous-expression booléenne
+  `all`/`any`/`not` ainsi que des valeurs observées de flags, de l'or
+  et des missions; toutes les vérités proviennent de `R9.matches`, sans
+  interpréteur concurrent.
+- **Breakpoints** : `(scene_id, choice_id)`; la simulation s'arrête **avant**
+  l'application des effets. Seule l'action explicite `step()` continue le
+  choix en pause et déclenche l'unique `StoryBook.choose` canonique.
+- **Pas par pas** : avance de ligne par `Simulation.advance_narrative_line`,
+  puis choix explicites. Le debugger n'invente pas de branches automatiques.
+- **Traces** : révision avant/après, scène d'origine, cible, variables modifiées,
+  quantité d'or, missions débloquées, décisions ajoutées. Les appels `report`
+  et `inspect` restent sans mutation et retournent des copies indépendantes.
+- **Budget** : 128 transitions maximum par session et 64 breakpoints.
+- **Qt** : démarrage par campagne, inspection dans un panneau texte, ajout ou
+  suppression de breakpoint sur la scène sélectionnée, choix et pas suivant,
+  arrêt du debugger. La sélection de graphe ne force pas le commit de
+  modifications en cours.
+
+Ces traces d'atelier sont **diagnostiques** (`isolated=True`,
+`replay_verified=None`) : aucune certification de replay Battle, de sauvegarde
+Player ou d'export n'est impliquée.
+
+```bash
+python -m unittest tests_standalone.test_r42_narrative_debugger -v
+QT_QPA_PLATFORM=offscreen \
+  python -m unittest tests_standalone.test_r42_narrative_qt -v
+```
+
+**Restant :** inspection ergonomique des quêtes à plusieurs actes, diagnostics
+de branches mortes, localisation et rendu de vrais personnages, preuve de
+toutes les trois fins dans le vertical slice R42.C et CI réelle.
