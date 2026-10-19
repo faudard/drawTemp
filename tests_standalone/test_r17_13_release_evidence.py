@@ -140,6 +140,40 @@ class R1713EvidenceTests(unittest.TestCase):
         wrong["p0_certified"] = True
         self.assertFalse(inspect_r14(wrong)["contract_valid"])
 
+    def test_bundle_manifest_and_authored_pair_are_sha_bound(self):
+        from drawtemp.export.r15 import export_game
+        from shutil import copy2
+
+        source = Path(str(files("sporebound").joinpath("content/jeanne.json")))
+        project = source.with_suffix(".game.json")
+        runtime = self.root / "fake-player"
+        runtime.mkdir()
+        executable = "DrawTempPlayer.exe" if os.name == "nt" else "DrawTempPlayer"
+        (runtime / executable).write_bytes(b"fake binary for manifest unit tests")
+        bundle = self.root / "bundle"
+        export_game(source, runtime, bundle)
+        good = build_dossier(revision=REV, content_path=source, bundle_path=bundle)
+        self.assertTrue(good["components"]["bundle"]["verified"])
+        self.assertTrue(good["components"]["bundle"]["authored_pair_identical"])
+        self.assertFalse(good["release_ready"])
+
+        # A different, individually valid source pair cannot borrow an
+        # unrelated native manifest as evidence of its own export.
+        another = self.root / "jeanne.json"
+        copy2(source, another)
+        copy2(project, another.with_suffix(".game.json"))
+        another.write_bytes(another.read_bytes() + b" ")
+        mismatch = build_dossier(revision=REV, content_path=another,
+                                 bundle_path=bundle)
+        self.assertFalse(mismatch["components"]["bundle"]["verified"])
+        self.assertEqual(mismatch["gates"]["R17.8"]["status"], "blocked")
+
+        physical = bundle / "game" / source.name
+        physical.write_bytes(physical.read_bytes() + b"tamper")
+        changed = build_dossier(revision=REV, bundle_path=bundle)
+        self.assertFalse(changed["components"]["bundle"]["verified"])
+        self.assertEqual(changed["gates"]["R17.8"]["status"], "blocked")
+
     def test_unverified_asset_rights_remain_blocked(self):
         content = Path(str(files("sporebound").joinpath("content/jeanne.json")))
         result = build_dossier(revision=REV, content_path=content)
