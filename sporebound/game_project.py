@@ -144,6 +144,11 @@ class GameProject:
             validate_roguelite_spec(
                 self.extensions[ROGUELITE_EXTENSION]["data"],
                 content=content, project=self)
+        # R43: opt-in Ability schema is validated on every canonical load.
+        # Legacy project JSON and native tactical skills remain untouched.
+        if "org.drawtemp.abilities" in self.extensions:
+            from drawtemp.sdk.ability_contracts import validate_catalog
+            validate_catalog(self.extensions["org.drawtemp.abilities"]["data"])
         from .campaign_flow import validate_flow
         validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
