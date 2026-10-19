@@ -276,13 +276,22 @@ class StoryBook:
             require(progress.story_digest == self.digest, 'Story definition differs from saved campaign')
             if self.raw.get('schema_version') == 2:
                 from .narrative_state_r42 import verify_state
+                from .narrative_playback_r42 import validate_cursor
                 verify_state(self.raw, progress)
+                validate_cursor(progress)
             return
         require(not progress.story_digest or progress.story_digest == self.digest,
                 'Story definition differs from saved campaign')
         if self.raw.get('schema_version') == 2:
             from .narrative_state_r42 import initialize_state
+            from .narrative_playback_r42 import initialize_cursor
+            # Both initializers act on a disposable progress object on normal
+            # new-game paths. Preflight reserved cursor collision first.
+            from .narrative_playback_r42 import CURSOR
+            require(CURSOR not in progress.story_flags,
+                    'R42 cursor collides with a pre-existing flag')
             initialize_state(self.raw, progress)
+            initialize_cursor(progress)
         progress.story_started = True
         progress.story_digest = self.digest
         # A legacy saved campaign with finished missions does not restart an intro.
@@ -359,5 +368,7 @@ class StoryBook:
         updated.story_pending = selected.get('next_scene', '')
         if self.raw.get('schema_version') == 2:
             from .narrative_state_r42 import verify_state
+            from .narrative_playback_r42 import reset_cursor
             verify_state(self.raw, updated)
+            reset_cursor(updated)
         return updated
