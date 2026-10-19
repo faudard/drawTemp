@@ -75,6 +75,28 @@ def author_project(folder):
     maps.rename("R17.12 — Le passage du château")
     maps.paint([(1, 4)], "surface:sand")
 
+    # Real class/skill/equipment authoring, in the same session/revision.
+    lancer_example(session)
+
+    events = EventStudio(session)
+    events.gate_wizard(
+        MISSION, door_id="gate", lever_id="lever", lever_cell=[2, 4],
+        event_id=EVENT_ID, danger_cell=[1, 3], danger=7,
+        dialogue="Jeanne ouvre la porte", cinematic_id=CINEMATIC_ID)
+    events.add_page(
+        MISSION, EVENT_ID, page_id=PAGE_ID, priority=70,
+        condition=condition("interact", object_id="lever"),
+        actions=[action("message", text="Le passage est libre"),
+                 action("hazard", pos=[1, 3], amount=7)])
+    events.create_scene(
+        MISSION, STORY_ID, "La porte du château", "Jeanne, entrez !",
+        speaker="Garde")
+    events.bind_scene(MISSION, EVENT_ID, STORY_ID)
+    events.add_presentation_cue(
+        MISSION, EVENT_ID, clip_id=CINEMATIC_ID,
+        clip_name="Ouverture du château", kind="sound",
+        cue_id="r1712_bell", fields={"cue": "bell"})
+
     construction = ConstructionWorkspace(session, MISSION)
     clip = structure_template("Maison")
     current = session.snapshot().to_dict()["content"]
@@ -97,28 +119,6 @@ def author_project(folder):
     construction.apply(construction.preview_material(
         facade="torchis", roof="ardoise"))
     construction.apply(construction.preview_floor_add(1))
-
-    # Real class/skill/equipment authoring, in the same session/revision.
-    lancer_example(session)
-
-    events = EventStudio(session)
-    events.gate_wizard(
-        MISSION, door_id="gate", lever_id="lever", lever_cell=[2, 4],
-        event_id=EVENT_ID, danger_cell=[1, 3], danger=7,
-        dialogue="Jeanne ouvre la porte", cinematic_id=CINEMATIC_ID)
-    events.add_page(
-        MISSION, EVENT_ID, page_id=PAGE_ID, priority=70,
-        condition=condition("interact", object_id="lever"),
-        actions=[action("message", text="Le passage est libre"),
-                 action("hazard", pos=[1, 3], amount=7)])
-    events.create_scene(
-        MISSION, STORY_ID, "La porte du château", "Jeanne, entrez !",
-        speaker="Garde")
-    events.bind_scene(MISSION, EVENT_ID, STORY_ID)
-    events.add_presentation_cue(
-        MISSION, EVENT_ID, clip_id=CINEMATIC_ID,
-        clip_name="Ouverture du château", kind="sound",
-        cue_id="r1712_bell", fields={"cue": "bell"})
 
     session.apply(session.preview_project(
         lambda project: {**project,
