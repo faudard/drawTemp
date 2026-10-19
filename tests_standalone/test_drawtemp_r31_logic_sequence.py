@@ -65,7 +65,7 @@ class SequenceContractTests(unittest.TestCase):
                 reopened.snapshot().to_dict()["project"]), [graph])
 
     def test_native_timing_is_journal_derived_and_replay_checks_digest(self):
-        apply_graph(self.session, wait_graph(ticks=2))
+        apply_graph(self.session, wait_graph(ticks=50))
         data = self.session.snapshot().to_dict()["content"]
         battle = Battle(Content.from_dict(data), MISSION,
                         seed=13, battle_id="r31-wait-replay")
@@ -78,7 +78,7 @@ class SequenceContractTests(unittest.TestCase):
         initial = battle.recording()
         self.assertEqual(Battle.replay(initial).digest(), battle.digest())
         # Generate authentic commands (no fabricated Battle event journal).
-        for _ in range(25):
+        for _ in range(300):
             if "r31_awaiting_s1" in battle.fired or battle.result:
                 break
             if battle.active_id is None:
@@ -94,7 +94,7 @@ class SequenceContractTests(unittest.TestCase):
         from sporebound.event_composer import condition
         from drawtemp.studio.events import EventStudio
         EventStudio(self.session).create(
-            MISSION, "prior_event", condition("tick", tick=7),
+            MISSION, "prior_event", condition("tick", tick=100),
             [{"kind": "message", "text": "Drapeau activé"}])
         draft = LogicGraphDraft.new(
             MISSION, "flagged", source_revision=self.session.revision)
@@ -111,7 +111,7 @@ class SequenceContractTests(unittest.TestCase):
         gate = next(x for x in battle.mission.triggers
                     if x["id"] == "r31_flagged_s1")
         self.assertEqual(temporal_status(battle, gate)["state"], "waiting")
-        battle.tick = 7
+        battle.tick = 100
         dispatch(battle)
         self.assertIn("prior_event", battle.fired)
         self.assertIn("r31_flagged_s1", battle.fired)
