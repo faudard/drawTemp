@@ -26,6 +26,7 @@ from drawtemp.studio.rpg_database import lancer_example
 from sporebound.event_composer import action, condition
 from sporebound.game_session import GameSession
 from sporebound.iso_structures import structure_template, validate_structure_placement
+from sporebound.tactical_rpg3 import authored_rules_for_document
 
 EVENT_ID = "r1712_gate"
 PAGE_ID = "opened"
@@ -135,7 +136,8 @@ def author_project(folder):
     reloaded = AuthoringSession.open(target).snapshot().to_dict()
     assert documents["content"] == reloaded["content"]
     assert documents["project"] == reloaded["project"]
-    checked_content = Content.from_dict(reloaded["content"])
+    checked_content = Content.from_dict(
+        reloaded["content"], rules=authored_rules_for_document(reloaded["content"]))
     GameProject.from_dict(reloaded["project"], checked_content)
     return {"content_path": str(target), "project_path": str(target.with_suffix(".game.json")),
             "mission": MISSION, "house_id": house.structure_id,
