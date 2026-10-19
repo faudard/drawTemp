@@ -153,6 +153,15 @@ class PlayerController:
         self.forecast = ""
         return self.state()
 
+    def next_dialogue_line(self):
+        """Advance only one v2 line, then autosave the revision."""
+        self._require_cinematic_completed()
+        state = self._current()
+        if not state.scene:
+            raise ValueError('No dialogue is pending')
+        self.session.advance_narrative_line(expected_revision=state.revision)
+        return self._changed()
+
     def choose(self, choice_id):
         state = self._current()
         if not state.scene:
@@ -589,7 +598,8 @@ class PlayerController:
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
                 "journey": {"enabled": False, "stages": [], "completed": False},
-                "choices": [], "missions": [], "scene": {}, "exploration": {},
+                "choices": [], "missions": [], "scene": {}, "dialogue_line": {},
+                "exploration": {},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
                 "living_world": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
@@ -645,6 +655,14 @@ class PlayerController:
             ],
         }
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
+        presentation = thaw(self.session.narrative_line(
+            expected_revision=snapshot.revision))
+        if presentation:
+            # Same authored scene, current saved line. The QML surface never
+            # mutates the story definition or pretends to evaluate effects.
+            base["dialogue_line"] = presentation
+            base["scene"]["speaker"] = presentation["speaker"]
+            base["scene"]["text"] = presentation["text"]
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
         if self.session.living_world_state() is not None:
             current = base["exploration"].get("scene_id")
@@ -688,7 +706,9 @@ class PlayerController:
         if snapshot.scene and (snapshot.battle or not snapshot.exploration or
                                snapshot.exploration["completed"]):
             base["screen"] = "dialogue"
-            base["choices"] = thaw(self.session.choices())
+            base["choices"] = (
+                thaw(self.session.choices())
+                if not presentation or presentation["complete"] else [])
         elif snapshot.exploration and not snapshot.exploration["completed"]:
             base["screen"] = "exploration"
         elif snapshot.battle:
