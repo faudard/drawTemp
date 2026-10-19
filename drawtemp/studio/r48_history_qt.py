@@ -232,6 +232,7 @@ class ProjectHistoryDialog(QDialog):
         self.base_combo.blockSignals(False)
 
     def capture_live(self):
+        self._invalidate_review()
         try:
             node = self.workspace.capture_live(
                 parent_id=self.parent_combo.currentData(),
@@ -253,6 +254,7 @@ class ProjectHistoryDialog(QDialog):
             self.import_pair(path)
 
     def import_pair(self, path):
+        self._invalidate_review()
         try:
             node = self.workspace.import_pair(
                 path, parent_id=self.parent_combo.currentData(),
@@ -359,6 +361,8 @@ class ProjectHistoryDialog(QDialog):
             self.audit_status.setText("Audit refusé : " + str(exc))
             self.audit_button.setEnabled(False)
             self._audit = None
+            self._audit_head = None
+            self.audit_path.clear()
             return False
         self._audit = audit
         self._audit_head = head
