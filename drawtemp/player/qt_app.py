@@ -226,6 +226,22 @@ def create_bridge(controller, renderer):
         def selectCell(self, x, y):
             self.invoke(self.controller.select_cell, x, y)
 
+        @Slot(str, str)
+        def requestTarget(self, kind, skill):
+            self.invoke(self.controller.request_target, kind, skill)
+
+        @Slot()
+        def cancelTarget(self):
+            self.invoke(self.controller.cancel_target)
+
+        @Slot()
+        def confirmTarget(self):
+            pending = self.controller._pending_target or {}
+            actor_id = pending.get("active", "")
+            visual = ((actor_id, "walk" if pending.get("kind") == "move"
+                       else "attack") if actor_id else None)
+            self.invoke(self.controller.confirm_target, visual=visual)
+
         @Slot(str)
         def command(self, kind):
             actor_id = ""
