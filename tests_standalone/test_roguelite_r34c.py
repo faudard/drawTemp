@@ -20,7 +20,7 @@ def configured():
         "schema_version": 1, "data": {
             "version": 1,
             "recipe": {"seed": 81, "rooms": 10, "branches": 3,
-                       "locked_goal": True, "encounter_budget": 7, "loot_budget": 8},
+                       "locked_goal": True, "encounter_budget": 7, "loot_budget": 80},
             "library": demo_library(), "biome": "ruins", "meta_reward": 7,
         }}
     project.validate(content)
@@ -79,7 +79,7 @@ class RogueliteSessionTests(unittest.TestCase):
                     self.session.roguelite_claim()
                 break
         else:
-            self.fail("Recipe with 8 loot placements must put loot on a route room")
+            self.fail("Recipe with 80 loot placements must put loot on a route room")
         before = self.session.roguelite_state()["inventory"]["loot"]
         self.session.roguelite_checkpoint()
         self.session.roguelite_die()
