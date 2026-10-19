@@ -36,7 +36,7 @@ def run_journey(*, revision, platform):
         authoring.mkdir()
         content, original = author_demo(authoring)
         saved = AuthoringSession.open(content)
-        if saved.snapshot().content != original["content"]:
+        if saved.snapshot().to_dict()["content"] != original["content"]:
             raise AssertionError("Studio authoring roundtrip diverged")
         checks["studio_authoring"] = "passed"
         if not content.with_suffix(".game.json").is_file():
@@ -77,9 +77,9 @@ def run_journey(*, revision, platform):
         current = player.state()
         if current["screen"] != "dialogue" or current["scene"]["id"] != STORY:
             raise AssertionError("Authored lever/dialogue did not trigger")
-        if not any(x["kind"] == "trigger" and x.get("id") == GATE_EVENT
-                   for x in player.session.active_battle.events):
-            raise AssertionError("Authored gate event missing")
+        if not any(x["id"] == "gate" and x.get("open", False)
+                   for x in current["battle"]["objects"]):
+            raise AssertionError("Authored gate event did not open the door")
         checks["player_story_to_battle"] = "passed"
         player.save(1)
         old_bytes = (root / "independent" / "user-saves" / "slot_1.json").read_bytes()
