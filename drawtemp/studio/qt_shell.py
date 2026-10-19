@@ -29,7 +29,7 @@ from drawtemp.studio.inspector_model import (
 from drawtemp.studio.resource_links import connections
 from drawtemp.studio.r18_navigation import (WORKSPACES, LABELS, EN, recent_projects, workspace_host)
 from drawtemp.studio.r18_onboarding import (
-    STEP_IDS, journey_steps, next_step, normalize_completed, project_key,
+    GUIDE_UI, STEP_IDS, journey_steps, next_step, normalize_completed, project_key,
 )
 
 log = logging.getLogger(__name__)
@@ -202,6 +202,7 @@ class StudioWindow(QMainWindow):
         panel.addWidget(title)
         intro = QLabel(
             "Créez un projet et découvrez les ateliers sans modifier de fichiers JSON.")
+        self.guide_intro = intro
         intro.setWordWrap(True)
         intro.setAccessibleName("Introduction au Studio DrawTemp")
         panel.addWidget(intro)
@@ -239,6 +240,7 @@ class StudioWindow(QMainWindow):
         warning = QLabel(
             "Événements et Cinématiques : consultation possible ; "
             "édition complète depuis le shell encore à certifier.")
+        self.guide_warning = warning
         warning.setWordWrap(True)
         warning.setAccessibleName("Limites actuelles des ateliers")
         guide_layout.addWidget(warning)
@@ -1113,10 +1115,20 @@ class StudioWindow(QMainWindow):
         if not hasattr(self, "guide_list"):
             return
         self.guide_panel.setVisible(not self._onboarding_hidden)
+        language = str(self.settings.value("language", "fr"))
+        if language not in GUIDE_UI:
+            language = "fr"
+        ui = GUIDE_UI[language]
+        self.guide_intro.setText(ui["intro"])
+        self.guide_panel.setAccessibleName(ui["panel"])
+        self.guide_list.setAccessibleName(ui["steps"])
+        self.guide_hint.setAccessibleName(ui["hint"])
+        self.guide_next_button.setAccessibleName(ui["next"])
+        self.guide_hide_button.setText(ui["hide"])
+        self.guide_warning.setText(ui["warning"])
         steps = journey_steps(
             self.session.snapshot(), self._onboarding_done,
-            content_path=self.content_path,
-            language=str(self.settings.value("language", "fr")))
+            content_path=self.content_path, language=language)
         self.guide_list.clear()
         completed = sum(step.done for step in steps)
         for step in steps:
@@ -1125,22 +1137,20 @@ class StudioWindow(QMainWindow):
             item = self.guide_list.item(self.guide_list.count() - 1)
             item.setToolTip(step.instructions + (
                 "\n" + step.blocker if step.blocker else ""))
-        self.guide_title.setText(
-            f"Premiers pas — {completed}/{len(steps)} étapes vérifiées")
+        self.guide_title.setText(ui["progress"].format(
+            done=completed, total=len(steps)))
         upcoming = next_step(steps)
         if upcoming is None:
-            self.guide_hint.setText(
-                "Parcours terminé : vérifiez le Player, les interactions "
-                "et les diagnostics avant toute publication.")
+            self.guide_hint.setText(ui["complete"])
             self.guide_next_button.setEnabled(False)
             return
         self.guide_hint.setText(
             upcoming.instructions +
             ("\n" + upcoming.blocker if upcoming.blocker else ""))
         self.guide_next_button.setText(
-            "Démarrer le projet…" if upcoming.identifier == "project" else
-            "Ouvrir l'atelier" if upcoming.identifier in ("map", "actor") else
-            "Enregistrer" if upcoming.identifier == "save" else "Lancer le Player")
+            ui["new"] if upcoming.identifier == "project" else
+            ui["workspace"] if upcoming.identifier in ("map", "actor") else
+            ui["save"] if upcoming.identifier == "save" else ui["playtest"])
         # Project creation also remains possible when no file is yet open;
         # missing map/actor blockers require explicit resource creation.
         self.guide_next_button.setEnabled(
@@ -1313,6 +1323,9 @@ class StudioWindow(QMainWindow):
             self.report_error(exc)
             return False
         self.statusBar().showMessage("Player Qt lancé : " + str(self.content_path))
+        # A successful Player launch against a clean, persisted pair proves
+        # that the pair has been saved, even if it was opened from disk.
+        self._guide_mark("save")
         self._guide_mark("playtest")
         return True
 
