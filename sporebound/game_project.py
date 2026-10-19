@@ -35,6 +35,8 @@ class GameProject:
     extensions: dict = field(default_factory=dict)
     # Optional R25 profile manifest; omission preserves legacy v1 JSON and digests.
     game_modes: dict = field(default_factory=dict)
+    # Opt-in R25.B scene graph; absent in historical manifests.
+    scene_routes: dict = field(default_factory=dict)
 
     @classmethod
     def default(cls, content):
@@ -69,7 +71,8 @@ class GameProject:
                 **({'battle_support': deepcopy(self.battle_support)} if self.battle_support else {}),
                 **({'campaign_flow': deepcopy(self.campaign_flow)} if self.campaign_flow else {}),
                 **({'extensions': deepcopy(self.extensions)} if self.extensions else {}),
-                **({'game_modes': deepcopy(self.game_modes)} if self.game_modes else {})}
+                **({'game_modes': deepcopy(self.game_modes)} if self.game_modes else {}),
+                **({'scene_routes': deepcopy(self.scene_routes)} if self.scene_routes else {})}
 
     def asset_registry(self):
         from .assets import AssetRegistry
@@ -137,6 +140,8 @@ class GameProject:
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes
         validate_game_modes(self.game_modes, content, self)
+        from .scene_router import validate_scene_routes
+        validate_scene_routes(self.scene_routes, content, self)
         require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
                 'Invalid battle support rules')
         for spec in self.battle_support:
