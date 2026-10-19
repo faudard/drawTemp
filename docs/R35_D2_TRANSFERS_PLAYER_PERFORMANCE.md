@@ -44,7 +44,7 @@ L'extension `GameProject.extensions["org.drawtemp.livingworld"]["data"]` peut d�
 ## Intégration dans le Player Qt
 
 - `Simulation.living_world_state(scene=...)` donne une projection immuable ; `Simulation.living_world_advance` passe par la transition R1 et sa révision, avec rollback si refusée.
-- `PlayerController.state()["living_world"]` présente l'heure, le jour, les PNJ de la scène. Le rendu R3 `scene_from_exploration(..., living_world=...)` ajoute des acteurs purement visuels avec un identifiant préfixé `world:`, sans modifier les véritables acteurs d'exploration ou les données de campagne.
+- `PlayerController.state()["living_world"]` présente l'heure, le jour, les PNJ de la scène. `Simulation.snapshot()` reconnaît désormais les scènes d'exploration routées par R25 même si aucun dialogue `StoryBook` n'est actif ; les commandes Player mouvement et interaction utilisent les méthodes canoniques `GameSession.route_move` / `route_interact` dans ce cas, sans modifier les scènes narratives historiques. Le rendu R3 `scene_from_exploration(..., living_world=...)` ajoute des acteurs purement visuels avec un identifiant préfixé `world:`, sans modifier les véritables acteurs d'exploration ou les données de campagne.
 - L'interface QML montre l'heure, les activités et une commande **Attendre 1 minute** qui prend le vrai `ticks_per_minute` du projet. Aucun minuteur graphique ne crée de ticks de simulation en arrière-plan.
 - L'éditeur Qt Studio → Outils → Monde vivant permet de saisir et supprimer les passages dirigés (scènes, X/Y, durée) depuis les dialogues de l'atelier, puis de prévisualiser les trajets avant un apply Undo/Redo.
 - Si une scène n'a pas de monde vivant, la présentation et les commandes classiques restent inchangées.
@@ -56,6 +56,6 @@ python -m unittest tests_standalone.test_r35_transfers -v
 QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_r35_transfers_qt -v
 ```
 
-Le premier scénario couvre le chemin détaillé entre deux scènes, le transit où le PNJ n'est affiché nulle part, le trajet inverse, minuit, 256 PNJ, l'absence de pathfinding par appel de rendu, les refus de données incohérentes et la projection Player SDK. Le second couvre la saisie Qt hors écran des passages et le fait que leur éditeur n'applique aucune mutation automatiquement.
+Le premier scénario couvre le chemin détaillé entre deux scènes, le transit où le PNJ n'est affiché nulle part, le trajet inverse, minuit, 256 PNJ, l'absence de pathfinding par appel de rendu, les refus de données incohérentes, la projection Player SDK et un scénario Player routé réel (`new_game → déplacement → attente → interaction`) avec rendu PNJ. Le second couvre la saisie Qt hors écran des passages et le fait que leur éditeur n'applique aucune mutation automatiquement.
 
 **À venir :** certification du Player Qt onscreen, gestion de plusieurs portails distincts entre les mêmes scènes, chemin multi-scènes avec étapes, animation interpolée visuelle, collisions dynamiques entre PNJ/joueur, profils p95/p99 CI et validation de la démo joueur.
