@@ -191,6 +191,34 @@ class InspectorQtTests(unittest.TestCase):
             finally:
                 window.close()
 
+    @unittest.skipUnless(
+        os.environ.get("DRAWTEMP_R18B_MAP_GUI") == "1",
+        "Requires Qt Quick renderer and software offscreen backend")
+    def test_real_map_construction_switch_disables_paint_and_keeps_session(self):
+        with tempfile.TemporaryDirectory() as folder:
+            window = self.window(folder)
+            try:
+                original = window.session
+                window.navigate("construction")
+                map_window = window._models["maps"]
+                self.assertIs(map_window.studio.authoring, original)
+                self.assertIs(map_window.construction.workspace.authoring, original)
+                self.assertEqual(map_window.mode.currentIndex(), 1)
+                self.assertFalse(map_window.toolbar_actions["Copier"].isEnabled())
+                self.assertFalse(map_window.tools.isEnabled())
+                previous = original.revision
+                map_window.begin_stroke(1, 1)
+                map_window.finish_stroke(3, 3)
+                self.assertEqual(original.revision, previous)
+                self.assertEqual(map_window.stroke, [])
+                window.navigate("maps")
+                self.assertEqual(map_window.mode.currentIndex(), 0)
+                self.assertTrue(map_window.toolbar_actions["Copier"].isEnabled())
+                self.assertTrue(map_window.tools.isEnabled())
+                self.assertIs(window._models["maps"], map_window)
+            finally:
+                window.close()
+
     def test_construction_dock_refuses_delayed_mutation_outside_mode(self):
         from drawtemp.sdk.construction import ConstructionWorkspace
         from drawtemp.studio.construction_dock import ConstructionDock
