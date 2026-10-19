@@ -80,12 +80,26 @@ class LivingWorldDialog(QDialog):
         self.stop_flag = QLineEdit()
         self.stop_flag.setPlaceholderText("Flag facultatif")
         self.stop_expected = QCheckBox("Valeur attendue : vrai")
+        self.stop_pos = QCheckBox("Coordonnées PNJ (exploration)")
+        self.stop_x = QSpinBox()
+        self.stop_y = QSpinBox()
+        for coordinate in (self.stop_x, self.stop_y):
+            coordinate.setRange(0, 31)
+        self.stop_x.setAccessibleName("Position PNJ colonne")
+        self.stop_y.setAccessibleName("Position PNJ ligne")
+        coord_row = QHBoxLayout()
+        coord_row.addWidget(QLabel("X"))
+        coord_row.addWidget(self.stop_x)
+        coord_row.addWidget(QLabel("Y"))
+        coord_row.addWidget(self.stop_y)
         form = QFormLayout()
         form.addRow("Heure", self.stop_time)
         form.addRow("Scène", self.stop_scene)
         form.addRow("Activité", self.stop_activity)
         form.addRow("Condition", self.stop_flag)
         form.addRow("", self.stop_expected)
+        form.addRow("", self.stop_pos)
+        form.addRow("Cellule (x, y)", coord_row)
         host = QWidget()
         host.setLayout(form)
         layout.addWidget(host)
@@ -134,9 +148,11 @@ class LivingWorldDialog(QDialog):
             return
         for stop in npc["schedule"]:
             minute = stop["minute"]
+            coordinates = (f' @ {stop["pos"][0]},{stop["pos"][1]}'
+                           if "pos" in stop else "")
             self.stops.addItem(
                 f'{minute//60:02}:{minute%60:02} • '
-                f'{stop["scene"]} / {stop["activity"]}')
+                f'{stop["scene"]} / {stop["activity"]}{coordinates}')
         if self.stops.count():
             self.stops.setCurrentRow(0)
 
@@ -152,6 +168,9 @@ class LivingWorldDialog(QDialog):
         cond = stop.get("when", {})
         self.stop_flag.setText(cond.get("flag", ""))
         self.stop_expected.setChecked(cond.get("eq", True))
+        self.stop_pos.setChecked("pos" in stop)
+        self.stop_x.setValue(stop.get("pos", [0, 0])[0])
+        self.stop_y.setValue(stop.get("pos", [0, 0])[1])
 
     def _read_stop(self):
         if not self.stop_scene.currentText():
@@ -163,6 +182,8 @@ class LivingWorldDialog(QDialog):
         if self.stop_flag.text().strip():
             stop["when"] = {"flag": self.stop_flag.text().strip(),
                             "eq": self.stop_expected.isChecked()}
+        if self.stop_pos.isChecked():
+            stop["pos"] = [self.stop_x.value(), self.stop_y.value()]
         return stop
 
     def _mutate_stop(self, replace):
