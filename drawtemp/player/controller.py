@@ -204,6 +204,38 @@ class PlayerController:
         self.session.party_set_active(selected, expected_revision=state.revision)
         return self._changed()
 
+    def start_rpg_encounter(self, encounter_id):
+        """Enter an explicitly authored RPG encounter from the campaign menu."""
+        state = self._current()
+        if state.mode != "campaign" or state.scene:
+            raise ValueError("Complete pending narrative first")
+        self.session.rpg_start(encounter_id, expected_revision=state.revision)
+        return self._changed()
+
+    def rpg_action(self, kind, target="", skill=""):
+        state = self._current()
+        if state.mode != "rpg":
+            raise ValueError("No current RPG encounter")
+        view = thaw(self.session.rpg_state(expected_revision=state.revision))
+        if view["result"]:
+            raise ValueError("Encounter already finished")
+        action = {"kind": kind, "actor": view["active"]}
+        if kind in ("attack", "item", "skill"):
+            action["target"] = target
+        if kind == "skill":
+            action["skill"] = skill
+        if kind == "item":
+            action["item"] = "potion"
+        self.session.rpg_action(action, expected_revision=state.revision)
+        return self._changed()
+
+    def finish_rpg_encounter(self):
+        state = self._current()
+        if state.mode != "rpg":
+            raise ValueError("No current RPG encounter")
+        self.session.rpg_finish(expected_revision=state.revision)
+        return self._changed()
+
     def explore_move(self, dx, dy):
         self._require_cinematic_completed()
         state = self._current()
@@ -619,7 +651,8 @@ class PlayerController:
                 "pending_target": {},
                 "gear": {"equipped": {}, "inventory": []},
                 "party": {"enabled": False, "heroes": [], "active": [],
-                          "capacity": 0}}
+                          "capacity": 0},
+                "rpg_available": [], "rpg": {}}
         if self.campaign_id.endswith("_journey"):
             campaign = self.project.campaign(self.campaign_id)
             if campaign is not None:
@@ -630,6 +663,15 @@ class PlayerController:
         snapshot = self._current()
         base["revision"] = snapshot.revision
         base["missions"] = list(snapshot.missions)
+        base["rpg_available"] = list(self.session.rpg_available(
+            expected_revision=snapshot.revision))
+        if snapshot.mode == "rpg":
+            base["rpg"] = thaw(self.session.rpg_state(
+                expected_revision=snapshot.revision))
+            base["rpg"]["skill_catalog"] = {
+                sid: {"name": skill.name, "cost": skill.cost,
+                      "target": skill.target}
+                for sid, skill in self.content.skills.items()}
         progress = thaw(snapshot.progress)
         # R27.D campaign journey: read-only view from the canonical Campaign
         # snapshot. Never store a second progress ledger or route outside R1.
@@ -727,7 +769,9 @@ class PlayerController:
                           battle.get("active") == pending["active"] and
                           not battle.get("result")),
             }
-        if snapshot.scene and (snapshot.battle or not snapshot.exploration or
+        if snapshot.mode == "rpg":
+            base["screen"] = "rpg_battle"
+        elif snapshot.scene and (snapshot.battle or not snapshot.exploration or
                                snapshot.exploration["completed"]):
             base["screen"] = "dialogue"
             base["choices"] = thaw(self.session.choices())
