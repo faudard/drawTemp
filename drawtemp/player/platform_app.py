@@ -15,6 +15,8 @@ import time
 def main(argv=None):
     parser = argparse.ArgumentParser(description="R32 interactive platform preview")
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--r40-metroidvania", action="store_true",
+                        help="Load the original R40 R32/R33 physical pickup and double-jump slice")
     parser.add_argument("--save-dir", type=Path,
                         default=Path.home() / ".drawtemp" / "r32-platform-preview")
     args = parser.parse_args(argv)
@@ -33,7 +35,11 @@ def main(argv=None):
     from drawtemp.player.platform_reference import platform_demo_project
     from sporebound.game_session import GameSession
 
-    content, project = platform_demo_project()
+    if args.r40_metroidvania:
+        from drawtemp.sdk.r40_starters import create_starter_pair
+        content, project = create_starter_pair("r40-metroidvania")
+    else:
+        content, project = platform_demo_project()
     app = QApplication([sys.argv[0]])
 
     class PlatformWindow(QMainWindow):
@@ -48,7 +54,10 @@ def main(argv=None):
             self.clock = ActionStepClock(hz=60)
             self.last_ns = time.monotonic_ns()
             self.paused = False
-            self.setWindowTitle("DrawTemp R32 • plateforme (preview non certifiée)")
+            self.setWindowTitle(
+                "DrawTemp R40 • metroidvania (preview non certifiée)"
+                if args.r40_metroidvania else
+                "DrawTemp R32 • plateforme (preview non certifiée)")
             body = QWidget()
             layout = QVBoxLayout(body)
             self.hud = QLabel()
@@ -185,6 +194,10 @@ def main(argv=None):
                 "Entrée : portail • P : pause • Ctrl+S/L : sauvegarder/reprendre"
                 + " | Tick " + str(state["tick"])
                 + " | Portes ouvertes : " + str(len(disabled))
+                + (" | Plume acquise" if self.game.progress.story_flags.get(
+                    "r33_pickup_feather") is True else "")
+                + (" | Saut aérien disponible : " +
+                   str(state["air_jumps_left"]) if "air_jumps_left" in state else "")
                 + (" | Portail disponible" if state["available_routes"] else ""))
 
     window = PlatformWindow()
