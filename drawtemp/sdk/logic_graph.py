@@ -239,6 +239,14 @@ def preview_graph(session: AuthoringSession, graph):
         for identifier, original in old_by_id.items():
             if existing.get(identifier) != original:
                 _fail("native_event_conflict", "R9 event changed outside Logic Studio")
+        if old_by_id:
+            positions = [i for i, row in enumerate(events)
+                         if row["id"] in old_by_id]
+            if (positions != list(range(positions[0], positions[0] + len(old_by_id))) or
+                    [events[i]["id"] for i in positions] !=
+                    [row["id"] for row in old_compiled]):
+                _fail("native_event_conflict",
+                      "R9 branch ordering was changed by another editor")
         for row in compiled:
             if row["id"] in existing and row["id"] not in old_by_id:
                 _fail("native_event_conflict", "R9 event id already belongs to another author")
