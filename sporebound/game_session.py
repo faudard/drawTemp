@@ -97,6 +97,7 @@ class GameSession:
         self._rt_origin = None
         self._rt_position = None
         self._rt_journal = None
+        self._platform = None  # R32 opt-in side-view adapter, never CT.
         # R35.A: optional clock owned by this session, not by the renderer.
         from .living_world import EXTENSION, LivingWorld
         spec = self.project.extensions.get(EXTENSION)
@@ -268,6 +269,60 @@ class GameSession:
             self._living_world.advance(1)
         return self.route_realtime_state()
 
+    def _platform_definition(self):
+        """Resolve geometry only for a routed free-movement authored scene."""
+        from .physics_scenes import EXTENSION
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending
+                and self.route_scene in self.project.exploration
+                and self.scene_profile(self.route_scene)["movement"] == "FREE_REALTIME"
+                and self._rt_journal is None,
+                "Physics requires an active routed free-movement scene")
+        extension = self.project.extensions.get(EXTENSION, {})
+        authored = extension.get("data", {}).get("scenes", {}).get(self.route_scene)
+        require(authored is not None, "Scene has no R32 physics definition")
+        return authored
+
+    def _platform_flag(self, collider):
+        return "r32:opened:" + self.route_scene + ":" + collider
+
+    def _active_platform(self):
+        from .platform_physics import PlatformPhysics
+        authored = self._platform_definition()
+        if self._platform is None:
+            opened = [row["opens"] for row in authored["colliders"]
+                      if "opens" in row and
+                      self.progress.story_flags.get(self._platform_flag(row["opens"])) is True]
+            self._platform = PlatformPhysics(authored,
+                                             initial_disabled=sorted(set(opened)))
+        return self._platform
+
+    def route_platform_state(self):
+        """Detached state projection for Player/Studio; no frame-clock input."""
+        return self._active_platform().snapshot()
+
+    def route_platform_step(self, move=0, jump=False, interact=False):
+        """Exactly one fixed step; rewards and door flags belong to Campaign."""
+        runtime = self._active_platform()
+        if self._living_world is not None:
+            self._living_world.preflight(1)
+        events = runtime.step({"tick": runtime.tick + 1, "move": move,
+                               "jump": jump, "interact": interact})
+        for event in events:
+            if event["kind"] == "door_open":
+                self.progress.story_flags[self._platform_flag(event["collider"])] = True
+        if self._living_world is not None:
+            self._living_world.advance(1)
+        return {"state": runtime.snapshot(), "events": events}
+
+    def route_platform_travel(self, link_id):
+        """Allow an existing R25 portal only while its R32 trigger is occupied."""
+        require(type(link_id) is str and
+                link_id in self._active_platform().available_routes(),
+                "Player is not inside the requested portal")
+        return self.route_transition(link_id)
+
     def route_transition(self, link_id):
         """One atomic navigation command; tactical startup uses the real CT core."""
         from .scene_router import MAX_HISTORY
@@ -282,7 +337,7 @@ class GameSession:
                            self.settled_fronts, self.siege_id, self.route_scene,
                            self.route_history, self.tactical_story_pending,
                            self.tactical_story_queue, self._rt_origin,
-                           self._rt_position, self._rt_journal))
+                           self._rt_position, self._rt_journal, self._platform))
         try:
             dest = route["destination"]
             if dest in self.content.missions:
@@ -304,6 +359,7 @@ class GameSession:
             self._rt_origin = None
             self._rt_position = None
             self._rt_journal = None
+            self._platform = None
             return {"scene": dest, "profile": self.scene_profile(dest),
                     "spawn": list(route["spawn"]), "mode": self.mode}
         except Exception:
@@ -311,7 +367,7 @@ class GameSession:
              self.settled_fronts, self.siege_id, self.route_scene,
              self.route_history, self.tactical_story_pending,
              self.tactical_story_queue, self._rt_origin,
-             self._rt_position, self._rt_journal) = before
+             self._rt_position, self._rt_journal, self._platform) = before
             raise
 
     def _tactical_story_progress(self):
@@ -817,6 +873,10 @@ class GameSession:
             data["scene_route"] = {
                 "version": 1, "current": self.route_scene,
                 "history": list(self.route_history)}
+        if self._platform is not None:
+            self._platform_definition()
+            data["scene_platform"] = {"version": 1, "scene": self.route_scene,
+                                      "physics": self._platform.recording()}
         if self._rt_journal is not None:
             require(self.scene_router.enabled and self.mode == "campaign"
                     and self.route_scene in self.project.exploration,
@@ -853,7 +913,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "living_world", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "living_world", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1066,6 +1126,24 @@ class GameSession:
             session._rt_origin = origin
             session._rt_position = list(position)
             session._rt_journal = journal
+        if "scene_platform" in data:
+            from .platform_physics import PlatformPhysics
+            saved = data["scene_platform"]
+            require(type(saved) is dict and set(saved) == {"version", "scene", "physics"}
+                    and type(saved["version"]) is int and saved["version"] == 1
+                    and saved["scene"] == session.route_scene
+                    and session._rt_journal is None, "Invalid R32 platform checkpoint")
+            authored = session._platform_definition()
+            platform = PlatformPhysics.from_recording(saved["physics"],
+                                                      expected_scene=authored)
+            authored_openable = {row["opens"] for row in authored["colliders"]
+                                 if "opens" in row}
+            saved_opened = {ident for ident in authored_openable
+                            if session.progress.story_flags.get(
+                                session._platform_flag(ident)) is True}
+            require(saved_opened == platform.disabled_colliders,
+                    "R32 physics replay disagrees with canonical campaign flags")
+            session._platform = platform
         # World map travel is optional, but an existing cursor must never be
         # accepted from a malformed or inaccessible persisted route.
         session.world_state()
