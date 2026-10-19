@@ -91,8 +91,10 @@ un playtest humain.
 
 ## Reste pour R20.B–D
 
-- R20.B : scènes village/forêt/refuge avec continuité d'exploration et mise
-  en scène qualifiée, ainsi que des rencontres tactiques variées.
+- R20.B : [variante jouable village/forêt/refuge](R20_B_PLAYABLE_VILLAGE_FOREST_REFUGE.md)
+  ajoutée en projet optionnel : quatre scènes explorables, secours persistants
+  avec conséquence tactique, parcours Acte I. Rendu artistique complet,
+  cinématiques, localisation et playtests de qualité restent ouverts.
 - R20.C : raccord cinématiques/relations/choix, conservation des branches
   après sauvegarde, migration des slots en cas de changement du récit.
 - R20.D : parcours externes des chemins, absence de softlock, preuve de
