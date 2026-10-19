@@ -5,9 +5,7 @@ The historic checkpoint, journal, and combat formats remain unchanged.
 """
 from __future__ import annotations
 
-from hashlib import sha256
 import json
-import os
 from pathlib import Path
 import platform
 import re
@@ -191,7 +189,7 @@ def aggregate_ci(reports, *, revision, human_reports=()):
                       "detail": "Short headless persistence/replay soak, not multi-hour Studio/Player endurance"},
             "R23.7": {"status": "partial",
                       "detail": "Preferences roundtrip only; real keyboard traversal, assistive technology and contrast audit open"},
-            "R23.8": {"status": "blocked" if not human["reports"] else "partial",
+            "R23.8": {"status": "partial" if human["observed_sessions"] > 0 else "blocked",
                       "detail": "No independently reviewed tester tasks, issue triage and retest signoff"},
         },
         "decision": "NO-GO",
