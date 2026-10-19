@@ -142,7 +142,7 @@ class SignatureVerificationTests(unittest.TestCase):
                 verify_windows(path, expected_sha256=digest, revision=REV,
                                publisher_thumbprint="0" * 40)
             with self.assertRaises(SignatureError):
-                verify_macos(path, Path(tmp) / "app", expected_sha256=digest,
+                verify_macos(path, expected_sha256=digest,
                              revision=REV, developer_team_id="TEAM123456")
             with self.assertRaises(SignatureError):
                 verify_linux(path, path, path, expected_sha256=digest,
