@@ -134,7 +134,7 @@ class PortableReleaseTests(unittest.TestCase):
         if os.name == "nt":
             self.skipTest("POSIX tar evil entries case")
         for names, message in (
-            (["DrawTemp/../outside"], "Unsafe"),
+            (["DrawTemp/../outside"], "Non-portable"),
             (["DrawTemp/one", "DrawTemp/one"], "Duplicate"),
         ):
             with self.subTest(names=names):
@@ -154,7 +154,7 @@ class PortableReleaseTests(unittest.TestCase):
         archive = self.root / "unsafe.zip"
         with zipfile.ZipFile(archive, "w") as tf:
             tf.writestr("DrawTemp/../escape", b"evil")
-        with self.assertRaisesRegex(ReleaseError, "Unsafe"):
+        with self.assertRaisesRegex(ReleaseError, "Non-portable"):
             install_preview(archive, self.root / "no-install",
                             expected_sha256=sha256(archive.read_bytes()).hexdigest())
         self.assertFalse((self.root / "no-install").exists())
