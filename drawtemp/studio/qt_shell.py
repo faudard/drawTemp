@@ -426,6 +426,8 @@ class StudioWindow(QMainWindow):
         self._action("palette", "Palette de commandes…", self.open_palette)
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
+        self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
+        self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
         self._action("focus_resources", "Rechercher les ressources",
@@ -475,6 +477,8 @@ class StudioWindow(QMainWindow):
         review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
         review_branch.triggered.connect(self._semantic_merge_dialog)
         tools_menu.addAction(self.commands["r30_creator"])
+        tools_menu.addAction(self.commands["r30_scale"])
+        tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r35_world"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
@@ -594,6 +598,19 @@ class StudioWindow(QMainWindow):
         dialog.exec()
         if self.session.revision != initial_revision:
             self.refresh()
+
+    def open_scale_dashboard(self):
+        """Read-only CPU evidence viewer; profiling itself runs headless."""
+        from drawtemp.studio.r30_scale_qt import R30ScaleDashboard
+        R30ScaleDashboard(self).exec()
+
+    def open_procgen(self):
+        """Read-only procedural preview bound to canonical Studio snapshot."""
+        try:
+            from drawtemp.studio.procgen_qt import open_procgen_preview
+            open_procgen_preview(self, self.session)
+        except (ValueError, OSError) as exc:
+            self.report_error(exc)
 
     def _set_favorites_only(self, index):
         self.proxy.favorite_only = index == 1
