@@ -222,6 +222,34 @@ class R27DungeonJourneyTests(unittest.TestCase):
         self.assertFalse(journey_status(session, self.campaign,
                                        prefix="amber")["completed"])
 
+    def test_standalone_player_campaign_journal_and_village_transition(self):
+        from drawtemp.player.controller import PlayerController
+        with TemporaryDirectory() as folder:
+            player = PlayerController(
+                self.content, self.project, self.campaign, folder)
+            state = player.new_game()
+            self.assertEqual(state["screen"], "campaign")
+            self.assertEqual(state["title"], "Le sanctuaire de l'ambre")
+            self.assertEqual(
+                [row["label"] for row in state["journey"]["stages"]],
+                ["Village", "Temple", "Gardien", "Retour"])
+            self.assertTrue(state["journey"]["stages"][0]["available"])
+            self.assertFalse(state["journey"]["stages"][1]["unlocked"])
+            player.start_mission(self.ids["village"])
+            player.select_cell(2, 14)
+            player.command("move")
+            self.assertEqual(player.state()["screen"], "result")
+            player.finish_battle()
+            state = player.state()
+            self.assertTrue(state["journey"]["stages"][0]["completed"])
+            self.assertTrue(state["journey"]["stages"][1]["available"])
+            saved = player.session.recording()
+            player.save(1)
+            resumed = PlayerController(
+                self.content, self.project, self.campaign, folder)
+            self.assertEqual(resumed.load(1)["journey"], state["journey"])
+            self.assertEqual(resumed.session.recording(), saved)
+
     def test_duplicate_prefix_and_invalid_prefix_never_mutate_documents(self):
         snapshot = self.maps.snapshot()
         with self.assertRaises(RuleError):
