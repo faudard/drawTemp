@@ -190,6 +190,8 @@
 
 **Suivi R21.A — tranche incrémentale (non-certifiante) :** [télégraphie des menaces superposées et compteurs HUD](drawtemp5/R21_TACTICAL_THREATS.md). Cette modification couvre une partie de R21.1 sans déclarer R21.1–R21.14 terminés ; exécuter les tests du document et contrôler la CI sur le SHA final, puis certifier les parcours siège/Qt/UX séparément.
 
+**Suivi R21.B — tranche incrémentale (non certifiante) :** [formations, réactions et protection multiétages](drawtemp5/R21_FLOOR_TACTICS.md). Ce lot améliore R21.2/R21.4/R21.7 avec les règles et les escaliers canoniques ; les preuves de commande/replay sont demandées dans la CI. Le Player Qt multiétage et le siège multi-branches complet restent à certifier.
+
 **Gate R21 :** le siège se termine par au moins deux approches tactiques cohérentes, avec plusieurs fronts, portes/escaliers, boss et conséquences durables. L'IA ne téléporte pas les unités hors simulation et le replay reste déterministe.
 
 ## 8. R22 — Creator Studio 2.0 (5.5 beta)
