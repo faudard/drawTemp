@@ -15,6 +15,7 @@ LABELS = {
     "objects": "Objets", "events": "Événements", "campaigns": "Campagnes",
     "scenes": "Dialogues", "cinematics": "Cinématiques",
     "assets": "Assets", "quests": "Quêtes R35", "factions": "Factions R35",
+    "prefab_variants": "Variantes R38", "prefab_instances": "Instances R38",
     "logic_graphs": "Graphes R31",
     "graph_nodes": "Nœuds R31",
 }
@@ -129,7 +130,8 @@ class GlobalSearchDialog(QDialog):
             lines.append("… " + str(len(outgoing) - 80) + " autres usages")
         self.details.setPlainText("\n".join(lines))
         self.open_button.setEnabled(hit.navigate is not None or
-                                    hit.family in ("logic_graphs", "graph_nodes"))
+                                    hit.family in ("logic_graphs", "graph_nodes",
+                                                   "prefab_variants", "prefab_instances"))
         self.open_button.setText(
             "Ouvrir Game Logic Studio" if hit.family in ("logic_graphs", "graph_nodes")
             else "Sélectionner dans l'explorateur")
@@ -153,3 +155,6 @@ class GlobalSearchDialog(QDialog):
         elif hit.family in ("logic_graphs", "graph_nodes"):
             self.accept()
             self.owner.open_logic_graph()
+        elif hit.family in ("prefab_variants", "prefab_instances"):
+            self.accept()
+            self.owner.open_prefab_variants()
