@@ -10,6 +10,13 @@ on:
       - 'tests_standalone/test_r35_factions_quests.py'
       - 'sporebound/living_world_commerce.py'
       - 'sporebound/living_world_navigation.py'
+      - 'sporebound/living_world_transfers.py'
+      - 'tests_standalone/test_r35_transfers.py'
+      - 'drawtemp/sdk/simulation.py'
+      - 'drawtemp/player/controller.py'
+      - 'drawtemp/player/qt_app.py'
+      - 'drawtemp/player/Main.qml'
+      - 'drawtemp/render/iso_scene.py'
       - 'tests_standalone/test_r35_navigation.py'
       - 'tests_standalone/test_r35_navigation_qt.py'
       - 'tests_standalone/test_r35_commerce.py'
@@ -30,6 +37,13 @@ on:
       - 'tests_standalone/test_r35_factions_quests.py'
       - 'sporebound/living_world_commerce.py'
       - 'sporebound/living_world_navigation.py'
+      - 'sporebound/living_world_transfers.py'
+      - 'tests_standalone/test_r35_transfers.py'
+      - 'drawtemp/sdk/simulation.py'
+      - 'drawtemp/player/controller.py'
+      - 'drawtemp/player/qt_app.py'
+      - 'drawtemp/player/Main.qml'
+      - 'drawtemp/render/iso_scene.py'
       - 'tests_standalone/test_r35_navigation.py'
       - 'tests_standalone/test_r35_navigation_qt.py'
       - 'tests_standalone/test_r35_commerce.py'
@@ -73,6 +87,8 @@ jobs:
         run: python -m unittest tests_standalone.test_r35_village -v
       - name: R35.D1 spatial schedule and off-focus pathfinding
         run: python -m unittest tests_standalone.test_r35_navigation -v
+      - name: R35.D2 cross-scene portals, 256 NPCs and Player projection
+        run: python -m unittest tests_standalone.test_r35_transfers -v
       - name: R25 and legacy GameSession regressions
         run: python -m unittest tests_standalone.test_r25_scene_router tests_standalone.test_r25_fixed_realtime tests_standalone.test_game_session -v
 
