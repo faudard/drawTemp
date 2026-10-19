@@ -196,7 +196,7 @@ class PlayerController:
                 raise ValueError("A party needs at least one active hero")
             selected.remove(hero_id)
         else:
-            authored = self.project.extensions["drawtemp.party_rpg"]["data"][
+            authored = self.project.extensions["drawtemp.partyrpg"]["data"][
                 "campaigns"][self.campaign_id]
             if len(selected) >= authored["max_active"]:
                 raise ValueError("Active group is full; reserve a hero first")
@@ -704,7 +704,7 @@ class PlayerController:
         party_state = self.session.party_state(expected_revision=snapshot.revision)
         if party_state is not None:
             party = thaw(party_state)
-            config = self.project.extensions["drawtemp.party_rpg"]["data"][
+            config = self.project.extensions["drawtemp.partyrpg"]["data"][
                 "campaigns"][self.campaign_id]
             base["party"] = {
                 "enabled": True, "active": list(party["active"]),
