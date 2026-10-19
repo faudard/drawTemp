@@ -279,6 +279,7 @@ export, UX/GPU ou acceptation de la vertical slice :
 | R27.A | [#304](https://github.com/faudard/drawTemp/pull/304) | Salles/portes, atelier Qt, world links canoniques | Tests finaux R5, Qt, overlaps |
 | R27.B | [#319](https://github.com/faudard/drawTemp/pull/319) | Clés/plaques/blocs, séquences, graphe, debugger borné | Replay déterministe, QA softlocks réelle |
 | R27.C | [#334](https://github.com/faudard/drawTemp/pull/334) | Player Qt contextuel, rendu R3 et autosave intra-bataille | R12/Qt CI, Save/Load réel, UX accessible |
+| R27.D | [#347](https://github.com/faudard/drawTemp/pull/347) | Création sans JSON de 4 missions et campagne isolée ; progression CampaignFlow, boss CT, sauvegardes | E2E sur SHA final, SceneRouter/R25/R26 toujours absent |
 
 **Ordre de fusion obligatoire :** #304 → #319 rebasée sur master
 → #334 rebasée sur master, uniquement après les checks du SHA final.
