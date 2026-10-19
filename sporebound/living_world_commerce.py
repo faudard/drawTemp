@@ -95,12 +95,20 @@ def listing(world, flags, scene=None):
 def validate_trades(world, trades, day):
     require(type(trades) is dict and len(trades) <= MAX_TRADES,
             "Invalid trade ledger")
-    balances = {}
-    prior_day = -1
+    sequenced = []
     for tid, row in trades.items():
         require(_id(tid) and type(row) is dict and set(row) ==
                 {"shop", "item", "action", "quantity", "day", "unit_price",
-                 "total"}, "Malformed trade record")
+                 "total", "sequence"}, "Malformed trade record")
+        require(type(row["sequence"]) is int and 0 <= row["sequence"] < len(trades),
+                "Invalid trade sequence")
+        sequenced.append(row)
+    require({r["sequence"] for r in sequenced} == set(range(len(trades))),
+            "Duplicate or missing trade sequences")
+    # JSON object key order is NOT a simulation ordering contract.
+    balances = {}
+    prior_day = -1
+    for row in sorted(sequenced, key=lambda entry: entry["sequence"]):
         shop, item = _find(world, row["shop"], row["item"])
         require(row["action"] in ("buy", "sell")
                 and type(row["quantity"]) is int
@@ -165,5 +173,6 @@ def transact(world, progress, flags, active_scene, shop_id, item_id,
     world.trades[transaction_id] = {
         "shop": shop_id, "item": item_id, "action": action,
         "quantity": quantity, "day": world.day,
-        "unit_price": price, "total": total}
+        "unit_price": price, "total": total,
+        "sequence": len(world.trades)}
     return True
