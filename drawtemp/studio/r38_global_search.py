@@ -125,6 +125,25 @@ class GlobalSearchIndex:
                              field, base + ".nodes[id=" + node["id"] +
                              "].params." + field)
 
+        # R35 daily quests and factions live in the existing living-world
+        # extension. Their IDs remain separate from R31 graph and R2 map IDs.
+        living = (project.get("extensions") or {}).get("org.drawtemp.livingworld") or {}
+        living_data = living.get("data") or {}
+        living_base = "GameProject.extensions.org.drawtemp.livingworld.data"
+        for faction in living_data.get("factions", ()):
+            identifier = faction["id"]
+            add(SearchEntry("factions", "", identifier, identifier,
+                            "Faction · réputation initiale " + str(faction["initial"]),
+                            living_base + ".factions[id=" + identifier + "]"))
+        for quest in living_data.get("daily_quests", ()):
+            identifier = quest["id"]
+            add(SearchEntry("quests", "", identifier, identifier,
+                            "Quête quotidienne · " + quest["completion_flag"],
+                            living_base + ".daily_quests[id=" + identifier + "]"))
+            link(("quests", "", identifier), ("factions", "", quest["faction"]),
+                 "faction", living_base + ".daily_quests[id=" + identifier +
+                 "].faction")
+
         self.entries = tuple(sorted(items.values(), key=lambda e: e.key))
         self.by_key = items
         self.usages = tuple(sorted(edges, key=lambda e: (
