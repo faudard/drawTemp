@@ -29,15 +29,15 @@ from drawtemp.studio.inspector_model import (
 from drawtemp.studio.resource_links import connections
 
 log = logging.getLogger(__name__)
-WORKSPACES = ("project", "profiles", "gameplay", "maps", "actors", "database", "events",
+WORKSPACES = ("project", "minigames", "profiles", "gameplay", "maps", "actors", "database", "events",
               "campaigns", "cinematics", "analysis")
 LABELS = {
-    "project": "Projet", "profiles": "Profils de jeu", "gameplay": "Gameplay", "maps": "Carte", "actors": "Personnages",
+    "project": "Projet", "minigames": "Mini-jeux R28", "profiles": "Profils de jeu", "gameplay": "Gameplay", "maps": "Carte", "actors": "Personnages",
     "database": "Base RPG", "events": "Événements / Animation", "campaigns": "Campagne",
     "cinematics": "Cinématiques", "analysis": "Analyse",
 }
 EN = {
-    "project": "Project", "profiles": "Game profiles", "gameplay": "Gameplay", "maps": "Map", "actors": "Characters",
+    "project": "Project", "minigames": "Mini-games R28", "profiles": "Game profiles", "gameplay": "Gameplay", "maps": "Map", "actors": "Characters",
     "database": "RPG Database", "events": "Events", "campaigns": "Campaign",
     "cinematics": "Cinematics", "analysis": "Analysis",
 }
@@ -193,7 +193,7 @@ class StudioWindow(QMainWindow):
         title.setFont(font)
         panel.addWidget(title)
         panel.addWidget(QLabel("Projet Jeanne • édition sans JSON • Content / GameProject partagés"))
-        for group in (("Créer", ("profiles", "gameplay", "maps", "actors", "database", "events")),
+        for group in (("Créer", ("minigames", "profiles", "gameplay", "maps", "actors", "database", "events")),
                       ("Organiser", ("campaigns", "cinematics", "analysis"))):
             panel.addWidget(QLabel(group[0]))
             buttons = QHBoxLayout()
@@ -804,7 +804,11 @@ class StudioWindow(QMainWindow):
             if identifier == "actors":
                 child.tree.setCurrentItem(child.tree.topLevelItem(1))
             return
-        if identifier == "profiles":
+        if identifier == "minigames":
+            from drawtemp.studio.r28e_minigames_qt import MiniGameGallery
+            child = MiniGameGallery()
+            child.openRequested.connect(self.open_generated_project)
+        elif identifier == "profiles":
             from drawtemp.studio.profile_editor_qt import ProfileEditorWidget
             child = ProfileEditorWidget(self.session)
             child.updated.connect(self.refresh)
@@ -936,18 +940,8 @@ class StudioWindow(QMainWindow):
             return self.save_document()
         return True
 
-    def open_document(self):
-        if not self._confirm_leave():
-            return
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Ouvrir Content + GameProject", "", "Content JSON (*.json)")
-        if not path:
-            return
-        try:
-            fresh = AuthoringSession.open(path)
-        except (AuthoringError, OSError, ValueError) as exc:
-            self.report_error(exc)
-            return
+    def _adopt_project(self, fresh, path):
+        """Switch the ONE canonical authoring owner, closing embedded editors."""
         self.workspace_tabs.setCurrentWidget(self.pages["project"])
         old_pages = {page for name, page in self.pages.items() if name != "project"}
         self.pages = {"project": self.pages["project"]}
@@ -962,6 +956,25 @@ class StudioWindow(QMainWindow):
         self.session = fresh
         self.content_path = Path(path)
         self.refresh()
+
+    def open_generated_project(self, content_path):
+        """Accept only a validated pair; respect unsaved authoring changes."""
+        if not self._confirm_leave():
+            return False
+        try:
+            fresh = AuthoringSession.open(content_path)
+        except (AuthoringError, OSError, ValueError) as exc:
+            self.report_error(exc)
+            return False
+        self._adopt_project(fresh, content_path)
+        return True
+
+    def open_document(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Ouvrir Content + GameProject", "", "Content JSON (*.json)")
+        if path:
+            return self.open_generated_project(path)
+        return False
 
     def closeEvent(self, event):
         if not self._confirm_leave():
