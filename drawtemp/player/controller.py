@@ -31,6 +31,8 @@ class PlayerController:
         self.message = self.preferences.warning
         self.forecast = ""
         self.inspected_skill = "attack"
+        # R18.C: ephemeral UI confirmation; never stored in save/replay.
+        self._pending_target = None
 
     def _path(self, slot):
         if type(slot) is not int or not 1 <= slot <= self.project.save_slots:
@@ -55,6 +57,7 @@ class PlayerController:
     def _activate_save(self, loaded, message, *, source=None):
         # No state is touched until the verified GameSession has been loaded.
         self.session = loaded
+        self._pending_target = None
         self.show_title = False
         self.selected = [0, 0]
         self.inspected_skill = "attack"
@@ -108,6 +111,7 @@ class PlayerController:
     def new_game(self):
         self.session = Simulation.new(self.content, self.project, self.campaign_id,
                                       seed=self.seed)
+        self._pending_target = None
         self.show_title = False
         self.message = "Le voyage de Jeanne commence."
         self.forecast = ""
@@ -132,6 +136,7 @@ class PlayerController:
 
     def title(self):
         self.show_title = True
+        self._pending_target = None
         self.forecast = ""
         return self.state()
 
@@ -204,8 +209,79 @@ class PlayerController:
             max(0, min(battle["width"] - 1, int(x))),
             max(0, min(battle["height"] - 1, int(y))),
         ]
+        self._pending_target = None
         self.forecast = ""
         return self.state()
+
+    def request_target(self, kind, skill_id=""):
+        """Stage a target action, showing canonical forecasts without RNG use.
+
+        Selection and request cannot change combat revision, replay or saves.
+        Confirming rechecks the exact active unit/revision/cell tuple.
+        Legacy headless command() remains intentionally available to scripts.
+        """
+        if kind not in ("move", "attack", "skill"):
+            raise ValueError("Unknown target action")
+        view = self.state()
+        if view["screen"] != "battle" or view["battle"].get("deploying"):
+            raise ValueError("Combat non prêt pour une action ciblée")
+        battle = view["battle"]
+        active = next((unit for unit in battle.get("units", [])
+                       if unit["id"] == battle.get("active")), None)
+        if active is None or active.get("team") != "player":
+            raise ValueError("Ce n'est pas le tour d'une unité alliée")
+        if kind == "skill":
+            if (not isinstance(skill_id, str) or not skill_id or
+                    skill_id not in active.get("skills", ())):
+                raise ValueError("Compétence indisponible")
+        elif skill_id:
+            raise ValueError("Compétence inattendue pour cette action")
+        focus = view["tactical"].get("focus") or {}
+        if kind == "move":
+            move = focus.get("move")
+            if not move:
+                raise ValueError("Déplacement indisponible vers cette case")
+            details = ("Coût " + str(move["cost"]) + " · " +
+                       str(len(move.get("risks") or [])) +
+                       " risque(s) possible(s), non garanti(s)")
+        else:
+            # Engine validation (range, LOS and cost), without sampling RNG.
+            if kind == "skill":
+                projected = self.session.tactical_presentation(
+                    self.selected, skill_id, expected_revision=view["revision"])
+                focus = thaw(projected).get("focus") or {}
+            if not focus.get("can_target"):
+                raise ValueError(focus.get("error") or "Cible indisponible")
+            forecast = focus.get("forecast") or []
+            details = (str(len(forecast)) +
+                       " effet(s) prévus (non garantis)")
+        self._pending_target = {
+            "kind": kind, "skill": skill_id, "cell": list(self.selected),
+            "revision": view["revision"], "active": battle["active"],
+            "details": details,
+        }
+        return self.state()
+
+    def cancel_target(self):
+        """Dismiss a staged action, preserving the last engine checkpoint."""
+        self._pending_target = None
+        return self.state()
+
+    def confirm_target(self):
+        pending = self._pending_target
+        if not pending:
+            raise ValueError("Aucune action ciblée en attente")
+        # Discard the request before checking: stale actions must not be replayed.
+        self._pending_target = None
+        view = self.state()
+        if (view["screen"] != "battle" or
+                view["revision"] != pending["revision"] or
+                view["selected"] != pending["cell"] or
+                view["battle"].get("active") != pending["active"]):
+            raise ValueError("Cible ou tour modifié : choisissez l'action à nouveau")
+        if pending["kind"] == "skill":
+            return self.use_skill(pending["skill"])
+        return self.command(pending["kind"])
 
     def command(self, kind):
         state = self._current()
@@ -275,6 +351,7 @@ class PlayerController:
                 skill_id not in ("attack", *active.get("skills", ()))):
             raise ValueError("Compétence indisponible")
         self.inspected_skill = skill_id
+        self._pending_target = None
         self.forecast = ""
         return self.state()
 
@@ -388,6 +465,7 @@ class PlayerController:
         return self.session.snapshot()
 
     def _changed(self, *, keep_message=False):
+        self._pending_target = None
         self.inspected_skill = "attack"
         if not keep_message:
             self.message = ""
@@ -406,6 +484,7 @@ class PlayerController:
                 "settings": self.preferences.view(),
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
                 "battle": {}, "tactical": {}, "revision": 0,
+                "pending_target": {},
                 "gear": {"equipped": {}, "inventory": []}}
         if self.session is None or self.show_title:
             return base
@@ -446,6 +525,18 @@ class PlayerController:
             base["battle"]["level_links"] = [
                 dict(link) for link in
                 self.content.missions[battle["mission_id"]].level_links]
+        if self._pending_target:
+            pending = self._pending_target
+            battle = base["battle"]
+            # Stale requests can be displayed as invalid, never confirmed.
+            base["pending_target"] = {
+                "kind": pending["kind"], "skill": pending["skill"],
+                "cell": list(pending["cell"]), "details": pending["details"],
+                "valid": (snapshot.revision == pending["revision"] and
+                          base["selected"] == pending["cell"] and
+                          battle.get("active") == pending["active"] and
+                          not battle.get("result")),
+            }
         if snapshot.scene and (snapshot.battle or not snapshot.exploration or
                                snapshot.exploration["completed"]):
             base["screen"] = "dialogue"
