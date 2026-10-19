@@ -142,6 +142,11 @@ class GameSession:
     def active_scene(self):
         return self.story.active_scene(self.progress)
 
+    def narrative_state(self):
+        """Read-only R42 projection of typed flags from canonical Campaign."""
+        from .narrative_state_r42 import state_snapshot
+        return state_snapshot(self.project.story, self.progress)
+
     def scene_profile(self, scene_id=None):
         """Read the canonical project profile without changing CT state."""
         if scene_id is not None:
