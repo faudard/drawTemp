@@ -171,6 +171,7 @@ class LogicGraphDialog(QDialog):
                 ("flag", "+ Drapeau", self.add_flag),
                 ("variable", "+ Variable", self.add_variable),
                 ("check", "+ Tester var", self.add_variable_check),
+                ("export", "Exporter campagne", self.export_campaign_flag),
                 ("copy", "Dupliquer", self.copy_action),
                 ("edit", "Propriétés…", self.edit_node),
                 ("remove", "Supprimer", self.remove_action),
@@ -345,6 +346,8 @@ class LogicGraphDialog(QDialog):
         for key in ("debug_bp", "debug_step", "debug_resume", "debug_inspect"):
             self.buttons[key].setEnabled(self.debug_session is not None)
         self.buttons["debug_start"].setEnabled(
+            self.draft is not None and not self._has_unsaved_draft())
+        self.buttons["export"].setEnabled(
             self.draft is not None and not self._has_unsaved_draft())
         for key in ("add", "branch", "wait", "flag", "variable", "check", "copy", "edit", "remove", "connect", "true", "false", "disconnect", "preview"):
             self.buttons[key].setEnabled(self.draft is not None)
@@ -625,6 +628,59 @@ class LogicGraphDialog(QDialog):
                 "Test ajouté : règle R9 logique_compare en lecture du journal.")
         except (LogicGraphError, ValueError) as exc:
             self._problem(exc)
+
+    def export_campaign_flag(self):
+        """Explicit R1 mapping after the graph was applied; no Battle mutation."""
+        if self.draft is None or self._has_unsaved_draft():
+            self._problem(LogicGraphError(
+                "unsaved_graph", "Appliquez le graphe avant d'exporter une variable."))
+            return False
+        raw = self.session.snapshot().to_dict()
+        mission = next((row for row in raw["content"]["missions"]
+                        if row["id"] == self.draft.graph["mission_id"]), None)
+        if mission is None:
+            return False
+        sources = sorted({
+            action["name"]
+            for trigger in mission.get("triggers", ())
+            for action in trigger.get("actions", ())
+            if action.get("kind") in ("logic_set", "logic_add")
+        })
+        if not sources:
+            self._problem(LogicGraphError(
+                "missing_source", "Aucune variable R31.F définie dans cette mission."))
+            return False
+        source, ok = QInputDialog.getItem(
+            self, "Exporter une variable", "Source tactique", sources, 0, False)
+        if not ok:
+            return False
+        target, ok = QInputDialog.getText(
+            self, "Exporter vers campagne", "Nom de drapeau campagne",
+            text=source)
+        if not ok:
+            return False
+        result, ok = QInputDialog.getItem(
+            self, "Condition d'export", "Résultat du combat",
+            ["victory", "defeat", "both"], 0, False)
+        if not ok:
+            return False
+        try:
+            from drawtemp.sdk.logic_campaign import configure_export
+            plan = configure_export(self.session, self.draft.graph["mission_id"],
+                                    source, target.strip(), result=result)
+            self.session.apply(plan)
+            self.draft = LogicGraphDraft.load(self.session, self.draft.graph["id"])
+            self._baseline = self.draft.document()
+            self._reset_debug()
+            self._render()
+            self.updated.emit()
+            self.diagnostics.setPlainText(
+                "Export campagne créé : valeur transférée seulement "
+                "au règlement authentifié du combat.")
+            return True
+        except (LogicGraphError, AuthoringError, ValueError) as exc:
+            self._problem(exc)
+            return False
 
     def copy_action(self):
         if self.draft is None or not self.selected_node:
