@@ -98,6 +98,7 @@ class GameSession:
         self._rt_position = None
         self._rt_journal = None
         self._platform = None  # R32 opt-in side-view adapter, never CT.
+        self._action = None  # R50.B opt-in R26 rules, recorded inside GameSession.
         # R34.C is opt-in, versioned and owned by this GameSession.
         from .roguelite import EXTENSION as ROGUELITE_EXTENSION, RogueliteRun
         run_spec = self.project.extensions.get(ROGUELITE_EXTENSION)
@@ -275,7 +276,8 @@ class GameSession:
         """
         from .fixed_clock import FixedTickJournal
         from .fixed_realtime import FreeMovement
-        require(self._platform is None, "Cannot mix R25 and R32 physics movement")
+        require(self._platform is None and self._action is None,
+                "Cannot mix R25 and R26/R32 movement")
         current = self.route_realtime_state()
         require(type(dx) is int and type(dy) is int
                 and dx in (-1, 0, 1) and dy in (-1, 0, 1),
@@ -312,6 +314,40 @@ class GameSession:
         if self._living_world is not None:
             self._living_world.advance(1)
         return self.route_realtime_state()
+
+    def route_action_state(self):
+        """Read an R26 combat snapshot for the active routed action scene."""
+        from .action_runtime import ActionRuntime
+        from .action_scene_adapter import authored_action_scene
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending
+                and self.route_scene in self.project.exploration
+                and self._rt_journal is None and self._platform is None,
+                "R26 combat requires a routed, idle action exploration scene")
+        scene = authored_action_scene(self.project, self.route_scene)
+        return (self._action.snapshot() if self._action is not None else
+                ActionRuntime(scene).snapshot())
+
+    def route_action_step(self, command):
+        """Run exactly one deterministic R26 tick, committed by PlayerController.
+
+        The action journal is an opt-in field of canonical GameSession, not
+        a separate save slot. Invalid commands never mutate this session.
+        """
+        from .action_runtime import ActionRuntime
+        from .action_scene_adapter import authored_action_scene
+        from .action_runtime import ActionError
+        self.route_action_state()
+        scene = authored_action_scene(self.project, self.route_scene)
+        runtime = self._action
+        if runtime is None:
+            runtime = ActionRuntime(scene)
+        else:
+            require(runtime.scene == scene, "Action scene changed during gameplay")
+        events = runtime.step(command)
+        self._action = runtime
+        return {"state": runtime.snapshot(), "events": events}
 
     def _platform_definition(self):
         """Resolve geometry only for a routed free-movement authored scene."""
@@ -373,8 +409,9 @@ class GameSession:
         from .scene_router import MAX_HISTORY
         require(self.scene_router.enabled and self.mode == "campaign"
                 and not self.progress.story_pending
-                and not self.tactical_story_pending,
-                "Resolve encounter or dialogue before changing scenes")
+                and not self.tactical_story_pending
+                and self._action is None,
+                "Resolve encounter, action combat or dialogue before changing scenes")
         require(len(self.route_history) < MAX_HISTORY,
                 "Scene transition history limit reached")
         route = self.scene_router.destination(self.route_scene, link_id, self.progress)
@@ -967,6 +1004,18 @@ class GameSession:
             self._platform_definition()
             data["scene_platform"] = {"version": 1, "scene": self.route_scene,
                                       "physics": self._platform.recording()}
+        if self._action is not None:
+            require(self.scene_router.enabled and self.mode == "campaign"
+                    and self._rt_journal is None and self._platform is None,
+                    "Action checkpoint requires routed campaign without other simulators")
+            from .action_scene_adapter import authored_action_scene
+            from .action_runtime import ActionRuntime
+            scene = authored_action_scene(self.project, self.route_scene)
+            ActionRuntime.from_recording(self._action.recording(),
+                                         expected_scene=scene)
+            data["scene_action"] = {
+                "version": 1, "scene": self.route_scene,
+                "runtime": self._action.recording()}
         if self._rt_journal is not None:
             require(self.scene_router.enabled and self.mode == "campaign"
                     and self.route_scene in self.project.exploration,
@@ -1005,7 +1054,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "roguelite", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "scene_action", "living_world", "roguelite", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1228,6 +1277,25 @@ class GameSession:
             session._rt_origin = origin
             session._rt_position = list(position)
             session._rt_journal = journal
+        if "scene_action" in data:
+            from .action_scene_adapter import authored_action_scene
+            from .action_runtime import ActionRuntime
+            action_saved = data["scene_action"]
+            require(type(action_saved) is dict and
+                    set(action_saved) == {"version", "scene", "runtime"}
+                    and type(action_saved["version"]) is int
+                    and action_saved["version"] == 1
+                    and action_saved["scene"] == session.route_scene
+                    and mode == "campaign" and session.scene_router.enabled
+                    and session._rt_journal is None
+                    and "scene_platform" not in data
+                    and session.route_scene in project.exploration,
+                    "Invalid R26 action checkpoint identity or mode")
+            scene = authored_action_scene(project, session.route_scene)
+            session._action = ActionRuntime.from_recording(
+                action_saved["runtime"], expected_scene=scene)
+            require(session._action.tick > 0,
+                    "Action checkpoint must contain at least one accepted tick")
         if "scene_platform" in data:
             from .platform_physics import PlatformPhysics
             saved = data["scene_platform"]
