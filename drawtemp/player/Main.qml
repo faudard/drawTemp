@@ -622,6 +622,45 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                         ColumnLayout {
+                            objectName: "r44WorldAtlasPanel"
+                            visible: root.playerData.screen === "exploration" &&
+                                     root.playerData.world_atlas.enabled
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                Layout.fillWidth: true
+                                text: "WORLD ATLAS · " + (root.playerData.world_atlas.region_title || "")
+                                color: root.gold
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Accessible.name: text
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: "Biome : " + (root.playerData.world_atlas.biome || "") +
+                                      " · Vue : " + (root.playerData.world_atlas.projection || "")
+                                color: root.muted
+                                wrapMode: Text.WordWrap
+                            }
+                            Repeater {
+                                model: root.playerData.world_atlas.portals || []
+                                Button {
+                                    objectName: "r44Portal-" + modelData.id
+                                    Layout.fillWidth: true
+                                    text: (modelData.available ?
+                                           (modelData.in_reach ? "➜ " : "⌖ ") : "🔒 ") +
+                                          modelData.title + " · coût " + modelData.travel_cost
+                                    enabled: !root.inputLocked && modelData.available &&
+                                             modelData.in_reach
+                                    Accessible.description: modelData.available ?
+                                        (modelData.in_reach ?
+                                         "Passage disponible" : "Approchez la sortie") :
+                                        "Passage conditionnel verrouillé"
+                                    onClicked: player.worldTransition(modelData.id)
+                                }
+                            }
+                        }
+                        ColumnLayout {
                             visible: root.playerData.screen === "exploration" &&
                                      root.playerData.living_world !== null &&
                                      root.playerData.living_world !== undefined
@@ -818,9 +857,16 @@ ApplicationWindow {
                                    (root.playerData.exploration.interactions || []) : []
                             Button {
                                 Layout.fillWidth: true
+                                property bool r44Object: root.playerData.world_atlas.enabled &&
+                                    root.playerData.world_atlas.object_ids.indexOf(modelData.id) !== -1
+                                objectName: r44Object ? "r44Object-" + modelData.id :
+                                                       "r14Explore-" + modelData.id
                                 text: (modelData.visited ? "✓ " : "◇ ") + modelData.title
-                                enabled: !modelData.visited
-                                onClicked: player.exploreInteract(modelData.id)
+                                enabled: !root.inputLocked && !modelData.visited
+                                onClicked: {
+                                    if (r44Object) player.worldInteract(modelData.id)
+                                    else player.exploreInteract(modelData.id)
+                                }
                             }
                         }
                         Repeater {

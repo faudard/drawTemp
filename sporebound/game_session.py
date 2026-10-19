@@ -288,6 +288,26 @@ class GameSession:
             self.progress = previous
             raise
 
+    def route_world_transition(self, link_id):
+        """R44: enforce an atlas exit hotspot before delegating to SceneRouter.
+
+        This opt-in action does not bypass the R25 route condition or mission
+        lifecycle. It records only the canonical R25 history in the checkpoint.
+        """
+        from .world_graph44 import EXTENSION, WorldGraph
+        require(type(link_id) is str and self.project.extensions.get(EXTENSION),
+                "R44: configured atlas portal required")
+        require(self.mode == "campaign"
+                and self.route_scene in self.project.exploration,
+                "R44: travel requires active routed exploration")
+        graph = WorldGraph(
+            self.project.extensions[EXTENSION]["data"], self.content, self.project)
+        portal = graph.inspect_portal(self.route_scene, link_id, self.progress)
+        position = self.route_state()["position"]
+        require(sum(abs(a - b) for a, b in zip(position, portal["source"])) <= 1,
+                "R44: approach the authored exit before traveling")
+        return self.route_transition(link_id)
+
     def route_move(self, dx, dy):
         """Legacy cardinal exploration remains available before free movement starts."""
         require(self.scene_router.enabled and self.mode == "campaign"

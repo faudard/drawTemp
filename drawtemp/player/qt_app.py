@@ -373,6 +373,14 @@ def create_bridge(controller, renderer):
         def exploreInteract(self, target):
             self.invoke(self.controller.explore_interact, target)
 
+        @Slot(str)
+        def worldInteract(self, object_id):
+            self.invoke(self.controller.world_interact, object_id)
+
+        @Slot(str)
+        def worldTransition(self, route_id):
+            self.invoke(self.controller.world_transition, route_id)
+
         @Slot(str, str)
         def exploreActor(self, actor, action):
             self.invoke(self.controller.explore_actor, actor, action)

@@ -188,6 +188,36 @@ class PlayerController:
         self.session.explore_move(dx, dy, expected_revision=state.revision)
         return self._changed()
 
+    def world_interact(self, object_id):
+        """R44 persistent object activation through the R1 GameSession owner."""
+        self._require_cinematic_completed()
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("R44: no active exploration scene")
+        world = thaw(self.session.world_atlas_state())
+        if not world["enabled"] or object_id not in world["object_ids"]:
+            raise ValueError("R44: unknown World Atlas object")
+        point = next((p for p in state.exploration["interactions"]
+                      if p["id"] == object_id), None)
+        self.session.world_interact(object_id, expected_revision=state.revision)
+        self.message = ((point["title"] + " — " + point["text"])
+                        if point is not None else "Objet du monde activé")
+        return self._changed(keep_message=True)
+
+    def world_transition(self, route_id):
+        """R44 hotspot-aware travel, authorized by SceneRouter in GameSession."""
+        self._require_cinematic_completed()
+        state = self._current()
+        world = thaw(self.session.world_atlas_state())
+        route = next((entry for entry in world["portals"]
+                      if entry["id"] == route_id), None)
+        if not world["enabled"] or route is None:
+            raise ValueError("R44: unknown World Atlas passage")
+        self.session.world_transition(route_id, expected_revision=state.revision)
+        self.selected = [0, 0]
+        self.message = "Arrivée : " + route["title"]
+        return self._changed(keep_message=True)
+
     def world_wait(self, ticks=1):
         """R35 player clock action, never an implicit renderer tick."""
         state = self._current()
@@ -207,7 +237,11 @@ class PlayerController:
         point = next((p for p in stage["interactions"] if p["id"] == point_id), None)
         if point is None:
             raise ValueError("Unknown exploration point")
-        self.session.explore_interact(point_id, expected_revision=state.revision)
+        world = thaw(self.session.world_atlas_state())
+        if world["enabled"] and point_id in world["object_ids"]:
+            self.session.world_interact(point_id, expected_revision=state.revision)
+        else:
+            self.session.explore_interact(point_id, expected_revision=state.revision)
         self.message = point["title"] + " — " + point["text"]
         return self._changed(keep_message=True)
 
@@ -590,6 +624,9 @@ class PlayerController:
                 "settings": self.preferences.view(),
                 "journey": {"enabled": False, "stages": [], "completed": False},
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
+                "world_atlas": {"enabled": False, "scene": "", "region": "",
+                                "region_title": "", "portals": [], "objects": [],
+                                "object_ids": []},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
                 "living_world": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
@@ -646,6 +683,7 @@ class PlayerController:
         }
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
+        base["world_atlas"] = thaw(self.session.world_atlas_state())
         if self.session.living_world_state() is not None:
             current = base["exploration"].get("scene_id")
             base["living_world"] = thaw(self.session.living_world_state(
