@@ -98,7 +98,7 @@ Les profils ne sont **pas** des branches irréconciliables du moteur. Un même j
 
 > **Avancement R25.A — [PR #298](https://github.com/faudard/drawTemp/pull/298) (proposée, non certifiée)** : schéma opt-in `game_modes` dans `GameProject`, presets stricts et résolution read-only dans `GameSession` (R25.1/R25.2), primitive headless `FixedTickJournal` pour les commandes/ticks/replay (fondation R25.4), tests et workflow 3 OS. **Pas encore livrés :** SceneRouter et transitions effectives, couplage de l'horloge au moteur, rendu top-down/caméra, input/HUD, sauvegarde inter-modes, parcours Studio no-JSON et gate 6.1. Voir [ADR R25](drawtemp5/R25_GAME_MODES_ADR.md). Ne pas transformer le statut de la PR en statut de certification.
 
-**But :** rendre l'architecture réellement multi-genres, sans régression tactique.
+> **Avancement R25.B — [PR #314](https://github.com/faudard/drawTemp/pull/314) (empilée sur #298, non certifiée)** : `SceneRouter` validé, liens et `spawn` contrôlés, conditions narratives existantes, transitions appelant le vrai `GameSession.start_mission()`, sauvegarde opt-in du curseur/historique et tests de reprise combat/campagne. **Limites :** navigation encore headless, déplacement cardinal de compatibilité, pas de runtime action temps réel/portail Player Qt ; crash recovery transactionnel et UX/Studio no-JSON restent ouverts. [Spécification et gates R25.B](drawtemp5/R25B_SCENE_ROUTER.md).\n\n**But :** rendre l'architecture réellement multi-genres, sans régression tactique.
 
 | ID | P | Livrable et comportement vérifiable | Dépendances / preuve |
 |---|---|---|---|

@@ -88,6 +88,11 @@ class GameSession:
         self.story = StoryBook(project.story, content, project.campaigns)
         self.exploration = Exploration(project.exploration, project.story)
         self.progress = project.new_game(campaign_id, content)
+        from .scene_router import SceneRouter
+        self.scene_router = SceneRouter(self.project.scene_routes, self.content, self.project)
+        self.route_scene = self.scene_router.start
+        self.route_history = []
+        self._route_starting = False
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -128,6 +133,59 @@ class GameSession:
                     "Unknown game mode scene")
         from .game_modes import resolve_scene_profile
         return resolve_scene_profile(self.project.game_modes, scene_id)
+
+    def route_state(self):
+        """Return the active exploration state from canonical Campaign flags."""
+        require(self.scene_router.enabled, "Scene routing is not enabled")
+        require(self.route_scene in self.project.exploration,
+                "Current route is not an exploration scene")
+        return self.exploration.state(self.progress, self.route_scene)
+
+    def route_move(self, dx, dy):
+        """R25.B uses existing cardinal Exploration; not real-time movement."""
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending,
+                "Resolve encounter or dialogue before route movement")
+        return self.exploration.move(self.progress, self.route_scene, dx, dy)
+
+    def route_transition(self, link_id):
+        """One atomic navigation command; tactical startup uses the real CT core."""
+        from .scene_router import MAX_HISTORY
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "Resolve encounter or dialogue before changing scenes")
+        require(len(self.route_history) < MAX_HISTORY,
+                "Scene transition history limit reached")
+        route = self.scene_router.destination(self.route_scene, link_id, self.progress)
+        before = deepcopy((self.progress, self.battle, self.fronts, self.finalized,
+                           self.settled_fronts, self.siege_id, self.route_scene,
+                           self.route_history, self.tactical_story_pending,
+                           self.tactical_story_queue))
+        try:
+            dest = route["destination"]
+            if dest in self.content.missions:
+                self._route_starting = True
+                try:
+                    self.start_mission(dest)
+                finally:
+                    self._route_starting = False
+            else:
+                from .exploration import _key
+                # Use existing Campaign.story_flags, never a second world save.
+                self.progress.story_flags[_key(dest, "pos")] = ",".join(
+                    map(str, route["spawn"]))
+                self.exploration.state(self.progress, dest)
+            self.route_scene = dest
+            self.route_history.append(route["id"])
+            return {"scene": dest, "profile": self.scene_profile(dest),
+                    "spawn": list(route["spawn"]), "mode": self.mode}
+        except Exception:
+            (self.progress, self.battle, self.fronts, self.finalized,
+             self.settled_fronts, self.siege_id, self.route_scene,
+             self.route_history, self.tactical_story_pending,
+             self.tactical_story_queue) = before
+            raise
 
     def _tactical_story_progress(self):
         require(bool(self.tactical_story_pending), "No tactical dialogue pending")
@@ -385,6 +443,8 @@ class GameSession:
         self.progress.unequip(uid, slot)
 
     def start_mission(self, mission_id):
+        require(not self.scene_router.enabled or self._route_starting,
+                "Routed projects must enter battles through a scene transition")
         require(self.mode == "campaign", "End the current encounter first")
         require(mission_id in self.available_missions(), "Mission is locked")
         # Enforce arrival at a visible world location at the headless boundary:
@@ -407,6 +467,8 @@ class GameSession:
 
     def start_fronts(self, missions, focused, *, specs=None, links=None,
                      logistics=None, campaign=None, event_graph=None):
+        require(not self.scene_router.enabled,
+                "Routed multi-front sessions are not supported yet")
         require(self.mode == "campaign", "End the current encounter first")
         require(isinstance(missions, dict) and bool(missions) and focused in missions,
                 "Invalid front mapping")
@@ -624,6 +686,10 @@ class GameSession:
             "finalized": self.finalized,
             "settled_fronts": sorted(self.settled_fronts),
         }
+        if self.scene_router.enabled:
+            data["scene_route"] = {
+                "version": 1, "current": self.route_scene,
+                "history": list(self.route_history)}
         if self.siege_id is not None:
             data["siege_id"] = self.siege_id
         if self.tactical_story_pending:
@@ -648,7 +714,7 @@ class GameSession:
         require(isinstance(data, dict) and type(data.get("version")) is int
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
-        require(set(data) - {"front_battle_ids", "siege_id",
+        require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
                              "tactical_story_pending", "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -799,6 +865,18 @@ class GameSession:
                                 and identity not in seen, "Invalid or duplicate battle identity")
                         battles[key].battle_id = identity
                         seen.add(identity)
+        # R25.B scene routing is opt-in. The legacy v1 recording is untouched.
+        if session.scene_router.enabled:
+            require("scene_route" in data,
+                    "Routed project checkpoint is missing scene state")
+            session.route_scene = session.scene_router.validate_checkpoint(
+                data["scene_route"], mode=mode, battle=session.battle)
+            session.route_history = list(data["scene_route"]["history"])
+            if session.route_scene in session.project.exploration:
+                session.exploration.state(session.progress, session.route_scene)
+        else:
+            require("scene_route" not in data,
+                    "Unexpected scene state in legacy checkpoint")
         # World map travel is optional, but an existing cursor must never be
         # accepted from a malformed or inaccessible persisted route.
         session.world_state()

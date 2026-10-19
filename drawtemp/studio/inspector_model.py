@@ -154,6 +154,31 @@ def _coerce(spec: PropertySpec, value):
     raise InspectorError("Type de propriété non pris en charge")
 
 
+def validate_draft(snapshot, selected, updates):
+    """Type-check only edited fields, for immediate per-field UI feedback.
+
+    Returns (typed_values, errors_by_field) without mutating or previewing
+    documents. Cross-field and canonical constraints remain enforced by the
+    atomic R1 preview/apply on commit.
+    """
+    selected = tuple(selected)
+    if not selected:
+        raise InspectorError("Aucune ressource sélectionnée")
+    if len({item.key for item in selected}) != len(selected):
+        raise InspectorError("Sélection dupliquée")
+    specs = {spec.key: spec for spec in shared_specs(snapshot, selected)}
+    typed, errors = {}, {}
+    for key, value in updates.items():
+        if key not in specs:
+            errors[key] = "Champ indisponible : " + key
+            continue
+        try:
+            typed[key] = _coerce(specs[key], value)
+        except InspectorError as exc:
+            errors[key] = str(exc)
+    return typed, errors
+
+
 def preview_properties(session: AuthoringSession, selected, updates,
                        *, expected_revision=None):
     """Create a single preview; caller may inspect or apply it atomically."""
@@ -165,11 +190,9 @@ def preview_properties(session: AuthoringSession, selected, updates,
     snapshot = session.snapshot()
     if expected_revision is not None and snapshot.revision != expected_revision:
         raise InspectorError("La sélection a changé : rafraîchissez l'inspecteur")
-    allowed = {spec.key: spec for spec in shared_specs(snapshot, selected)}
-    invalid = set(updates) - set(allowed)
-    if invalid:
-        raise InspectorError("Champs indisponibles : " + ", ".join(sorted(invalid)))
-    typed = {key: _coerce(allowed[key], value) for key, value in updates.items()}
+    typed, errors = validate_draft(snapshot, selected, updates)
+    if errors:
+        raise InspectorError("; ".join(errors[key] for key in sorted(errors)))
 
     def transform(content, project):
         pair = {"content": content, "project": project}
