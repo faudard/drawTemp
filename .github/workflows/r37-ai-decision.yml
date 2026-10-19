@@ -1,0 +1,44 @@
+name: R37 Advanced AI Decision
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/ai_decision.py'
+      - 'drawtemp/sdk/__init__.py'
+      - 'tests_standalone/test_r37_ai_decision.py'
+      - '.github/workflows/r37-ai-decision.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/sdk/ai_decision.py'
+      - 'drawtemp/sdk/__init__.py'
+      - 'tests_standalone/test_r37_ai_decision.py'
+      - '.github/workflows/r37-ai-decision.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  headless-ai-contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.12']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install editable package
+        run: python -m pip install -e .
+      - name: R37.A versioned context, blackboard, deterministic utility
+        run: python -m unittest tests_standalone.test_r37_ai_decision -v
+      - name: R31 compatible declarative graph contracts
+        run: python -m unittest tests_standalone.test_drawtemp_r31_logic_graph -v
