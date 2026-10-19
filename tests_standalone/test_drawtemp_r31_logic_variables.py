@@ -189,7 +189,16 @@ class TypedVariableTests(unittest.TestCase):
         self.assertEqual(old, battle.events)
         draft = LogicGraphDraft.new(MISSION, "max_int", source_revision=0)
         draft.add_variable_after("message", "r31_number", value=1000000)
-        draft.apply(new_session())  # preflight valid; runtime increment is bounded
+        fresh = new_session()
+        draft.apply(fresh)  # assignment of the maximal signed value is valid
+        overflowing = LogicGraphDraft.load(fresh, "max_int")
+        overflowing.add_variable_after(
+            "variable1", "r31_number", mode="add", value=1)
+        overflowing.apply(fresh)
+        raw = fresh.snapshot().to_dict()["content"]
+        content = Content.from_dict(raw)
+        with self.assertRaises(RuleError):
+            Battle(content, MISSION, seed=11, battle_id="overflow-guard")
 
     def test_revision_stale_breaks_debug_after_undo(self):
         session = new_session()
