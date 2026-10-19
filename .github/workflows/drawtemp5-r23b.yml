@@ -1,0 +1,134 @@
+name: DrawTemp 5 R23.B endurance accessibility QA
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/quality/r23b.py'
+      - 'scripts/r23b_evidence.py'
+      - 'tests_standalone/test_drawtemp5_r23b.py'
+      - '.github/workflows/drawtemp5-r23b.yml'
+      - 'docs/drawtemp5/R23B_ENDURANCE_ACCESSIBILITY_QA.md'
+      - 'examples/persistence_soak.py'
+      - 'sporebound/long_session.py'
+      - 'sporebound/player_preferences.py'
+      - 'sporebound/playtest_telemetry.py'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r23b-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  headless-evidence:
+    name: R23.B measured persistence and settings / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            platform: Linux
+          - os: windows-latest
+            platform: Windows
+          - os: macos-latest
+            platform: macOS
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deterministic Core
+        run: python -m pip install .
+      - name: Verify R23.B gates and long-session regressions
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp5_r23b
+          tests_standalone.test_long_session_r8
+          tests_standalone.test_player_preferences_r7
+          tests_standalone.test_playtest_384 -v
+      - name: Run real replay-checked headless campaign endurance
+        run: >-
+          python scripts/r23b_evidence.py run
+          --revision ${{ github.sha }}
+          --platform ${{ matrix.platform }}
+          --iterations 1
+          --commands 8
+          --output r23b-ci.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r23b-ci-${{ matrix.platform }}
+          path: r23b-ci.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  assessment:
+    name: R23.B independent same-commit assessment (NO-GO)
+    needs: headless-evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: r23b-ci-*
+          path: r23b-artifacts
+          merge-multiple: false
+      - name: Fail if any OS is missing or from a different SHA
+        run: >-
+          python scripts/r23b_evidence.py aggregate
+          --directory r23b-artifacts
+          --revision ${{ github.sha }}
+          --output r23b-assessment.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r23b-assessment
+          path: r23b-assessment.json
+          if-no-files-found: warn
+
+  qt-player-input:
+    name: R23.B Qt Quick input journey - offscreen only
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt prerequisites
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]"
+      - name: Actual QML clicks and keyboard F5 plus reload
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp5_r14_gui.QtUserJourneys.test_player_qml_clicks_new_choice_mission_save_resume
+          -v
+
+  tk-player-settings:
+    name: R23.B Player keyboard preferences - virtual desktop only
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tk and display
+        run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb python3-pil
+      - name: Actual Tk options Apply, remapping and reopen
+        env:
+          SPOREBOUND_GUI_SMOKE: '1'
+        run: >-
+          xvfb-run -a python3 -m unittest
+          tests_standalone.test_player_preferences_r7_gui -v
