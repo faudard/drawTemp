@@ -189,8 +189,9 @@ class ClassicPartyFoundationTests(unittest.TestCase):
         ):
             with self.subTest(malformed=malformed), self.assertRaises(RuleError):
                 rpg_turn_order(malformed)
-        self.assertTrue(negotiate_sdk(required_features=[
-            "classic-party.v1", "rpg-turn-order.v1"]).compatible)
+        self.assertEqual(negotiate_sdk((1, 0), required_features=[
+            "classic-party.v1", "rpg-turn-order.v1"])["features"],
+            ["classic-party.v1", "rpg-turn-order.v1"])
 
 
 if __name__ == "__main__":
