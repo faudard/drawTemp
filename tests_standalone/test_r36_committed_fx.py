@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 import unittest
 
 from drawtemp.player.action_controller import ActionPlayerController
@@ -121,6 +122,21 @@ class CommittedFxTests(unittest.TestCase):
         fx.observe(runtime.snapshot(), [])
         with self.assertRaises(ValueError):
             fx.observe(runtime.snapshot(), [])
+
+    def test_cosmetic_failure_cannot_rollback_committed_action(self):
+        scene = encounter_scene()
+        player = ActionPlayerController(scene)
+        baseline = ActionRuntime(scene)
+        with patch.object(player.fx, "observe",
+                          side_effect=ValueError("rejected marker")):
+            events = player.step(dx=1, attack=True)
+        self.assertIn("enemy_hit", [event["kind"] for event in events])
+        baseline.step({"tick": 1, "dx": 1, "attack": True})
+        self.assertEqual(player.runtime.recording(), baseline.recording())
+        self.assertEqual(player.state()["fx"], [])
+        self.assertIn("rejected marker", player.state()["fx_warning"])
+        player.step()
+        self.assertEqual(player.state()["fx_warning"], "")
 
     def test_fx_stream_deterministic_across_identical_commands(self):
         first, second = (ActionRuntime(encounter_scene()) for _ in range(2))
