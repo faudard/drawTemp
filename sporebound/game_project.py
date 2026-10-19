@@ -174,6 +174,10 @@ class GameProject:
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes
         validate_game_modes(self.game_modes, content, self)
+        from .classic_party import EXTENSION as PARTY_EXTENSION, validate_classic_party
+        if PARTY_EXTENSION in self.extensions:
+            validate_classic_party(self.extensions[PARTY_EXTENSION]["data"],
+                                   content=content, project=self)
         from .scene_router import validate_scene_routes
         validate_scene_routes(self.scene_routes, content, self)
         require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
