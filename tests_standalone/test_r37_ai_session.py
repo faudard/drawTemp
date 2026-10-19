@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from drawtemp.sdk.reference import MISSION, reference_project
-from sporebound.advanced_ai import EXTENSION
+from sporebound.advanced_ai import EXTENSION, AdvancedAI
 from sporebound.game_project import GameProject
 from sporebound.game_session import GameSession, digest
 from sporebound.model import RuleError
@@ -96,6 +96,29 @@ class AdvancedAISessionTests(unittest.TestCase):
         self.assertEqual(GameSession.from_recording(
             session.recording(), content, project).recording(),
             session.recording())
+
+    def test_invalid_memory_update_and_global_event_order_are_atomic(self):
+        content, project = realtime_fixture()
+        session = GameSession.new(content, project, "main")
+        original = session.recording()
+        with self.assertRaises(ValueError):
+            session.ai_remember("merchant", {"alert": ["untrusted"]})
+        self.assertEqual(session.recording(), original)
+        document = deepcopy(project.extensions[EXTENSION]["data"])
+        document["agents"].append({
+            "id": "other_ct", "mode": "ct",
+            "policies": [policy("wait", "wait", base=0)],
+        })
+        ai = AdvancedAI(document,
+                        living_world=project.extensions["org.drawtemp.livingworld"]["data"])
+        ai.remember("merchant", {"alert": True}, tick=7)
+        original_history = ai.recording()
+        with self.assertRaises(RuleError):
+            ai.remember("other_ct", {"alert": True}, tick=6)
+        self.assertEqual(ai.recording(), original_history)
+        metadata = ai.agent("merchant")
+        metadata["policies"][0]["action"] = "forged"
+        self.assertNotEqual(metadata, ai.agent("merchant"))
 
     def test_tactical_preview_is_opt_in_and_does_not_change_ct(self):
         content, project = reference_project()
