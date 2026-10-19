@@ -78,6 +78,16 @@ def perceive_grid(stage, actor, target, sensor, *, movement=False,
             and type(stage["blocked"]) is list
             and len(stage["blocked"]) <= MAX_STAGE_CELLS,
             "Invalid R37 canonical navigation grid")
+    # The public headless sensor can also be called without GameProject.
+    # Reject malformed obstacle data instead of silently treating it as free.
+    blocked = stage["blocked"]
+    require(all(type(cell) is list and len(cell) == 2
+                and all(type(v) is int for v in cell)
+                and 0 <= cell[0] < stage["width"]
+                and 0 <= cell[1] < stage["height"]
+                for cell in blocked)
+            and len({tuple(cell) for cell in blocked}) == len(blocked),
+            "Invalid or duplicate R37 navigation obstacles")
     require(all(_point(p, stage) for p in (actor, target))
             and type(movement) is bool,
             "R37 perception needs clear actor/target cells and boolean movement")
