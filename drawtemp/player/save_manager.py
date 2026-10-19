@@ -47,8 +47,12 @@ class SaveManager:
             for file in (base, base.with_suffix(".json.bak")):
                 try:
                     st = file.lstat()
+                    # POSIX change-time changes on in-place edits even when
+                    # an external program restores size and mtime. Keep the
+                    # existing cheap metadata signature (no hash on each HUD
+                    # refresh), while making cache invalidation less fragile.
                     result.append((file.name, st.st_size, st.st_mtime_ns,
-                                   st.st_mode, st.st_ino))
+                                   st.st_ctime_ns, st.st_mode, st.st_ino))
                 except FileNotFoundError:
                     result.append((file.name, None))
         return tuple(result)
