@@ -188,6 +188,46 @@ def _new_png(image, target):
     target.write_bytes(data)
 
 
+def render_walk_followthrough(source):
+    """Author the missing distinct second walking pose without changing source art.
+
+    The historical Jeanne atlas has only a small amount of lower-body motion,
+    largely hidden when R7's outfit layers are composited. The companion strip
+    articulates the leading/trailing boots on the 64 px character canvas while
+    retaining the approved face, hair, palette and transparent background.
+    Exactly one frame per cardinal direction; artwork remains presentation-only.
+    """
+    from PIL import Image, ImageDraw
+    output = Image.new("RGBA", (len(DIRECTIONS) * 64, 64))
+    with Image.open(source) as original:
+        atlas = original.convert("RGBA")
+        for column, direction in enumerate(DIRECTIONS):
+            # The original row-3 walk keyframe is the source of this authored
+            # variation. Never replace or alter the original source PNG.
+            frame = atlas.crop((column * 64, 3 * 64,
+                                (column + 1) * 64, 4 * 64))
+            paint = ImageDraw.Draw(frame, "RGBA")
+            phase = 1 if direction in ("south", "east") else -1
+            # Two independently articulated steps, visible below each of the
+            # R7 costume layers (which can extend down to pixel 58).
+            paint.polygon(
+                [(22 + 3 * phase, 57), (29 + 3 * phase, 55),
+                 (29 + 5 * phase, 62), (20 + 5 * phase, 62)],
+                fill=(61, 51, 47, 255))
+            paint.polygon(
+                [(34 - 3 * phase, 56), (40 - 2 * phase, 58),
+                 (44 - 4 * phase, 62), (34 - 4 * phase, 62)],
+                fill=(105, 78, 60, 255))
+            paint.line(
+                [(20 + 5 * phase, 62), (29 + 5 * phase, 62)],
+                fill=(164, 130, 90, 255), width=1)
+            paint.line(
+                [(34 - 4 * phase, 62), (44 - 4 * phase, 62)],
+                fill=(151, 120, 87, 255), width=1)
+            output.alpha_composite(frame, (column * 64, 0))
+    return output
+
+
 def generate_recipe(destination):
     """Describe fully editable four-direction costumes using the R7 v1 schema."""
     base = "sources/jeanne_atlas.png"
@@ -200,6 +240,13 @@ def generate_recipe(destination):
              "wounded": "Jeanne blessée — campagne"}[variant],
             base, rows=ROW_LAYOUT,
         )
+        # The second authored walking keyframe is a distinct directional
+        # pose in a companion strip, not a renamed or reused source frame.
+        for column, direction in enumerate(DIRECTIONS):
+            block["clips"]["walk"]["directions"][direction][1].update({
+                "path": "sources/jeanne_walk_followthrough.png",
+                "region": [column * 64, 0, 64, 64],
+            })
         block["layers"] = [{
             "slot": "clothing",
             "paths": {direction: f"layers/{variant}/{direction}.png"
@@ -229,6 +276,8 @@ def build_jeanne_art(repository, destination):
         if base.size != (256, 512):
             raise CharacterError("Unexpected approved Jeanne atlas dimensions")
     _copy_new(source, destination / "sources/jeanne_atlas.png")
+    _new_png(render_walk_followthrough(source),
+             destination / "sources/jeanne_walk_followthrough.png")
     for portrait in PORTRAITS:
         _copy_new(art / f"jeanne_{portrait}.png",
                   destination / "sources" / f"jeanne_{portrait}.png")
