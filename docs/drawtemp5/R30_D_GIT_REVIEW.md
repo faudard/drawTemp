@@ -34,9 +34,10 @@ AuthoringSession partagée du shell R2.
 5. Visualiser les différences et choisir garder local / prendre entrant
    pour chaque conflit dans l'onglet Diff & conflits (même grille
    que la revue de paires de fichiers R30.C).
-6. Avant validation en session, comparer de nouveau les OID de commits
-   de base/entrant, les hashes des deux fichiers locaux, et la révision
-   plus le fingerprint de la session.
+6. Valider que la base est un ancêtre réel Git de l'entrant et du HEAD local.
+   Avant validation en session, comparer de nouveau les OID de commits
+   de base/entrant et HEAD local, les hashes des deux fichiers locaux, et la
+   révision plus le fingerprint de la session.
 7. Fusionner UNIQUEMENT via AuthoringSession.preview_pair/apply avec
    validation canonique et Undo/Redo, sans enregistrer automatiquement
    sur le disque. L'utilisateur sauvegarde depuis le shell quand il le
@@ -46,6 +47,7 @@ AuthoringSession partagée du shell R2.
 
 Les sous-commandes Git exécutées ici sont uniquement :
 - rev-parse --show-toplevel / --is-inside-work-tree / --verify,
+- merge-base --is-ancestor,
 - ls-tree,
 - cat-file -s / cat-file blob.
 
@@ -92,7 +94,7 @@ tests R30.A/B/C, revue Git, Qt offscreen et baseline tactique Jeanne.
 Les runners et résultats CI doivent être vérifiés sur le SHA final.
 
 Les tests contrôlent : lecture de vraies révisions Git, merge non
-conflictuel, conflit exigeant une décision, Undo, branche déplacée,
+conflictuel, conflit exigeant une décision, Undo, branche déplacée, HEAD local changé, base non ancêtre,
 modification externe des fichiers, changement de révision de session,
 injection de ref, document historique invalide, dépôt absent, refus de
 modification Git/Content automatique.
