@@ -1955,27 +1955,211 @@ class StudioWindow(QMainWindow):
             return False
 
     def _saved_for_player(self):
-        if self.content_path is None or self.session.snapshot().dirty:
+        if self._edited_fields:
+            self.inspector_error.setText(
+                "Appliquez ou ignorez les propriétés avant le playtest.")
+            return False
+        if (self.content_path is None or self.session.snapshot().dirty or
+                not self.content_path.is_file()):
             return self.save_document()
         return True
 
+    def _sync_playtest_commands(self):
+        active = self._r49_playtest.active
+        self.commands["playtest"].setEnabled(not active)
+        self.commands["stop_playtest"].setEnabled(active)
+        self.commands["playtest_report"].setEnabled(
+            self._r49_playtest.phase != "idle")
+        context = self._r49_playtest.context
+        can_return = (not active and
+                      self._r49_playtest.phase in TERMINAL and
+                      context is not None and
+                      context.matches(self.session, self.content_path))
+        self.commands["return_playtest"].setEnabled(can_return)
+        for key in ("new", "new_project", "new_template", "open"):
+            self.commands[key].setEnabled(not active)
+        if hasattr(self, "_r49_publication_play"):
+            self._r49_publication_play.setEnabled(not active)
+            self._r49_publication_stop.setEnabled(active)
+
     def playtest(self):
+        """Supervise one local Player; True means launch requested, not passed."""
+        if self._r49_playtest.active:
+            self.statusBar().showMessage("Un Player est déjà en cours.")
+            return False
         if not self._saved_for_player():
             return False
-        try:
-            started, _pid = QProcess.startDetached(
-                sys.executable, ["-m", "drawtemp.player.qt_app",
-                                 "--content", str(self.content_path)])
-            if not started:
-                raise OSError("Le processus Player Qt n'a pas démarré.")
-        except (OSError, RuntimeError) as exc:
-            self.report_error(exc)
+        context = EditorReturnContext(
+            workspace=self._active_workspace,
+            resource_keys=tuple(resource.key for resource in self._selected),
+            focus_region=self._r49_focus.preferred(self._active_workspace),
+            document_path=str(self.content_path.resolve(strict=False)),
+            session_identity=id(self.session),
+        )
+        self._r49_playtest.begin(context)
+        process = QProcess(self)
+        self._r49_player_process = process
+        process.setProcessChannelMode(QProcess.SeparateChannels)
+        process.started.connect(self._on_playtest_started)
+        process.readyReadStandardOutput.connect(self._read_playtest_output)
+        process.readyReadStandardError.connect(self._read_playtest_output)
+        process.errorOccurred.connect(self._on_playtest_error)
+        process.finished.connect(self._on_playtest_finished)
+        self._sync_playtest_commands()
+        self.statusBar().showMessage("Démarrage du Player Qt demandé…")
+        # Program and arguments come only from the Studio. Project data must
+        # never supply a command, shell script or replacement executable.
+        process.start(
+            sys.executable,
+            ["-m", "drawtemp.player.qt_app", "--content", str(self.content_path)],
+        )
+        return True
+
+    def _read_playtest_output(self):
+        process = self._r49_player_process
+        if process is None:
+            return
+        for channel, reader in (
+            ("stdout", process.readAllStandardOutput),
+            ("stderr", process.readAllStandardError),
+        ):
+            chunk = bytes(reader())
+            if chunk:
+                self._r49_playtest.append(channel, chunk)
+
+    def _on_playtest_started(self):
+        if self._r49_playtest.started():
+            self.statusBar().showMessage(
+                "Player en cours — retour et diagnostics après fermeture.")
+            # Only the OS process start is known here, not a successful test.
+            self._guide_mark("save")
+            self._sync_playtest_commands()
+
+    def _on_playtest_error(self, error):
+        process = self._r49_player_process
+        if process is None:
+            return
+        message = process.errorString()
+        if error == QProcess.FailedToStart:
+            self._r49_playtest.failed_to_start(message)
+            self.problems.addItem("R49.B3 : démarrage Player impossible : " + message[:300])
+            self.statusBar().showMessage("Playtest non démarré : " + message[:180])
+            self._cleanup_player_process()
+            self._sync_playtest_commands()
+            return
+        self._r49_playtest.note_error(message)
+
+    def _on_playtest_finished(self, code, status):
+        if self._r49_player_process is None:
+            return
+        self._read_playtest_output()
+        self._r49_playtest.finish(code, crashed=(status == QProcess.CrashExit))
+        success = self._r49_playtest.successful
+        label = ("Playtest terminé (code 0)" if success else
+                 "Playtest interrompu" if self._r49_playtest.phase == "stopped"
+                 else "Playtest en échec (code " + str(code) + ")")
+        self.statusBar().showMessage(label + " — retour à l'éditeur disponible.")
+        self.problems.addItem("R49.B3 : " + label)
+        if not success:
+            errors = self._r49_playtest.stream("stderr").strip()
+            if errors:
+                self.problems.addItem("R49.B3 stderr : " + errors[-300:])
+        self._cleanup_player_process()
+        if success:
+            # Reaching process exit 0 proves only a completed process,
+            # not which game mechanics or vertical slice were exercised.
+            self._guide_mark("playtest")
+        self._sync_playtest_commands()
+        # No automatic navigation while the author may be editing elsewhere.
+        # The explicit "Revenir à l'édition testée" command restores context.
+
+    def _cleanup_player_process(self):
+        process = self._r49_player_process
+        self._r49_player_process = None
+        if process is not None:
+            process.deleteLater()
+
+    def stop_playtest(self):
+        """Ask the local Player to exit, then kill if it ignores termination."""
+        process = self._r49_player_process
+        if process is None or not self._r49_playtest.request_stop():
             return False
-        self.statusBar().showMessage("Player Qt lancé : " + str(self.content_path))
-        # A successful Player launch against a clean, persisted pair proves
-        # that the pair has been saved, even if it was opened from disk.
-        self._guide_mark("save")
-        self._guide_mark("playtest")
+        self.statusBar().showMessage("Arrêt du Player demandé…")
+        self._sync_playtest_commands()
+        process.terminate()
+        QTimer.singleShot(
+            2500,
+            lambda: (process.kill() if self._r49_player_process is process and
+                     process.state() != QProcess.NotRunning else None),
+        )
+        return True
+
+    def return_to_playtest_editor(self):
+        """Explicit return to previous workspace, resource IDs and focus."""
+        context = self._r49_playtest.context
+        if (self._r49_playtest.active or
+                self._r49_playtest.phase not in TERMINAL or
+                context is None or not context.matches(self.session, self.content_path)):
+            self.statusBar().showMessage("Contexte du playtest indisponible.")
+            return False
+        if self._edited_fields:
+            self.statusBar().showMessage(
+                "Appliquez ou ignorez les propriétés avant de revenir.")
+            return False
+        if self.navigate(context.workspace) is False:
+            return False
+        restored = 0
+        if context.resource_keys:
+            for i, identity in enumerate(context.resource_keys):
+                if i == 0:
+                    if not self.focus_resource(identity):
+                        continue
+                    restored += 1
+                else:
+                    for row in range(self.resource_model.rowCount()):
+                        parent = self.resource_model.item(row)
+                        for j in range(parent.rowCount()):
+                            item = parent.child(j)
+                            if tuple(item.data(Qt.UserRole).split("|", 2)) != identity:
+                                continue
+                            index = self.proxy.mapFromSource(item.index())
+                            if index.isValid():
+                                self.resource_view.selectionModel().select(
+                                    index, QItemSelectionModel.Select |
+                                    QItemSelectionModel.Rows)
+                                restored += 1
+        target = (self._r49_focus_candidate(context.focus_region)
+                  if context.focus_region else None)
+        if target is not None:
+            target.setFocus(Qt.ShortcutFocusReason)
+        elif not context.resource_keys:
+            self.focus_workspace()
+        if restored != len(context.resource_keys):
+            self.statusBar().showMessage(
+                "Retour partiel : des ressources ont changé ou disparu.")
+        else:
+            self.statusBar().showMessage(
+                "Contexte Studio restauré — le Player n'a pas modifié le projet.")
+        return True
+
+    def show_playtest_report(self):
+        """Read-only process diagnostics, bounded in memory and not uploaded."""
+        if self._r49_playtest.phase == "idle":
+            return False
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Diagnostics du playtest — R49")
+        layout = QVBoxLayout(dialog)
+        report = QPlainTextEdit()
+        report.setObjectName("r49-playtest-report")
+        report.setAccessibleName("Code de sortie et diagnostics locaux du Player")
+        report.setReadOnly(True)
+        report.setPlainText(self._r49_playtest.report())
+        layout.addWidget(report)
+        close = QPushButton("Fermer")
+        close.clicked.connect(dialog.accept)
+        layout.addWidget(close)
+        dialog.resize(690, 440)
+        dialog.exec()
         return True
 
     def export_player(self):
