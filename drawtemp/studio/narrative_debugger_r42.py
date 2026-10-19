@@ -110,6 +110,35 @@ class NarrativeDebugger:
         return {'scene': {'id': scene['id'], 'title': scene['title']},
                 'line': line, 'choices': rows}
 
+    def preview_choice(self, choice_id):
+        """Predict effects by running the real choice on an extra throwaway clone."""
+        self._check()
+        current = self.inspect(choice_id)
+        require(current['scene'] is not None, 'No narrative scene to preview')
+        require(current['choices'][0]['available'], 'Choice is not currently available')
+        before = self._snapshot()
+        sandbox = deepcopy(self._simulation)
+        sandbox.choose_story_option(choice_id, expected_revision=before.revision)
+        after = sandbox.snapshot()
+        a = thaw(before.progress)
+        b = thaw(after.progress)
+        flags_before, flags_after = a['story_flags'], b['story_flags']
+        changed = [{'key': key, 'before': deepcopy(flags_before.get(key)),
+                    'after': deepcopy(flags_after.get(key))}
+                   for key in sorted(set(flags_before) | set(flags_after))
+                   if flags_before.get(key) != flags_after.get(key)]
+        items = [{'item': key,
+                  'delta': b['inventory'].get(key, 0) - a['inventory'].get(key, 0)}
+                 for key in sorted(set(a['inventory']) | set(b['inventory']))
+                 if a['inventory'].get(key, 0) != b['inventory'].get(key, 0)]
+        return {'choice': choice_id, 'scene': current['scene']['id'],
+                'next_scene': thaw(after.scene).get('id', '') if after.scene else '',
+                'flags': changed, 'gold_delta': b['gold'] - a['gold'],
+                'items': items,
+                'unlocked_added': sorted(set(b['unlocked']) - set(a['unlocked'])),
+                'history_delta': len(b['story_history']) - len(a['story_history']),
+                'isolated': True, 'committed': False}
+
     def breakpoint(self, scene_id, choice_id, enabled=True):
         """Stop *before* a choice can apply its canonical effects."""
         self._check()
