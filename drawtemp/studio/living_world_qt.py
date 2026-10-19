@@ -21,6 +21,66 @@ from sporebound.living_world import EXTENSION, LivingWorld
 from sporebound.living_world_diagnostics import timeline
 
 
+class TransferEditor(QDialog):
+    """Author explicit portal endpoints in canonical exploration cells."""
+
+    def __init__(self, scenes, item=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Passage entre deux scènes")
+        self.setMinimumWidth(340)
+        self.transfer = None
+        self._item = item or {}
+        form = QFormLayout(self)
+        self.ident = QLineEdit(self._item.get("id", ""))
+        self.origin = QComboBox()
+        self.destination = QComboBox()
+        self.origin.addItems(scenes)
+        self.destination.addItems(scenes)
+        self.origin.setCurrentText(self._item.get("from_scene", scenes[0] if scenes else ""))
+        self.destination.setCurrentText(self._item.get(
+            "to_scene", scenes[-1] if scenes else ""))
+        self.from_x = QSpinBox()
+        self.from_y = QSpinBox()
+        self.to_x = QSpinBox()
+        self.to_y = QSpinBox()
+        for spin in (self.from_x, self.from_y, self.to_x, self.to_y):
+            spin.setRange(0, 31)
+        self.from_x.setValue(self._item.get("from_pos", [0, 0])[0])
+        self.from_y.setValue(self._item.get("from_pos", [0, 0])[1])
+        self.to_x.setValue(self._item.get("to_pos", [0, 0])[0])
+        self.to_y.setValue(self._item.get("to_pos", [0, 0])[1])
+        self.minutes = QSpinBox()
+        self.minutes.setRange(1, 240)
+        self.minutes.setValue(self._item.get("travel_minutes", 1))
+        form.addRow("Identifiant du passage", self.ident)
+        form.addRow("Scène de départ", self.origin)
+        form.addRow("Scène de destination", self.destination)
+        form.addRow("Sortie X", self.from_x)
+        form.addRow("Sortie Y", self.from_y)
+        form.addRow("Entrée X", self.to_x)
+        form.addRow("Entrée Y", self.to_y)
+        form.addRow("Durée en minutes", self.minutes)
+        save = QPushButton("Valider le passage")
+        save.clicked.connect(self._save)
+        form.addRow(save)
+
+    def _save(self):
+        if not self.ident.text().strip():
+            QMessageBox.warning(self, "Passage", "Identifiant requis.")
+            return
+        if self.origin.currentText() == self.destination.currentText():
+            QMessageBox.warning(self, "Passage", "Deux scènes distinctes sont nécessaires.")
+            return
+        self.transfer = {
+            "id": self.ident.text().strip(),
+            "from_scene": self.origin.currentText(),
+            "to_scene": self.destination.currentText(),
+            "from_pos": [self.from_x.value(), self.from_y.value()],
+            "to_pos": [self.to_x.value(), self.to_y.value()],
+            "travel_minutes": self.minutes.value()}
+        self.accept()
+
+
 class LivingWorldDialog(QDialog):
     """Human-editable NPC stops, previews and transactional save in Studio."""
 
@@ -112,6 +172,20 @@ class LivingWorldDialog(QDialog):
             btn.clicked.connect(callback)
             buttons.addWidget(btn)
         layout.addLayout(buttons)
+        layout.addWidget(QLabel("Passages entre scènes (R35.D2)"))
+        self.transfer_list = QListWidget()
+        self.transfer_list.setAccessibleName("Passages inter-scènes")
+        self.transfer_list.setMaximumHeight(105)
+        layout.addWidget(self.transfer_list)
+        transfer_actions = QHBoxLayout()
+        for label, action in (
+                ("Ajouter passage", self._add_transfer),
+                ("Modifier passage", self._edit_transfer),
+                ("Supprimer passage", self._remove_transfer)):
+            button = QPushButton(label)
+            button.clicked.connect(action)
+            transfer_actions.addWidget(button)
+        layout.addLayout(transfer_actions)
         self.diagnostics = QPlainTextEdit()
         self.diagnostics.setReadOnly(True)
         self.diagnostics.setAccessibleName("Diagnostic des horaires")
@@ -126,6 +200,38 @@ class LivingWorldDialog(QDialog):
             action_row.addWidget(button)
         layout.addLayout(action_row)
         self._load_npcs()
+        self._load_transfers()
+
+    def _load_transfers(self):
+        self.transfer_list.clear()
+        for item in self.document.get("transfers", []):
+            self.transfer_list.addItem(
+                f'{item["id"]} : {item["from_scene"]} → '
+                f'{item["to_scene"]} ({item["travel_minutes"]} min)')
+
+    def _add_transfer(self):
+        editor = TransferEditor(self.scenes, parent=self)
+        if editor.exec() == QDialog.Accepted:
+            self.document.setdefault("transfers", []).append(editor.transfer)
+            self._load_transfers()
+
+    def _edit_transfer(self):
+        index = self.transfer_list.currentRow()
+        items = self.document.get("transfers", [])
+        if index < 0 or index >= len(items):
+            return
+        editor = TransferEditor(self.scenes, items[index], parent=self)
+        if editor.exec() == QDialog.Accepted:
+            items[index] = editor.transfer
+            self._load_transfers()
+            self.transfer_list.setCurrentRow(index)
+
+    def _remove_transfer(self):
+        index = self.transfer_list.currentRow()
+        items = self.document.get("transfers", [])
+        if 0 <= index < len(items):
+            del items[index]
+            self._load_transfers()
 
     def _npc(self):
         key = self.npc_select.currentText()
