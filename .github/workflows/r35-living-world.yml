@@ -9,6 +9,8 @@ on:
       - 'tests_standalone/test_r35_living_world.py'
       - 'tests_standalone/test_r35_factions_quests.py'
       - 'sporebound/living_world_commerce.py'
+      - 'sporebound/living_world_crafting.py'
+      - 'tests_standalone/test_r45_crafting.py'
       - 'sporebound/living_world_navigation.py'
       - 'sporebound/living_world_transfers.py'
       - 'tests_standalone/test_r35_transfers.py'
@@ -37,6 +39,8 @@ on:
       - 'tests_standalone/test_r35_living_world.py'
       - 'tests_standalone/test_r35_factions_quests.py'
       - 'sporebound/living_world_commerce.py'
+      - 'sporebound/living_world_crafting.py'
+      - 'tests_standalone/test_r45_crafting.py'
       - 'sporebound/living_world_navigation.py'
       - 'sporebound/living_world_transfers.py'
       - 'tests_standalone/test_r35_transfers.py'
@@ -85,6 +89,8 @@ jobs:
         run: python -m unittest tests_standalone.test_r35_factions_quests -v
       - name: R35.B2 merchant receipts and daily inventory
         run: python -m unittest tests_standalone.test_r35_commerce -v
+      - name: R45.A canonical crafting receipts and save compatibility
+        run: python -m unittest tests_standalone.test_r45_crafting -v
       - name: R35.C1 village schedule editing and world timeline
         run: python -m unittest tests_standalone.test_r35_village -v
       - name: R35.D1 spatial schedule and off-focus pathfinding
