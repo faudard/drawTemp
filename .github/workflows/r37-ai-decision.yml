@@ -14,9 +14,13 @@ on:
   push:
     branches: [master]
     paths:
+      - 'sporebound/advanced_ai.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/game_project.py'
       - 'drawtemp/sdk/ai_decision.py'
       - 'drawtemp/sdk/__init__.py'
       - 'tests_standalone/test_r37_ai_decision.py'
+      - 'tests_standalone/test_r37_ai_session.py'
       - '.github/workflows/r37-ai-decision.yml'
   workflow_dispatch:
 
