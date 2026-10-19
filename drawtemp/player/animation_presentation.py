@@ -7,6 +7,7 @@ No canonical replay or GameProject schemas change.
 from __future__ import annotations
 
 from copy import deepcopy
+from hashlib import sha256
 
 from sporebound.action_runtime import TICK_HZ, SCALE
 from sporebound.animation_graph import AnimationStateController, controllers_from_project
@@ -84,7 +85,8 @@ class ActionAnimationPresentation:
         if (type(tick) is not int or tick != self._tick + 1
                 or snapshot.get("tick_hz") != TICK_HZ or
                 type(events) not in (list, tuple) or len(events) > 64 or
-                any(type(row) is not dict or row.get("tick") != tick or
+                any(type(row) is not dict or type(row.get("tick")) is not int or
+                    row["tick"] != tick or
                     type(row.get("kind")) is not str for row in events)):
             raise ValueError("Animation binding expects committed consecutive R26 events")
         # Build a new immutable-from-caller state so a rejected visual graph
@@ -118,7 +120,8 @@ class ActionAnimationPresentation:
             x, y = entity["pos"]
             for marker in cue_rows:
                 emitted.append({
-                    "id": "cue:" + actor + ":" + marker["id"],
+                    "id": "cue:" + actor + ":" + sha256(marker["id"].encode(
+                        "utf-8")).hexdigest()[:16],
                     "kind": CUE_FX_KIND[marker["cue"]], "actor": actor,
                     "x": x / SCALE - .5, "y": y / SCALE - .5,
                     "born": tick, "expires": tick + CUE_LIFETIME,
