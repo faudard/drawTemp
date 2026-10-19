@@ -124,9 +124,9 @@ def create_bridge(controller, renderer):
             return dict(self._recovery_notice)
 
         def _display_error(self, error):
-            code = getattr(error, "code", "operation_failed")
+            code = getattr(error, "code", None)
             if not isinstance(code, str):
-                code = "operation_failed"
+                code = "io_error" if isinstance(error, OSError) else "operation_failed"
             guidance = {
                 "primary_valid": ("Sauvegarde déjà valide",
                                   "La restauration risquerait de remplacer la progression actuelle."),
