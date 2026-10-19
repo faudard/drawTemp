@@ -106,6 +106,31 @@ class TypedVariableTests(unittest.TestCase):
                          {"r31_score": 11})
         self.assertEqual(session.snapshot().to_dict(), before)
 
+    def test_game_session_checkpoint_restores_battle_variable_journal(self):
+        from sporebound.game_session import GameSession
+        session = new_session()
+        bool_graph().apply(session)
+        snap = session.snapshot().to_dict()
+        raw = snap["content"]
+        content = Content.from_dict(raw)
+        from sporebound.game_project import GameProject
+        project = GameProject.from_dict(snap["project"], content)
+        campaign_id = project.campaigns[0]["id"]
+        game = GameSession(content, project, campaign_id, seed=14)
+        # Complete the reference project's opening story dialogue before combat.
+        if game.active_scene() is not None:
+            game.choose_story_option("enter")
+        battle = game.start_mission(MISSION)
+        self.assertIsNotNone(battle)
+        self.assertEqual(variables_from_journal(game.battle),
+                         {"r31_gate_open": True})
+        checkpoint = game.recording()
+        restored = GameSession.from_recording(checkpoint, content, project)
+        self.assertEqual(variables_from_journal(restored.battle),
+                         {"r31_gate_open": True})
+        self.assertEqual(restored.recording(), checkpoint)
+        self.assertEqual(game.rules.manifest(), restored.rules.manifest())
+
     def test_nonmatching_predicate_cannot_enter_second_stage(self):
         session = new_session()
         draft = LogicGraphDraft.new(MISSION, "false_gate", source_revision=0)
