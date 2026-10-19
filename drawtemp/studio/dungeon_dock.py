@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDockWidget, QFormLayout, QHBoxLayout,
-    QInputDialog, QLabel, QLineEdit, QPushButton, QSpinBox,
+    QInputDialog, QLabel, QLineEdit, QMessageBox, QPushButton, QSpinBox,
     QTextEdit, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -205,6 +205,15 @@ class DungeonDock(QDockWidget):
             "Préfixe des missions et de la campagne (unique)",
             text="r27")
         if not ok or not prefix.strip():
+            return
+        confirmed = QMessageBox.question(
+            self, "Ajouter le parcours au projet",
+            "Cette création ajoute 4 missions et modifie le manifeste de "
+            "campagne. Les sauvegardes existantes du projet peuvent devenir "
+            "incompatibles avec les nouvelles empreintes Content/Project. "
+            "Travaillez sur une copie ou un projet non publié. Continuer ?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if confirmed != QMessageBox.Yes:
             return
         from .dungeon_journey import build_dungeon_journey
         self.window._safe(lambda: build_dungeon_journey(
