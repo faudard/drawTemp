@@ -78,6 +78,21 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "invalid_parents")
         self.assertEqual(len(self.graph), before)
 
+    def test_malformed_parents_and_altered_graph_nodes_fail_closed(self):
+        with self.assertRaises(CollaborationError) as caught:
+            self.graph.add(self.root, parents=([self.root_node.node_id],))
+        self.assertEqual(caught.exception.code, "invalid_parents")
+        original = self.graph.node(self.root_node.node_id)
+        self.graph._nodes[original.node_id] = replace(original, label="tampered")
+        with self.assertRaises(CollaborationError) as caught:
+            self.graph.node(original.node_id)
+        self.assertEqual(caught.exception.code, "invalid_revision")
+        child = make_revision(self.content, self.project, author="alice",
+                              parents=(self.root.digest,))
+        with self.assertRaises(CollaborationError) as caught:
+            self.graph.add(child, parents=(original.node_id,), label="child")
+        self.assertEqual(caught.exception.code, "invalid_revision")
+
     def test_duplicate_nodes_and_history_limits(self):
         with self.assertRaises(CollaborationError) as caught:
             self.graph.add(self.root, label="root")
