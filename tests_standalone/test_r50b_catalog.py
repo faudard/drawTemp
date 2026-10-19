@@ -144,6 +144,8 @@ class R50BQtTests(unittest.TestCase):
                 gallery.genre.setCurrentIndex(gallery.genre.findData(key))
                 self.assertFalse(gallery.create_button.isEnabled())
             gallery.parent_folder.setText(temp)
+            gallery.genre.setCurrentIndex(gallery.genre.findData("exploration_prototype"))
+            self.assertTrue(gallery.create_button.isEnabled())
             gallery.genre.setCurrentIndex(gallery.genre.findData("srpg"))
             self.assertTrue(gallery.create_button.isEnabled())
             gallery.create()
