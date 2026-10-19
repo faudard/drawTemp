@@ -8,10 +8,10 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (
     QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QPlainTextEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget,
+    QPlainTextEdit, QPushButton, QSlider, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from drawtemp.studio.animation_graph_authoring import AnimationControllerAuthoring
@@ -98,6 +98,14 @@ class AnimationControllerPanel(QWidget):
         self.tick = QSpinBox()
         self.tick.setRange(0, 1000000)
         sample_form.addRow("Tick simulation (échantillon)", self.tick)
+        self.scrubber = QSlider(Qt.Horizontal)
+        self.scrubber.setObjectName("r36-animation-scrubber")
+        self.scrubber.setRange(0, 1000000)
+        self.scrubber.setAccessibleName("Parcours image par tick du contrôleur d'animation")
+        self.scrubber.valueChanged.connect(self.tick.setValue)
+        self.tick.valueChanged.connect(self.scrubber.setValue)
+        self.scrubber.valueChanged.connect(lambda _value: self.sample())
+        sample_form.addRow("Scrubbing (lecture seule)", self.scrubber)
         inspect = QPushButton("Échantillonner le sprite (sans rendu)")
         inspect.clicked.connect(self.sample)
         sample_form.addRow(inspect)
