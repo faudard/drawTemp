@@ -40,7 +40,7 @@ MANUAL_RELEASE_REQUIREMENTS = (
     "Native Qt Player built, exported and run on clean Windows/Linux/macOS machines",
     "Actual renderer equivalence and onscreen GPU/frame-time measurements approved",
     "Legally verified art provenance, modification and redistribution rights",
-    "Independent creator UX/playthrough approval and signed release evidence",
+    "Both missions completed through a genuine Player walkthrough, with creator UX and signed release evidence",
 )
 
 
