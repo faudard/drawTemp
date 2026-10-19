@@ -54,6 +54,14 @@ class R33ProgressionTests(unittest.TestCase):
         self.assertFalse(report["goal_reachable"])
         self.assertEqual(report["unreachable_rooms"], ["citadel", "ruins"])
 
+    def test_unreachable_optional_room_is_not_certified_safe(self):
+        graph = example()
+        graph["rooms"].append("secret")
+        report = analyze_metroidvania(graph)
+        self.assertTrue(report["goal_reachable"])
+        self.assertEqual(report["unreachable_rooms"], ["secret"])
+        self.assertFalse(report["safe"])
+
     def test_budget_is_fail_closed(self):
         report = analyze_metroidvania(example(), state_budget=1)
         self.assertFalse(report["complete"])
