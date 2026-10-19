@@ -280,9 +280,12 @@ class ModRegistry:
             project = project.to_dict()
         if type(project) is dict and "project" in project:
             project = project["project"]
-        if type(project) is not dict or type(project.get("extensions")) is not dict:
-            _fail("invalid_project", "Expected canonical GameProject extensions")
-        namespaces = project["extensions"]
+        if (type(project) is not dict or type(project.get("version")) is not int or
+                project["version"] != 1 or type(project.get("campaigns")) is not list or
+                type(project.get("extensions", {})) is not dict):
+            _fail("invalid_project", "Expected canonical GameProject v1 structure")
+        # GameProject.to_dict() omits an empty extensions mapping by design.
+        namespaces = project.get("extensions", {})
         errors, verified = [], []
         for mod_id, expected_sha in sorted(expected_pins.items()):
             entry = self._entries.get(mod_id)
@@ -347,9 +350,11 @@ class ModRegistry:
             _fail("invalid_project", "Project snapshot required to prevent data loss")
         if "project" in project:
             project = project["project"]
-        if type(project) is not dict or type(project.get("extensions")) is not dict:
-            _fail("invalid_project", "Expected canonical GameProject extensions")
-        if entry["manifest"]["namespace"] in project["extensions"]:
+        if (type(project) is not dict or type(project.get("version")) is not int or
+                project["version"] != 1 or type(project.get("campaigns")) is not list or
+                type(project.get("extensions", {})) is not dict):
+            _fail("invalid_project", "Expected canonical GameProject v1 structure")
+        if entry["manifest"]["namespace"] in project.get("extensions", {}):
             _fail("data_in_use", "Existing extension data must remain accessible")
         self.disable(mod_id)
         del self._entries[mod_id]
