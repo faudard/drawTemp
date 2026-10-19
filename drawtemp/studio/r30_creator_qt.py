@@ -199,10 +199,13 @@ class R30CreatorDialog(QDialog):
             self._error("Prévisualisation refusée", exc, self.pack_status)
             return None
         self.pack_publish_button.setEnabled(True)
+        unsaved = (" ATTENTION : les modifications non enregistrées dans le "
+                   "Studio ne seront pas intégrées à la copie."
+                   if self.session.snapshot().dirty else "")
         self.pack_status.setText(
             f"{preview.pack_id} {preview.pack_version} : "
             f"{len(preview.selections)} ressource(s) validée(s). "
-            "Droits de publication NON vérifiés. Destination = nouveau projet.")
+            "Droits de publication NON vérifiés. Destination = nouveau projet." + unsaved)
         return preview
 
     def _publish_dialog(self):
@@ -323,11 +326,12 @@ class R30CreatorDialog(QDialog):
         conflicts = list(preview.conflicts)
         self.merge_table.setRowCount(len(changes) + len(conflicts))
         for row, (source, change) in enumerate(changes):
-            for column, text in enumerate((
-                source, change.path, _short(change.before), "",
-                _short(change.after), "",
-            )):
-                self.merge_table.setItem(row, column, _item(text))
+            target_local = source == "Local"
+            values = (source, change.path, _short(change.before),
+                      _short(change.after) if target_local else "",
+                      "" if target_local else _short(change.after), "")
+            for column, value in enumerate(values):
+                self.merge_table.setItem(row, column, _item(value))
         for offset, conflict in enumerate(conflicts):
             row = len(changes) + offset
             values = ("Conflit", conflict.path, _short(conflict.base),
