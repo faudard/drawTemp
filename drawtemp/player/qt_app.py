@@ -360,6 +360,11 @@ def create_bridge(controller, renderer):
         def startMission(self, mission):
             self.invoke(self.controller.start_mission, mission)
 
+        @Slot(str)
+        def routeTransition(self, link_id):
+            """Travel through the existing R25 GameSession scene graph."""
+            self.invoke(self.controller.route_transition, link_id)
+
         @Slot(int, int)
         def exploreMove(self, dx, dy):
             self.invoke(self.controller.explore_move, dx, dy,
