@@ -51,7 +51,8 @@ class LogicCanvas(QGraphicsView):
             color = QColor("#225785" if node["kind"] == "event" else
                            "#775325" if node["kind"] == "branch" else
                            "#295943" if node["kind"] == "wait" else
-                           "#59466e" if node["kind"] == "flag" else "#35465f")
+                           "#59466e" if node["kind"] == "flag" else
+                           "#584b28" if node["kind"] == "check" else "#35465f")
             box = scene.addRect(x, y, 186, 76, QPen(QColor("#8ca9d0"), 2),
                                 QBrush(color))
             box.setData(0, node["id"])
@@ -168,6 +169,8 @@ class LogicGraphDialog(QDialog):
                 ("branch", "+ Si / Sinon", self.add_branch),
                 ("wait", "+ Attendre", self.add_wait),
                 ("flag", "+ Drapeau", self.add_flag),
+                ("variable", "+ Variable", self.add_variable),
+                ("check", "+ Tester var", self.add_variable_check),
                 ("copy", "Dupliquer", self.copy_action),
                 ("edit", "Propriétés…", self.edit_node),
                 ("remove", "Supprimer", self.remove_action),
@@ -343,7 +346,7 @@ class LogicGraphDialog(QDialog):
             self.buttons[key].setEnabled(self.debug_session is not None)
         self.buttons["debug_start"].setEnabled(
             self.draft is not None and not self._has_unsaved_draft())
-        for key in ("add", "branch", "wait", "flag", "copy", "edit", "remove", "connect", "true", "false", "disconnect", "preview"):
+        for key in ("add", "branch", "wait", "flag", "variable", "check", "copy", "edit", "remove", "connect", "true", "false", "disconnect", "preview"):
             self.buttons[key].setEnabled(self.draft is not None)
 
     def _inspect(self):
@@ -555,6 +558,74 @@ class LogicGraphDialog(QDialog):
         except (LogicGraphError, ValueError) as exc:
             self._problem(exc)
 
+    def _prompt_variable_value(self, *, numerical=False, initial=None):
+        if numerical:
+            value, ok = QInputDialog.getInt(
+                self, "Variable R31.F", "Entier", 
+                0 if initial is None else initial, -1000000, 1000000)
+            return value if ok else None
+        option, ok = QInputDialog.getItem(
+            self, "Variable R31.F", "Booléen", ["Vrai", "Faux"], 0, False)
+        return option == "Vrai" if ok else None
+
+    def _prompt_variable_name(self, initial="r31_drapeau"):
+        name, ok = QInputDialog.getText(
+            self, "Variable R31.F", "Nom du combat (r31_…)", text=initial)
+        return name.strip() if ok else None
+
+    def add_variable(self):
+        if self.draft is None or not self.selected_node:
+            return
+        name = self._prompt_variable_name()
+        if name is None:
+            return
+        kind, ok = QInputDialog.getItem(
+            self, "Mutation R31.F", "Opération",
+            ["Affecter booléen", "Affecter entier", "Ajouter entier"], 0, False)
+        if not ok:
+            return
+        numeric = kind != "Affecter booléen"
+        value = self._prompt_variable_value(numerical=numeric)
+        if value is None:
+            return
+        mode = "add" if kind == "Ajouter entier" else "set"
+        try:
+            self.selected_node = self.draft.add_variable_after(
+                self.selected_node, name, mode=mode, value=value)
+            self._render()
+            self.diagnostics.setPlainText(
+                "Variable de combat journalisée ; aucun effet de campagne implicite.")
+        except (LogicGraphError, ValueError) as exc:
+            self._problem(exc)
+
+    def add_variable_check(self):
+        if self.draft is None or not self.selected_node:
+            return
+        name = self._prompt_variable_name()
+        if name is None:
+            return
+        operator, ok = QInputDialog.getItem(
+            self, "Comparer une variable", "Opérateur",
+            ["eq", "ne", "gte", "lte"], 0, False)
+        if not ok:
+            return
+        mode, ok = QInputDialog.getItem(
+            self, "Type de variable", "Valeur", ["Booléen", "Entier"], 
+            1 if operator in ("gte", "lte") else 0, False)
+        if not ok:
+            return
+        value = self._prompt_variable_value(numerical=mode == "Entier")
+        if value is None:
+            return
+        try:
+            self.selected_node = self.draft.add_check_after(
+                self.selected_node, name, operator=operator, value=value)
+            self._render()
+            self.diagnostics.setPlainText(
+                "Test ajouté : règle R9 logique_compare en lecture du journal.")
+        except (LogicGraphError, ValueError) as exc:
+            self._problem(exc)
+
     def copy_action(self):
         if self.draft is None or not self.selected_node:
             return
@@ -642,6 +713,24 @@ class LogicGraphDialog(QDialog):
                                      {"kind": "ticks", "ticks": ticks})
                 self._render()
                 return
+            if node["kind"] == "check":
+                name = self._prompt_variable_name(params["name"])
+                if name is None:
+                    return
+                operator, ok = QInputDialog.getItem(
+                    self, "Comparer une variable", "Opérateur",
+                    ["eq", "ne", "gte", "lte"], 0, False)
+                if not ok:
+                    return
+                value = self._prompt_variable_value(
+                    numerical=type(params["value"]) is int)
+                if value is None:
+                    return
+                self.draft.edit_node(self.selected_node, {
+                    "kind": "logic_compare", "name": name,
+                    "operator": operator, "value": value})
+                self._render()
+                return
             if node["kind"] == "flag":
                 value, ok = QInputDialog.getText(
                     self, "Drapeau journal", "ID d'événement R9", text=params["event_id"])
@@ -688,6 +777,18 @@ class LogicGraphDialog(QDialog):
                 if not ok:
                     return
                 params["text"] = value
+            elif kind in ("logic_set", "logic_add"):
+                name = self._prompt_variable_name(params["name"])
+                if name is None:
+                    return
+                value = self._prompt_variable_value(
+                    numerical=kind == "logic_add" or type(params.get("value")) is int,
+                    initial=params.get("amount") if kind == "logic_add"
+                    else params.get("value"))
+                if value is None:
+                    return
+                params["name"] = name
+                params["amount" if kind == "logic_add" else "value"] = value
             elif kind == "despawn":
                 value, ok = QInputDialog.getText(
                     self, "Retirer un acteur", "ID de l'acteur", text=params["unit"])
@@ -725,7 +826,7 @@ class LogicGraphDialog(QDialog):
                 ("\nSI/SINON exclusifs via cancel_after R9"
                  if self.draft.graph["schema_version"] == 2 else
                  ("\nÉvénements R9 enchaînés via after/delay_ticks"
-                  if self.draft.graph["schema_version"] == 3 else "")))
+                  if self.draft.graph["schema_version"] in (3, 4) else "")))
             return True
         except (AuthoringError, LogicGraphError, ValueError) as exc:
             self._problem(exc)
