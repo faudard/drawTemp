@@ -52,6 +52,16 @@ unique prefix (default `r27`). The template builder:
 A duplicate prefix, an invalid field or broken Content/Project
 reference aborts without changing the Studio documents.
 
+**Existing save compatibility:** adding four missions and a CampaignFlow
+changes the existing project's Content/Project fingerprints. Old save
+slots from that same project **may become incompatible** by design of
+`GameSession.load`'s integrity checks, even if the original Jeanne
+mission/story data is left unchanged. The Studio wizard requires an
+explicit confirmation and recommends an isolated project copy; for
+a safe demonstration, use the CLI generator into a NEW Content/Project
+pair. This is not a migration or proof of backward-compatible
+restoration of old save files.
+
 You can also generate and save a standalone demo directly:
 
 ```bash
