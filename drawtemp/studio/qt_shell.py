@@ -333,6 +333,8 @@ class StudioWindow(QMainWindow):
         self._action("undo", "Annuler", self.undo)
         self._action("redo", "Rétablir", self.redo)
         self._action("palette", "Palette de commandes…", self.open_palette)
+        self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…",
+                     self.open_procgen)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
@@ -367,6 +369,7 @@ class StudioWindow(QMainWindow):
             action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
+        tools_menu.addAction(self.commands["procgen"])
         shortcuts = tools_menu.addAction("Configurer un raccourci…")
         shortcuts.triggered.connect(self.configure_shortcut)
         # Localization applies to global workspace labels; legacy editors
@@ -440,6 +443,14 @@ class StudioWindow(QMainWindow):
 
     def open_palette(self):
         CommandPalette(self).exec()
+
+    def open_procgen(self):
+        """Read-only procedural preview bound to canonical Studio snapshot."""
+        try:
+            from drawtemp.studio.procgen_qt import open_procgen_preview
+            open_procgen_preview(self, self.session)
+        except (ValueError, OSError) as exc:
+            self.report_error(exc)
 
     def _set_favorites_only(self, index):
         self.proxy.favorite_only = index == 1
