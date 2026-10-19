@@ -122,7 +122,7 @@ class SceneRouter:
                     "Scene transition prerequisites are not satisfied")
         return deepcopy(route)
 
-    def validate_checkpoint(self, data, *, mode, battle):
+    def validate_checkpoint(self, data, *, mode, battle, rpg_scene=None):
         require(self.enabled and type(data) is dict
                 and set(data) == {"version", "current", "history"}
                 and type(data["version"]) is int
@@ -144,6 +144,13 @@ class SceneRouter:
             require(battle is not None and battle.mission.id == current
                     and current in self.content.missions,
                     "Scene route tactical encounter mismatch")
+        elif mode == "rpg":
+            # R41 RPG combat takes place within the current exploration scene.
+            # The scene-route cursor and history must continue to replay
+            # unchanged while GameSession owns the encounter's action journal.
+            require(battle is None and type(rpg_scene) is str
+                    and rpg_scene == current and current in self.project.exploration,
+                    "R41 encounter scene does not match route cursor")
         elif mode == "campaign":
             require(battle is None, "Campaign route contains live tactical state")
         else:
