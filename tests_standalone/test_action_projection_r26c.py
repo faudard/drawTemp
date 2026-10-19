@@ -57,6 +57,16 @@ class R26CTopDownProjectionTests(unittest.TestCase):
         self.assertIn("supply", {row["id"] for row in rows})
         self.assertEqual(len({row["id"] for row in rows}), len(rows))
         self.assertTrue(any(row["kind"] == "tile" for row in rows))
+        tile_depths = [row["zOrder"] for row in rows if row["kind"] == "tile"]
+        actor_depths = [row["zOrder"] for row in rows if row["kind"] == "actor"]
+        self.assertGreater(min(actor_depths), max(tile_depths),
+                           "Ground tiles must not conceal top-down actors")
+        sx, sy = camera.screen(*projection.project(hero["x"], hero["y"]))
+        self.assertEqual(pick(scene, camera, sx, sy, projection),
+                         {"kind": "actor", "id": "hero"})
+        sx, sy = camera.screen(*projection.project(1, 3))
+        self.assertEqual(pick(scene, camera, sx, sy, projection),
+                         {"kind": "object", "id": "supply"})
         self.assertEqual([row["id"] for row in rows],
                          [row["id"] for row in render_items(
                              scene, camera, projection, tile_index=index)])
