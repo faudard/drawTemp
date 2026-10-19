@@ -73,11 +73,64 @@ résolutions manuelles, parents divergents, intégrité SHA-256, validation
 canonique, ancien mode R30, ABA et transaction Undo. La CI doit confirmer
 leurs résultats sur le SHA de la PR. Pas de claim GPU/Qt onscreen/tri-OS.
 
+## Incrément R48.A2 : refactor transactionnel et audit local
+
+Le code de ce lot complète R48.A1 sans créer de nouvelle source de vérité.
+
+- `drawtemp.sdk.project_refactor.preview_rename(session, resource, new_id)`
+  réutilise les planificateurs **R2.7** existants :
+  `scene:id`, `campaign:id`, `map_actor:mission/id` et
+  `map_object:mission/id`. Le rapport détaché expose les chemins d'impact
+  et les digests avant/après. Pas de substitution de texte non typée :
+  références opaques, IDs invalides ou collisions sont refusés.
+- `apply_rename(session, review)` vérifie la révision du Studio, les digests
+  des deux versions et le plan d'auteur lié à la session. L'opération est
+  **un unique Undo** ; un edit suivi d'Undo (ABA) invalide la prévisualisation.
+- Le changement d'ID d'une campagne ne peut être prévisualisé que depuis
+  un Studio associé à une destination sauvegardée et non modifiée de façon
+  externe ; présence de slots de sauvegarde dans l'ancien namespace = refus
+  explicite. **Aucune migration de sauvegardes existantes**.
+- `drawtemp.sdk.project_audit.LocalAuditLog` est un fichier JSONL local
+  **facultatif**, append-only, numéroté, chaîné par SHA-256 et limité à
+  8 Mio. Le verrou O_EXCL et le HEAD attendu refusent les écritures
+  concurrentes par cette API; un journal tronqué, corrompu ou modifié
+  bloque toute nouvelle entrée. Les entrées ne contiennent que la
+  provenance, les noms d'opérations et les digests.
+- **Limite transactionnelle :** le Studio et le journal sont deux supports.
+  Une application validée peut précéder une panne d'append ; **on ne peut pas
+  prétendre à une atomicité inter-supports ni à un audit exhaustif**.
+  Le journal n'est ni un format de sauvegarde, ni une signature, ni un
+  autorisateur de rollback. Aucun historique Git n'est modifié.
+
+```python
+from drawtemp.sdk.project_refactor import preview_rename, apply_rename
+from drawtemp.sdk.project_audit import LocalAuditLog
+
+review = preview_rename(session, "scene:arrival", "arrival_new")
+# Afficher review.affected_paths dans la UI avant confirmation.
+transition = apply_rename(session, review)
+audit = LocalAuditLog("collaboration.audit.jsonl")
+status = audit.inspect()
+audit.append(expected_head=status["head"], actor="alice",
+             operation="rename", resource=review.resource,
+             before=review.before_digest, after=review.after_digest)
+# Le save() Content/GameProject et la publication audit restent explicites.
+```
+
+Régressions R48.A2 :
+
+```bash
+python -m unittest tests_standalone.test_drawtemp_r48a2_refactor_audit -v
+```
+
+**Rebase trans-générations, arbitrage d'ancêtres divergents, UX Qt R48.B
+et gate R48.C restent ouverts.** La CI du SHA de la branche doit être
+validée avant tout statut « prêt à fusionner ».
+
 ## Tranches restantes
 
-- **R48.A2** : refactor global d'IDs et graphe de références Content/GameProject
-  avec preview/impact/résolution explicite, audits append-only liés aux SHA,
-  rebase multi-générations et tests adversariaux de reprise.
+- **R48.A3** : rebase multi-générations et résolution d'ancêtres, audit
+  rapproché des snapshots canoniques, tests adversariaux de reprise après crash.
 - **R48.B** : panneau Qt Project History & Review, détail des conflits,
   provenance et commentaires localisés aux IDs, QTest et review onscreen.
 - **R48.C** : fixture deux auteurs (carte + dialogue/quête), tests perturbations,
