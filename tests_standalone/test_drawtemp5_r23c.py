@@ -104,6 +104,17 @@ class PortableReleaseTests(unittest.TestCase):
             remove_preview(target)
         self.assertTrue(target.exists())
 
+    @unittest.skipIf(os.name == "nt", "POSIX execution-bit assertion")
+    def test_removing_studio_execute_permission_breaks_relocation_gate(self):
+        archive, report = self.package()
+        target = self.root / "no-execute"
+        install_preview(archive, target, expected_sha256=report["sha256"])
+        exe = target / "Studio" / self.studio_name
+        exe.chmod(0o644)
+        with self.assertRaisesRegex(ReleaseError, "mode mismatch"):
+            verify_portable(target)
+        self.assertTrue(target.exists())
+
     def test_symlinked_studio_runtime_outside_project_is_rejected(self):
         rogue = self.root / "outside.txt"
         rogue.write_bytes(b"evil")
