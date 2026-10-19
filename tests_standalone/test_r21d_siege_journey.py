@@ -93,7 +93,7 @@ class JourneyPlaybackTests(unittest.TestCase):
                             for entry in session.active.events))
         ram = next(o for o in session.active.mission.objects
                    if o["id"] == "ram")
-        self.assertEqual(ram["pos"], [4, 3])
+        self.assertEqual(tuple(ram["pos"]), (4, 3))
         self.assertEqual(session.logistics.reserves["player"], 2)
         self.assertEqual(session.digest(),
                          MultiFrontSession.replay(session.recording()).digest())
