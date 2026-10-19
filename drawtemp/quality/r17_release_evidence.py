@@ -253,7 +253,9 @@ def build_dossier(*, revision, artifacts=None, checks=None, cross=None, r14=None
             if not matched:
                 components["bundle"]["reason"] = (
                     "R15 bundle does not match the exact authored Content/GameProject pair")
-                gates["R17.8"]["detail"] = "Export belongs to another authored project"
+                gates["R17.8"] = _gate(
+                    "R17.8", "blocked",
+                    "Export belongs to another authored project")
             elif gates["R17.8"]["status"] == "blocked":
                 gates["R17.8"] = _gate(
                     "R17.8", "partial",
