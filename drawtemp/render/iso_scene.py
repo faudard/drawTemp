@@ -40,6 +40,29 @@ class IsoProjection:
         return tuple(max(hits)[-2:]) if hits else None
 
 
+@dataclass(frozen=True)
+class TopDownProjection:
+    """R26/R3 orthogonal projection with cell centres at integer indices.
+
+    The same Camera, TileChunkIndex, render_items and pick functions are used
+    by tactical and action scenes. Elevation is deliberately visual-only.
+    """
+    width: float = 64
+    height: float = 64
+    height_step: float = 0
+
+    def project(self, x, y, elevation=0):
+        return x * self.width, y * self.height - elevation * self.height_step
+
+    def unproject(self, sx, sy, elevation=0):
+        return sx / self.width, (sy + elevation * self.height_step) / self.height
+
+    def pick(self, sx, sy, width, height, elevations=None):
+        x, y = self.unproject(sx, sy)
+        cx, cy = floor(x + .5), floor(y + .5)
+        return (cx, cy) if 0 <= cx < width and 0 <= cy < height else None
+
+
 @dataclass
 class Camera:
     width: float = 960
@@ -177,6 +200,55 @@ def scene_from_exploration(stage, *, revision=0):
             "tiles": tiles, "actors": actors, "objects": objects}
 
 
+def scene_from_action(runtime):
+    """Adapt R26 logical state into the unchanged R3 scene record contract.
+
+    The headless simulation is the sole source of authority. Positions are
+    converted to fractional cell-centre coordinates without rounding them to
+    a tactical grid. Both clients can use this detached scene projection.
+    """
+    from sporebound.action_runtime import ActionRuntime, SCALE
+    if not isinstance(runtime, ActionRuntime):
+        raise ValueError("Expected a validated R26 action runtime")
+    authored = runtime.scene
+    snapshot = runtime.snapshot()
+    walls = {tuple(row) for row in authored["walls"]}
+    width, height = authored["width"], authored["height"]
+    tiles = [
+        {"x": x, "y": y, "height": 0,
+         "surface": "rock" if (x, y) in walls else "grass",
+         "feature": "stone_wall" if (x, y) in walls else "",
+         "blocked": (x, y) in walls, "cover": 0, "hazard": 0,
+         "goal": False}
+        for y in range(height) for x in range(width)
+    ]
+    def actor_position(row):
+        return row["pos"][0] / SCALE - .5, row["pos"][1] / SCALE - .5
+
+    hero = snapshot["hero"]
+    x, y = actor_position(hero)
+    actors = [{"id": "hero", "name": "Héros", "x": x, "y": y,
+               "team": "player", "alive": hero["alive"], "hp": hero["hp"],
+               "level": 0, "direction": facing_to_direction(hero["facing"]),
+               "combat_state": "dodge" if hero["dodge_left"] else "idle"}]
+    for name, enemy in sorted(snapshot["enemies"].items()):
+        x, y = actor_position(enemy)
+        actors.append({"id": name, "name": name, "x": x, "y": y,
+                       "team": "enemy", "alive": enemy["hp"] > 0,
+                       "hp": enemy["hp"], "level": 0,
+                       "direction": facing_to_direction(enemy["facing"]),
+                       "combat_state": enemy["state"]})
+    objects = [
+        {"id": obj["id"], "kind": obj["kind"],
+         "x": obj["pos"][0], "y": obj["pos"][1],
+         "open": snapshot["objects"][obj["id"]]["opened"]}
+        for obj in authored["objects"]
+    ]
+    return {"mission": "action:" + authored["id"], "width": width,
+            "height": height, "revision": snapshot["tick"],
+            "tiles": tiles, "actors": actors, "objects": objects}
+
+
 def fingerprint(scene):
     return hashlib.sha256(json.dumps(scene, sort_keys=True).encode()).hexdigest()
 
@@ -255,6 +327,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                          "label": a.get("name", a["id"]), "team": a["team"],
                          "alive": a["alive"], "sx": sx, "sy": sy,
                          "direction": a.get("direction", "south"),
+                         "hp": a.get("hp"), "combatState": a.get("combat_state", ""),
                          "zOrder": (x + y) * 100 + 60})
     from .building_geometry import building_surfaces
     from .visual_compositor import automatic_cutaway
