@@ -165,6 +165,8 @@
 | R20.13 QA Acte I | P0 | Parcours des branches, dialogues, sauvegarde/reprise, récompenses non dupliquées, zéro softlock connu | R14 ; tests E2E |
 | R20.14 Démo distribuable | P0 | Début/fin de l'acte I via Player autonome, menus, options, sauvegardes et feedback de testeurs | R15/R23 précoce ; rapport |
 
+**Référence de production R20.A :** [bible et contrat canonique de l'Acte I](jeanne/R20_ACT_I_PRODUCTION_CONTRACT.md). Le contenu tactique/narratif existant est audité sans revendiquer la certification R20 ; l'UX Player, les sauvegardes migrées, les scènes complémentaires et les essais externes restent à prouver.
+
 **Gate R20 :** trois missions narratives liées au minimum, une bifurcation réellement persistante, une fin d'acte identifiable, et un joueur externe peut tout terminer sans Studio ni compréhension des formats. La qualité narrative est revue humainement, pas « prouvée » par des tests de graphe seuls.
 
 ## 7. R21 — Tactical RPG & Castle Siege 2.0 (5.4)
