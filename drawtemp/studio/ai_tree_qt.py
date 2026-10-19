@@ -48,6 +48,7 @@ class BehaviorTreeDialog(QDialog):
         top.addWidget(self.reload_button)
         root.addLayout(top)
         toolbar = QHBoxLayout()
+        diagnostics_toolbar = QHBoxLayout()
         self.buttons = {}
         for key, label, callback in (
             ("sequence", "+ Séquence", lambda: self.add_node("sequence")),
@@ -68,9 +69,12 @@ class BehaviorTreeDialog(QDialog):
             button = QPushButton(label)
             button.setObjectName("r37-" + key)
             button.clicked.connect(callback)
-            toolbar.addWidget(button)
+            (toolbar if key in ("sequence", "selector", "condition",
+                                "action", "invert", "edit", "delete",
+                                "up", "down") else diagnostics_toolbar).addWidget(button)
             self.buttons[key] = button
         root.addLayout(toolbar)
+        root.addLayout(diagnostics_toolbar)
 
         split = QSplitter(Qt.Horizontal)
         root.addWidget(split, 1)
