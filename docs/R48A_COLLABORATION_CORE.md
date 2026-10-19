@@ -10,7 +10,8 @@ certification deux-auteurs R48.C, ni une garantie d'authenticité cryptographiqu
 - `ProjectRevision` : snapshot validé et immuable (charge JSON en octets
   canoniques), SHA-256 stable, `schema=1`, auteur descriptif et un ou deux
   parents SHA-256 déclarés. `make_revision` refuse les parents invalides,
-  cycles triviaux et documents non validables. Le champ auteur n'est pas signé.
+  documents non validables. Une branche inchangée peut conserver le digest
+  de son parent; le champ auteur n'est pas signé.
 - `CollaborationController.compare(base, local, incoming)` : exige que
   les deux branches déclarent **exactement** le digest du parent `base`,
   vérifie que le local correspond au snapshot actif d'`AuthoringSession`
