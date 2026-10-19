@@ -4,7 +4,9 @@ from __future__ import annotations
 from copy import deepcopy
 import unittest
 
-from drawtemp.render.r32_contact_trace import trace_platform_contacts
+from drawtemp.render.r32_contact_trace import (
+    trace_platform_contacts, trace_committed_platform_step,
+)
 from sporebound.platform_physics import PlatformPhysics
 from tests_standalone.test_platform_physics_r32 import scene, block, step
 
@@ -19,7 +21,7 @@ class PhysicsContactTraceTests(unittest.TestCase):
         found = None
         for _ in range(20):
             events = step(game, move=1)
-            trace = trace_platform_contacts(room, game.snapshot(), events)
+            trace = trace_committed_platform_step(game)
             if trace:
                 found = trace[0]
                 break
@@ -43,7 +45,7 @@ class PhysicsContactTraceTests(unittest.TestCase):
         land = None
         for _ in range(60):
             events = step(game)
-            contacts = trace_platform_contacts(room, game.snapshot(), events)
+            contacts = trace_committed_platform_step(game)
             if contacts:
                 land = contacts[0]
                 break
@@ -68,6 +70,8 @@ class PhysicsContactTraceTests(unittest.TestCase):
                 trace_platform_contacts(room, snap, invalid)
         after = game.recording()
         self.assertEqual(after, game.recording())
+        with self.assertRaises(ValueError):
+            trace_committed_platform_step(object())
 
     def test_geometry_is_derived_from_committed_moving_collider_position(self):
         room = scene(hero={
