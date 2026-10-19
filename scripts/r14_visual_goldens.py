@@ -85,7 +85,15 @@ def render_frame(args):
             window.setHeight(680)
             window.show()
             QTest.qWait(350)
-            image = window.grabWindow()
+            # QQmlApplicationEngine exposes the ApplicationWindow through the
+            # base QWindow wrapper on some PySide6 6.8 builds. The underlying
+            # C++ object is a QQuickWindow, whose grabWindow() captures the
+            # scenegraph in the offscreen software backend. QWindow itself
+            # does not implement grabWindow().
+            from PySide6.QtQuick import QQuickWindow
+            from shiboken6 import getCppPointer, wrapInstance
+            quick_window = wrapInstance(getCppPointer(window)[0], QQuickWindow)
+            image = quick_window.grabWindow()
             window.hide()
             window.close()
             engine.deleteLater()
