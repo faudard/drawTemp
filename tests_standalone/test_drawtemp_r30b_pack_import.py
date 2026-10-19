@@ -194,6 +194,53 @@ class R30PackImportTests(unittest.TestCase):
                          before)
         self.assertTrue((self.source_root / "art/existing.png").exists())
 
+    def test_preserves_existing_registered_source_asset_in_new_copy(self):
+        content, project = reference_project()
+        project.assets = {
+            "version": 1,
+            "entries": [{"id": "prior-sprite", "kind": "sprite",
+                         "path": "art/prior.png"}],
+            "bindings": {},
+        }
+        (self.source_root / "art").mkdir()
+        original = _png()
+        (self.source_root / "art/prior.png").write_bytes(original)
+        self.source.unlink()
+        (self.source_root / "game.game.json").unlink()
+        AuthoringSession.new(content, project).save_as(self.source)
+        preview = self.preview()
+        imported = import_pack_to_copy(preview, self.destination)
+        self.assertEqual((imported / "art/prior.png").read_bytes(), original)
+        data, manifest = validate_pair(
+            json.loads((imported / "game.json").read_text(encoding="utf-8")),
+            json.loads((imported / "game.game.json").read_text(encoding="utf-8")))
+        registry = AssetRegistry(manifest["assets"])
+        self.assertEqual(registry.diagnostics(imported), [])
+        self.assertEqual({e["id"] for e in registry.to_dict()["entries"]},
+                         {"prior-sprite", "art-pack.grass"})
+
+    def test_cli_is_preview_only_without_explicit_confirm(self):
+        import contextlib
+        from io import StringIO
+        from drawtemp.export.pack_import_cli import main
+        choices = self.root / "choices.json"
+        choices.write_text(json.dumps(self.bindings), encoding="utf-8")
+        args = ["--content", str(self.source), "--pack", str(self.archive),
+                "--bindings", str(choices)]
+        output = StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(main(args), 0)
+        self.assertFalse(json.loads(output.getvalue())["applied"])
+        self.assertFalse(self.destination.exists())
+        with self.assertRaises(SystemExit):
+            main([*args, "--confirm"])
+        output = StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(main([*args, "--output", str(self.destination),
+                                   "--confirm"]), 0)
+        self.assertTrue(json.loads(output.getvalue())["applied"])
+        self.assertTrue((self.destination / "game.game.json").is_file())
+
     def test_non_destructive_destination_policy(self):
         preview = self.preview()
         with self.assertRaises(PackImportError) as caught:
