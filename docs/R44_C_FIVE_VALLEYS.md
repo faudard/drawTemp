@@ -4,7 +4,7 @@
 
 ## Contenu
 
-- Cinq scènes/régions liées : **hameau → vergers → lagune → crête → sanctuaire**, chacune avec une relique persistante. Les portes de l'étape suivante dépendent du flag activé en interagissant avec la relique locale.
+- Cinq scènes/régions liées : **hameau → vergers → lagune → crête → sanctuaire**, chacune avec une relique persistante. Les portes de l'étape suivante dépendent du flag activé en interagissant avec la relique locale. Chaque portail se situe **en [3,3]**, distinct du spawn [1,1] : le Player doit parcourir réellement la carte et rejoindre une case voisine avant de changer de région.
 - Quatre retours explicites, sans téléportation implicite ni second registre de progression.
 - Biomes, thèmes d'exploration et conversions top-down/isométriques définis par le `WorldGraph` R44.A/B.
 - `GameSession.route_world_interact("relic")` valide qu'il s'agit d'une interaction existante, non-sortie et atteignable dans la scène active. Elle délègue à `route_interact` puis inscrit exactement un booléen dans les `Campaign.story_flags` et ne distribue aucun bonus/reward parallèle. Toute erreur laisse la progression inchangée.

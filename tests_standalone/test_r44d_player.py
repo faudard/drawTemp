@@ -33,6 +33,11 @@ class WorldAtlasPlayerTests(unittest.TestCase):
             sim.world_transition("to_grove", expected_revision=snapshot.revision)
         self.assertEqual(stale.exception.code, "stale_revision")
         self.assertEqual(thaw(sim.world_atlas_state())["scene"], "valley")
+        self.assertFalse(next(x for x in thaw(sim.world_atlas_state())["portals"]
+                              if x["id"] == "to_grove")["in_reach"])
+        sim.explore_move(1, 0)
+        sim.explore_move(1, 0)
+        sim.explore_move(0, 1)
         sim.world_transition("to_grove", expected_revision=sim.snapshot().revision)
         self.assertEqual(thaw(sim.world_atlas_state())["scene"], "grove")
         self.assertEqual(sim.snapshot().mode, "campaign")
@@ -70,6 +75,11 @@ class WorldAtlasPlayerTests(unittest.TestCase):
                     row = next(x for x in controller.state()["world_atlas"]["portals"]
                                if x["id"] == route)
                     self.assertTrue(row["unlocked"])
+                    controller.explore_move(1, 0)
+                    controller.explore_move(1, 0)
+                    controller.explore_move(0, 1)
+                    self.assertTrue(next(x for x in controller.state()["world_atlas"]["portals"]
+                                         if x["id"] == route)["in_reach"])
                     controller.world_transition(route)
                     if idx == 1:  # Real Player slot, not direct GameSession disk writing.
                         controller.save(1)
@@ -79,6 +89,9 @@ class WorldAtlasPlayerTests(unittest.TestCase):
                         self.assertEqual(controller.session.recording(), saved)
                         self.assertEqual(controller.state()["world_atlas"]["scene"], "marsh")
             self.assertEqual(controller.state()["world_atlas"]["scene"], "sanctuary")
+            controller.explore_move(1, 0)
+            controller.explore_move(1, 0)
+            controller.explore_move(0, 1)
             controller.world_transition("back_ridge")
             self.assertTrue(controller.state()["world_atlas"]["objects"][0]["active"])
             self.assertTrue(all(
@@ -95,6 +108,9 @@ class WorldAtlasPlayerTests(unittest.TestCase):
             self.assertEqual(thaw(sim.world_atlas_state())["scene"], "valley")
             self.assertEqual(sim.recording(), before)
             sim.world_interact("relic")
+            sim.explore_move(1, 0)
+            sim.explore_move(1, 0)
+            sim.explore_move(0, 1)
             sim.world_transition("to_grove")
             self.assertEqual(thaw(sim.world_atlas_state())["scene"], "grove")
 

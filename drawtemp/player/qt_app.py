@@ -699,6 +699,11 @@ def main(argv=None):
                     if not controller.state()["world_atlas"]["objects"][0]["active"]:
                         raise AssertionError("R44 relic was not activated")
                     if index + 1 < len(ids):
+                        # Walk with real Qt shortcuts to [3,2], adjacent to
+                        # the authored portal at [3,3] (not a free teleport).
+                        for key in (Qt.Key_Right, Qt.Key_Right, Qt.Key_Down):
+                            QTest.keyClick(window, key)
+                            QTest.qWait(60)
                         click("r44Portal-to_" + ids[index + 1])
                     if index == 1:
                         # Save and resume halfway through the authored route.
@@ -712,6 +717,9 @@ def main(argv=None):
                         click("r14Continue")
                         if controller.session.recording() != before:
                             raise AssertionError("R44 QML reload changed checkpoint")
+                for key in (Qt.Key_Right, Qt.Key_Right, Qt.Key_Down):
+                    QTest.keyClick(window, key)
+                    QTest.qWait(60)
                 click("r44Portal-back_ridge")
                 if (controller.state()["world_atlas"]["scene"] != "ridge" or
                         not controller.state()["world_atlas"]["objects"][0]["active"]):

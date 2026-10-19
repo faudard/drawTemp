@@ -65,8 +65,8 @@ def five_valleys_project():
         routes.append({"id": backward, "source": after, "destination": before,
                        "spawn": [1, 1]})
         portals.extend([
-            {"route": forward, "source": [1, 1], "travel_cost": 2},
-            {"route": backward, "source": [1, 1], "travel_cost": 1},
+            {"route": forward, "source": [3, 3], "travel_cost": 2},
+            {"route": backward, "source": [3, 3], "travel_cost": 1},
         ])
     project.scene_routes = {"version": 1, "start": ids[0], "links": routes}
     project.game_modes = {
@@ -113,9 +113,16 @@ def smoke_five_valleys(*, seed=44):
         if idx < len(ids) - 1:
             require(graph.shortest_path(sid, ids[idx+1], session.progress)["routes"]
                     == ["to_" + ids[idx+1]], "R44: canonical next route missing")
-            session.route_transition("to_" + ids[idx+1])
+            # Walk to the authored exit instead of teleporting from spawn.
+            session.route_move(1, 0)
+            session.route_move(1, 0)
+            session.route_move(0, 1)
+            session.route_world_transition("to_" + ids[idx+1])
     # Explicit return to prior region and observe the original cache state.
-    session.route_transition("back_ridge")
+    session.route_move(1, 0)
+    session.route_move(1, 0)
+    session.route_move(0, 1)
+    session.route_world_transition("back_ridge")
     require(session.route_scene == "ridge"
             and graph.object_states(session.progress, "ridge")["relic"]["active"],
             "R44: returning erased a persistent object")

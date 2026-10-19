@@ -41,7 +41,14 @@ class FiveValleys44Tests(unittest.TestCase):
         saved = session.recording()
         self.assertTrue(session.route_world_interact("relic")["already_activated"])
         self.assertEqual(session.recording(), saved)
-        self.assertEqual(session.route_transition("to_grove")["scene"], "grove")
+        # R44 travel is spatially gated; direct R25 travel still exists for
+        # compatibility but the R44 Player must use the hotspot-aware API.
+        with self.assertRaises(RuleError):
+            session.route_world_transition("to_grove")
+        session.route_move(1, 0)
+        session.route_move(1, 0)
+        session.route_move(0, 1)
+        self.assertEqual(session.route_world_transition("to_grove")["scene"], "grove")
         self.assertTrue(session.progress.story_flags[relic_flag("valley")])
 
     def test_proximity_and_invalid_object_fail_without_changes(self):
@@ -70,11 +77,20 @@ class FiveValleys44Tests(unittest.TestCase):
                                self.content, self.project)
             self.assertTrue(atlas.object_states(restored.progress, "ridge")
                             ["relic"]["active"])
-            restored.route_transition("back_marsh")
+            restored.route_move(1, 0)
+            restored.route_move(1, 0)
+            restored.route_move(0, 1)
+            restored.route_world_transition("back_marsh")
             self.assertTrue(atlas.object_states(restored.progress, "marsh")
                             ["relic"]["active"])
-            restored.route_transition("back_grove")
-            restored.route_transition("back_valley")
+            restored.route_move(1, 0)
+            restored.route_move(1, 0)
+            restored.route_move(0, 1)
+            restored.route_world_transition("back_grove")
+            restored.route_move(1, 0)
+            restored.route_move(1, 0)
+            restored.route_move(0, 1)
+            restored.route_world_transition("back_valley")
             self.assertTrue(atlas.object_states(restored.progress, "valley")
                             ["relic"]["active"])
 
