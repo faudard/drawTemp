@@ -106,8 +106,7 @@ antagonistes, les scènes de transition, les retours visuels/sonores, le
 contrôle clavier/manette Qt sur matériel et le contenu qualitatif de
 l'Acte I exigent encore des revues dédiées.
 
-R20.C doit traiter cinématiques, conséquences de branche supplémentaires
-et migration volontaire des slots si le contenu évolue. R20.D devra
+R20.C traite maintenant [les cinématiques authorées, l'après-archives/otages et les épilogues persistants](R20_C_CINEMATICS_AND_PERSISTENCE.md) dans une nouvelle variante isolée. L'auto-déclenchement complet dans le Player Qt et une éventuelle migration volontaire des slots demeurent des gates ouverts. R20.D devra
 prouver qu'un joueur externe peut réellement jouer et finir la
 campagne complète sans Studio, avec export natif/retours de playtest.
 Ce pack ne ferme **pas** le gate global R20.
