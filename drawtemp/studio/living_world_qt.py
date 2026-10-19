@@ -261,7 +261,10 @@ class LivingWorldDialog(QDialog):
         try:
             draft = self._current_document()
             plan = self._validated_preview()
-            world = LivingWorld(draft, set(self.scenes))
+            world = LivingWorld(
+                draft, set(self.scenes),
+                exploration=self.session.snapshot().to_dict()["project"].get(
+                    "exploration", {}))
             report = timeline(world, {}, limit=80)
             text = [f'PNJ : {plan.report["npc_count"]} | '
                     f'Boutiques : {plan.report["shop_count"]} | '
