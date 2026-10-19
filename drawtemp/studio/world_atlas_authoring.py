@@ -40,7 +40,7 @@ def default_world_atlas(session: AuthoringSession):
         current = pending.pop()
         if current not in seen:
             seen.add(current)
-            pending.extend(sorted(neighbors.get(current, ()) - seen, reverse=True))
+            pending.extend(sorted(neighbors.get(current, set()) - seen, reverse=True))
     known = set(project.get("exploration", {})) | {
         mission["id"] for mission in content["missions"]}
     require(seen <= known and len(seen) <= 256,
@@ -192,7 +192,7 @@ def preview_world_atlas(session: AuthoringSession, document,
 
     plan = session.preview_project(edit, kind="r44.world-atlas")
     prior = snapshot.to_dict()["project"].get("extensions", {}).get(EXTENSION, {})
-    changed = prior.get("data") != data
+    changed = prior != {"schema_version": 1, "data": data}
     return WorldAtlasPreview(plan, {
         "source_revision": snapshot.revision, "changed": changed,
         "regions": len(data["regions"]),

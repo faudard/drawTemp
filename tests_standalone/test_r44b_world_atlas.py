@@ -55,6 +55,28 @@ class WorldAtlasAuthoringTests(unittest.TestCase):
         self.assertEqual(self.session.snapshot().to_dict()["project"]["extensions"][EXTENSION]["data"],
                          self.atlas)
 
+    def test_single_scene_no_outbound_portal(self):
+        # Canonical R25 accepts a one-scene graph with zero links.
+        content, project = scene_fixture()
+        project.scene_routes["links"] = []
+        project.validate(content)
+        editor = AuthoringSession.new(content, project)
+        draft = default_world_atlas(editor)
+        self.assertEqual(draft["portals"], [])
+        self.assertEqual(len(draft["regions"][0]["scenes"]), 1)
+        apply_world_atlas(editor, preview_world_atlas(editor, draft))
+        self.assertEqual(editor.revision, 1)
+
+    def test_existing_envelope_references_are_not_silently_dropped(self):
+        # A changed envelope is a transaction even when its data match.
+        self.session.apply(preview_world_atlas(self.session, self.atlas).plan)
+        data = self.session.snapshot().to_dict()
+        self.assertEqual(data["project"]["extensions"][EXTENSION]["schema_version"], 1)
+        unchanged = preview_world_atlas(self.session, self.atlas)
+        self.assertFalse(unchanged.report["changed"])
+        with self.assertRaises(AuthoringError):
+            apply_world_atlas(self.session, unchanged)
+
     def test_stale_preview_rejected_after_unrelated_edit(self):
         old = preview_world_atlas(self.session, self.atlas)
         revised = place_scene(self.atlas, "arrival", [20, 30])
