@@ -194,6 +194,7 @@ def generate_with_prefabs(recipe: ProcGenRecipe | Mapping[str, Any],
         prefab = selected[room["id"]]
         room["prefab_id"] = prefab["id"]
         room["biome"] = biome
+        room["tags"] = list(prefab["tags"])
         room["asset_id"] = prefab.get("asset_id")
         room["mission_id"] = prefab.get("mission_id")
         room["doors"] = [
