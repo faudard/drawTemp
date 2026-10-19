@@ -127,6 +127,7 @@ class ActionPlayerController:
             verified = ActionRuntime.load(self.save_path, expected_scene=self.scene)
             if verified.hero["alive"]:
                 self.runtime = verified
+                self.fx.reset(self.runtime.tick)
                 self.paused = False
                 self.events = ()
                 self.message = "Réapparition au point de sauvegarde."
