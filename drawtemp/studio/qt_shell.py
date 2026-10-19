@@ -29,15 +29,15 @@ from drawtemp.studio.inspector_model import (
 from drawtemp.studio.resource_links import connections
 
 log = logging.getLogger(__name__)
-WORKSPACES = ("project", "profiles", "maps", "actors", "database", "events",
+WORKSPACES = ("project", "profiles", "gameplay", "maps", "actors", "database", "events",
               "campaigns", "cinematics", "analysis")
 LABELS = {
-    "project": "Projet", "profiles": "Profils de jeu", "maps": "Carte", "actors": "Personnages",
+    "project": "Projet", "profiles": "Profils de jeu", "gameplay": "Gameplay", "maps": "Carte", "actors": "Personnages",
     "database": "Base RPG", "events": "Événements", "campaigns": "Campagne",
     "cinematics": "Cinématiques", "analysis": "Analyse",
 }
 EN = {
-    "project": "Project", "profiles": "Game profiles", "maps": "Map", "actors": "Characters",
+    "project": "Project", "profiles": "Game profiles", "gameplay": "Gameplay", "maps": "Map", "actors": "Characters",
     "database": "RPG Database", "events": "Events", "campaigns": "Campaign",
     "cinematics": "Cinematics", "analysis": "Analysis",
 }
@@ -193,7 +193,7 @@ class StudioWindow(QMainWindow):
         title.setFont(font)
         panel.addWidget(title)
         panel.addWidget(QLabel("Projet Jeanne • édition sans JSON • Content / GameProject partagés"))
-        for group in (("Créer", ("profiles", "maps", "actors", "database", "events")),
+        for group in (("Créer", ("profiles", "gameplay", "maps", "actors", "database", "events")),
                       ("Organiser", ("campaigns", "cinematics", "analysis"))):
             panel.addWidget(QLabel(group[0]))
             buttons = QHBoxLayout()
@@ -563,8 +563,9 @@ class StudioWindow(QMainWindow):
         self.last_revision = snapshot.revision
         self._show_inspector()
         self._update_title()
-        if "profiles" in self._models:
-            self._models["profiles"].refresh()
+        for name in ("profiles", "gameplay"):
+            if name in self._models:
+                self._models[name].refresh()
         self.commands["undo"].setEnabled(snapshot.can_undo)
         self.commands["redo"].setEnabled(snapshot.can_redo)
 
@@ -807,6 +808,10 @@ class StudioWindow(QMainWindow):
             from drawtemp.studio.profile_editor_qt import ProfileEditorWidget
             child = ProfileEditorWidget(self.session)
             child.updated.connect(self.refresh)
+        elif identifier == "gameplay":
+            from drawtemp.studio.genre_rules_qt import GenreRulesWorkspace
+            child = GenreRulesWorkspace(self.session)
+            child.updated.connect(self.refresh)
         elif identifier == "maps":
             from drawtemp.studio.map_authoring import MapStudio
             from drawtemp.studio.map_editor import MapWindow
@@ -830,7 +835,7 @@ class StudioWindow(QMainWindow):
                                    opened=bool(self.content_path))
         else:
             child = self._overview(identifier)
-        if identifier in ("profiles", "maps", "database", "campaigns"):
+        if identifier in ("profiles", "gameplay", "maps", "database", "campaigns"):
             self._models[identifier] = child
             # Embedded editors must never swap the shared AuthoringSession:
             # opening/saving a project is a shell responsibility.
