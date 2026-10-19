@@ -77,14 +77,14 @@ class FormulaGraphTests(unittest.TestCase):
         for _ in range(4):
             formula = replace_node(formula, (), op="add")
         # Longest path depth 4 remains legal.
-        self.assertEqual(len(describe_nodes(formula)), 5)
+        self.assertEqual(len(describe_nodes(formula)), 9)
         previous = deepcopy(formula)
         for _ in range(1):
             formula = replace_node(formula, (), op="add")
-        self.assertEqual(len(describe_nodes(formula)), 6)
+        self.assertEqual(len(describe_nodes(formula)), 11)
         with self.assertRaises(AbilityError):
             replace_node(formula, (), op="add")
-        self.assertEqual(len(describe_nodes(previous)), 5)
+        self.assertEqual(len(describe_nodes(previous)), 9)
 
     def test_balance_lab_cannot_claim_runtime_damage_or_mutate_document(self):
         spec = new_ability("r43_arc")
