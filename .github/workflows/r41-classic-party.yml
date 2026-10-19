@@ -11,6 +11,8 @@ on:
       - 'tests_standalone/test_r41_classic_party.py'
       - 'tests_standalone/test_r41_party_studio.py'
       - 'tests_standalone/test_r41_encounter.py'
+      - 'tests_standalone/test_r41_routed_encounter.py'
+      - 'sporebound/scene_router.py'
       - 'tests_standalone/test_r41_encounter_qt.py'
       - 'sporebound/classic_encounter.py'
       - 'drawtemp/studio/encounter_authoring.py'
@@ -35,6 +37,8 @@ on:
       - 'tests_standalone/test_r41_classic_party.py'
       - 'tests_standalone/test_r41_party_studio.py'
       - 'tests_standalone/test_r41_encounter.py'
+      - 'tests_standalone/test_r41_routed_encounter.py'
+      - 'sporebound/scene_router.py'
       - 'tests_standalone/test_r41_encounter_qt.py'
       - 'sporebound/classic_encounter.py'
       - 'drawtemp/studio/encounter_authoring.py'
@@ -75,6 +79,8 @@ jobs:
         run: python -m unittest tests_standalone.test_r41_party_studio -v
       - name: R41.B2 actions, encounter authoring, replay and Player recovery
         run: python -m unittest tests_standalone.test_r41_encounter -v
+      - name: R41.B3 routed transition and replay gates
+        run: python -m unittest tests_standalone.test_r41_routed_encounter -v
       - name: R25 profiles and tactical unchanged
         run: python -m unittest tests_standalone.test_r25_foundation -v
       - name: Canonical GameSession and Jeanne replay
