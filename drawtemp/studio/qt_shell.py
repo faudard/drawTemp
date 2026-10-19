@@ -40,6 +40,9 @@ from drawtemp.studio.r18_navigation import (WORKSPACES, LABELS, EN, recent_proje
 from drawtemp.studio.r49_experience import (
     OperationTimings, audit_command_bindings, measure_studio, resolve_shortcuts,
 )
+from drawtemp.studio.r49_workspaces import (
+    FOCUS_REGIONS, WorkspaceFocusMemory, focus_settings_key,
+)
 from drawtemp.studio.r18_onboarding import (
     GUIDE_UI, STEP_IDS, journey_steps, next_step, normalize_completed, project_key,
 )
@@ -49,7 +52,7 @@ DEFAULT_SHORTCUTS = {
     "save": "Ctrl+S", "open": "Ctrl+O", "undo": "Ctrl+Z", "redo": "Ctrl+Shift+Z",
     "palette": "Ctrl+Shift+P", "guide": "Ctrl+Shift+G",
     "focus_resources": "Ctrl+1",
-    "focus_inspector": "Ctrl+2", "new": "Ctrl+Shift+N",
+    "focus_inspector": "Ctrl+2", "focus_workspace": "Ctrl+3", "new": "Ctrl+Shift+N",
     "new_project": "Ctrl+N", "new_template": "Ctrl+Alt+N",
     "playtest": "F5", "export": "Ctrl+Shift+E",
     "go_project": "Ctrl+Alt+1", "go_maps": "Ctrl+Alt+2",
@@ -177,6 +180,10 @@ class StudioWindow(QMainWindow):
         self.commands = {}
         self.r49_timings = OperationTimings()
         self._r49_audit = None
+        self._r49_focus = WorkspaceFocusMemory({
+            name: self.settings.value(focus_settings_key(name))
+            for name in WORKSPACES
+        })
         self.plugins = StudioPluginRegistry()
         self._plugin_docks = {}
         self._plugin_fields = {}
@@ -188,6 +195,9 @@ class StudioWindow(QMainWindow):
                     self.settings.value("theme", "dark"),
                     int(self.settings.value("scale", 100)))
         self._build()
+        # Track meaningful focus changes only inside the active workspace or
+        # the shared docks. No QWidget pointers are written to QSettings.
+        QApplication.instance().focusChanged.connect(self._r49_on_focus_changed)
         self._restore_layout()
         self.refresh()
         self.watch = QTimer(self)
@@ -445,6 +455,8 @@ class StudioWindow(QMainWindow):
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
                      lambda: (self.name_edit or self.resource_view).setFocus())
+        self._action("focus_workspace", "Revenir au contenu de l’atelier",
+                     self.focus_workspace)
         for identifier in WORKSPACES:
             action = self._action(
                 "go_" + identifier, "Atelier : " + LABELS[identifier],
@@ -1078,6 +1090,7 @@ class StudioWindow(QMainWindow):
     @measure_studio("studio.navigate")
     def navigate(self, identifier):
         host = workspace_host(identifier)
+        self._r49_on_focus_changed(None, QApplication.focusWidget())
         if identifier == "actors" and "database" in self._models:
             database = self._models["database"]
             database.tree.setCurrentItem(database.tree.topLevelItem(1))
@@ -1094,6 +1107,7 @@ class StudioWindow(QMainWindow):
             self._models["maps"].mode.setCurrentIndex(
                 1 if identifier == "construction" else 0)
         self._activate(identifier)
+        self._r49_restore_focus(identifier)
         if identifier == "maps":
             self._guide_mark("map")
         elif identifier == "actors":
@@ -1105,6 +1119,90 @@ class StudioWindow(QMainWindow):
         for name in WORKSPACES:
             self.commands["go_" + name].setChecked(name == identifier)
         self.statusBar().showMessage("Atelier : " + LABELS[identifier])
+
+    def _r49_on_focus_changed(self, _old, current):
+        """Observe only the active page or docks; ignore menus and dialogs."""
+        if current is None or not self.isVisible():
+            return
+        page = self.pages.get(self._active_workspace)
+        if page is None:
+            return
+        if current is self.search or self.search.isAncestorOf(current):
+            region = "search"
+        elif (current is self.resource_view or
+              self.resource_view.isAncestorOf(current)):
+            region = "resources"
+        elif (current is self.inspector_dock or
+              self.inspector_dock.isAncestorOf(current)):
+            region = "inspector"
+        elif (current is self.problems or self.problems.isAncestorOf(current)):
+            region = "diagnostics"
+        elif current is page or page.isAncestorOf(current):
+            region = "workspace"
+        else:
+            return
+        if self._r49_focus.remember(self._active_workspace, region):
+            self.settings.setValue(focus_settings_key(self._active_workspace),
+                                   region)
+
+    def _r49_focus_candidate(self, region):
+        """Return a visible, enabled focus target; never instantiate pages."""
+        if region == "workspace":
+            page = self.pages.get(self._active_workspace)
+            if page is None:
+                return None
+            current = page.focusWidget()
+            if (current is not None and current.isVisibleTo(self) and
+                    current.isEnabled() and current.focusPolicy() != Qt.NoFocus):
+                return current
+            if (page.isVisibleTo(self) and page.isEnabled() and
+                    page.focusPolicy() != Qt.NoFocus):
+                return page
+            for child in page.findChildren(QWidget):
+                if (child.isVisibleTo(self) and child.isEnabled() and
+                        child.focusPolicy() != Qt.NoFocus):
+                    return child
+            return None
+        if region == "search":
+            candidate = self.search
+        elif region == "resources":
+            candidate = self.resource_view
+        elif region == "inspector":
+            candidate = self.name_edit or self.links
+        elif region == "diagnostics":
+            candidate = self.problems
+        else:
+            return None
+        return candidate if (candidate is not None and candidate.isVisibleTo(self)
+                             and candidate.isEnabled() and
+                             candidate.focusPolicy() != Qt.NoFocus) else None
+
+    def _r49_restore_focus(self, workspace):
+        """Restore a semantic focus area only when previously observed."""
+        if self._r49_focus.preferred(workspace) is None:
+            return False
+        available = {
+            region for region in FOCUS_REGIONS
+            if self._r49_focus_candidate(region) is not None
+        }
+        target = self._r49_focus.resolve(workspace, available)
+        if target is None:
+            return False
+        widget = self._r49_focus_candidate(target)
+        if widget is None:
+            return False
+        widget.setFocus(Qt.OtherFocusReason)
+        return True
+
+    def focus_workspace(self):
+        """Keyboard command: return from toolbar/docks to active editor."""
+        widget = self._r49_focus_candidate("workspace")
+        if widget is None:
+            self.statusBar().showMessage(
+                "Aucun contrôle activable dans cet atelier.")
+            return False
+        widget.setFocus(Qt.ShortcutFocusReason)
+        return True
 
     @measure_studio("studio.workspace_init")
     def _make_workspace(self, identifier):
@@ -1797,6 +1895,11 @@ class StudioWindow(QMainWindow):
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/docks", self.saveState(1))
         self.settings.sync()
+        try:
+            QApplication.instance().focusChanged.disconnect(
+                self._r49_on_focus_changed)
+        except (RuntimeError, TypeError):
+            pass
         event.accept()
 
 
