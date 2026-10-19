@@ -126,6 +126,27 @@ class QtModInspectorTests(unittest.TestCase):
         self.assertEqual(self.dialog.items.count(), 0)
         self.assertEqual(self.owner.mods.statuses(), ())
 
+    def test_host_version_switch_revokes_consent_and_preserves_project(self):
+        self._installed()
+        self.dialog._confirm = lambda *_args: True
+        self.dialog._enable_clicked()
+        before = self.owner.session.snapshot().to_dict()
+        candidate = manifest()
+        candidate["version"] = "1.1.0"
+        upgraded = self.dialog.replace_descriptor(candidate)
+        self.assertEqual(upgraded["version"], "1.1.0")
+        self.assertFalse(self.dialog.apply_button.isEnabled())
+        self.assertEqual(self.owner.mods.status("quest-mod")["grants"], [])
+        self.assertEqual(before, self.owner.session.snapshot().to_dict())
+        with self.assertRaises(ModError) as denied:
+            self.dialog.replace_descriptor(manifest())
+        self.assertEqual(denied.exception.code, "downgrade_denied")
+        rolled_back = self.dialog.replace_descriptor(
+            manifest(), allow_downgrade=True)
+        self.assertTrue(rolled_back["downgraded"])
+        self.assertFalse(self.owner.mods.status("quest-mod")["enabled"])
+        self.assertEqual(self.owner.session.snapshot().to_dict(), before)
+
     def test_no_stale_document_consent_in_main_window(self):
         from drawtemp.studio.qt_shell import StudioWindow
         from PySide6.QtCore import QSettings
