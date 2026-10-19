@@ -155,6 +155,17 @@ class LocalGitProject:
             raise GitReviewError("ref_moved", "Git reference moved during preview")
         return GitRevision(ref, commit, content_oid, project_oid, content, project)
 
+    def ensure_common_base(self, base_oid: str, incoming_oid: str, head_oid: str):
+        """Require a true Git common ancestor, not a guessed semantic base."""
+        for descendant in (incoming_oid, head_oid):
+            try:
+                self._run(self.root, "merge-base", "--is-ancestor", base_oid, descendant)
+            except GitReviewError as exc:
+                raise GitReviewError(
+                    "unrelated_history",
+                    "Base must be an ancestor of incoming and local HEAD",
+                ) from exc
+
     def worktree_hashes(self) -> tuple[str, str]:
         return _hash_file(self.content_path), _hash_file(self.project_path)
 
@@ -176,6 +187,8 @@ class GitReviewController:
         local_files = self.git.worktree_hashes()
         base = self.git.snapshot(base_ref)
         incoming = self.git.snapshot(incoming_ref)
+        current_head = self.git.resolve_ref("HEAD")
+        self.git.ensure_common_base(base.commit, incoming.commit, current_head)
         local = self.session.snapshot().to_dict()
         review = preview_merge(
             base.content, base.project,
@@ -186,6 +199,7 @@ class GitReviewController:
             raise GitReviewError("worktree_changed", "Local files changed during review")
         self._base, self._incoming = base, incoming
         self._source_hashes = local_files
+        self._head_oid = current_head
         self._local = (local["content"], local["project"])
         self._revision = local["revision"]
         self._review = review
@@ -202,7 +216,8 @@ class GitReviewController:
             raise GitReviewError("no_review", "Inspect Git refs before applying")
         base, incoming = self._base, self._incoming
         if (self.git.resolve_ref(base.ref) != base.commit or
-                self.git.resolve_ref(incoming.ref) != incoming.commit):
+                self.git.resolve_ref(incoming.ref) != incoming.commit or
+                self.git.resolve_ref("HEAD") != self._head_oid):
             raise GitReviewError("ref_moved", "Git branch/tag changed; review again")
         if self.git.worktree_hashes() != self._source_hashes:
             raise GitReviewError("worktree_changed", "Local project files changed; review again")
@@ -216,6 +231,7 @@ class GitReviewController:
         plan = stage_merge(self.session, candidate, expected_revision=self._revision)
         if (self.git.resolve_ref(base.ref) != base.commit or
                 self.git.resolve_ref(incoming.ref) != incoming.commit or
+                self.git.resolve_ref("HEAD") != self._head_oid or
                 self.git.worktree_hashes() != self._source_hashes):
             raise GitReviewError("source_changed", "Reviewed Git inputs changed; review again")
         transition = self.session.apply(plan)
@@ -226,6 +242,7 @@ class GitReviewController:
         self._base = None
         self._incoming = None
         self._source_hashes = None
+        self._head_oid = None
         self._local = None
         self._revision = None
         self._review = None
