@@ -2,6 +2,13 @@
 
 **DrawTemp** est un RPG tactique narratif autonome en Python 3.10+, avec un Player et un Game Studio Tk. La campagne **Jeanne d'Arc — Les Cendres du Royaume** est désormais le jeu par défaut.
 
+## Vision et roadmaps du Creator Studio
+
+DrawTemp vise à terme un **éditeur de jeux 2D/2.5D multi-genres** : SRPG tactique, RPG classique, action-aventure avec exploration libre (inspiration Zelda), aventures narratives et jeux hybrides. La campagne Jeanne est le contenu de référence actuellement disponible, **pas une limitation du moteur futur**.
+
+- [Roadmap multi-genres (R25–R30, cible 6.0–7.0)](docs/DRAWTEMP_MULTI_GENRE_CREATOR_ROADMAP.md) : modes de jeu, architecture, ateliers, vertical slices, livraisons et critères de certification.
+- [Roadmap 5.0 et consolidation R17–R24](docs/DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md) : fondations et dépendances préalables ; les jalons futurs sont proposés, non livrés.
+
 ## Jouer à Jeanne d'Arc
 
 Depuis la racine du dépôt :
