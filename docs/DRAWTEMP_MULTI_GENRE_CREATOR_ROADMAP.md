@@ -94,6 +94,8 @@ Les profils ne sont **pas** des branches irréconciliables du moteur. Un même j
 
 ## 5. R25 — Game Modes Foundation (6.1)
 
+> **Avancement R25.A — [PR #298](https://github.com/faudard/drawTemp/pull/298) (proposée, non certifiée)** : schéma opt-in `game_modes` dans `GameProject`, presets stricts et résolution read-only dans `GameSession` (R25.1/R25.2), primitive headless `FixedTickJournal` pour les commandes/ticks/replay (fondation R25.4), tests et workflow 3 OS. **Pas encore livrés :** SceneRouter et transitions effectives, couplage de l'horloge au moteur, rendu top-down/caméra, input/HUD, sauvegarde inter-modes, parcours Studio no-JSON et gate 6.1. Voir [ADR R25](drawtemp5/R25_GAME_MODES_ADR.md). Ne pas transformer le statut de la PR en statut de certification.
+
 **But :** rendre l'architecture réellement multi-genres, sans régression tactique.
 
 | ID | P | Livrable et comportement vérifiable | Dépendances / preuve |
