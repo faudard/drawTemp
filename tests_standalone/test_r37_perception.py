@@ -55,14 +55,17 @@ class R37PerceptionTests(unittest.TestCase):
         self.assertFalse(seen["visible"])
         self.assertFalse(seen["heard"])
         self.assertEqual(seen["signal"], "none")
-        self.assertTrue(seen["reachable"])
-        self.assertEqual(seen["path_length"], 4)
-        self.assertEqual(seen["next_step"], [0, 1])
+        self.assertFalse(seen["reachable"])  # No omniscient path leak.
+        self.assertIsNone(seen["path_length"])
+        self.assertIsNone(seen["next_step"])
         heard = perceive_grid(stage, [0, 0], [2, 2],
                               sensor(facing="omni", vision=4, hearing=4),
                               movement=True)
         self.assertEqual(heard["signal"], "heard")
         self.assertTrue(heard["heard"])
+        self.assertTrue(heard["reachable"])
+        self.assertEqual(heard["path_length"], 4)
+        self.assertEqual(heard["next_step"], [0, 1])
         self.assertEqual(heard["reason"], "audible_movement")
         # A corner-touching wall blocks LOS in either direction.
         mirror = perceive_grid(stage, [2, 2], [0, 0],
@@ -179,8 +182,8 @@ class R37PerceptionTests(unittest.TestCase):
         pristine = session.recording()
         first = session.ai_perception_preview("traveler")
         self.assertEqual(first["perception"]["signal"], "none")
-        self.assertEqual(first["perception"]["path_length"], 5 if
-                         first["perception"]["reachable"] else None)
+        self.assertFalse(first["perception"]["reachable"])
+        self.assertIsNone(first["perception"]["path_length"])
         self.assertFalse(session.ai_decision_context("traveler")["facts"][
             "enemy_visible"])
         self.assertEqual(session.ai_decision_preview("traveler")["action"],
