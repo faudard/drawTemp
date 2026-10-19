@@ -373,7 +373,35 @@ class LivingEconomyDialog(QDialog):
             self.draft.remove_recipe(item.text())
             self._refresh_all()
 
+    def _pending_form(self):
+        """Prevent silently losing typed values not yet saved to the draft."""
+        shops = self.document.get("shops", [])
+        row = self.shop_list.currentRow()
+        shop = {**self.shop_header.value(), "items": self.shop_items.values()}
+        if 0 <= row < len(shops):
+            if shop != shops[row]:
+                return "Conserver d'abord les modifications de la boutique."
+        elif shop["id"] or shop["items"]:
+            return "Conserver d'abord la nouvelle boutique."
+        recipes = self.document.get("recipes", [])
+        row = self.recipe_list.currentRow()
+        recipe = {**self.recipe_header.value(),
+                  "inputs": self.recipe_inputs.values(),
+                  "outputs": self.recipe_outputs.values(),
+                  "gold_cost": self.recipe_gold.value(),
+                  "daily_limit": self.recipe_limit.value()}
+        if 0 <= row < len(recipes):
+            if recipe != recipes[row]:
+                return "Conserver d'abord les modifications de la recette."
+        elif recipe["id"] or recipe["inputs"] or recipe["outputs"]:
+            return "Conserver d'abord la nouvelle recette."
+        return ""
+
     def _preview(self):
+        pending = self._pending_form()
+        if pending:
+            self.diagnostics.setPlainText(pending)
+            return False
         try:
             report = self.draft.preview()
             pair = self.draft.session.snapshot().to_dict()
@@ -411,6 +439,10 @@ class LivingEconomyDialog(QDialog):
             return False
 
     def _apply(self):
+        pending = self._pending_form()
+        if pending:
+            self.diagnostics.setPlainText(pending)
+            return
         try:
             self.draft.apply()
         except (RuleError, ValueError, TypeError, KeyError) as exc:
