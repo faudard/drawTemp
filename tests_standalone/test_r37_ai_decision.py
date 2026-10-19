@@ -74,6 +74,13 @@ class AIContractTests(unittest.TestCase):
         self.assertEqual(evaluate_decision(context(), board, shuffled), report)
         self.assertEqual(evaluate_decision(context(), board, policies()), report)
         self.assertEqual(len(report["digest"]), 64)
+        self.assertEqual(len(report["inputs_digest"]), 64)
+        changed = deepcopy(board)
+        changed["values"]["unused_memory"] = "different"
+        # Inputs are bound to their digest even when the chosen action is unchanged.
+        different = evaluate_decision(context(), changed, policies())
+        self.assertEqual(different["action"], report["action"])
+        self.assertNotEqual(different["inputs_digest"], report["inputs_digest"])
 
     def test_fallback_missing_facts_and_type_equality(self):
         board = new_blackboard("guard_1")
