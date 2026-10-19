@@ -79,6 +79,46 @@ class R40PlayerRoutesTests(unittest.TestCase):
                 self.assertEqual(third.load(1)["exploration"]["scene_id"],
                                  "r40_citadel")
 
+    def test_real_studio_authoring_transaction_is_loaded_by_player(self):
+        with TemporaryDirectory() as folder:
+            path = _project(folder, "r40-adventure")
+            editor = AuthoringSession.open(path)
+            original = editor.snapshot().to_dict()
+            plan = editor.preview_project(
+                lambda project: {
+                    **project,
+                    "title": "Le passage des trois tours",
+                    "exploration": {
+                        **project["exploration"],
+                        "r40_citadel": {
+                            **project["exploration"]["r40_citadel"],
+                            "title": "La tour finale",
+                        },
+                    },
+                },
+                kind="r40-studio-rename")
+            self.assertEqual(editor.snapshot().to_dict(), original)
+            editor.apply(plan)
+            self.assertTrue(editor.snapshot().dirty)
+            editor.save()
+            reopened = AuthoringSession.open(path).snapshot().to_dict()
+            self.assertEqual(reopened["project"]["title"],
+                             "Le passage des trois tours")
+            self.assertEqual(
+                reopened["project"]["exploration"]["r40_citadel"]["title"],
+                "La tour finale")
+            player = _player(path, folder)
+            view = player.new_game()
+            self.assertEqual(view["title"], "Le passage des trois tours")
+            player.explore_move(1, 0)
+            player.explore_interact("waystone")
+            player.route_transition("to_ruins")
+            player.explore_move(1, 0)
+            player.explore_interact("waystone")
+            self.assertEqual(next(row["title"] for row in
+                                  player.state()["routes"]
+                                  if row["id"] == "to_citadel"), "La tour finale")
+
     def test_stale_revision_and_route_rejection_are_atomic(self):
         with TemporaryDirectory() as folder:
             path = _project(folder, "r40-adventure")
