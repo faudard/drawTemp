@@ -42,8 +42,9 @@ class R50BCatalogTests(unittest.TestCase):
             starter("made_up_genre")
 
     def test_blocked_modes_cannot_mutate_disk_or_masquerade_as_ct(self):
+        supported = {row["id"] for row in catalog()["entries"] if row["can_create"]}
         for entry in STARTERS:
-            if entry.minigame is not None:
+            if entry.key in supported:
                 continue
             target = self.root / entry.key
             preview = preview_starter(entry.key, target)
