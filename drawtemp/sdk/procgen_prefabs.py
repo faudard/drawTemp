@@ -22,7 +22,7 @@ MAX_SEARCH_NODES = 20000
 
 
 def _id(value: Any, label: str) -> str:
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}", value):
         _fail("invalid_library", f"{label} must be a 1..64 character identifier")
     return value
 
@@ -48,7 +48,7 @@ def validate_library(library: Mapping[str, Any], *, content=None, project=None) 
         ids.add(name.casefold())
         roles, biomes, ports = item["roles"], item["biomes"], item["ports"]
         if (type(roles) is not list or not roles or len(roles) > len(ROLES)
-                or any(x not in ROLES for x in roles) or len(roles) != len(set(roles))):
+                or any(type(x) is not str or x not in ROLES for x in roles) or len(roles) != len(set(roles))):
             _fail("invalid_library", f"{name}: invalid roles")
         if type(biomes) is not list or not 1 <= len(biomes) <= 16:
             _fail("invalid_library", f"{name}: invalid biome list")
@@ -89,7 +89,7 @@ def demo_library() -> dict:
     """Read-only, unbound templates for previews, never claim actual map assets."""
     return {"schema_version": 1, "prefabs": [
         {"id": "entry", "roles": ["entry"], "biomes": ["ruins"],
-         "ports": ["arch", "arch"]},
+         "ports": ["arch", "arch", "arch", "arch"]},
         {"id": "hall", "roles": ["normal"], "biomes": ["ruins"],
          "ports": ["arch", "arch", "arch", "arch"]},
         {"id": "keyroom", "roles": ["key"], "biomes": ["ruins"],
