@@ -158,6 +158,12 @@ def _compile_policies(policies):
     return sorted(compiled, key=lambda p: p["id"])
 
 
+def validate_policies(policies):
+    """Validate authored policies without evaluating a fabricated world state."""
+    return _compile_policies(policies)
+
+
+
 def _digest(value):
     canonical = json.dumps(value, sort_keys=True, separators=(",", ":"),
                            ensure_ascii=True).encode("utf-8")
@@ -238,4 +244,4 @@ def evaluate_decision(context, blackboard, policies, *, fallback="wait"):
 
 __all__ = ["SCHEMA_VERSION", "AIDecisionError", "validate_context",
            "new_blackboard", "validate_blackboard", "update_blackboard",
-           "evaluate_decision"]
+           "evaluate_decision", "validate_policies"]
