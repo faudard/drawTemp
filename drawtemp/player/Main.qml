@@ -471,6 +471,21 @@ ApplicationWindow {
                     Accessible.description: text
                 }
             }
+            // Completed routed stages can still offer exits without
+            // creating a second campaign or forcing an unrelated CT mission.
+            Repeater {
+                model: root.playerData.routes || []
+                Button {
+                    objectName: "r40CampaignRoute-" + modelData.id
+                    text: "Rejoindre · " + modelData.title +
+                          (modelData.available ? "" : " (verrouillé)")
+                    enabled: modelData.available && !root.inputLocked
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 380
+                    Accessible.description: text
+                    onClicked: player.routeTransition(modelData.id)
+                }
+            }
             Repeater {
                 model: root.playerData.missions
                 Button {
@@ -821,6 +836,28 @@ ApplicationWindow {
                                 text: (modelData.visited ? "✓ " : "◇ ") + modelData.title
                                 enabled: !modelData.visited
                                 onClicked: player.exploreInteract(modelData.id)
+                            }
+                        }
+                        Label {
+                            visible: root.playerData.screen === "exploration" &&
+                                     (root.playerData.routes || []).length > 0
+                            text: "DESTINATIONS · PASSAGES VALIDÉS PAR LA CAMPAGNE"
+                            color: root.gold
+                            font.bold: true
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        Repeater {
+                            model: root.playerData.screen === "exploration" ?
+                                   (root.playerData.routes || []) : []
+                            Button {
+                                objectName: "r40ExploreRoute-" + modelData.id
+                                Layout.fillWidth: true
+                                text: "Voyager · " + modelData.title +
+                                      (modelData.available ? "" : " (verrouillé)")
+                                enabled: modelData.available && !root.inputLocked
+                                Accessible.description: text
+                                onClicked: player.routeTransition(modelData.id)
                             }
                         }
                         Repeater {
