@@ -165,6 +165,23 @@ class Simulation:
         return self._apply("living_world_advance", ticks,
                            expected_revision=expected_revision)
 
+    def party_state(self, *, expected_revision=None):
+        """R41 read-only projection; no second roster or inventory owner."""
+        self._check_revision(expected_revision, "party_state")
+        if self._session._classic_party is None:
+            return None
+        return freeze(self._session.party_state())
+
+    def party_recruit(self, hero_id, *, expected_revision=None):
+        """R41 session-owned transactional recruitment with revision guard."""
+        return self._apply("party_recruit", hero_id,
+                           expected_revision=expected_revision)
+
+    def party_set_active(self, hero_ids, *, expected_revision=None):
+        """R41 active/reserve change; Campaign.heroes and CT are untouched."""
+        return self._apply("party_set_active", hero_ids,
+                           expected_revision=expected_revision)
+
     def roguelite_state(self, *, expected_revision=None):
         """Read-only deterministic R34 run view (not an alternate save schema)."""
         self._check_revision(expected_revision, 'roguelite_state')
