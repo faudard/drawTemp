@@ -258,6 +258,23 @@ class R27DungeonJourneyTests(unittest.TestCase):
             build_dungeon_journey(self.maps, prefix="../bad")
         self.assertEqual(self.maps.snapshot(), snapshot)
 
+    def test_preexisting_saves_are_explicitly_rejected_not_silently_reinterpreted(self):
+        from drawtemp.sdk.reference import reference_project
+        from sporebound.game_session import IncompatibleSaveError
+        legacy_content, legacy_project = reference_project()
+        legacy_session = GameSession.new(
+            legacy_content, legacy_project, "main", seed=17)
+        with TemporaryDirectory() as folder:
+            old = Path(folder) / "old-main.json"
+            legacy_session.save(old)
+            before = old.read_bytes()
+            with self.assertRaises(IncompatibleSaveError):
+                GameSession.load(old, self.content, self.project)
+            self.assertEqual(old.read_bytes(), before)
+            self.assertEqual(
+                GameSession.load(old, legacy_content, legacy_project)
+                .recording(), legacy_session.recording())
+
     def test_two_file_save_open_and_project_round_trip(self):
         with TemporaryDirectory() as folder:
             target = Path(folder) / "amber.json"
