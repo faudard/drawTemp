@@ -108,7 +108,13 @@ class Simulation:
             state = freeze({**battle.state(), 'mission_id': battle.mission.id,
                             'objective': battle.mission.objective,
                             'width': battle.board.width, 'height': battle.board.height})
-        exploration = session.exploration_state() if session.mode == 'campaign' and scene else None
+        exploration = None
+        if session.mode == "campaign":
+            if scene is not None:
+                exploration = session.exploration_state()
+            elif (session.scene_router.enabled
+                  and session.route_scene in session.project.exploration):
+                exploration = session.route_state()
         return StateSnapshot(self._revision, session.mode, session.campaign_id,
                              tuple(session.available_missions()),
                              freeze(asdict(session.progress)), freeze(scene), state,
@@ -148,11 +154,58 @@ class Simulation:
             return freeze(self._session.tactical_choices())
         return freeze(self._session.available_choices())
 
+    def living_world_state(self, scene=None):
+        """Opt-in detached world projection for Player/Qt; no state mutation."""
+        if self._session._living_world is None:
+            return None
+        return freeze(self._session.living_world_state(scene=scene))
+
+    def living_world_advance(self, ticks=1, *, expected_revision=None):
+        """Player-facing explicit time step, checked through R1 revisions."""
+        return self._apply("living_world_advance", ticks,
+                           expected_revision=expected_revision)
+
+    def roguelite_state(self, *, expected_revision=None):
+        """Read-only deterministic R34 run view (not an alternate save schema)."""
+        self._check_revision(expected_revision, 'roguelite_state')
+        try:
+            return freeze(self._session.roguelite_state())
+        except RuleError as exc:
+            raise SimulationError('invalid_action', 'roguelite_state', str(exc)) from exc
+
+    def roguelite_move(self, room_id, *, expected_revision=None):
+        return self._apply('roguelite_move', room_id,
+                           expected_revision=expected_revision)
+
+    def roguelite_claim(self, *, expected_revision=None):
+        return self._apply('roguelite_claim', expected_revision=expected_revision)
+
+    def roguelite_checkpoint(self, *, expected_revision=None):
+        return self._apply('roguelite_checkpoint', expected_revision=expected_revision)
+
+    def roguelite_die(self, *, expected_revision=None):
+        return self._apply('roguelite_die', expected_revision=expected_revision)
+
+    def roguelite_restart(self, *, expected_revision=None):
+        return self._apply('roguelite_restart', expected_revision=expected_revision)
+
     def explore_move(self, dx, dy, *, expected_revision=None):
-        return self._apply('explore_move', dx, dy, expected_revision=expected_revision)
+        session = self._session
+        # R25 routed exploration is not a narrative StoryBook scene.
+        # The Player must use the same canonical route command as GameSession.
+        routed = (session.scene_router.enabled
+                  and session.active_scene() is None
+                  and session.route_scene in session.project.exploration)
+        operation = 'route_move' if routed else 'explore_move'
+        return self._apply(operation, dx, dy, expected_revision=expected_revision)
 
     def explore_interact(self, point_id, *, expected_revision=None):
-        return self._apply('explore_interact', point_id, expected_revision=expected_revision)
+        session = self._session
+        routed = (session.scene_router.enabled
+                  and session.active_scene() is None
+                  and session.route_scene in session.project.exploration)
+        operation = 'route_interact' if routed else 'explore_interact'
+        return self._apply(operation, point_id, expected_revision=expected_revision)
 
     def explore_wait(self, *, expected_revision=None):
         return self._apply('explore_wait', expected_revision=expected_revision)
@@ -172,6 +225,15 @@ class Simulation:
             raise SimulationError('invalid_action', 'auto_enemy_turn',
                                   'No enemy activation is ready')
         return self._apply('execute', choose_command(battle),
+                           expected_revision=expected_revision)
+
+    def pending_scene_cinematic(self):
+        """Immutable authored presentation cue; never expose mutable engine data."""
+        return freeze(self._session.pending_scene_cinematic())
+
+    def acknowledge_scene_cinematic(self, clip_id, *, expected_revision=None):
+        """Revision-checked acknowledgement with canonical transaction rollback."""
+        return self._apply('acknowledge_scene_cinematic', clip_id,
                            expected_revision=expected_revision)
 
     def choose_story_option(self, choice, *, expected_revision=None):

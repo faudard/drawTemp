@@ -1,0 +1,50 @@
+name: R26 C Shared Top-down Renderer
+on:
+  pull_request:
+    paths:
+      - "drawtemp/render/iso_scene.py"
+      - "drawtemp/render/qt_viewport.py"
+      - "drawtemp/render/TopDownViewport.qml"
+      - "drawtemp/render/__init__.py"
+      - "drawtemp/player/action_app.py"
+      - "drawtemp/player/action_clock.py"
+      - "drawtemp/player/ActionPreview.qml"
+      - "tests_standalone/test_action_projection_r26c.py"
+      - ".github/workflows/r26-shared-renderer.yml"
+  push:
+    branches:
+      - feat/r26c-shared-topdown-renderer
+      - master
+permissions:
+  contents: read
+jobs:
+  r3-headless:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: Check R3 top-down action projection and fixed timing
+        run: python -m unittest tests_standalone.test_action_projection_r26c tests_standalone.test_action_runtime_r26 tests_standalone.test_action_player_r26b -v
+      - name: Preserve old iso and campaign contracts
+        run: python -m unittest tests_standalone.test_drawtemp5_r3 tests_standalone.test_game_session -v
+  qt-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[qt6]'
+      - name: Instantiate actual R26 top-down Qt scene offscreen
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.player.qt_app --action-demo --smoke --save-dir "${{ runner.temp }}/action"

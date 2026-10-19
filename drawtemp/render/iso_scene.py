@@ -40,6 +40,29 @@ class IsoProjection:
         return tuple(max(hits)[-2:]) if hits else None
 
 
+@dataclass(frozen=True)
+class TopDownProjection:
+    """R26/R3 orthogonal projection with cell centres at integer indices.
+
+    The same Camera, TileChunkIndex, render_items and pick functions are used
+    by tactical and action scenes. Elevation is deliberately visual-only.
+    """
+    width: float = 64
+    height: float = 64
+    height_step: float = 0
+
+    def project(self, x, y, elevation=0):
+        return x * self.width, y * self.height - elevation * self.height_step
+
+    def unproject(self, sx, sy, elevation=0):
+        return sx / self.width, (sy + elevation * self.height_step) / self.height
+
+    def pick(self, sx, sy, width, height, elevations=None):
+        x, y = self.unproject(sx, sy)
+        cx, cy = floor(x + .5), floor(y + .5)
+        return (cx, cy) if 0 <= cx < width and 0 <= cy < height else None
+
+
 @dataclass
 class Camera:
     width: float = 960
@@ -136,7 +159,7 @@ def scene_from_mission(mission, snapshot=None):
             "interior_floors": deepcopy(mission.interior_floors)}
 
 
-def scene_from_exploration(stage, *, revision=0):
+def scene_from_exploration(stage, *, revision=0, living_world=None):
     """Adapt an R1 narrative exploration snapshot to the same R3 scene schema.
 
     The canonical exploration stage has no authored tactical terrain map. Its
@@ -167,6 +190,29 @@ def scene_from_exploration(stage, *, revision=0):
          "direction": "south"}
         for actor in stage.get("actors", ())
     )
+    # R35.D2: draw read-only living-world NPC positions; never modify
+    # canonical exploration actors or the Campaign/CT state.
+    if living_world is not None:
+        if not isinstance(living_world, Mapping):
+            raise ValueError("Expected a living-world projection mapping")
+        used = {entry["id"] for entry in actors}
+        for npc in living_world.get("npcs", ()):
+            if npc.get("scene") != stage["scene_id"] or npc.get("pos") is None:
+                continue
+            pos = npc["pos"]
+            if (type(pos) not in (list, tuple) or len(pos) != 2
+                    or any(type(n) is not int for n in pos)
+                    or not (0 <= pos[0] < width and 0 <= pos[1] < height)):
+                raise ValueError("Invalid NPC presentation cell")
+            uid = "world:" + npc["id"]
+            if uid in used:
+                raise ValueError("Duplicate NPC render identity")
+            used.add(uid)
+            actors.append({
+                "id": uid, "name": npc["id"], "x": pos[0], "y": pos[1],
+                "team": "ally", "alive": True, "level": 0,
+                "direction": "south", "world_activity": npc["activity"],
+                "world_moving": bool(npc.get("moving", False))})
     objects = [
         {"id": point["id"], "kind": "visited" if point["visited"] else "marker",
          "x": point["pos"][0], "y": point["pos"][1]}
@@ -174,6 +220,55 @@ def scene_from_exploration(stage, *, revision=0):
     ]
     return {"mission": "exploration:" + stage["scene_id"],
             "width": width, "height": height, "revision": revision,
+            "tiles": tiles, "actors": actors, "objects": objects}
+
+
+def scene_from_action(runtime):
+    """Adapt R26 logical state into the unchanged R3 scene record contract.
+
+    The headless simulation is the sole source of authority. Positions are
+    converted to fractional cell-centre coordinates without rounding them to
+    a tactical grid. Both clients can use this detached scene projection.
+    """
+    from sporebound.action_runtime import ActionRuntime, SCALE
+    if not isinstance(runtime, ActionRuntime):
+        raise ValueError("Expected a validated R26 action runtime")
+    authored = runtime.scene
+    snapshot = runtime.snapshot()
+    walls = {tuple(row) for row in authored["walls"]}
+    width, height = authored["width"], authored["height"]
+    tiles = [
+        {"x": x, "y": y, "height": 0,
+         "surface": "rock" if (x, y) in walls else "grass",
+         "feature": "stone_wall" if (x, y) in walls else "",
+         "blocked": (x, y) in walls, "cover": 0, "hazard": 0,
+         "goal": False}
+        for y in range(height) for x in range(width)
+    ]
+    def actor_position(row):
+        return row["pos"][0] / SCALE - .5, row["pos"][1] / SCALE - .5
+
+    hero = snapshot["hero"]
+    x, y = actor_position(hero)
+    actors = [{"id": "hero", "name": "Héros", "x": x, "y": y,
+               "team": "player", "alive": hero["alive"], "hp": hero["hp"],
+               "level": 0, "direction": facing_to_direction(hero["facing"]),
+               "combat_state": "dodge" if hero["dodge_left"] else "idle"}]
+    for name, enemy in sorted(snapshot["enemies"].items()):
+        x, y = actor_position(enemy)
+        actors.append({"id": name, "name": name, "x": x, "y": y,
+                       "team": "enemy", "alive": enemy["hp"] > 0,
+                       "hp": enemy["hp"], "level": 0,
+                       "direction": facing_to_direction(enemy["facing"]),
+                       "combat_state": enemy["state"]})
+    objects = [
+        {"id": obj["id"], "kind": obj["kind"],
+         "x": obj["pos"][0], "y": obj["pos"][1],
+         "open": snapshot["objects"][obj["id"]]["opened"]}
+        for obj in authored["objects"]
+    ]
+    return {"mission": "action:" + authored["id"], "width": width,
+            "height": height, "revision": snapshot["tick"],
             "tiles": tiles, "actors": actors, "objects": objects}
 
 
@@ -205,6 +300,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
     from .tile_chunks import TileChunkIndex
 
     index = tile_index if tile_index is not None else TileChunkIndex(scene)
+    top_down = isinstance(projection, TopDownProjection)
     elev = index.elevations
     lo_x, hi_x, lo_y, hi_y = index.visible_bounds(camera, projection)
     overlay_by_cell = {}
@@ -239,14 +335,16 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                      "feature": t.get("feature", ""),
                      "blocked": t.get("blocked", False), "cover": t.get("cover", 0),
                      "hazard": t.get("hazard", 0), "goal": t.get("goal", False),
-                     "zOrder": (x + y) * 100})
+                     "zOrder": -100000 if top_down else (x + y) * 100})
     for o in scene["objects"]:
         x, y = o["x"], o["y"]
         if lo_x - 1 <= x <= hi_x + 1 and lo_y - 1 <= y <= hi_y + 1:
             sx, sy = projection.project(x, y, elev.get((x, y), 0))
             rows.append({"kind": "object", "id": o["id"], "label": o["kind"],
                          "open": o.get("open", False),
-                         "sx": sx, "sy": sy, "zOrder": (x + y) * 100 + 30})
+                         "sx": sx, "sy": sy,
+                         "zOrder": int(y * 100) + 30 if top_down
+                         else (x + y) * 100 + 30})
     for a in scene["actors"]:
         x, y = a["x"], a["y"]
         if lo_x - 1 <= x <= hi_x + 1 and lo_y - 1 <= y <= hi_y + 1:
@@ -255,7 +353,9 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                          "label": a.get("name", a["id"]), "team": a["team"],
                          "alive": a["alive"], "sx": sx, "sy": sy,
                          "direction": a.get("direction", "south"),
-                         "zOrder": (x + y) * 100 + 60})
+                         "hp": a.get("hp"), "combatState": a.get("combat_state", ""),
+                         "zOrder": int(y * 100) + 60 if top_down
+                         else (x + y) * 100 + 60})
     from .building_geometry import building_surfaces
     from .visual_compositor import automatic_cutaway
     hidden_roofs = automatic_cutaway(
@@ -282,12 +382,23 @@ def pick(scene, camera, sx, sy, projection=IsoProjection(), *,
     for a in scene["actors"]:
         x, y = a["x"], a["y"]
         px, py = projection.project(x, y, elevations.get((int(x), int(y)), 0) + a["level"] * 4)
-        if abs(wx - px) < projection.width * .25 and py - projection.height * 1.2 < wy < py:
-            hits.append(((x + y) * 100 + 60, {"kind": "actor", "id": a["id"]}))
+        if ((abs(wx - px) <= projection.width * .4 and
+             abs(wy - py) <= projection.height * .4)
+                if isinstance(projection, TopDownProjection) else
+                (abs(wx - px) < projection.width * .25 and
+                 py - projection.height * 1.2 < wy < py)):
+            depth = int(y * 100) + 60 if isinstance(projection, TopDownProjection) else (x + y) * 100 + 60
+            hits.append((depth, {"kind": "actor", "id": a["id"]}))
     for o in scene["objects"]:
         px, py = projection.project(o["x"], o["y"], elevations.get((o["x"], o["y"]), 0))
-        if abs(wx - px) < projection.width * .2 and py - projection.height < wy < py:
-            hits.append(((o["x"] + o["y"]) * 100 + 30, {"kind": "object", "id": o["id"]}))
+        if ((abs(wx - px) <= projection.width * .35 and
+             abs(wy - py) <= projection.height * .35)
+                if isinstance(projection, TopDownProjection) else
+                (abs(wx - px) < projection.width * .2 and
+                 py - projection.height < wy < py)):
+            depth = (o["y"] * 100 + 30 if isinstance(projection, TopDownProjection)
+                     else (o["x"] + o["y"]) * 100 + 30)
+            hits.append((depth, {"kind": "object", "id": o["id"]}))
     if hits:
         return max(hits, key=lambda row: row[0])[1]
     from .building_geometry import building_surfaces, pick_surface

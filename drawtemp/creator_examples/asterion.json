@@ -1,0 +1,356 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "id": "arc_bolt",
+      "name": "Impulsion d'arc",
+      "cost": 2,
+      "range": 3,
+      "effects": [
+        {
+          "kind": "damage",
+          "power": 7,
+          "element": "physical"
+        }
+      ]
+    },
+    {
+      "id": "field_repair",
+      "name": "Réparation d'urgence",
+      "cost": 3,
+      "range": 3,
+      "target": "ally",
+      "effects": [
+        {
+          "kind": "heal",
+          "power": 17
+        }
+      ]
+    },
+    {
+      "id": "static_pulse",
+      "name": "Décharge statique",
+      "cost": 1,
+      "range": 2,
+      "effects": [
+        {
+          "kind": "damage",
+          "power": 4,
+          "element": "physical"
+        }
+      ]
+    }
+  ],
+  "archetypes": {
+    "scout": {
+      "max_hp": 62,
+      "max_mp": 14,
+      "attack": 9,
+      "speed": 14,
+      "move": 5,
+      "weapon": "focus",
+      "attack_range": 3,
+      "weapon_power": 4,
+      "skills": [
+        "arc_bolt"
+      ],
+      "reaction": "counter",
+      "kind": "character",
+      "tags": [
+        "crew",
+        "pilot"
+      ]
+    },
+    "engineer": {
+      "max_hp": 72,
+      "max_mp": 19,
+      "attack": 6,
+      "speed": 10,
+      "move": 4,
+      "weapon": "melee",
+      "weapon_power": 3,
+      "skills": [
+        "field_repair"
+      ],
+      "kind": "character",
+      "tags": [
+        "crew",
+        "support"
+      ]
+    },
+    "security_drone": {
+      "max_hp": 32,
+      "max_mp": 7,
+      "attack": 5,
+      "speed": 9,
+      "weapon": "ranged",
+      "attack_range": 3,
+      "min_range": 1,
+      "weapon_power": 2,
+      "skills": [
+        "static_pulse"
+      ],
+      "kind": "monster",
+      "tags": [
+        "machine",
+        "security"
+      ]
+    },
+    "guardian": {
+      "max_hp": 90,
+      "max_mp": 9,
+      "attack": 12,
+      "speed": 8,
+      "weapon": "melee",
+      "weapon_power": 6,
+      "skills": [
+        "static_pulse"
+      ],
+      "kind": "monster",
+      "tags": [
+        "machine",
+        "boss"
+      ]
+    }
+  },
+  "missions": [
+    {
+      "id": "signal_depot",
+      "name": "Station du signal — reprise de l'antenne",
+      "board": {
+        "width": 9,
+        "height": 7,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              2
+            ],
+            "surface": "stone",
+            "cover": 25
+          },
+          {
+            "pos": [
+              3,
+              3
+            ],
+            "surface": "stone",
+            "cover": 25
+          },
+          {
+            "pos": [
+              4,
+              2
+            ],
+            "surface": "cobble",
+            "height": 1
+          },
+          {
+            "pos": [
+              5,
+              2
+            ],
+            "surface": "cobble",
+            "height": 1
+          },
+          {
+            "pos": [
+              5,
+              4
+            ],
+            "surface": "rock",
+            "feature": "crate",
+            "cover": 30
+          },
+          {
+            "pos": [
+              6,
+              4
+            ],
+            "surface": "rock",
+            "feature": "pillar",
+            "cover": 20
+          },
+          {
+            "pos": [
+              4,
+              4
+            ],
+            "surface": "stone",
+            "blocked": true,
+            "feature": "stone_wall"
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "lyra",
+          "name": "Lyra — pilote éclaireuse",
+          "team": "player",
+          "pos": [
+            1,
+            5
+          ],
+          "archetype": "scout"
+        },
+        {
+          "id": "iro",
+          "name": "Iro — mécanicien de bord",
+          "team": "player",
+          "pos": [
+            2,
+            5
+          ],
+          "archetype": "engineer"
+        },
+        {
+          "id": "drone_s1",
+          "name": "Drone sentinelle S1",
+          "team": "enemy",
+          "pos": [
+            6,
+            1
+          ],
+          "archetype": "security_drone"
+        },
+        {
+          "id": "drone_s2",
+          "name": "Drone sentinelle S2",
+          "team": "enemy",
+          "pos": [
+            7,
+            4
+          ],
+          "archetype": "security_drone"
+        }
+      ],
+      "objective": "eliminate",
+      "reward": 120,
+      "next_missions": [
+        "reactor_vault"
+      ],
+      "triggers": [
+        {
+          "id": "antenna_noise",
+          "condition": "tick",
+          "value": 15,
+          "actions": [
+            {
+              "kind": "message",
+              "text": "Une impulsion inconnue traverse l'antenne de secours."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reactor_vault",
+      "name": "Soute du réacteur — protéger le cœur",
+      "board": {
+        "width": 10,
+        "height": 8,
+        "tiles": [
+          {
+            "pos": [
+              3,
+              2
+            ],
+            "surface": "rock",
+            "feature": "crate",
+            "cover": 20
+          },
+          {
+            "pos": [
+              4,
+              2
+            ],
+            "surface": "stone",
+            "cover": 20
+          },
+          {
+            "pos": [
+              6,
+              3
+            ],
+            "surface": "stone",
+            "height": 1
+          },
+          {
+            "pos": [
+              6,
+              4
+            ],
+            "surface": "stone",
+            "height": 1
+          },
+          {
+            "pos": [
+              7,
+              2
+            ],
+            "surface": "rock",
+            "feature": "pillar",
+            "cover": 20
+          },
+          {
+            "pos": [
+              5,
+              5
+            ],
+            "surface": "stone",
+            "blocked": true,
+            "feature": "stone_wall"
+          }
+        ]
+      },
+      "units": [
+        {
+          "id": "lyra",
+          "name": "Lyra — pilote éclaireuse",
+          "team": "player",
+          "pos": [
+            1,
+            6
+          ],
+          "archetype": "scout"
+        },
+        {
+          "id": "iro",
+          "name": "Iro — mécanicien de bord",
+          "team": "player",
+          "pos": [
+            2,
+            6
+          ],
+          "archetype": "engineer"
+        },
+        {
+          "id": "guardian",
+          "name": "Gardien de la soute",
+          "team": "enemy",
+          "pos": [
+            7,
+            3
+          ],
+          "archetype": "guardian"
+        },
+        {
+          "id": "drone_s3",
+          "name": "Drone sentinelle S3",
+          "team": "enemy",
+          "pos": [
+            7,
+            5
+          ],
+          "archetype": "security_drone"
+        }
+      ],
+      "objective": "eliminate",
+      "reward": 220,
+      "next_missions": []
+    }
+  ],
+  "jobs": {},
+  "equipment": {},
+  "tactic_unlocks": []
+}

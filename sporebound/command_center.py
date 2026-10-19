@@ -14,6 +14,8 @@ from .model import RuleError, require
 
 HELP = """Commands:
   status                         Show all fronts, convoys and last orders
+  siege                          Inspect gate/ram readiness and causal links
+  journey                        Inspect deployment, front switches and convoys
   focus FRONT                    Switch controlled battle
   doctrine FRONT hold|assault|delay|retreat
   turn [N]                       Advance 1..20 strategic turns
@@ -197,6 +199,16 @@ def handle(session, line):
         return session, HELP, False
     if action == "status" and not fields:
         return session, dashboard(session), False
+    if action == "siege" and not fields:
+        from .siege_readiness_r21 import siege_front_readiness
+        return session, json.dumps(siege_front_readiness(session),
+                                   ensure_ascii=False, indent=2,
+                                   sort_keys=True), False
+    if action == "journey" and not fields:
+        from .siege_journey_r21 import siege_journey_snapshot
+        return session, json.dumps(siege_journey_snapshot(session),
+                                   ensure_ascii=False, indent=2,
+                                   sort_keys=True), False
     if action == "focus" and len(fields) == 1:
         session.switch(fields[0])
         return session, dashboard(session), False

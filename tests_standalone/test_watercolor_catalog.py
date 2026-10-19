@@ -9,6 +9,7 @@ from sporebound.watercolor_catalog import (
     DEFAULT_WATERCOLOR_ROOT, WatercolorCatalog,
 )
 from tests_standalone.test_watercolor_release_gate import png
+from tests_standalone.watercolor_motion_fixture import motion_publication_claimed
 
 
 def copied_metadata(directory):
@@ -19,6 +20,8 @@ def copied_metadata(directory):
 
 
 class WatercolorCatalogTests(unittest.TestCase):
+    @unittest.skipUnless(motion_publication_claimed(),
+                         "INT-03 motion cels not published; strict release gate stays open")
     def test_real_manifest_catalogues_88_original_and_11_derived_png(self):
         catalog = WatercolorCatalog()
         self.assertTrue(catalog.has_metadata())
@@ -39,6 +42,8 @@ class WatercolorCatalogTests(unittest.TestCase):
             self.assertEqual(WatercolorCatalog(tmp).animation_frame_ids(),
                              frozenset())
 
+    @unittest.skipUnless(motion_publication_claimed(),
+                         "INT-03 motion cels not published; strict release gate stays open")
     def test_authored_animation_timing_and_terminal_frames(self):
         catalog = WatercolorCatalog()
         self.assertEqual(catalog.frame("anim_jeanne_walk", 0),

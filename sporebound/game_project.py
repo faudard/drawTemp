@@ -32,6 +32,11 @@ class GameProject:
     battle_support: list[dict] = field(default_factory=list)
     world: dict = field(default_factory=dict)
     campaign_flow: dict = field(default_factory=dict)
+    extensions: dict = field(default_factory=dict)
+    # Optional R25 profile manifest; omission preserves legacy v1 JSON and digests.
+    game_modes: dict = field(default_factory=dict)
+    # Opt-in R25.B scene graph; absent in historical manifests.
+    scene_routes: dict = field(default_factory=dict)
 
     @classmethod
     def default(cls, content):
@@ -64,7 +69,10 @@ class GameProject:
                 **({'exploration': deepcopy(self.exploration)} if self.exploration else {}),
                 **({'world': deepcopy(self.world)} if self.world else {}),
                 **({'battle_support': deepcopy(self.battle_support)} if self.battle_support else {}),
-                **({'campaign_flow': deepcopy(self.campaign_flow)} if self.campaign_flow else {})}
+                **({'campaign_flow': deepcopy(self.campaign_flow)} if self.campaign_flow else {}),
+                **({'extensions': deepcopy(self.extensions)} if self.extensions else {}),
+                **({'game_modes': deepcopy(self.game_modes)} if self.game_modes else {}),
+                **({'scene_routes': deepcopy(self.scene_routes)} if self.scene_routes else {})}
 
     def asset_registry(self):
         from .assets import AssetRegistry
@@ -106,6 +114,36 @@ class GameProject:
                     'Campaign description too long')
             require(campaign['start_mission'] in content.missions,
                     f'Unknown starting mission: {campaign["start_mission"]}')
+        from .project_extensions import validate_project_extensions
+        validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # R32: reject malformed geometry on load, even outside the Studio.
+        from .physics_scenes import EXTENSION as PHYSICS_EXTENSION, physics_scene_ids, validate_physics_catalog
+        if PHYSICS_EXTENSION in self.extensions:
+            physics_data = validate_physics_catalog(
+                self.extensions[PHYSICS_EXTENSION]["data"],
+                known_ids=physics_scene_ids(content, self))
+            routes = {(row["source"], row["id"]) for row in
+                      self.scene_routes.get("links", [])}
+            for physics_id, physics_scene in physics_data["scenes"].items():
+                require(physics_id in self.exploration,
+                        "R32 platform scenes need a canonical exploration identity")
+                for collider in physics_scene["colliders"]:
+                    if "route" in collider:
+                        require((physics_id, collider["route"]) in routes,
+                                "R32 route trigger must reference its own authored scene link")
+        if "drawtemp.metroidvania" in self.extensions:
+            from .metroidvania import validate_metroidvania
+            validate_metroidvania(
+                self.extensions["drawtemp.metroidvania"]["data"],
+                scene_ids=self.exploration,
+            )
+        # R34 is opt-in project-owned declarative data; malformed recipes must
+        # be rejected during canonical project validation, not at Player launch.
+        from .roguelite import EXTENSION as ROGUELITE_EXTENSION, validate_roguelite_spec
+        if ROGUELITE_EXTENSION in self.extensions:
+            validate_roguelite_spec(
+                self.extensions[ROGUELITE_EXTENSION]["data"],
+                content=content, project=self)
         from .campaign_flow import validate_flow
         validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
@@ -126,8 +164,18 @@ class GameProject:
                     'Unknown strategic narrative trigger: ' + reference)
         from .exploration import validate_exploration
         validate_exploration(self.exploration, self.story)
+        from .living_world import EXTENSION, validate_living_world
+        if EXTENSION in self.extensions:
+            validate_living_world(
+                self.extensions[EXTENSION]["data"],
+                set(self.exploration) | set(content.missions),
+                exploration=self.exploration)
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
+        from .game_modes import validate_game_modes
+        validate_game_modes(self.game_modes, content, self)
+        from .scene_router import validate_scene_routes
+        validate_scene_routes(self.scene_routes, content, self)
         require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
                 'Invalid battle support rules')
         for spec in self.battle_support:

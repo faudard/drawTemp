@@ -13,7 +13,9 @@ from drawtemp.core import Content, RuleError
 from drawtemp.render.iso_scene import scene_from_mission
 from drawtemp.render.qt_viewport import make_controller
 from drawtemp.sdk.authoring import AuthoringError
+from sporebound.studio_transaction import StudioTransactionStore
 from drawtemp.sdk.construction import ConstructionWorkspace
+from drawtemp.studio.r18_context import ContextCommandError, require_context
 from .map_authoring import MapStudio, SURFACE_PALETTE
 
 try:
@@ -21,7 +23,7 @@ try:
     from PySide6.QtQuickWidgets import QQuickWidget
     from PySide6.QtWidgets import (
         QApplication, QCheckBox, QComboBox, QDockWidget, QFileDialog,
-        QFormLayout, QHBoxLayout, QInputDialog, QLabel, QListWidget, QMainWindow,
+        QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QMainWindow,
         QMessageBox, QPushButton, QSpinBox, QTextEdit, QToolBar, QVBoxLayout,
         QWidget,
     )
@@ -50,6 +52,7 @@ class MapWindow(QMainWindow):
         self.pending_operation = None
         self.pending_transform = None
         self.preview_anchor = None
+        self.pending_generation = None
 
         toolbar = QToolBar("Carte", self)
         self.addToolBar(toolbar)
@@ -61,10 +64,14 @@ class MapWindow(QMainWindow):
             ("Renommer", self.rename_map),
             ("Ouvrir", self.open_map),
             ("Enregistrer", self.save_map),
+            ("Enregistrer une copie", self.save_map_as),
+            ("Récupérer projet", self.recover_project),
             ("Annuler", self.undo),
             ("Rétablir", self.redo),
             ("Copier", self.copy_selection),
             ("Coller", self.paste_selection),
+            ("Génération biome…", self.show_generator),
+            ("Bibliothèque prefabs…", self.show_prefabs),
             ("Test IA", self.playtest),
         ):
             action = toolbar.addAction(name)
@@ -98,7 +105,7 @@ class MapWindow(QMainWindow):
         ])
         toolbar.addSeparator()
         self.mode = QComboBox()
-        self.mode.addItems(["Édition carte", "Construction 2.5D"])
+        self.mode.addItems(["Édition carte", "Construction 2.5D", "Donjons / énigmes"])
         toolbar.addWidget(QLabel(" Espace "))
         toolbar.addWidget(self.mode)
         toolbar.addWidget(QLabel(" Outil "))
@@ -112,6 +119,21 @@ class MapWindow(QMainWindow):
         self.additive_selection.setObjectName("r5_selection_additive")
         self.additive_selection.setToolTip("Conserver les cellules déjà sélectionnées, même disjointes")
         toolbar.addWidget(self.additive_selection)
+        toolbar.addWidget(QLabel(" Rayon "))
+        self.brush_radius = QSpinBox()
+        self.brush_radius.setObjectName("r22_brush_radius")
+        self.brush_radius.setRange(0, 3)
+        self.brush_radius.setValue(0)
+        toolbar.addWidget(self.brush_radius)
+        toolbar.addWidget(QLabel(" Forme "))
+        self.brush_shape = QComboBox()
+        self.brush_shape.addItem("Losange", "diamond")
+        self.brush_shape.addItem("Carré", "square")
+        self.brush_shape.setObjectName("r22_brush_shape")
+        toolbar.addWidget(self.brush_shape)
+        self.brush_mask = QCheckBox("Pinceau dans sélection")
+        self.brush_mask.setObjectName("r22_brush_mask")
+        toolbar.addWidget(self.brush_mask)
 
         # R3 controller is the only source of camera, hit-testing and render
         # delegates. Its scene is reconstructed from the validated R1 Content.
@@ -197,14 +219,21 @@ class MapWindow(QMainWindow):
         from .map_layers_dock import MapLayersDock
         self.layers_panel = MapLayersDock(self.studio.layers, self.refresh)
         self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
+        self._make_generator_dock()
+        self._make_prefab_dock()
 
         from .construction_dock import ConstructionDock
         # R6 runs on the EXACT MapStudio authoring session and viewport.
         # Its dock is contextual, not a second map editor or renderer.
         self.construction = ConstructionDock(
             ConstructionWorkspace(self.studio.authoring, self.studio.mission_id), self)
+        self.construction.context_enabled = lambda: self.mode.currentIndex() == 1
         self.addDockWidget(Qt.RightDockWidgetArea, self.construction)
         self.construction.hide()
+        from .dungeon_dock import DungeonDock
+        self.dungeon = DungeonDock(self)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.dungeon)
+        self.dungeon.hide()
         self.mode.currentIndexChanged.connect(self._construction_mode)
         self.construction.committed.connect(lambda _change: self.refresh())
         self.construction.level_changed.connect(self._construction_view)
@@ -217,17 +246,50 @@ class MapWindow(QMainWindow):
         from .r15_creator import open_creator
         open_creator(self)
 
+    def _map_context(self, operation):
+        if self.mode.currentIndex() == 2 and operation == "map.stroke":
+            return True  # Preserve R27 dungeon placement.
+        mode = "construction" if self.mode.currentIndex() == 1 else "map"
+        try:
+            require_context(mode, operation)
+        except ContextCommandError as exc:
+            self.statusBar().showMessage(str(exc))
+            return False
+        return True
+
     def _construction_mode(self, *_):
-        active = self.mode.currentIndex() == 1
+        current = self.mode.currentIndex()
+        active = current == 1
+        self.cancel_stroke()
+        self.cancel_transform()
+        if current != 0:
+            self.cancel_generation()
+        self.generator_dock.setEnabled(current == 0)
+        self.prefab_dock.setEnabled(not active)
+        self.brush_radius.setEnabled(not active)
+        self.brush_shape.setEnabled(not active)
+        self.brush_mask.setEnabled(not active)
         root = self.viewport.rootObject()
         root.setProperty("interactionMode", "construction" if active else "edit")
         self.construction.setVisible(active)
-        self.tools.setEnabled(not active)
-        self.material.setEnabled(not active)
+        self.dungeon.setVisible(current == 2)
+        self.tools.setEnabled(current == 0)
+        self.material.setEnabled(current == 0)
+        self.additive_selection.setEnabled(current == 0)
+        self.layers_panel.setEnabled(current == 0)
+        for name in ("Nouvelle carte", "Dupliquer", "Renommer", "Copier", "Coller",
+                     "Déplacer sélection", "Dupliquer sélection", "Rotation ↻",
+                     "Rotation ↺", "Miroir horizontal", "Miroir vertical",
+                     "Appliquer aperçu", "Annuler aperçu"):
+            action = self.toolbar_actions.get(name)
+            if action is not None:
+                action.setEnabled(current == 0)
         self._construction_view()
         self.statusBar().showMessage(
             "R6 : sélectionner directement toiture, murs, fenêtres, porte et étages"
-            if active else "R5 : édition de carte et terrain")
+            if active else (
+                "R27 : cliquer une case pour positionner une interaction, puis valider dans le panneau"
+                if current == 2 else "R5 : édition de carte et terrain"))
 
     def _construction_view(self, *_):
         active = self.mode.currentIndex() == 1
@@ -276,8 +338,10 @@ class MapWindow(QMainWindow):
     def change_map(self, row):
         if row < 0:
             return
+        self.cancel_generation()
         def action():
             self.studio.select_map(self.studio.map_ids()[row])
+            self.refresh_prefab_shelf()
             self.selection = []
             self.cancel_transform()
         self._safe(action)
@@ -293,6 +357,8 @@ class MapWindow(QMainWindow):
         return identifier.strip(), name.strip()
 
     def create_map(self):
+        if not self._map_context("map.create"):
+            return
         value = self._name_id("Nouvelle carte", "village")
         if value is None:
             return
@@ -300,6 +366,8 @@ class MapWindow(QMainWindow):
         self.refresh_maps()
 
     def duplicate_map(self):
+        if not self._map_context("map.duplicate"):
+            return
         value = self._name_id("Dupliquer la carte", self.studio.mission_id + "_copy")
         if value is None:
             return
@@ -307,49 +375,194 @@ class MapWindow(QMainWindow):
         self.refresh_maps()
 
     def rename_map(self):
+        if not self._map_context("map.rename"):
+            return
         name, ok = QInputDialog.getText(
             self, "Renommer", "Nouveau nom", text=self.studio.mission()["name"])
         if ok and name.strip():
             self._safe(lambda: self.studio.rename(name))
             self.refresh_maps()
 
+    def _has_unsaved(self):
+        return self.studio.authoring.snapshot().dirty or self.studio.layers.dirty
+
+    def _load_verified_project(self, path):
+        # Construct both the canonical pair and layer workspace successfully
+        # before replacing the live project. Failed reload must not discard
+        # unsaved in-memory maps, undo history or active selection.
+        loaded = MapStudio.open(path)
+        self.studio = loaded
+        self.layers_panel.set_workspace(loaded.layers)
+        self.selection = []
+        self.cancel_transform()
+        self.refresh_maps()
+
+    def _allow_discard_unsaved(self):
+        if not self._has_unsaved():
+            return True
+        response = QMessageBox.warning(
+            self, "Modifications non enregistrées",
+            "Recharger ce projet abandonnera les modifications locales non "
+            "enregistrées (carte et calques). Enregistrer une copie d'abord "
+            "si vous souhaitez les conserver. Continuer ?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        return response == QMessageBox.Yes
+
     def open_map(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Ouvrir un contenu avec manifeste .game.json", "", "Content JSON (*.json)")
         if not path:
             return
-        if self.studio.authoring.snapshot().dirty or self.studio.layers.dirty:
-            QMessageBox.information(self, "Carte modifiée",
-                                    "Enregistrez avant d'ouvrir un autre projet.")
+        if self._has_unsaved():
+            QMessageBox.information(
+                self, "Carte modifiée",
+                "Enregistrez une copie avant d'ouvrir un autre projet.")
             return
-        def open_document():
-            self.studio = MapStudio.open(path)
-            self.layers_panel.set_workspace(self.studio.layers)
-            self.selection = []
-            self.cancel_transform()
-            self.refresh_maps()
-        self._safe(open_document)
+        if StudioTransactionStore(path).pending:
+            self.recover_project(path)
+            return
+        self.cancel_generation()
+        self._safe(lambda: self._load_verified_project(path))
+
+    def recover_project(self, path=None):
+        """R17.11 explicit two-file journal recovery with immutable review."""
+        # QAction.triggered may forward its checked bool, not a filename.
+        if not isinstance(path, (str, Path)):
+            current = self.studio.authoring.storage_status()
+            if current["has_destination"] and current["pending"]:
+                path = current["path"]
+            else:
+                path, _ = QFileDialog.getOpenFileName(
+                    self, "Projet avec journal .studio-recovery.json", "",
+                    "Content JSON (*.json)")
+        if not path:
+            return
+        store = StudioTransactionStore(path)
+        try:
+            report = store.inspect_recovery()
+        except (RuleError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Récupération indisponible",
+                                "Aucun fichier n'a été remplacé. " + str(exc))
+            return
+
+        choice_box = QMessageBox(self)
+        choice_box.setObjectName("r17StudioRecoveryReview")
+        choice_box.setWindowTitle("Récupération du projet interrompu")
+        choice_box.setIcon(QMessageBox.Warning)
+        choice_box.setText("Deux fichiers Content + GameProject et un journal "
+                           "de transaction seront vérifiés avant toute écriture.")
+        choices = report["choices"]
+        choice_box.setInformativeText(
+            str(store.content_path) + "\n\n" +
+            "Terminer l'enregistrement : " +
+            ("possible" if choices["complete"]["available"]
+             else choices["complete"]["reason"]) + "\n" +
+            "Revenir à la sauvegarde précédente : " +
+            ("possible" if choices["rollback"]["available"]
+             else choices["rollback"]["reason"]))
+        finish = choice_box.addButton(
+            "Terminer l'enregistrement", QMessageBox.AcceptRole)
+        rollback = choice_box.addButton(
+            "Revenir en arrière", QMessageBox.AcceptRole)
+        cancel = choice_box.addButton("Annuler", QMessageBox.RejectRole)
+        finish.setEnabled(choices["complete"]["available"])
+        rollback.setEnabled(choices["rollback"]["available"])
+        choice_box.setDefaultButton(cancel)
+        choice_box.exec()
+        clicked = choice_box.clickedButton()
+        if clicked not in (finish, rollback):
+            return
+        if not self._allow_discard_unsaved():
+            return
+        selected = "complete" if clicked is finish else "rollback"
+        try:
+            # Mandatory second fingerprint comparison in the canonical store.
+            store.recover(selected, expected_fingerprints=report["fingerprints"])
+            if all(p.is_file() for p in store.paths):
+                self._load_verified_project(path)
+            else:
+                QMessageBox.information(
+                    self, "Récupération terminée",
+                    "L'annulation de la première sauvegarde a restauré "
+                    "l'absence du projet. Aucun projet n'a été ouvert.")
+                return
+        except (RuleError, AuthoringError, OSError, ValueError) as exc:
+            QMessageBox.critical(
+                self, "Récupération interrompue",
+                "Aucune décision automatique n'a été prise. Si des fichiers "
+                "ont déjà été remplacés, le journal reste disponible pour "
+                "une nouvelle inspection.\n" + str(exc))
+            return
+        self.statusBar().showMessage(
+            "Projet restauré (" + selected + ") et rechargé", 7000)
+
+    def save_map_as(self, *_):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Enregistrer une copie de Content + GameProject",
+            "jeanne-village-copie.json", "Content JSON (*.json)")
+        if not path:
+            return
+        self._safe(lambda: self.studio.save_as(path))
+
+    def _save_conflict(self, error):
+        """Explicit choices only. Never retry save() on conflicting documents."""
+        try:
+            status = self.studio.authoring.storage_status()
+        except (OSError, RuleError) as exc:
+            QMessageBox.warning(self, "Échec d'enregistrement",
+                                str(error) + "\n" + str(exc))
+            return
+        if status["pending"]:
+            answer = QMessageBox.question(
+                self, "Sauvegarde interrompue",
+                "Un journal de récupération a été détecté. Examiner les "
+                "deux fichiers avant toute nouvelle sauvegarde ?\n" + str(error),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if answer == QMessageBox.Yes:
+                self.recover_project(status["path"])
+            return
+        if not status["external_change"]:
+            QMessageBox.warning(self, "Échec d'enregistrement", str(error))
+            return
+        conflict = QMessageBox(self)
+        conflict.setObjectName("r17StudioSaveConflict")
+        conflict.setWindowTitle("Conflit de fichiers externes")
+        conflict.setIcon(QMessageBox.Warning)
+        conflict.setText("Content ou GameProject a été modifié sur disque "
+                         "par une autre application. L'enregistrement est bloqué.")
+        conflict.setInformativeText(
+            "Pour conserver vos modifications locales : Enregistrer une copie.\n"
+            "Pour utiliser la version externe : Recharger (après confirmation).\n"
+            "Aucun fichier du projet courant ne sera écrasé par ce dialogue.")
+        copy_button = conflict.addButton("Enregistrer une copie", QMessageBox.AcceptRole)
+        reload_button = conflict.addButton("Recharger du disque", QMessageBox.ActionRole)
+        cancel = conflict.addButton("Annuler", QMessageBox.RejectRole)
+        conflict.setDefaultButton(cancel)
+        conflict.exec()
+        clicked = conflict.clickedButton()
+        if clicked is copy_button:
+            self.save_map_as()
+        elif clicked is reload_button and self._allow_discard_unsaved():
+            self._safe(lambda: self._load_verified_project(status["path"]))
 
     def save_map(self):
-        def action():
-            try:
-                return self.studio.save()
-            except AuthoringError as exc:
-                if exc.code != "no_destination":
-                    raise
-                path, _ = QFileDialog.getSaveFileName(
-                    self, "Enregistrer contenu + projet", "jeanne-village.json",
-                    "Content JSON (*.json)")
-                if path:
-                    return self.studio.save_as(path)
-        self._safe(action)
+        try:
+            return self.studio.save()
+        except AuthoringError as exc:
+            if exc.code == "no_destination":
+                return self.save_map_as()
+            self._save_conflict(exc)
+        except (RuleError, OSError, ValueError) as exc:
+            self._save_conflict(exc)
 
     def undo(self):
+        self.cancel_generation()
         self.cancel_transform()
         self._safe(self.studio.undo)
         self.refresh_maps()
 
     def redo(self):
+        self.cancel_generation()
         self.cancel_transform()
         self._safe(self.studio.redo)
         self.refresh_maps()
@@ -366,6 +579,8 @@ class MapWindow(QMainWindow):
                     result["final_mode"], result["result"] or "En cours"))
 
     def copy_selection(self):
+        if not self._map_context("map.copy"):
+            return
         if not self.selection:
             QMessageBox.information(self, "Copier", "Sélectionnez des cases au rectangle ou au lasso.")
             return
@@ -375,10 +590,245 @@ class MapWindow(QMainWindow):
                 "Copie terrain + objectifs prête. Identités d'unités/objets non dupliquées.")
 
     def paste_selection(self):
+        if not self._map_context("map.paste"):
+            return
         if self.studio.region_clipboard is None:
             QMessageBox.information(self, "Coller", "Copiez une sélection avant le collage.")
             return
         self.start_transform("paste")
+
+    def _make_generator_dock(self):
+        """R22.2A uses existing R3 ghost overlay and R5 selection geometry."""
+        from .map_generation import BIOMES
+        panel = QWidget()
+        form = QVBoxLayout(panel)
+        form.addWidget(QLabel("Terrain déterministe — seuls les emplacements vides sont modifiés."))
+        self.gen_biome = QComboBox()
+        self.gen_biome.setObjectName("r22_biome")
+        self.gen_biome.addItems(tuple(BIOMES))
+        form.addWidget(QLabel("Biome"))
+        form.addWidget(self.gen_biome)
+        self.gen_seed = QSpinBox()
+        self.gen_seed.setObjectName("r22_seed")
+        self.gen_seed.setRange(0, 2147483647)
+        self.gen_seed.setValue(17)
+        form.addWidget(QLabel("Graine reproductible"))
+        form.addWidget(self.gen_seed)
+        self.gen_coverage = QSpinBox()
+        self.gen_coverage.setObjectName("r22_coverage")
+        self.gen_coverage.setRange(1, 100)
+        self.gen_coverage.setSuffix(" %")
+        self.gen_coverage.setValue(75)
+        form.addWidget(QLabel("Couverture des cellules disponibles"))
+        form.addWidget(self.gen_coverage)
+        self.gen_selected_only = QCheckBox("Limiter à la sélection / au lasso")
+        self.gen_selected_only.setObjectName("r22_selected_only")
+        form.addWidget(self.gen_selected_only)
+        self.gen_report = QLabel("Prévisualiser avant d'appliquer ; Ctrl+Z pour annuler.")
+        self.gen_report.setWordWrap(True)
+        form.addWidget(self.gen_report)
+        self.gen_preview_button = QPushButton("Prévisualiser sans modifier")
+        self.gen_preview_button.clicked.connect(self.preview_generation)
+        form.addWidget(self.gen_preview_button)
+        self.gen_apply_button = QPushButton("Appliquer la génération")
+        self.gen_apply_button.setEnabled(False)
+        self.gen_apply_button.clicked.connect(self.apply_generation)
+        form.addWidget(self.gen_apply_button)
+        cancel = QPushButton("Annuler l'aperçu")
+        cancel.clicked.connect(self.cancel_generation)
+        form.addWidget(cancel)
+        self.generator_dock = self._dock(
+            "R22 — Génération de carte", panel, Qt.RightDockWidgetArea)
+        self.generator_dock.hide()
+        # Changing any input invalidates the prior visible, validated preview.
+        self.gen_biome.currentIndexChanged.connect(self.cancel_generation)
+        self.gen_seed.valueChanged.connect(self.cancel_generation)
+        self.gen_coverage.valueChanged.connect(self.cancel_generation)
+        self.gen_selected_only.toggled.connect(self.cancel_generation)
+
+    def show_generator(self):
+        self.generator_dock.show()
+        self.generator_dock.raise_()
+
+    def cancel_generation(self, *_):
+        if self.pending_generation is not None and self.viewport.rootObject():
+            self.viewport.rootObject().setProperty("transformCells", [])
+        self.pending_generation = None
+        if hasattr(self, "gen_apply_button"):
+            self.gen_apply_button.setEnabled(False)
+            self.gen_report.setText("Aucun aperçu actif.")
+
+    def preview_generation(self):
+        if self.mode.currentIndex() != 0:
+            QMessageBox.warning(self, "Génération", "Passez en mode Édition carte.")
+            return
+        if self.gen_selected_only.isChecked() and not self.selection:
+            QMessageBox.warning(self, "Génération", "Sélectionnez une région avec le rectangle ou le lasso.")
+            return
+        self.cancel_transform()
+        self.cancel_generation()
+        preview = self._safe(lambda: self.studio.preview_generation(
+            seed=self.gen_seed.value(),
+            biome=self.gen_biome.currentText(),
+            coverage=self.gen_coverage.value(),
+            cells=self.selection if self.gen_selected_only.isChecked() else None,
+        ))
+        if preview is None:
+            return
+        self.pending_generation = preview
+        self.gen_apply_button.setEnabled(True)
+        self.viewport.rootObject().setProperty(
+            "transformCells", self._project_cells(preview.cells)
+        )
+        message = (
+            f"{len(preview.cells)} cases proposées · "
+            f"{preview.protected_count} cases protégées · "
+            "aucun document modifié · Appliquer pour confirmer"
+        )
+        self.gen_report.setText(message)
+        self.statusBar().showMessage(message)
+
+    def apply_generation(self):
+        if self.pending_generation is None:
+            QMessageBox.information(self, "Génération", "Prévisualisez d'abord le terrain.")
+            return
+        preview = self.pending_generation
+        changed = len(preview.cells)
+        result = self._safe(
+            lambda: self.studio.commit_generation(preview)
+        )
+        if result is not None:
+            self.cancel_generation()
+            self.statusBar().showMessage(
+                f"{changed} cases générées en une transaction. Ctrl+Z annule le tout."
+            )
+
+    def _make_prefab_dock(self):
+        """Reusable terrain-only prefabs, placed via R5 preview/undo."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.addWidget(QLabel(
+            "Motifs de terrain réutilisables ; acteurs et bâtiments restent dans R6."))
+        self.prefab_search = QLineEdit()
+        self.prefab_search.setObjectName("r22_prefab_search")
+        self.prefab_search.setPlaceholderText("Rechercher un modèle...")
+        layout.addWidget(self.prefab_search)
+        self.prefab_category = QComboBox()
+        self.prefab_category.setObjectName("r22_prefab_category")
+        self.prefab_category.addItems(("Tous", "Nature", "Chemins", "Décors", "Mes modèles"))
+        layout.addWidget(self.prefab_category)
+        self.prefab_list = QListWidget()
+        self.prefab_list.setObjectName("r22_prefab_list")
+        layout.addWidget(self.prefab_list, 1)
+        self.prefab_orientation = QComboBox()
+        self.prefab_orientation.addItem("Orientation normale", "none")
+        self.prefab_orientation.addItem("Rotation droite", "rotate_cw")
+        self.prefab_orientation.addItem("Rotation gauche", "rotate_ccw")
+        self.prefab_orientation.addItem("Miroir horizontal", "mirror_x")
+        self.prefab_orientation.addItem("Miroir vertical", "mirror_y")
+        layout.addWidget(self.prefab_orientation)
+        self.prefab_place = QPushButton("Placer avec aperçu")
+        self.prefab_place.setObjectName("r22_prefab_place")
+        self.prefab_place.clicked.connect(self.place_selected_prefab)
+        layout.addWidget(self.prefab_place)
+        capture = QPushButton("Mémoriser la sélection")
+        capture.clicked.connect(self.capture_selection_prefab)
+        layout.addWidget(capture)
+        export = QPushButton("Exporter mes modèles…")
+        export.clicked.connect(self.export_prefabs)
+        layout.addWidget(export)
+        load = QPushButton("Importer une bibliothèque…")
+        load.clicked.connect(self.import_prefabs)
+        layout.addWidget(load)
+        self.prefab_info = QLabel(
+            "Les modèles personnalisés restent en mémoire tant qu'ils ne sont pas exportés.")
+        self.prefab_info.setWordWrap(True)
+        layout.addWidget(self.prefab_info)
+        self.prefab_dock = self._dock(
+            "R22 — Bibliothèque de terrain", widget, Qt.RightDockWidgetArea)
+        self.prefab_dock.hide()
+        self.prefab_search.textChanged.connect(self.refresh_prefab_shelf)
+        self.prefab_category.currentIndexChanged.connect(self.refresh_prefab_shelf)
+        self.refresh_prefab_shelf()
+
+    def show_prefabs(self):
+        self.prefab_dock.show()
+        self.prefab_dock.raise_()
+
+    def refresh_prefab_shelf(self, *_):
+        from PySide6.QtCore import Qt
+        old = self.prefab_list.currentItem()
+        key = old.data(Qt.UserRole) if old else None
+        self.prefab_list.clear()
+        for entry in self.studio.prefabs.entries(
+                self.prefab_search.text(), self.prefab_category.currentText()):
+            self.prefab_list.addItem(entry.title + " · " + entry.category)
+            item = self.prefab_list.item(self.prefab_list.count() - 1)
+            item.setData(Qt.UserRole, entry.key)
+            if entry.key == key:
+                self.prefab_list.setCurrentItem(item)
+        if self.prefab_list.currentRow() < 0 and self.prefab_list.count():
+            self.prefab_list.setCurrentRow(0)
+
+    def place_selected_prefab(self):
+        from PySide6.QtCore import Qt
+        if self.mode.currentIndex() != 0:
+            QMessageBox.warning(self, "Préfab", "Passez en mode Édition carte.")
+            return
+        item = self.prefab_list.currentItem()
+        if item is None:
+            QMessageBox.information(self, "Préfab", "Choisissez un modèle de terrain.")
+            return
+        key = item.data(Qt.UserRole)
+        orientation = self.prefab_orientation.currentData()
+        if self._safe(lambda: self.studio.select_prefab(key, orientation)) is None:
+            return
+        # Existing R5 paste uses safe collision preview and atomic AuthoringSession.
+        self.start_transform("paste")
+        self.prefab_info.setText(
+            "Survolez la carte, vérifiez l'aperçu puis cliquez sur Appliquer aperçu.")
+
+    def capture_selection_prefab(self):
+        if not self.selection:
+            QMessageBox.information(
+                self, "Préfab", "Sélectionnez d'abord du terrain au rectangle/lasso.")
+            return
+        name, ok = QInputDialog.getText(
+            self, "Nouveau modèle", "Nom du préfab de terrain")
+        if not ok:
+            return
+        result = self._safe(lambda: self.studio.capture_prefab(name, self.selection))
+        if result is not None:
+            self.refresh_prefab_shelf()
+            self.prefab_info.setText(
+                "Modèle mémorisé. Exportez la bibliothèque pour le réutiliser plus tard.")
+
+    def export_prefabs(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exporter bibliothèque de terrain", "terrain-prefabs.json",
+            "JSON (*.json)")
+        if path:
+            from drawtemp.core import RuleError
+            try:
+                self.studio.prefabs.export_file(path)
+                self.prefab_info.setText("Bibliothèque exportée : " + path)
+            except (RuleError, OSError, ValueError) as exc:
+                QMessageBox.warning(self, "Export refusé", str(exc))
+
+    def import_prefabs(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Importer bibliothèque de terrain", "", "JSON (*.json)")
+        if path:
+            from .map_prefabs import TerrainPrefabLibrary
+            try:
+                loaded = TerrainPrefabLibrary.import_file(path)
+            except (RuleError, OSError, ValueError, TypeError, KeyError) as exc:
+                QMessageBox.warning(self, "Import refusé", str(exc))
+                return
+            self.studio.prefabs = loaded
+            self.refresh_prefab_shelf()
+            self.prefab_info.setText(
+                "Bibliothèque importée : les modèles existants ont été remplacés.")
 
     def _selection_origin(self):
         if not self.selection:
@@ -417,6 +867,9 @@ class MapWindow(QMainWindow):
             self.viewport.rootObject().setProperty("transformCells", [])
 
     def start_transform(self, operation):
+        if not self._map_context("map.transform"):
+            return
+        self.cancel_generation()
         if operation != "paste" and not self.selection:
             QMessageBox.information(self, "Sélection", "Choisissez d'abord une région.")
             return
@@ -486,6 +939,8 @@ class MapWindow(QMainWindow):
             self.viewport.rootObject().setProperty("transformCells", [])
 
     def apply_transform(self, *_):
+        if not self._map_context("map.apply_transform"):
+            return
         if self.pending_transform is None:
             QMessageBox.information(
                 self, "Placement", "Choisissez une destination valide (aperçu non rouge).")
@@ -503,6 +958,8 @@ class MapWindow(QMainWindow):
                 "Transformation validée en une transaction. Ctrl+Z pour annuler.")
 
     def change_objective(self):
+        if not self._map_context("map.objective"):
+            return
         self._safe(lambda: self.studio.set_objective(self.objective.currentText()))
 
     def _tool(self):
@@ -524,20 +981,33 @@ class MapWindow(QMainWindow):
         self.stroke = []
 
     def begin_stroke(self, x, y):
+        if not self._map_context("map.stroke"):
+            return
         self.stroke = [(x, y)]
         self.selected = (x, y)
 
     def extend_stroke(self, x, y):
+        if not self._map_context("map.stroke"):
+            return
         if self.stroke and (x, y) != self.stroke[-1]:
             self.stroke.append((x, y))
             self.selected = (x, y)
 
     def finish_stroke(self, x, y):
+        if not self._map_context("map.stroke"):
+            self.cancel_stroke()
+            return
         if not self.stroke:
             return
+        self.cancel_generation()
         self.extend_stroke(x, y)
         cells = self.stroke
         self.stroke = []
+        if self.mode.currentIndex() == 2:
+            self.dungeon.set_position(x, y)
+            self.statusBar().showMessage(
+                "R27 : interaction positionnée en ({}, {}). Valider dans le panneau.".format(x, y))
+            return
         tool = self._tool()
         first, last = cells[0], cells[-1]
         def apply():
@@ -574,10 +1044,20 @@ class MapWindow(QMainWindow):
                 return self.studio.line(first, last, brush)
             if tool == "Remplissage":
                 return self.studio.flood(last, brush)
+            if tool == "Pinceau":
+                return self.studio.smart(
+                    cells, brush, radius=self.brush_radius.value(),
+                    shape=self.brush_shape.currentData(),
+                    selection_mask=self.selection if self.brush_mask.isChecked()
+                    else None)
             return self.studio.paint(cells, brush)
         self._safe(apply)
 
     def refresh(self, *_):
+        if self.pending_generation is not None and (
+                self.pending_generation.mission_id != self.studio.mission_id or
+                self.pending_generation.revision != self.studio.authoring.revision):
+            self.cancel_generation()
         self.layers_panel.set_mission(self.studio.mission_id)
         if hasattr(self, "construction"):
             workspace = self.construction.workspace
@@ -597,8 +1077,13 @@ class MapWindow(QMainWindow):
         self.renderer.replace_scene(self._render_scene())
         if hasattr(self, "construction"):
             self._construction_view()
+        if hasattr(self, "dungeon"):
+            self.dungeon.refresh()
         root = self.viewport.rootObject()
         self._render_selection()
+        if self.pending_generation is not None:
+            root.setProperty("transformCells",
+                             self._project_cells(self.pending_generation.cells))
         root.setProperty("showGrid", self.show_grid.isChecked())
         root.setProperty("showBlocked", self.show_blocked.isChecked())
         root.setProperty("showHeights", self.show_height.isChecked())

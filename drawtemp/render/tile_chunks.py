@@ -36,6 +36,10 @@ class TileChunkIndex:
             raise ValueError("Duplicate terrain tile")
         dirty = {cell for cell in self.tiles.keys() | current.keys()
                  if self.tiles.get(cell) != current.get(cell)}
+        # During camera-only refresh the source is unchanged: retain the
+        # elevation lookup and chunk allocation instead of rebuilding them.
+        if not dirty:
+            return dirty
         for cell in dirty:
             cx, cy = cell[0] // self.chunk_size, cell[1] // self.chunk_size
             chunk = self.chunks.setdefault((cx, cy), {})

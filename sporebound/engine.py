@@ -58,6 +58,8 @@ class Battle:
             if obj["kind"] == "door":
                 self.board.tiles[tuple(obj["pos"])] = deepcopy(self.board.tile(tuple(obj["pos"])))
                 self.board.tiles[tuple(obj["pos"])].blocked = not obj.get("open", False)
+        from .puzzle_rules import sync_plates
+        sync_plates(self)
         self.deploying = bool(self.mission.deployment)
         if not self.deploying:
             for unit in self.units:
@@ -267,8 +269,8 @@ class Battle:
     def engagement_threats(self, cell: Cell, moving_team: str) -> list[dict]:
         return movement.engagement_threats(self, cell, moving_team)
 
-    def reaction_threats(self, cell: Cell, moving_team: str) -> list[dict]:
-        return reaction_rules.reaction_threats(self, cell, moving_team)
+    def reaction_threats(self, cell: Cell, moving_team: str, *, level: int = 0) -> list[dict]:
+        return reaction_rules.reaction_threats(self, cell, moving_team, level=level)
 
     def movement_threats(self, u: Unit, path: list[Cell]) -> list[dict]:
         return reaction_rules.movement_threats(self, u, path)
@@ -556,18 +558,14 @@ class Battle:
                 target["open"] = True
                 self.board.tiles[tuple(target["pos"])].blocked = False
                 self.emit("gate_breached", gate=target["id"])
-        elif obj["kind"] == "door":
-            require(not obj.get("locked", False), "Gate locked: use a siege engine or its switch")
-            require(not obj.get("open", False), "Door already open")
-            obj["open"] = True
-            self.board.tiles[tuple(obj["pos"])].blocked = False
-        elif obj["kind"] == "switch":
-            door = next(o for o in self.mission.objects if o["id"] == obj["link"])
-            door["open"] = True
-            self.board.tiles[tuple(door["pos"])].blocked = False
+        elif obj["kind"] in {"door", "switch", "key"}:
+            from .puzzle_rules import interact
+            consumed = interact(self, u, obj)
         else:
+            require(obj["kind"] == "chest", "Object cannot be interacted with")
             self.loot += obj.get("amount", 25)
-        if obj["kind"] not in {"ram", "catapult"}:
+        if obj["kind"] not in {"ram", "catapult"} and (
+                obj["kind"] not in {"door", "switch", "key"} or consumed):
             obj["used"] = True
         u.acted = True
         u.cast = None
@@ -669,6 +667,11 @@ class Battle:
                         'Door toggle expects an object ID')
                 from .building_gameplay import toggle_door
                 toggle_door(self, u, command['object'])
+            elif kind == 'puzzle_push':
+                require(set(command) == {'kind', 'object', 'direction'},
+                        'Puzzle push expects object ID and direction')
+                from .puzzle_rules import push_block
+                push_block(self, u, command['object'], command['direction'])
             elif kind == 'level_move':
                 require(bool(self.mission.level_links),
                         'No authored vertical connectors in this mission')

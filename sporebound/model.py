@@ -419,7 +419,7 @@ class Content:
                 require(obj["id"] not in object_ids, "Duplicate object")
                 object_ids.add(obj["id"])
                 cell(obj["pos"], b)
-                require(obj["kind"] in {"door", "switch", "chest", "ram", "catapult", "passage", "defense"}, "Unknown object kind")
+                require(obj["kind"] in {"door", "switch", "chest", "ram", "catapult", "passage", "defense", "key", "plate", "block"}, "Unknown object kind")
                 from .siege import validate as validate_siege
                 validate_siege(m, obj, cell, integer)
                 integer(obj.get("amount", 1), 0, 10000, "object.amount")
@@ -444,6 +444,8 @@ class Content:
                 if obj["kind"] in {"ram", "catapult"}:
                     require(any(o["id"] == obj.get("link") and o["kind"] == "door" for o in m.objects),
                             "Siege engine needs a gate target")
+            from .puzzle_rules import validate_puzzles
+            validate_puzzles(m)
             # Chained events use ordinary Mission.triggers and stored event IDs;
             # validate the complete graph before allowing any Player load.
             if any('after' in t or 'after_any' in t for t in m.triggers):

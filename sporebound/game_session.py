@@ -88,6 +88,30 @@ class GameSession:
         self.story = StoryBook(project.story, content, project.campaigns)
         self.exploration = Exploration(project.exploration, project.story)
         self.progress = project.new_game(campaign_id, content)
+        from .scene_router import SceneRouter
+        self.scene_router = SceneRouter(self.project.scene_routes, self.content, self.project)
+        self.route_scene = self.scene_router.start
+        self.route_history = []
+        self._route_starting = False
+        # Opt-in per-scene movement journal; absent in all legacy recordings.
+        self._rt_origin = None
+        self._rt_position = None
+        self._rt_journal = None
+        self._platform = None  # R32 opt-in side-view adapter, never CT.
+        # R34.C is opt-in, versioned and owned by this GameSession.
+        from .roguelite import EXTENSION as ROGUELITE_EXTENSION, RogueliteRun
+        run_spec = self.project.extensions.get(ROGUELITE_EXTENSION)
+        self._roguelite = (RogueliteRun(
+            run_spec["data"], content=self.content, project=self.project)
+            if run_spec is not None else None)
+        # R35.A: optional clock owned by this session, not by the renderer.
+        from .living_world import EXTENSION, LivingWorld
+        spec = self.project.extensions.get(EXTENSION)
+        self._living_world = (
+            LivingWorld(spec["data"],
+                        set(self.project.exploration) | set(self.content.missions),
+                        exploration=self.project.exploration)
+            if spec is not None else None)
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -117,6 +141,279 @@ class GameSession:
 
     def active_scene(self):
         return self.story.active_scene(self.progress)
+
+    def scene_profile(self, scene_id=None):
+        """Read the canonical project profile without changing CT state."""
+        if scene_id is not None:
+            known = (set(self.content.missions)
+                     | set(self.project.exploration)
+                     | set(self.story.scenes))
+            require(type(scene_id) is str and scene_id in known,
+                    "Unknown game mode scene")
+        from .game_modes import resolve_scene_profile
+        return resolve_scene_profile(self.project.game_modes, scene_id)
+
+    def roguelite_state(self):
+        """Detached run/meta snapshot; never expose mutable gameplay state."""
+        require(self._roguelite is not None, "R34 roguelite is not configured")
+        return self._roguelite.snapshot()
+
+    def _roguelite_action(self, kind, value=None):
+        require(self._roguelite is not None and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R34 run commands require an active campaign without combat/dialogue")
+        return self._roguelite.action(kind, value)
+
+    def roguelite_move(self, room_id):
+        return self._roguelite_action("move", room_id)
+
+    def roguelite_claim(self):
+        return self._roguelite_action("claim")
+
+    def roguelite_die(self):
+        return self._roguelite_action("die")
+
+    def roguelite_restart(self):
+        return self._roguelite_action("restart")
+
+    def roguelite_checkpoint(self):
+        return self._roguelite_action("checkpoint")
+
+    def living_world_state(self, scene=None):
+        """R35.A detached schedule projection, including off-focus scenes."""
+        require(self._living_world is not None, "Living world is not configured")
+        return self._living_world.view(self.progress.story_flags, scene=scene)
+
+    def living_world_advance(self, ticks=1):
+        """Explicit exploration-only clock advance (cutscenes/travel/fast-forward)."""
+        require(self._living_world is not None and self.mode == "campaign"
+                and not self.progress.story_pending,
+                "Living-world clock is paused outside exploration")
+        return self._living_world.advance(ticks)
+
+    def living_world_reputation_event(self, faction, delta, event_id):
+        """Apply an idempotent, explicit faction event to the session checkpoint."""
+        require(self._living_world is not None,
+                "Living world is not configured")
+        return self._living_world.adjust_reputation(faction, delta, event_id)
+
+    def living_world_finish_daily_quest(self, quest_id):
+        """Award canonical Campaign gold exactly once per day and quest."""
+        require(self._living_world is not None and self.mode == "campaign"
+                and not self.progress.story_pending,
+                "Daily quests require an active exploration session")
+        return self._living_world.finish_daily_quest(quest_id, self.progress)
+
+    def living_world_timeline(self, *, scene=None, limit=512):
+        """Read-only R35 authoring diagnostics, never advances simulation."""
+        require(self._living_world is not None, "Living world is not configured")
+        from .living_world_diagnostics import timeline
+        return timeline(self._living_world, self.progress.story_flags,
+                        scene=scene, limit=limit)
+
+    def living_world_trade(self, shop_id, item_id, action, quantity,
+                           transaction_id):
+        """Atomic buy/sell in canonical Campaign inventory and currency."""
+        require(self._living_world is not None
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "Trading requires active exploration without a pending dialogue")
+        return self._living_world.transact(
+            self.progress, self.progress.story_flags, self.route_scene,
+            shop_id, item_id, action, quantity, transaction_id)
+
+    def route_state(self):
+        """Return the active exploration state from canonical Campaign flags."""
+        require(self.scene_router.enabled, "Scene routing is not enabled")
+        require(self.route_scene in self.project.exploration,
+                "Current route is not an exploration scene")
+        return self.exploration.state(self.progress, self.route_scene)
+
+    def route_interact(self, point_id):
+        """R25 routed exploration uses the canonical interaction flag ledger."""
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending
+                and self.route_scene in self.project.exploration,
+                "Routed exploration interactions require an active scene")
+        return self.exploration.interact(self.progress, self.route_scene, point_id)
+
+    def route_move(self, dx, dy):
+        """Legacy cardinal exploration remains available before free movement starts."""
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and self._rt_journal is None,
+                "Resolve encounter or free movement before cardinal movement")
+        return self.exploration.move(self.progress, self.route_scene, dx, dy)
+
+    def route_realtime_state(self):
+        """Detached subcell position for Player/Studio; no Qt dependency."""
+        from .fixed_realtime import FreeMovement
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and self.route_scene in self.project.exploration
+                and self.scene_profile(self.route_scene)["movement"] == "FREE_REALTIME",
+                "No active free movement scene")
+        stage = self.exploration.state(self.progress, self.route_scene)
+        require(not stage["completed"], "Exploration stage already completed")
+        movement = FreeMovement(stage)
+        position = (list(self._rt_position) if self._rt_position is not None
+                    else movement.center(stage["position"]))
+        return {"scene": self.route_scene, "position": position,
+                "cell": movement.cell(position),
+                "tick": self._rt_journal.tick if self._rt_journal else 0}
+
+    def route_realtime_step(self, dx=0, dy=0):
+        """Apply exactly one fixed simulation tick; no wall-clock delta accepted.
+
+        A failed command leaves both the journal and Campaign unchanged.
+        The FixedTickJournal is local to the active exploration scene.
+        """
+        from .fixed_clock import FixedTickJournal
+        from .fixed_realtime import FreeMovement
+        require(self._platform is None, "Cannot mix R25 and R32 physics movement")
+        current = self.route_realtime_state()
+        require(type(dx) is int and type(dy) is int
+                and dx in (-1, 0, 1) and dy in (-1, 0, 1),
+                "Invalid free movement input")
+        if self._living_world is not None:
+            self._living_world.preflight(1)
+        scene = current["scene"]
+        movement = FreeMovement(self.project.exploration[scene])
+        origin = (list(self._rt_origin) if self._rt_origin is not None
+                  else list(current["position"]))
+        # A private journal copy makes input submission and step atomic even
+        # if a handler, digest, or validation unexpectedly fails.
+        journal = (deepcopy(self._rt_journal) if self._rt_journal is not None
+                   else FixedTickJournal(rate=60, seed=self.seed))
+        pos = list(current["position"])
+        journal.submit(journal.tick + 1, "hero",
+                       {"kind": "move", "dx": dx, "dy": dy})
+        def handler(tick, commands):
+            nonlocal pos
+            for event in commands:
+                require(event["source"] == "hero", "Unknown free movement source")
+                cmd = event["command"]
+                require(set(cmd) == {"kind", "dx", "dy"}
+                        and cmd["kind"] == "move",
+                        "Invalid free movement command")
+                pos = movement.advance(pos, cmd["dx"], cmd["dy"])
+            return {"scene": scene, "position": list(pos)}
+        snapshot = journal.step(handler)
+        from .exploration import _key
+        cell = movement.cell(snapshot["position"])
+        self.progress.story_flags[_key(scene, "pos")] = ",".join(map(str, cell))
+        self._rt_origin, self._rt_position, self._rt_journal = (
+            origin, snapshot["position"], journal)
+        if self._living_world is not None:
+            self._living_world.advance(1)
+        return self.route_realtime_state()
+
+    def _platform_definition(self):
+        """Resolve geometry only for a routed free-movement authored scene."""
+        from .physics_scenes import EXTENSION
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending
+                and self.route_scene in self.project.exploration
+                and self.scene_profile(self.route_scene)["movement"] == "FREE_REALTIME"
+                and self._rt_journal is None,
+                "Physics requires an active routed free-movement scene")
+        extension = self.project.extensions.get(EXTENSION, {})
+        authored = extension.get("data", {}).get("scenes", {}).get(self.route_scene)
+        require(authored is not None, "Scene has no R32 physics definition")
+        return authored
+
+    def _platform_flag(self, collider):
+        payload = (self.route_scene + ":" + collider).encode("utf-8")
+        return "r32_open_" + hashlib.sha256(payload).hexdigest()[:24]
+
+    def _active_platform(self):
+        from .platform_physics import PlatformPhysics
+        authored = self._platform_definition()
+        if self._platform is None:
+            opened = [row["opens"] for row in authored["colliders"]
+                      if "opens" in row and
+                      self.progress.story_flags.get(self._platform_flag(row["opens"])) is True]
+            self._platform = PlatformPhysics(authored,
+                                             initial_disabled=sorted(set(opened)))
+        return self._platform
+
+    def route_platform_state(self):
+        """Detached state projection for Player/Studio; no frame-clock input."""
+        return self._active_platform().snapshot()
+
+    def route_platform_step(self, move=0, jump=False, interact=False):
+        """Exactly one fixed step; rewards and door flags belong to Campaign."""
+        runtime = self._active_platform()
+        if self._living_world is not None:
+            self._living_world.preflight(1)
+        events = runtime.step({"tick": runtime.tick + 1, "move": move,
+                               "jump": jump, "interact": interact})
+        for event in events:
+            if event["kind"] == "door_open":
+                self.progress.story_flags[self._platform_flag(event["collider"])] = True
+        if self._living_world is not None:
+            self._living_world.advance(1)
+        return {"state": runtime.snapshot(), "events": events}
+
+    def route_platform_travel(self, link_id):
+        """Allow an existing R25 portal only while its R32 trigger is occupied."""
+        require(type(link_id) is str and
+                link_id in self._active_platform().available_routes(),
+                "Player is not inside the requested portal")
+        return self.route_transition(link_id)
+
+    def route_transition(self, link_id):
+        """One atomic navigation command; tactical startup uses the real CT core."""
+        from .scene_router import MAX_HISTORY
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "Resolve encounter or dialogue before changing scenes")
+        require(len(self.route_history) < MAX_HISTORY,
+                "Scene transition history limit reached")
+        route = self.scene_router.destination(self.route_scene, link_id, self.progress)
+        before = deepcopy((self.progress, self.battle, self.fronts, self.finalized,
+                           self.settled_fronts, self.siege_id, self.route_scene,
+                           self.route_history, self.tactical_story_pending,
+                           self.tactical_story_queue, self._rt_origin,
+                           self._rt_position, self._rt_journal, self._platform))
+        try:
+            dest = route["destination"]
+            if dest in self.content.missions:
+                self._route_starting = True
+                try:
+                    self.start_mission(dest)
+                finally:
+                    self._route_starting = False
+            else:
+                from .exploration import _key
+                # Use existing Campaign.story_flags, never a second world save.
+                self.progress.story_flags[_key(dest, "pos")] = ",".join(
+                    map(str, route["spawn"]))
+                self.exploration.state(self.progress, dest)
+            self.route_scene = dest
+            self.route_history.append(route["id"])
+            # The next exploration segment starts a fresh tick log.
+            # R25.E will certify continuous replay spanning mode boundaries.
+            self._rt_origin = None
+            self._rt_position = None
+            self._rt_journal = None
+            self._platform = None
+            return {"scene": dest, "profile": self.scene_profile(dest),
+                    "spawn": list(route["spawn"]), "mode": self.mode}
+        except Exception:
+            (self.progress, self.battle, self.fronts, self.finalized,
+             self.settled_fronts, self.siege_id, self.route_scene,
+             self.route_history, self.tactical_story_pending,
+             self.tactical_story_queue, self._rt_origin,
+             self._rt_position, self._rt_journal, self._platform) = before
+            raise
 
     def _tactical_story_progress(self):
         require(bool(self.tactical_story_pending), "No tactical dialogue pending")
@@ -194,6 +491,51 @@ class GameSession:
             (self.progress, self.battle, self.tactical_story_pending,
              self.tactical_story_queue, self.finalized) = previous
             raise
+
+    def _scene_cinematic_key(self, clip):
+        """Stable per-visit acknowledgement inside the existing verified save.
+
+        Scope by the narrative decision count AND mission completion count:
+        returning to a scene in a later chapter plays its clip again. No
+        parallel save ledger and no untrusted cinematic callbacks.
+        """
+        scene = self.active_scene()
+        require(scene is not None, "No cinematic narrative scene")
+        identity = (self.campaign_id + "|" + scene["id"] + "|" + clip["id"]
+                    + "|" + str(len(self.progress.story_history))
+                    + "|" + str(len(self.progress.completed)))
+        return "cine_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
+
+    def pending_scene_cinematic(self):
+        """First unacknowledged scene clip, pure projection (no clock)."""
+        if self.mode != "campaign":
+            return None
+        scene = self.active_scene()
+        if scene is None:
+            return None
+        from .cinematics import matching_cinematics
+        for clip in matching_cinematics(self.project, "scene", scene["id"]):
+            if self.progress.story_flags.get(self._scene_cinematic_key(clip)) is not True:
+                return clip
+        return None
+
+    def acknowledge_scene_cinematic(self, clip_id):
+        """Mark only the next currently visible clip as played or skipped.
+
+        Acknowledgement is part of Campaign.story_flags and is serialised by
+        normal GameSession recording. No narrative effects, rewards or Battle
+        commands are executed here. Simulation supplies rollback/revisions.
+        """
+        require(isinstance(clip_id, str), "Invalid cinematic identifier")
+        clip = self.pending_scene_cinematic()
+        require(clip is not None and clip["id"] == clip_id,
+                "Cinematic is not the next active clip")
+        key = self._scene_cinematic_key(clip)
+        require(key not in self.progress.story_flags, "Cinematic already acknowledged")
+        require(len(self.progress.story_flags) < 1000,
+                "Campaign flag budget exhausted")
+        self.progress.story_flags[key] = True
+        return self.pending_scene_cinematic()
 
     def exploration_state(self):
         scene = self.active_scene()
@@ -374,6 +716,8 @@ class GameSession:
         self.progress.unequip(uid, slot)
 
     def start_mission(self, mission_id):
+        require(not self.scene_router.enabled or self._route_starting,
+                "Routed projects must enter battles through a scene transition")
         require(self.mode == "campaign", "End the current encounter first")
         require(mission_id in self.available_missions(), "Mission is locked")
         # Enforce arrival at a visible world location at the headless boundary:
@@ -396,6 +740,8 @@ class GameSession:
 
     def start_fronts(self, missions, focused, *, specs=None, links=None,
                      logistics=None, campaign=None, event_graph=None):
+        require(not self.scene_router.enabled,
+                "Routed multi-front sessions are not supported yet")
         require(self.mode == "campaign", "End the current encounter first")
         require(isinstance(missions, dict) and bool(missions) and focused in missions,
                 "Invalid front mapping")
@@ -613,6 +959,27 @@ class GameSession:
             "finalized": self.finalized,
             "settled_fronts": sorted(self.settled_fronts),
         }
+        if self.scene_router.enabled:
+            data["scene_route"] = {
+                "version": 1, "current": self.route_scene,
+                "history": list(self.route_history)}
+        if self._platform is not None:
+            self._platform_definition()
+            data["scene_platform"] = {"version": 1, "scene": self.route_scene,
+                                      "physics": self._platform.recording()}
+        if self._rt_journal is not None:
+            require(self.scene_router.enabled and self.mode == "campaign"
+                    and self.route_scene in self.project.exploration,
+                    "Realtime checkpoint requires active exploration")
+            data["scene_realtime"] = {
+                "version": 1, "scene": self.route_scene,
+                "origin": list(self._rt_origin),
+                "position": list(self._rt_position),
+                "journal": self._rt_journal.recording()}
+        if self._living_world is not None:
+            data["living_world"] = self._living_world.snapshot()
+        if self._roguelite is not None:
+            data["roguelite"] = self._roguelite.recording()
         if self.siege_id is not None:
             data["siege_id"] = self.siege_id
         if self.tactical_story_pending:
@@ -637,8 +1004,9 @@ class GameSession:
         require(isinstance(data, dict) and type(data.get("version")) is int
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
-        require(set(data) - {"front_battle_ids", "siege_id",
-                             "tactical_story_pending", "tactical_story_queue"} ==
+        require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
+                             "scene_realtime", "scene_platform", "living_world", "roguelite", "tactical_story_pending",
+                             "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
                 "mode", "tactical", "finalized", "settled_fronts", "digest"},
@@ -661,6 +1029,23 @@ class GameSession:
             raise IncompatibleSaveError("rules", data["rules"], current_rules)
         session = cls(content, project, data["campaign_id"],
                       seed=data["seed"], rules=rules)
+        if session._living_world is not None:
+            require("living_world" in data,
+                    "Living-world checkpoint missing from enabled project")
+            session._living_world.restore(data["living_world"])
+        else:
+            require("living_world" not in data,
+                    "Unexpected living-world state in legacy checkpoint")
+        if session._roguelite is not None:
+            require("roguelite" in data,
+                    "R34 configured project checkpoint is missing its run state")
+            from .roguelite import EXTENSION as ROGUELITE_EXTENSION, RogueliteRun
+            session._roguelite = RogueliteRun.from_recording(
+                project.extensions[ROGUELITE_EXTENSION]["data"], data["roguelite"],
+                content=session.content, project=session.project)
+        else:
+            require("roguelite" not in data,
+                    "Unexpected R34 state in a legacy session")
         session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
         verify_flow_save(session.progress, project.campaign_flow)
         session.story.initialize(session.progress, session.campaign_id)
@@ -788,6 +1173,79 @@ class GameSession:
                                 and identity not in seen, "Invalid or duplicate battle identity")
                         battles[key].battle_id = identity
                         seen.add(identity)
+        # R25.B scene routing is opt-in. The legacy v1 recording is untouched.
+        if session.scene_router.enabled:
+            require("scene_route" in data,
+                    "Routed project checkpoint is missing scene state")
+            session.route_scene = session.scene_router.validate_checkpoint(
+                data["scene_route"], mode=mode, battle=session.battle)
+            session.route_history = list(data["scene_route"]["history"])
+            if session.route_scene in session.project.exploration:
+                session.exploration.state(session.progress, session.route_scene)
+        else:
+            require("scene_route" not in data,
+                    "Unexpected scene state in legacy checkpoint")
+        if "scene_realtime" in data:
+            from .fixed_clock import FixedTickJournal
+            from .fixed_realtime import FreeMovement
+            saved = data["scene_realtime"]
+            require(type(saved) is dict
+                    and set(saved) == {"version", "scene", "origin",
+                                       "position", "journal"}
+                    and type(saved["version"]) is int
+                    and saved["version"] == 1
+                    and saved["scene"] == session.route_scene
+                    and mode == "campaign"
+                    and session.scene_router.enabled
+                    and saved["scene"] in project.exploration
+                    and session.scene_profile(saved["scene"])["movement"]
+                    == "FREE_REALTIME",
+                    "Invalid realtime checkpoint metadata")
+            movement = FreeMovement(project.exploration[saved["scene"]])
+            origin = movement.center(movement.cell(saved["origin"]))
+            require(origin == saved["origin"],
+                    "Realtime journal origin must be an unblocked tile center")
+            position = list(origin)
+            def verify_tick(tick, commands):
+                nonlocal position
+                for event in commands:
+                    cmd = event["command"]
+                    require(event["source"] == "hero"
+                            and type(cmd) is dict
+                            and set(cmd) == {"kind", "dx", "dy"}
+                            and cmd["kind"] == "move",
+                            "Invalid replayed movement command")
+                    position = movement.advance(position, cmd["dx"], cmd["dy"])
+                return {"scene": saved["scene"], "position": list(position)}
+            journal = FixedTickJournal.replay(saved["journal"], verify_tick)
+            require(journal.rate == 60 and journal.seed == session.seed,
+                    "Realtime replay seed/rate mismatch")
+            require(journal.tick > 0 and saved["position"] == position,
+                    "Realtime replay position diverged")
+            stage = session.exploration.state(session.progress, saved["scene"])
+            require(stage["position"] == movement.cell(position),
+                    "Realtime and campaign exploration positions disagree")
+            session._rt_origin = origin
+            session._rt_position = list(position)
+            session._rt_journal = journal
+        if "scene_platform" in data:
+            from .platform_physics import PlatformPhysics
+            saved = data["scene_platform"]
+            require(type(saved) is dict and set(saved) == {"version", "scene", "physics"}
+                    and type(saved["version"]) is int and saved["version"] == 1
+                    and saved["scene"] == session.route_scene
+                    and session._rt_journal is None, "Invalid R32 platform checkpoint")
+            authored = session._platform_definition()
+            platform = PlatformPhysics.from_recording(saved["physics"],
+                                                      expected_scene=authored)
+            authored_openable = {row["opens"] for row in authored["colliders"]
+                                 if "opens" in row}
+            saved_opened = {ident for ident in authored_openable
+                            if session.progress.story_flags.get(
+                                session._platform_flag(ident)) is True}
+            require(saved_opened == platform.disabled_colliders,
+                    "R32 physics replay disagrees with canonical campaign flags")
+            session._platform = platform
         # World map travel is optional, but an existing cursor must never be
         # accepted from a malformed or inaccessible persisted route.
         session.world_state()

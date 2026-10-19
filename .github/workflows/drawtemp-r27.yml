@@ -1,0 +1,46 @@
+name: DrawTemp R27 Dungeon Studio
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/dungeon_*.py'
+      - 'drawtemp/studio/map_editor.py'
+      - 'tests_standalone/test_drawtemp5_r27_*.py'
+      - 'docs/drawtemp5/R27A_DUNGEON_AUTHORING.md'
+      - '.github/workflows/drawtemp-r27.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  headless:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: R27 canonical dungeon authoring and real tactical interactions
+        run: python -m unittest tests_standalone.test_drawtemp5_r27_dungeon tests_standalone.test_drawtemp5_r27_puzzles -v
+      - name: R1/R5/R10 legacy transactional contracts
+        run: python -m unittest tests_standalone.test_drawtemp5_r5_map tests_standalone.test_drawtemp5_r10 -v
+
+  qt-offscreen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Qt software dependencies
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]"
+      - name: R27 actual Widgets dock and shared Qt Quick viewport
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          DRAWTEMP_R27_QT_SMOKE: '1'
+        run: python -m unittest tests_standalone.test_drawtemp5_r27_qt -v

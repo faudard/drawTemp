@@ -47,8 +47,12 @@ class SaveManager:
             for file in (base, base.with_suffix(".json.bak")):
                 try:
                     st = file.lstat()
+                    # POSIX change-time changes on in-place edits even when
+                    # an external program restores size and mtime. Keep the
+                    # existing cheap metadata signature (no hash on each HUD
+                    # refresh), while making cache invalidation less fragile.
                     result.append((file.name, st.st_size, st.st_mtime_ns,
-                                   st.st_mode, st.st_ino))
+                                   st.st_ctime_ns, st.st_mode, st.st_ino))
                 except FileNotFoundError:
                     result.append((file.name, None))
         return tuple(result)
@@ -130,7 +134,7 @@ class SaveManager:
     def load_autosave(self):
         return self._store("auto").load()
 
-    def restore_autosave_backup(self):
+    def restore_autosave_backup(self, *, expected_fingerprints=None):
         """Recovery only: refuse to downgrade an already valid autosave."""
         with self._mutex:
             inspection = self._store("auto").inspect()
@@ -139,6 +143,7 @@ class SaveManager:
                                 "Autosauvegarde principale valide : rien à restaurer")
             if inspection.backup != "valid":
                 raise SlotError("backup_invalid", "Aucun secours valide disponible")
-            restored = self._store("auto").restore_backup()
+            restored = self._store("auto").restore_backup(
+                expected_fingerprints=expected_fingerprints)
             self._invalidate()
             return restored

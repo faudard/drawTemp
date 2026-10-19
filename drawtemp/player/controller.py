@@ -10,6 +10,8 @@ from drawtemp.sdk.slots import PlayerSlotStore
 from drawtemp.core import RuleError
 from drawtemp.player.save_manager import SaveManager
 from drawtemp.player.preferences import PlayerPreferences
+from sporebound.cinematic_transport import CinematicTransport
+from drawtemp.cinematics.projection import frame_payload
 
 
 class PlayerController:
@@ -31,6 +33,11 @@ class PlayerController:
         self.message = self.preferences.warning
         self.forecast = ""
         self.inspected_skill = "attack"
+        self._cinematic_clip = None
+        self._cinematic_transport = None
+        self._cinematic_registry = None
+        # R18.C: ephemeral UI confirmation; never stored in save/replay.
+        self._pending_target = None
 
     def _path(self, slot):
         if type(slot) is not int or not 1 <= slot <= self.project.save_slots:
@@ -55,6 +62,9 @@ class PlayerController:
     def _activate_save(self, loaded, message, *, source=None):
         # No state is touched until the verified GameSession has been loaded.
         self.session = loaded
+        self._cinematic_clip = None
+        self._cinematic_transport = None
+        self._pending_target = None
         self.show_title = False
         self.selected = [0, 0]
         self.inspected_skill = "attack"
@@ -65,12 +75,14 @@ class PlayerController:
                                if source == "auto" else None)
         return self.state()
 
-    def restore_backup(self, slot=1):
-        verified = self._store(slot).restore_backup()
+    def restore_backup(self, slot=1, *, expected_fingerprints=None):
+        verified = self._store(slot).restore_backup(
+            expected_fingerprints=expected_fingerprints)
         return self._activate_save(verified, "Sauvegarde de secours restaurée")
 
-    def restore_autosave_backup(self):
-        verified = self.saves.restore_autosave_backup()
+    def restore_autosave_backup(self, *, expected_fingerprints=None):
+        verified = self.saves.restore_autosave_backup(
+            expected_fingerprints=expected_fingerprints)
         return self._activate_save(verified, "Autosauvegarde de secours restaurée",
                                    source="auto")
 
@@ -108,6 +120,9 @@ class PlayerController:
     def new_game(self):
         self.session = Simulation.new(self.content, self.project, self.campaign_id,
                                       seed=self.seed)
+        self._cinematic_clip = None
+        self._cinematic_transport = None
+        self._pending_target = None
         self.show_title = False
         self.message = "Le voyage de Jeanne commence."
         self.forecast = ""
@@ -132,6 +147,9 @@ class PlayerController:
 
     def title(self):
         self.show_title = True
+        self._cinematic_clip = None
+        self._cinematic_transport = None
+        self._pending_target = None
         self.forecast = ""
         return self.state()
 
@@ -151,6 +169,7 @@ class PlayerController:
         return self._changed()
 
     def start_mission(self, mission_id):
+        self._require_cinematic_completed()
         state = self._current()
         if state.mode != "campaign" or state.scene is not None:
             raise ValueError("Resolve the narrative before starting a mission")
@@ -162,10 +181,22 @@ class PlayerController:
         return self._changed()
 
     def explore_move(self, dx, dy):
+        self._require_cinematic_completed()
         state = self._current()
         if not state.exploration or state.exploration["completed"]:
             raise ValueError("Exploration is unavailable")
         self.session.explore_move(dx, dy, expected_revision=state.revision)
+        return self._changed()
+
+    def world_wait(self, ticks=1):
+        """R35 player clock action, never an implicit renderer tick."""
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("World clock can advance only during exploration")
+        if self.session.living_world_state() is None:
+            raise ValueError("Living world is not configured")
+        self.session.living_world_advance(ticks,
+                                          expected_revision=state.revision)
         return self._changed()
 
     def explore_interact(self, point_id):
@@ -181,6 +212,7 @@ class PlayerController:
         return self._changed(keep_message=True)
 
     def explore_actor(self, actor_id, action="talk"):
+        self._require_cinematic_completed()
         state = self._current()
         self.session.explore_actor(actor_id, action, expected_revision=state.revision)
         return self._changed()
@@ -204,8 +236,80 @@ class PlayerController:
             max(0, min(battle["width"] - 1, int(x))),
             max(0, min(battle["height"] - 1, int(y))),
         ]
+        self._pending_target = None
         self.forecast = ""
         return self.state()
+
+    def request_target(self, kind, skill_id=""):
+        """Stage a target action, showing canonical forecasts without RNG use.
+
+        Selection and request cannot change combat revision, replay or saves.
+        Confirming rechecks the exact active unit/revision/cell tuple.
+        Legacy headless command() remains intentionally available to scripts.
+        """
+        if kind not in ("move", "attack", "skill"):
+            raise ValueError("Unknown target action")
+        view = self.state()
+        if view["screen"] != "battle" or view["battle"].get("deploying"):
+            raise ValueError("Combat non prêt pour une action ciblée")
+        battle = view["battle"]
+        active = next((unit for unit in battle.get("units", [])
+                       if unit["id"] == battle.get("active")), None)
+        if active is None or active.get("team") != "player":
+            raise ValueError("Ce n'est pas le tour d'une unité alliée")
+        if kind == "skill":
+            if (not isinstance(skill_id, str) or not skill_id or
+                    skill_id not in active.get("skills", ())):
+                raise ValueError("Compétence indisponible")
+        elif skill_id:
+            raise ValueError("Compétence inattendue pour cette action")
+        focus = view["tactical"].get("focus") or {}
+        if kind == "move":
+            move = focus.get("move")
+            if not move:
+                raise ValueError("Déplacement indisponible vers cette case")
+            details = ("Coût " + str(move["cost"]) + " · " +
+                       str(len(move.get("risks") or [])) +
+                       " risque(s) possible(s), non garanti(s)")
+        else:
+            # Engine validation (range, LOS and cost), without sampling RNG.
+            # The inspector may currently highlight a *different* skill.
+            effective_skill = "attack" if kind == "attack" else skill_id
+            projected = self.session.tactical_presentation(
+                self.selected, effective_skill, expected_revision=view["revision"])
+            focus = thaw(projected).get("focus") or {}
+            if not focus.get("can_target"):
+                raise ValueError(focus.get("error") or "Cible indisponible")
+            forecast = focus.get("forecast") or []
+            details = (str(len(forecast)) +
+                       " effet(s) prévus (non garantis)")
+        self._pending_target = {
+            "kind": kind, "skill": skill_id, "cell": list(self.selected),
+            "revision": view["revision"], "active": battle["active"],
+            "details": details,
+        }
+        return self.state()
+
+    def cancel_target(self):
+        """Dismiss a staged action, preserving the last engine checkpoint."""
+        self._pending_target = None
+        return self.state()
+
+    def confirm_target(self):
+        pending = self._pending_target
+        if not pending:
+            raise ValueError("Aucune action ciblée en attente")
+        # Discard the request before checking: stale actions must not be replayed.
+        self._pending_target = None
+        view = self.state()
+        if (view["screen"] != "battle" or
+                view["revision"] != pending["revision"] or
+                view["selected"] != pending["cell"] or
+                view["battle"].get("active") != pending["active"]):
+            raise ValueError("Cible ou tour modifié : choisissez l'action à nouveau")
+        if pending["kind"] == "skill":
+            return self.use_skill(pending["skill"])
+        return self.command(pending["kind"])
 
     def command(self, kind):
         state = self._current()
@@ -275,6 +379,7 @@ class PlayerController:
                 skill_id not in ("attack", *active.get("skills", ()))):
             raise ValueError("Compétence indisponible")
         self.inspected_skill = skill_id
+        self._pending_target = None
         self.forecast = ""
         return self.state()
 
@@ -382,12 +487,69 @@ class PlayerController:
     def resolve_key(self, key, context):
         return self.preferences.resolve(key, context)
 
+    def _require_cinematic_completed(self):
+        if self.session is not None and self.session.pending_scene_cinematic() is not None:
+            raise ValueError("Terminez ou passez la cinématique avant de poursuivre")
+
+    def _sync_cinematic(self):
+        """Create only presentation transport; real progress is in Simulation."""
+        if self.session is None or self.show_title:
+            self._cinematic_clip = None
+            self._cinematic_transport = None
+            return None
+        candidate = self.session.pending_scene_cinematic()
+        if candidate is None:
+            self._cinematic_clip = None
+            self._cinematic_transport = None
+            return None
+        clip = thaw(candidate)
+        if self._cinematic_clip is None or self._cinematic_clip["id"] != clip["id"]:
+            self._cinematic_clip = clip
+            self._cinematic_transport = CinematicTransport(clip["duration_ms"])
+        return self._cinematic_clip
+
+    def cinematic_pause(self):
+        if self._sync_cinematic() is None:
+            raise ValueError("No active cinematic")
+        self._cinematic_transport.pause()
+        return self.state()
+
+    def cinematic_play(self):
+        if self._sync_cinematic() is None:
+            raise ValueError("No active cinematic")
+        self._cinematic_transport.resume()
+        return self.state()
+
+    def cinematic_seek(self, time_ms):
+        if self._sync_cinematic() is None:
+            raise ValueError("No active cinematic")
+        self._cinematic_transport.seek(time_ms)
+        return self.state()
+
+    def cinematic_skip(self):
+        clip = self._sync_cinematic()
+        if clip is None:
+            raise ValueError("No active cinematic")
+        revision = self._current().revision
+        self.session.acknowledge_scene_cinematic(clip["id"],
+                                                 expected_revision=revision)
+        self._cinematic_clip = None
+        self._cinematic_transport = None
+        return self._changed()
+
+    def cinematic_tick(self):
+        if self._sync_cinematic() is not None:
+            if self._cinematic_transport.read() >= self._cinematic_clip["duration_ms"]:
+                return self.cinematic_skip()
+        return self.state()
+
     def _current(self):
         if self.session is None:
             raise ValueError("No active game")
         return self.session.snapshot()
 
     def _changed(self, *, keep_message=False):
+        self._pending_target = None
         self.inspected_skill = "attack"
         if not keep_message:
             self.message = ""
@@ -405,7 +567,8 @@ class PlayerController:
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
-                "battle": {}, "tactical": {}, "revision": 0,
+                "battle": {}, "tactical": {}, "living_world": None, "cinematic": {}, "revision": 0,
+                "pending_target": {},
                 "gear": {"equipped": {}, "inventory": []}}
         if self.session is None or self.show_title:
             return base
@@ -426,6 +589,11 @@ class PlayerController:
         }
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
+        if self.session.living_world_state() is not None:
+            current = base["exploration"].get("scene_id")
+            base["living_world"] = thaw(self.session.living_world_state(
+                scene=current)) if current is not None else thaw(
+                    self.session.living_world_state())
         if snapshot.battle:
             # Selection is a UI concern and can outlive a previous mission.
             width, height = snapshot.battle["width"], snapshot.battle["height"]
@@ -446,6 +614,18 @@ class PlayerController:
             base["battle"]["level_links"] = [
                 dict(link) for link in
                 self.content.missions[battle["mission_id"]].level_links]
+        if self._pending_target:
+            pending = self._pending_target
+            battle = base["battle"]
+            # Stale requests can be displayed as invalid, never confirmed.
+            base["pending_target"] = {
+                "kind": pending["kind"], "skill": pending["skill"],
+                "cell": list(pending["cell"]), "details": pending["details"],
+                "valid": (snapshot.revision == pending["revision"] and
+                          base["selected"] == pending["cell"] and
+                          battle.get("active") == pending["active"] and
+                          not battle.get("result")),
+            }
         if snapshot.scene and (snapshot.battle or not snapshot.exploration or
                                snapshot.exploration["completed"]):
             base["screen"] = "dialogue"
@@ -456,4 +636,18 @@ class PlayerController:
             base["screen"] = "result" if snapshot.battle["result"] else "battle"
         else:
             base["screen"] = "campaign"
+        clip = self._sync_cinematic()
+        if clip is not None:
+            if self._cinematic_registry is None:
+                self._cinematic_registry = self.project.asset_registry()
+            project_file = getattr(self, "asset_project_path", None)
+            asset_root = Path(project_file).parent if project_file is not None else None
+            position = self._cinematic_transport.read()
+            base["cinematic"] = {
+                "id": clip["id"], "title": clip["name"],
+                "durationMs": clip["duration_ms"],
+                "playing": self._cinematic_transport.playing,
+                "frame": frame_payload(clip, position, registry=self._cinematic_registry,
+                                       asset_root=asset_root),
+            }
         return base

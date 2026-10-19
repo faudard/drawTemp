@@ -1,0 +1,60 @@
+name: DrawTemp R17.11 Studio Recovery UX
+on:
+  pull_request:
+    paths:
+      - 'sporebound/studio_transaction.py'
+      - 'drawtemp/sdk/authoring.py'
+      - 'drawtemp/studio/map_editor.py'
+      - 'tests_standalone/test_r17_studio_recovery*.py'
+      - '.github/workflows/drawtemp-r17-11-studio-recovery.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  headless:
+    name: R17.11 Studio journal / ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: Journal, external edit and R1 regression
+        run: >-
+          python -m unittest
+          tests_standalone.test_r17_studio_recovery
+          tests_standalone.test_studio_transaction_3721b
+          tests_standalone.test_drawtemp5_r1_authoring -v
+  qt:
+    name: R17.11 Studio Qt / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install '.[qt6]'
+      - name: GUI authoring and recovery
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: >-
+          python -m unittest
+          tests_standalone.test_r17_studio_recovery_qt
+          tests_standalone.test_drawtemp5_r5_selection_qt -v

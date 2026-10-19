@@ -1,0 +1,49 @@
+name: DrawTemp R34 Run & Meta Gate
+on:
+  pull_request:
+    paths:
+      - 'sporebound/roguelite.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/game_project.py'
+      - 'drawtemp/sdk/procgen*.py'
+      - 'drawtemp/sdk/roguelite_authoring.py'
+      - 'drawtemp/sdk/simulation.py'
+      - 'drawtemp/studio/procgen_qt.py'
+      - 'tests_standalone/test_roguelite_r34c.py'
+      - 'tests_standalone/test_procgen*.py'
+      - '.github/workflows/drawtemp-r34.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: r34-run-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  headless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Verify Python syntax
+        run: python -m compileall -q sporebound/roguelite.py sporebound/game_session.py sporebound/game_project.py drawtemp/sdk/procgen.py drawtemp/sdk/procgen_prefabs.py drawtemp/sdk/roguelite_authoring.py drawtemp/sdk/simulation.py
+      - name: R34.A + R34.B deterministic generation
+        run: python -m unittest tests_standalone.test_procgen_r34 tests_standalone.test_procgen_prefabs_r34b -v
+      - name: R34.C run/meta/replay and historical checkpoints
+        run: python -m unittest tests_standalone.test_roguelite_r34c tests_standalone.test_game_session -v
+  qt-offscreen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[qt6]'
+      - name: R34 Qt Studio preview and explicit Undo/Redo authoring
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest tests_standalone.test_procgen_qt_r34b -v

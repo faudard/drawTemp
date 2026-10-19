@@ -1,0 +1,74 @@
+name: DrawTemp R30.C Creator Qt review (preview)
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/r30_creator_review.py'
+      - 'drawtemp/studio/r30_creator_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'drawtemp/sdk/semantic_review.py'
+      - 'tests_standalone/test_drawtemp_r30c_review.py'
+      - 'tests_standalone/test_drawtemp_r30c_qt.py'
+      - '.github/workflows/drawtemp-r30c-review.yml'
+      - 'docs/drawtemp5/R30_C_QT_CREATOR_REVIEW.md'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  headless:
+    name: R30.C headless / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Review decisions, packs, imports and R1 non-regression
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp_r30_creator
+          tests_standalone.test_drawtemp_r30b_pack_import
+          tests_standalone.test_drawtemp_r30c_review
+          tests_standalone.test_drawtemp5_r1_authoring
+          -v
+      - name: Jeanne CT/replay baseline (no GPU certification)
+        run: >-
+          python -m drawtemp.sdk.migration
+          --verify-baseline docs/drawtemp5/reference-baseline.json
+
+  qt-smoke:
+    name: R30.C Qt offscreen / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt runtime
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]"
+      - name: Qt widgets, real command wiring and explicit conflict choices
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_drawtemp_r30c_qt -v
+      - name: Standalone dialog initialization (software, not GPU)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.studio.r30_creator_qt --smoke

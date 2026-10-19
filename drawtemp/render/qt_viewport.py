@@ -7,7 +7,8 @@ import argparse
 from pathlib import Path
 import sys
 
-from .iso_scene import Camera, IsoProjection, pick, render_items, scene_from_mission
+from .iso_scene import (Camera, IsoProjection, TopDownProjection, pick,
+                        render_items, scene_from_mission)
 from .event_overlay import project_event_markers
 from .tile_chunks import TileChunkIndex
 from .visual_compositor import actor_visual_position, automatic_cutaway
@@ -23,8 +24,11 @@ def default_atlas_url():
 
 
 def make_controller(scene, atlas_url=None, *, assets=None,
-                    character_pack=None, character_variant=None):
+                    character_pack=None, character_variant=None,
+                    character_packs=None, projection_mode="isometric"):
     """Shared R3 renderer with optional R7 character pack, no gameplay changes."""
+    if projection_mode not in ("isometric", "top_down"):
+        raise ValueError("Unsupported R3 projection mode")
     from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QElapsedTimer
     from drawtemp.assets.character_runtime import CharacterPack
     from drawtemp.assets.characters import ACTIONS
@@ -39,7 +43,9 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             super().__init__()
             self.scene = scene
             self.camera = Camera()
-            self.projection = IsoProjection()
+            self.projection = (TopDownProjection() if projection_mode == "top_down"
+                               else IsoProjection())
+            self.projection_mode = projection_mode
             self.selection = None
             self._building_level = 0
             self._building_cutaway = False
@@ -66,6 +72,19 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                 character_pack if isinstance(character_pack, CharacterPack)
                 else CharacterPack(character_pack) if character_pack is not None
                 else None)
+            # Explicit actor-id -> independently approved R7 CharacterPack.
+            # The legacy one-character API remains unchanged for R7/R12.
+            self._characters = {}
+            if self._character is not None:
+                self._characters[self._character.character_id] = self._character
+            if character_packs is not None:
+                if not isinstance(character_packs, dict) or len(character_packs) > 32:
+                    raise ValueError("Character packs must be a bounded actor mapping")
+                for actor_id, source in character_packs.items():
+                    pack = source if isinstance(source, CharacterPack) else CharacterPack(source)
+                    if actor_id != pack.character_id or actor_id in self._characters:
+                        raise ValueError("Duplicate or mismatched character pack ID")
+                    self._characters[actor_id] = pack
             self._variant = character_variant
             if (self._character is not None and character_variant is not None
                     and character_variant not in self._character.variants):
@@ -79,7 +98,7 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self._sprite_timer.setInterval(80)
             self._sprite_timer.timeout.connect(self.advance_frames)
             self.center_scene()
-            if self._character is not None:
+            if self._characters:
                 self._sprite_timer.start()
 
         def center_scene(self):
@@ -104,37 +123,37 @@ def make_controller(scene, atlas_url=None, *, assets=None,
 
         def decorate_frames(self, rows):
             """Add sprite presentation to visible actor rows without Core mutation."""
-            if self._character is None:
+            if not self._characters:
                 return
             now = self._clock.elapsed()
             for row in rows:
-                if (row["kind"] != "actor" or
-                        row["id"] != self._character.character_id):
+                if row["kind"] != "actor" or row["id"] not in self._characters:
                     continue
+                pack = self._characters[row["id"]]
                 for field in ("spriteReady", "spriteUrl", "spriteRegion", "spritePivot"):
                     row.pop(field, None)
                 actor_id = row["id"]
                 outfit = self.outfit_for(actor_id)
                 if outfit is None:
-                    outfit = self._character.variants[0]
+                    outfit = pack.variants[0]
                 direction = row.get("direction", "south")
                 if not row.get("alive", True):
                     # Dead units hold the authored final pose; never animate idle
                     # as if they were alive. Missing death art falls back to the
                     # legacy desaturated vector silhouette.
-                    death_ms = self._character.duration(outfit, "death", direction)
+                    death_ms = pack.duration(outfit, "death", direction)
                     if death_ms:
-                        self._apply_character_art(row, self._character.preview_actor(
+                        self._apply_character_art(row, pack.preview_actor(
                             actor_id, variant=outfit, action="death",
                             direction=direction, elapsed_ms=death_ms - 1))
                     continue
                 action, beginning = self._action_begins.get(actor_id, ("idle", 0))
                 elapsed = now - beginning if action != "idle" else now
-                duration = self._character.duration(outfit, action, direction)
+                duration = pack.duration(outfit, action, direction)
                 if action != "idle" and (not duration or elapsed >= duration):
                     self._action_begins.pop(actor_id, None)
                     action, elapsed = "idle", now
-                art = self._character.preview_actor(
+                art = pack.preview_actor(
                     actor_id, variant=outfit, action=action,
                     direction=direction, elapsed_ms=elapsed)
                 if art is not None:
@@ -180,7 +199,10 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             provider = make_image_provider(self._batch)
             engine.addImageProvider("drawtemp-tiles", provider)
             self._image_provider = provider  # Qt owns it while engine is live.
-            self._batch_enabled = True
+            # R3 raster batch atlas geometry is isometric; never paint diamond
+            # tile textures into top-down scenes. Both projections still use
+            # the same renderer controller/culling/scene records.
+            self._batch_enabled = self.projection_mode == "isometric"
             self.refresh()
 
         @Property(bool, notify=sceneChanged)
@@ -189,7 +211,7 @@ def make_controller(scene, atlas_url=None, *, assets=None,
 
         def advance_frames(self):
             """Tick just the actor frames; do not recompute/cull terrain at 12 Hz."""
-            if self._character is None:
+            if not self._characters:
                 return
             # Re-sample from undecorated R4 rows rather than the previous
             # R7 frame; a missing idle/death frame must not display stale art.
@@ -201,8 +223,12 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                 self.sceneChanged.emit()
 
         def outfit_for(self, actor_id):
+            pack = self._characters.get(actor_id)
+            if pack is None:
+                return None
+            default = self._variant if pack is self._character and self._variant else pack.variants[0]
             return self._outfits.get(
-                actor_id, self._progress_outfits.get(actor_id, self._variant))
+                actor_id, self._progress_outfits.get(actor_id, default))
 
         def sync_progress(self, progress, equipment):
             """Reconstruct costume from canonical equipment after load/equip.
@@ -229,8 +255,8 @@ def make_controller(scene, atlas_url=None, *, assets=None,
 
         def set_outfit(self, actor_id, variant):
             """Change a visual preview, never an equipment rule or save field."""
-            if (self._character is None or actor_id != self._character.character_id
-                    or variant not in self._character.variants):
+            pack = self._characters.get(actor_id)
+            if pack is None or variant not in pack.variants:
                 raise ValueError("Unknown character/outfit")
             self._outfits[actor_id] = variant
             self._action_begins.pop(actor_id, None)
@@ -240,7 +266,7 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             """Play one authored clip cycle, then restore idle presentation."""
             if action not in ACTIONS:
                 raise ValueError("Unknown character action")
-            if (self._character is None or actor_id != self._character.character_id):
+            if actor_id not in self._characters:
                 return False
             self._action_begins[actor_id] = (action, self._clock.elapsed())
             self.refresh()
@@ -290,6 +316,10 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self._event_selected = selected_id
             self.sceneChanged.emit()
 
+        @Property(str, constant=True)
+        def projectionMode(self):
+            return self.projection_mode
+
         @Property("QVariantMap", notify=cameraChanged)
         def cameraState(self):
             return {"zoom": self.camera.zoom, "panX": self.camera.pan_x,
@@ -314,6 +344,26 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                     elapsed_ms=elapsed_ms) or {}
             except (OSError, ValueError, RuntimeError):
                 return {}
+
+        @Slot("QVariantMap", float, result="QVariantMap")
+        def visualClipFrame(self, clip, phase):
+            """Sample the committed event's true R7/R4 sprite, without CT ticks.
+
+            This is shared by the Player TacticalBoard and the Studio renderer;
+            it uses the existing character outfit projection and asset registry.
+            No action pose is invented if the appropriate R7 clip is absent.
+            """
+            from .visual_clip_frames import clip_art_frame
+            if not isinstance(clip, dict):
+                return {}
+            actor = next((item for item in self.scene["actors"]
+                          if item["id"] == clip.get("actor")), None)
+            if actor is None:
+                return {}
+            return clip_art_frame(
+                clip, phase, actor=actor,
+                character=self._characters.get(actor["id"]),
+                variant=self.outfit_for(actor["id"]), assets=self.assets)
 
         @Slot(int)
         def advanceVisual(self, delta_ms):
@@ -474,8 +524,12 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                 0 <= y < self.scene["height"]) else None
             self.refresh()
 
-        def replace_scene(self, new_scene):
-            """Keep zoom/pan through edits and turns, recenter for a new map."""
+        def replace_scene(self, new_scene, *, follow_world=None):
+            """Replace detached R3 rows and optionally track a fractional actor.
+
+            Follow and scene updates share one refresh, preventing a redundant
+            full terrain pass on each action tick.
+            """
             changed = (self.scene["mission"] != new_scene["mission"] or
                        self.scene["width"] != new_scene["width"] or
                        self.scene["height"] != new_scene["height"])
@@ -488,20 +542,29 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self.overlays = {}  # Never carry stale tactical previews across turns.
             if changed:
                 self.active_level = 0
-            if changed:
                 self._index = TileChunkIndex(new_scene)
                 self._batch.reset(self._index)
-                self.center_scene()
             else:
                 dirty = self._index.update(new_scene)
                 self._batch.invalidate(dirty)
-                self.refresh()
+            if follow_world is not None:
+                if (not isinstance(follow_world, (tuple, list))
+                        or len(follow_world) != 2):
+                    raise ValueError("Expected [x,y] camera target")
+                sx, sy = self.projection.project(*follow_world)
+                self.camera.center(sx, sy)
+            elif changed:
+                sx, sy = self.projection.project((self.scene["width"] - 1) / 2,
+                                                 (self.scene["height"] - 1) / 2)
+                self.camera.center(sx, sy)
+            self.refresh()
 
     return RendererController()
 
 
 def create_view(scene, parent=None, *, assets=None,
-                character_pack=None, character_variant=None):
+                character_pack=None, character_variant=None,
+                character_packs=None):
     """Return (QQuickView, controller); caller retains both references.
 
     Studio can wrap the QQuickView with QWidget.createWindowContainer(view).
@@ -511,7 +574,8 @@ def create_view(scene, parent=None, *, assets=None,
     from PySide6.QtQuick import QQuickView
     controller = make_controller(scene, assets=assets,
                                  character_pack=character_pack,
-                                 character_variant=character_variant)
+                                 character_variant=character_variant,
+                                 character_packs=character_packs)
     view = QQuickView(parent)
     controller.attach_engine(view.engine())
     view.rootContext().setContextProperty("renderer", controller)

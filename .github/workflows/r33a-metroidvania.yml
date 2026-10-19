@@ -1,0 +1,23 @@
+name: R33A Metroidvania Preflight
+
+on:
+  pull_request:
+    paths:
+      - "sporebound/metroidvania.py"
+      - "sporebound/game_project.py"
+      - "tests_standalone/test_r33_metroidvania.py"
+      - ".github/workflows/r33a-metroidvania.yml"
+  workflow_dispatch:
+
+jobs:
+  headless:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install DrawTemp
+        run: python -m pip install -e .
+      - name: R33 progression and legacy isolation
+        run: python -m unittest discover -s tests_standalone -p 'test_r33_metroidvania.py' -v

@@ -31,6 +31,21 @@ gameplay schema, runtime frame synthesis, or made-up licensing assertion.
    per-OS JSON proof tied to `GITHUB_SHA`. A passing report is not a GPU,
    animation-quality or legal-rights audit.
 
+## Development CI versus certified publication
+
+The normal `Standalone gameplay` test matrix runs from the tracked **88-source**
+preview checkout, where the 11 derivative PNGs are not yet published. Its
+`test_jeanne_motion_pack` and full motion timing assertions are therefore
+**skipped only when publication is completely absent**. Once derived hashes,
+extended animation metadata, more than 88 sprites, or even a single derived
+PNG is present, the same assertions run and reject incomplete publication.
+
+`test_optional_motion_gate_ci` protects this boundary, and the dedicated
+`drawtemp5-int03.yml` certification remains deliberately **fail-closed** on
+real published bytes, exact hashes, animation counts and legal rights. A green
+general gameplay matrix is **not** evidence that the INT-03 asset release gate
+has passed, and it never authorizes placeholder frames or rights approvals.
+
 ## Commands
 
 ```bash

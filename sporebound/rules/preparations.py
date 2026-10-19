@@ -18,13 +18,19 @@ def validate_intercept(b, u, target_id):
     require(any(t.id == target_id for t in b.units), 'Unknown Intercept target')
     target = b.unit(target_id)
     require(target.alive and target.team == u.team and target.id != u.id, 'Invalid Intercept target')
+    require(b.unit_levels.get(u.id, 0) == b.unit_levels.get(target.id, 0),
+            'Intercept target is on a different floor')
     require(distance(u.pos, target.pos) <= max(1, b.engagement_range(u))
-            and b.line_of_sight(u.pos, target.pos), 'Intercept target outside protection range')
+            and b.line_of_sight(u.pos, target.pos,
+                                level=b.unit_levels.get(u.id, 0)),
+            'Intercept target outside protection range')
 
 
 def ranged_covers(b, watcher, cell):
     skill = b._basic(watcher)
-    return skill.min_range <= distance(watcher.pos, cell) <= skill.range and b.line_of_sight(watcher.pos, cell)
+    return (skill.min_range <= distance(watcher.pos, cell) <= skill.range
+            and b.line_of_sight(watcher.pos, cell,
+                                level=b.unit_levels.get(watcher.id, 0)))
 
 
 def guard_covers(b, watcher, cell):
@@ -39,8 +45,10 @@ def guard_enters(b, watcher, previous, cell):
 def intercepts(b, protector, prep, target):
     return (prep.get('target') == target.id and protector.alive and protector.team == target.team
             and b._can_react(protector)
+            and b.unit_levels.get(protector.id, 0) == b.unit_levels.get(target.id, 0)
             and distance(protector.pos, target.pos) <= max(1, b.engagement_range(protector))
-            and b.line_of_sight(protector.pos, target.pos))
+            and b.line_of_sight(protector.pos, target.pos,
+                                level=b.unit_levels.get(protector.id, 0)))
 
 
 def brace(b, target, caster, prep, amount):

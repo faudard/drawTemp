@@ -1,0 +1,67 @@
+name: DrawTemp R28.A multi-genre Creator
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/genre_workflow.py'
+      - 'drawtemp/studio/genre_wizard_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'drawtemp/export/templates.py'
+      - 'tests_standalone/test_r28_creator_workflow.py'
+      - '.github/workflows/drawtemp-r28a-creator.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/studio/genre_workflow.py'
+      - 'drawtemp/studio/genre_wizard_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'drawtemp/export/templates.py'
+      - 'tests_standalone/test_r28_creator_workflow.py'
+      - '.github/workflows/drawtemp-r28a-creator.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  creator-headless:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e .
+      - name: R28 safety plus R15 templates
+        run: python -m unittest tests_standalone.test_r28_creator_workflow tests_standalone.test_drawtemp5_r15_creator -v
+
+  creator-qt:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Linux Qt libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libopengl0 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libdbus-1-3
+      - run: python -m pip install -e ".[qt6]"
+      - name: R28 Wizard and existing Studio regression
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_r28_creator_workflow tests_standalone.test_drawtemp5_r2 -v
+      - name: Studio starts with new-project action
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.studio.qt_shell --smoke --workspace project

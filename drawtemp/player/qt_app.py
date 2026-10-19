@@ -8,6 +8,7 @@ import sys
 from drawtemp.core import Content, GameProject
 from drawtemp.assets.runtime import PresentationAssets
 from drawtemp.player.controller import PlayerController
+from drawtemp.sdk.simulation import thaw
 from drawtemp.player.animation_controller import AnimationDirector
 from drawtemp.render.iso_scene import scene_from_mission, scene_from_exploration
 from drawtemp.render.qt_viewport import make_controller
@@ -75,7 +76,11 @@ def scene_for_player(controller):
             mission_id = snapshot.battle["mission_id"]
             return scene_from_mission(controller.content.missions[mission_id], snapshot)
         if snapshot.exploration is not None and not snapshot.exploration["completed"]:
-            return scene_from_exploration(snapshot.exploration, revision=snapshot.revision)
+            world = controller.session.living_world_state(
+                scene=snapshot.exploration["scene_id"])
+            return scene_from_exploration(
+                snapshot.exploration, revision=snapshot.revision,
+                living_world=thaw(world) if world is not None else None)
     return scene_from_mission(next(iter(controller.content.missions.values())))
 
 
@@ -91,6 +96,8 @@ def create_bridge(controller, renderer):
             self.controller = controller
             self.renderer = renderer
             self.animator = AnimationDirector()
+            self._pending_recovery = None  # ephemeral confirmation, never gameplay
+            self._recovery_notice = {}
 
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
@@ -100,15 +107,131 @@ def create_bridge(controller, renderer):
         def animationPlan(self):
             return self.animator.snapshot()
 
-        def invoke(self, call, *args, visual=None):
+        @Property("QVariantMap", notify=stateChanged)
+        def recoveryOffer(self):
+            if self._pending_recovery is None:
+                return {"pending": False}
+            slot, _fingerprints = self._pending_recovery
+            title = ("Autosauvegarde" if slot == 0 else
+                     "Emplacement " + str(slot))
+            return {
+                "pending": True, "source": slot, "title": title,
+                "description": (
+                    "Le fichier principal est invalide ou absent. "
+                    "Restaurer le secours vérifié peut revenir à une "
+                    "progression antérieure. Le fichier corrompu sera "
+                    "conservé pour diagnostic. Cette opération est irréversible "
+                    "sans une autre copie de sauvegarde."),
+            }
+
+        @Property("QVariantMap", notify=stateChanged)
+        def recoveryNotice(self):
+            return dict(self._recovery_notice)
+
+        def _display_error(self, error):
+            code = getattr(error, "code", None)
+            if not isinstance(code, str):
+                code = "io_error" if isinstance(error, OSError) else "operation_failed"
+            guidance = {
+                "primary_valid": ("Sauvegarde déjà valide",
+                                  "La restauration risquerait de remplacer la progression actuelle."),
+                "stale_recovery": ("Sauvegarde modifiée",
+                                   "Les fichiers ont changé après confirmation. Examinez-les de nouveau."),
+                "backup_invalid": ("Secours indisponible",
+                                   "Aucune copie de secours vérifiée ne peut être restaurée."),
+                "no_valid_save": ("Reprise impossible",
+                                  "Choisissez un emplacement valide ou inspectez les copies de secours."),
+                "recovery_required": ("Récupération nécessaire",
+                                      "Examinez le secours avant de restaurer manuellement."),
+                "incompatible_save": ("Sauvegarde incompatible",
+                                      "Ce fichier ne correspond pas à la version ou au projet courant."),
+                "wrong_campaign": ("Campagne incompatible",
+                                   "La sauvegarde ne correspond pas à cette campagne."),
+                "unsafe_path": ("Chemin de sauvegarde dangereux",
+                                "Inspectez les fichiers sur disque avant toute nouvelle tentative."),
+                "evidence_exists": ("Copie endommagée déjà présente",
+                                    "Conservez les preuves et inspectez-les manuellement."),
+                "io_error": ("Erreur d'accès au disque",
+                             "Vérifiez l'espace libre, les permissions et le support."),
+            }
+            title, advice = guidance.get(
+                code, ("Action impossible",
+                       "Aucune sauvegarde n'a été restaurée automatiquement. "
+                       "Vérifiez l'état des fichiers avant de réessayer."))
+            self._recovery_notice = {
+                "active": True, "code": code, "title": title,
+                "advice": advice, "detail": str(error).replace("\n", " ")[:360],
+            }
+            self.controller.message = title + " : " + str(error)[:240]
+
+        def _recovery_store(self, source):
+            # 0 is a UI-only autosave selector, not a valid manual slot.
+            if type(source) is not int:
+                raise ValueError("Invalid recovery selection")
+            if source == 0:
+                return self.controller.saves._store("auto")
+            return self.controller._store(source)
+
+        @Slot(int)
+        def requestRecovery(self, source):
+            from drawtemp.sdk.slots import SlotError
+            self._pending_recovery = None
+            self._recovery_notice = {}
+            try:
+                store = self._recovery_store(source)
+                status = store.inspect()
+                if status.primary == "valid":
+                    raise SlotError("primary_valid",
+                                    "Le fichier principal est sain : restauration refusée")
+                if status.backup != "valid":
+                    raise SlotError("backup_invalid",
+                                    "Aucune sauvegarde de secours valide")
+                self._pending_recovery = (
+                    source, store.recovery_fingerprints())
+            except Exception as exc:
+                self._display_error(exc)
+            self.stateChanged.emit()
+
+        @Slot()
+        def cancelRecovery(self):
+            if self._pending_recovery is not None:
+                self._pending_recovery = None
+                self.stateChanged.emit()
+
+        @Slot()
+        def dismissRecoveryNotice(self):
+            if self._recovery_notice:
+                self._recovery_notice = {}
+                self.stateChanged.emit()
+
+        @Slot()
+        def confirmRecovery(self):
+            pending = self._pending_recovery
+            self._pending_recovery = None
+            if pending is None:
+                self._display_error(ValueError("Aucune restauration à confirmer"))
+                self.stateChanged.emit()
+                return
+            source, fingerprints = pending
+            if source == 0:
+                self.invoke(self.controller.restore_autosave_backup,
+                            expected_fingerprints=fingerprints)
+            else:
+                self.invoke(self.controller.restore_backup, source,
+                            expected_fingerprints=fingerprints)
+
+        def invoke(self, call, *args, visual=None, **kwargs):
             before = (self.controller.session.snapshot()
                       if self.controller.session is not None else None)
             try:
-                call(*args)
+                call(*args, **kwargs)
+                self._recovery_notice = {}
+                self._pending_recovery = None
                 after = (self.controller.session.snapshot()
                          if self.controller.session is not None else None)
                 reset = (call.__name__ in
-                         {"new_game", "load", "restore_backup", "title"})
+                         {"new_game", "load", "load_autosave", "continue_game",
+                          "restore_backup", "restore_autosave_backup", "title"})
                 if reset or self.controller.show_title:
                     self.animator.cancel()
                 elif (before is not None and after is not None and
@@ -119,7 +242,9 @@ def create_bridge(controller, renderer):
                     # Existing R8 equipment and injuries are already serialized
                     # in Campaign.progress, and validated by Simulation.load().
                     # No parallel visual save-state is introduced here.
-                    if call.__name__ in ("new_game", "load", "restore_backup"):
+                    if call.__name__ in ("new_game", "load", "load_autosave",
+                                            "continue_game", "restore_backup",
+                                            "restore_autosave_backup"):
                         self.renderer.clear_outfit_preview()
                     snapshot = self.controller.session.snapshot()
                     self.renderer.sync_progress(snapshot.progress,
@@ -138,7 +263,8 @@ def create_bridge(controller, renderer):
                     self.renderer.play_actor(*visual)
             except Exception as exc:
                 # An invalid rule does not publish a new clip or overwrite saves.
-                self.controller.message = str(exc)
+                # The user sees a deliberate action rather than a raw traceback.
+                self._display_error(exc)
             self.stateChanged.emit()
 
         def settings_update(self, method, *args):
@@ -201,6 +327,31 @@ def create_bridge(controller, renderer):
         def titleScreen(self):
             self.invoke(self.controller.title)
 
+        @Slot()
+        def cinematicTick(self):
+            # A 40ms frame refresh must not rebuild the isometric renderer.
+            try:
+                self.controller.cinematic_tick()
+            except Exception as exc:
+                self.controller.message = str(exc)
+            self.stateChanged.emit()
+
+        @Slot()
+        def cinematicSkip(self):
+            self.invoke(self.controller.cinematic_skip)
+
+        @Slot()
+        def cinematicPause(self):
+            self.settings_update(self.controller.cinematic_pause)
+
+        @Slot()
+        def cinematicPlay(self):
+            self.settings_update(self.controller.cinematic_play)
+
+        @Slot(int)
+        def cinematicSeek(self, milliseconds):
+            self.settings_update(self.controller.cinematic_seek, milliseconds)
+
         @Slot(str)
         def choose(self, choice):
             self.invoke(self.controller.choose, choice)
@@ -214,6 +365,10 @@ def create_bridge(controller, renderer):
             self.invoke(self.controller.explore_move, dx, dy,
                         visual=("jeanne", "walk"))
 
+        @Slot(int)
+        def worldWait(self, ticks):
+            self.invoke(self.controller.world_wait, ticks)
+
         @Slot(str)
         def exploreInteract(self, target):
             self.invoke(self.controller.explore_interact, target)
@@ -225,6 +380,22 @@ def create_bridge(controller, renderer):
         @Slot(int, int)
         def selectCell(self, x, y):
             self.invoke(self.controller.select_cell, x, y)
+
+        @Slot(str, str)
+        def requestTarget(self, kind, skill):
+            self.invoke(self.controller.request_target, kind, skill)
+
+        @Slot()
+        def cancelTarget(self):
+            self.invoke(self.controller.cancel_target)
+
+        @Slot()
+        def confirmTarget(self):
+            pending = self.controller._pending_target or {}
+            actor_id = pending.get("active", "")
+            visual = ((actor_id, "walk" if pending.get("kind") == "move"
+                       else "attack") if actor_id else None)
+            self.invoke(self.controller.confirm_target, visual=visual)
 
         @Slot(str)
         def command(self, kind):
@@ -298,11 +469,25 @@ def create_bridge(controller, renderer):
     return PlayerBridge(controller, renderer)
 
 def main(argv=None):
+    # Opt-in R26 development preview. Do not alter the default tactical
+    # Player, its canonical save slots, or native bundle verification.
+    if argv is None:
+        argv = sys.argv[1:]
+    if "--platform-demo" in argv:
+        if getattr(sys, "frozen", False):
+            raise ValueError("R32 diagnostic platform preview is not a certified native bundle")
+        from drawtemp.player.platform_app import main as platform_main
+        return platform_main([arg for arg in argv if arg != "--platform-demo"])
+    if "--action-demo" in argv:
+        if getattr(sys, "frozen", False):
+            raise ValueError("Experimental action preview is not a certified native bundle")
+        from drawtemp.player.action_app import main as action_main
+        return action_main([arg for arg in argv if arg != "--action-demo"])
     parser = argparse.ArgumentParser(description="DrawTemp 5 — Qt Quick Player (R12)")
     parser.add_argument("--smoke", action="store_true", help="Load the QML root and quit")
     parser.add_argument("--reference", action="store_true",
                         help="Run the deterministic R0 reference campaign")
-    parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration"),
+    parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration", "cinematic"),
                         default="title", help="Exercise a real game scene during Qt smoke")
     parser.add_argument("--save-dir", type=Path, help="Separate persistent save directory")
     parser.add_argument("--content", type=Path, help="Custom canonical Content JSON")
@@ -310,14 +495,30 @@ def main(argv=None):
     parser.add_argument("--campaign", help="Campaign ID from the selected project")
     parser.add_argument("--character-pack", type=Path, help="Published R7 atlas export directory")
     parser.add_argument("--character-variant", help="Initial authored outfit ID")
+    parser.add_argument("--actor-pack", action="append", default=[], metavar="ID=R7_DIR",
+                        help="Opt-in one published R7 pack for an enemy/actor ID; repeatable")
     parser.add_argument("--gui-journey", action="store_true",
                         help="R14 Qt input journey: title, story, battle, F5, menu, reload")
+    parser.add_argument("--gui-target-journey", action="store_true",
+                        help="R18 Qt GUI journey: select, request, cancel, confirm, resume")
     args = parser.parse_args(argv)
-    if args.gui_journey and (not args.reference or args.smoke or args.save_dir is None):
-        parser.error("--gui-journey requires --reference and an isolated --save-dir")
+    if len(args.actor_pack) > 32:
+        parser.error("Too many actor packs (maximum 32)")
+    actor_packs = {}
+    for raw in args.actor_pack:
+        actor_id, separator, folder = raw.partition("=")
+        if (not separator or not actor_id or not folder or
+                actor_id in actor_packs or not actor_id.replace("_", "").isalnum()):
+            parser.error("Expected a unique --actor-pack ID=R7_DIR")
+        actor_packs[actor_id] = Path(folder).expanduser()
+    if (args.gui_journey or args.gui_target_journey) and (
+            not args.reference or args.smoke or args.save_dir is None):
+        parser.error("GUI journeys require --reference and an isolated --save-dir")
 
     # R15: a frozen Player must never run unverified or substitute game data.
     if getattr(sys, "frozen", False):
+        if actor_packs:
+            parser.error("Unverified external actor packs are not allowed in frozen releases")
         from drawtemp.export.r15 import verify_bundle
         bundle = Path(sys.executable).resolve().parent.parent
         try:
@@ -360,12 +561,26 @@ def main(argv=None):
         controller.new_game()
         if controller.state()["screen"] != "exploration":
             parser.error("No exploration stage in the current campaign")
+    elif args.smoke and args.smoke_scene == "cinematic":
+        if args.reference:
+            parser.error("--smoke-scene cinematic requires authored scene clips")
+        controller.new_game()
+        scene = controller.state()
+        if not scene["cinematic"].get("id"):
+            parser.error("No authored scene cinematic in the selected campaign")
+        if not scene["cinematic"].get("frame"):
+            parser.error("No cinematic frame available for QML projection")
     presentation = (PresentationAssets.for_project(
         controller.project, controller.asset_project_path)
         if controller.asset_project_path is not None else None)
-    renderer = make_controller(scene_for_player(controller), assets=presentation,
-                               character_pack=args.character_pack,
-                               character_variant=args.character_variant)
+    try:
+        renderer = make_controller(
+            scene_for_player(controller), assets=presentation,
+            character_pack=args.character_pack,
+            character_variant=args.character_variant,
+            character_packs=actor_packs)
+    except (OSError, ValueError) as exc:
+        parser.error("Invalid character pack: " + str(exc))
     if controller.session is not None:
         renderer.sync_progress(controller.session.snapshot().progress,
                                controller.content.equipment)
@@ -379,7 +594,7 @@ def main(argv=None):
     if not engine.rootObjects():
         print("R12 Player QML root failed to load", file=sys.stderr)
         return 1
-    if args.gui_journey:
+    if args.gui_journey or args.gui_target_journey:
         # Drives production QML and the actual PlayerBridge. This intentionally
         # runs in a separate QGuiApplication process from the Widgets Studio.
         from PySide6.QtCore import QPoint, QPointF, Qt
@@ -440,6 +655,46 @@ def main(argv=None):
                 click("r14Mission-" + MISSION)
                 if controller.state()["screen"] not in ("battle", "result"):
                     raise AssertionError("Reference battle did not start")
+                if args.gui_target_journey:
+                    # Reach a human CT activation with the *existing* tactical
+                    # engine, then exercise the real buttons in the QML tree.
+                    for _turn in range(100):
+                        battle = controller.session._session.active_battle
+                        if battle.result:
+                            raise AssertionError("Encounter ended before R18 target gate")
+                        if battle.deploying:
+                            bridge.command("deploy")
+                        elif battle.active is not None and battle.active.team == "enemy":
+                            bridge.enemyTurn()
+                        else:
+                            break
+                    battle = controller.session._session.active_battle
+                    if battle.active is None or battle.active.team != "player":
+                        raise AssertionError("No player activation for R18 target gate")
+                    positions = sorted(
+                        cell for cell in battle.reachable()
+                        if cell != battle.active.pos)
+                    if not positions:
+                        raise AssertionError("No available movement target for R18 gate")
+                    bridge.selectCell(*positions[0])
+                    pending_revision = controller.session.snapshot().revision
+                    pending_replay = controller.session.recording()
+                    click("r18RequestMove")
+                    if not controller.state()["pending_target"].get("valid"):
+                        raise AssertionError("R18 request was not staged")
+                    if controller.session.snapshot().revision != pending_revision:
+                        raise AssertionError("Request mutated the battle")
+                    click("r18CancelTarget")
+                    if controller.state()["pending_target"]:
+                        raise AssertionError("Cancel did not clear the target")
+                    if controller.session.recording() != pending_replay:
+                        raise AssertionError("R18 cancel changed the replay")
+                    click("r18RequestMove")
+                    click("r18ConfirmTarget")
+                    if controller.session.snapshot().revision != pending_revision + 1:
+                        raise AssertionError("R18 confirmation was not one command")
+                    if controller.state()["pending_target"]:
+                        raise AssertionError("Confirmed target remained pending")
                 before = controller.state()
                 QTest.keyClick(window, Qt.Key_F5)
                 QTest.qWait(100)
@@ -452,8 +707,10 @@ def main(argv=None):
                 after = controller.state()
                 if after["screen"] != before["screen"] or after["battle"] != before["battle"]:
                     raise AssertionError("GUI save/reload changed the canonical battle state")
-                print("R14 Player QML GUI input: title -> dialogue -> campaign -> "
-                      "battle -> F5 -> pause/title -> reload OK", flush=True)
+                print(("R18 Player QML targeting + " if args.gui_target_journey else
+                       "R14 Player QML input + ") +
+                      "title -> dialogue -> campaign -> battle -> F5 -> "
+                      "pause/title -> reload OK", flush=True)
                 app.exit(0)
             except Exception:
                 import traceback

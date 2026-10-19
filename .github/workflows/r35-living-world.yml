@@ -1,0 +1,110 @@
+name: R35 Living World Simulator
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/living_world.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/game_project.py'
+      - 'tests_standalone/test_r35_living_world.py'
+      - 'tests_standalone/test_r35_factions_quests.py'
+      - 'sporebound/living_world_commerce.py'
+      - 'sporebound/living_world_navigation.py'
+      - 'sporebound/living_world_transfers.py'
+      - 'tests_standalone/test_r35_transfers.py'
+      - 'tests_standalone/test_r35_transfers_qt.py'
+      - 'drawtemp/sdk/simulation.py'
+      - 'drawtemp/player/controller.py'
+      - 'drawtemp/player/qt_app.py'
+      - 'drawtemp/player/Main.qml'
+      - 'drawtemp/render/iso_scene.py'
+      - 'tests_standalone/test_r35_navigation.py'
+      - 'tests_standalone/test_r35_navigation_qt.py'
+      - 'tests_standalone/test_r35_commerce.py'
+      - 'tests_standalone/test_r35_village.py'
+      - 'tests_standalone/test_r35_village_qt.py'
+      - 'drawtemp/studio/living_world_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'sporebound/living_world_diagnostics.py'
+      - 'drawtemp/studio/living_world_authoring.py'
+      - '.github/workflows/r35-living-world.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'sporebound/living_world.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/game_project.py'
+      - 'tests_standalone/test_r35_living_world.py'
+      - 'tests_standalone/test_r35_factions_quests.py'
+      - 'sporebound/living_world_commerce.py'
+      - 'sporebound/living_world_navigation.py'
+      - 'sporebound/living_world_transfers.py'
+      - 'tests_standalone/test_r35_transfers.py'
+      - 'tests_standalone/test_r35_transfers_qt.py'
+      - 'drawtemp/sdk/simulation.py'
+      - 'drawtemp/player/controller.py'
+      - 'drawtemp/player/qt_app.py'
+      - 'drawtemp/player/Main.qml'
+      - 'drawtemp/render/iso_scene.py'
+      - 'tests_standalone/test_r35_navigation.py'
+      - 'tests_standalone/test_r35_navigation_qt.py'
+      - 'tests_standalone/test_r35_commerce.py'
+      - 'tests_standalone/test_r35_village.py'
+      - 'tests_standalone/test_r35_village_qt.py'
+      - 'drawtemp/studio/living_world_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'sporebound/living_world_diagnostics.py'
+      - 'drawtemp/studio/living_world_authoring.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  r35-headless:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.12']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install package
+        run: python -m pip install -e .
+      - name: R35.A deterministic clock, schedules and save/load
+        run: python -m unittest tests_standalone.test_r35_living_world -v
+      - name: R35.B1 reputation and daily quest receipts
+        run: python -m unittest tests_standalone.test_r35_factions_quests -v
+      - name: R35.B2 merchant receipts and daily inventory
+        run: python -m unittest tests_standalone.test_r35_commerce -v
+      - name: R35.C1 village schedule editing and world timeline
+        run: python -m unittest tests_standalone.test_r35_village -v
+      - name: R35.D1 spatial schedule and off-focus pathfinding
+        run: python -m unittest tests_standalone.test_r35_navigation -v
+      - name: R35.D2 cross-scene portals, 256 NPCs and Player projection
+        run: python -m unittest tests_standalone.test_r35_transfers -v
+      - name: R25 and legacy GameSession regressions
+        run: python -m unittest tests_standalone.test_r25_scene_router tests_standalone.test_r25_fixed_realtime tests_standalone.test_game_session -v
+
+  r35-qt-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Qt Studio
+        run: python -m pip install -e ".[qt6]"
+      - name: Qt R35.C2 offscreen UI, preview, apply and undo
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest tests_standalone.test_r35_village_qt tests_standalone.test_r35_navigation_qt tests_standalone.test_r35_transfers_qt -v

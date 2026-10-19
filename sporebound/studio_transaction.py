@@ -207,33 +207,97 @@ class StudioTransactionStore:
                 "Journal sans contenus de destination")
         return data
 
-    def recover(self, choice):
-        """Explicit rollback/rollforward, idempotent after an interrupted retry.
+    def recovery_fingerprints(self):
+        """Detached SHA-256 consent token for both files and all journal sources.
 
-        Validate EVERY target and EVERY needed recovery source before writing
-        either target. Changes made externally after the interruption are never
-        overwritten. Calling twice after success is refused (no pending journal).
+        No state is mutated. Symlinks are refused, including dangling ones.
+        The entire token is checked again before the first recovery write.
         """
+        tracked = (self.journal, *self.paths,
+                   *(self._stage(path) for path in self.paths),
+                   *(self._backup(path) for path in self.paths))
+        result = []
+        for path in tracked:
+            require(not path.is_symlink(),
+                    "Lien symbolique interdit pendant récupération : " + path.name)
+            result.append(_digest(path.read_bytes()) if path.exists() else None)
+        return tuple(result)
+
+    def _plan_recovery(self, choice):
+        """Validate all inputs and the resulting Content/Project pair read-only."""
         require(choice in ("complete", "rollback"), "Choisir complete ou rollback")
         data = self._manifest()
         desired = data["next"] if choice == "complete" else data["previous"]
-        sources = []
+        sources, resulting = [], []
         for index, path in enumerate(self.paths):
-            actual = _digest(path.read_bytes()) if path.exists() else None
+            require(not path.is_symlink(),
+                    "Lien symbolique interdit : " + path.name)
+            current = path.read_bytes() if path.exists() else None
+            actual = _digest(current)
             require(actual in (data["previous"][index], data["next"][index]),
                     f"{path.name} a été modifié depuis l'interruption : copie manuelle requise")
             if actual == desired[index]:
                 sources.append(None)
+                resulting.append(current)
                 continue
             if desired[index] is None:
                 sources.append(None)
+                resulting.append(None)
                 continue
             source = self._stage(path) if choice == "complete" else self._backup(path)
+            require(not source.is_symlink(),
+                    "Lien symbolique interdit : " + source.name)
             require(source.is_file(), f"Fichier de récupération absent : {source.name}")
             raw = source.read_bytes()
             require(_digest(raw) == desired[index],
                     f"Fichier de récupération altéré : {source.name}")
             sources.append(raw)
+            resulting.append(raw)
+        require(all(raw is None for raw in resulting) or
+                all(raw is not None for raw in resulting),
+                "Récupération incomplète : Content et GameProject doivent rester un couple")
+        if resulting[0] is not None:
+            try:
+                validate_pair(*(json.loads(raw.decode("utf-8")) for raw in resulting))
+            except (ValueError, UnicodeError, TypeError, KeyError) as exc:
+                raise RuleError("Couple Content/GameProject invalide après récupération : "
+                                + str(exc)) from exc
+        return tuple(sources), tuple(desired)
+
+    def inspect_recovery(self):
+        """Read-only report for UI; unusable choices carry a reason, not a button."""
+        self._manifest()  # Invalid or foreign journal must not be hidden.
+        fingerprints = self.recovery_fingerprints()
+        choices = {}
+        for choice in ("complete", "rollback"):
+            try:
+                self._plan_recovery(choice)
+            except (RuleError, OSError) as exc:
+                choices[choice] = {"available": False, "reason": str(exc)[:360]}
+            else:
+                choices[choice] = {"available": True, "reason": ""}
+        return {"content_path": str(self.content_path),
+                "project_path": str(self.project_path),
+                "fingerprints": fingerprints, "choices": choices}
+
+    def recover(self, choice, *, expected_fingerprints=None):
+        """Explicit, consent-bound rollback/rollforward of the canonical pair.
+
+        Recheck the displayed review's entire fingerprint tuple before writing.
+        Recoveries without a UI token remain supported for existing callers.
+        """
+        if expected_fingerprints is not None:
+            require(type(expected_fingerprints) is tuple and
+                    len(expected_fingerprints) == 7 and
+                    all(item is None or
+                        isinstance(item, str) and len(item) == 64
+                        for item in expected_fingerprints),
+                    "Confirmation de récupération invalide")
+            require(self.recovery_fingerprints() == expected_fingerprints,
+                    "Récupération obsolète : les fichiers ont changé depuis l'aperçu")
+        sources, desired = self._plan_recovery(choice)
+        # The journal stays present after a partial failure, allowing explicit
+        # retry. Never discard a different user's changes without a new review.
         for index, path in enumerate(self.paths):
             raw = sources[index]
             if raw is not None:

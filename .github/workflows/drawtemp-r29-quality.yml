@@ -1,0 +1,85 @@
+name: DrawTemp R29 Multi-genre Quality Evidence
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/quality/r29.py'
+      - 'scripts/certify_multigenre_r29.py'
+      - 'tests_standalone/test_r29_quality.py'
+      - 'docs/drawtemp5/R29_MULTI_GENRE_QA.md'
+      - '.github/workflows/drawtemp-r29-quality.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r29-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bounded-evidence:
+    name: R29 bounded tests / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Qt loader libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - name: Install QA dependencies
+        run: python -m pip install ".[qt6,art]"
+      - name: Validate fail-closed reporting contracts
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_r29_quality -v
+      - name: Collect existing tactical, recovery, visual and export evidence
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python scripts/certify_multigenre_r29.py --report r29/r29-report.json
+      - name: Upload real probes and checksums
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r29-${{ matrix.os }}
+          path: r29/
+          if-no-files-found: warn
+
+  verify-matrix:
+    name: R29 / independent tri-OS evidence
+    needs: [bounded-evidence]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: r29-*
+          path: r29-artifacts
+          merge-multiple: false
+      - name: Detect incomplete, failed, stale or tampered runner evidence
+        run: >-
+          python scripts/certify_multigenre_r29.py
+          --aggregate r29-artifacts --report r29-matrix.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r29-matrix-no-go
+          path: r29-matrix.json
+          if-no-files-found: warn

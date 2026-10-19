@@ -140,6 +140,8 @@ class MapStudio:
         self.clipboard = None
         self.region_clipboard = None  # R5.7 detached full terrain/goal stamp
         self.layers = LayerWorkspace()
+        from .map_prefabs import TerrainPrefabLibrary
+        self.prefabs = TerrainPrefabLibrary()
 
     @classmethod
     def reference(cls):
@@ -263,9 +265,16 @@ class MapStudio:
                     pending.append(cell)
         return self.paint(seen, brush)
 
-    def smart(self, anchors, brush, *, radius=1, shape="diamond"):
-        cells = smart_brush_cells(self.snapshot()["content"], self.mission_id,
-                                  anchors, radius=radius, shape=shape)
+    def smart(self, anchors, brush, *, radius=1, shape="diamond",
+              selection_mask=None):
+        data = self.snapshot()["content"]
+        cells = smart_brush_cells(data, self.mission_id, anchors,
+                                  radius=radius, shape=shape)
+        if selection_mask is not None:
+            allowed = set(selected_cells(data, self.mission_id, list(selection_mask)))
+            cells = tuple(cell for cell in cells if cell in allowed)
+            if not cells:
+                raise RuleError("Brush stroke does not intersect the selection")
         return self.paint(cells, brush)
 
     def sample(self, cell):
@@ -320,13 +329,54 @@ class MapStudio:
 
     def commit_region(self, preview):
         from .map_selection import commit_transform
+        from drawtemp.sdk.simulation import thaw
+        # Layer locks are independent UI state; recheck locks at commit, not
+        # just during the R1 plan preview (including prefab placements).
+        if hasattr(preview, "plan"):
+            self.layers.assert_editable(
+                self.snapshot()["content"], thaw(preview.plan.content)
+            )
         return commit_transform(self, preview)
+
+    def capture_prefab(self, title, cells):
+        from .map_selection import copy_region
+        stamp = copy_region(self.snapshot()["content"], self.mission_id, cells)
+        return self.prefabs.capture(title, stamp)
+
+    def select_prefab(self, key, orientation="none"):
+        self.region_clipboard = self.prefabs.get(key, orientation)
+        return self.region_clipboard
+
+    def preview_prefab(self, key, anchor, *, orientation="none"):
+        from .map_selection import prepare_transform
+        return prepare_transform(
+            self, operation="paste", anchor=anchor,
+            stamp=self.prefabs.get(key, orientation),
+        )
+
+    def commit_prefab(self, preview):
+        return self.commit_region(preview)
 
     def transform_region(self, cells=(), *, operation="move", anchor=None,
                          include_entities=True):
         preview = self.preview_region(cells, operation=operation, anchor=anchor,
                                       include_entities=include_entities)
         return self.commit_region(preview)
+
+    def preview_generation(self, *, seed, biome, coverage=75, cells=None):
+        """Prepare a seed-stable biome preview on the current map/selection."""
+        from .map_generation import prepare_generation
+        return prepare_generation(self, seed=seed, biome=biome,
+                                  coverage=coverage, cells=cells)
+
+    def commit_generation(self, preview):
+        """Commit the exact preview as one R1 transaction and one Undo step."""
+        from .map_generation import commit_generation
+        return commit_generation(self, preview)
+
+    def generate(self, *, seed, biome, coverage=75, cells=None):
+        return self.commit_generation(self.preview_generation(
+            seed=seed, biome=biome, coverage=coverage, cells=cells))
 
     def structure(self, name, anchor):
         if name not in ("Maison", "Pont", "Tour", "Ruines", "Escalier", "Rempart"):

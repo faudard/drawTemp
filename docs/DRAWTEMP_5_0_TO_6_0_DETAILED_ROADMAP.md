@@ -165,6 +165,10 @@
 | R20.13 QA Acte I | P0 | Parcours des branches, dialogues, sauvegarde/reprise, récompenses non dupliquées, zéro softlock connu | R14 ; tests E2E |
 | R20.14 Démo distribuable | P0 | Début/fin de l'acte I via Player autonome, menus, options, sauvegardes et feedback de testeurs | R15/R23 précoce ; rapport |
 
+**Références de production :** [R20.A — contrat narratif canonique](jeanne/R20_ACT_I_PRODUCTION_CONTRACT.md), [R20.B — exploration Acte I](jeanne/R20_B_PLAYABLE_VILLAGE_FOREST_REFUGE.md) et [R20.C — cinématiques et embranchements sauvegardés](jeanne/R20_C_CINEMATICS_AND_PERSISTENCE.md). R20.B et R20.C restent deux **GameProject distincts** afin de préserver les sauvegardes antérieures ; leur UX Player, tests GPU et certification restent ouverts.
+
+**R20.D — parcours E2E et gate de distribution :** quatre parcours prologue→fin, vrais combats/sauvegardes et smoke Qt offscreen. Le package de démo R15 reste conditionnel : licences, tests machine propre, retours externes et certification demeurent à prouver.
+
 **Gate R20 :** trois missions narratives liées au minimum, une bifurcation réellement persistante, une fin d'acte identifiable, et un joueur externe peut tout terminer sans Studio ni compréhension des formats. La qualité narrative est revue humainement, pas « prouvée » par des tests de graphe seuls.
 
 ## 7. R21 — Tactical RPG & Castle Siege 2.0 (5.4)
@@ -187,6 +191,14 @@
 | R21.12 Salle du trône | P0 | Boss à phases télégraphiées, états environnementaux et renforts sous règles traçables | R13 ; tests multi-seeds |
 | R21.13 Fins de siège | P0 | Victoire, accord, défaite cohérents et persistés ; aucune fin inaccessible par défaut de script | R10 ; path validation |
 | R21.14 Balance Lab | P0 | Analyse seeds, distribution pertes/durée, heatmaps et statistiques couplées au replay exact | R13 ; QA humaine et CI |
+
+**Suivi R21.A — incrément non certifiant :** [menaces superposées et HUD tactique](drawtemp5/R21_TACTICAL_THREATS.md) ; la télégrafie couvre une partie de R21.1, avec CI et replay à revalider sur le SHA consolidé.
+
+**Suivi R21.B — incrément non certifiant :** [formations, réactions et étages](drawtemp5/R21_FLOOR_TACTICS.md) ; règles et escaliers canoniques, sans certification du Player multiétage.
+
+**Suivi R21.C — incrément non certifiant :** [bélier, herse et causalité des fronts](drawtemp5/R21_SIEGE_READINESS.md) ; la validation des parcours de siège complets reste ouverte.
+
+**Suivi R21.D — tranche incrémentale non certifiante :** [parcours de siège, déploiement, convoyage et checkpoints rejouables](drawtemp5/R21_SIEGE_JOURNEY.md). Ce lot enchaîne de vraies commandes de mission sur plusieurs fronts, puis sauvegarde/reprise vérifiée ; les parcours complets du château et leur UX Qt restent ouverts.
 
 **Gate R21 :** le siège se termine par au moins deux approches tactiques cohérentes, avec plusieurs fronts, portes/escaliers, boss et conséquences durables. L'IA ne téléporte pas les unités hors simulation et le replay reste déterministe.
 
@@ -214,6 +226,18 @@
 **Gate R22 :** une mini-campagne nouvelle est créée entièrement dans les ateliers Qt avec sauvegarde, annulation, preview, export et reprise. Pas d'éditeur métier qui « marche » seulement avec un fichier préparé manuellement.
 
 ## 9. R23 — Public Release & Certification 5.5
+
+**Intégration en cours :** [R23.A — intégrité et journal de certification](drawtemp5/R23A_RELEASE_HARDENING.md) renforce l'export R15 et fournit des preuves CI multi-OS liées au commit. Ce n'est **pas** une certification 5.5 : les installateurs signés, licences, métriques GPU physiques, essais utilisateurs et gate Go/No-go final restent ouverts.
+
+**Suite R23.B — certification toujours NO-GO :** [endurance, accessibilité et QA utilisateurs](drawtemp5/R23B_ENDURANCE_ACCESSIBILITY_QA.md) ; les tests hors écran ne remplacent pas les essais physiques GPU, l'endurance prolongée ni la revue humaine.
+
+**Troisième tranche :** [R23.C — archives natives portables, installation isolée et bilan de release](drawtemp5/R23C_DISTRIBUTION_CERTIFICATION.md) ajoute checksums de transfert, validation/extraction bornée, le Player **et** le Studio sur des runners distincts, tamper rejection et désinstallation du dossier portable. Ces archives ne sont pas des MSI/DEB/DMG signés ; l'ensemble R23 conserve le statut **NO-GO** en attendant tests physiques, licences, mesures et approbation finale.
+
+**Quatrième tranche :** [R23.D — installateurs natifs Windows, Linux et macOS](drawtemp5/R23D_NATIVE_INSTALLERS.md) produit un installateur Inno Setup per-user, un paquet Debian/Ubuntu DEB et un DMG avec application macOS. Les trois parcours CI effectuent l'installation, le lancement des binaires exportés, le rejet d'un asset falsifié et la désinstallation sur runner isolé. Les paquets restent **non signés** et la 5.5 **non certifiée** : signatures, notarisation, licences, essais hardware/offline et Go/No-go humain restent à réaliser.
+
+**Cinquième tranche :** [R23.E — contrôle des signatures, droits et dossier Go/No-go](drawtemp5/R23E_SIGNING_RIGHTS_RELEASE_GATE.md) inventorie les licences et empreintes des assets **effectivement exportés** sur trois OS, fournit des vérifications Authenticode/Apple/GPG en lecture seule avec identités de confiance épinglées, et collecte les douze gates dans un dossier `NO-GO` basé sur le même commit. Aucune licence déclarée ne vaut approbation juridique, et aucun certificat, notarisation, test physique ou signature de décision n'est fabriqué.
+
+**Sixième tranche :** [R23.F — répétition Release Candidate 5.5.0-rc0](drawtemp5/R23F_RELEASE_CANDIDATE.md) rejoue de vraies APIs de création d'événement et de sauvegarde Studio, export R15, délocalisation du Player, session, sauvegarde/reprise, rejet de données falsifiées sur trois OS. Le **runtime export de cette répétition est synthétique** (les binaires natifs sont vérifiés séparément par R23.D) ; la vérification des douze gates sur même SHA produit **NO-GO / tag_allowed=false** tant que licences, signature, essais externes et accord humain sont ouverts.
 
 **But :** publier un produit de création utilisable et maintenable, pas une succession de builds.
 

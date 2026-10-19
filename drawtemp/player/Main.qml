@@ -20,7 +20,8 @@ ApplicationWindow {
     property int currentSlot: 1
     property real textScale: playerData.settings.display.text_scale
     property bool highContrast: playerData.settings.display.high_contrast
-    property bool inputLocked: pausePopup.opened || optionsPopup.opened
+    property bool inputLocked: pausePopup.opened || optionsPopup.opened || Boolean(playerData.cinematic.id) ||
+                               recoveryPopup.opened || recoveryErrorPopup.opened
     function binding(action) { return playerData.settings.bindings[action] || "" }
     onPlayerDataChanged: {
         if (smokeMode) return
@@ -48,7 +49,13 @@ ApplicationWindow {
 
     Connections {
         target: player
-        function onStateChanged() { root.playerData = player.view }
+        function onStateChanged() {
+            root.playerData = player.view
+            if (player.recoveryOffer.pending && !recoveryPopup.opened)
+                recoveryPopup.open()
+            if (player.recoveryNotice.active && !recoveryErrorPopup.opened)
+                recoveryErrorPopup.open()
+        }
     }
 
     Rectangle {
@@ -144,12 +151,12 @@ ApplicationWindow {
     Shortcut {
         sequence: root.binding("battle_move")
         enabled: root.playerData.screen === "battle" && !root.inputLocked
-        onActivated: player.command("move")
+        onActivated: player.requestTarget("move", "")
     }
     Shortcut {
         sequence: root.binding("battle_attack")
         enabled: root.playerData.screen === "battle" && !root.inputLocked
-        onActivated: player.command("attack")
+        onActivated: player.requestTarget("attack", "")
     }
     Shortcut {
         sequence: root.binding("battle_end")
@@ -162,8 +169,21 @@ ApplicationWindow {
         onActivated: player.saveGame(root.currentSlot)
     }
     Shortcut {
+        sequence: "Return"
+        enabled: root.playerData.screen === "battle" && !root.inputLocked &&
+                 root.playerData.pending_target.valid === true
+        onActivated: player.confirmTarget()
+    }
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.playerData.screen === "battle" && !root.inputLocked &&
+                 !!root.playerData.pending_target.kind
+        onActivated: player.cancelTarget()
+    }
+    Shortcut {
         sequence: root.binding("pause")
-        enabled: root.playerData.screen !== "title" && !root.inputLocked
+        enabled: root.playerData.screen !== "title" && !root.inputLocked &&
+                 !root.playerData.pending_target.kind
         onActivated: pausePopup.open()
     }
 
@@ -272,7 +292,8 @@ ApplicationWindow {
                     text: "Restaurer auto (.bak)"
                     enabled: root.playerData.save_manager.autosave.recoverable &&
                              root.playerData.save_manager.autosave.status !== "valid"
-                    onClicked: player.restoreAutosaveBackup()
+                    objectName: "r17RequestAutosaveRecovery"
+                    onClicked: player.requestRecovery(0)
                 }
             }
             RowLayout {
@@ -291,8 +312,11 @@ ApplicationWindow {
                 }
                 Button {
                     text: "Restaurer secours"
-                    enabled: root.playerData.backups.indexOf(root.currentSlot) !== -1
-                    onClicked: player.restoreBackup(root.currentSlot)
+                    objectName: "r17RequestManualRecovery"
+                    enabled: root.playerData.save_manager.sources.length > root.currentSlot &&
+                             root.playerData.save_manager.sources[root.currentSlot].recoverable &&
+                             root.playerData.save_manager.sources[root.currentSlot].status !== "valid"
+                    onClicked: player.requestRecovery(root.currentSlot)
                 }
             }
             Button {
@@ -557,11 +581,64 @@ ApplicationWindow {
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
+                        ColumnLayout {
+                            visible: root.playerData.screen === "exploration" &&
+                                     root.playerData.living_world !== null &&
+                                     root.playerData.living_world !== undefined
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                text: "MONDE VIVANT · JOUR " +
+                                      (root.playerData.living_world ?
+                                       root.playerData.living_world.day + 1 : 1)
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Label {
+                                text: {
+                                    var w = root.playerData.living_world
+                                    if (!w) return ""
+                                    var h = Math.floor(w.minute / 60)
+                                    var m = w.minute % 60
+                                    return ("0" + h).slice(-2) + ":" +
+                                           ("0" + m).slice(-2) + " · " +
+                                           (w.npcs || []).length + " PNJ dans cette zone"
+                                }
+                                color: root.ivory
+                                Layout.fillWidth: true
+                            }
+                            Button {
+                                text: "Attendre 1 minute"
+                                enabled: !root.inputLocked
+                                Layout.fillWidth: true
+                                onClicked: {
+                                    var w = root.playerData.living_world
+                                    if (w) {
+                                        // Project ticks/minute is authored, not hardcoded.
+                                        // worldMinuteWait is provided in the projection.
+                                        player.worldWait(w.ticks_per_minute || 1)
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: root.playerData.living_world ?
+                                       (root.playerData.living_world.npcs || []) : []
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: root.muted
+                                    text: modelData.id + " · " + modelData.activity
+                                }
+                            }
+                        }
                         Label {
                             visible: root.playerData.screen !== "exploration"
                             text: "CT · tour " + (root.playerData.battle.tick || 0) +
                                   "\nUnité active : " + (root.playerData.battle.active || "—") +
-                                  "\nCible : " + root.playerData.selected.join(", ")
+                                  "\nCase sélectionnée : " + root.playerData.selected.join(", ") +
+                                  "\nSélectionner ≠ agir : Déplacer/Attaquer, puis Confirmer (Entrée)" +
+                                  "\nLa prévision n'est pas un résultat garanti."
                             color: root.ivory
                             Layout.fillWidth: true
                         }
@@ -806,8 +883,16 @@ ApplicationWindow {
                 visible: root.playerData.battle.deploying === true
                 onClicked: player.command("deploy")
             }
-            Button { text: "Déplacer"; onClicked: player.command("move") }
-            Button { text: "Attaquer"; onClicked: player.command("attack") }
+            Button {
+                objectName: "r18RequestMove"
+                text: "Déplacer"
+                onClicked: player.requestTarget("move", "")
+            }
+            Button {
+                objectName: "r18RequestAttack"
+                text: "Attaquer"
+                onClicked: player.requestTarget("attack", "")
+            }
             Button { text: "Aperçu déplacement"; onClicked: player.preview("move") }
             Button { text: "Prévision attaque"; onClicked: player.preview("attack") }
             Button {
@@ -817,14 +902,56 @@ ApplicationWindow {
                             root.playerData.tactical.focus.can_target === true)
                 onClicked: {
                     if (root.playerData.tactical.skill === "attack")
-                        player.command("attack")
+                        player.requestTarget("attack", "")
                     else
-                        player.useSkill(root.playerData.tactical.skill)
+                        player.requestTarget("skill", root.playerData.tactical.skill)
                 }
             }
             Button { text: "Fin du tour  " + root.binding("battle_end"); onClicked: player.command("end") }
             Button { text: "Tour ennemi"; onClicked: player.enemyTurn() }
             Item { Layout.fillWidth: true }
+        }
+
+        Rectangle {
+            objectName: "r18TargetConfirmation"
+            visible: root.playerData.screen === "battle" &&
+                     !!root.playerData.pending_target.kind
+            Layout.fillWidth: true
+            implicitHeight: targetPanel.implicitHeight + 20
+            radius: 8
+            color: "#263b43"
+            border.color: root.playerData.pending_target.valid ? "#e7c78b" : "#f0aca8"
+            RowLayout {
+                id: targetPanel
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 12
+                Label {
+                    text: "Action : " + (root.playerData.pending_target.kind || "") +
+                          " · case " + (root.playerData.pending_target.cell || []).join(", ") +
+                          "\n" + (root.playerData.pending_target.details || "") +
+                          (root.playerData.pending_target.valid ? "" :
+                           "\nLe tour a changé : annulez et choisissez une nouvelle action.")
+                    color: root.ivory
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    font.pixelSize: 13 * root.textScale
+                    Accessible.name: text
+                }
+                Button {
+                    objectName: "r18ConfirmTarget"
+                    text: "Confirmer · Entrée"
+                    enabled: root.playerData.pending_target.valid === true
+                    onClicked: player.confirmTarget()
+                    Accessible.name: "Confirmer l'action ciblée"
+                }
+                Button {
+                    objectName: "r18CancelTarget"
+                    text: "Annuler · Échap"
+                    onClicked: player.cancelTarget()
+                    Accessible.name: "Annuler l'action ciblée"
+                }
+            }
         }
 
         RowLayout {
@@ -894,6 +1021,282 @@ ApplicationWindow {
                 objectName: "r14SaveGame"
                 text: "Sauvegarder · " + root.binding("save")
                 onClicked: player.saveGame(root.currentSlot)
+            }
+        }
+    }
+
+    // R17.11: every recovery is a separate explicit user decision. The
+    // approved bytes are SHA-bound in R1 under the single-writer lock.
+    Popup {
+        id: recoveryPopup
+        objectName: "r17RecoveryDialog"
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(root.width - 48, 530)
+        height: 300
+        padding: 22
+        onClosed: player.cancelRecovery()
+        background: Rectangle {
+            radius: 10
+            color: "#1d3039"
+            border.color: "#dbb67e"
+        }
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+            Label {
+                text: "Confirmer la restauration"
+                color: root.gold
+                font.pixelSize: 22 * root.textScale
+                font.bold: true
+                Layout.fillWidth: true
+            }
+            Label {
+                text: player.recoveryOffer.title || ""
+                color: root.ivory
+                font.pixelSize: 16 * root.textScale
+            }
+            Label {
+                text: player.recoveryOffer.description || ""
+                color: root.ivory
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Accessible.name: text
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                Button {
+                    objectName: "r17CancelRecovery"
+                    text: "Annuler"
+                    onClicked: recoveryPopup.close()
+                }
+                Button {
+                    objectName: "r17ConfirmRecovery"
+                    text: "Restaurer le secours vérifié"
+                    enabled: player.recoveryOffer.pending
+                    onClicked: {
+                        player.confirmRecovery()
+                        recoveryPopup.close()
+                    }
+                }
+            }
+        }
+    }
+
+    Popup {
+        id: recoveryErrorPopup
+        objectName: "r17RecoveryError"
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(root.width - 48, 515)
+        height: 295
+        padding: 22
+        onClosed: player.dismissRecoveryNotice()
+        background: Rectangle {
+            radius: 10
+            color: "#26323b"
+            border.color: "#ed9b8c"
+        }
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+            Label {
+                text: player.recoveryNotice.title || "Action impossible"
+                color: "#ffb1a2"
+                font.bold: true
+                font.pixelSize: 22 * root.textScale
+                Layout.fillWidth: true
+            }
+            Label {
+                text: player.recoveryNotice.advice || ""
+                color: root.ivory
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Label {
+                    text: player.recoveryNotice.detail || ""
+                    width: parent.width
+                    color: root.muted
+                    wrapMode: Text.Wrap
+                    Accessible.name: text
+                }
+            }
+            Button {
+                objectName: "r17DismissRecoveryError"
+                text: "Compris"
+                Layout.alignment: Qt.AlignRight
+                onClicked: recoveryErrorPopup.close()
+            }
+        }
+    }
+
+    // R20.C.1: a presentation-only cinematic overlay, projected with the
+    // shared R11 frame_payload. Engine choices remain blocked until the next
+    // clip is acknowledged in the canonical campaign checkpoint.
+    Shortcut {
+        sequence: "Escape"
+        enabled: cinematicOverlay.visible && !pausePopup.opened && !optionsPopup.opened
+        onActivated: player.cinematicSkip()
+    }
+
+    Rectangle {
+        id: cinematicOverlay
+        objectName: "r20CinematicOverlay"
+        property var clip: root.playerData.cinematic || ({})
+        property var frameData: clip.frame || ({})
+        anchors.fill: parent
+        visible: Boolean(clip.id) && !root.smokeMode
+        z: 100
+        color: frameData.background || "#101a2b"
+        border.color: "#987f61"
+        border.width: 2
+
+        // Capture clicks over the campaign and tactical scene during playback.
+        MouseArea { anchors.fill: parent }
+
+        Timer {
+            interval: 40
+            repeat: true
+            running: cinematicOverlay.visible && Boolean(cinematicOverlay.clip.playing)
+            onTriggered: player.cinematicTick()
+        }
+
+        Label {
+            anchors.top: parent.top
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.topMargin: 30
+            text: cinematicOverlay.clip.title || "Jeanne d'Arc"
+            color: "#efdcad"
+            font.pixelSize: 28 * root.textScale
+            font.family: "serif"
+            font.bold: true
+        }
+
+        Item {
+            id: cinematicCanvas
+            anchors.fill: parent
+            anchors.topMargin: 82
+            anchors.bottomMargin: 205
+            clip: true
+            Repeater {
+                model: cinematicOverlay.frameData.actors || []
+                delegate: Item {
+                    width: 90
+                    height: 120
+                    x: (0.5 + (modelData.x - 0.5 -
+                        (cinematicOverlay.frameData.cameraX || 0)) *
+                        (cinematicOverlay.frameData.zoom || 1)) * cinematicCanvas.width - width/2
+                    y: (0.5 + (modelData.y - 0.5 -
+                        (cinematicOverlay.frameData.cameraY || 0)) *
+                        (cinematicOverlay.frameData.zoom || 1)) * cinematicCanvas.height - height/2
+                    Image {
+                        anchors.fill: parent
+                        source: modelData.image || ""
+                        fillMode: Image.PreserveAspectFit
+                        visible: Boolean(modelData.image)
+                    }
+                    Rectangle {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: 58; height: 70; radius: 29
+                        color: "#baa27a"
+                        border.color: "#f1e2b8"
+                        visible: !modelData.image
+                        Label {
+                            anchors.centerIn: parent
+                            text: modelData.name.slice(0, 2).toUpperCase()
+                            font.bold: true
+                            color: "#1b2531"
+                        }
+                    }
+                    Label {
+                        anchors.bottom: parent.bottom
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: modelData.name
+                        color: "#f4e7ca"
+                        font.pixelSize: 14 * root.textScale
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            id: cinematicDialogue
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: cinematicControls.top
+            anchors.leftMargin: 36; anchors.rightMargin: 36
+            anchors.bottomMargin: 16
+            height: 132
+            color: "#121d2c"
+            border.color: "#c1a878"
+            border.width: 1
+            radius: 8
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 17
+                Label {
+                    text: cinematicOverlay.frameData.speaker || cinematicOverlay.clip.title
+                    font.bold: true
+                    color: "#f5ca91"
+                    font.pixelSize: 17 * root.textScale
+                }
+                Label {
+                    text: cinematicOverlay.frameData.dialogue || "..."
+                    color: "#f5ead5"
+                    font.pixelSize: 18 * root.textScale
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                }
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: cinematicOverlay.frameData.transition === "dissolve" ? "#101a2b" : "#000000"
+            opacity: Math.max(cinematicOverlay.frameData.transitionOpacity || 0,
+                              cinematicOverlay.frameData.fadeOpacity || 0)
+            visible: opacity > 0
+        }
+
+        RowLayout {
+            id: cinematicControls
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: 25
+            spacing: 14
+            Button {
+                objectName: "r20CinematicPause"
+                text: cinematicOverlay.clip.playing ? "Pause" : "Lire"
+                onClicked: cinematicOverlay.clip.playing ? player.cinematicPause() :
+                           player.cinematicPlay()
+            }
+            Slider {
+                id: cinematicSeek
+                Layout.fillWidth: true
+                from: 0
+                to: cinematicOverlay.clip.durationMs || 1
+                value: cinematicOverlay.frameData.timeMs || 0
+                onMoved: player.cinematicSeek(Math.round(value))
+            }
+            Label {
+                text: Math.round((cinematicOverlay.frameData.timeMs || 0)/1000) +
+                      " / " + Math.round((cinematicOverlay.clip.durationMs || 0)/1000) + " s"
+                color: "#f5ead5"
+            }
+            Button {
+                objectName: "r20CinematicSkip"
+                text: "Passer la cinématique  Esc"
+                onClicked: player.cinematicSkip()
             }
         }
     }

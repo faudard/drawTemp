@@ -21,7 +21,7 @@ class EventDebugger:
     MAX_TIMELINE = 200
 
     def __init__(self, data, mission_id, event_id, *, project=None,
-                 tick=0, scenario='satisfied'):
+                 tick=0, scenario='satisfied', included_event_ids=None):
         require(type(tick) is int and 0 <= tick <= 100000,
                 'Debug tick must be 0..100000')
         require(scenario in ('initial', 'satisfied', 'unsatisfied'),
@@ -32,7 +32,24 @@ class EventDebugger:
         self.mission_id, self.event_id = mission_id, event_id
         self.project = deepcopy(project) if project is not None else None
         self.selected = deepcopy(selected)
-        self.chain = chain_descendants(data, mission_id, event_id)
+        if included_event_ids is None:
+            self.chain = chain_descendants(data, mission_id, event_id)
+        else:
+            # R31 visual IF/ELSE requires BOTH mutually cancelling native
+            # triggers in the SAME disposable Battle. Explicit selection does
+            # not change the canonical dispatcher or legacy R9 behaviour.
+            require(type(included_event_ids) in (list, tuple) and
+                    1 <= len(included_event_ids) <= self.MAX_TIMELINE and
+                    all(type(eid) is str for eid in included_event_ids) and
+                    len(set(included_event_ids)) == len(included_event_ids) and
+                    event_id in included_event_ids,
+                    'Invalid explicit debug event selection')
+            mission = next(m for m in data['missions'] if m['id'] == mission_id)
+            selected_ids = set(included_event_ids)
+            self.chain = [deepcopy(row) for row in mission['triggers']
+                          if row['id'] in selected_ids]
+            require(len(self.chain) == len(selected_ids),
+                    'Unknown event in explicit debug selection')
         require(0 < len(self.chain) <= self.MAX_TIMELINE,
                 'Debug graph exceeds 200 events')
         self.by_id = {row['id']: row for row in self.chain}

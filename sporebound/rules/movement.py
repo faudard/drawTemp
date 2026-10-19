@@ -13,9 +13,12 @@ def reachable(battle, unit: Unit | None = None) -> dict[Cell, tuple[int, list[Ce
     blocked = set().union(*(o.occupied_cells() for o in battle.units
                             if o.alive and o.id != u.id
                             and battle.unit_levels.get(o.id, 0) == level))
+    blocks = {tuple(obj["pos"]) for obj in battle.mission.objects
+              if obj["kind"] == "block"}
     def free(anchor):
         cells = u.occupied_cells(anchor)
-        return all(battle.board.contains(c) and c not in blocked and not battle.board.tile(c).blocked
+        return all(battle.board.contains(c) and c not in blocked
+                   and c not in blocks and not battle.board.tile(c).blocked
                    for c in cells)
 
     if battle.rules.movements.get(u.movement).teleport:
@@ -198,6 +201,8 @@ def _move(battle, u: Unit, cell: Cell):
         if not u.alive:
             break
         u.pos = nxt
+        from ..puzzle_rules import sync_plates
+        sync_plates(battle)
         for pursuer in pursuers:
             if not pursuer.alive or battle.at(previous) is not None:
                 continue
