@@ -96,8 +96,8 @@ def validate_branch_graph(graph):
         else:
             _validate_params(node["kind"], node["params"])
         nodes[node["id"]] = node
-    if not 5 <= len(nodes) <= MAX_NODES:
-        _fail("node_budget", "Branch graph needs 5..64 nodes (entry, branch and 2 actions)")
+    if not 4 <= len(nodes) <= MAX_NODES:
+        _fail("node_budget", "Branch graph needs 4..64 nodes (entry, branch and 2 actions)")
     if graph["entry"] not in nodes or nodes[graph["entry"]]["kind"] != "event":
         _fail("invalid_entry", "Branch graph needs an event entry")
     branches = [key for key, node in nodes.items() if node["kind"] == "branch"]
@@ -160,7 +160,6 @@ def compile_branch_triggers(graph):
     cancel_after makes either arm irrevocable; true/false cannot both fire,
     even if the underlying HP/team/tick predicate changes over time.
     """
-    from drawtemp.sdk.logic_graph import _validate_params
     paths, expression = validate_branch_graph(graph)
     entry = next(node for node in graph["nodes"] if node["id"] == graph["entry"])
     params = entry["params"]
