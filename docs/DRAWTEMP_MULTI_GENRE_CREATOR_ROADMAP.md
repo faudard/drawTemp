@@ -260,6 +260,27 @@ Les lots ci-dessous sont des PR **proposées**, à ouvrir uniquement après vér
 | 17 | R29.B — Publishing, docs, user tests | R29.A | 3 jeux exportés |
 | 18 | R30.A–D — API, packs, semantic diff, platform gate | R29 stable | 2e jeu sans fork |
 
+### Avancement exploratoire R27 — hors certification
+
+Les PR ci-dessous constituent des **incréments tactiques compatibles R1/R5/R12**,
+créés avant l'intégration des dépendances R25/R26. Elles sont empilées et
+restent volontairement **brouillons**. Leur existence ne clôt ni la phase
+R27 multi-genres, ni les gates temporels, scenes, save/replay inter-modes,
+export, UX/GPU ou acceptation de la vertical slice :
+
+| Incrément | PR | Livrable proposé | Preuve restant obligatoire |
+|---|---|---|---|
+| R27.A | [#304](https://github.com/faudard/drawTemp/pull/304) | Salles/portes, atelier Qt, world links canoniques | Tests finaux R5, Qt, overlaps |
+| R27.B | [#319](https://github.com/faudard/drawTemp/pull/319) | Clés/plaques/blocs, séquences, graphe, debugger borné | Replay déterministe, QA softlocks réelle |
+| R27.C | [#334](https://github.com/faudard/drawTemp/pull/334) | Player Qt contextuel, rendu R3 et autosave intra-bataille | R12/Qt CI, Save/Load réel, UX accessible |
+
+**Ordre de fusion obligatoire :** #304 → #319 rebasée sur master
+→ #334 rebasée sur master, uniquement après les checks du SHA final.
+Un `next_missions` tactique n'est pas un SceneRouter et l'état d'un
+`Battle` sauvegardé n'est pas une clé persistante inter-cartes.
+L'acceptation **village → donjon → boss → village** reste à développer
+avec les dépendances R25/26.
+
 ### Règles de gestion des PR
 
 - Chaque PR indique : ID lot, base/head/SHA, dépendances, liste de fichiers, changements de schémas, migrations, parcours E2E, tests, preuves, limites et plan de rollback.
