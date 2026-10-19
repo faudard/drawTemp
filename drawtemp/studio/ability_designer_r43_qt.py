@@ -277,6 +277,9 @@ class AbilityDesignerDialog(QDialog):
             text="r43_new")
         if not ok:
             return
+        self._loading = True
+        self.ability_select.setCurrentIndex(-1)
+        self._loading = False
         self._load_draft(AbilityDraft.create(self.session, value.strip()))
 
     def reload(self):
@@ -290,6 +293,7 @@ class AbilityDesignerDialog(QDialog):
         self.identifier.setReadOnly(draft.original_id is not None)
         self.name.setText(draft.document["name"])
         profiles = draft.document["profiles"]
+        _select(self.preview_mode, profiles[0])
         for mode, checkbox in self.mode_checks.items():
             checkbox.setChecked(mode in profiles)
             t = draft.document["timing"].get(mode, {"windup": 0, "cooldown": 0})
