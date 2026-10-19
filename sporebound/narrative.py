@@ -290,6 +290,8 @@ class StoryBook:
             from .narrative_playback_r42 import CURSOR
             require(CURSOR not in progress.story_flags,
                     'R42 cursor collides with a pre-existing flag')
+            require(len(progress.story_flags) + len(self.raw.get('state', [])) + 1 <= 1000,
+                    'R42 state and cursor exceed Campaign flag budget')
             initialize_state(self.raw, progress)
             initialize_cursor(progress)
         progress.story_started = True
