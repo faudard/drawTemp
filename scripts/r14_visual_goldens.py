@@ -85,15 +85,31 @@ def render_frame(args):
             window.setHeight(680)
             window.show()
             QTest.qWait(350)
-            # QQmlApplicationEngine exposes the ApplicationWindow through the
-            # base QWindow wrapper on some PySide6 6.8 builds. The underlying
-            # C++ object is a QQuickWindow, whose grabWindow() captures the
-            # scenegraph in the offscreen software backend. QWindow itself
-            # does not implement grabWindow().
-            from PySide6.QtQuick import QQuickWindow
-            from shiboken6 import getCppPointer, wrapInstance
-            quick_window = wrapInstance(getCppPointer(window)[0], QQuickWindow)
-            image = quick_window.grabWindow()
+            # QQmlApplicationEngine exposes the QML ApplicationWindow as
+            # PySide6.QtGui.QWindow on Qt 6.8.3. Shiboken may reuse that base
+            # wrapper even after wrapInstance(..., QQuickWindow), leaving
+            # grabWindow() unavailable. Capture its actual QQuickItem content
+            # instead. grabToImage is asynchronous; keep the result alive and
+            # spin a bounded local Qt event loop until the frame is complete.
+            from PySide6.QtCore import QEventLoop, QTimer
+            from PySide6.QtQuick import QQuickItem
+            content_item = window.property("contentItem")
+            if not isinstance(content_item, QQuickItem):
+                raise RuntimeError("Player root has no Qt Quick content item")
+            grab = content_item.grabToImage()
+            if grab is None:
+                raise RuntimeError("Player Qt Quick grabToImage failed to start")
+            frame_loop = QEventLoop()
+            timed_out = [True]
+            def frame_ready():
+                timed_out[0] = False
+                frame_loop.quit()
+            grab.ready.connect(frame_ready)
+            QTimer.singleShot(10000, frame_loop.quit)
+            frame_loop.exec()
+            if timed_out[0]:
+                raise RuntimeError("Player Qt Quick screenshot timed out")
+            image = grab.image()
             window.hide()
             window.close()
             engine.deleteLater()
