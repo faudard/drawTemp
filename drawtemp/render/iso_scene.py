@@ -159,7 +159,7 @@ def scene_from_mission(mission, snapshot=None):
             "interior_floors": deepcopy(mission.interior_floors)}
 
 
-def scene_from_exploration(stage, *, revision=0):
+def scene_from_exploration(stage, *, revision=0, living_world=None):
     """Adapt an R1 narrative exploration snapshot to the same R3 scene schema.
 
     The canonical exploration stage has no authored tactical terrain map. Its
@@ -190,6 +190,29 @@ def scene_from_exploration(stage, *, revision=0):
          "direction": "south"}
         for actor in stage.get("actors", ())
     )
+    # R35.D2: draw read-only living-world NPC positions; never modify
+    # canonical exploration actors or the Campaign/CT state.
+    if living_world is not None:
+        if not isinstance(living_world, Mapping):
+            raise ValueError("Expected a living-world projection mapping")
+        used = {entry["id"] for entry in actors}
+        for npc in living_world.get("npcs", ()):
+            if npc.get("scene") != stage["scene_id"] or npc.get("pos") is None:
+                continue
+            pos = npc["pos"]
+            if (type(pos) is not list or len(pos) != 2
+                    or any(type(n) is not int for n in pos)
+                    or not (0 <= pos[0] < width and 0 <= pos[1] < height)):
+                raise ValueError("Invalid NPC presentation cell")
+            uid = "world:" + npc["id"]
+            if uid in used:
+                raise ValueError("Duplicate NPC render identity")
+            used.add(uid)
+            actors.append({
+                "id": uid, "name": npc["id"], "x": pos[0], "y": pos[1],
+                "team": "ally", "alive": True, "level": 0,
+                "direction": "south", "world_activity": npc["activity"],
+                "world_moving": bool(npc.get("moving", False))})
     objects = [
         {"id": point["id"], "kind": "visited" if point["visited"] else "marker",
          "x": point["pos"][0], "y": point["pos"][1]}
