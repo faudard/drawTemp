@@ -87,68 +87,37 @@ class QtUserJourneys(unittest.TestCase):
                 window.deleteLater()
 
     def test_player_qml_clicks_new_choice_mission_save_resume(self):
-        from PySide6.QtCore import QObject, QPoint, QPointF, QUrl, Qt
-        from PySide6.QtQml import QQmlApplicationEngine
-        from PySide6.QtTest import QTest
-        from drawtemp.player.qt_app import build_controller, create_bridge, scene_for_player
-        from drawtemp.render.qt_viewport import make_controller
-        from drawtemp.sdk.reference import MISSION
+        """Exercise real Player inputs in its production QGuiApplication.
+
+        R14 also exercises a QQuickWidget-based Studio in the same unittest
+        class. On macOS/Qt 6.8 a second QQmlApplicationEngine with its own
+        QQuickWindow after that Widget's scenegraph can segfault. Player
+        production always runs in a separate process, so the gate must verify
+        that real lifecycle rather than accidentally combining two runtimes.
+        The production --gui-journey performs actual QTest mouse/keyboard
+        input through the QML buttons and checks save/resume itself.
+        """
+        import subprocess
+        import sys
 
         with TemporaryDirectory() as folder:
-            controller = build_controller(save_dir=folder, reference=True)
-            renderer = make_controller(scene_for_player(controller))
-            bridge = create_bridge(controller, renderer)
-            engine = QQmlApplicationEngine()
-            engine.setInitialProperties({"smokeMode": False})
-            engine.rootContext().setContextProperty("renderer", renderer)
-            engine.rootContext().setContextProperty("player", bridge)
-            engine.load(QUrl.fromLocalFile(str(Path(__file__).resolve().parents[1] /
-                                               "drawtemp/player/Main.qml")))
-            self.assertTrue(engine.rootObjects(), "Real Player QML did not instantiate")
-            window = engine.rootObjects()[0]
-            try:
-                window.show()
-                QTest.qWait(180)
-                self.assertEqual(controller.state()["screen"], "title")
-
-                def click_text(label):
-                    def recurse(node):
-                        yield node
-                        for child in node.childItems():
-                            yield from recurse(child)
-                    candidates = [
-                        item for item in recurse(window.contentItem())
-                        if item.property("text") == label and
-                        item.property("down") is not None and
-                        item.isVisible() and item.width() > 0 and item.height() > 0
-                    ]
-                    self.assertTrue(candidates, "Missing visible QML button: " + label)
-                    button = candidates[0]
-                    center = button.mapToScene(QPointF(button.width() / 2, button.height() / 2))
-                    QTest.mouseClick(window, Qt.LeftButton,
-                                     pos=QPoint(round(center.x()), round(center.y())))
-                    QTest.qWait(80)
-
-                click_text("Nouvelle partie")
-                self.assertEqual(controller.state()["screen"], "dialogue")
-                click_text("Entrer")
-                self.assertEqual(controller.state()["screen"], "campaign")
-                click_text("Commencer · " + MISSION)
-                self.assertEqual(controller.state()["screen"], "battle")
-                click_text("Sauvegarder · F5")
-                self.assertTrue((Path(folder) / "slot_1.json").is_file())
-                original = controller.session.recording()
-                # Trigger a live title transition, then use the visible Continue button.
-                bridge.titleScreen()
-                self.assertEqual(controller.state()["screen"], "title")
-                click_text("Continuer")
-                self.assertEqual(controller.state()["screen"], "battle")
-                self.assertEqual(controller.session.recording(), original)
-                self.assertEqual(renderer.scene["mission"], MISSION)
-            finally:
-                window.hide()
-                window.close()
-                engine.deleteLater()
+            env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
+                       QT_QUICK_BACKEND="software")
+            process = subprocess.run(
+                [sys.executable, "-m", "drawtemp.player.qt_app",
+                 "--reference", "--save-dir", folder, "--gui-journey"],
+                cwd=Path(__file__).resolve().parents[1], env=env,
+                capture_output=True, text=True, timeout=75, check=False)
+            self.assertEqual(process.returncode, 0,
+                             process.stdout + "\n" + process.stderr)
+            self.assertIn("R14 Player QML GUI input:", process.stdout)
+            self.assertTrue((Path(folder) / "slot_1.json").is_file())
+            # Read the actual checkpoint through the canonical Player, not a
+            # synthetic mock or the subprocess' stdout alone.
+            from drawtemp.player.qt_app import build_controller
+            restored = build_controller(save_dir=folder, reference=True)
+            restored.load(1)
+            self.assertEqual(restored.state()["screen"], "battle")
 
 
 if __name__ == "__main__":
