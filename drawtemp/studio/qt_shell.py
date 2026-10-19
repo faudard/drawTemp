@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDockWidget,
     QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
-    QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QToolBar, QTreeView, QVBoxLayout, QWidget,
+    QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QTabWidget, QToolBar, QTreeView, QVBoxLayout, QWidget,
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
@@ -1073,8 +1073,14 @@ class StudioWindow(QMainWindow):
             return
         if identifier == "minigames":
             from drawtemp.studio.r28e_minigames_qt import MiniGameGallery
-            child = MiniGameGallery()
-            child.openRequested.connect(self.open_path)
+            from drawtemp.studio.r50b_catalog_qt import R50CatalogWidget
+            child = QTabWidget()
+            historical = MiniGameGallery()
+            historical.openRequested.connect(self.open_path)
+            child.addTab(historical, "Mini-jeux R28")
+            creator_catalog = R50CatalogWidget()
+            creator_catalog.openRequested.connect(self.open_path)
+            child.addTab(creator_catalog, "Catalogue R50 (NO-GO)")
         elif identifier == "profiles":
             from drawtemp.studio.profile_editor_qt import ProfileEditorWidget
             child = ProfileEditorWidget(self.session)
