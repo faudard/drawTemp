@@ -361,6 +361,7 @@ class StudioWindow(QMainWindow):
         self._action("undo", "Annuler", self.undo)
         self._action("redo", "Rétablir", self.redo)
         self._action("palette", "Palette de commandes…", self.open_palette)
+        self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
@@ -404,6 +405,7 @@ class StudioWindow(QMainWindow):
             action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
+        tools_menu.addAction(self.commands["r30_creator"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
@@ -491,6 +493,15 @@ class StudioWindow(QMainWindow):
 
     def open_palette(self):
         CommandPalette(self).exec()
+
+    def open_creator_review(self):
+        """One shared editor session; packs are always exported as new copies."""
+        from drawtemp.studio.r30_creator_qt import R30CreatorDialog
+        initial_revision = self.session.revision
+        dialog = R30CreatorDialog(self.session, content_path=self.content_path, parent=self)
+        dialog.exec()
+        if self.session.revision != initial_revision:
+            self.refresh()
 
     def _set_favorites_only(self, index):
         self.proxy.favorite_only = index == 1
