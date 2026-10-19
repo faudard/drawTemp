@@ -130,9 +130,10 @@ class StudioGuideQtTests(unittest.TestCase):
                 self.assertTrue(window.save_document())
                 self.assertIn("save", window._onboarding_done)
                 self.assertFalse("playtest" in window._onboarding_done)
-                with patch("drawtemp.studio.qt_shell.QProcess.startDetached",
-                           return_value=(True, 117)):
+                with patch("drawtemp.studio.qt_shell.QProcess") as process:
+                    process.startDetached.return_value = (True, 117)
                     self.assertTrue(window.playtest())
+                    process.startDetached.assert_called_once()
                 self.assertEqual(window._onboarding_done, set(STEP_IDS))
                 self.assertFalse(window.guide_next_button.isEnabled())
                 window.hide_guide()
@@ -162,8 +163,10 @@ class StudioGuideQtTests(unittest.TestCase):
                 self.assertFalse(window._onboarding_done)
                 self.assertIsNone(window.content_path)
                 self.assertTrue(window.open_path(path))
-                with patch("drawtemp.studio.qt_shell.QProcess.startDetached",
-                           return_value=(False, 0)), patch.object(window, "report_error"):
+                self.assertTrue(window.save_document())
+                with patch("drawtemp.studio.qt_shell.QProcess") as process, patch.object(
+                        window, "report_error"):
+                    process.startDetached.return_value = (False, 0)
                     self.assertFalse(window.playtest())
                 self.assertNotIn("playtest", window._onboarding_done)
                 self.assertIn("save", window._onboarding_done)
