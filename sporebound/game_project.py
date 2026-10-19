@@ -116,6 +116,11 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # R32: reject malformed geometry on load, even outside the Studio.
+        from .physics_scenes import EXTENSION as PHYSICS_EXTENSION, physics_scene_ids, validate_physics_catalog
+        if PHYSICS_EXTENSION in self.extensions:
+            validate_physics_catalog(self.extensions[PHYSICS_EXTENSION]["data"],
+                                     known_ids=physics_scene_ids(content, self))
         if "drawtemp.metroidvania" in self.extensions:
             from .metroidvania import validate_metroidvania
             validate_metroidvania(
