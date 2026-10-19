@@ -136,7 +136,7 @@ class RoutedRealtimeTests(unittest.TestCase):
             lambda data: data["scene_realtime"]["journal"]["states"].__setitem__(
                 0, "0" * 64),
         ]
-        for change in changes[:-1]:
+        for change in changes:
             row = deepcopy(original)
             change(row)
             # Re-hash the outer session to exercise validation below that layer.
