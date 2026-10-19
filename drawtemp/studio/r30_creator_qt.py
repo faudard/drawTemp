@@ -23,6 +23,7 @@ from drawtemp.sdk.reference import reference_project
 from drawtemp.studio.r30_creator_review import (
     MergeReviewController, PackReviewController,
 )
+from drawtemp.studio.r30_git_review import GitReviewController
 
 
 def _short(value):
@@ -50,13 +51,15 @@ class R30CreatorDialog(QDialog):
     def __init__(self, session: AuthoringSession, *, content_path=None, parent=None):
         super().__init__(parent)
         self.setObjectName("r30-creator-dialog")
-        self.setWindowTitle("DrawTemp Creator — Packs & révision sémantique (R30.C)")
+        self.setWindowTitle("DrawTemp Creator — Packs, diff et Git local (R30.D)")
         self.resize(1080, 720)
         self.session = session
         self.content_path = Path(content_path) if content_path else None
         self.pack_controller = (PackReviewController(self.content_path)
                                 if self.content_path else None)
         self.merge_controller = MergeReviewController(self.session)
+        self.git_controller = None
+        self._active_merge = self.merge_controller
         self._pack_populating = False
         self._merge_choices = {}
         root = QVBoxLayout(self)
@@ -68,6 +71,7 @@ class R30CreatorDialog(QDialog):
         root.addWidget(self.tabs)
         self._build_pack_tab()
         self._build_merge_tab()
+        self._build_git_tab()
         close_button = QPushButton("Fermer")
         close_button.clicked.connect(self.reject)
         root.addWidget(close_button)
@@ -289,6 +293,9 @@ class R30CreatorDialog(QDialog):
 
     def _invalidate_merge(self):
         self.merge_controller.invalidate()
+        if self.git_controller is not None:
+            self.git_controller.invalidate()
+        self._active_merge = self.merge_controller
         self.merge_table.setRowCount(0)
         self._merge_choices.clear()
         self.merge_apply_button.setEnabled(False)
@@ -320,6 +327,9 @@ class R30CreatorDialog(QDialog):
         except (ValueError, OSError) as exc:
             self._error("Comparaison impossible", exc, self.merge_status)
             return None
+        return self._render_merge_preview(preview)
+
+    def _render_merge_preview(self, preview):
         self._merge_choices = {}
         changes = [("Local", entry) for entry in preview.local_changes]
         changes += [("Entrant", entry) for entry in preview.incoming_changes]
@@ -357,9 +367,9 @@ class R30CreatorDialog(QDialog):
         complete = all(widget.currentData() in ("local", "incoming")
                        for widget in self._merge_choices.values())
         self.merge_apply_button.setEnabled(
-            complete and self.merge_controller._review is not None and
-            bool(self.merge_controller._review.local_changes or
-                 self.merge_controller._review.incoming_changes))
+            complete and self._active_merge._review is not None and
+            bool(self._active_merge._review.local_changes or
+                 self._active_merge._review.incoming_changes))
 
     def _apply_merge_dialog(self):
         if not self.merge_apply_button.isEnabled():
@@ -377,7 +387,7 @@ class R30CreatorDialog(QDialog):
         decisions = {path: widget.currentData()
                      for path, widget in self._merge_choices.items()}
         try:
-            transition = self.merge_controller.apply(decisions)
+            transition = self._active_merge.apply(decisions)
         except (ValueError, OSError) as exc:
             self.merge_apply_button.setEnabled(False)
             self._error("Fusion refusée", exc, self.merge_status)
@@ -388,6 +398,78 @@ class R30CreatorDialog(QDialog):
             "Utilisez Enregistrer dans le Studio pour la persister, "
             "ou Annuler (Undo) pour revenir.")
         return transition
+
+    def _build_git_tab(self):
+        """Read-only local Git branches/tags, never checkout or commit."""
+        panel = QWidget()
+        self.tabs.addTab(panel, "Git local")
+        layout = QVBoxLayout(panel)
+        intro = QLabel(
+            "Historique Git LOCAL du projet enregistré : comparer deux refs "
+            "de la même paire Content/GameProject. Aucun fetch, checkout, "
+            "commit, push, reset ou modification de la branche Git.")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        self.git_base_ref = QLineEdit("master")
+        self.git_base_ref.setAccessibleName("Référence Git de base commune")
+        self.git_incoming_ref = QLineEdit("HEAD")
+        self.git_incoming_ref.setAccessibleName("Référence Git entrante")
+        for label, widget in (("Base Git", self.git_base_ref),
+                              ("Branche ou commit entrant", self.git_incoming_ref)):
+            row = QHBoxLayout()
+            row.addWidget(QLabel(label))
+            row.addWidget(widget)
+            layout.addLayout(row)
+            widget.textChanged.connect(self._invalidate_merge)
+        self.git_compare_button = QPushButton("Comparer ces refs en lecture seule")
+        self.git_compare_button.clicked.connect(self._compare_git)
+        self.git_compare_button.setEnabled(self.content_path is not None)
+        layout.addWidget(self.git_compare_button)
+        self.git_status = QLabel(
+            "Les ressources historiques sont lues depuis les blobs Git. "
+            "Résoudre les conflits dans l'onglet Diff & conflits ; "
+            "appliquer modifie uniquement la session, pas Git.")
+        self.git_status.setWordWrap(True)
+        self.git_status.setAccessibleName("Résultat de comparaison Git")
+        layout.addWidget(self.git_status)
+        layout.addStretch(1)
+        if self.content_path is None:
+            self.git_status.setText(
+                "Projet non enregistré : enregistrez Content/GameProject "
+                "dans un dépôt Git avant de comparer des commits.")
+
+    def _compare_git(self):
+        return self.compare_git_refs(self.git_base_ref.text().strip(),
+                                     self.git_incoming_ref.text().strip())
+
+    def compare_git_refs(self, base_ref, incoming_ref):
+        self._invalidate_merge()
+        if self.content_path is None:
+            self.git_status.setText("Projet enregistré requis")
+            return None
+        self.git_base_ref.blockSignals(True)
+        self.git_incoming_ref.blockSignals(True)
+        try:
+            self.git_base_ref.setText(str(base_ref))
+            self.git_incoming_ref.setText(str(incoming_ref))
+        finally:
+            self.git_base_ref.blockSignals(False)
+            self.git_incoming_ref.blockSignals(False)
+        try:
+            if self.git_controller is None:
+                self.git_controller = GitReviewController(self.session, self.content_path)
+            preview = self.git_controller.compare_refs(base_ref, incoming_ref)
+        except (ValueError, OSError) as exc:
+            self._error("Revue Git refusée", exc, self.git_status)
+            return None
+        self._active_merge = self.git_controller
+        base, incoming = self.git_controller.refs
+        self.git_status.setText(
+            f"BASE {base.ref}: {base.commit[:12]} | ENTRANT "
+            f"{incoming.ref}: {incoming.commit[:12]}. "
+            "Refs figées et vérifiées avant application. Aucune écriture Git.")
+        self.tabs.setCurrentIndex(1)  # Reuse canonical diff + decision widgets.
+        return self._render_merge_preview(preview)
 
     def _error(self, title, error, label):
         label.setText(str(error))
