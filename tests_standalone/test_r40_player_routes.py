@@ -94,6 +94,48 @@ class R40PlayerRoutesTests(unittest.TestCase):
                 player.route_transition("to_citadel")
             self.assertEqual(player.session.recording(), before)
 
+    def test_r34_roguelite_in_real_player_menu_with_save_and_meta(self):
+        with TemporaryDirectory() as folder:
+            root = Path(folder) / "roguelite"
+            content = create_project(ProjectSpec("r40-roguelite", root))
+            player = _player(content, folder)
+            self.assertEqual(player.new_game()["screen"], "dialogue")
+            player.choose("enter")
+            view = player.state()
+            self.assertEqual(view["screen"], "campaign")
+            self.assertTrue(view["roguelite"]["enabled"])
+            self.assertEqual(view["roguelite"]["state"]["status"], "active")
+            self.assertEqual(view["roguelite"]["state"]["meta"]["coins"], 0)
+            self.assertEqual(view["roguelite"]["can_claim"], False)
+            route = list(view["roguelite"]["state"]["layout"]["route"])
+            original_gold = player.session.snapshot().progress["gold"]
+            player.roguelite_checkpoint()
+            player.save(1)
+            resumed = _player(content, folder)
+            resumed.load(1)
+            self.assertIsNotNone(resumed.state()["roguelite"]["state"]["checkpoint"])
+            for destination in route[1:]:
+                candidate = next(
+                    row for row in resumed.state()["roguelite"]["moves"]
+                    if row["id"] == destination)
+                self.assertTrue(candidate["available"])
+                resumed.roguelite_move(destination)
+            completed = resumed.state()["roguelite"]["state"]
+            self.assertEqual(completed["status"], "won")
+            self.assertEqual(completed["meta"]["wins"], 1)
+            self.assertEqual(completed["meta"]["coins"], 7)
+            self.assertEqual(resumed.session.snapshot().progress["gold"],
+                             original_gold)
+            resumed.save(1)
+            third = _player(content, folder)
+            third.load(1)
+            third.roguelite_restart()
+            self.assertEqual(third.state()["roguelite"]["state"]["meta"]["wins"], 1)
+            self.assertEqual(third.state()["roguelite"]["state"]["inventory"]["loot"], 0)
+            third.save(1)
+            final = _player(content, folder)
+            self.assertEqual(final.load(1)["roguelite"]["state"]["meta"]["wins"], 1)
+
     def test_authored_content_player_save_is_bound_to_project(self):
         with TemporaryDirectory() as folder:
             adventure = _project(folder, "r40-adventure")
