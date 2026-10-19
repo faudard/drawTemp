@@ -68,7 +68,7 @@ class HeadlessR30CReviewTests(unittest.TestCase):
         self._set_title(self.incoming_session, "Remote name II")
         self._save_incoming()
         self.merge.compare(self.base, self.incoming)
-        with self.assertRaisesRegex(ValueError, "unchanged"):
+        with self.assertRaisesRegex(ValueError, "makes no changes"):
             # Review is safe, but a choice that makes no changes is not a valid
             # canonical R1 authoring transaction.
             self.merge.apply({"/project/title": "local"})
