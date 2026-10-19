@@ -50,6 +50,22 @@ class NarrativeQtR42Tests(unittest.TestCase):
         self.dialog.undo()
         self.assertEqual(self.dialog.lines.rowCount(), 1)
 
+    def test_debugger_is_isolated_and_qt_displays_trace(self):
+        from drawtemp.studio.narrative_debugger_r42 import NarrativeDebugger
+        self.dialog.preview_migration()
+        self.dialog.apply_preview()
+        before = self.session.snapshot().to_dict()
+        self.dialog.debugger = NarrativeDebugger(self.session, 'main')
+        self.dialog.debug_render()
+        self.assertIn('arrival', self.dialog.debug_output.toPlainText())
+        self.assertIn('isolé', self.dialog.debug_output.toPlainText())
+        self.dialog.debugger.choose('enter')
+        self.dialog.debug_render()
+        self.assertIn('décisions', self.dialog.debug_output.toPlainText())
+        self.assertEqual(self.session.snapshot().to_dict(), before)
+        self.dialog.debug_reset()
+        self.assertIsNone(self.dialog.debugger)
+
     def test_source_usage_and_undo_refresh(self):
         self.dialog.preview_migration()
         self.dialog.apply_preview()
