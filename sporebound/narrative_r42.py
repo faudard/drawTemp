@@ -26,7 +26,7 @@ MAX_PATH_EDGES = 32
 
 def _legacy_projection(story):
     """Project v2 onto R9's executable schema, without changing semantics."""
-    allowed = {'schema_version', 'subgraphs', 'scenes', 'entry_scenes',
+    allowed = {'schema_version', 'subgraphs', 'state', 'scenes', 'entry_scenes',
                'after_mission', 'after_strategic_event', 'during_tactical_event'}
     require(type(story) is dict and set(story) <= allowed,
             'Unknown Narrative v2 field')
@@ -34,7 +34,7 @@ def _legacy_projection(story):
             and story['schema_version'] == SCHEMA_VERSION,
             'Unsupported Narrative v2 schema version')
     result = {key: deepcopy(value) for key, value in story.items()
-              if key not in ('schema_version', 'subgraphs', 'scenes')}
+              if key not in ('schema_version', 'subgraphs', 'state', 'scenes')}
     result['scenes'] = []
     for scene in story.get('scenes', []):
         require(type(scene) is dict and 'lines' in scene,
@@ -95,6 +95,10 @@ def validate_story_v2(story, content, campaigns):
         names.add(item['id'])
         require(type(item['entry_scene']) is str and item['entry_scene'] in ids,
                 'Subgraph entry must reference an authored scene')
+
+    # R42.A2 uses ordinary R9 flags/conditions/effects, with typed validation.
+    from .narrative_state_r42 import validate_state_catalog
+    validate_state_catalog(story, content, campaigns)
 
     # R9 validates acyclicity. Enforce a separate v2 bound on longest path,
     # including reused branches, to avoid unbounded authoring/Player navigation.
