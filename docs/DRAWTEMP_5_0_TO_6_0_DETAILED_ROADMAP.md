@@ -26,6 +26,8 @@
 
 ## 1. Baseline vérifiée et risques de fusion
 
+**Addendum R17.A, 18 octobre 2026 — [Merge Ledger](drawtemp5/R17_MERGE_LEDGER.md) :** les anciens merge commits #263/#273 vers une branche intermédiaire ne sont pas automatiquement des ancêtres de `master`. Les fonctionnalités R9 sont réintégrées sur la base de `master` par les commits des PR #280–#282 ; la preuve de présence et les tests doivent être vérifiés sur le SHA consolidé, puis après fusion.
+
 État ponctuel GitHub au 15/10/2026 :
 - [#248 R7.B](https://github.com/faudard/drawTemp/pull/248) est la PR encore ouverte lors de la vérification. Son état de mergeabilité peut changer : contrôler sa base et sa CI avant fusion.
 - [#264 R7.C](https://github.com/faudard/drawTemp/pull/264), costumes Jeanne/équipement, a été fusionnée **vers la branche de #248**, et non directement vers master ; prouver sa présence après intégration finale.
@@ -74,6 +76,8 @@
 **Chemin critique :** INT-CROSS-01 → R17 → R18/R19 (parallélisables) → R20 → R21/R22 (partiellement parallèles) → R23 → R24. Ne pas attendre R20 pour lancer les tests de performance, la documentation ou le prototype d'export.
 
 ## 3. R17 — Post-merge Integration & Release Readiness
+
+> **Intégration consolidée R17, 18 octobre 2026 (PR unique, depuis master) :** les développements des PR #277 à #284 sont rassemblés dans une branche contenant leurs commits d'origine. Inclus : registre réel des fusions, correctif R7 de fallback atlas, réparation de syntaxe certification, moteur pages R9.D, Studio Qt R9.C, E2E Studio→Player, export natif multi-OS avec runner séparé, et parité visuelle R3. Les anciennes PR sont remplacées par la PR de consolidation ; les statuts historiques intermédiaires ne constituent pas une certification globale. **R17.8 et R17.5** sont validés seulement sur les éléments couverts par la CI logicielle : licences, signatures, GPU physique, goldens humains, autres gates P0 et audit release restent ouverts. Voir les dossiers `docs/drawtemp5/R17_*.md`.
 
 **But :** terminer les contrats 5.0, fermer les écarts d'intégration, sans ajouter une nouvelle architecture.
 

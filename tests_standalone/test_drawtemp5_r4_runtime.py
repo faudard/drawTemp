@@ -73,7 +73,7 @@ class R4RuntimeIntegrationTests(unittest.TestCase):
             # Player consumes the same GameProject and exact R3 projection.
             ctrl = build_controller(content_path=content_path, project_path=project_path,
                                     save_dir=Path(tmp) / "saves")
-            self.assertEqual(ctrl.asset_project_path, project_path)
+            self.assertEqual(ctrl.asset_project_path.resolve(), project_path.resolve())
             player = PresentationAssets.for_project(ctrl.project, ctrl.asset_project_path)
             ctrl.new_game()
             ctrl.choose("enter")
@@ -121,7 +121,13 @@ class R4RuntimeIntegrationTests(unittest.TestCase):
                 os.chdir(Path(tmp).parent)
                 runtime = PresentationAssets.for_project(project, project_path)
                 frame = runtime.actor_frame("jeanne")
-                self.assertTrue(frame["imageUrl"].startswith(project_path.parent.as_uri()))
+                from urllib.parse import urlparse, unquote
+                from urllib.request import url2pathname
+                url = urlparse(frame["imageUrl"])
+                self.assertEqual(url.scheme, "file")
+                image = Path(url2pathname(unquote(url.path)))
+                self.assertTrue(image.is_file())
+                self.assertTrue(image.resolve().is_relative_to(project_path.parent.resolve()))
             finally:
                 os.chdir(current)
             with self.assertRaises(ValueError):

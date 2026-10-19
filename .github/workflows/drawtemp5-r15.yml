@@ -71,6 +71,16 @@ jobs:
           else
             cd export/Jeanne && ./Player/DrawTempPlayer --smoke && ./Player/DrawTempPlayer --smoke --smoke-scene exploration
           fi
+      - name: Archive native game bundle with executable permissions
+        shell: bash
+        run: tar -czf "r15-bundle-${{ runner.os }}.tar.gz" -C export Jeanne
+      - name: Publish native game for separate clean-runner verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: r15-bundle-${{ runner.os }}
+          path: r15-bundle-${{ runner.os }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
       - name: Freeze Qt Map Studio
         run: >-
           python -m PyInstaller --noconfirm --clean --onedir
@@ -86,3 +96,68 @@ jobs:
             export/Jeanne/**
             dist/DrawTempStudio/**
           if-no-files-found: warn
+
+  relocated-player:
+    name: R17.8 exported Player / ${{ matrix.os }} / isolated runner
+    needs: native-bundle
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      # Deliberately NO checkout, setup-python, pip, or Studio in this job.
+      # libEGL/libOpenGL are documented OS runtime prerequisites, not Python.
+      - name: Linux Qt system runtime (no Python/Studio install)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - name: Download only the released game archive
+        uses: actions/download-artifact@v4
+        with:
+          name: r15-bundle-${{ runner.os }}
+          path: ${{ runner.temp }}/r17-game-download
+      - name: Verify relocated native launch and tamper rejection
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          PYTHONPATH: ''
+          PYTHONHOME: ''
+          PYTHONNOUSERSITE: '1'
+        run: |
+          set -euo pipefail
+          runtime_temp="$RUNNER_TEMP"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # Git Bash tar interprets D:/... as a remote archive; use POSIX path.
+            runtime_temp="$(cygpath -u "$RUNNER_TEMP")"
+          fi
+          dest="$runtime_temp/r17-fresh-player"
+          mkdir -p "$dest"
+          tar -xzf "$runtime_temp/r17-game-download/r15-bundle-${{ runner.os }}.tar.gz" -C "$dest"
+          cd "$dest/Jeanne"
+          test -f manifest.json
+          test -f game/jeanne.json
+          test -f game/jeanne.game.json
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            player="./Player/DrawTempPlayer.exe"
+          else
+            player="./Player/DrawTempPlayer"
+            test -x "$player"
+          fi
+          # These two launches come from the extracted bundle in a distinct
+          # runner with no repository checkout, installed wheel, or Studio.
+          "$player" --smoke
+          "$player" --smoke --smoke-scene exploration
+          printf '\nTamper rejection (mandatory):\n'
+          printf '\nR17-NEGATIVE-TAMPER\n' >> game/jeanne.json
+          if "$player" --smoke > "$runtime_temp/r17-tamper.log" 2>&1; then
+            echo "FAIL: native Player accepted modified game assets"
+            exit 1
+          fi
+          if ! grep -qi "integrity failure" "$runtime_temp/r17-tamper.log"; then
+            echo "FAIL: expected integrity failure, got:"
+            cat "$runtime_temp/r17-tamper.log"
+            exit 1
+          fi
+          echo "R17.8 isolated-runner smoke + fail-closed tamper gate passed"

@@ -100,7 +100,11 @@ def run_gate(adapter_type=SessionAdapter, seed=17):
         if legacy.active_battle.result != "victory":
             raise AssertionError("Reference combat failed to reach victory")
         replayed = GameSession.from_recording(candidate.snapshot(), content, project)
-        if replayed.recording() != legacy.recording():
+        # Independent sessions have distinct per-instance battle UUIDs; this
+        # is not gameplay divergence. The envelope checksum and replay were
+        # verified during load above. Compare the canonical tactical payload
+        # with the same UUID-normalization used by every previous parity gate.
+        if comparable(replayed.recording()) != comparable(legacy.recording()):
             raise AssertionError("Replay divergence")
     return {"schema": 1, "seed": seed, "result": "victory", "trace": trace,
             "content_sha256": fingerprint(content.to_dict()),

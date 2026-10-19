@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from .iso_scene import Camera, IsoProjection, pick, render_items, scene_from_mission
+from .event_overlay import project_event_markers
 from .tile_chunks import TileChunkIndex
 from .visual_compositor import actor_visual_position, automatic_cutaway
 from .building_geometry import pick_surface
@@ -43,7 +44,12 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self._building_level = 0
             self._building_cutaway = False
             self._items = []
+            self._event_markers = []
+            self._event_selected = ""
             self._base_items = []
+            # Keep R4 atlas decoration separate from R7 frame state.
+            # Missing R7 frames must fall back without stale imageUrl.
+            self._visual_base_items = []
             self._elapsed_ms = 0
             self.assets = assets
             self._index = TileChunkIndex(scene)
@@ -146,6 +152,8 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                 self._batch_rows, self._batched_ids = self._batch.prepare(self._items)
             else:
                 self._batch_rows, self._batched_ids = [], set()
+            self._visual_base_items = self._items
+            self._items = [dict(row) for row in self._visual_base_items]
             self.decorate_frames(self._items)
             self._filter_visible_items()
             self.sceneChanged.emit()
@@ -183,7 +191,9 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             """Tick just the actor frames; do not recompute/cull terrain at 12 Hz."""
             if self._character is None:
                 return
-            rows = [dict(row) for row in self._items]
+            # Re-sample from undecorated R4 rows rather than the previous
+            # R7 frame; a missing idle/death frame must not display stale art.
+            rows = [dict(row) for row in self._visual_base_items]
             self.decorate_frames(rows)
             if rows != self._items:
                 self._items = rows
@@ -263,6 +273,23 @@ def make_controller(scene, atlas_url=None, *, assets=None,
         def items(self):
             return self._items
 
+        @Property("QVariantList", notify=sceneChanged)
+        def eventMarkers(self):
+            return project_event_markers(self.scene, self._event_markers,
+                                         selected_id=self._event_selected,
+                                         projection=self.projection)
+
+        def setEventMarkers(self, markers, selected_id=""):
+            """Read-only R9 overlay: opt-in, independent of Player render items."""
+            from copy import deepcopy
+            staged = deepcopy(markers)
+            project_event_markers(self.scene, staged,
+                                  selected_id=selected_id,
+                                  projection=self.projection)
+            self._event_markers = staged
+            self._event_selected = selected_id
+            self.sceneChanged.emit()
+
         @Property("QVariantMap", notify=cameraChanged)
         def cameraState(self):
             return {"zoom": self.camera.zoom, "panX": self.camera.pan_x,
@@ -295,8 +322,9 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                 return
             if self.assets is not None and self.assets.has_animations:
                 self._elapsed_ms += delta_ms
-                self._items = self.assets.decorate(
+                self._visual_base_items = self.assets.decorate(
                     self._base_items, elapsed_ms=self._elapsed_ms)
+                self._items = [dict(row) for row in self._visual_base_items]
                 self.decorate_frames(self._items)
                 self._filter_visible_items()
                 self.sceneChanged.emit()
@@ -453,6 +481,8 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                        self.scene["height"] != new_scene["height"])
             self.scene = new_scene
             if changed:
+                self._event_markers = []
+                self._event_selected = ""
                 self._action_begins.clear()
             self.selection = None
             self.overlays = {}  # Never carry stale tactical previews across turns.

@@ -76,7 +76,8 @@ def _without_ephemeral_ids(record, identities):
     tactical = value.get("tactical")
     if isinstance(tactical, dict) and isinstance(tactical.get("battle_id"), str):
         original = tactical["battle_id"]
-        token = identities.setdefault(original, "<battle-%d>" % len(identities))
+        token = identities.setdefault(
+            original, "<battle-%d>" % len(set(identities.values())))
         tactical["battle_id"] = token
     groups = value.get("front_battle_ids")
     if isinstance(groups, dict):
@@ -153,9 +154,36 @@ def certify_trace(content, project, campaign_id, commands, *,
                     *deepcopy(command.args), **deepcopy(command.kwargs))
                 recorded = continuous.recording()
                 second = replayed.recording()
-                if (_without_ephemeral_ids(recorded, continuous_ids) !=\n                        _without_ephemeral_ids(second, resumed_ids)):
-                    raise CertificationError("runtime_divergence",
-                                             "Continuous and independently resumed engines differ")
+                normal_continuous = _without_ephemeral_ids(recorded, continuous_ids)
+                normal_resumed = _without_ephemeral_ids(second, resumed_ids)
+                if normal_continuous != normal_resumed:
+                    # Identify the first real mismatching field without
+                    # weakening exact comparison of the two authenticated
+                    # recordings. This diagnostics-only path is especially
+                    # useful for UUID and campaign-progress regressions.
+                    def first_difference(left, right, location="$"):
+                        if type(left) is not type(right):
+                            return location + " (type)"
+                        if isinstance(left, dict):
+                            if set(left) != set(right):
+                                return location + " (keys " + repr(
+                                    sorted(set(left) ^ set(right))) + ")"
+                            for key in sorted(left):
+                                if left[key] != right[key]:
+                                    return first_difference(
+                                        left[key], right[key], location + "." + str(key))
+                        elif isinstance(left, list):
+                            if len(left) != len(right):
+                                return location + " (length)"
+                            for offset, (a, b) in enumerate(zip(left, right)):
+                                if a != b:
+                                    return first_difference(
+                                        a, b, location + "[" + str(offset) + "]")
+                        return location
+                    raise CertificationError(
+                        "runtime_divergence",
+                        "Continuous and independently resumed engines differ at " +
+                        first_difference(normal_continuous, normal_resumed))
                 # Verify CT, RNG, event streams and front timelines *before*
                 # re-binding the resumed handle to the canonical source UUID.
                 left = _witness(index, command.operation, continuous, recorded)
@@ -176,6 +204,12 @@ def certify_trace(content, project, campaign_id, commands, *,
                     raise CertificationError("disk_divergence",
                                              "Checkpoint changes after disk replay")
                 replayed = verify_recording(recorded, content, project)
+                # The resumed timeline now holds the authenticated continuous
+                # battle IDs, rather than the independent IDs from the command
+                # just executed. Preserve each established token lease across
+                # this switch; a later command must not mislabel the same
+                # battle as a fresh identity or rewrite campaign history.
+                resumed_ids.update(continuous_ids)
                 replay_step = _witness(index, command.operation, replayed, recorded)
                 if replay_step != _witness(index, command.operation, continuous, recorded):
                     raise CertificationError("state_divergence",

@@ -85,7 +85,20 @@ def render_frame(args):
             window.setHeight(680)
             window.show()
             QTest.qWait(350)
-            image = window.grabWindow()
+            # QQmlApplicationEngine can expose ApplicationWindow as the base
+            # QWindow wrapper. Retrieve the *typed* QQuickWindow through its
+            # real contentItem.window(), avoiding unsafe Shiboken re-wrapping.
+            # QQuickWindow.grabWindow() is a synchronous scenegraph capture;
+            # QQuickItem.grabToImage() can segfault on macOS software/offscreen
+            # render loops with a nested event loop.
+            from PySide6.QtQuick import QQuickItem, QQuickWindow
+            content_item = window.property("contentItem")
+            if not isinstance(content_item, QQuickItem):
+                raise RuntimeError("Player root has no Qt Quick content item")
+            quick_window = content_item.window()
+            if not isinstance(quick_window, QQuickWindow):
+                raise RuntimeError("Player content item is not attached to QQuickWindow")
+            image = quick_window.grabWindow()
             window.hide()
             window.close()
             engine.deleteLater()

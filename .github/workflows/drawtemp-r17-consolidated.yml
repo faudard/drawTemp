@@ -1,0 +1,80 @@
+name: DrawTemp R17 Consolidated Integration
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/drawtemp-r17-consolidated.yml'
+      - 'drawtemp/**'
+      - 'sporebound/**'
+      - 'tests_standalone/test_r17*'
+      - 'tests_standalone/test_drawtemp5_r7_qt.py'
+      - 'tests_standalone/test_drawtemp5_r9c.py'
+      - 'tests_standalone/test_drawtemp5_r9d.py'
+      - 'tests_standalone/test_drawtemp5_r15.py'
+      - 'docs/drawtemp5/R17_CONSOLIDATED_REVIEW.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-and-export:
+    name: Headless R17 / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: R17 ledger, syntax, R9 pages, export and Player E2E
+        run: >-
+          python -m unittest -v
+          tests_standalone.test_r17_merge_ledger
+          tests_standalone.test_r17_source_integrity
+          tests_standalone.test_drawtemp5_r9d
+          tests_standalone.test_r17c_event_integration
+          tests_standalone.test_drawtemp5_r9c
+          tests_standalone.test_drawtemp5_r15
+          tests_standalone.test_drawtemp5_r15_creator
+          tests_standalone.test_r17_renderer_parity.RendererParityContracts
+          tests_standalone.test_r17d_studio_player_roundtrip.StudioPlayerRoundtripTests
+
+  qt-integration:
+    name: Combined R7/R9/Player/Renderer / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux native Qt prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]"
+      - name: Integrated cross-workshop/Player render suite
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          DRAWTEMP_R17_PARITY_DIR: ${{ github.workspace }}/artifacts/r17-parity
+        run: >-
+          python -m unittest -v
+          tests_standalone.test_drawtemp5_r7_qt
+          tests_standalone.test_drawtemp5_r9c
+          tests_standalone.test_drawtemp5_r9d
+          tests_standalone.test_r17c_event_integration
+          tests_standalone.test_r17d_studio_player_roundtrip
+          tests_standalone.test_r17_renderer_parity
+      - name: Export capture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r17-combined-${{ runner.os }}
+          path: artifacts/r17-parity/**
+          if-no-files-found: warn

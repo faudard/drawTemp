@@ -76,3 +76,22 @@ L'absence de run, block, magic et victory reste visible dans les diagnostics.
   profondeur réels, vérification 24/54/96 px et budget GPU.
 
 La fermeture du gate R7 reste explicitement **ouverte**.
+
+## R17.B1 — Réinitialisation des frames de présentation partielles
+
+Sur un pack partiel, une action dessinée (par exemple attaque ou marche)
+peut exister sans pose idle pour la même orientation. Lors du retour à idle,
+un tick incrémental ne doit jamais afficher la texture de l'action précédente.
+
+Le contrôleur R3 conserve désormais les lignes de base décorées par R4
+**avant** surcouche R7, puis reconstruit uniquement la présentation lors
+des ticks. Cela évite la fuite de `imageUrl`/`atlasX` du sprite précédent
+et préserve le fallback R4 ou vectoriel. Les données de combat, CT,
+sauvegardes et replay ne changent pas.
+
+Régression automatisée dans
+`tests_standalone/test_drawtemp5_r7_qt.py::R7QtIntegrationTests.test_expired_attack_with_missing_idle_restores_baseline_instead_of_stale_art`.
+
+Cela ne clôt **pas** R17.2 : l'intégration complète des clips runtime aux
+déplacements, équipements et visualisations Studio/Player ainsi que la
+validation physique GPU restent à certifier.

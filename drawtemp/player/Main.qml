@@ -812,8 +812,9 @@ ApplicationWindow {
             Button { text: "Prévision attaque"; onClicked: player.preview("attack") }
             Button {
                 text: "Utiliser " + (root.playerData.tactical.skill || "attaque")
-                enabled: root.playerData.tactical.focus &&
-                         root.playerData.tactical.focus.can_target === true
+                enabled: !!(root.playerData && root.playerData.tactical &&
+                            root.playerData.tactical.focus &&
+                            root.playerData.tactical.focus.can_target === true)
                 onClicked: {
                     if (root.playerData.tactical.skill === "attack")
                         player.command("attack")

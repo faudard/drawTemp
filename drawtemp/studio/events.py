@@ -10,14 +10,27 @@ from copy import deepcopy
 
 from drawtemp.core import Content, GameProject
 from drawtemp.sdk.authoring import AuthoringSession
-from sporebound import event_composer, event_graph, story_authoring
+from sporebound import event_composer, event_graph, event_pages, story_authoring
 from sporebound.entity_event_studio import author_gate_sequence
 from sporebound.event_branch_builder import author_choice_fork
 from sporebound.branch_qa_363 import (audit_branch_coverage, format_branch_qa,
                                       probe_story_choices, probe_tactical_branches)
 from drawtemp.studio.event_debug_controller import EventDebugController
+from drawtemp.studio.event_command_catalog import tactical_action, story_effect
+from drawtemp.studio.event_presentation import add_event_cue
+from drawtemp.render.iso_scene import scene_from_mission
 from sporebound.event_context import inspect_event, preview_event, format_preview_report
 from sporebound.event_debugger import EventDebugger, format_debug_report
+
+
+def _authored_content(data):
+    """Validate current Content with its opt-in R6/R9 rule manifest.
+
+    Story and cinematic edits must use the same contract as AuthoringSession.
+    Falling back to default_rules() rejects already-authored event pages.
+    """
+    from sporebound.tactical_rpg3 import authored_rules_for_document
+    return Content.from_dict(data, rules=authored_rules_for_document(data))
 
 
 class EventStudio:
@@ -49,7 +62,7 @@ class EventStudio:
 
     def inspect(self, mission_id, event_id):
         state = self.documents()
-        content = Content.from_dict(state["content"])
+        content = _authored_content(state["content"])
         project = GameProject.from_dict(state["project"], content)
         return inspect_event(state["content"], mission_id, event_id, project)
 
@@ -103,6 +116,92 @@ class EventStudio:
                             event_graph.update_action(data, mission_id, event_id,
                                                       index, action))
 
+
+    def add_tactical_command(self, mission_id, event_id, kind, fields):
+        """Every action goes through the legacy registered rule contract."""
+        return self.add_action(mission_id, event_id, tactical_action(kind, fields))
+
+    def replace_tactical_command(self, mission_id, event_id, index, kind, fields):
+        return self.replace_action(mission_id, event_id, index,
+                                   tactical_action(kind, fields))
+
+    def add_presentation_cue(self, mission_id, event_id, *, clip_id,
+                             clip_name, kind, cue_id,
+                             start_ms=0, duration_ms=1000, fields=None):
+        """Typed dialogue/audio/actor/camera/FX on the existing Player cinematic hook."""
+        self.event(mission_id, event_id)
+        return self._pair(
+            mission_id, "presentation-cue",
+            lambda data, project: (
+                data, add_event_cue(
+                    project, mission_id, event_id,
+                    clip_id=clip_id, clip_name=clip_name,
+                    kind=kind, cue_id=cue_id,
+                    start_ms=start_ms, duration_ms=duration_ms,
+                    fields=fields)))
+
+    def add_story_effect(self, mission_id, scene_id, choice_id, kind, fields):
+        """Change a REAL StoryBook choice's variables/items as one R1 transaction."""
+        payload = story_effect(kind, fields)
+        return self._pair(
+            mission_id, "story-choice-effect",
+            lambda data, project: (
+                data, story_authoring.add_effect(
+                    project, _authored_content(data), scene_id, choice_id,
+                    payload)))
+
+    def iso_scene(self, mission_id):
+        """Canonical Content → shared R3 Renderer scene, detached from the editor."""
+        data = self.documents()["content"]
+        content = _authored_content(data)
+        return scene_from_mission(content.missions[mission_id])
+
+
+    def event_pages(self, mission_id, event_id):
+        """The implicit base and authored pages share one canonical event ID."""
+        trigger = self.event(mission_id, event_id)
+        base = {"id": "base", "priority": 0,
+                "enabled": trigger.get("enabled", True),
+                "repeat": trigger.get("repeat", False),
+                "cooldown_ticks": trigger.get("cooldown_ticks", 1),
+                "condition": trigger["condition"],
+                "actions": deepcopy(trigger["actions"])}
+        return [base, *deepcopy(trigger.get("pages", []))]
+
+    def add_page(self, mission_id, event_id, *, page_id, priority,
+                 condition, actions, enabled=True, repeat=False,
+                 cooldown_ticks=1):
+        return self._commit(
+            mission_id, "page-create",
+            lambda data: event_pages.create_page(
+                data, mission_id, event_id, page_id=page_id, priority=priority,
+                condition=condition, actions=actions, enabled=enabled,
+                repeat=repeat, cooldown_ticks=cooldown_ticks))
+
+    def configure_page(self, mission_id, event_id, page_id, *,
+                       priority=None, enabled=None, repeat=None,
+                       cooldown_ticks=None):
+        return self._commit(
+            mission_id, "page-configure",
+            lambda data: event_pages.update_page(
+                data, mission_id, event_id, page_id, priority=priority,
+                enabled=enabled, repeat=repeat,
+                cooldown_ticks=cooldown_ticks))
+
+    def delete_page(self, mission_id, event_id, page_id):
+        return self._commit(
+            mission_id, "page-delete",
+            lambda data: event_pages.remove_page(
+                data, mission_id, event_id, page_id))
+
+    def edit_page(self, mission_id, event_id, page_id, *,
+                  condition=None, actions=None):
+        return self._commit(
+            mission_id, "page-commands",
+            lambda data: event_pages.update_page_commands(
+                data, mission_id, event_id, page_id,
+                condition=condition, actions=actions))
+
     def move_action(self, mission_id, event_id, index, direction):
         return self._commit(mission_id, "action", lambda data:
                             event_graph.reorder_action(data, mission_id, event_id,
@@ -142,7 +241,7 @@ class EventStudio:
 
     def _pair(self, mission_id, kind, edit):
         def transform(content, project):
-            game_project = GameProject.from_dict(project, Content.from_dict(content))
+            game_project = GameProject.from_dict(project, _authored_content(content))
             new_content, new_project = edit(content, game_project)
             if isinstance(new_project, GameProject):
                 new_project = new_project.to_dict()
@@ -155,13 +254,13 @@ class EventStudio:
         """A scene is stored only in GameProject.story; event references remain canonical."""
         return self._pair(mission_id, "scene", lambda data, project:
                           (data, story_authoring.create_scene(
-                              project, Content.from_dict(data), scene_id, title, text,
+                              project, _authored_content(data), scene_id, title, text,
                               speaker=speaker)))
 
     def bind_scene(self, mission_id, event_id, scene_id):
         return self._pair(mission_id, "scene-binding", lambda data, project:
                           (data, story_authoring.set_tactical_scene(
-                              project, Content.from_dict(data), mission_id,
+                              project, _authored_content(data), mission_id,
                               event_id, scene_id)))
 
     def gate_wizard(self, mission_id, **kwargs):
@@ -200,7 +299,7 @@ class EventStudio:
         """Read-only branch diagnostics; synthetic previews are not replay proof."""
         state = self.documents()
         content = state["content"]
-        project = GameProject.from_dict(state["project"], Content.from_dict(content))
+        project = GameProject.from_dict(state["project"], _authored_content(content))
         structural = audit_branch_coverage(project.story, content, mission_id)
         results = [structural]
         if probe:
@@ -263,6 +362,15 @@ class EventStudio:
                 if action["kind"] == "hazard":
                     markers.append({"event_id": event["id"],
                                     "pos": list(action["pos"]), "kind": "effect"})
+                if action["kind"] == "spawn":
+                    markers.append({"event_id": event["id"],
+                                    "pos": list(action["actor"]["pos"]),
+                                    "kind": "effect"})
+                if action["kind"] in ("wave", "queue_wave"):
+                    for actor in action["actors"]:
+                        markers.append({"event_id": event["id"],
+                                        "pos": list(actor["pos"]),
+                                        "kind": "effect"})
         return markers
 
     def preview(self, mission_id, event_id, *, scenario="satisfied", tick=0):
@@ -275,7 +383,7 @@ class EventStudio:
     def debugger(self, mission_id, event_id, *, scenario="satisfied"):
         state = self.documents()
         game_project = GameProject.from_dict(
-            state["project"], Content.from_dict(state["content"]))
+            state["project"], _authored_content(state["content"]))
         engine = EventDebugger(state["content"], mission_id, event_id,
                                project=game_project, scenario=scenario)
         for _ in range(len(engine.chain)):

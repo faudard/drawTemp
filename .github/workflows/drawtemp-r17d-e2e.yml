@@ -1,0 +1,38 @@
+name: DrawTemp R17.D Studio Player E2E
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/events.py'
+      - 'tests_standalone/test_r17d_studio_player_roundtrip.py'
+      - 'docs/drawtemp5/R17D_STUDIO_PLAYER_E2E.md'
+      - '.github/workflows/drawtemp-r17d-e2e.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  authored-play-save-resume:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install ".[qt6]"
+      - name: R17.D verified Studio to Player scenario
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_r17d_studio_player_roundtrip -v
+      - name: Core replay and R9 event regressions
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_drawtemp5_r9c tests_standalone.test_drawtemp5_r9d tests_standalone.test_r17c_event_integration -v

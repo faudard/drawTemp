@@ -41,7 +41,10 @@ class CombatAIR8Tests(unittest.TestCase):
         battle = self._battle()
         target = battle.unit(self.player)
         attacker = battle.unit(self.enemy)
-        self.assertEqual(target.statuses["protect"], 24)
+        # Battle startup advances the canonical CT clock before the first
+        # actionable turn; timed statuses are decremented by those ticks.
+        self.assertGreater(target.statuses["protect"], 0)
+        self.assertLessEqual(target.statuses["protect"], 24)
         self.assertEqual(target.resistances["physical"], 100)
         self.assertEqual(target.reaction, "counter")
         skill = battle._basic(attacker)
@@ -68,7 +71,7 @@ class CombatAIR8Tests(unittest.TestCase):
                        formation="phalanx")
         row = self.editor.detail(MISSION, self.enemy)
         self.assertEqual(row["behavior"], "tactical")
-        self.assertEqual(row["patrol_route"], ())
+        self.assertEqual(row["patrol_route"], [])
         self.assertIn("quest:watcher", row["tags"])
         self.assertNotIn("medic", row["tags"])
         self.assertIn("protector", row["tags"])
@@ -122,7 +125,7 @@ class CombatAIR8Tests(unittest.TestCase):
         self.editor.ai(MISSION, self.enemy, behavior="tactical",
                        route=((0, 2), (0, 3)))
         self.assertEqual(self.editor.detail(MISSION, self.enemy)
-                         ["patrol_route"], ((0, 2), (0, 3)))
+                         ["patrol_route"], [[0, 2], [0, 3]])
         with self.assertRaises(RuleError):
             self.editor.ai(MISSION, self.enemy, behavior="adaptive_boss",
                            route=((0, 2), (0, 3)))

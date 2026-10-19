@@ -94,7 +94,10 @@ class SharedCinematicDocumentTests(unittest.TestCase):
             content_path = Path(directory) / "int02.json"
             saved = self.cinematic.save(content_path)
             project_path = content_path.with_suffix(".game.json")
-            self.assertEqual(tuple(saved), (content_path, project_path))
+            # Windows may expand the RUNNER~1 8.3 alias during resolve().
+            # Compare canonical files, not merely their path spellings.
+            self.assertEqual(tuple(p.resolve() for p in saved),
+                             (content_path.resolve(), project_path.resolve()))
             self.assertTrue(content_path.is_file())
             self.assertTrue(project_path.is_file())
             self.assertFalse(self.cinematic.dirty)

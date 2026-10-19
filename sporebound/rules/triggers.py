@@ -208,6 +208,7 @@ def dispatch(battle, *, observer=None, before_fire=None, fire_limit=None):
             (type(fire_limit) is int and 1 <= fire_limit <= 200),
             'Invalid event-debug step limit')
     from ..temporal_events import temporal_status
+    from ..event_pages import active_page, can_fire_page
     events = battle.mission.triggers
     cascades = any('after' in row or 'after_any' in row for row in events)
     fired_now = 0
@@ -215,7 +216,9 @@ def dispatch(battle, *, observer=None, before_fire=None, fire_limit=None):
         progressed = False
         for trigger in events:
             eid = trigger['id']
-            if eid in battle.fired:
+            paged = ('pages' in trigger or 'repeat' in trigger or
+                     'enabled' in trigger)
+            if eid in battle.fired and not paged:
                 continue
             blocked = [ref for ref in trigger.get('after', ())
                        if ref not in battle.fired]
@@ -250,26 +253,45 @@ def dispatch(battle, *, observer=None, before_fire=None, fire_limit=None):
                         observer({'event_id': eid, 'state': temporal['state'],
                                   'pass': pass_number})
                     continue
-            if not battle.rules.trigger_conditions.get(
-                    trigger['condition']).matches(battle, trigger):
-                if observer is not None:
-                    observer({'event_id': eid, 'state': 'condition_false',
-                              'pass': pass_number})
-                continue
-            if 'when' in trigger and not matches_composite(
-                    battle, trigger['when']):
-                if observer is not None:
-                    observer({'event_id': eid, 'state': 'composite_false',
-                              'pass': pass_number})
-                continue
+            if paged:
+                # The canonical dispatcher chooses one highest-priority page;
+                # conditions, state toggles and cooldowns are journal-derived.
+                page = active_page(battle, trigger)
+                if page is None or not can_fire_page(battle, trigger, page):
+                    if observer is not None:
+                        observer({'event_id': eid,
+                                  'state': 'page_inactive' if page is None
+                                  else 'page_waiting',
+                                  'page': None if page is None else page['id'],
+                                  'pass': pass_number})
+                    continue
+                actions = page['actions']
+            else:
+                if not battle.rules.trigger_conditions.get(
+                        trigger['condition']).matches(battle, trigger):
+                    if observer is not None:
+                        observer({'event_id': eid, 'state': 'condition_false',
+                                  'pass': pass_number})
+                    continue
+                if 'when' in trigger and not matches_composite(
+                        battle, trigger['when']):
+                    if observer is not None:
+                        observer({'event_id': eid, 'state': 'composite_false',
+                                  'pass': pass_number})
+                    continue
+                actions = trigger['actions']
             if before_fire is not None and before_fire(trigger):
                 if observer is not None:
                     observer({'event_id': eid, 'state': 'breakpoint',
                               'pass': pass_number})
                 return {'fired': fired_now, 'paused': eid}
-            battle.fired.append(eid)
-            battle.emit('trigger', id=eid)
-            for action in trigger['actions']:
+            if eid not in battle.fired:
+                battle.fired.append(eid)
+            if paged:
+                battle.emit('trigger', id=eid, page=page['id'])
+            else:
+                battle.emit('trigger', id=eid)
+            for action in actions:
                 battle.rules.trigger_actions.get(action['kind']).apply(
                     battle, action)
             fired_now += 1

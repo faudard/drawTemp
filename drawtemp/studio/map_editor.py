@@ -38,7 +38,8 @@ except ImportError:
 
 
 class MapWindow(QMainWindow):
-    def __init__(self, studio=None, *, character_pack=None, character_variant=None):
+    def __init__(self, studio=None, *, project_path=None,
+                 character_pack=None, character_variant=None):
         super().__init__()
         self.studio = studio or MapStudio.reference()
         self.setWindowTitle("DrawTemp 5.0 — Éditeur de cartes R5")
@@ -114,7 +115,20 @@ class MapWindow(QMainWindow):
 
         # R3 controller is the only source of camera, hit-testing and render
         # delegates. Its scene is reconstructed from the validated R1 Content.
-        self.renderer = make_controller(self._render_scene(),
+        # With a project manifest path the Studio resolves the same R4 atlas
+        # bindings as the installed Player; no implicit cwd resource lookup.
+        self.asset_browser = None
+        self.asset_browser_dock = None
+        presentation = None
+        project = None
+        if project_path is not None:
+            from drawtemp.assets.runtime import PresentationAssets
+            from drawtemp.core import GameProject
+            snapshot = self.studio.authoring.snapshot().to_dict()
+            project = GameProject.from_dict(
+                snapshot["project"], Content.from_dict(snapshot["content"]))
+            presentation = PresentationAssets.for_project(project, project_path)
+        self.renderer = make_controller(self._render_scene(), assets=presentation,
                                         character_pack=character_pack,
                                         character_variant=character_variant)
         viewport = QQuickWidget(self)
@@ -137,6 +151,13 @@ class MapWindow(QMainWindow):
         root.buildingPicked.connect(self._on_building_pick)
         self.viewport = viewport
         self.setCentralWidget(viewport)
+
+        if project is not None:
+            from drawtemp.assets.qt_browser import AssetBrowser
+            self.asset_browser = AssetBrowser(
+                project.asset_registry(), Path(project_path).parent, parent=self)
+            self.asset_browser_dock = self._dock(
+                "Ressources / Assets", self.asset_browser, Qt.RightDockWidgetArea)
 
         self.maps = QListWidget()
         self.maps.currentRowChanged.connect(self.change_map)
@@ -232,6 +253,7 @@ class MapWindow(QMainWindow):
         dock.setObjectName(title)
         dock.setWidget(widget)
         self.addDockWidget(area, dock)
+        return dock
 
     def _safe(self, operation):
         try:

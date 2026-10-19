@@ -3,7 +3,7 @@
 All generations are canonical GameSession v1 records written via the R1.8
 PlayerSlotStore. No gameplay metadata is added to session records or rules.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 
@@ -77,9 +77,9 @@ class SaveManager:
                     "recoverable": info.recoverable,
                     "error": info.message[:400],
                     "mtime_ns": mtime,
-                    "saved_at": (datetime.fromtimestamp(mtime / 1_000_000_000)
-                                 .astimezone().isoformat(timespec="seconds")
-                                 if mtime else ""),
+                    "saved_at": (datetime.fromtimestamp(
+                        mtime / 1_000_000_000, tz=timezone.utc
+                    ).isoformat(timespec="seconds") if mtime else ""),
                 })
             candidates = [row for row in rows if row["status"] == "valid"]
             latest = max(candidates, key=lambda r: (
