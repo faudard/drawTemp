@@ -200,7 +200,7 @@ def scene_from_exploration(stage, *, revision=0, living_world=None):
             if npc.get("scene") != stage["scene_id"] or npc.get("pos") is None:
                 continue
             pos = npc["pos"]
-            if (type(pos) is not list or len(pos) != 2
+            if (type(pos) not in (list, tuple) or len(pos) != 2
                     or any(type(n) is not int for n in pos)
                     or not (0 <= pos[0] < width and 0 <= pos[1] < height)):
                 raise ValueError("Invalid NPC presentation cell")
