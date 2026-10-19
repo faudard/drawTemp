@@ -68,7 +68,7 @@ Avant tout tag 10.0 :
 | R66 | 10.6→11.0 | Simulation Designer Pro | R31/R35/R55/R56/R61/R62/R63 | Livrable conditionné aux gates |
 | R67 | 10.7 étude | Multiplayer Feasibility Gate | R25/R29/R56/R59/R60 | Faisabilité |
 | R68 | 10.8 étude | Alternative Platform Feasibility | R39/R57/R59/R60 | Faisabilité |
-| R69 | 10.9→11.0 | Community Creator Hub | R24/R47/R48/R58/R59/R67 | Livrable conditionné aux gates |
+| R69 | 10.9→11.0 | Community Creator Hub | R24/R47/R48/R58/R59 | Livrable conditionné aux gates |
 | R70 | 11.0 | Genre Expansion Certification | R60/R61–R66 P0; R67–R69 conditionnels | Livrable conditionné aux gates |
 | R71 | 11.1 conditionnel | Connected Games Architecture | R67=GO et R70; sinon reporté | Livrable conditionné aux gates |
 | R72 | 11.2 conditionnel | Cooperative Gameplay Prototype | R71=GO/R53/R65/R70 | Livrable conditionné aux gates |
@@ -377,7 +377,7 @@ Avant tout tag 10.0 :
 
 **Objectif :** Améliorer la distribution de créations sans rendre le Studio dépendant d'un serveur.
 
-**Dépendances :** R24/R47/R48/R58/R59/R67. Ces noms désignent des contrats / gates à prouver sur `master`, et non une présence supposée. 
+**Dépendances :** R24/R47/R48/R58/R59. Ces noms désignent des contrats / gates à prouver sur `master`, et non une présence supposée. 
 
 | Sous-lot / PR proposée | Priorité | Livraison | Critères d'évidence |
 |---|---|---|---|
@@ -717,7 +717,7 @@ Ne pas rendre le support PC captif de plateformes expérimentales.
 | 52 | V4 | **R68.A** | P0 | R39/R57/R59/R60 | ADR distincts Web et Android/iOS, scope séparé. |
 | 53 | V4 | **R68.B** | P1 | R68.A | Mesures matériel réel et audit installabilité. |
 | 54 | V4 | **R68.C** | P0 | R68.A+B | Gate R68 |
-| 55 | V4 | **R69.A** | P0 | R24/R47/R48/R58/R59/R67 | Publication locale/hors ligne maintenue. |
+| 55 | V4 | **R69.A** | P0 | R24/R47/R48/R58/R59 | Publication locale/hors ligne maintenue. |
 | 56 | V4 | **R69.B** | P1 | R69.A | Permissions explicites, confidentialité, UX. |
 | 57 | V4 | **R69.C** | P0 | R69.A+B | Gate R69 |
 | 58 | V5 | **R70.A** | P0 | R60/R61–R66 P0; R67–R69 conditionnels | Régressions CT/action/R40/R60, corpus multi-seeds. |
