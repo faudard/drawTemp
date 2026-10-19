@@ -27,7 +27,7 @@ class NarrativeGraphView(QGraphicsView):
         self.setScene(QGraphicsScene(self))
         self.setMinimumWidth(340)
 
-    def render(self, projection, selection=''):
+    def draw_graph(self, projection, selection=''):
         scene = self.scene()
         scene.clear()
         positions = {}
@@ -161,7 +161,7 @@ class NarrativeStudioDialog(QDialog):
         names = [s['id'] for s in doc.get('scenes', [])]
         chosen = prefer or self._selected
         self._selected = chosen if chosen in names else (names[0] if names else '')
-        self.graph.render(graph, self._selected)
+        self.graph.draw_graph(graph, self._selected)
         self.buttons['migrate'].setEnabled(bool(names) and graph['version'] == 1)
         for key in ('new', 'state', 'subgraph', 'preview'):
             self.buttons[key].setEnabled(graph['version'] == 2)
@@ -183,7 +183,7 @@ class NarrativeStudioDialog(QDialog):
         self._plan = None
         self._dirty = False
         self._display_selected()
-        self.graph.render(self.workbench.graph(), scene_id)
+        self.graph.draw_graph(self.workbench.graph(), scene_id)
         self.buttons['apply'].setEnabled(False)
 
     def _display_selected(self):
