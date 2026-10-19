@@ -180,6 +180,46 @@ class StudioGuideQtTests(unittest.TestCase):
             finally:
                 window.close()
 
+    def test_project_switch_does_not_leak_guide_progress(self):
+        with TemporaryDirectory() as folder:
+            first = Path(folder) / "first.json"
+            second = Path(folder) / "second.json"
+            for path in (first, second):
+                AuthoringSession.new(*reference_project()).save_as(path)
+            window = self.window(folder)
+            try:
+                self.assertTrue(window.open_path(first))
+                self._fake_map_and_actor(window)
+                window.guide_next()
+                self.assertIn("map", window._onboarding_done)
+                self.assertTrue(window.open_path(second))
+                self.assertEqual(window._onboarding_done, {"project"})
+                self.assertTrue(window.open_path(first))
+                self.assertIn("map", window._onboarding_done)
+                self.assertNotIn("actor", window._onboarding_done)
+            finally:
+                window.close()
+
+    def test_create_project_template_is_real_canonical_pair(self):
+        from drawtemp.player.qt_app import build_controller
+        with TemporaryDirectory() as folder:
+            window = self.window(folder)
+            try:
+                destination = Path(folder) / "new-game"
+                self.assertTrue(window.create_project("blank", destination))
+                content = destination / "game.json"
+                project = destination / "game.game.json"
+                self.assertTrue(content.is_file())
+                self.assertTrue(project.is_file())
+                self.assertEqual(window.content_path, content)
+                self.assertIn("project", window._onboarding_done)
+                self.assertNotIn("map", window._onboarding_done)
+                self.assertIsNotNone(build_controller(
+                    content_path=content,
+                    save_dir=Path(folder) / "player-saves"))
+            finally:
+                window.close()
+
     def test_empty_state_and_keyboard_accessibility(self):
         with TemporaryDirectory() as folder:
             window = self.window(folder)
