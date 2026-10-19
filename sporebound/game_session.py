@@ -276,6 +276,22 @@ class GameSession:
                 npc = pose["pos"]
                 facts["distance"] = abs(npc[0] - player[0]) + abs(npc[1] - player[1])
             tick = self._living_world.ticks
+            if "sensor" in agent:
+                memory = self._advanced_ai.state(actor_id)["values"]
+                if same_scene and pose.get("pos") is not None:
+                    perception = self.ai_perception_preview(actor_id)["perception"]
+                    facts.update({
+                        "enemy_visible": perception["visible"],
+                        "noise_heard": perception["heard"],
+                        "alert": perception["alert"],
+                        "target_reachable": perception["reachable"],
+                    })
+                else:
+                    facts.update({
+                        "enemy_visible": False, "noise_heard": False,
+                        "alert": bool(memory.get("suspicion", 0)),
+                        "target_reachable": False,
+                    })
         board = self._advanced_ai.state(actor_id)
         require(board["updated_tick"] <= tick,
                 "R37 blackboard is newer than the canonical game clock")
@@ -287,6 +303,79 @@ class GameSession:
         """Read-only R37 policy explanation. Never invoke Battle.execute."""
         context = self.ai_decision_context(actor_id)
         return self._advanced_ai.preview(context)
+
+    def ai_perception_preview(self, actor_id):
+        """R37.D sensor from R35 NPC, canonical hero cell and verified R25 input.
+
+        Does not dispatch combat moves, infer LOS from Manhattan distance,
+        advance world time or mutate NPC memory.
+        """
+        require(self._advanced_ai is not None,
+                "R37 advanced AI is not enabled")
+        agent = self._advanced_ai.agent(actor_id)
+        require(agent["mode"] == "realtime" and "sensor" in agent,
+                "R37 perception requires an authored realtime sensor")
+        require(self.mode == "campaign" and self._living_world is not None
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending,
+                "R37 perception requires active routed exploration")
+        stage = self.exploration.state(self.progress, self.route_scene)
+        require(not stage["completed"], "R37 perception scene is completed")
+        pose = self._living_world.npc_pose(actor_id, self.progress.story_flags)
+        require(pose["scene"] == self.route_scene
+                and pose.get("pos") is not None,
+                "R37 NPC is not positioned in the player's scene")
+        memory = self._advanced_ai.state(actor_id)["values"]
+        prior = None
+        if memory.get("suspicion", 0) > 0:
+            if "last_known_x" in memory and "last_known_y" in memory:
+                prior = [memory["last_known_x"], memory["last_known_y"]]
+        movement = False
+        if self._rt_journal is not None:
+            journal = self._rt_journal.recording()
+            if journal["inputs"]:
+                latest = journal["inputs"][-1]
+                command = latest["command"]
+                movement = (
+                    latest["tick"] == self._rt_journal.tick
+                    and latest["source"] == "hero"
+                    and command["kind"] == "move"
+                    and (command["dx"] != 0 or command["dy"] != 0))
+        from .ai_perception import perceive_grid
+        report = perceive_grid(stage, pose["pos"], stage["position"],
+                               agent["sensor"], movement=movement,
+                               remembered=prior)
+        return {"actor_id": actor_id, "scene": self.route_scene,
+                "tick": self._living_world.ticks, "perception": report}
+
+    def ai_observe(self, actor_id):
+        """Commit one explicit observation per actor/world tick to R37 ledger.
+
+        Suspicion persists for three authored observations after sight and
+        two after sound. Each later explicit observation without a signal
+        decreases it once; there is no implicit frame-driven countdown.
+        """
+        report = self.ai_perception_preview(actor_id)
+        tick = report["tick"]
+        observation = report["perception"]
+        require(not any(
+            row["actor_id"] == actor_id and row["tick"] == tick
+            and "observation_kind" in row["changes"]
+            for row in self._advanced_ai.history),
+            "R37 AI already observed this actor at this world tick")
+        memory = self._advanced_ai.state(actor_id)["values"]
+        signal = observation["signal"]
+        suspicion = (3 if signal == "seen" else 2 if signal == "heard"
+                     else max(0, memory.get("suspicion", 0) - 1))
+        changes = {"suspicion": suspicion, "alert": suspicion > 0,
+                   "observation_kind": signal,
+                   "heard_noise": observation["heard"]}
+        if signal != "none":
+            changes["last_known_x"] = observation["target"][0]
+            changes["last_known_y"] = observation["target"][1]
+        updated = self._advanced_ai.remember(actor_id, changes, tick=tick)
+        return {"observation": report, "blackboard": updated}
 
     def ai_remember(self, actor_id, changes):
         """Journal bounded R35 NPC memory against its authoritative world tick.
