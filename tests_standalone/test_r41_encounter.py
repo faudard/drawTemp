@@ -162,6 +162,23 @@ class R41EncounterTests(unittest.TestCase):
         self.assertFalse(self.session.progress.story_flags.get("r41:sparring"))
         self.assertEqual(self.session.rpg_available(), ["sparring"])
 
+    def test_guard_until_ko_defeat_never_grants_victory_reward(self):
+        self.session.rpg_start("sparring")
+        for _ in range(100):
+            view = self.session.rpg_state()
+            if view["result"]:
+                break
+            self.assertEqual(view["active"], "jeanne")
+            self.session.rpg_action({"kind": "guard", "actor": "jeanne"})
+        self.assertEqual(self.session.rpg_state()["result"], "defeat")
+        hero = next(a for a in self.session.rpg_state()["actors"]
+                    if a["id"] == "jeanne")
+        self.assertEqual(hero["hp"], 0)
+        self.session.rpg_finish()
+        self.assertEqual(self.session.progress.gold, 0)
+        self.assertEqual(self.session.progress.heroes["jeanne"].xp, 0)
+        self.assertEqual(self.session.rpg_available(), ["sparring"])
+
     def test_invalid_encounter_contract_fails_closed(self):
         modifiers = [
             lambda d: d.update(enemies=["unknown"]),
