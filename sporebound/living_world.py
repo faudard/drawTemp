@@ -30,7 +30,7 @@ def validate_living_world(spec, scene_ids):
     required = {"version", "start_minute", "ticks_per_minute",
                 "clock_policy", "npcs"}
     require(type(spec) is dict and required <= set(spec)
-            <= required | {"factions", "daily_quests"},
+            <= required | {"factions", "daily_quests", "shops"},
             "Malformed living-world document")
     require(type(spec["version"]) is int and spec["version"] == VERSION,
             "Unsupported living-world version; explicit migration required")
@@ -115,6 +115,8 @@ def validate_living_world(spec, scene_ids):
                 and type(quest["reputation_delta"]) is int
                 and -100 <= quest["reputation_delta"] <= 100,
                 "Daily quest has invalid hours or rewards")
+    from .living_world_commerce import validate_shops
+    validate_shops(spec, scene_ids)
 
 
 class LivingWorld:
@@ -129,6 +131,7 @@ class LivingWorld:
                            for f in self.spec.get("factions", [])}
         self.events = {}
         self.claimed = {}
+        self.trades = {}
 
     @property
     def day(self):
@@ -159,6 +162,8 @@ class LivingWorld:
             data["events"] = deepcopy(self.events)
         if "daily_quests" in self.spec:
             data["claimed"] = deepcopy(self.claimed)
+        if "shops" in self.spec:
+            data["trades"] = deepcopy(self.trades)
         return data
 
     def restore(self, data):
@@ -167,6 +172,8 @@ class LivingWorld:
             expected |= {"reputation", "events"}
         if "daily_quests" in self.spec:
             expected.add("claimed")
+        if "shops" in self.spec:
+            expected.add("trades")
         require(type(data) is dict and set(data) == expected
                 and type(data["version"]) is int and data["version"] == VERSION
                 and type(data["ticks"]) is int
@@ -198,10 +205,23 @@ class LivingWorld:
                             data["ticks"] // self.spec["ticks_per_minute"]) // 1440
                         for day in claimed.values()),
                 "Invalid daily-quest checkpoint")
+        if "shops" in self.spec:
+            from .living_world_commerce import validate_trades
+            checkpoint_day = (self.spec["start_minute"]
+                              + data["ticks"] // self.spec["ticks_per_minute"]) // 1440
+            validate_trades(self, data["trades"], checkpoint_day)
         self.ticks = data["ticks"]
         self.reputation = deepcopy(reputation)
         self.events = deepcopy(events)
         self.claimed = deepcopy(claimed)
+        if "shops" in self.spec:
+            self.trades = deepcopy(data["trades"])
+
+    def transact(self, progress, flags, active_scene, shop_id, item_id,
+                 action, quantity, transaction_id):
+        from .living_world_commerce import transact
+        return transact(self, progress, flags, active_scene, shop_id, item_id,
+                        action, quantity, transaction_id)
 
     def adjust_reputation(self, faction, delta, event_id):
         """Commit one idempotent narrative event without a second quest registry."""
@@ -258,26 +278,29 @@ class LivingWorld:
         self.claimed[quest_id] = self.day
         return True
 
+    def npc_status(self, npc_id, story_flags):
+        require(type(story_flags) is dict, "Story flags must be a mapping")
+        npc = next((n for n in self.spec["npcs"] if n["id"] == npc_id), None)
+        require(npc is not None, "Unknown NPC")
+        eligible = [stop for stop in npc["schedule"]
+                    if "when" not in stop
+                    or story_flags.get(stop["when"]["flag"], False)
+                    is stop["when"]["eq"]]
+        if not eligible:
+            return None, "unavailable"
+        stop = next((row for row in reversed(eligible)
+                     if row["minute"] <= self.minute), eligible[-1])
+        return stop["scene"], stop["activity"]
+
     def view(self, story_flags, *, scene=None):
-        """Return detached, ordered NPC projections; no state mutated."""
+        """Detached world projection, including remote scenes."""
         require(type(story_flags) is dict, "Story flags must be a mapping")
         require(scene is None or scene in self.scene_ids,
                 "Unknown living-world scene")
         rows = []
         current = self.minute
         for npc in self.spec["npcs"]:
-            eligible = [stop for stop in npc["schedule"]
-                        if "when" not in stop or
-                        (story_flags.get(stop["when"]["flag"], False)
-                         is stop["when"]["eq"])]
-            if eligible:
-                # Schedules recur daily. Before the first stop of a new day,
-                # the last eligible stop from yesterday is still active.
-                candidate = next((stop for stop in reversed(eligible)
-                                  if stop["minute"] <= current), eligible[-1])
-                location, activity = candidate["scene"], candidate["activity"]
-            else:
-                location, activity = None, "unavailable"
+            location, activity = self.npc_status(npc["id"], story_flags)
             if scene is None or location == scene:
                 rows.append({"id": npc["id"], "scene": location,
                              "activity": activity})
@@ -291,6 +314,9 @@ class LivingWorld:
                  "claimed_today": self.claimed.get(q["id"]) == self.day,
                  "ready": self.quest_ready(q["id"], story_flags)}
                 for q in self.spec["daily_quests"]]
+        if "shops" in self.spec:
+            from .living_world_commerce import listing
+            data["shops"] = listing(self, story_flags, scene)
         return data
 
 
