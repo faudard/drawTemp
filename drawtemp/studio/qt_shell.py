@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QItemSelectionModel, QSettings, QSortFilterProxyModel, Qt, QTimer
+from PySide6.QtCore import QItemSelectionModel, QProcess, QSettings, QSortFilterProxyModel, Qt, QTimer
 from PySide6.QtGui import QAction, QColor, QFont, QIntValidator, QKeySequence, QPalette, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDockWidget,
@@ -27,24 +27,19 @@ from drawtemp.studio.inspector_model import (
     InspectorError, common_value, edit_properties, shared_specs,
 )
 from drawtemp.studio.resource_links import connections
+from drawtemp.studio.r18_navigation import (WORKSPACES, LABELS, EN, recent_projects, workspace_host)
 
 log = logging.getLogger(__name__)
-WORKSPACES = ("project", "maps", "actors", "database", "events",
-              "campaigns", "cinematics", "analysis")
-LABELS = {
-    "project": "Projet", "maps": "Carte", "actors": "Personnages",
-    "database": "Base RPG", "events": "Événements", "campaigns": "Campagne",
-    "cinematics": "Cinématiques", "analysis": "Analyse",
-}
-EN = {
-    "project": "Project", "maps": "Map", "actors": "Characters",
-    "database": "RPG Database", "events": "Events", "campaigns": "Campaign",
-    "cinematics": "Cinematics", "analysis": "Analysis",
-}
 DEFAULT_SHORTCUTS = {
     "save": "Ctrl+S", "open": "Ctrl+O", "undo": "Ctrl+Z", "redo": "Ctrl+Shift+Z",
     "palette": "Ctrl+Shift+P", "focus_resources": "Ctrl+1",
-    "focus_inspector": "Ctrl+2",
+    "focus_inspector": "Ctrl+2", "new": "Ctrl+N",
+    "playtest": "F5", "export": "Ctrl+Shift+E",
+    "go_project": "Ctrl+Alt+1", "go_maps": "Ctrl+Alt+2",
+    "go_construction": "Ctrl+Alt+3", "go_actors": "Ctrl+Alt+4",
+    "go_database": "Ctrl+Alt+5", "go_events": "Ctrl+Alt+6",
+    "go_campaigns": "Ctrl+Alt+7", "go_cinematics": "Ctrl+Alt+8",
+    "go_analysis": "Ctrl+Alt+9", "go_publication": "Ctrl+Alt+0",
 }
 
 
@@ -157,6 +152,7 @@ class StudioWindow(QMainWindow):
         self._selected = ()
         self.pages = {}
         self.commands = {}
+        self._active_workspace = "project"
         self.setObjectName("drawtemp-r2-main")
         self.setWindowTitle("DrawTemp 5.0 • Studio")
         self.resize(1440, 900)
@@ -180,6 +176,7 @@ class StudioWindow(QMainWindow):
         self._make_problems_dock()
         self._build_commands()
         self._build_menus()
+        self._refresh_recent_menu()
         self._activate("project")
 
     def _make_home(self):
@@ -193,8 +190,8 @@ class StudioWindow(QMainWindow):
         title.setFont(font)
         panel.addWidget(title)
         panel.addWidget(QLabel("Projet Jeanne • édition sans JSON • Content / GameProject partagés"))
-        for group in (("Créer", ("maps", "actors", "database", "events")),
-                      ("Organiser", ("campaigns", "cinematics", "analysis"))):
+        for group in (("Créer", ("maps", "construction", "actors", "database", "events")),
+                      ("Organiser", ("campaigns", "cinematics", "analysis", "publication"))):
             panel.addWidget(QLabel(group[0]))
             buttons = QHBoxLayout()
             for identifier in group[1]:
@@ -327,9 +324,13 @@ class StudioWindow(QMainWindow):
         return action
 
     def _build_commands(self):
+        self._action("new", "Nouveau projet…", self.new_project)
         self._action("open", "Ouvrir un projet…", self.open_document)
         self._action("save", "Enregistrer le projet", self.save_document)
         self._action("save_as", "Enregistrer sous…", self.save_document_as)
+        self._action("playtest", "Jouer / Playtest", self.playtest)
+        self._action("export", "Exporter le Player…", self.export_player)
+        self._action("preferences", "Préférences…", self.open_preferences)
         self._action("undo", "Annuler", self.undo)
         self._action("redo", "Rétablir", self.redo)
         self._action("palette", "Palette de commandes…", self.open_palette)
@@ -338,12 +339,21 @@ class StudioWindow(QMainWindow):
         self._action("focus_inspector", "Inspecter la sélection",
                      lambda: (self.name_edit or self.resource_view).setFocus())
         for identifier in WORKSPACES:
-            self._action("go_" + identifier, "Atelier : " + LABELS[identifier],
-                         lambda _checked=False, key=identifier: self.navigate(key))
+            action = self._action(
+                "go_" + identifier, "Atelier : " + LABELS[identifier],
+                lambda _checked=False, key=identifier: self.navigate(key))
+            action.setCheckable(True)
 
     def _build_menus(self):
         file_menu = self.menuBar().addMenu("&Fichier")
-        for key in ("open", "save", "save_as"):
+        for key in ("new", "open"):
+            file_menu.addAction(self.commands[key])
+        self.recent_menu = file_menu.addMenu("Projets récents")
+        self.recent_menu.aboutToShow.connect(self._refresh_recent_menu)
+        for key in ("save", "save_as"):
+            file_menu.addAction(self.commands[key])
+        file_menu.addSeparator()
+        for key in ("playtest", "export"):
             file_menu.addAction(self.commands[key])
         edit_menu = self.menuBar().addMenu("&Édition")
         for key in ("undo", "redo", "palette"):
@@ -367,6 +377,7 @@ class StudioWindow(QMainWindow):
             action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
+        tools_menu.addAction(self.commands["preferences"])
         shortcuts = tools_menu.addAction("Configurer un raccourci…")
         shortcuts.triggered.connect(self.configure_shortcut)
         # Localization applies to global workspace labels; legacy editors
@@ -387,9 +398,14 @@ class StudioWindow(QMainWindow):
         if geometry:
             self.restoreGeometry(geometry)
         if not (state and self.restoreState(state, 1)):
-            self.layout_preset("editing")
+            preset = str(self.settings.value("window/preset", "editing"))
+            self.layout_preset(preset if preset in ("editing", "analysis", "compact")
+                               else "editing")
 
     def layout_preset(self, preset):
+        if preset not in ("editing", "analysis", "compact"):
+            raise ValueError("Unknown layout preset: " + str(preset))
+        self.settings.setValue("window/preset", preset)
         for dock in (self.resource_dock, self.inspector_dock, self.problems_dock):
             dock.setFloating(False)
         self.resource_dock.show()
@@ -776,21 +792,29 @@ class StudioWindow(QMainWindow):
                     child.campaign.setCurrentIndex(row)
 
     def navigate(self, identifier):
+        host = workspace_host(identifier)
         if identifier == "actors" and "database" in self._models:
             database = self._models["database"]
             database.tree.setCurrentItem(database.tree.topLevelItem(1))
-        if identifier not in WORKSPACES:
-            raise ValueError("Unknown workspace: " + identifier)
-        if identifier not in self.pages:
+        if host not in self.pages:
             try:
-                self._make_workspace(identifier)
+                self._make_workspace(host)
             except Exception as exc:
                 self.report_error(exc)
                 return
+        if identifier == "construction":
+            self.pages["construction"] = self.pages["maps"]
+        if identifier in ("maps", "construction"):
+            # R6 shares the exact viewport and authoring session of R5.
+            self._models["maps"].mode.setCurrentIndex(
+                1 if identifier == "construction" else 0)
         self._activate(identifier)
 
     def _activate(self, identifier):
         self.workspace_tabs.setCurrentWidget(self.pages[identifier])
+        self._active_workspace = identifier
+        for name in WORKSPACES:
+            self.commands["go_" + name].setChecked(name == identifier)
         self.statusBar().showMessage("Atelier : " + LABELS[identifier])
 
     def _make_workspace(self, identifier):
@@ -822,6 +846,8 @@ class StudioWindow(QMainWindow):
             studio = CampaignStudio(self.session, campaigns[0]["id"])
             child = CampaignWindow(studio, source=self.content_path,
                                    opened=bool(self.content_path))
+        elif identifier == "publication":
+            child = self._publication_page()
         else:
             child = self._overview(identifier)
         if identifier in ("maps", "database", "campaigns"):
@@ -841,6 +867,25 @@ class StudioWindow(QMainWindow):
         if identifier in ("database", "actors"):
             self.pages["database"] = child
             self.pages["actors"] = child
+
+    def _publication_page(self):
+        page = QWidget()
+        panel = QVBoxLayout(page)
+        panel.addWidget(QLabel("Publication du projet"))
+        description = QLabel(
+            "Le Player autonome est exporté par R15 avec validation des "
+            "assets, licences et runtime natif. Aucun export n'est lancé "
+            "sans contrôle explicite.")
+        description.setWordWrap(True)
+        panel.addWidget(description)
+        play = QPushButton("Playtest du projet enregistré")
+        play.clicked.connect(self.playtest)
+        panel.addWidget(play)
+        export = QPushButton("Vérifier et exporter le Player…")
+        export.clicked.connect(self.export_player)
+        panel.addWidget(export)
+        panel.addStretch(1)
+        return page
 
     def _overview(self, identifier):
         page = QWidget()
@@ -881,12 +926,98 @@ class StudioWindow(QMainWindow):
         except AuthoringError as exc:
             self.report_error(exc)
 
+    def _record_recent(self, path):
+        items = recent_projects(self.settings.value("files/recent", []),
+                                selected=path)
+        self.settings.setValue("files/recent", items)
+        self._refresh_recent_menu()
+
+    def _refresh_recent_menu(self):
+        self.recent_menu.clear()
+        paths = recent_projects(self.settings.value("files/recent", []))
+        if not paths:
+            item = self.recent_menu.addAction("Aucun projet récent")
+            item.setEnabled(False)
+        for path in paths:
+            name = Path(path).name
+            label = name + " — " + path
+            if not Path(path).is_file():
+                label += " (introuvable)"
+            action = self.recent_menu.addAction(label)
+            action.setToolTip(path)
+            action.triggered.connect(
+                lambda _checked=False, selected=path: self.open_path(selected))
+
+    def _install_document(self, fresh, path):
+        """Replace one canonical R1 session only after the new one is valid."""
+        self.workspace_tabs.setCurrentWidget(self.pages["project"])
+        old_pages = {page for name, page in self.pages.items() if name != "project"}
+        self.pages = {"project": self.pages["project"]}
+        for page in old_pages:
+            self.workspace_tabs.removeWidget(page)
+            page.setParent(None)
+            page.deleteLater()
+        self._models.clear()
+        self._selected = ()
+        self._reference_anchor = ()
+        self.reference_filter.setCurrentIndex(0)
+        self.session = fresh
+        self.content_path = Path(path)
+        self._activate("project")
+        self.refresh()
+        self._record_recent(path)
+
+    def open_path(self, path):
+        if not self._confirm_leave():
+            return False
+        try:
+            fresh = AuthoringSession.open(path)
+        except (AuthoringError, OSError, ValueError) as exc:
+            self.report_error(exc)
+            return False
+        self._install_document(fresh, path)
+        return True
+
+    def create_project(self, kind, destination):
+        if not self._confirm_leave():
+            return False
+        from drawtemp.export.templates import create_template
+        try:
+            created = create_template(kind, destination)
+            fresh = AuthoringSession.open(created / "game.json")
+        except (AuthoringError, OSError, ValueError) as exc:
+            self.report_error(exc)
+            return False
+        self._install_document(fresh, created / "game.json")
+        return True
+
+    def new_project(self):
+        from drawtemp.export.templates import TEMPLATES
+        kind, accepted = QInputDialog.getItem(
+            self, "Nouveau projet", "Modèle", list(TEMPLATES), 0, False)
+        if not accepted:
+            return
+        parent = QFileDialog.getExistingDirectory(
+            self, "Dossier parent du projet")
+        if not parent:
+            return
+        name, accepted = QInputDialog.getText(
+            self, "Nouveau projet", "Nom du dossier à créer", text="DrawTempProject")
+        if not accepted:
+            return
+        name = name.strip()
+        if name in ("", ".", "..") or Path(name).name != name or "\\" in name:
+            self.report_error(ValueError("Nom de dossier invalide"))
+            return
+        self.create_project(kind, Path(parent) / name)
+
     def save_document(self):
         try:
             if self.content_path is None:
                 return self.save_document_as()
             self.session.save()
             self.refresh()
+            self._record_recent(self.content_path)
             return True
         except (AuthoringError, OSError) as exc:
             self.report_error(exc)
@@ -902,10 +1033,65 @@ class StudioWindow(QMainWindow):
             self.session.save_as(path)
             self.content_path = Path(path)
             self.refresh()
+            self._record_recent(path)
             return True
         except (AuthoringError, OSError) as exc:
             self.report_error(exc)
             return False
+
+    def _saved_for_player(self):
+        if self.content_path is None or self.session.snapshot().dirty:
+            return self.save_document()
+        return True
+
+    def playtest(self):
+        if not self._saved_for_player():
+            return False
+        try:
+            started, _pid = QProcess.startDetached(
+                sys.executable, ["-m", "drawtemp.player.qt_app",
+                                 "--content", str(self.content_path)])
+            if not started:
+                raise OSError("Le processus Player Qt n'a pas démarré.")
+        except (OSError, RuntimeError) as exc:
+            self.report_error(exc)
+            return False
+        self.statusBar().showMessage("Player Qt lancé : " + str(self.content_path))
+        return True
+
+    def export_player(self):
+        if not self._saved_for_player():
+            return False
+        from drawtemp.studio.r15_creator import CreatorDialog
+        dialog = CreatorDialog(self)
+        dialog.mode.setCurrentIndex(2)
+        dialog.source.setText(str(self.content_path))
+        dialog.exec()
+        return True
+
+    def open_preferences(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Préférences du Studio")
+        form = QFormLayout(dialog)
+        theme = QComboBox()
+        theme.addItems(["dark", "light"])
+        theme.setCurrentText(str(self.settings.value("theme", "dark")))
+        form.addRow("Thème", theme)
+        language = QComboBox()
+        language.addItems(["fr", "en"])
+        language.setCurrentText(str(self.settings.value("language", "fr")))
+        form.addRow("Langue du shell", language)
+        scale = QComboBox()
+        scale.addItems(["90", "100", "115", "130"])
+        scale.setCurrentText(str(self.settings.value("scale", 100)))
+        form.addRow("Échelle (%)", scale)
+        apply_button = QPushButton("Appliquer")
+        apply_button.clicked.connect(dialog.accept)
+        form.addRow(apply_button)
+        if dialog.exec() == QDialog.Accepted:
+            self.set_theme(theme.currentText())
+            self.set_language(language.currentText())
+            self.set_scale(int(scale.currentText()))
 
     def _confirm_leave(self):
         if not self.session.snapshot().dirty:
@@ -922,31 +1108,11 @@ class StudioWindow(QMainWindow):
         return True
 
     def open_document(self):
-        if not self._confirm_leave():
-            return
         path, _ = QFileDialog.getOpenFileName(
             self, "Ouvrir Content + GameProject", "", "Content JSON (*.json)")
-        if not path:
-            return
-        try:
-            fresh = AuthoringSession.open(path)
-        except (AuthoringError, OSError, ValueError) as exc:
-            self.report_error(exc)
-            return
-        self.workspace_tabs.setCurrentWidget(self.pages["project"])
-        old_pages = {page for name, page in self.pages.items() if name != "project"}
-        self.pages = {"project": self.pages["project"]}
-        for page in old_pages:
-            self.workspace_tabs.removeWidget(page)
-            page.setParent(None)
-            page.deleteLater()
-        self._models.clear()
-        self._selected = ()
-        self._reference_anchor = ()
-        self.reference_filter.setCurrentIndex(0)
-        self.session = fresh
-        self.content_path = Path(path)
-        self.refresh()
+        if path:
+            return self.open_path(path)
+        return False
 
     def closeEvent(self, event):
         if not self._confirm_leave():
@@ -978,6 +1144,8 @@ def main(argv=None):
         if args.reset_layout:
             settings.remove("window")
         window = StudioWindow(session, content_path=args.content, settings=settings)
+        if args.content:
+            window._record_recent(args.content)
         window.show()
         window.navigate(args.workspace)
         if args.smoke:
