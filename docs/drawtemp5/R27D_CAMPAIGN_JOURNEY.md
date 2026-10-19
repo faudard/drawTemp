@@ -78,6 +78,11 @@ two-file transaction store. You do not edit either JSON manually.
 - **Return**: reach the village exit. The `r27_homecoming` ending
   becomes available in the existing campaign inspector.
 
+The Player title follows the selected campaign and its campaign screen
+displays a read-only **Village / Temple / Gardien / Retour** stage journal
+(with available/locked/completed statuses). These labels are derived from
+the verified Simulation Campaign snapshot, not a separate puzzle save.
+
 The stage flags (e.g. `r27_dungeon_cleared`), completed missions,
 reward ledger, XP, equipment and unlock gates belong to **Campaign**.
 The opened local dungeon door and collected local key belong to the
