@@ -41,16 +41,22 @@ class ConstructionGameplayQtTests(unittest.TestCase):
             self.assertEqual(len(studio.mission()["level_links"]), 1)
             dock.gameplay_door.click()
             mission = studio.mission()
-            self.assertEqual(sum(o["kind"] == "door" for o in mission["objects"]), 1)
-            self.assertEqual(tuple(next(o["pos"] for o in mission["objects"]
-                                        if o["kind"] == "door")), entry)
+            # The R0 reference mission already contains the 'gate' door.
+            # Count the new building entrance without erasing fixture objects.
+            authored = [o for o in mission["objects"]
+                        if o["kind"] == "door" and o["id"] != "gate"]
+            self.assertEqual(len(authored), 1)
+            self.assertEqual(tuple(authored[0]["pos"]), entry)
             self.assertIs(dock.workspace.authoring, studio.authoring)
             self.assertTrue(any(item["kind"] == "building"
                                 for item in window.renderer.items))
             dock.undo.click()
-            self.assertFalse(any(o["kind"] == "door" for o in studio.mission()["objects"]))
+            self.assertFalse(any(o["kind"] == "door" and o["id"] != "gate"
+                                 for o in studio.mission()["objects"]))
+            self.assertTrue(any(o["id"] == "gate" for o in studio.mission()["objects"]))
             dock.redo.click()
-            self.assertTrue(any(o["kind"] == "door" for o in studio.mission()["objects"]))
+            self.assertTrue(any(o["kind"] == "door" and o["id"] != "gate"
+                                for o in studio.mission()["objects"]))
         finally:
             with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
                 window.close()
