@@ -43,6 +43,9 @@ from drawtemp.studio.r49_experience import (
 from drawtemp.studio.r49_workspaces import (
     FOCUS_REGIONS, WorkspaceFocusMemory, focus_settings_key,
 )
+from drawtemp.studio.r49_inspector_integrity import (
+    reference_audit, problems_for_selection,
+)
 from drawtemp.studio.r18_onboarding import (
     GUIDE_UI, STEP_IDS, journey_steps, next_step, normalize_completed, project_key,
 )
@@ -181,6 +184,8 @@ class StudioWindow(QMainWindow):
         self.r49_timings = OperationTimings()
         self._r49_audit = None
         self._r49_navigating = False
+        self._r49_reference_cache = None
+        self._r49_reference_key = None
         self._r49_focus = WorkspaceFocusMemory({
             name: self.settings.value(focus_settings_key(name))
             for name in WORKSPACES
@@ -401,6 +406,11 @@ class StudioWindow(QMainWindow):
         self.references.setWordWrap(True)
         self.references.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(self.references)
+        self.reference_issues_label = QLabel("")
+        self.reference_issues_label.setWordWrap(True)
+        self.reference_issues_label.setAccessibleName(
+            "Diagnostic des références du ou des éléments sélectionnés")
+        layout.addWidget(self.reference_issues_label)
         layout.addWidget(QLabel("Références croisées — double-cliquer pour naviguer"))
         self.links = QListWidget()
         self.links.setAccessibleName("Références entrantes et sortantes")
@@ -448,6 +458,8 @@ class StudioWindow(QMainWindow):
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
         self._action("r49_metrics", "Mesures UX locales R49…", self.open_r49_metrics)
+        self._action("r49_references", "Vérifier les références du projet…",
+                     self.inspect_references)
         self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
@@ -516,6 +528,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r30_scale"])
         tools_menu.addAction(self.commands["r49_metrics"])
+        tools_menu.addAction(self.commands["r49_references"])
         tools_menu.addAction(self.commands["r30_assist"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
@@ -858,12 +871,16 @@ class StudioWindow(QMainWindow):
         for label in self._property_error_labels.values():
             label.clear()
         if not self._edited_fields:
+            self.resource_view.setEnabled(True)
             self.inspector_error.setText("")
             self.pending_label.setText("")
             self.apply_button.setEnabled(False)
             self.discard_button.setEnabled(False)
             return False
         self.discard_button.setEnabled(True)
+        # A staged multi-property edit belongs to the original resource IDs.
+        # Disable switching the selection until apply/discard is explicit.
+        self.resource_view.setEnabled(False)
         if self.session.revision != self._inspector_revision:
             self.inspector_error.setText(
                 "Le projet a changé pendant la saisie. Ignorez les modifications "
@@ -909,6 +926,7 @@ class StudioWindow(QMainWindow):
         snapshot = self.session.snapshot()
         self._inspector_revision = snapshot.revision
         self._edited_fields = set()
+        self.resource_view.setEnabled(True)
         self.property_widgets.clear()
         self._property_error_labels.clear()
         self.name_edit = None
@@ -922,6 +940,7 @@ class StudioWindow(QMainWindow):
             str(len(chosen)) + " ressource(s) sélectionnée(s)" if chosen else
             "Sélectionnez une ressource dans l'explorateur")
         self.links.clear()
+        self.reference_issues_label.clear()
         if not chosen:
             self.references.setText("Aucune sélection")
             return
@@ -991,8 +1010,80 @@ class StudioWindow(QMainWindow):
                         title + " : " + other.title + " (" + other.family + ")",
                         other.key, edge.path)
                     self.links.addItem(item)
+            audit = self._r49_integrity(snapshot)
+            broken = problems_for_selection(audit, chosen)
+            if broken:
+                self.reference_issues_label.setText(
+                    str(len(broken)) + " référence(s) introuvable(s) dans cette sélection.")
+                for problem in broken:
+                    item = self._link_item("⚠ " + problem.summary,
+                                           problem.source.key, problem.path)
+                    self.links.addItem(item)
+            elif audit.truncated:
+                self.reference_issues_label.setText(
+                    "Analyse partielle : certaines références restent non vérifiées.")
+            else:
+                self.reference_issues_label.setText(
+                    "Aucune référence introuvable dans cette sélection.")
+            if audit.truncated:
+                self.reference_issues_label.setText(
+                    self.reference_issues_label.text() +
+                    " Analyse incomplète (limite de sécurité atteinte).")
         except (InspectorError, ValueError) as exc:
             self.inspector_error.setText(str(exc))
+
+    def _r49_integrity(self, snapshot=None):
+        """One bounded audit per canonical session revision, with no sidecar."""
+        snapshot = snapshot or self.session.snapshot()
+        key = (id(self.session), snapshot.revision)
+        if key != self._r49_reference_key:
+            self._r49_reference_cache = reference_audit(snapshot)
+            self._r49_reference_key = key
+        return self._r49_reference_cache
+
+    def inspect_references(self):
+        """Explore broken typed references and jump to their real source."""
+        audit = self._r49_integrity()
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Intégrité des références — R49")
+        layout = QVBoxLayout(dialog)
+        text = (str(len(audit.problems)) + " référence(s) introuvable(s).")
+        if audit.truncated:
+            text += " Résultat incomplet : limite de sécurité atteinte."
+        elif audit.passed:
+            text += " Aucun problème dans les champs typés reconnus."
+        message = QLabel(text)
+        message.setWordWrap(True)
+        layout.addWidget(message)
+        listing = QListWidget()
+        listing.setAccessibleName("Références introuvables et sources")
+        for problem in audit.problems:
+            listing.addItem(self._link_item(problem.summary,
+                                            problem.source.key, problem.path))
+        layout.addWidget(listing)
+        open_source = QPushButton("Afficher la source")
+        open_source.setEnabled(bool(audit.problems))
+        layout.addWidget(open_source)
+        close = QPushButton("Fermer")
+        close.clicked.connect(dialog.reject)
+        layout.addWidget(close)
+
+        def jump(item):
+            if item is None:
+                return
+            identity = item.data(Qt.UserRole)
+            dialog.accept()
+            if identity:
+                self.focus_resource(tuple(identity))
+
+        listing.itemActivated.connect(jump)
+        listing.itemDoubleClicked.connect(jump)
+        open_source.clicked.connect(lambda: jump(listing.currentItem()))
+        if listing.count():
+            listing.setCurrentRow(0)
+        dialog.resize(680, 390)
+        dialog.exec()
+        return audit
 
     def _link_item(self, title, identity, path):
         from PySide6.QtWidgets import QListWidgetItem
@@ -1025,6 +1116,7 @@ class StudioWindow(QMainWindow):
                        for key in self._edited_fields}
             edit_properties(self.session, self._selected, updates,
                             expected_revision=self._inspector_revision)
+            self._edited_fields.clear()
             self.refresh()
             return True
         except (AuthoringError, InspectorError, ValueError) as exc:
@@ -1091,6 +1183,12 @@ class StudioWindow(QMainWindow):
     @measure_studio("studio.navigate")
     def navigate(self, identifier):
         host = workspace_host(identifier)
+        if self._edited_fields and identifier != self._active_workspace:
+            self.statusBar().showMessage(
+                "Terminez ou ignorez les propriétés en cours avant de changer d'atelier.")
+            self.inspector_error.setText(
+                "Saisie non appliquée : Appliquer ou Ignorer pour changer d'atelier.")
+            return False
         self._r49_on_focus_changed(None, QApplication.focusWidget())
         # Qt may move focus automatically during setCurrentWidget. Do not let
         # those transient focus events replace a user's saved preference.
@@ -1710,6 +1808,8 @@ class StudioWindow(QMainWindow):
             page.setParent(None)
             page.deleteLater()
         self._models.clear()
+        self._r49_reference_cache = None
+        self._r49_reference_key = None
         self._selected = ()
         self._reference_anchor = ()
         self.reference_filter.setCurrentIndex(0)
@@ -1875,6 +1975,12 @@ class StudioWindow(QMainWindow):
             self.set_scale(int(scale.currentText()))
 
     def _confirm_leave(self):
+        if self._edited_fields:
+            self.inspector_error.setText(
+                "Propriétés en cours : appliquez-les ou ignorez-les avant de quitter.")
+            self.statusBar().showMessage(
+                "Terminez l'édition dans l'inspecteur avant de fermer ou changer de projet.")
+            return False
         if not self.session.snapshot().dirty:
             return True
         choice = QMessageBox.warning(
