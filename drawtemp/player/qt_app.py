@@ -347,6 +347,22 @@ def create_bridge(controller, renderer):
         def selectCell(self, x, y):
             self.invoke(self.controller.select_cell, x, y)
 
+        @Slot(str, str)
+        def requestTarget(self, kind, skill):
+            self.invoke(self.controller.request_target, kind, skill)
+
+        @Slot()
+        def cancelTarget(self):
+            self.invoke(self.controller.cancel_target)
+
+        @Slot()
+        def confirmTarget(self):
+            pending = self.controller._pending_target or {}
+            actor_id = pending.get("active", "")
+            visual = ((actor_id, "walk" if pending.get("kind") == "move"
+                       else "attack") if actor_id else None)
+            self.invoke(self.controller.confirm_target, visual=visual)
+
         @Slot(str)
         def command(self, kind):
             actor_id = ""
@@ -442,9 +458,12 @@ def main(argv=None):
     parser.add_argument("--character-variant", help="Initial authored outfit ID")
     parser.add_argument("--gui-journey", action="store_true",
                         help="R14 Qt input journey: title, story, battle, F5, menu, reload")
+    parser.add_argument("--gui-target-journey", action="store_true",
+                        help="R18 Qt GUI journey: select, request, cancel, confirm, resume")
     args = parser.parse_args(argv)
-    if args.gui_journey and (not args.reference or args.smoke or args.save_dir is None):
-        parser.error("--gui-journey requires --reference and an isolated --save-dir")
+    if (args.gui_journey or args.gui_target_journey) and (
+            not args.reference or args.smoke or args.save_dir is None):
+        parser.error("GUI journeys require --reference and an isolated --save-dir")
 
     # R15: a frozen Player must never run unverified or substitute game data.
     if getattr(sys, "frozen", False):
@@ -509,7 +528,7 @@ def main(argv=None):
     if not engine.rootObjects():
         print("R12 Player QML root failed to load", file=sys.stderr)
         return 1
-    if args.gui_journey:
+    if args.gui_journey or args.gui_target_journey:
         # Drives production QML and the actual PlayerBridge. This intentionally
         # runs in a separate QGuiApplication process from the Widgets Studio.
         from PySide6.QtCore import QPoint, QPointF, Qt
@@ -570,6 +589,46 @@ def main(argv=None):
                 click("r14Mission-" + MISSION)
                 if controller.state()["screen"] not in ("battle", "result"):
                     raise AssertionError("Reference battle did not start")
+                if args.gui_target_journey:
+                    # Reach a human CT activation with the *existing* tactical
+                    # engine, then exercise the real buttons in the QML tree.
+                    for _turn in range(100):
+                        battle = controller.session._session.active_battle
+                        if battle.result:
+                            raise AssertionError("Encounter ended before R18 target gate")
+                        if battle.deploying:
+                            bridge.command("deploy")
+                        elif battle.active is not None and battle.active.team == "enemy":
+                            bridge.enemyTurn()
+                        else:
+                            break
+                    battle = controller.session._session.active_battle
+                    if battle.active is None or battle.active.team != "player":
+                        raise AssertionError("No player activation for R18 target gate")
+                    positions = sorted(
+                        cell for cell in battle.reachable()
+                        if cell != battle.active.pos)
+                    if not positions:
+                        raise AssertionError("No available movement target for R18 gate")
+                    bridge.selectCell(*positions[0])
+                    pending_revision = controller.session.snapshot().revision
+                    pending_replay = controller.session.recording()
+                    click("r18RequestMove")
+                    if not controller.state()["pending_target"].get("valid"):
+                        raise AssertionError("R18 request was not staged")
+                    if controller.session.snapshot().revision != pending_revision:
+                        raise AssertionError("Request mutated the battle")
+                    click("r18CancelTarget")
+                    if controller.state()["pending_target"]:
+                        raise AssertionError("Cancel did not clear the target")
+                    if controller.session.recording() != pending_replay:
+                        raise AssertionError("R18 cancel changed the replay")
+                    click("r18RequestMove")
+                    click("r18ConfirmTarget")
+                    if controller.session.snapshot().revision != pending_revision + 1:
+                        raise AssertionError("R18 confirmation was not one command")
+                    if controller.state()["pending_target"]:
+                        raise AssertionError("Confirmed target remained pending")
                 before = controller.state()
                 QTest.keyClick(window, Qt.Key_F5)
                 QTest.qWait(100)
@@ -582,8 +641,10 @@ def main(argv=None):
                 after = controller.state()
                 if after["screen"] != before["screen"] or after["battle"] != before["battle"]:
                     raise AssertionError("GUI save/reload changed the canonical battle state")
-                print("R14 Player QML GUI input: title -> dialogue -> campaign -> "
-                      "battle -> F5 -> pause/title -> reload OK", flush=True)
+                print(("R18 Player QML targeting + " if args.gui_target_journey else
+                       "R14 Player QML input + ") +
+                      "title -> dialogue -> campaign -> battle -> F5 -> "
+                      "pause/title -> reload OK", flush=True)
                 app.exit(0)
             except Exception:
                 import traceback

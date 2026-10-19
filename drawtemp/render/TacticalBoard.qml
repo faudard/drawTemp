@@ -16,6 +16,10 @@ IsoViewport {
     // R3.C repositions the *actual* atlas/actor delegate, not a duplicate ghost.
     activeVisualClip: board.playing ? board.currentClip : ({})
     activeVisualPhase: board.phase
+    // Only one visible actor per committed event. Never hide the canonical
+    // actor if the corresponding R7 pose is absent (e.g. magic on old packs).
+    concealedActorIds: board.playing && motionGhost.visible ?
+                       [board.currentClip.actor] : []
 
     // R12.7: animation clips represent *committed* GameSession events. The
     // R3 scene is already authoritative at the final state; this temporary
@@ -33,7 +37,6 @@ IsoViewport {
         runningSerial = animationPlan.serial
         playing = false
         tween.stop()
-        concealedActorIds = []
         clipIndex = -1
         currentClip = ({})
         if (animationPlan.clips && animationPlan.clips.length > 0)
@@ -45,26 +48,17 @@ IsoViewport {
         // immediately discards any callbacks from an older plan.
         if (!animationPlan || runningSerial !== animationPlan.serial) {
             playing = false
-            concealedActorIds = []
-            return
+                return
         }
         clipIndex += 1
         if (!animationPlan.clips || clipIndex >= animationPlan.clips.length) {
             playing = false
-            concealedActorIds = []
-            currentClip = ({})
+                currentClip = ({})
             return
         }
         currentClip = animationPlan.clips[clipIndex]
         phase = 0
         playing = true
-        // For a real hit pose also hide the idle frame, preventing double
-        // Jeanne on top of a genuine impact animation.
-        var artHit = currentClip.kind === "impact" &&
-                     !!renderer.animationFrame(currentClip.actor, "south", "hit", 0).imageUrl
-        concealedActorIds = (currentClip.kind === "move" ||
-                             currentClip.kind === "attack" || artHit) ?
-                             [currentClip.actor] : []
         tween.duration = currentClip.duration_ms
         tween.restart()
     }
@@ -139,22 +133,30 @@ IsoViewport {
         objectName: "r12-motion-ghost"
         readonly property var sprite:
             board.playing && board.currentClip.actor ?
-            renderer.animationFrame(board.currentClip.actor,
-                                    board.actionDirection(), board.actionPose(),
-                                    Math.floor(board.phase *
-                                               (board.currentClip.duration_ms || 250))) : ({})
+            renderer.visualClipFrame(board.currentClip, board.phase) : ({})
         readonly property bool hasArt: !!sprite.imageUrl
-        visible: board.playing &&
-                 (board.currentClip.kind === "move" ||
-                  board.currentClip.kind === "attack" ||
-                  (board.currentClip.kind === "impact" && hasArt))
-        readonly property var pos: board.scenePoint(board.clipCell())
+        visible: board.playing && projected.sx !== undefined &&
+                 ((board.currentClip.kind === "move" ||
+                   board.currentClip.kind === "attack") ||
+                  ((board.currentClip.kind === "cast" ||
+                    board.currentClip.kind === "impact" ||
+                    board.currentClip.kind === "block") && hasArt))
+        // Use R3's canonical iso projection and easing, including real
+        // terrain elevation. Do not calculate a second motion path in QML.
+        readonly property var projected: board.playing ?
+            renderer.motionPoint(board.currentClip, board.phase) : ({})
         readonly property real ratio: renderer.cameraState.zoom
+        readonly property var pos: projected.sx !== undefined ?
+            [board.width / 2 + renderer.cameraState.panX + projected.sx * ratio,
+             board.height / 2 + renderer.cameraState.panY + projected.sy * ratio] :
+            board.scenePoint(board.clipCell())
         x: pos[0] - (hasArt ? sprite.pivotX : 20) * ratio
         y: pos[1] - (hasArt ? sprite.pivotY : 68) * ratio
         width: (hasArt ? sprite.frameWidth : 40) * ratio
         height: (hasArt ? sprite.frameHeight : 68) * ratio
-        z: (board.clipCell()[0] + board.clipCell()[1]) * 100 + 75
+        z: projected.worldX !== undefined ?
+           (projected.worldX + projected.worldY) * 100 + 75 :
+           (board.clipCell()[0] + board.clipCell()[1]) * 100 + 75
         Image {
             id: actionSprite
             objectName: "r12-action-sprite"
