@@ -17,9 +17,12 @@ class Battle:
     def __init__(self, content: Content, mission_id: str, seed: int = 1, battle_id: str | None = None, *, rules=None, initial_state=None):
         if rules is None:
             from .event_pages import has_pages
+            from .logic_variables import has_logic_variables
             from .tactical_rpg3 import authored_rules_for_document
             raw = content.to_dict()
-            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
+            rules = (authored_rules_for_document(raw)
+                     if has_pages(raw) or has_logic_variables(raw)
+                     else default_rules())
         self.rules = rules
         for key in ('damage', 'hit_chance', 'mitigation'):
             self.rules.formulas.get(key)
@@ -751,9 +754,12 @@ class Battle:
         require(recording.get("version") in {1, 2, 3}, "Unsupported replay version")
         if rules is None:
             from .event_pages import has_pages
+            from .logic_variables import has_logic_variables
             from .tactical_rpg3 import authored_rules_for_document
             raw = recording["content"]
-            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
+            rules = (authored_rules_for_document(raw)
+                     if has_pages(raw) or has_logic_variables(raw)
+                     else default_rules())
         if recording['version'] == 3:
             require(recording.get('rules') == rules.manifest(), 'Replay ruleset mismatch')
         elif recording['version'] == 2:
