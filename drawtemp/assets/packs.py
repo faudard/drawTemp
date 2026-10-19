@@ -294,8 +294,12 @@ def _make_transform(manifest, archive_sha):
         extensions = project.setdefault("extensions", {})
         stored = extensions.setdefault(RECEIPT_NAMESPACE, {
             "schema_version": 1, "data": {"packs": []}, "references": []})
-        if (type(stored) is not dict or stored.get("schema_version") != 1 or
+        if (type(stored) is not dict or set(stored) !=
+                {"schema_version", "data", "references"} or
+                stored.get("schema_version") != 1 or
                 type(stored.get("data")) is not dict or
+                set(stored["data"]) != {"packs"} or
+                stored.get("references") != [] or
                 type(stored["data"].get("packs")) is not list):
             fail("invalid_receipts", "Unrecognized pack receipt schema")
         installed = stored["data"]["packs"]
@@ -367,6 +371,10 @@ def install_pack(preview, editor, project_root, *, expected_revision=None):
     if checked.manifest != preview.manifest:
         fail("stale_preview", "Pack manifest changed")
     manifest = thaw(checked.manifest)
+    issues = verify_installed_packs(root, editor.snapshot().to_dict()["project"])
+    if issues:
+        fail("invalid_receipts", "Existing installed resource pack failed integrity: " +
+             issues[0])
     plan = editor.preview_project(_make_transform(manifest, checked.sha256),
                                   kind="r24.resource-pack")
     if expected_revision is not None and plan.source_revision != expected_revision:
@@ -427,8 +435,12 @@ def verify_installed_packs(project_root, project):
     issues = []
     try:
         receipt = extensions[RECEIPT_NAMESPACE]
-        if (type(receipt) is not dict or receipt.get("schema_version") != 1 or
+        if (type(receipt) is not dict or set(receipt) !=
+                {"schema_version", "data", "references"} or
+                receipt.get("schema_version") != 1 or
+                receipt.get("references") != [] or
                 type(receipt.get("data")) is not dict or
+                set(receipt["data"]) != {"packs"} or
                 type(receipt["data"].get("packs")) is not list):
             fail("invalid_receipts", "Invalid pack receipt registry")
         packs = receipt["data"]["packs"]
@@ -443,7 +455,10 @@ def verify_installed_packs(project_root, project):
             if pack["id"] in seen_ids:
                 fail("invalid_receipts", "Duplicate pack receipt")
             seen_ids.add(pack["id"])
-            if type(pack["files"]) is not list or type(pack["asset_ids"]) is not list:
+            if (type(pack["files"]) is not list or
+                    not 1 <= len(pack["files"]) <= MAX_FILES or
+                    type(pack["asset_ids"]) is not list or
+                    not 1 <= len(pack["asset_ids"]) <= MAX_ENTRIES):
                 fail("invalid_receipts", "Invalid pack receipt files/IDs")
             own_ids = set()
             for aid in pack["asset_ids"]:
