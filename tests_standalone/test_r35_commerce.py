@@ -100,6 +100,29 @@ class R35MerchantTests(unittest.TestCase):
             s.living_world_trade("village_shop", "herb", "buy", 1, "in_battle")
         self.assertEqual(s.living_world_state()["ticks"], 2)
 
+    def test_receipt_order_is_explicit_not_json_key_order(self):
+        s = self.session
+        s.living_world_advance(2)
+        s.living_world_trade("village_shop", "herb", "buy", 2, "z_purchase")
+        s.living_world_trade("village_shop", "herb", "sell", 1, "a_refund")
+        original = s.recording()
+        swapped = deepcopy(original)
+        swapped["living_world"]["trades"] = {
+            key: original["living_world"]["trades"][key]
+            for key in sorted(original["living_world"]["trades"])}
+        self.assertEqual(swapped["digest"], digest(
+            {k: v for k, v in swapped.items() if k != "digest"}))
+        restored = GameSession.from_recording(
+            swapped, self.content, self.project)
+        self.assertEqual(
+            restored.living_world_state()["shops"][0]["items"][0]["stock"], 4)
+        duplicated = deepcopy(swapped)
+        duplicated["living_world"]["trades"]["a_refund"]["sequence"] = 0
+        duplicated["digest"] = digest(
+            {k: v for k, v in duplicated.items() if k != "digest"})
+        with self.assertRaises(RuleError):
+            GameSession.from_recording(duplicated, self.content, self.project)
+
     def test_receipt_integrity_and_invalid_catalogue(self):
         s = self.session
         s.living_world_advance(2)
