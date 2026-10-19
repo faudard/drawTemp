@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
+from drawtemp.sdk.modding import ModRegistry
 from drawtemp.sdk.reference import reference_project
 from drawtemp.studio.workspace_model import FAMILY_LABELS, resources
 from drawtemp.studio.inspector_model import (
@@ -173,6 +174,7 @@ class StudioWindow(QMainWindow):
         self.pages = {}
         self.commands = {}
         self.plugins = StudioPluginRegistry()
+        self.mods = ModRegistry()  # R47 grants never persist across projects.
         self._plugin_docks = {}
         self._plugin_fields = {}
         self._active_workspace = "project"
@@ -493,6 +495,9 @@ class StudioWindow(QMainWindow):
         load_plugin.triggered.connect(self._load_plugin_dialog)
         disable_plugin = plugin_menu.addAction("Désactiver un plugin…")
         disable_plugin.triggered.connect(self._disable_plugin_dialog)
+        mod_menu = tools_menu.addMenu("Modules / SDK R47")
+        mod_manager = mod_menu.addAction("Inspecter les mods déclaratifs…")
+        mod_manager.triggered.connect(self.open_mod_manager)
         shortcuts = tools_menu.addAction("Configurer un raccourci…")
         shortcuts.triggered.connect(self.configure_shortcut)
         # Localization applies to global workspace labels; legacy editors
@@ -1400,6 +1405,11 @@ class StudioWindow(QMainWindow):
             self._unmount_plugin(selected)
             self.statusBar().showMessage("Plugin désactivé : " + selected)
 
+    def open_mod_manager(self):
+        """Open the R47 inspector; Studio remains owner of edits and grants."""
+        from drawtemp.studio.r47_mods_qt import ModManagerDialog
+        return ModManagerDialog(self).exec()
+
     def report_error(self, error):
         log.warning("R2 Studio: %s", error)
         self.problems.addItem(str(error))
@@ -1564,6 +1574,8 @@ class StudioWindow(QMainWindow):
         self._selected = ()
         self._reference_anchor = ()
         self.reference_filter.setCurrentIndex(0)
+        # Project switch invalidates every R47 consent and installed descriptor.
+        self.mods = ModRegistry()
         self.session = fresh
         self.content_path = Path(path)
         self._activate("project")
