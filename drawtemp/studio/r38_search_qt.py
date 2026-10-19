@@ -14,7 +14,8 @@ LABELS = {
     "project": "Projet", "maps": "Cartes", "actors": "Acteurs",
     "objects": "Objets", "events": "Événements", "campaigns": "Campagnes",
     "scenes": "Dialogues", "cinematics": "Cinématiques",
-    "assets": "Assets", "logic_graphs": "Graphes R31",
+    "assets": "Assets", "quests": "Quêtes R35", "factions": "Factions R35",
+    "logic_graphs": "Graphes R31",
     "graph_nodes": "Nœuds R31",
 }
 
