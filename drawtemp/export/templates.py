@@ -13,10 +13,11 @@ from drawtemp.sdk.reference import reference_project
 from sporebound.studio_transaction import validate_pair
 from drawtemp.quality.r14 import safe_asset_path
 
-TEMPLATES = ("blank", "tactical", "narrative", "jeanne")
+TEMPLATES = ("blank", "tactical", "narrative", "jeanne", "asterion")
 _TITLES = {"blank": "Nouveau RPG", "tactical": "Prototype tactique",
            "narrative": "Histoire interactive",
-           "jeanne": "Jeanne d'Arc — Les Cendres du Royaume"}
+           "jeanne": "Jeanne d'Arc — Les Cendres du Royaume",
+           "asterion": "Asterion — Les Veilleurs du Signal"}
 
 
 def create_template(kind, destination):
@@ -30,7 +31,22 @@ def create_template(kind, destination):
     with TemporaryDirectory(prefix=".drawtemp-template-", dir=output.parent) as folder:
         stage = Path(folder) / "project"
         stage.mkdir()
-        if kind == "jeanne":
+        if kind == "asterion":
+            # Independent second game, included in the installed wheel.
+            source = files("drawtemp").joinpath("creator_examples/asterion.json")
+            source_project = files("drawtemp").joinpath("creator_examples/asterion.game.json")
+            content = Content.from_dict(json.loads(source.read_text(encoding="utf-8")))
+            project = GameProject.from_dict(
+                json.loads(source_project.read_text(encoding="utf-8")), content)
+            valid_content, valid_project = validate_pair(
+                content.to_dict(), project.to_dict())
+            (stage / "game.json").write_text(
+                json.dumps(valid_content, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8")
+            (stage / "game.game.json").write_text(
+                json.dumps(valid_project, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8")
+        elif kind == "jeanne":
             source = Path(str(files("sporebound").joinpath("content/jeanne.json")))
             source_project = source.with_name("jeanne.game.json")
             report = preflight(source)
