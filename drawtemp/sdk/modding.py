@@ -184,8 +184,11 @@ class ModRegistry:
         if type(paths) is not dict or set(paths) != {r["id"] for r in mod["resources"]}:
             _fail("missing_resource", "Exact pinned resource pack mapping required")
         for res in mod["resources"]:
+            path = Path(paths[res["id"]])
+            if path.is_symlink() or not path.is_file():
+                _fail("unsafe_resource", "Resource pack must be a regular, non-symlink file")
             try:
-                report = inspect_pack(paths[res["id"]])
+                report = inspect_pack(path)
             except (PackError, OSError, ValueError, TypeError) as exc:
                 raise ModError("invalid_resource", "Resource pack could not be verified") from exc
             if (report.pack_id, report.version, report.archive_sha256) != (
@@ -194,6 +197,7 @@ class ModRegistry:
         digest = hashlib.sha256(json.dumps(mod, sort_keys=True, separators=(",", ":"),
                                            ensure_ascii=True).encode("utf-8")).hexdigest()
         self._entries[mid] = {"manifest": mod, "digest": digest,
+                              "resource_paths": {key: Path(value) for key, value in paths.items()},
                               "enabled": False, "grants": frozenset()}
         return self.status(mid)
 
@@ -258,6 +262,71 @@ class ModRegistry:
             _fail("stale_revision", "Refresh the Studio document before applying")
         plan = self.preview_extension(mod_id, editor)
         return editor.apply(plan)
+
+    def audit_project(self, project, *, expected_pins):
+        """R47.C: read-only fail-closed mod inventory for a canonical project.
+
+        Caller supplies IDs and pinned manifest SHA-256 values from a
+        separately trusted inventory. This NEVER approves legal rights or a
+        standalone Player build. A missing mod is a diagnostic, never deleted
+        project data. Resources are rehashed, not trusted from install time.
+        """
+        if (type(expected_pins) is not dict or len(expected_pins) > 32 or
+                any(type(mid) is not str or not _ID.fullmatch(mid) or
+                    type(digest) is not str or not _SHA.fullmatch(digest)
+                    for mid, digest in expected_pins.items())):
+            _fail("invalid_pins", "Expected a bounded mapping of mod IDs to SHA-256")
+        if hasattr(project, "to_dict"):
+            project = project.to_dict()
+        if type(project) is dict and "project" in project:
+            project = project["project"]
+        if type(project) is not dict or type(project.get("extensions")) is not dict:
+            _fail("invalid_project", "Expected canonical GameProject extensions")
+        namespaces = project["extensions"]
+        errors, verified = [], []
+        for mod_id, expected_sha in sorted(expected_pins.items()):
+            entry = self._entries.get(mod_id)
+            if entry is None:
+                errors.append(mod_id + ": missing_mod")
+                continue
+            doc = entry["manifest"]
+            if entry["digest"] != expected_sha:
+                errors.append(mod_id + ": manifest_changed")
+                continue
+            try:
+                validate_mod_manifest(doc)
+            except ModError:
+                errors.append(mod_id + ": incompatible_manifest")
+                continue
+            if doc["extension"] is not None and doc["namespace"] not in namespaces:
+                errors.append(mod_id + ": missing_namespace")
+                continue
+            if doc["extension"] is not None:
+                namespace_data = namespaces[doc["namespace"]]
+                if (type(namespace_data) is not dict or
+                        namespace_data.get("schema_version") != 1):
+                    errors.append(mod_id + ": invalid_namespace")
+                    continue
+            damaged = False
+            for resource in doc["resources"]:
+                path = entry["resource_paths"].get(resource["id"])
+                try:
+                    if path is None or path.is_symlink() or not path.is_file():
+                        raise ValueError("Resource no longer exists")
+                    current = inspect_pack(path)
+                    if (current.pack_id, current.version, current.archive_sha256) != (
+                            resource["id"], resource["version"], resource["sha256"]):
+                        raise ValueError("Resource digest changed")
+                except (PackError, OSError, ValueError, TypeError):
+                    errors.append(mod_id + ": resource_changed")
+                    damaged = True
+                    break
+            if damaged:
+                continue
+            verified.append(mod_id)
+        return {"compatible": not errors, "errors": errors,
+                "verified_mod_ids": verified, "rights_verified": False,
+                "native_export_verified": False, "release_certified": False}
 
     def uninstall(self, mod_id, *, project):
         """Unregister metadata only; never delete user data or asset files."""
