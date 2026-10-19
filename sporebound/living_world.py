@@ -131,6 +131,9 @@ class LivingWorld:
         self.spec = deepcopy(spec)
         self.scene_ids = frozenset(scene_ids)
         self.exploration = deepcopy(exploration or {})
+        # R35.10: indexing actor identities keeps 256-NPC views O(N),
+        # rather than linearly scanning 256 actors for each projected NPC.
+        self._npc_by_id = {npc["id"]: npc for npc in self.spec["npcs"]}
         from .living_world_transfers import compile_legs
         self._nav_routes = compile_legs(self.spec, self.exploration)
         self.ticks = 0
@@ -288,7 +291,7 @@ class LivingWorld:
     def npc_pose(self, npc_id, story_flags):
         """Collision-aware projection; no mutation or frame-clock dependence."""
         require(type(story_flags) is dict, "Story flags must be a mapping")
-        npc = next((n for n in self.spec["npcs"] if n["id"] == npc_id), None)
+        npc = self._npc_by_id.get(npc_id)
         require(npc is not None, "Unknown NPC")
         from .living_world_navigation import resolve_npc
         return resolve_npc(npc, story_flags, self.minute, self.exploration,
