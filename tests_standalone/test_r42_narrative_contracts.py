@@ -60,6 +60,9 @@ class NarrativeContractsR42Tests(unittest.TestCase):
         progress = new.new_game('main', self.content)
         self.assertEqual(book.active_scene(progress)['lines'][1]['speaker'],
                          'Capitaine')
+        from sporebound.narrative_playback_r42 import advance_line
+        progress = deepcopy(progress)
+        advance_line(progress, book.active_scene(progress))
         self.assertEqual(book.choose(progress, 'enter').story_pending, '')
         with self.assertRaises(RuleError):
             set_dialogue_lines(new, self.content, 'arrival', [
