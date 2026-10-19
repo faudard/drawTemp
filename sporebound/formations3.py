@@ -49,7 +49,9 @@ def formation_preview(battle, unit_id):
     """Pure explanation of active and broken stances, including floor ownership."""
     unit = next((u for u in battle.units if u.id == unit_id), None)
     require(unit is not None, "Unknown formation unit")
-    tile = battle.board.tile(unit.pos)
+    level = battle.unit_levels.get(unit.id, 0)
+    # The ground board has no authority over upper-deck cover/elevation.
+    tile = battle.board.tile(unit.pos) if level == 0 else None
     mode = _formation_tag(unit)[len(PREFIX):] or "none"
     wall = bool(shield_wall(battle, unit))
     spear = bool(phalanx(battle, unit))
@@ -72,12 +74,13 @@ def formation_preview(battle, unit_id):
     elif mode.startswith("escort:") and not providing:
         reason = "escort_target_required_adjacent_on_same_floor"
     return {"unit": unit.id, "mode": mode,
-            "level": battle.unit_levels.get(unit.id, 0),
+            "level": level,
             "shield_wall": wall, "phalanx": spear, "escort": protected,
             "providing_escort": providing, "formation_active": bool(active),
             "partners": partners, "break_reason": reason,
-            "terrain_cover": tile.cover, "elevation": tile.height,
-            "fortified": bool(wall and tile.cover >= 20)}
+            "terrain_cover": tile.cover if tile else 0,
+            "elevation": tile.height if tile else 0,
+            "fortified": bool(wall and tile and tile.cover >= 20)}
 
 
 def set_formation(battle, actor, command):
@@ -165,11 +168,15 @@ def install_formations(rules):
             return damage
         if phalanx(battle, caster) and skill.id == "attack":
             damage = damage * 5 // 4
-            if battle.board.tile(caster.pos).height > battle.board.tile(target.pos).height:
+            if (battle.unit_levels.get(caster.id, 0) == 0
+                    and battle.unit_levels.get(target.id, 0) == 0
+                    and battle.board.tile(caster.pos).height >
+                    battle.board.tile(target.pos).height):
                 damage = damage * 11 // 10
         if shield_wall(battle, target):
             damage = damage * 4 // 5
-            if battle.board.tile(target.pos).cover >= 20:
+            if (battle.unit_levels.get(target.id, 0) == 0
+                    and battle.board.tile(target.pos).cover >= 20):
                 damage = damage * 9 // 10
         if escorted(battle, target):
             damage = damage * 17 // 20
