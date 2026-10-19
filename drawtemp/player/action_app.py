@@ -139,7 +139,16 @@ def main(argv=None):
                         help="Instantiate offscreen UI and stop before gameplay")
     parser.add_argument("--save-dir", type=Path,
                         default=Path.home() / ".drawtemp" / "action-preview")
+    parser.add_argument("--content", type=Path,
+                        help="Canonical Content JSON for --animation-project")
+    parser.add_argument("--animation-project", type=Path,
+                        help="Validated GameProject JSON containing R28/R36 animation assets")
+    parser.add_argument("--hero-controller",
+                        help="Existing R36 Animation Controller bound to the action hero")
     args = parser.parse_args(argv)
+    if any((args.content, args.animation_project, args.hero_controller)) and not all(
+            (args.content, args.animation_project, args.hero_controller)):
+        parser.error("--content, --animation-project and --hero-controller are required together")
     try:
         from PySide6.QtCore import QTimer, QUrl
         from PySide6.QtGui import QGuiApplication
@@ -149,8 +158,25 @@ def main(argv=None):
         return 2
 
     app = QGuiApplication([sys.argv[0]])
-    controller = ActionPlayerController(
-        demo_scene(), save_path=args.save_dir / "action.json")
+    animation_project = None
+    if args.animation_project is not None:
+        from sporebound.model import Content
+        from sporebound.game_project import GameProject
+        try:
+            animation_project = GameProject.load(
+                args.animation_project, Content.load(args.content))
+        except (OSError, ValueError, TypeError) as exc:
+            print("R36 animation project rejected: " + str(exc), file=sys.stderr)
+            return 2
+    try:
+        controller = ActionPlayerController(
+            demo_scene(), save_path=args.save_dir / "action.json",
+            animation_project=animation_project,
+            animation_bindings=({"hero": args.hero_controller}
+                                if args.hero_controller else None))
+    except (ValueError, TypeError) as exc:
+        print("R36 hero binding rejected: " + str(exc), file=sys.stderr)
+        return 2
     # The exact same R3 projection/controller handles Studio, tactical Player
     # and this opt-in action Player. The Qt delegate is projection-specific.
     from drawtemp.render.qt_viewport import make_controller
