@@ -16,7 +16,7 @@ try:
 except ImportError:
     QApplication = None
 
-from drawtemp.quality.r30_scale import collect_profile
+from drawtemp.quality.r30_scale import collect_profile, OPS
 from drawtemp.sdk.authoring import AuthoringSession
 from drawtemp.sdk.reference import reference_project
 
@@ -41,11 +41,11 @@ class R30ScaleQtTests(unittest.TestCase):
         self.assertFalse(self.dashboard.compare_button.isEnabled())
         self.assertFalse(self.dashboard.chart.rows)
         self.assertTrue(self.dashboard.open_report(self.file))
-        self.assertEqual(self.dashboard.table.rowCount(), 5)
-        self.assertEqual(len(self.dashboard.chart.rows), 5)
+        self.assertEqual(self.dashboard.table.rowCount(), len(OPS))
+        self.assertEqual(len(self.dashboard.chart.rows), len(OPS))
         self.assertTrue(self.dashboard.compare_button.isEnabled())
         self.assertIn("p99 exploratoire", self.dashboard.status.text())
-        self.assertIn("Pas", self.dashboard.banner.text())
+        self.assertIn("PAS", self.dashboard.banner.text())
         self.assertIn("Assets", self.dashboard.assets_label.text())
         self.dashboard.chart.resize(800, 350)
         self.dashboard.chart.repaint()  # QPainter must work offscreen.
