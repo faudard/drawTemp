@@ -24,7 +24,7 @@ Le test refuse également : exécution arbitraire (`entrypoint`), écrasement im
 
 Le test génère des archives R30 de données JSON originales, sans fichiers Python/QML, avec manifestes et SHA-256 calculés. Chaque module épingle un pack par ID, version et SHA-256 d'archive. Les chemins sont choisis par le host et non déduits du JSON du manifeste.
 
-`ModRegistry.audit_project(project, expected_pins=...)` vérifie, **sans mutation**, la présence des mods exigés, leur manifeste versionné, leur namespace et les packs R30 encore présents. Les pins (ID → SHA-256 du manifeste) doivent provenir d'un inventaire séparément approuvé par l'appelant. Ce mécanisme ne fournit **pas** une autorité de signature : si l'inventaire lui-même est compromis, le résultat n'est pas une preuve de confiance.
+`ModRegistry.audit_project(project, expected_pins=...)` vérifie, **sans mutation**, la présence des mods exigés, leur manifeste versionné, leur namespace **et la valeur exacte de leur enveloppe déclarative**, ainsi que les packs R30 encore présents. Les pins (ID → SHA-256 du manifeste) doivent provenir d'un inventaire séparément approuvé par l'appelant. Ce mécanisme ne fournit **pas** une autorité de signature : si l'inventaire lui-même est compromis, le résultat n'est pas une preuve de confiance.
 
 Après installation, falsifier une archive ZIP entraîne le diagnostic `resource_changed` et un résultat `compatible: false`. Le retrait d'un module non disponible ne supprime jamais ses données du projet : l'audit annonce `missing_mod`. `rights_verified`, `native_export_verified` et `release_certified` restent toujours **false** dans ce rapport technique.
 
