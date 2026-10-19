@@ -225,10 +225,14 @@ def import_pack_to_copy(preview: PackImportPreview, destination):
         raise PackImportError("invalid_preview", "Expected a read-only import preview")
     source = Path(preview.content_path)
     archive_path = Path(preview.archive_path)
-    dest = Path(destination).absolute()
+    requested = Path(destination).absolute()
     root = source.parent.resolve(strict=True)
-    # Never stage inside the source project's root or overwrite the project.
-    if dest == root or root in dest.parents:
+    # Resolve existing parent symlinks BEFORE comparing paths. Otherwise a
+    # destination that only looks external could stage inside the source tree.
+    parent = requested.parent.resolve(strict=False)
+    dest = parent / requested.name
+    if (dest == root or root in dest.parents or
+            requested.name in ("", ".", "..")):
         raise PackImportError("invalid_destination", "Output must be outside source project")
     if dest.exists() or dest.is_symlink():
         raise PackImportError("destination_exists", "Existing destination not replaced")
