@@ -44,7 +44,8 @@ class LogicCanvas(QGraphicsView):
         for index, node in enumerate(nodes):
             col, row = divmod(index, 4)
             x, y = 30 + col * 225, 35 + row * 106
-            color = QColor("#225785" if node["kind"] == "event" else "#35465f")
+            color = QColor("#225785" if node["kind"] == "event" else
+                           "#775325" if node["kind"] == "branch" else "#35465f")
             box = scene.addRect(x, y, 186, 76, QPen(QColor("#8ca9d0"), 2),
                                 QBrush(color))
             box.setData(0, node["id"])
@@ -66,7 +67,9 @@ class LogicCanvas(QGraphicsView):
             halfway = (start_point.x() + end_point.x()) / 2
             path.cubicTo(halfway, start_point.y(),
                          halfway, end_point.y(), end_point.x(), end_point.y())
-            line = scene.addPath(path, QPen(QColor("#66b9de"), 3))
+            stroke = "#68c2a1" if edge["out"] == "true" else (
+                "#efa46e" if edge["out"] == "false" else "#66b9de")
+            line = scene.addPath(path, QPen(QColor(stroke), 3))
             line.setZValue(1)
         scene.setSceneRect(scene.itemsBoundingRect().adjusted(-20, -25, 30, 30))
         self.highlight(self._selected)
@@ -142,10 +145,13 @@ class LogicGraphDialog(QDialog):
         for key, label, callback in (
                 ("new", "Nouveau", self.new_graph),
                 ("add", "+ Action", self.add_action),
+                ("branch", "+ Si / Sinon", self.add_branch),
                 ("copy", "Dupliquer", self.copy_action),
                 ("edit", "Propriétés…", self.edit_node),
                 ("remove", "Supprimer", self.remove_action),
                 ("connect", "Relier", self.start_connect),
+                ("true", "Relier SI", lambda: self.start_connect("true")),
+                ("false", "Relier SINON", lambda: self.start_connect("false")),
                 ("disconnect", "Délier", self.start_disconnect),
                 ("preview", "Vérifier", self.preview),
                 ("apply", "Appliquer", self.apply_changes),
@@ -271,7 +277,7 @@ class LogicGraphDialog(QDialog):
             self._inspect()
         self.mission.setEnabled(self.draft is None)
         self.buttons["apply"].setEnabled(self.draft is not None)
-        for key in ("add", "copy", "edit", "remove", "connect", "disconnect", "preview"):
+        for key in ("add", "branch", "copy", "edit", "remove", "connect", "true", "false", "disconnect", "preview"):
             self.buttons[key].setEnabled(self.draft is not None)
 
     def _inspect(self):
@@ -291,12 +297,14 @@ class LogicGraphDialog(QDialog):
     def choose_node(self, node_id):
         if self.draft is None:
             return
-        if self.link_start.startswith("connect:") or self.link_start.startswith("disconnect:"):
+        if self.link_start and self.link_start.split(":", 1)[0] in (
+                "connect", "connect_true", "connect_false", "disconnect"):
             mode, source = self.link_start.split(":", 1)
             self.link_start = ""
             try:
-                if mode == "connect":
-                    self.draft.connect(source, node_id)
+                if mode.startswith("connect"):
+                    port = {"connect_true": "true", "connect_false": "false"}.get(mode, "next")
+                    self.draft.connect(source, node_id, port=port)
                 else:
                     self.draft.disconnect(source, node_id)
                 self.diagnostics.setPlainText("Connexion modifiée en brouillon.")
@@ -307,11 +315,18 @@ class LogicGraphDialog(QDialog):
         self.canvas.highlight(node_id)
         self._inspect()
 
-    def start_connect(self):
-        if self.selected_node:
-            self.link_start = "connect:" + self.selected_node
-            self.diagnostics.setPlainText("Cliquez la destination du nœud " +
-                                          self.selected_node)
+    def start_connect(self, port="next"):
+        if self.selected_node and self.draft is not None:
+            node = self.draft.node(self.selected_node)
+            if node["kind"] == "branch" and port == "next":
+                port = "true"
+            if node["kind"] != "branch" and port in ("true", "false"):
+                self.diagnostics.setPlainText("Relier SI/SINON requiert un nœud condition.")
+                return
+            code = {"true": "connect_true", "false": "connect_false"}.get(port, "connect")
+            self.link_start = code + ":" + self.selected_node
+            self.diagnostics.setPlainText("Cliquez la destination du port " +
+                                          port + " de " + self.selected_node)
 
     def start_disconnect(self):
         if self.selected_node:
@@ -331,6 +346,16 @@ class LogicGraphDialog(QDialog):
             self._render()
             self.diagnostics.setPlainText("Nœud ajouté. Reliez ses ports avant Appliquer.")
         except LogicGraphError as exc:
+            self._problem(exc)
+
+    def add_branch(self):
+        if self.draft is None:
+            return
+        try:
+            self.selected_node = self.draft.add_branch()
+            self._render()
+            self.diagnostics.setPlainText("SI/SINON inséré. Condition typée modifiable.")
+        except (LogicGraphError, ValueError) as exc:
             self._problem(exc)
 
     def copy_action(self):
@@ -353,6 +378,57 @@ class LogicGraphDialog(QDialog):
         except LogicGraphError as exc:
             self._problem(exc)
 
+    def _prompt_expression(self, previous):
+        """Strict boolean AST via typed dialogs; no JSON or interpreter."""
+        operator, ok = QInputDialog.getItem(
+            self, "Expression booléenne", "Opération",
+            ["Remplacer", "ET", "OU", "NON"], 0, False)
+        if not ok:
+            return None
+        if operator == "NON":
+            value = {"not": deepcopy(previous)}
+        else:
+            kind, ok = QInputDialog.getItem(
+                self, "Prédicat typé", "Condition",
+                ["hp_below", "wave_capacity", "defeated", "tick"], 0, False)
+            if not ok:
+                return None
+            if kind in ("hp_below", "defeated"):
+                unit, ok = QInputDialog.getText(
+                    self, "Acteur", "ID existant (validé par R9)", text="hero")
+                if not ok:
+                    return None
+                leaf = {"condition": kind, "unit": unit}
+                if kind == "hp_below":
+                    percent, ok = QInputDialog.getInt(
+                        self, "PV", "Seuil %", 50, 1, 99)
+                    if not ok:
+                        return None
+                    leaf["percent"] = percent
+            elif kind == "wave_capacity":
+                team, ok = QInputDialog.getItem(
+                    self, "Équipe", "Équipe", ["enemy", "player", "neutral"], 0, False)
+                if not ok:
+                    return None
+                quantity, ok = QInputDialog.getInt(
+                    self, "Effectifs", "Nombre maximum", 0, 0, 100000)
+                if not ok:
+                    return None
+                leaf = {"condition": kind, "team": team,
+                        "max_alive": quantity}
+            else:
+                tick, ok = QInputDialog.getInt(
+                    self, "Temps logique", "Tick minimum", 0, 0, 100000)
+                if not ok:
+                    return None
+                leaf = {"condition": kind, "value": tick}
+            value = (leaf if operator == "Remplacer"
+                     else {{"ET": "all", "OU": "any"}[operator]:
+                           [deepcopy(previous), leaf]})
+        from drawtemp.sdk.logic_branches import validate_expression
+        validate_expression(value)
+        return value
+
     def edit_node(self):
         if self.draft is None or not self.selected_node:
             return
@@ -360,6 +436,15 @@ class LogicGraphDialog(QDialog):
         params = deepcopy(node["params"])
         kind = params["kind"]
         try:
+            if node["kind"] == "branch":
+                expression = self._prompt_expression(params["predicate"])
+                if expression is None:
+                    return
+                self.draft.edit_node(self.selected_node, {
+                    "kind": "if", "predicate": expression})
+                self._render()
+                self.diagnostics.setPlainText("Condition booléenne modifiée en brouillon.")
+                return
             if node["kind"] == "event":
                 selected, ok = QInputDialog.getItem(
                     self, "Type de déclencheur", "Événement R9",
@@ -416,11 +501,14 @@ class LogicGraphDialog(QDialog):
             return False
         try:
             _plan, compiled = self.draft.prepare(self.session)
+            triggers = compiled if isinstance(compiled, list) else [compiled]
             self.diagnostics.setPlainText(
                 "VALIDÉ (non enregistré)\n" +
-                "R9: " + compiled["id"] + "\n" +
-                "Déclencheur: " + compiled["condition"] + "\n" +
-                "Actions: " + " → ".join(row["kind"] for row in compiled["actions"]))
+                "\n".join(t["id"] + " [" + t["condition"] + "]: " +
+                          " → ".join(a["kind"] for a in t["actions"])
+                          for t in triggers) +
+                ("\nSI/SINON exclusifs via cancel_after R9"
+                 if len(triggers) == 2 else ""))
             return True
         except (AuthoringError, LogicGraphError, ValueError) as exc:
             self._problem(exc)
