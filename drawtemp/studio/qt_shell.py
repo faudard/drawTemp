@@ -430,6 +430,7 @@ class StudioWindow(QMainWindow):
         self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
+        self._action("r42_narrative", "Narrative Studio R42…", self.open_narrative_studio)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
@@ -482,6 +483,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r30_assist"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
+        tools_menu.addAction(self.commands["r42_narrative"])
         tools_menu.addAction(self.commands["r35_world"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
@@ -599,6 +601,16 @@ class StudioWindow(QMainWindow):
         dialog.updated.connect(self.refresh)
         dialog.exec()
         if self.session.revision != initial_revision:
+            self.refresh()
+
+    def open_narrative_studio(self):
+        """R42.B: canonical narrative editor bound to this Studio session."""
+        from drawtemp.studio.narrative_qt_r42 import NarrativeStudioDialog
+        prior = self.session.revision
+        dialog = NarrativeStudioDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != prior:
             self.refresh()
 
     def open_scale_dashboard(self):
