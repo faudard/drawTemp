@@ -135,6 +135,8 @@ class ProjectHistoryDialog(QDialog):
         base_row.addWidget(self.base_combo, 3)
         self.compare_button = QPushButton("Comparer les versions")
         self.compare_button.setObjectName("r48-compare")
+        self.compare_button.setShortcut("Alt+C")
+        self.compare_button.setToolTip("Alt+C : comparer les versions sélectionnées")
         self.compare_button.clicked.connect(self.compare_selected)
         base_row.addWidget(self.compare_button)
         layout.addLayout(base_row)
@@ -199,6 +201,9 @@ class ProjectHistoryDialog(QDialog):
         self.notes_table = QTableWidget(0, 4)
         self.notes_table.setObjectName("r48-notes-table")
         self.notes_table.setAccessibleName("Discussions de revue de la ressource")
+        self.notes_table.setAccessibleDescription(
+            "Chaque ligne indique un commentaire ou une réponse, son auteur "
+            "et le statut du fil. Les annotations ne résolvent pas les conflits.")
         self.notes_table.setHorizontalHeaderLabels(
             ("Fil", "Auteur", "Message", "État"))
         self.notes_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -222,6 +227,8 @@ class ProjectHistoryDialog(QDialog):
         note_edit_row.addWidget(self.note_text, 4)
         self.post_note_button = QPushButton("Publier la note")
         self.post_note_button.setObjectName("r48-note-post")
+        self.post_note_button.setShortcut("Alt+P")
+        self.post_note_button.setToolTip("Alt+P ou Ctrl+Entrée : publier le commentaire")
         self.post_note_button.setEnabled(False)
         self.post_note_button.clicked.connect(self.post_note)
         note_edit_row.addWidget(self.post_note_button)
@@ -545,17 +552,20 @@ class ProjectHistoryDialog(QDialog):
             except (ValueError, OSError, TypeError) as exc:
                 self.notes_status.setText("Notes non vérifiables : " + str(exc))
                 threads = ()
-            self.notes_table.setRowCount(len(threads))
-            for row, thread in enumerate(threads):
-                first = thread["comments"][0]
-                values = (
-                    str(thread["id"]), first["author"],
-                    first["text"] + (f" (+{len(thread['comments']) - 1})"
-                                     if len(thread["comments"]) > 1 else ""),
-                    "Résolu" if thread["resolved"] else "Ouvert",
-                )
-                for column, value in enumerate(values):
-                    self.notes_table.setItem(row, column, _cell(value))
+            self.notes_table.setRowCount(
+                sum(len(thread["comments"]) for thread in threads))
+            row_index = 0
+            for thread in threads:
+                state = "Résolu" if thread["resolved"] else "Ouvert"
+                for index, comment in enumerate(thread["comments"]):
+                    values = (
+                        f"#{thread['id']}" if not index else
+                        f"#{thread['id']} ↳ {index}",
+                        comment["author"], comment["text"], state,
+                    )
+                    for column, value in enumerate(values):
+                        self.notes_table.setItem(row_index, column, _cell(value))
+                    row_index += 1
                 self.note_thread_combo.addItem(
                     f"Fil #{thread['id']} — {'résolu' if thread['resolved'] else 'ouvert'}",
                     thread["id"])
