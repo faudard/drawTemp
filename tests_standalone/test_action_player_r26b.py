@@ -159,8 +159,11 @@ class R26BCampaignTests(unittest.TestCase):
         with patch.object(GameSession, "scene_profile", action_profile, create=True):
             encounter = ActionEncounter(self.session, action_scene())
             self.session.progress.gold += 10
+            # The tick continues, but no checkpoint/reward may be
+            # published after a concurrent change to canonical progress.
+            encounter.step({"tick": 1})
             with self.assertRaises(RuleError):
-                encounter.step({"tick": 1})
+                encounter.recording()
             with self.assertRaises(RuleError):
                 encounter.commit()
             self.assertEqual(self.session.progress.inventory, {"potion": 2})
