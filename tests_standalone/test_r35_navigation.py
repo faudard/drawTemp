@@ -40,12 +40,11 @@ class R35NavigationTests(unittest.TestCase):
         self.assertEqual(merchant()["pos"], [1, 1])
         self.assertFalse(merchant()["moving"])
         self.assertFalse(game.living_world_state()["shops"][0]["open"])
-        expected = ([1, 1], [1, 0], [2, 0], [3, 0], [3, 1])
-        for pos in expected:
-            if game.living_world_state()["minute"] > 476:
-                pass
+        expected = ([1, 1], [1, 1], [1, 0],
+                    [2, 0], [3, 0], [3, 1])
+        for i, pos in enumerate(expected):
             self.assertEqual(merchant()["pos"], pos)
-            if pos != expected[-1]:
+            if i < len(expected) - 1:
                 game.living_world_advance(2)
         self.assertEqual(game.living_world_state()["minute"], 480)
         self.assertEqual(merchant()["activity"], "trade")
