@@ -178,7 +178,12 @@ class InspectorQtTests(unittest.TestCase):
                 field = window.property_widgets["attack"][0]
                 field.setValue(333)
                 self.assertTrue(window.apply_button.isEnabled())
-                edit_properties(window.session, [actor], {"speed": 12})
+                current_speed = next(
+                    unit["speed"] for unit in
+                    window.session.snapshot().to_dict()["content"]["missions"][0]["units"]
+                    if unit["id"] == actor.resource_id)
+                new_speed = current_speed + 1 if current_speed < 9999 else current_speed - 1
+                edit_properties(window.session, [actor], {"speed": new_speed})
                 window._refresh_if_changed()
                 self.assertEqual(field.value(), 333)
                 self.assertFalse(window.apply_button.isEnabled())
