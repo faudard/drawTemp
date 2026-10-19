@@ -21,7 +21,7 @@ try:
     from PySide6.QtQuickWidgets import QQuickWidget
     from PySide6.QtWidgets import (
         QApplication, QCheckBox, QComboBox, QDockWidget, QFileDialog,
-        QFormLayout, QHBoxLayout, QInputDialog, QLabel, QListWidget, QMainWindow,
+        QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QMainWindow,
         QMessageBox, QPushButton, QSpinBox, QTextEdit, QToolBar, QVBoxLayout,
         QWidget,
     )
@@ -67,6 +67,7 @@ class MapWindow(QMainWindow):
             ("Copier", self.copy_selection),
             ("Coller", self.paste_selection),
             ("Génération biome…", self.show_generator),
+            ("Bibliothèque prefabs…", self.show_prefabs),
             ("Test IA", self.playtest),
         ):
             action = toolbar.addAction(name)
@@ -114,6 +115,21 @@ class MapWindow(QMainWindow):
         self.additive_selection.setObjectName("r5_selection_additive")
         self.additive_selection.setToolTip("Conserver les cellules déjà sélectionnées, même disjointes")
         toolbar.addWidget(self.additive_selection)
+        toolbar.addWidget(QLabel(" Rayon "))
+        self.brush_radius = QSpinBox()
+        self.brush_radius.setObjectName("r22_brush_radius")
+        self.brush_radius.setRange(0, 3)
+        self.brush_radius.setValue(0)
+        toolbar.addWidget(self.brush_radius)
+        toolbar.addWidget(QLabel(" Forme "))
+        self.brush_shape = QComboBox()
+        self.brush_shape.addItem("Losange", "diamond")
+        self.brush_shape.addItem("Carré", "square")
+        self.brush_shape.setObjectName("r22_brush_shape")
+        toolbar.addWidget(self.brush_shape)
+        self.brush_mask = QCheckBox("Pinceau dans sélection")
+        self.brush_mask.setObjectName("r22_brush_mask")
+        toolbar.addWidget(self.brush_mask)
 
         # R3 controller is the only source of camera, hit-testing and render
         # delegates. Its scene is reconstructed from the validated R1 Content.
@@ -200,6 +216,7 @@ class MapWindow(QMainWindow):
         self.layers_panel = MapLayersDock(self.studio.layers, self.refresh)
         self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
         self._make_generator_dock()
+        self._make_prefab_dock()
 
         from .construction_dock import ConstructionDock
         # R6 runs on the EXACT MapStudio authoring session and viewport.
@@ -225,6 +242,10 @@ class MapWindow(QMainWindow):
         if active:
             self.cancel_generation()
         self.generator_dock.setEnabled(not active)
+        self.prefab_dock.setEnabled(not active)
+        self.brush_radius.setEnabled(not active)
+        self.brush_shape.setEnabled(not active)
+        self.brush_mask.setEnabled(not active)
         root = self.viewport.rootObject()
         root.setProperty("interactionMode", "construction" if active else "edit")
         self.construction.setVisible(active)
@@ -333,6 +354,7 @@ class MapWindow(QMainWindow):
             self.cancel_generation()
             self.studio = MapStudio.open(path)
             self.layers_panel.set_workspace(self.studio.layers)
+            self.refresh_prefab_shelf()
             self.selection = []
             self.cancel_transform()
             self.refresh_maps()
@@ -495,6 +517,133 @@ class MapWindow(QMainWindow):
             self.statusBar().showMessage(
                 f"{changed} cases générées en une transaction. Ctrl+Z annule le tout."
             )
+
+    def _make_prefab_dock(self):
+        """Reusable terrain-only prefabs, placed via R5 preview/undo."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.addWidget(QLabel(
+            "Motifs de terrain réutilisables ; acteurs et bâtiments restent dans R6."))
+        self.prefab_search = QLineEdit()
+        self.prefab_search.setObjectName("r22_prefab_search")
+        self.prefab_search.setPlaceholderText("Rechercher un modèle...")
+        layout.addWidget(self.prefab_search)
+        self.prefab_category = QComboBox()
+        self.prefab_category.setObjectName("r22_prefab_category")
+        self.prefab_category.addItems(("Tous", "Nature", "Chemins", "Décors", "Mes modèles"))
+        layout.addWidget(self.prefab_category)
+        self.prefab_list = QListWidget()
+        self.prefab_list.setObjectName("r22_prefab_list")
+        layout.addWidget(self.prefab_list, 1)
+        self.prefab_orientation = QComboBox()
+        self.prefab_orientation.addItem("Orientation normale", "none")
+        self.prefab_orientation.addItem("Rotation droite", "rotate_cw")
+        self.prefab_orientation.addItem("Rotation gauche", "rotate_ccw")
+        self.prefab_orientation.addItem("Miroir horizontal", "mirror_x")
+        self.prefab_orientation.addItem("Miroir vertical", "mirror_y")
+        layout.addWidget(self.prefab_orientation)
+        self.prefab_place = QPushButton("Placer avec aperçu")
+        self.prefab_place.setObjectName("r22_prefab_place")
+        self.prefab_place.clicked.connect(self.place_selected_prefab)
+        layout.addWidget(self.prefab_place)
+        capture = QPushButton("Mémoriser la sélection")
+        capture.clicked.connect(self.capture_selection_prefab)
+        layout.addWidget(capture)
+        export = QPushButton("Exporter mes modèles…")
+        export.clicked.connect(self.export_prefabs)
+        layout.addWidget(export)
+        load = QPushButton("Importer une bibliothèque…")
+        load.clicked.connect(self.import_prefabs)
+        layout.addWidget(load)
+        self.prefab_info = QLabel(
+            "Les modèles personnalisés restent en mémoire tant qu'ils ne sont pas exportés.")
+        self.prefab_info.setWordWrap(True)
+        layout.addWidget(self.prefab_info)
+        self.prefab_dock = self._dock(
+            "R22 — Bibliothèque de terrain", widget, Qt.RightDockWidgetArea)
+        self.prefab_dock.hide()
+        self.prefab_search.textChanged.connect(self.refresh_prefab_shelf)
+        self.prefab_category.currentIndexChanged.connect(self.refresh_prefab_shelf)
+        self.refresh_prefab_shelf()
+
+    def show_prefabs(self):
+        self.prefab_dock.show()
+        self.prefab_dock.raise_()
+
+    def refresh_prefab_shelf(self, *_):
+        from PySide6.QtCore import Qt
+        old = self.prefab_list.currentItem()
+        key = old.data(Qt.UserRole) if old else None
+        self.prefab_list.clear()
+        for entry in self.studio.prefabs.entries(
+                self.prefab_search.text(), self.prefab_category.currentText()):
+            self.prefab_list.addItem(entry.title + " · " + entry.category)
+            item = self.prefab_list.item(self.prefab_list.count() - 1)
+            item.setData(Qt.UserRole, entry.key)
+            if entry.key == key:
+                self.prefab_list.setCurrentItem(item)
+        if self.prefab_list.currentRow() < 0 and self.prefab_list.count():
+            self.prefab_list.setCurrentRow(0)
+
+    def place_selected_prefab(self):
+        from PySide6.QtCore import Qt
+        if self.mode.currentIndex() != 0:
+            QMessageBox.warning(self, "Préfab", "Passez en mode Édition carte.")
+            return
+        item = self.prefab_list.currentItem()
+        if item is None:
+            QMessageBox.information(self, "Préfab", "Choisissez un modèle de terrain.")
+            return
+        key = item.data(Qt.UserRole)
+        orientation = self.prefab_orientation.currentData()
+        if self._safe(lambda: self.studio.select_prefab(key, orientation)) is None:
+            return
+        # Existing R5 paste uses safe collision preview and atomic AuthoringSession.
+        self.start_transform("paste")
+        self.prefab_info.setText(
+            "Survolez la carte, vérifiez l'aperçu puis cliquez sur Appliquer aperçu.")
+
+    def capture_selection_prefab(self):
+        if not self.selection:
+            QMessageBox.information(
+                self, "Préfab", "Sélectionnez d'abord du terrain au rectangle/lasso.")
+            return
+        name, ok = QInputDialog.getText(
+            self, "Nouveau modèle", "Nom du préfab de terrain")
+        if not ok:
+            return
+        result = self._safe(lambda: self.studio.capture_prefab(name, self.selection))
+        if result is not None:
+            self.refresh_prefab_shelf()
+            self.prefab_info.setText(
+                "Modèle mémorisé. Exportez la bibliothèque pour le réutiliser plus tard.")
+
+    def export_prefabs(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exporter bibliothèque de terrain", "terrain-prefabs.json",
+            "JSON (*.json)")
+        if path:
+            from drawtemp.core import RuleError
+            try:
+                self.studio.prefabs.export_file(path)
+                self.prefab_info.setText("Bibliothèque exportée : " + path)
+            except (RuleError, OSError, ValueError) as exc:
+                QMessageBox.warning(self, "Export refusé", str(exc))
+
+    def import_prefabs(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Importer bibliothèque de terrain", "", "JSON (*.json)")
+        if path:
+            from .map_prefabs import TerrainPrefabLibrary
+            try:
+                loaded = TerrainPrefabLibrary.import_file(path)
+            except (RuleError, OSError, ValueError, TypeError, KeyError) as exc:
+                QMessageBox.warning(self, "Import refusé", str(exc))
+                return
+            self.studio.prefabs = loaded
+            self.refresh_prefab_shelf()
+            self.prefab_info.setText(
+                "Bibliothèque importée : les modèles existants ont été remplacés.")
 
     def _selection_origin(self):
         if not self.selection:
@@ -692,6 +841,12 @@ class MapWindow(QMainWindow):
                 return self.studio.line(first, last, brush)
             if tool == "Remplissage":
                 return self.studio.flood(last, brush)
+            if tool == "Pinceau":
+                return self.studio.smart(
+                    cells, brush, radius=self.brush_radius.value(),
+                    shape=self.brush_shape.currentData(),
+                    selection_mask=self.selection if self.brush_mask.isChecked()
+                    else None)
             return self.studio.paint(cells, brush)
         self._safe(apply)
 
