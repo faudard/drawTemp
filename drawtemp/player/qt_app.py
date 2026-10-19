@@ -295,6 +295,11 @@ def create_bridge(controller, renderer):
         def setTextScale(self, value):
             self.settings_update(self.controller.set_display, "text_scale", value)
 
+        @Slot(str)
+        def togglePartyMember(self, hero_id):
+            """R41.B1: same canonical Simulation transaction as headless Player."""
+            self.invoke(self.controller.toggle_party_member, hero_id)
+
         @Slot()
         def newGame(self):
             self.invoke(self.controller.new_game)
