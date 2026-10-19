@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 
 from .r15 import ExportError, preflight, verify_bundle
+from .native_identity import inspect_native
 
 PC_TARGETS = {
     "windows-x86_64": ("Windows", "x86_64", "DrawTempPlayer.exe"),
@@ -25,7 +26,7 @@ def _text(value):
 def publication_plan(bundle, provenance, *, revision, target, family):
     """Verify immutable export bytes and strict rights, then list outstanding gates.
 
-    family and architecture remain declared intent until R39.B hardware journeys.
+    Family remains declared intent; header identity does not prove launchability.
     A valid plan is deliberately NO-GO; this API cannot certify a release.
     """
     if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
@@ -60,6 +61,10 @@ def publication_plan(bundle, provenance, *, revision, target, family):
     platform, architecture, executable = PC_TARGETS[target]
     if manifest["player"] != "Player/" + executable:
         raise ExportError("Player executable identity does not match publication target")
+    identity = inspect_native(root / manifest["player"])
+    expected_format = {"Linux": "ELF64", "Windows": "PE32+", "macOS": "Mach-O64"}[platform]
+    if identity != {"format": expected_format, "architecture": architecture}:
+        raise ExportError("Native Player header does not match publication target")
     rights = preflight(root / manifest["content"], require_licenses=True)
     if not rights["passed"]:
         raise ExportError("Publication preflight failed: " + "; ".join(rights["errors"]))
@@ -72,15 +77,16 @@ def publication_plan(bundle, provenance, *, revision, target, family):
         "revision": revision, "target": target, "platform": platform,
         "architecture": architecture, "declared_family": family,
         "manifest_sha256": digest, "player": manifest["player"],
+        "native_header": identity,
         "files": len(manifest["files"]),
         "dependencies": sorted((dict(row) for row in dependencies),
                                key=lambda row: row["name"].casefold()),
         "checks": {"bundle_integrity": "passed", "asset_rights": "passed",
-                   "provenance_binding": "passed"},
+                   "provenance_binding": "passed", "native_header_identity": "passed"},
         "provenance_authenticity": "not-verified",
         "release_certified": False, "decision": "NO-GO",
         "blockers": [
-            "Native OS/architecture and dependency inventory independently verified",
+            "Native runtime launch/ABI compatibility and dependency inventory independently verified",
             "Same-revision builds and clean-machine install/launch on all PC targets",
             "Four game-family Studio-to-Player journeys",
             "Controller, keyboard remapping, focus, accessibility and scaling on hardware",
@@ -89,3 +95,22 @@ def publication_plan(bundle, provenance, *, revision, target, family):
             "Dependency redistribution review, signing and release approval",
         ],
     }
+
+
+def build_provenance(bundle, dependencies, *, revision, target):
+    """Generate a byte-bound declaration for a built bundle; never infer a Git SHA.
+
+    Callers provide the exact build revision and dependency inventory. Neither
+    is authenticated by this function. The same strict publication checks apply.
+    """
+    root = Path(bundle).resolve(strict=True)
+    verify_bundle(root)
+    declaration = {
+        "schema": 1, "kind": "drawtemp-r39-build-provenance",
+        "revision": revision, "target": target,
+        "manifest_sha256": sha256((root / "manifest.json").read_bytes()).hexdigest(),
+        "dependencies": dependencies,
+    }
+    plan = publication_plan(root, declaration, revision=revision, target=target, family="srpg")
+    declaration["dependencies"] = plan["dependencies"]
+    return declaration

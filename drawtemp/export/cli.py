@@ -8,7 +8,20 @@ from .r15 import ExportError, export_game, preflight, verify_bundle
 from .templates import create_template, TEMPLATES
 from .migration import migration_preview, import_project
 from .extensions import inspect_extension
-from .publishing import GAME_FAMILIES, PC_TARGETS, publication_plan
+from .publishing import GAME_FAMILIES, PC_TARGETS, publication_plan, build_provenance
+
+
+def _publication_json(path):
+    if path.stat().st_size > 8 * 1024 * 1024:
+        raise ExportError("Publication input exceeds 8 MiB")
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ExportError("Duplicate publication JSON key: " + key)
+            result[key] = value
+        return result
+    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
 
 
 def main(argv=None):
@@ -43,20 +56,20 @@ def main(argv=None):
     publish.add_argument("--revision", required=True)
     publish.add_argument("--target", required=True, choices=PC_TARGETS)
     publish.add_argument("--family", required=True, choices=GAME_FAMILIES)
+    provenance = cmd.add_parser("build-provenance", help="Generate a byte-bound R39 build declaration")
+    provenance.add_argument("--bundle", required=True, type=Path)
+    provenance.add_argument("--dependencies", required=True, type=Path)
+    provenance.add_argument("--revision", required=True)
+    provenance.add_argument("--target", required=True, choices=PC_TARGETS)
     args = parser.parse_args(argv)
     try:
+        if args.command == "build-provenance":
+            result = build_provenance(args.bundle, _publication_json(args.dependencies),
+                                      revision=args.revision, target=args.target)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
         if args.command == "publish-plan":
-            if args.provenance.stat().st_size > 8 * 1024 * 1024:
-                raise ExportError("Build provenance exceeds 8 MiB")
-            def unique(pairs):
-                result = {}
-                for key, value in pairs:
-                    if key in result:
-                        raise ExportError("Duplicate provenance key: " + key)
-                    result[key] = value
-                return result
-            provenance = json.loads(args.provenance.read_text(encoding="utf-8"),
-                                    object_pairs_hook=unique)
+            provenance = _publication_json(args.provenance)
             result = publication_plan(args.bundle, provenance, revision=args.revision,
                                       target=args.target, family=args.family)
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))

@@ -1,0 +1,34 @@
+name: R39 publication preflight (not release certification)
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/export/**'
+      - 'tests_standalone/test_r39*.py'
+      - '.github/workflows/r39-publishing.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/export/**'
+      - 'tests_standalone/test_r39*.py'
+      - '.github/workflows/r39-publishing.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: r39-preflight-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  header-and-publication:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Synthetic native headers, provenance and R15 regressions
+        run: python -m unittest tests_standalone.test_r39_native tests_standalone.test_r39_publishing tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator -v

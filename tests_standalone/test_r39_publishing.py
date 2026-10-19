@@ -1,4 +1,4 @@
-"""Real R15 bundles exercise R39 planning; placeholder binaries prove no certification."""
+"""R15 bundles with synthetic native headers exercise preflight, not execution."""
 from contextlib import redirect_stdout, redirect_stderr
 from copy import deepcopy
 from hashlib import sha256
@@ -14,6 +14,8 @@ from drawtemp.export.publishing import publication_plan, GAME_FAMILIES
 from drawtemp.export.r15 import export_game, ExportError
 from drawtemp.export.templates import create_template
 
+from tests_standalone.test_r39_native import native_bytes
+
 REV = 'a' * 40
 
 
@@ -26,7 +28,8 @@ class PublishingTests(unittest.TestCase):
         runtime = self.root / 'runtime'
         runtime.mkdir()
         self.exe = 'DrawTempPlayer.exe' if os.name == 'nt' else 'DrawTempPlayer'
-        (runtime / self.exe).write_bytes(b'placeholder, not a runnable native binary')
+        (runtime / self.exe).write_bytes(native_bytes(
+            'windows-x86_64' if os.name == 'nt' else 'linux-x86_64'))
         self.bundle = export_game(source / 'game.json', runtime, self.root / 'bundle')
         self.target = 'windows-x86_64' if os.name == 'nt' else 'linux-x86_64'
         self.provenance = {
