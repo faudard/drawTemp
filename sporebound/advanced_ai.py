@@ -31,7 +31,9 @@ def validate_advanced_ai(spec, *, living_world=None):
     for agent in spec["agents"]:
         require(type(agent) is dict
                 and set(agent) in ({"id", "mode", "policies"},
-                                   {"id", "mode", "tree"})
+                                   {"id", "mode", "tree"},
+                                   {"id", "mode", "policies", "sensor"},
+                                   {"id", "mode", "tree", "sensor"})
                 and agent["mode"] in ("ct", "realtime"),
                 "Invalid R37 AI agent contract")
         # Delegate identity and policy grammar to one R37.A authority.
@@ -46,12 +48,22 @@ def validate_advanced_ai(spec, *, living_world=None):
             raise RuleError("Invalid R37 AI policy: " + str(exc)) from exc
         require(agent["id"] not in seen, "Duplicate R37 AI actor")
         seen.add(agent["id"])
+        if "sensor" in agent:
+            from .ai_perception import validate_sensor
+            validate_sensor(agent["sensor"])
+            require(agent["mode"] == "realtime",
+                    "R37.D sensors currently require a realtime R35 NPC")
         if agent["mode"] == "realtime":
             require(type(living_world) is dict
                     and type(living_world.get("npcs")) is list
                     and agent["id"] in {n.get("id") for n in living_world["npcs"]
                                         if type(n) is dict},
                     "Realtime R37 AI requires an R35 authored NPC")
+            if "sensor" in agent:
+                npc = next(n for n in living_world["npcs"]
+                           if n["id"] == agent["id"])
+                require(all("pos" in stop for stop in npc["schedule"]),
+                        "R37 sensor requires a positioned R35 NPC schedule")
     return deepcopy(spec)
 
 
