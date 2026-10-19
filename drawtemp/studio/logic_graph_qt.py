@@ -376,8 +376,11 @@ class LogicGraphDialog(QDialog):
         try:
             self._debug_result(callback())
             return True
-        except (LogicGraphError, AuthoringError, ValueError) as exc:
+        except AuthoringError as exc:
             self._reset_debug()
+            self._problem(exc)
+            return False
+        except (LogicGraphError, ValueError) as exc:
             self._problem(exc)
             return False
 
