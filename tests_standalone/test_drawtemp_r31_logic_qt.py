@@ -229,6 +229,59 @@ class VisualLogicQtTests(unittest.TestCase):
         finally:
             view.close()
 
+    def test_wait_gate_qt_edit_preview_and_debug_schedule(self):
+        from PySide6.QtWidgets import QInputDialog
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        session = new_session()
+        view = LogicGraphDialog(session)
+        try:
+            with patch.object(QInputDialog, "getText",
+                              return_value=("qt_wait", True)):
+                view.new_graph()
+            view.choose_node("message")
+            with patch.object(QInputDialog, "getInt", return_value=(4, True)):
+                view.add_wait()
+            self.assertEqual(view.draft.graph["schema_version"], 3)
+            self.assertIn("wait1", view.canvas._cards)
+            view.choose_node("wait1")
+            with patch.object(QInputDialog, "getInt", return_value=(6, True)):
+                view.edit_node()
+            self.assertEqual(view.draft.node("wait1")["params"]["ticks"], 6)
+            self.assertTrue(view.preview())
+            self.assertIn("delay_ticks", str(view.draft.prepare(session)[1]))
+            self.assertTrue(view.apply_changes())
+            self.assertTrue(view.start_debug())
+            self.assertTrue(view.debug_step())
+            view.choose_node("wait1")
+            self.assertTrue(view.debug_inspect())
+            self.assertIn("scheduled", view.diagnostics.toPlainText())
+            self.assertEqual(session.snapshot().to_dict()["project"]
+                             ["extensions"]["org.drawtemp.logic"]["data"]["graphs"][0]
+                             ["schema_version"], 3)
+        finally:
+            view.close()
+
+    def test_flag_gate_qt_edit_preview_and_unresolved_reference(self):
+        from PySide6.QtWidgets import QInputDialog
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        session = new_session()
+        view = LogicGraphDialog(session)
+        try:
+            with patch.object(QInputDialog, "getText",
+                              return_value=("qt_flag", True)):
+                view.new_graph()
+            view.choose_node("message")
+            with patch.object(QInputDialog, "getText",
+                              return_value=("event_missing", True)):
+                view.add_flag()
+            self.assertEqual(view.draft.graph["schema_version"], 3)
+            self.assertIn("flag1", view.canvas._cards)
+            self.assertFalse(view.preview())
+            self.assertFalse(view.apply_changes())
+            self.assertEqual(session.revision, 0)
+        finally:
+            view.close()
+
     def test_debugger_ui_breakpoint_step_inspect_and_stale_revision(self):
         from drawtemp.studio.logic_graph_qt import LogicGraphDialog
         session = new_session()
