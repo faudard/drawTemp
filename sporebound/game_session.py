@@ -332,16 +332,21 @@ class GameSession:
         payload = (self.route_scene + ":" + collider).encode("utf-8")
         return "r32_open_" + hashlib.sha256(payload).hexdigest()[:24]
 
-    def _metroidvania_air_jumps(self):
-        """One opt-in R33 ability in canonical Campaign flags, never CT."""
+    def _metroidvania_abilities(self):
+        """R33 authored grants resolved exclusively from earned Campaign flags."""
         spec = self.project.extensions.get("drawtemp.metroidvania")
         if spec is None:
-            return 0
-        for pickup in spec["data"]["pickups"]:
-            if ("double_jump" in pickup["grants"] and
-                    self.progress.story_flags.get("r33_pickup_" + pickup["id"]) is True):
-                return 1
-        return 0
+            return frozenset()
+        graph = spec["data"]
+        abilities = set(graph["starting_capabilities"])
+        for pickup in graph["pickups"]:
+            if self.progress.story_flags.get("r33_pickup_" + pickup["id"]) is True:
+                abilities.update(pickup["grants"])
+        return frozenset(abilities)
+
+    def _metroidvania_air_jumps(self):
+        """One opt-in R33 ability in canonical Campaign flags, never CT."""
+        return int("double_jump" in self._metroidvania_abilities())
 
     def _metroidvania_collect(self, events):
         """Accept a pickup only when the real R32 trigger was entered."""
@@ -409,15 +414,28 @@ class GameSession:
         require(len(self.route_history) < MAX_HISTORY,
                 "Scene transition history limit reached")
         route = self.scene_router.destination(self.route_scene, link_id, self.progress)
-        # R40.B.3 opt-in physical high-gate cannot be entered via a direct R25
-        # transition: only an authenticated R32 trigger can unlock travel.
-        if (link_id == "high_gate" and
-                "drawtemp.metroidvania" in self.project.extensions):
-            require(self._metroidvania_air_jumps() > 0,
-                    "The high gate requires the earned double-jump ability")
-            require(self._platform is not None and
-                    link_id in self._platform.available_routes(),
-                    "The high-gate portal requires physical contact")
+        # R33 ability-gated route requirements are explicit project data.
+        # For authored physical gates, enforce actual R32 overlap too;
+        # narrative-only links retain their earlier R25 behavior.
+        metroidvania = self.project.extensions.get("drawtemp.metroidvania")
+        if metroidvania is not None:
+            gated = [row for row in metroidvania["data"]["links"]
+                     if row["id"] == link_id and row["requires"]]
+            for row in gated:
+                require(row["source"] == self.route_scene and
+                        row["destination"] == route["destination"],
+                        "R33 gate does not match the authored scene route")
+                require(set(row["requires"]) <= self._metroidvania_abilities(),
+                        "R33 scene gate requires an earned capability")
+                physical = (self.project.extensions.get("drawtemp.physics", {})
+                            .get("data", {}).get("scenes", {})
+                            .get(self.route_scene, {}))
+                portals = {c["route"] for c in physical.get("colliders", [])
+                           if "route" in c}
+                if link_id in portals:
+                    require(self._platform is not None and
+                            link_id in self._platform.available_routes(),
+                            "R33 physical gate requires actual R32 portal overlap")
         before = deepcopy((self.progress, self.battle, self.fronts, self.finalized,
                            self.settled_fronts, self.siege_id, self.route_scene,
                            self.route_history, self.tactical_story_pending,
