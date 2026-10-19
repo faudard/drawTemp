@@ -394,14 +394,20 @@ class R28DWorkspace(QWidget):
         layout.addWidget(self.tabs)
         self.animation = AnimationHitboxPanel(session)
         from drawtemp.studio.animation_graph_qt import AnimationControllerPanel
+        from drawtemp.studio.animation_timeline_qt import AnimationTimelinePanel
         self.animation_controller = AnimationControllerPanel(session)
+        self.animation_timeline = AnimationTimelinePanel(session)
         self.events = EventQuestPanel(session)
         self.playtest = PlaytestRoundtripPanel(session)
         self.tabs.addTab(self.animation, "Animation / Hitbox")
         self.tabs.addTab(self.animation_controller, "Contrôleur R36")
+        self.tabs.addTab(self.animation_timeline, "Timeline R36")
         self.tabs.addTab(self.events, "Événements / Quêtes")
         self.tabs.addTab(self.playtest, "Playtest")
         self.animation.updated.connect(self.animation_controller.refresh)
+        self.animation.updated.connect(self.animation_timeline.refresh)
+        self.animation_controller.updated.connect(self.animation_timeline.refresh)
+        self.animation_timeline.updated.connect(self.updated.emit)
         self.animation.updated.connect(self.updated.emit)
         self.animation_controller.updated.connect(self.updated.emit)
         self.events.updated.connect(self.updated.emit)
@@ -409,5 +415,6 @@ class R28DWorkspace(QWidget):
     def refresh(self):
         self.animation.refresh()
         self.animation_controller.refresh()
+        self.animation_timeline.refresh()
         self.events.refresh()
         self.playtest.refresh()
