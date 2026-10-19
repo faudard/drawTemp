@@ -6,7 +6,7 @@ an independent save file. CT, Campaign gold and legacy Player slots are untouche
 """
 from __future__ import annotations
 
-from copy import deepcopy
+from copy import copy, deepcopy
 
 from .model import RuleError, require
 
@@ -156,7 +156,15 @@ class RogueliteRun:
                 "R34 command budget exhausted")
         # Candidate owns its own mutable state, but shares the validated,
         # read-only canonical Content and GameProject references.
-        candidate = deepcopy(self)
+        candidate = copy(self)
+        candidate._commands = list(self._commands)
+        candidate._visited = set(self._visited)
+        candidate._keys = set(self._keys)
+        candidate._claimed = set(self._claimed)
+        candidate._meta = dict(self._meta)
+        candidate._checkpoint = deepcopy(self._checkpoint)
+        # Content/GameProject and the generated layout are treated as read-only
+        # throughout actions; avoid expensive and unsafe ownership duplication.
         candidate._transition(kind, value)
         candidate._commands.append({"kind": kind, "value": value})
         self._commands = candidate._commands
