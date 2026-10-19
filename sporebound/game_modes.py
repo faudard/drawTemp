@@ -100,9 +100,12 @@ def validate_game_modes(manifest, content, project):
         require(type(scene_id) is str and scene_id in known,
                 f"Unknown game mode scene: {scene_id!r}")
         profile = _entry(entry)
-        if scene_id in content.missions:
-            require(profile["combat"] == "TACTICAL_CT",
-                    "Existing tactical missions must retain CT rules")
+    # Every tactical mission remains CT, including missions that inherit
+    # the project default instead of carrying an explicit scene override.
+    for mission_id in content.missions:
+        active = _entry(scenes.get(mission_id, manifest["default"]))
+        require(active["combat"] == "TACTICAL_CT",
+                "Existing tactical missions must retain CT rules")
 
 
 def resolve_scene_profile(manifest, scene_id=None):
