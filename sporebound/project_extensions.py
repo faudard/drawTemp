@@ -35,8 +35,6 @@ def _json_value(value, depth=0):
     if depth > 24:
         _fail("invalid_payload", "Extension JSON nesting exceeds 24 levels")
     if value is None or type(value) in (str, bool):
-        if type(value) is str and len(value) > 65536:
-            _fail("invalid_payload", "Extension string is too long")
         return
     if type(value) is int:
         if not -(2 ** 53 - 1) <= value <= 2 ** 53 - 1:

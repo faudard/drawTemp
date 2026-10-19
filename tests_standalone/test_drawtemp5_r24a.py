@@ -1,6 +1,6 @@
 """R24.A: SDK negotiation and canonical, inert, namespaced extension data."""
 import json
-import math
+from tempfile import TemporaryDirectory
 import subprocess
 import sys
 import unittest
@@ -69,6 +69,11 @@ class ProjectExtensionTests(unittest.TestCase):
         doc = self.extended()
         model = GameProject.from_dict(doc, self.content)
         self.assertEqual(model.to_dict(), doc)
+        self.assertEqual(GameProject.from_dict(json.loads(json.dumps(doc)), self.content).to_dict(), doc)
+        with TemporaryDirectory() as folder:
+            output = Path(folder) / "project.game.json"
+            model.save(output, self.content)
+            self.assertEqual(GameProject.load(output, self.content).to_dict(), doc)
         doc["extensions"]["org.example.quest"]["data"]["chapter"] = 999
         self.assertEqual(model.extensions["org.example.quest"]["data"]["chapter"], 3)
         extracted = model.to_dict()
@@ -103,6 +108,12 @@ class ProjectExtensionTests(unittest.TestCase):
                 with self.assertRaises(ProjectExtensionError) as caught:
                     GameProject.from_dict(doc, self.content)
                 self.assertEqual(caught.exception.code, code)
+        repeated = self.extended()
+        repeated["extensions"]["org.example.quest"]["references"].append(
+            {"kind": "campaign", "id": "main"})
+        with self.assertRaises(ProjectExtensionError) as caught:
+            GameProject.from_dict(repeated, self.content)
+        self.assertEqual(caught.exception.code, "invalid_reference")
         oversized = self.extended()
         oversized["extensions"]["org.example.quest"]["data"] = {"text": "a" * 66000}
         with self.assertRaises(ProjectExtensionError) as caught:
