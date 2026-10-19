@@ -7,6 +7,8 @@
 > **Documents complémentaires :** [roadmap canonique 5.0 (R0–R16)](DRAWTEMP_5_0_ROADMAP.md) · [consolidation 5.0–6.0 (R17–R24)](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md) · [roadmap historique](../ROADMAP.md).
 >
 > **Règle :** ne pas transformer DrawTemp en clone de FFT ni en clone de Zelda, ne pas créer de second moteur concurrent. L'éditeur est **multi-genres par composition de capacités et de profils de jeu**. La continuité de Jeanne et du SRPG reste un contrat de compatibilité.
+>
+> **Suite après R30 (nouvelle proposition)** : [roadmap détaillée DrawTemp 7.1 → 8.0, R31–R40](DRAWTEMP_7_1_TO_8_0_DETAILED_ROADMAP.md) : visual scripting, physique 2D, metroidvania, roguelite, monde vivant, animation/VFX, IA, outils pro, publication et certification. Les lots R31–R40 dépendent des gates R25–R30, ils ne sont pas déjà livrés.
 
 ## 0. Décision de produit et périmètre réel
 
