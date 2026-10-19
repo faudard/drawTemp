@@ -2,7 +2,7 @@
 
 > **Statut : PROPOSITION DOCUMENTAIRE — 19 octobre 2026.** Cette feuille de route n'implémente aucun lot R51–R80, n'approuve aucune release 10/11/12 et n'atteste aucun test. Numéros de versions = horizons de planification, pas dates. **Aucune de ces 90 PR de code n'est créée par cette documentation.**
 >
-> **Point de départ vérifié :** le dépôt dispose de [R31–R40](DRAWTEMP_7_1_TO_8_0_DETAILED_ROADMAP.md), proposition visant la 8.0. **R41–R50 ont été discutés mais ne sont pas documentés/certifiés dans ce dépôt à la rédaction.** Leur clôture, en particulier R41 RPG classique, R42 narration, R43 combat, R44 monde, R45 simulation, R46 cinéma, R47 SDK, R48 collaboration, R49 UX, R50 9.0, constitue un **contrat d'entrée futur à formaliser** ; ne pas les traiter comme des APIs existantes.
+> **Point de départ vérifié :** le dépôt dispose de [R31–R40](DRAWTEMP_7_1_TO_8_0_DETAILED_ROADMAP.md), proposition visant la 8.0. **R41–R50 ont désormais une [roadmap proposée dans la PR #369](https://github.com/faudard/drawTemp/pull/369), cible DrawTemp 8.1–9.0** (R41 RPG classique, R42 narration, R43 combat, R44 monde, R45 simulation, R46 cinéma, R47 SDK, R48 collaboration, R49 UX et R50 certification 9.0). La roadmap est encore en PR, les gates ne sont pas certifiés : ne pas traiter ces jalons comme des APIs existantes.
 >
 > **Non négociable :** R0–R40 restent les sources canoniques du patrimoine SRPG Jeanne, action-aventure, metroidvania et roguelite ; aucune version de cette roadmap ne constitue à elle seule une validation de compatibilité.
 
@@ -41,7 +41,7 @@
 
 Avant tout tag 10.0 :
 1. Les gates de R40 8.0 sont clos et publiquement auditables ; ne pas confondre merge R17–R31.D et R40 certifié.
-2. Écrire la roadmap R41–R50 en reliant **R41 RPG**, **R42 Narration**, **R43 Combat**, **R44 Worlds**, **R45 Simulation**, **R46 Cinematics**, **R47 SDK**, **R48 Collaboration**, **R49 UX**, **R50 Release 9.0** ; vérifier les contrats requis ou réduire explicitement les lots R51+.
+2. Réviser et fusionner la [roadmap R41–R50 proposée](https://github.com/faudard/drawTemp/pull/369), couvrant **R41 RPG, R42 Narration, R43 Combat, R44 Worlds, R45 Simulation, R46 Cinematics, R47 SDK, R48 Collaboration, R49 UX et R50 Release 9.0** ; implémenter/certifier ensuite les contrats requis ou réduire explicitement les lots R51+.
 3. Baseline déterministe du corpus Jeanne CT, action R26, platformer R33, roguelite R34, monde vivant R35 et exemples R40 ; migrations anciennes sauvegardes, Content/GameProject et licences.
 4. Réparer les vérifications GitHub Actions de la branche finale et démontrer au moins un export sur une machine propre avant tout P0 de publication.
 5. Geler schémas/points d'extension avant d'autoriser des branches parallèles touchant les mêmes fichiers ; plan de résolution de conflits d'abord, branches ensuite.
@@ -780,7 +780,7 @@ Pour R60, R70, R80, maintenir un tableau **ID, P0/P1, version, dépendances, PR,
 | Risque | P | Réponse / condition de réduction |
 |---|---|---|
 | Trop de genres affaiblit la fiabilité du Studio | P0 | Une slice complète à chaque grand gate; reporter les P2/P1 si la CI, l'UX ou le Player n'est pas prêt |
-| R41–R50 non spécifiés réellement | P0 | Écrire, valider et implémenter les contrats nécessaires avant les lots dépendants; jamais inventer leur état |
+| R41–R50 spécifiés mais non certifiés | P0 | Valider la PR documentaire #369, puis développer et certifier les contrats préalables avant toute dépendance R51+; ne pas inventer leur état |
 | UI personnalisée duplique le runtime | P0 | Bindings UI uniquement sur GameSession, mêmes composants Player/Studio et sérialisation unique |
 | Simulation hors focus diverge | P0 | Tick entier, approximation documentée, trace et conservation des invariants |
 | Grand monde/RTS souffre de l'échelle | P0 | Budgets benchmark matériels, caps explicites, cache borné, annulation |
@@ -793,7 +793,7 @@ Pour R60, R70, R80, maintenir un tableau **ID, P0/P1, version, dépendances, PR,
 
 ## 8. Décisions de lancement
 
-- **Maintenant :** fermer les gates préexistants et les échecs de CI avant de multiplier les PR; cette proposition ne doit pas détourner du chemin R36–R40 ni du travail de documentation R41–R50.
+- **Maintenant :** fermer les gates préexistants et les échecs de CI avant de multiplier les PR; suivre le chemin R36–R40 puis la roadmap R41–R50 en PR #369 avant R51+.
 - **À la validation R50 :** découper R51.A, R56.A et R59.A en contrats et tests de référence; planifier le premier jeu vitrine immédiatement.
 - **Après R60 :** lancer nouveaux genres par extraction de capacités communes; reporter RTS si les budgets multi-agents ne tiennent pas.
 - **Après R67 :** la décision NO-GO réseau est une issue valide; conserver R71–R73 à l'état étude/reporté et avancer R74–R78.
@@ -801,4 +801,4 @@ Pour R60, R70, R80, maintenir un tableau **ID, P0/P1, version, dépendances, PR,
 
 ---
 
-Liens : [R17–R24](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md) · [R25–R30](DRAWTEMP_MULTI_GENRE_CREATOR_ROADMAP.md) · [R31–R40](DRAWTEMP_7_1_TO_8_0_DETAILED_ROADMAP.md). **R41–R50 : document futur à établir.**
+Liens : [R17–R24](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md) · [R25–R30](DRAWTEMP_MULTI_GENRE_CREATOR_ROADMAP.md) · [R31–R40](DRAWTEMP_7_1_TO_8_0_DETAILED_ROADMAP.md) · [R41–R50 : PR #369](https://github.com/faudard/drawTemp/pull/369). **R41–R50 : proposés, non certifiés.**
