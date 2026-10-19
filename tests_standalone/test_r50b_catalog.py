@@ -67,8 +67,8 @@ class R50BCatalogTests(unittest.TestCase):
         with self.assertRaises(CatalogError):
             create_starter("srpg", dest)
         self.assertEqual(marker.read_text(encoding="utf-8"), "do not overwrite")
-        with self.assertRaises(CatalogError):
-            preview_starter("srpg", self.root / "nonexistent" / "project")
+        self.assertFalse(preview_starter(
+            "srpg", self.root / "nonexistent" / "project")["can_create"])
 
     def test_real_studio_edit_save_and_headless_session_roundtrip(self):
         digests = {}
