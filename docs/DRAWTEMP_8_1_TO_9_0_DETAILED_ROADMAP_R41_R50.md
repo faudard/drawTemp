@@ -10,7 +10,7 @@
 
 DrawTemp 9.0 doit devenir un **Studio de création 2D/2.5D multi-genres complet et exploitable** : RPG classique, narration multi-branches, capacités/combat composables, monde en régions, simulation vivante, cinématiques, API d'extensions, collaboration, UX auteur tiers, publication stable. Le critère produit n'est **pas** de posséder les ateliers en catalogue : c'est de produire et maintenir des jeux jouables sans édition de Python/JSON.
 
-Les familles de références (FFT, Zelda, JRPG classiques, etc.) ne sont que des inspirations de mécaniques; les assets, cartes, noms et histoires de ces licences ne doivent pas être copiés. Les six réalisations historiques comprennent quatre genres certifiés conditionnellement à R40, et la certification R50 ajoute un cinquième genre majeur : **RPG classique**, avec un chemin narratif/hybride.
+Les familles de références (FFT, Zelda, JRPG classiques, etc.) ne sont que des inspirations de mécaniques; les assets, cartes, noms et histoires de ces licences ne doivent pas être copiés. La roadmap R40 prévoit quatre jeux de référence obligatoires (SRPG, action-aventure, metroidvania, roguelite), à certifier avant R50. Le jalon R50 ajoute une cinquième famille majeure : **RPG classique**, ainsi qu'un démonstrateur narratif/hybride.
 
 ### 0.1 Objectifs hors périmètre
 
