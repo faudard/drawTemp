@@ -38,7 +38,13 @@ class R127ArtContractTests(unittest.TestCase):
                                      f"jeanne_{direction}_{expected_row}")
                     self.assertEqual((frame["frameWidth"], frame["frameHeight"]),
                                      (64, 64))
-                    self.assertTrue(Path(frame["imageUrl"].removeprefix("file://")).is_file())
+                    # file:///C:/... must be decoded with platform URL rules;
+                    # stripping 'file://' leaves /C:/... on Windows.
+                    from urllib.parse import urlparse, unquote
+                    from urllib.request import url2pathname
+                    uri = urlparse(frame["imageUrl"])
+                    self.assertEqual(uri.scheme, "file")
+                    self.assertTrue(Path(url2pathname(unquote(uri.path))).is_file())
                     self.assertEqual(frame["pivotX"], 32)
                     self.assertEqual(frame["pivotY"], 64)
         self.assertTrue(self.assets.has_animations)
