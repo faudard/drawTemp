@@ -12,6 +12,7 @@ from pathlib import Path
 from sporebound.action_runtime import ActionRuntime, SCALE, validate_scene
 from drawtemp.render.committed_fx import CommittedFxDirector
 from drawtemp.render.vfx2d import project_vfx
+from drawtemp.player.animation_presentation import ActionAnimationPresentation
 
 
 def demo_scene():
@@ -46,11 +47,17 @@ class ActionPlayerController:
     active runtime, so a failed load never corrupts the current game.
     """
 
-    def __init__(self, scene, *, save_path=None):
+    def __init__(self, scene, *, save_path=None, animation_project=None,
+                 animation_bindings=None):
         self.scene = validate_scene(scene)
         self.save_path = Path(save_path) if save_path is not None else None
         self.runtime = ActionRuntime(self.scene)
         self.fx = CommittedFxDirector()
+        self.animation = (ActionAnimationPresentation(animation_project, animation_bindings,
+                                                       self.scene)
+                          if animation_project is not None else None)
+        if animation_project is None and animation_bindings is not None:
+            raise ValueError("Animation bindings require an authored GameProject")
         self.fx_warning = ""
         self.paused = False
         self.message = "Explorez la prairie. Ouvrez le coffre avant la porte."
@@ -81,7 +88,12 @@ class ActionPlayerController:
         snapshot["message"] = self.message
         snapshot["events"] = deepcopy(self.events)
         snapshot["fx"] = self.fx.snapshot()
-        snapshot["vfx"] = project_vfx(snapshot["fx"])
+        snapshot["animation_frames"] = (
+            self.animation.frames() if self.animation is not None else {})
+        snapshot["animation_cues"] = (
+            self.animation.cues() if self.animation is not None else [])
+        snapshot["vfx"] = project_vfx(
+            (snapshot["fx"] + snapshot["animation_cues"])[-96:])
         snapshot["fx_warning"] = self.fx_warning
         return snapshot
 
@@ -104,6 +116,13 @@ class ActionPlayerController:
             # committed action or poison its canonical replay/save.
             self.fx.reset(self.runtime.tick)
             self.fx_warning = "R36 VFX disabled for this tick: " + str(exc)
+        if self.animation is not None:
+            try:
+                self.animation.observe(self.runtime.snapshot(), events)
+            except (ValueError, TypeError, KeyError) as exc:
+                # Visual bindings never interfere with already committed hits.
+                self.animation.reset(self.runtime.tick)
+                self.fx_warning = "R36 actor animation disabled for tick: " + str(exc)
         if events:
             self.message = " · ".join(event["kind"].replace("_", " ")
                                       for event in events[-3:])
@@ -126,6 +145,8 @@ class ActionPlayerController:
         verified = ActionRuntime.load(self.save_path, expected_scene=self.scene)
         self.runtime = verified
         self.fx.reset(self.runtime.tick)
+        if self.animation is not None:
+            self.animation.reset(self.runtime.tick)
         self.fx_warning = ""
         self.paused = False
         self.events = ()
@@ -140,6 +161,8 @@ class ActionPlayerController:
             if verified.hero["alive"]:
                 self.runtime = verified
                 self.fx.reset(self.runtime.tick)
+                if self.animation is not None:
+                    self.animation.reset(self.runtime.tick)
                 self.fx_warning = ""
                 self.paused = False
                 self.events = ()
@@ -147,6 +170,8 @@ class ActionPlayerController:
                 return self.state()
         self.runtime = ActionRuntime(self.scene)
         self.fx.reset(self.runtime.tick)
+        if self.animation is not None:
+            self.animation.reset(self.runtime.tick)
         self.fx_warning = ""
         self.paused = False
         self.events = ()
