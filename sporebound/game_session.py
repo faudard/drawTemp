@@ -233,6 +233,7 @@ class GameSession:
         """
         from .fixed_clock import FixedTickJournal
         from .fixed_realtime import FreeMovement
+        require(self._platform is None, "Cannot mix R25 and R32 physics movement")
         current = self.route_realtime_state()
         require(type(dx) is int and type(dy) is int
                 and dx in (-1, 0, 1) and dy in (-1, 0, 1),
@@ -286,7 +287,8 @@ class GameSession:
         return authored
 
     def _platform_flag(self, collider):
-        return "r32:opened:" + self.route_scene + ":" + collider
+        payload = (self.route_scene + ":" + collider).encode("utf-8")
+        return "r32_open_" + hashlib.sha256(payload).hexdigest()[:24]
 
     def _active_platform(self):
         from .platform_physics import PlatformPhysics
