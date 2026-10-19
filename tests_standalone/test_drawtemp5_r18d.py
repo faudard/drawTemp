@@ -106,6 +106,7 @@ class StudioGuideQtTests(unittest.TestCase):
         map_widget.mode.addItems(["Carte", "Construction"])
         window.workspace_tabs.addWidget(map_widget)
         window.pages["maps"] = map_widget
+        window._models["maps"] = map_widget
         actor_widget = QWidget()
         window.workspace_tabs.addWidget(actor_widget)
         window.pages["actors"] = actor_widget
@@ -192,8 +193,13 @@ class StudioGuideQtTests(unittest.TestCase):
                 self.assertTrue(window.guide_panel.accessibleName())
                 window.navigate("cinematics")
                 current = window.pages["cinematics"]
-                self.assertIsNotNone(
-                    current.findChild(type(window.guide_hint), "r18-empty-workspace"))
+                from drawtemp.studio.workspace_model import resources
+                has_cinematics = any(
+                    item.family == "cinematics"
+                    for item in resources(window.session.snapshot()))
+                empty = current.findChild(
+                    type(window.guide_hint), "r18-empty-workspace")
+                self.assertEqual(empty is None, has_cinematics)
             finally:
                 window.close()
 
