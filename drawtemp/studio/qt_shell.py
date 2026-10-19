@@ -180,6 +180,7 @@ class StudioWindow(QMainWindow):
         self.commands = {}
         self.r49_timings = OperationTimings()
         self._r49_audit = None
+        self._r49_navigating = False
         self._r49_focus = WorkspaceFocusMemory({
             name: self.settings.value(focus_settings_key(name))
             for name in WORKSPACES
@@ -1091,23 +1092,29 @@ class StudioWindow(QMainWindow):
     def navigate(self, identifier):
         host = workspace_host(identifier)
         self._r49_on_focus_changed(None, QApplication.focusWidget())
-        if identifier == "actors" and "database" in self._models:
-            database = self._models["database"]
-            database.tree.setCurrentItem(database.tree.topLevelItem(1))
-        if host not in self.pages:
-            try:
-                self._make_workspace(host)
-            except Exception as exc:
-                self.report_error(exc)
-                return
-        if identifier == "construction":
-            self.pages["construction"] = self.pages["maps"]
-        if identifier in ("maps", "construction"):
-            # R6 shares the exact viewport and authoring session of R5.
-            self._models["maps"].mode.setCurrentIndex(
-                1 if identifier == "construction" else 0)
-        self._activate(identifier)
-        self._r49_restore_focus(identifier)
+        # Qt may move focus automatically during setCurrentWidget. Do not let
+        # those transient focus events replace a user's saved preference.
+        self._r49_navigating = True
+        try:
+            if identifier == "actors" and "database" in self._models:
+                database = self._models["database"]
+                database.tree.setCurrentItem(database.tree.topLevelItem(1))
+            if host not in self.pages:
+                try:
+                    self._make_workspace(host)
+                except Exception as exc:
+                    self.report_error(exc)
+                    return
+            if identifier == "construction":
+                self.pages["construction"] = self.pages["maps"]
+            if identifier in ("maps", "construction"):
+                # R6 shares the exact viewport and authoring session of R5.
+                self._models["maps"].mode.setCurrentIndex(
+                    1 if identifier == "construction" else 0)
+            self._activate(identifier)
+            self._r49_restore_focus(identifier)
+        finally:
+            self._r49_navigating = False
         if identifier == "maps":
             self._guide_mark("map")
         elif identifier == "actors":
@@ -1122,7 +1129,7 @@ class StudioWindow(QMainWindow):
 
     def _r49_on_focus_changed(self, _old, current):
         """Observe only the active page or docks; ignore menus and dialogs."""
-        if current is None or not self.isVisible():
+        if current is None or not self.isVisible() or self._r49_navigating:
             return
         page = self.pages.get(self._active_workspace)
         if page is None:
