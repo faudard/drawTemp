@@ -35,6 +35,10 @@ class DungeonDock(QDockWidget):
         new_map.setObjectName("r27_create_dungeon")
         new_map.clicked.connect(self.create_dungeon)
         layout.addWidget(new_map)
+        journey = QPushButton("Créer un parcours village → temple → boss → retour")
+        journey.setObjectName("r27_build_journey")
+        journey.clicked.connect(self.create_journey)
+        layout.addWidget(journey)
 
         room = QFormLayout()
         self.x0, self.y0 = _spin(3), _spin(3)
@@ -194,6 +198,18 @@ class DungeonDock(QDockWidget):
         self.window._safe(lambda: self._studio().set_sequence(
             door_id, order, reset_on_error=self.reset_sequence.isChecked()))
         self.refresh()
+
+    def create_journey(self):
+        prefix, ok = QInputDialog.getText(
+            self, "Parcours R27.D",
+            "Préfixe des missions et de la campagne (unique)",
+            text="r27")
+        if not ok or not prefix.strip():
+            return
+        from .dungeon_journey import build_dungeon_journey
+        self.window._safe(lambda: build_dungeon_journey(
+            self.window.studio, prefix=prefix.strip()))
+        self.window.refresh_maps()
 
     def create_dungeon(self):
         mid, ok = QInputDialog.getText(
