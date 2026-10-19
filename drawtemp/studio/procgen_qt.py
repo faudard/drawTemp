@@ -1,6 +1,6 @@
 """R34.B Qt Widgets preview of *proposed* procedural rooms.
 
-Read-only with respect to AuthoringSession. Prefab IDs may point to canonical
+Previews are read-only; explicit Apply uses AuthoringSession. Prefab IDs may point to canonical
 Content missions / GameProject sprite assets, but room placement and physical
 map instantiation belong to a later, transactional authoring lot.
 """
@@ -26,12 +26,14 @@ from drawtemp.sdk.procgen_prefabs import (
 class ProcGenPreviewDialog(QDialog):
     """Standalone, opt-in procedural preview; no writes except explicit export."""
 
-    def __init__(self, parent=None, *, content=None, project=None, library=None):
+    def __init__(self, parent=None, *, content=None, project=None, library=None,
+                 session=None):
         super().__init__(parent)
         self.setObjectName("r34-procgen-dialog")
         self.setWindowTitle("R34 — Donjons procéduraux (aperçu uniquement)")
         self.resize(950, 650)
         self._content, self._project = content, project
+        self._authoring_session = session
         self._library = validate_library(library if library is not None else demo_library(),
                                          content=content, project=project)
         self._last_layout = None
@@ -70,6 +72,10 @@ class ProcGenPreviewDialog(QDialog):
         self.loot.setRange(0, 256)
         self.loot.setValue(3)
         form.addRow("Budget loot", self.loot)
+        self.meta_reward = QSpinBox()
+        self.meta_reward.setRange(0, 1000)
+        self.meta_reward.setValue(1)
+        form.addRow("Récompense meta / victoire", self.meta_reward)
         self.biome = QComboBox()
         self.biome.setObjectName("r34-biome")
         self.biome.addItems(sorted({b for p in self._library["prefabs"]
@@ -94,6 +100,11 @@ class ProcGenPreviewDialog(QDialog):
         export.setObjectName("r34-export")
         export.clicked.connect(self.export_repro)
         form_panel.addWidget(export)
+        self.apply_project_button = QPushButton("Activer R34 dans le projet (Undo/Redo)")
+        self.apply_project_button.setObjectName("r34-apply-project")
+        self.apply_project_button.setEnabled(session is not None)
+        self.apply_project_button.clicked.connect(self.apply_to_project)
+        form_panel.addWidget(self.apply_project_button)
         form_panel.addStretch()
         splitter.addWidget(form_host)
         right = QWidget()
@@ -238,6 +249,44 @@ class ProcGenPreviewDialog(QDialog):
             self.report.setPlainText("Validation refusée : " + str(exc))
             return None
 
+    def apply_to_project(self):
+        """Explicit canonical project edit; never silently save project files."""
+        if self._authoring_session is None:
+            return None
+        from drawtemp.sdk.roguelite_authoring import preview_roguelite_project
+        try:
+            recipe = self._recipe()
+            if (self._last_layout is None or self._last_recipe != recipe
+                    or self._last_biome != self.biome.currentText()):
+                if self.preview() is None:
+                    raise ProcGenError("invalid_generation", "Aucune génération valide")
+            plan = preview_roguelite_project(
+                self._authoring_session, recipe, self._library,
+                biome=self.biome.currentText(),
+                meta_reward=self.meta_reward.value())
+        except (ProcGenError, ValueError) as exc:
+            self.report.setPlainText("Application refusée : " + str(exc))
+            return None
+        reply = QMessageBox.question(
+            self, "Activer R34",
+            "Ajouter ou remplacer la recette R34 dans le projet ? "
+            "L'opération est annulable et n'enregistre pas les fichiers.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply != QMessageBox.Yes:
+            return None
+        try:
+            transition = self._authoring_session.apply(plan)
+            if hasattr(self.parent(), "refresh"):
+                self.parent().refresh()
+            self.report.appendPlainText(
+                "Recette R34 appliquée à GameProject.extensions "
+                f"(révision {transition.snapshot.revision}). "
+                "Enregistrez le projet dans le Studio.")
+            return transition
+        except ValueError as exc:
+            self.report.setPlainText("Édition annulée : " + str(exc))
+            return None
+
     def export_repro(self) -> None:
         # Invalid or superseded previews must never be exported as successful.
         try:
@@ -277,5 +326,6 @@ def open_procgen_preview(parent, session):
     snapshot = session.snapshot()
     content = Content.from_dict(thaw(snapshot.content))
     project = GameProject.from_dict(thaw(snapshot.project), content)
-    dialog = ProcGenPreviewDialog(parent, content=content, project=project)
+    dialog = ProcGenPreviewDialog(parent, content=content, project=project,
+                                  session=session)
     return dialog.exec()
