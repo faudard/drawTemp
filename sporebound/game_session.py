@@ -97,6 +97,13 @@ class GameSession:
         self._rt_origin = None
         self._rt_position = None
         self._rt_journal = None
+        # R35.A: optional clock owned by this session, not by the renderer.
+        from .living_world import EXTENSION, LivingWorld
+        spec = self.project.extensions.get(EXTENSION)
+        self._living_world = (
+            LivingWorld(spec["data"],
+                        set(self.project.exploration) | set(self.content.missions))
+            if spec is not None else None)
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -137,6 +144,18 @@ class GameSession:
                     "Unknown game mode scene")
         from .game_modes import resolve_scene_profile
         return resolve_scene_profile(self.project.game_modes, scene_id)
+
+    def living_world_state(self, scene=None):
+        """R35.A detached schedule projection, including off-focus scenes."""
+        require(self._living_world is not None, "Living world is not configured")
+        return self._living_world.view(self.progress.story_flags, scene=scene)
+
+    def living_world_advance(self, ticks=1):
+        """Explicit exploration-only clock advance (cutscenes/travel/fast-forward)."""
+        require(self._living_world is not None and self.mode == "campaign"
+                and not self.progress.story_pending,
+                "Living-world clock is paused outside exploration")
+        return self._living_world.advance(ticks)
 
     def route_state(self):
         """Return the active exploration state from canonical Campaign flags."""
@@ -182,6 +201,8 @@ class GameSession:
         require(type(dx) is int and type(dy) is int
                 and dx in (-1, 0, 1) and dy in (-1, 0, 1),
                 "Invalid free movement input")
+        if self._living_world is not None:
+            self._living_world.preflight(1)
         scene = current["scene"]
         movement = FreeMovement(self.project.exploration[scene])
         origin = (list(self._rt_origin) if self._rt_origin is not None
@@ -209,6 +230,8 @@ class GameSession:
         self.progress.story_flags[_key(scene, "pos")] = ",".join(map(str, cell))
         self._rt_origin, self._rt_position, self._rt_journal = (
             origin, snapshot["position"], journal)
+        if self._living_world is not None:
+            self._living_world.advance(1)
         return self.route_realtime_state()
 
     def route_transition(self, link_id):
@@ -769,6 +792,8 @@ class GameSession:
                 "origin": list(self._rt_origin),
                 "position": list(self._rt_position),
                 "journal": self._rt_journal.recording()}
+        if self._living_world is not None:
+            data["living_world"] = self._living_world.snapshot()
         if self.siege_id is not None:
             data["siege_id"] = self.siege_id
         if self.tactical_story_pending:
@@ -794,7 +819,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "tactical_story_pending",
+                             "scene_realtime", "living_world", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -818,6 +843,13 @@ class GameSession:
             raise IncompatibleSaveError("rules", data["rules"], current_rules)
         session = cls(content, project, data["campaign_id"],
                       seed=data["seed"], rules=rules)
+        if session._living_world is not None:
+            require("living_world" in data,
+                    "Living-world checkpoint missing from enabled project")
+            session._living_world.restore(data["living_world"])
+        else:
+            require("living_world" not in data,
+                    "Unexpected living-world state in legacy checkpoint")
         session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
         verify_flow_save(session.progress, project.campaign_flow)
         session.story.initialize(session.progress, session.campaign_id)

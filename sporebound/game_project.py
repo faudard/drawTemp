@@ -116,6 +116,11 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        from .living_world import EXTENSION, validate_living_world
+        if EXTENSION in self.extensions:
+            validate_living_world(
+                self.extensions[EXTENSION]["data"],
+                set(self.exploration) | set(content.missions))
         from .campaign_flow import validate_flow
         validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
