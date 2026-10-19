@@ -48,7 +48,7 @@ nouvelle partie. Un migrateur de sauvegardes certifié est hors périmètre.
 - **Portée = espace de noms durable**, pas durée de vie automatique : aucun
   reset silencieux en sortie de scène. La durée de vie contextuelle, les
   conversions et la réputation de faction R35 seront traitées explicitement.
-- Les clés stables `r42_<scope>_<owner>_<id>` vivent **dans le même
+- Les clés stables `r42_<code_portée>_<owner>_<id>` (c/s/m) vivent **dans le même
   `Campaign.story_flags`**, sans nouveau magasin ou schéma de checkpoint.
   R9 `matches`, `set_flag` et `add_flag` restent la seule exécution.
 - `StoryBook.initialize` installe une fois les valeurs initiales après
