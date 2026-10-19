@@ -10,6 +10,8 @@ from drawtemp.sdk.slots import PlayerSlotStore
 from drawtemp.core import RuleError
 from drawtemp.player.save_manager import SaveManager
 from drawtemp.player.preferences import PlayerPreferences
+from sporebound.cinematic_transport import CinematicTransport
+from drawtemp.cinematics.projection import frame_payload
 
 
 class PlayerController:
@@ -31,6 +33,8 @@ class PlayerController:
         self.message = self.preferences.warning
         self.forecast = ""
         self.inspected_skill = "attack"
+        self._cinematic_clip = None
+        self._cinematic_transport = None
 
     def _path(self, slot):
         if type(slot) is not int or not 1 <= slot <= self.project.save_slots:
@@ -55,6 +59,8 @@ class PlayerController:
     def _activate_save(self, loaded, message, *, source=None):
         # No state is touched until the verified GameSession has been loaded.
         self.session = loaded
+        self._cinematic_clip = None
+        self._cinematic_transport = None
         self.show_title = False
         self.selected = [0, 0]
         self.inspected_skill = "attack"
@@ -108,6 +114,8 @@ class PlayerController:
     def new_game(self):
         self.session = Simulation.new(self.content, self.project, self.campaign_id,
                                       seed=self.seed)
+        self._cinematic_clip = None
+        self._cinematic_transport = None
         self.show_title = False
         self.message = "Le voyage de Jeanne commence."
         self.forecast = ""
@@ -132,10 +140,13 @@ class PlayerController:
 
     def title(self):
         self.show_title = True
+        self._cinematic_clip = None
+        self._cinematic_transport = None
         self.forecast = ""
         return self.state()
 
     def choose(self, choice_id):
+        self._require_cinematic_completed()
         state = self._current()
         if not state.scene:
             raise ValueError("No dialogue is pending")
@@ -151,6 +162,7 @@ class PlayerController:
         return self._changed()
 
     def start_mission(self, mission_id):
+        self._require_cinematic_completed()
         state = self._current()
         if state.mode != "campaign" or state.scene is not None:
             raise ValueError("Resolve the narrative before starting a mission")
@@ -162,6 +174,7 @@ class PlayerController:
         return self._changed()
 
     def explore_move(self, dx, dy):
+        self._require_cinematic_completed()
         state = self._current()
         if not state.exploration or state.exploration["completed"]:
             raise ValueError("Exploration is unavailable")
@@ -169,6 +182,7 @@ class PlayerController:
         return self._changed()
 
     def explore_interact(self, point_id):
+        self._require_cinematic_completed()
         state = self._current()
         if not state.exploration or state.exploration["completed"]:
             raise ValueError("Exploration is unavailable")
@@ -181,6 +195,7 @@ class PlayerController:
         return self._changed(keep_message=True)
 
     def explore_actor(self, actor_id, action="talk"):
+        self._require_cinematic_completed()
         state = self._current()
         self.session.explore_actor(actor_id, action, expected_revision=state.revision)
         return self._changed()
@@ -382,6 +397,62 @@ class PlayerController:
     def resolve_key(self, key, context):
         return self.preferences.resolve(key, context)
 
+    def _require_cinematic_completed(self):
+        if self.session is not None and self.session.pending_scene_cinematic() is not None:
+            raise ValueError("Terminez ou passez la cinématique avant de poursuivre")
+
+    def _sync_cinematic(self):
+        """Create only presentation transport; real progress is in Simulation."""
+        if self.session is None or self.show_title:
+            self._cinematic_clip = None
+            self._cinematic_transport = None
+            return None
+        candidate = self.session.pending_scene_cinematic()
+        if candidate is None:
+            self._cinematic_clip = None
+            self._cinematic_transport = None
+            return None
+        clip = thaw(candidate)
+        if self._cinematic_clip is None or self._cinematic_clip["id"] != clip["id"]:
+            self._cinematic_clip = clip
+            self._cinematic_transport = CinematicTransport(clip["duration_ms"])
+        return self._cinematic_clip
+
+    def cinematic_pause(self):
+        if self._sync_cinematic() is None:
+            raise ValueError("No active cinematic")
+        self._cinematic_transport.pause()
+        return self.state()
+
+    def cinematic_play(self):
+        if self._sync_cinematic() is None:
+            raise ValueError("No active cinematic")
+        self._cinematic_transport.resume()
+        return self.state()
+
+    def cinematic_seek(self, time_ms):
+        if self._sync_cinematic() is None:
+            raise ValueError("No active cinematic")
+        self._cinematic_transport.seek(time_ms)
+        return self.state()
+
+    def cinematic_skip(self):
+        clip = self._sync_cinematic()
+        if clip is None:
+            raise ValueError("No active cinematic")
+        revision = self._current().revision
+        self.session.acknowledge_scene_cinematic(clip["id"],
+                                                 expected_revision=revision)
+        self._cinematic_clip = None
+        self._cinematic_transport = None
+        return self._changed()
+
+    def cinematic_tick(self):
+        if self._sync_cinematic() is not None:
+            if self._cinematic_transport.read() >= self._cinematic_clip["duration_ms"]:
+                return self.cinematic_skip()
+        return self.state()
+
     def _current(self):
         if self.session is None:
             raise ValueError("No active game")
@@ -405,7 +476,7 @@ class PlayerController:
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
-                "battle": {}, "tactical": {}, "revision": 0,
+                "battle": {}, "tactical": {}, "cinematic": {}, "revision": 0,
                 "gear": {"equipped": {}, "inventory": []}}
         if self.session is None or self.show_title:
             return base
@@ -456,4 +527,18 @@ class PlayerController:
             base["screen"] = "result" if snapshot.battle["result"] else "battle"
         else:
             base["screen"] = "campaign"
+        clip = self._sync_cinematic()
+        if clip is not None:
+            from sporebound.assets import AssetRegistry
+            registry = AssetRegistry(self.project.assets if self.project.assets else None)
+            project_file = getattr(self, "asset_project_path", None)
+            asset_root = Path(project_file).parent if project_file is not None else None
+            position = self._cinematic_transport.read()
+            base["cinematic"] = {
+                "id": clip["id"], "title": clip["name"],
+                "durationMs": clip["duration_ms"],
+                "playing": self._cinematic_transport.playing,
+                "frame": frame_payload(clip, position, registry=registry,
+                                       asset_root=asset_root),
+            }
         return base
