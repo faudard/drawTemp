@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'drawtemp/export/**'
+      - 'tests_standalone/test_r39*.py'
       - 'drawtemp/player/**'
       - 'drawtemp/studio/**'
       - 'scripts/r15_*'
@@ -81,6 +82,18 @@ jobs:
           --runtime-dir dist/DrawTempPlayer
           --output export/Jeanne
       - run: python -m drawtemp.export.cli verify --bundle export/Jeanne
+      - name: R39 collect exact-build evidence (collection only, NOT release approval)
+        run: >-
+          python -m drawtemp.export.cli build-evidence
+          --bundle export/Jeanne --output r39-build-evidence
+          --revision ${{ github.sha }} --family srpg
+      - name: Preserve R39 blockers and observed build environment
+        uses: actions/upload-artifact@v4
+        with:
+          name: r39-build-evidence-${{ runner.os }}
+          path: r39-build-evidence/*.json
+          if-no-files-found: error
+          retention-days: 14
       - name: R23.A record actual native bundle integrity for this commit
         run: >-
           python scripts/r23_release_gate.py native

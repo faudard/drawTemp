@@ -61,8 +61,25 @@ def main(argv=None):
     provenance.add_argument("--dependencies", required=True, type=Path)
     provenance.add_argument("--revision", required=True)
     provenance.add_argument("--target", required=True, choices=PC_TARGETS)
+    evidence = cmd.add_parser("build-evidence", help="Collect a native build dossier; NO-GO remains explicit")
+    evidence.add_argument("--bundle", required=True, type=Path)
+    evidence.add_argument("--output", required=True, type=Path)
+    evidence.add_argument("--revision", required=True)
+    evidence.add_argument("--target", choices=PC_TARGETS)
+    evidence.add_argument("--family", required=True, choices=GAME_FAMILIES)
+    evidence.add_argument("--dependencies", type=Path)
+    evidence.add_argument("--require-preflight", action="store_true",
+                          help="Exit 2 when evidence is collected but strict preflight is blocked")
     args = parser.parse_args(argv)
     try:
+        if args.command == "build-evidence":
+            from .build_evidence import collect_build_evidence, host_target
+            dependencies = _publication_json(args.dependencies) if args.dependencies else None
+            result = collect_build_evidence(args.bundle, args.output, revision=args.revision,
+                                            target=args.target or host_target(), family=args.family,
+                                            dependencies=dependencies)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 2 if args.require_preflight and result["publication_preflight"] != "passed" else 0
         if args.command == "build-provenance":
             result = build_provenance(args.bundle, _publication_json(args.dependencies),
                                       revision=args.revision, target=args.target)

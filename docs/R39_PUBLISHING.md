@@ -85,9 +85,45 @@ segments, dependencies, minimum OS versions and actual launch behavior still
 require platform build/runtime checks. Synthetic headers can pass inspection;
 `native_header_identity: passed` must never be used as a release certificate.
 
+## Native build integration and blocked evidence
+
+The R15 `native-bundle` job now runs `build-evidence` immediately after export
+and verification, with the exact checked-out `${{ github.sha }}`. The target is
+mapped from the runner OS/CPU and then crosschecked against the Player header.
+Unsupported host architectures fail explicitly. Each OS uploads an external
+`r39-build-evidence-<OS>` dossier, without altering its R15 bundle.
+
+```sh
+python -m drawtemp.export.cli build-evidence \
+  --bundle ./exported-game --output ./r39-evidence \
+  --revision 0123456789abcdef0123456789abcdef01234567 --family srpg
+```
+
+- `build-evidence.json`: bundle hash, exact declared revision, native header,
+  strict asset-rights result, preflight status and explicit blockers.
+- `build-environment.json`: installed Python distribution metadata, including
+  unknown licenses as JSON null. This includes build tools and is **not a runtime
+  SBOM**; it omits native/system libraries and does not establish redistribution rights.
+- With `--dependencies reviewed-runtime-dependencies.json` and successful strict
+  checks, also emits `build-provenance.json` and `publication-plan.json`.
+
+Without a reviewed runtime inventory, publication preflight remains blocked;
+Python package metadata is never substituted for that inventory. Missing asset
+rights also remain blockers. Jeanne currently lacks `asset-licenses.json`, so
+this integration does not silently turn that preview into a publishable release.
+
+The output directory must be new and outside the bundle. Documents are staged
+then published together. Invalid native identity, tampered bundles or an existing
+output are fatal errors (exit 1), not successful missing-evidence reports.
+Collection success (exit 0) only means the dossier was produced. Use
+`--require-preflight` for exit 2 when the dossier records a blocked preflight.
+The native workflow intentionally collects the blockers without claiming release
+approval. Even a passed preflight retains `decision: NO-GO` and
+`release_certified: false`; launch/hardware/signature gates remain separate.
+
 ## Remaining work
 
-- R39.A: wire provenance generation into native builds and authenticate it,
+- R39.A: supply reviewed runtime inventories in native builds and authenticate provenance,
   verify launch/ABI compatibility, complete dependency inventory, Studio export UI integration,
   same-SHA multi-OS build matrix and four real game-family export journeys.
 - R39.B: clean-machine install/launch, hardware input/a11y/scaling, save migration,
@@ -96,7 +132,7 @@ require platform build/runtime checks. Synthetic headers can pass inspection;
 
 ## Verification
 
-`python -m unittest tests_standalone.test_r39_native tests_standalone.test_r39_publishing
+`python -m unittest tests_standalone.test_r39_build_evidence tests_standalone.test_r39_native tests_standalone.test_r39_publishing
  tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator`
 (on one shell line).
 
