@@ -85,7 +85,10 @@ class CinematicStudio4GUITests(unittest.TestCase):
                 owner.project.save(owner.project_path, content)
                 project = GameProject.load(owner.project_path, content)
                 self.assertEqual(len(project.cinematics[0]["events"]), 2)
-                self.assertEqual(owner.capture_history.call_count, 7)
+                # Applying an unchanged inspector event is a no-op. The six
+                # actual mutations each append one global history checkpoint;
+                # undo/redo and a no-op must never duplicate checkpoints.
+                self.assertEqual(owner.capture_history.call_count, 6)
                 # Undo/redo themselves do not append duplicate history items.
         finally:
             if studio is not None and studio.preview_renderer is not None:
