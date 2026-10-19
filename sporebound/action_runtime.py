@@ -134,6 +134,9 @@ class ActionRuntime:
     def __init__(self, scene):
         self.scene = validate_scene(scene)
         self.scene_digest = _digest(self.scene)
+        self._walls = frozenset(tuple(cell) for cell in self.scene["walls"])
+        self._enemy_specs = {row["id"]: row for row in self.scene["enemies"]}
+        self._object_specs = {row["id"]: row for row in self.scene["objects"]}
         self.tick = 0
         self.hero = {
             "pos": _center(self.scene["hero"]["pos"]), "hp": self.scene["hero"]["hp"],
@@ -170,10 +173,9 @@ class ActionRuntime:
         w, h = self.scene["width"] * SCALE, self.scene["height"] * SCALE
         if x < RADIUS or y < RADIUS or x > w - RADIUS or y > h - RADIUS:
             return False
-        solid = {tuple(wall) for wall in self.scene["walls"]}
         for tx in range((x - RADIUS) // SCALE, (x + RADIUS) // SCALE + 1):
             for ty in range((y - RADIUS) // SCALE, (y + RADIUS) // SCALE + 1):
-                if (tx, ty) in solid:
+                if (tx, ty) in self._walls:
                     return False
         # A closed door occupies its authored tile until an explicit interaction.
         for obj in self.scene["objects"]:
@@ -248,7 +250,7 @@ class ActionRuntime:
                     self._emit("enemy_dead", enemy=name, reward="coin")
 
     def _interact(self, object_id):
-        row = next((obj for obj in self.scene["objects"] if obj["id"] == object_id), None)
+        row = self._object_specs.get(object_id)
         _check(row is not None, "Unknown interaction object")
         dx = self.hero["pos"][0] - _center(row["pos"])[0]
         dy = self.hero["pos"][1] - _center(row["pos"])[1]
@@ -270,7 +272,6 @@ class ActionRuntime:
 
     def _enemy_ai(self, guard):
         hero = self.hero
-        specs = {row["id"]: row for row in self.scene["enemies"]}
         for name in sorted(self.enemies):
             enemy = self.enemies[name]
             if enemy["hp"] <= 0:
@@ -299,7 +300,7 @@ class ActionRuntime:
                 tx, ty = enemy["home"]
             else:
                 enemy["state"] = "patrol"
-                route = specs[name]["patrol"]
+                route = self._enemy_specs[name]["patrol"]
                 if not route:
                     continue
                 point = _center(route[enemy["patrol_index"]])
@@ -320,8 +321,11 @@ class ActionRuntime:
     def step(self, command):
         _check(self.tick < MAX_TICKS, "Action replay tick budget exceeded")
         frame = _input(command, self.tick + 1)  # Fail before mutating any state.
+        # Keep rollback bounded: copying the entire input journal each frame
+        # would make a long-running 60 Hz session quadratic in elapsed ticks.
         old = deepcopy((self.tick, self.hero, self.enemies, self.objects,
-                        self.inventory, self.flags, self.commands, self.last_events))
+                        self.inventory, self.flags, self.last_events))
+        old_command_count = len(self.commands)
         try:
             self.tick += 1
             self.last_events = []
@@ -356,7 +360,8 @@ class ActionRuntime:
             return deepcopy(self.last_events)
         except Exception:
             (self.tick, self.hero, self.enemies, self.objects, self.inventory,
-             self.flags, self.commands, self.last_events) = old
+             self.flags, self.last_events) = old
+            del self.commands[old_command_count:]
             raise
 
     def recording(self):
