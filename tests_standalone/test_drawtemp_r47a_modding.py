@@ -138,6 +138,24 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(result["removed"], "quest-mod")
         self.assertFalse(result["deleted_asset_files"])
 
+    def test_empty_extension_section_omitted_by_canonical_serialization(self):
+        # GameProject.to_dict omits extensions when the mapping is empty.
+        # Importing/removing an un-applied mod must still be reversible.
+        snapshot = self.editor.snapshot()
+        self.assertNotIn("extensions", snapshot.to_dict()["project"])
+        pins = {"quest-mod": self.registry.status("quest-mod")["manifest_sha256"]}
+        result = self.registry.audit_project(snapshot, expected_pins=pins)
+        self.assertFalse(result["compatible"])
+        self.assertIn("missing_namespace", result["errors"][0])
+        self.assertEqual(self.registry.audit_project(
+            snapshot, expected_pins={})["errors"], [])
+        with self.assertRaises(ModError) as invalid:
+            self.registry.uninstall("quest-mod", project={})
+        self.assertEqual(invalid.exception.code, "invalid_project")
+        removed = self.registry.uninstall("quest-mod", project=snapshot)
+        self.assertFalse(removed["deleted_project_data"])
+        self.assertEqual(self.registry.statuses(), ())
+
     def test_pack_pins_fail_closed_and_missing_dependencies(self):
         another = manifest("extra-mod", "org.example.extra")
         another["dependencies"] = [{"id": "missing-mod", "min_version": "1.0.0",
