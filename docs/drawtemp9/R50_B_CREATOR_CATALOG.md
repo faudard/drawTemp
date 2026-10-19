@@ -27,6 +27,7 @@ ne constitue **pas** un jeu hybride certifié.
 | Roguelite | Les salles mouvantes | Bloquée | Manque création/Player certifiable |
 | Hybride narratif | Le conseil des gardes | Bloquée | Manque transition récit/action/CT et retour |
 | Prototype narratif supplémentaire | Le choix du village | Oui (prototype seulement) | Choix, état de récit et checkpoint GameSession |
+| Prototype d'exploration libre | La vallée du guet | Oui (prototype seulement) | Studio R1 → R25 libre à 60 Hz → combat CT → retour, via PlayerController/save/replay |
 
 Les noms de projets sont des intitulés de démonstration, **pas**
 des jeux complets ou des assets préexistants. Aucun contenu tiers n'est
@@ -71,6 +72,31 @@ python -m unittest -v tests_standalone.test_r50b_player_journey
 python -m unittest -v tests_standalone.test_r50b_catalog
 ```
 
+## Tranche R50.B suivante — Exploration libre et transition CT
+
+Le catalogue comprend désormais un **prototype supplémentaire**, distinct
+d'une action-aventure certifiée : `exploration_prototype`.
+
+- Création depuis le Studio (aucun JSON édité à la main) ; le générateur
+  réutilise `create_template("narrative")` et `AuthoringSession.preview_pair`
+  pour ajouter la scène `arrival`, son profil `FREE_REALTIME`, une route vers
+  la mission CT existante et une route de retour.
+- Vrai `PlayerController.route_realtime_step` : huit ticks déterministes
+  puis sauvegarde/reprise avec comparaison du journal et de la position.
+  Une commande de déplacement invalide est refusée sans changer le slot.
+- `PlayerController.route_transition` démarre le combat CT canonique,
+  suivi de sauvegarde/reprise, abandon explicite et retour au village.
+- Tous les checkpoints viennent du même `GameSession`, et les documents
+  auteurs restent immuables. Le starter n'est publié qu'après le parcours.
+- `action_adventure` reste **bloqué** : cette démonstration ne prouve pas
+  les attaques temps réel, le Player QML, la manette, les collisions physiques
+  natives, ni le routage déclenché par proximité du portail (R25 accepte
+  encore une transition par identifiant de lien).
+
+```bash
+python -m unittest -v tests_standalone.test_r50b_exploration
+```
+
 ### Restant pour la vraie R50.B
 
 - R41.B : RPG classique jouable par menus, groupe et sauvegarde.
@@ -85,8 +111,7 @@ python -m unittest -v tests_standalone.test_r50b_catalog
 ## Commandes de vérification
 
 ```bash
-python -m unittest -v tests_standalone.test_r50b_catalog
-python -m unittest -v tests_standalone.test_r28e_minigames_certification
+python -m unittest -v tests_standalone.test_r50b_catalog tests_standalone.test_r50b_player_journey tests_standalone.test_r50b_exploration tests_standalone.test_r28e_minigames_certification
 ```
 
 En CI, l'exécution Qt est **offscreen** et ne représente ni une preuve de
