@@ -300,6 +300,18 @@ def create_bridge(controller, renderer):
             """R41.B1: same canonical Simulation transaction as headless Player."""
             self.invoke(self.controller.toggle_party_member, hero_id)
 
+        @Slot(str)
+        def startRpgEncounter(self, encounter_id):
+            self.invoke(self.controller.start_rpg_encounter, encounter_id)
+
+        @Slot(str, str, str)
+        def rpgAction(self, kind, target, skill):
+            self.invoke(self.controller.rpg_action, kind, target, skill)
+
+        @Slot()
+        def finishRpgEncounter(self):
+            self.invoke(self.controller.finish_rpg_encounter)
+
         @Slot()
         def newGame(self):
             self.invoke(self.controller.new_game)
