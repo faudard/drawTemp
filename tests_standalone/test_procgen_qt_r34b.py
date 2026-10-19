@@ -17,6 +17,28 @@ class ProceduralPreviewQtTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_explicit_project_apply_is_undoable(self):
+        from unittest.mock import patch
+        from drawtemp.sdk.authoring import AuthoringSession
+        from drawtemp.sdk.reference import reference_project
+        from sporebound.roguelite import EXTENSION
+        from PySide6.QtWidgets import QMessageBox
+
+        content, project = reference_project()
+        session = AuthoringSession.new(content, project)
+        dialog = ProcGenPreviewDialog(content=content, project=project,
+                                       session=session)
+        self.assertTrue(dialog.apply_project_button.isEnabled())
+        self.assertNotIn(EXTENSION, session.snapshot().project.get("extensions", {}))
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+            transition = dialog.apply_to_project()
+        self.assertIsNotNone(transition)
+        self.assertEqual(session.snapshot().project["extensions"][EXTENSION]
+                         ["data"]["recipe"]["seed"], 42)
+        session.undo()
+        self.assertNotIn(EXTENSION, session.snapshot().project.get("extensions", {}))
+        dialog.close()
+
     def test_seed_preview_batch_and_invalid_no_stale_export(self):
         dialog = ProcGenPreviewDialog()
         self.assertEqual(dialog.objectName(), "r34-procgen-dialog")
