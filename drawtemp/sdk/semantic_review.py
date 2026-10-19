@@ -116,7 +116,7 @@ def semantic_diff(before_content, before_project, after_content, after_project) 
     return tuple(sorted(changes, key=lambda change: (change.path, change.kind)))
 
 
-def _merge(base, local, incoming, path, conflicts):
+def _merge(base, local, incoming, path, conflicts, choices=None):
     # These cases also handle new properties and deletions without resurrecting
     # removed keys or silently overwriting an independent edit.
     if local == incoming:
@@ -132,7 +132,7 @@ def _merge(base, local, incoming, path, conflicts):
             value = _merge(base.get(key, _MISSING),
                            local.get(key, _MISSING),
                            incoming.get(key, _MISSING),
-                           _pointer(path, key), conflicts)
+                           _pointer(path, key), conflicts, choices)
             if value is not _MISSING:
                 result[key] = value
         return result
@@ -146,8 +146,11 @@ def _merge(base, local, incoming, path, conflicts):
                       for value in (base, local, incoming)]
             if orders[0] == orders[1] == orders[2]:
                 return [_merge(maps[0][name], maps[1][name], maps[2][name],
-                               _pointer(path, name), conflicts)
+                               _pointer(path, name), conflicts, choices)
                         for name in orders[0]]
+    if choices is not None and path in choices:
+        value = local if choices[path] == "local" else incoming
+        return _MISSING if value is _MISSING else deepcopy(value)
     conflicts.append(Conflict(path, _value(base), _value(local), _value(incoming)))
     return _MISSING
 
@@ -199,3 +202,38 @@ def stage_merge(session, preview: MergePreview, *, expected_revision: int):
                                     deepcopy(preview.project)),
         kind="r30-semantic-merge",
     )
+
+
+
+def resolve_merge(base_content, base_project,
+                  local_content, local_project,
+                  incoming_content, incoming_project, decisions) -> MergePreview:
+    """Resolve *every* detected three-way conflict by explicit local/incoming choice.
+
+    This is an isolated preview; no source file or AuthoringSession is changed.
+    Choosing a whole conflicting sequence is intentional: ordered event actions
+    and mission ordering cannot be merged element-by-element without semantics.
+    """
+    initial = preview_merge(base_content, base_project,
+                            local_content, local_project,
+                            incoming_content, incoming_project)
+    if not isinstance(decisions, dict):
+        raise ValueError("Conflict resolutions must be a path-to-choice dictionary")
+    paths = {conflict.path for conflict in initial.conflicts}
+    if set(decisions) != paths:
+        raise ValueError("One explicit decision is required for each conflict")
+    if any(choice not in ("local", "incoming") for choice in decisions.values()):
+        raise ValueError("Resolution must be local or incoming")
+    if not paths:
+        return initial
+    b_content, b_project = _document(base_content), _document(base_project)
+    l_content, l_project = _document(local_content), _document(local_project)
+    r_content, r_project = _document(incoming_content), _document(incoming_project)
+    unresolved = []
+    content = _merge(b_content, l_content, r_content, "/content", unresolved, decisions)
+    project = _merge(b_project, l_project, r_project, "/project", unresolved, decisions)
+    if unresolved or not isinstance(content, dict) or not isinstance(project, dict):
+        raise ValueError("Resolution could not construct canonical documents")
+    return MergePreview(initial.local_changes, initial.incoming_changes,
+                        (), deepcopy(content), deepcopy(project),
+                        initial.local_fingerprint, fingerprint_pair(content, project))
