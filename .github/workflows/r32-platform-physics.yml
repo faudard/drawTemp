@@ -1,0 +1,41 @@
+name: R32 Platform Physics Headless
+on:
+  pull_request:
+    paths:
+      - "sporebound/platform_physics.py"
+      - "tests_standalone/test_platform_physics_r32.py"
+      - "docs/drawtemp5/R32_PLATFORM_PHYSICS_FOUNDATION.md"
+      - ".github/workflows/r32-platform-physics.yml"
+  push:
+    branches:
+      - master
+      - integration/consolidate-open-roadmap-20261019
+permissions:
+  contents: read
+jobs:
+  physics-headless:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.10'
+          - os: ubuntu-latest
+            python: '3.12'
+          - os: windows-latest
+            python: '3.12'
+          - os: macos-latest
+            python: '3.12'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: Deterministic movement/collision/replay R32
+        run: python -m unittest tests_standalone.test_platform_physics_r32 -v
+      - name: Preserve action rules R26
+        run: python -m unittest tests_standalone.test_action_runtime_r26 -v
+      - name: Preserve canonical CT session
+        run: python -m unittest tests_standalone.test_game_session -v
