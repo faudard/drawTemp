@@ -169,6 +169,11 @@ de débogage n'écrit sur disque, ne modifie l'éditeur ou le Player actif.
   choix en pause et déclenche l'unique `StoryBook.choose` canonique.
 - **Pas par pas** : avance de ligne par `Simulation.advance_narrative_line`,
   puis choix explicites. Le debugger n'invente pas de branches automatiques.
+- **Prévision sans commit** : `preview_choice` clone une seconde fois
+  la `Simulation` de débogage et exécute le **vrai** choix R9 dans cette
+  copie jetable. Le panneau Qt « Prévoir les effets » montre les changements
+  attendus d'or, de flags, d'inventaire, de missions et d'historique. Le
+  debugger et l'éditeur restent intacts, sans interprétation approximative.
 - **Traces** : révision avant/après, scène d'origine, cible, variables modifiées,
   quantité d'or, missions débloquées, décisions ajoutées. Les appels `report`
   et `inspect` restent sans mutation et retournent des copies indépendantes.
