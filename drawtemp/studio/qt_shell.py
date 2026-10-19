@@ -30,6 +30,9 @@ from drawtemp.studio.resource_links import connections
 from drawtemp.sdk.controlled_scripting import (
     StudioScriptError, read_script_manifest, install_script,
 )
+from drawtemp.sdk.r24g_semantic_vcs import (
+    SemanticMergeError, read_pair, preview_merge, apply_merge,
+)
 from drawtemp.studio.plugins import (
     StudioPluginError, StudioPluginRegistry, read_studio_manifest,
 )
@@ -468,6 +471,9 @@ class StudioWindow(QMainWindow):
             action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
+        vcs_menu = tools_menu.addMenu("Collaboration / VCS")
+        review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
+        review_branch.triggered.connect(self._semantic_merge_dialog)
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r35_world"])
@@ -1135,6 +1141,73 @@ class StudioWindow(QMainWindow):
             empty.setAccessibleName("Aucune ressource dans cet atelier")
             layout.addWidget(empty)
         return page
+
+    def preview_semantic_merge(self, base_content_path, theirs_content_path):
+        """Read two sibling pairs; compare with THIS live canonical editor."""
+        base = read_pair(base_content_path)
+        theirs = read_pair(theirs_content_path)
+        return preview_merge(self.session, base, theirs)
+
+    def apply_semantic_merge(self, review):
+        """Caller has explicitly approved the reviewed changes."""
+        transition = apply_merge(self.session, review)
+        self.refresh()
+        self.problems.addItem("Fusion sémantique appliquée — Enregistrer pour persister")
+        return transition
+
+    def _semantic_merge_dialog(self):
+        base_path, _ = QFileDialog.getOpenFileName(
+            self, "Version ancêtre / base (Content JSON)", "", "Content JSON (*.json)")
+        if not base_path:
+            return
+        theirs_path, _ = QFileDialog.getOpenFileName(
+            self, "Version distante / theirs (Content JSON)", "", "Content JSON (*.json)")
+        if not theirs_path:
+            return
+        try:
+            review = self.preview_semantic_merge(base_path, theirs_path)
+            report = review.report
+            lines = [
+                f"Changements locaux : {len(report['local_diff'])}",
+                f"Changements distants : {len(report['remote_diff'])}",
+                f"Conflits : {len(report['conflicts'])}",
+            ]
+            if report["conflicts"]:
+                lines.extend(
+                    f"• {item['reason']} — {item['path']}"
+                    for item in report["conflicts"][:20])
+                summary = "\n".join(lines) + (
+                    "\n\nConflits non résolus : aucune modification appliquée."
+                )
+                self.problems.addItem("Fusion VCS refusée : conflits détectés")
+                QMessageBox.warning(self, "Conflits Content / GameProject", summary)
+                return report
+            if report["already_current"]:
+                QMessageBox.information(
+                    self, "Fusion VCS", "\n".join(lines) +
+                    "\n\nLa version locale inclut déjà ces modifications.")
+                return report
+            # Never ask authors to approve an opaque set of changes. The
+            # full deterministic semantic path list is available in Details.
+            dialog = QMessageBox(self)
+            dialog.setWindowTitle("Confirmer la fusion sémantique")
+            dialog.setIcon(QMessageBox.Question)
+            dialog.setText(
+                "\n".join(lines) +
+                "\n\nConsultez « Afficher les détails » pour revoir TOUS "
+                "les champs ajoutés, supprimés ou modifiés. "
+                "Fusion en une transaction Undo/Redo ; enregistrement séparé.")
+            dialog.setDetailedText("\n".join(
+                item["op"] + "  " + item["path"]
+                for item in report["remote_diff"]))
+            dialog.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            dialog.setDefaultButton(QMessageBox.No)
+            if dialog.exec() == QMessageBox.Yes:
+                self.apply_semantic_merge(review)
+            return report
+        except (SemanticMergeError, AuthoringError, ValueError, OSError) as exc:
+            self.report_error(exc)
+            return None
 
     def apply_controlled_hooks(self, path, *, grants):
         """Opt-in import into native narrative effects; editor remains owner."""
