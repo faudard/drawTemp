@@ -46,14 +46,14 @@ class CommittedFxDirector:
                 or snapshot["tick"] != self._tick + 1
                 or snapshot.get("tick_hz") != TICK_HZ):
             raise ValueError("FX requires the next committed R26 snapshot")
-        if type(events) not in (list, tuple) or len(events) > MAX_EMITS_PER_TICK:
-            raise ValueError("FX event count exceeds the per-tick budget")
+        if type(events) not in (list, tuple):
+            raise ValueError("FX events must be a committed sequence")
         tick = snapshot["tick"]
         # Validate every recognized event before changing state.
         emitted = []
         hero = snapshot["hero"]
         enemies = snapshot["enemies"]
-        for index, event in enumerate(events):
+        for index, event in enumerate(events[:MAX_EMITS_PER_TICK]):
             if (type(event) is not dict or type(event.get("tick")) is not int
                     or event["tick"] != tick or type(event.get("kind")) is not str):
                 raise ValueError("FX event is not part of the committed tick")
