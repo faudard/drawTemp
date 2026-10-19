@@ -253,6 +253,12 @@ class SemanticReviewTests(unittest.TestCase):
                                current["content"], current["project"],
                                initial_content, remote)
         self.assertTrue(review.can_apply)
+        changed_preview = preview_merge(initial_content, initial_project,
+                                        current["content"], current["project"],
+                                        initial_content, remote)
+        changed_preview.project["title"] = "Unreviewed alteration"
+        with self.assertRaisesRegex(ValueError, "changed after review"):
+            stage_merge(session, changed_preview, expected_revision=session.revision)
         staged = stage_merge(session, review, expected_revision=session.revision)
         # Staging is not an implicit commit.
         self.assertEqual(session.snapshot().project["title"], initial_project["title"])
