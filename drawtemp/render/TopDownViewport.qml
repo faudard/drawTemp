@@ -52,6 +52,12 @@ Item {
             }
             Rectangle {
                 anchors.fill: parent
+                visible: projected.tile && row.lightShade !== undefined
+                color: "#07121b"
+                opacity: row.lightShade === undefined ? 0 : row.lightShade
+            }
+            Rectangle {
+                anchors.fill: parent
                 visible: projected.actor
                 radius: width / 2
                 color: row.alive ? (row.team === "player" ? "#f1ca75" : "#d06561")
