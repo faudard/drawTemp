@@ -78,11 +78,13 @@ def validate_platform_scene(scene):
     ids = set()
     actor = [*pos, *size]
     for row in rows:
-        _require(type(row) is dict and set(row) in (
-            {"id", "rect", "layer", "mask", "trigger", "one_way"},
-            {"id", "rect", "layer", "mask", "trigger", "one_way",
-             "velocity", "travel"}
-        ), "Invalid collider schema")
+        _require(type(row) is dict and
+                 {"id", "rect", "layer", "mask", "trigger", "one_way"} <= set(row)
+                 and set(row) <= {"id", "rect", "layer", "mask", "trigger",
+                                  "one_way", "velocity", "travel", "opens", "route"}
+                 and (("velocity" in row) == ("travel" in row))
+                 and not ("opens" in row and "route" in row),
+                 "Invalid collider schema")
         _require(_id(row["id"]) and row["id"] not in ids, "Duplicate or invalid collider")
         ids.add(row["id"])
         rect = row["rect"]
@@ -96,6 +98,11 @@ def validate_platform_scene(scene):
                  and type(row["trigger"]) is bool
                  and type(row["one_way"]) is bool, "Invalid collision filter")
         _require(not (row["trigger"] and row["one_way"]), "Trigger cannot be one-way")
+        if "opens" in row or "route" in row:
+            _require(row["trigger"] and not row["one_way"],
+                     "Interactive collider must be a trigger")
+            _require(_id(row.get("opens", "")) or _id(row.get("route", "")),
+                     "Interactive collider needs an explicit target")
         if "velocity" in row:
             travel = row["travel"]
             _require(not row["trigger"] and row["one_way"],
@@ -108,6 +115,15 @@ def validate_platform_scene(scene):
                      "Invalid moving-platform travel")
         if not row["trigger"] and not row["one_way"] and _overlap(actor, rect):
             _require(False, "Hero overlaps a solid at spawn")
+    for row in rows:
+        if "opens" in row:
+            _require(_id(row["opens"]) and row["opens"] != row["id"]
+                     and any(other["id"] == row["opens"]
+                             and not other["trigger"] and not other["one_way"]
+                             and "velocity" not in other for other in rows),
+                     "Switch must reference a static solid collider")
+        if "route" in row:
+            _require(_id(row["route"]), "Invalid route trigger reference")
     return deepcopy(scene)
 
 
@@ -118,9 +134,20 @@ class PlatformPhysics:
     mode owner may attach this capability; this module never alters CT state.
     """
 
-    def __init__(self, scene):
+    def __init__(self, scene, *, initial_disabled=()):
         self.scene = validate_platform_scene(scene)
         self.scene_digest = _hash(self.scene)
+        _require(type(initial_disabled) in (tuple, list)
+                 and all(type(v) is str for v in initial_disabled)
+                 and len(set(initial_disabled)) == len(initial_disabled),
+                 "Invalid initial opened door identifiers")
+        doors = {r["id"] for r in self.scene["colliders"]
+                 if not r["trigger"] and not r["one_way"] and "velocity" not in r}
+        openable = {r["opens"] for r in self.scene["colliders"] if "opens" in r}
+        _require(set(initial_disabled) <= (doors & openable),
+                 "Checkpoint references an unopenable collider")
+        self.initial_disabled = tuple(sorted(initial_disabled))
+        self.disabled_colliders = set(self.initial_disabled)
         hero = self.scene["hero"]
         x, y = hero["pos"]
         self.tick = 0
@@ -162,7 +189,8 @@ class PlatformPhysics:
         if rect[1] + rect[3] == self.scene["height"]:
             return "world"
         for row, block in self._colliders():
-            if (not row["trigger"] and self._active(row)
+            if (row["id"] not in self.disabled_colliders and
+                    not row["trigger"] and self._active(row)
                     and rect[1] + rect[3] == block[1]
                     and rect[0] < block[0] + block[2]
                     and rect[0] + rect[2] > block[0]):
@@ -209,7 +237,7 @@ class PlatformPhysics:
         delta = min(distance, max_delta) if distance > 0 else max(distance, max_delta)
         hit = "world" if delta != distance else None
         for row, block in self._colliders():
-            if row["trigger"] or not self._active(row):
+            if row["id"] in self.disabled_colliders or row["trigger"] or not self._active(row):
                 continue
             if row["one_way"] and (idx == 0 or distance < 0):
                 continue
@@ -225,11 +253,19 @@ class PlatformPhysics:
         self.actor[axis] += delta
         return hit
 
+    def available_routes(self):
+        """Links requiring explicit transition, only while overlapping the trigger."""
+        active = set(self.inside_triggers)
+        return sorted({row["route"] for row in self.scene["colliders"]
+                       if row.get("route") and row["id"] in active})
+
     def snapshot(self):
         return deepcopy({
             "version": VERSION, "scene": self.scene["id"], "tick": self.tick,
             "tick_hz": TICK_HZ, "actor": self.actor, "movers": self.movers,
             "inside_triggers": self.inside_triggers,
+            "disabled_colliders": sorted(self.disabled_colliders),
+            "available_routes": self.available_routes(),
         })
 
     def digest(self):
@@ -237,15 +273,19 @@ class PlatformPhysics:
 
     def step(self, command):
         _require(self.tick < MAX_TICKS, "Physics tick budget exhausted")
-        _require(type(command) is dict and set(command) <= {"tick", "move", "jump"}
+        _require(type(command) is dict and set(command) <= {"tick", "move", "jump", "interact"}
                  and type(command.get("tick")) is int
                  and command["tick"] == self.tick + 1, "Expected next logical tick")
         move, jump = command.get("move", 0), command.get("jump", False)
+        interact = command.get("interact", False)
         _require(type(move) is int and move in (-1, 0, 1)
-                 and type(jump) is bool, "Invalid platform input")
-        frame = {"tick": self.tick + 1, "move": move, "jump": jump}
+                 and type(jump) is bool and type(interact) is bool,
+                 "Invalid platform input")
+        frame = {"tick": self.tick + 1, "move": move, "jump": jump,
+                 "interact": interact}
         # No arbitrary callbacks or external systems during this deterministic step.
-        previous = deepcopy((self.tick, self.actor, self.movers, self.inside_triggers))
+        previous = deepcopy((self.tick, self.actor, self.movers,
+                             self.inside_triggers, self.disabled_colliders))
         events = []
         try:
             self.tick += 1
@@ -296,28 +336,41 @@ class PlatformPhysics:
             for name in sorted(set(self.inside_triggers) - set(current)):
                 events.append({"kind": "trigger_exit", "collider": name, "tick": self.tick})
             self.inside_triggers = current
+            if interact:
+                for row in sorted(self.scene["colliders"], key=lambda r: r["id"]):
+                    target = row.get("opens")
+                    if (target and row["id"] in current
+                            and target not in self.disabled_colliders):
+                        self.disabled_colliders.add(target)
+                        events.append({"kind": "door_open", "collider": target,
+                                       "switch": row["id"], "tick": self.tick})
             self.commands.append(frame)
             self.last_events = deepcopy(events)
             return deepcopy(events)
         except Exception:
-            self.tick, self.actor, self.movers, self.inside_triggers = previous
+            (self.tick, self.actor, self.movers,
+             self.inside_triggers, self.disabled_colliders) = previous
             raise
 
     def recording(self):
         body = {"version": VERSION, "scene": deepcopy(self.scene),
                 "commands": deepcopy(self.commands), "state_digest": self.digest()}
+        if self.initial_disabled:
+            body["initial_disabled"] = list(self.initial_disabled)
         return {**body, "digest": _hash(body)}
 
     @classmethod
     def from_recording(cls, raw, *, expected_scene=None):
-        _require(type(raw) is dict and set(raw) == {
-            "version", "scene", "commands", "state_digest", "digest"
-        } and type(raw["version"]) is int and raw["version"] == VERSION,
+        _require(type(raw) is dict and
+                 set(raw) in ({"version", "scene", "commands", "state_digest", "digest"},
+                              {"version", "scene", "commands", "state_digest",
+                               "digest", "initial_disabled"})
+                 and type(raw["version"]) is int and raw["version"] == VERSION,
                 "Unsupported physics recording")
         _require(type(raw["digest"]) is str
                  and _hash({k: v for k, v in raw.items() if k != "digest"})
                  == raw["digest"], "Physics checkpoint digest mismatch")
-        game = cls(raw["scene"])
+        game = cls(raw["scene"], initial_disabled=raw.get("initial_disabled", ()))
         if expected_scene is not None:
             _require(game.scene_digest == _hash(validate_platform_scene(expected_scene)),
                      "Physics authored scene changed")
