@@ -65,7 +65,6 @@ class AbilityDraftTests(unittest.TestCase):
     def test_existing_skill_id_cannot_be_renamed_or_clobbered(self):
         session = editor()
         created = AbilityDraft.create(session)
-        created.apply if False else None
         created.preview()
         created.apply()
         loaded = AbilityDraft.load(session, "r43_new")
