@@ -56,7 +56,8 @@ class R19QtVisualClipTests(unittest.TestCase):
             self.assertEqual(first["direction"], "east")
             self.assertEqual(first["pose"], "attack")
             self.assertEqual(first["pivotY"], 63)
-            self.assertNotEqual(first["atlasY"], last["atlasY"])
+            self.assertNotEqual((first["atlasX"], first["atlasY"]),
+                                (last["atlasX"], last["atlasY"]))
             self.assertFalse(renderer.visualClipFrame(
                 {**attack, "kind": "cast"}, 0))
             self.assertFalse(renderer.visualClipFrame(
