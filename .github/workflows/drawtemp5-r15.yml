@@ -210,6 +210,38 @@ jobs:
             dist/DrawTempStudio/**
           if-no-files-found: warn
 
+  r39-publication-matrix:
+    name: R39 same-SHA PC matrix (NO-GO)
+    needs: native-bundle
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: mkdir -p r39-evidence
+      - name: Download available reports (missing reports remain matrix blockers)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: r39-build-evidence-*
+          path: r39-evidence
+          merge-multiple: false
+      - name: Aggregate exact revision, family and all four declared PC targets
+        run: >-
+          python -m drawtemp.export.cli publication-matrix
+          --directory r39-evidence --revision ${{ github.sha }} --family srpg
+          > r39-publication-matrix.json
+      - name: Retain matrix and missing/blocked target diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: r39-publication-matrix
+          path: r39-publication-matrix.json
+          if-no-files-found: error
+          retention-days: 14
+
   r23-cross-os-ledger:
     name: R23.A commit-pinned release ledger (NO-GO)
     needs: native-bundle

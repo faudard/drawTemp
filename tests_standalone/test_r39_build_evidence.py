@@ -48,6 +48,9 @@ class BuildEvidenceTests(unittest.TestCase):
         before = (self.bundle / 'manifest.json').read_bytes()
         report = self.collect(dependencies=DEPS)
         self.assertEqual(report['publication_preflight'], 'passed')
+        from drawtemp.export.publication_matrix import publication_matrix
+        matrix = publication_matrix([report], revision='a'*40, family='srpg', targets=[self.target])
+        self.assertEqual(matrix['publication_preflight'], 'passed')
         self.assertFalse(report['release_certified'])
         self.assertEqual(report['decision'], 'NO-GO')
         provenance = json.loads((self.output / 'build-provenance.json').read_text())

@@ -70,8 +70,30 @@ def main(argv=None):
     evidence.add_argument("--dependencies", type=Path)
     evidence.add_argument("--require-preflight", action="store_true",
                           help="Exit 2 when evidence is collected but strict preflight is blocked")
+    matrix = cmd.add_parser("publication-matrix", help="Aggregate same-SHA build reports; never release approval")
+    matrix.add_argument("--directory", required=True, type=Path)
+    matrix.add_argument("--revision", required=True)
+    matrix.add_argument("--family", required=True, choices=GAME_FAMILIES)
+    matrix.add_argument("--targets", nargs="+", choices=PC_TARGETS)
+    matrix.add_argument("--require-preflight", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "publication-matrix":
+            from .publication_matrix import publication_matrix
+            directory = args.directory.resolve(strict=True)
+            if not directory.is_dir():
+                raise ExportError("Evidence directory required")
+            reports = []
+            for path in sorted(directory.rglob("build-evidence.json")):
+                if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+                    raise ExportError("Symlinked matrix evidence is not supported")
+                if len(reports) >= len(PC_TARGETS):
+                    raise ExportError("Too many build reports")
+                reports.append(_publication_json(path))
+            result = publication_matrix(reports, revision=args.revision, family=args.family,
+                                        targets=args.targets)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 2 if args.require_preflight and result["publication_preflight"] != "passed" else 0
         if args.command == "build-evidence":
             from .build_evidence import collect_build_evidence, host_target
             dependencies = _publication_json(args.dependencies) if args.dependencies else None

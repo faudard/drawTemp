@@ -121,6 +121,39 @@ The native workflow intentionally collects the blockers without claiming release
 approval. Even a passed preflight retains `decision: NO-GO` and
 `release_certified: false`; launch/hardware/signature gates remain separate.
 
+## Cross-platform matrix
+
+The `r39-publication-matrix` job collects all available per-OS build reports even
+when the native matrix has failed. Missing artifacts remain visible as missing
+targets; artifact download failure is tolerated only to produce that blocked
+matrix, never to declare success of native builds.
+
+```sh
+python -m drawtemp.export.cli publication-matrix \
+  --directory ./downloaded-r39-artifacts \
+  --revision 0123456789abcdef0123456789abcdef01234567 --family srpg
+```
+
+The directory contains nested `build-evidence.json` files, as produced by artifact
+download without merging. Output is JSON on stdout. The default requires all four
+PC targets, including both macOS architectures. The current three-runner native
+workflow therefore does **not** demonstrate all four targets; the absent macOS
+architecture is reported explicitly. An explicit `--targets linux-x86_64 ...`
+selects a narrower matrix and that scope is retained in `required_targets`.
+
+The aggregator rejects duplicate/unexpected targets, mixed Git revisions or game
+families, invalid hashes/native identities, contradictory preflight states, and
+unsupported certification claims. Bundle hashes may differ across OS builds.
+Absent targets and blocked targets have separate arrays. An empty directory
+produces an entirely missing/blocked matrix rather than an implicit pass.
+
+Exit 0 means a consistent matrix report was generated. `--require-preflight`
+returns 2 for missing/blocked targets; malformed or conflicting inputs return 1.
+The workflow deliberately retains the NO-GO report for diagnosis without using
+collection success as release approval. Even a complete passed preflight matrix
+remains non-certified: it aggregates producer declarations, does not independently
+reverify remote binaries, and does not replace four-family or hardware journeys.
+
 ## Remaining work
 
 - R39.A: supply reviewed runtime inventories in native builds and authenticate provenance,
@@ -132,7 +165,7 @@ approval. Even a passed preflight retains `decision: NO-GO` and
 
 ## Verification
 
-`python -m unittest tests_standalone.test_r39_build_evidence tests_standalone.test_r39_native tests_standalone.test_r39_publishing
+`python -m unittest tests_standalone.test_r39_matrix tests_standalone.test_r39_build_evidence tests_standalone.test_r39_native tests_standalone.test_r39_publishing
  tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator`
 (on one shell line).
 

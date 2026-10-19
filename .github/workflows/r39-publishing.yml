@@ -31,4 +31,4 @@ jobs:
         with:
           python-version: '3.12'
       - name: Synthetic native headers, provenance and R15 regressions
-        run: python -m unittest tests_standalone.test_r39_build_evidence tests_standalone.test_r39_native tests_standalone.test_r39_publishing tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator -v
+        run: python -m unittest tests_standalone.test_r39_matrix tests_standalone.test_r39_build_evidence tests_standalone.test_r39_native tests_standalone.test_r39_publishing tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator -v
