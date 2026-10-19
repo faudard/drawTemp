@@ -221,9 +221,11 @@ class LogicGraphDialog(QDialog):
             text="nouveau_graphe")
         if not accepted:
             return
+        self.graphs.blockSignals(True)
+        self.graphs.setCurrentIndex(0)
+        self.graphs.blockSignals(False)
         self.draft = LogicGraphDraft.new(
             mission_id, identifier.strip(), source_revision=self.session.revision)
-        self.graphs.setCurrentIndex(0)
         self.selected_node = "start"
         self.link_start = ""
         self._render()
