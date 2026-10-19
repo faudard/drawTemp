@@ -365,6 +365,26 @@ def create_bridge(controller, renderer):
             """Travel through the existing R25 GameSession scene graph."""
             self.invoke(self.controller.route_transition, link_id)
 
+        @Slot(int)
+        def rogueliteMove(self, room_id):
+            self.invoke(self.controller.roguelite_move, room_id)
+
+        @Slot()
+        def rogueliteClaim(self):
+            self.invoke(self.controller.roguelite_claim)
+
+        @Slot()
+        def rogueliteCheckpoint(self):
+            self.invoke(self.controller.roguelite_checkpoint)
+
+        @Slot()
+        def rogueliteDie(self):
+            self.invoke(self.controller.roguelite_die)
+
+        @Slot()
+        def rogueliteRestart(self):
+            self.invoke(self.controller.roguelite_restart)
+
         @Slot(int, int)
         def exploreMove(self, dx, dy):
             self.invoke(self.controller.explore_move, dx, dy,
