@@ -200,7 +200,12 @@ class Simulation:
         return self._apply(operation, dx, dy, expected_revision=expected_revision)
 
     def explore_interact(self, point_id, *, expected_revision=None):
-        return self._apply('explore_interact', point_id, expected_revision=expected_revision)
+        session = self._session
+        routed = (session.scene_router.enabled
+                  and session.active_scene() is None
+                  and session.route_scene in session.project.exploration)
+        operation = 'route_interact' if routed else 'explore_interact'
+        return self._apply(operation, point_id, expected_revision=expected_revision)
 
     def explore_wait(self, *, expected_revision=None):
         return self._apply('explore_wait', expected_revision=expected_revision)
