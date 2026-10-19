@@ -127,6 +127,10 @@ class ActionRuntimeR26Tests(unittest.TestCase):
         ]))
         events = self.command(game, interact="door")
         self.assertEqual(events[0]["kind"], "interaction_locked")
+        for _ in range(4):
+            self.command(game, dx=1)
+        self.assertLess(game.hero["pos"][0] + 240, 2 * SCALE,
+                        "Locked doors must block movement")
         self.command(game, interact="chest")
         self.assertEqual(game.inventory["key"], 1)
         self.command(game, interact="chest")
@@ -135,6 +139,10 @@ class ActionRuntimeR26Tests(unittest.TestCase):
         self.assertEqual(game.inventory["key"], 0)
         self.assertTrue(game.flags["opened:door"])
         self.assertTrue(game.objects["door"]["opened"])
+        for _ in range(3):
+            self.command(game, dx=1)
+        self.assertGreater(game.hero["pos"][0] + 240, 2 * SCALE,
+                           "Opening a door removes its collision")
 
     def test_invalid_actions_rollback_and_strict_tick_order(self):
         game = ActionRuntime(scene())
