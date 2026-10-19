@@ -22,7 +22,7 @@ ou second moteur narratif n'est ajouté.
 
 ## Exemple de données versionnées
 
-<escape>
+~~~json
 {
   "extensions": {
     "drawtemp.cinematicpro": {
@@ -44,7 +44,7 @@ ou second moteur narratif n'est ajouté.
     }
   }
 }
-</escape>
+~~~
 
 Cet exemple présuppose que le clip R11 war_council contient déjà l'événement
 decision. Les modifications doivent passer par une transaction AuthoringSession.
