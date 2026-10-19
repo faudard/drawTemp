@@ -218,11 +218,17 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="R17.12 cross-workshop evidence")
     parser.add_argument("--project-dir", required=True, type=Path)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--verify-bundle", type=Path,
+                        help="Validate the exported authored bundle, without rewriting the project")
     args = parser.parse_args(argv)
-    result = author_project(args.project_dir)
-    result["player"] = verify_gameplay(result["content_path"],
-                                       args.project_dir / "saves")
-    result["preflight"] = preflight(result["content_path"])
+    if args.verify_bundle:
+        result = inspect_export(args.project_dir / "r1712-jeanne.json",
+                                args.verify_bundle)
+    else:
+        result = author_project(args.project_dir)
+        result["player"] = verify_gameplay(result["content_path"],
+                                           args.project_dir / "saves")
+        result["preflight"] = preflight(result["content_path"])
     result["r17_12_certified"] = False
     payload = json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.report:
