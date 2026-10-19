@@ -334,6 +334,7 @@ class StudioWindow(QMainWindow):
         self._action("redo", "Rétablir", self.redo)
         self._action("palette", "Palette de commandes…", self.open_palette)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
+        self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
@@ -369,6 +370,7 @@ class StudioWindow(QMainWindow):
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
         tools_menu.addAction(self.commands["r30_creator"])
+        tools_menu.addAction(self.commands["r30_scale"])
         shortcuts = tools_menu.addAction("Configurer un raccourci…")
         shortcuts.triggered.connect(self.configure_shortcut)
         # Localization applies to global workspace labels; legacy editors
@@ -451,6 +453,11 @@ class StudioWindow(QMainWindow):
         dialog.exec()
         if self.session.revision != initial_revision:
             self.refresh()
+
+    def open_scale_dashboard(self):
+        """Read-only CPU evidence viewer; profiling itself runs headless."""
+        from drawtemp.studio.r30_scale_qt import R30ScaleDashboard
+        R30ScaleDashboard(self).exec()
 
     def _set_favorites_only(self, index):
         self.proxy.favorite_only = index == 1
