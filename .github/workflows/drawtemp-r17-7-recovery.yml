@@ -1,0 +1,35 @@
+name: DrawTemp R17.7 Persistent Checkpoint Recovery
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/slots.py'
+      - 'drawtemp/player/save_manager.py'
+      - 'tests_standalone/test_r17_persistence_recovery.py'
+      - '.github/workflows/drawtemp-r17-7-recovery.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checkpoint-recovery:
+    name: R17.7 checkpoint/backup / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: R17.7 recovery and canonical R1/R12 regression
+        run: >-
+          python -m unittest
+          tests_standalone.test_r17_persistence_recovery
+          tests_standalone.test_drawtemp5_r1d
+          tests_standalone.test_drawtemp5_r12_save_manager
+          tests_standalone.test_drawtemp5_r1e -v
