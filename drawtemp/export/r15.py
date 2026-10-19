@@ -66,6 +66,8 @@ def _check_asset_rights(root, report, strict):
         if path not in report["assets"]:
             issues.append("Rights entry references unregistered asset: " + path)
     evidence = set()
+    evidence_spelling = {}
+    asset_folded = {path.casefold() for path in report["assets"]}
     required = {"status", "rights_holder", "license_id", "evidence_path",
                 "sha256", "allow_modification", "allow_redistribution"}
     for relative in report["assets"]:
@@ -96,8 +98,12 @@ def _check_asset_rights(root, report, strict):
             evidence_file = safe_asset_path(root, proof)
             if not evidence_file.is_file() or evidence_file.stat().st_size == 0:
                 raise ValueError("Evidence file missing or empty")
-            if proof.casefold() in {path.casefold() for path in report["assets"]}:
+            if proof.casefold() in asset_folded:
                 raise ValueError("Evidence path collides with an asset")
+            previous = evidence_spelling.get(proof.casefold())
+            if previous is not None and previous != proof:
+                raise ValueError("Non-portable evidence case collision: " + previous)
+            evidence_spelling[proof.casefold()] = proof
         except (OSError, ValueError) as exc:
             issues.append("Unverifiable rights evidence for " + relative + ": " + str(exc))
             continue
@@ -232,6 +238,13 @@ def export_game(content_path, runtime_dir, destination, *,
             target = game / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(safe_asset_path(source.parent, relative), target)
+        # Recheck the COPIED bytes before publishing: a source file altered
+        # between preflight and copy must not bypass the rights SHA binding.
+        staged = preflight(game / source.name, require_licenses=require_licenses)
+        if (not staged["passed"] or staged["assets"] != report["assets"] or
+                staged["rights_evidence"] != report["rights_evidence"]):
+            raise ExportError("Staged content or asset rights changed during export: " +
+                              "; ".join(staged["errors"]))
         files = [
             {"path": file.relative_to(stage).as_posix(), "size": file.stat().st_size,
              "sha256": _hash(file)}
