@@ -201,6 +201,31 @@ def create_bridge(controller, renderer):
         def titleScreen(self):
             self.invoke(self.controller.title)
 
+        @Slot()
+        def cinematicTick(self):
+            # A 40ms frame refresh must not rebuild the isometric renderer.
+            try:
+                self.controller.cinematic_tick()
+            except Exception as exc:
+                self.controller.message = str(exc)
+            self.stateChanged.emit()
+
+        @Slot()
+        def cinematicSkip(self):
+            self.invoke(self.controller.cinematic_skip)
+
+        @Slot()
+        def cinematicPause(self):
+            self.settings_update(self.controller.cinematic_pause)
+
+        @Slot()
+        def cinematicPlay(self):
+            self.settings_update(self.controller.cinematic_play)
+
+        @Slot(int)
+        def cinematicSeek(self, milliseconds):
+            self.settings_update(self.controller.cinematic_seek, milliseconds)
+
         @Slot(str)
         def choose(self, choice):
             self.invoke(self.controller.choose, choice)
