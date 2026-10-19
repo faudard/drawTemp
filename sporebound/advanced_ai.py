@@ -29,13 +29,19 @@ def validate_advanced_ai(spec, *, living_world=None):
             "Invalid R37 advanced AI project document")
     seen = set()
     for agent in spec["agents"]:
-        require(type(agent) is dict and set(agent) == {"id", "mode", "policies"}
+        require(type(agent) is dict
+                and set(agent) in ({"id", "mode", "policies"},
+                                   {"id", "mode", "tree"})
                 and agent["mode"] in ("ct", "realtime"),
                 "Invalid R37 AI agent contract")
         # Delegate identity and policy grammar to one R37.A authority.
         try:
             new_blackboard(agent["id"])
-            validate_policies(agent["policies"])
+            if "tree" in agent:
+                from drawtemp.sdk.behavior_tree import validate_behavior_tree
+                validate_behavior_tree(agent["tree"])
+            else:
+                validate_policies(agent["policies"])
         except AIDecisionError as exc:
             raise RuleError("Invalid R37 AI policy: " + str(exc)) from exc
         require(agent["id"] not in seen, "Duplicate R37 AI actor")
@@ -74,6 +80,10 @@ class AdvancedAI:
     def preview(self, context):
         agent = self.agent(context["actor_id"])
         require(agent["mode"] == context["mode"], "R37 AI scene mode mismatch")
+        if "tree" in agent:
+            from drawtemp.sdk.behavior_tree import evaluate_behavior_tree
+            return evaluate_behavior_tree(context, self.blackboards[agent["id"]],
+                                          agent["tree"])
         return evaluate_decision(context, self.blackboards[agent["id"]],
                                  agent["policies"])
 
