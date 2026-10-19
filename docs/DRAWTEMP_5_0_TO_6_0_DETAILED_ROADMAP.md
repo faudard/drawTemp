@@ -4,6 +4,8 @@
 >
 > **Règle de lecture :** une PR fusionnée n'implique ni la présence de toutes les branches empilées dans master, ni la validation d'un gate, ni une livraison publique. Les états GitHub ci-dessous correspondent à une vérification ponctuelle, non à un tableau de bord vivant.
 
+**Extension produit après la consolidation :** [Roadmap Creator Studio multi-genres (R25–R30)](DRAWTEMP_MULTI_GENRE_CREATOR_ROADMAP.md). Ce document R17–R24 continue de certifier la fondation tactique/Qt ; il ne limite pas DrawTemp à Final Fantasy Tactics. La suite introduit des profils de jeu SRPG, action-aventure top-down façon Zelda, RPG classique, narratif et hybride, sans second Core/registre/renderer. R24.9/R24.12 servent de base à un second jeu *inter-genres*, dont les fonctionnalités temps réel complètes relèvent de R25–R29. Ne pas déclarer les lots R25–R30 livrés par ce lien.
+
 ## 0. Vision, frontières et Definition of Done
 
 **Vision produit :** permettre de créer un Tactical RPG 2.5D isométrique narratif — carte, bâtiments, personnages, animations, base RPG, événements, campagne, siège, cinématiques, audio, IA, équilibrage — depuis un Studio graphique, de le tester immédiatement et d'exporter un Player autonome sans saisie manuelle de JSON.
