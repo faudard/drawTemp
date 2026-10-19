@@ -27,6 +27,10 @@ on:
       - 'scripts/r23e_verify_authenticode.ps1'
       - 'tests_standalone/test_drawtemp5_r23e.py'
       - 'docs/drawtemp5/R23E_*.md'
+      - 'drawtemp/quality/r23f.py'
+      - 'scripts/r23f_*.py'
+      - 'tests_standalone/test_drawtemp5_r23f.py'
+      - 'docs/drawtemp5/R23F_*.md'
   push:
     branches: [master]
   workflow_dispatch:
@@ -44,7 +48,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install .
-      - run: python -m unittest tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator tests_standalone.test_drawtemp5_r23a tests_standalone.test_drawtemp5_r23_evidence tests_standalone.test_drawtemp5_r23c tests_standalone.test_drawtemp5_r23c_release tests_standalone.test_drawtemp5_r23d tests_standalone.test_drawtemp5_r23e -v
+      - run: python -m unittest tests_standalone.test_drawtemp5_r15 tests_standalone.test_drawtemp5_r15_creator tests_standalone.test_drawtemp5_r23a tests_standalone.test_drawtemp5_r23_evidence tests_standalone.test_drawtemp5_r23c tests_standalone.test_drawtemp5_r23c_release tests_standalone.test_drawtemp5_r23d tests_standalone.test_drawtemp5_r23e tests_standalone.test_drawtemp5_r23f -v
       - run: python -m drawtemp.export.cli check --content sporebound/content/jeanne.json
 
   native-bundle:
@@ -534,6 +538,68 @@ jobs:
         with:
           name: r23e-release-dossier
           path: r23e-release-dossier.json
+          if-no-files-found: warn
+
+  r23f-authoring-player:
+    name: R23.F real authoring-export-resume rehearsal / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 16
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Real Studio Event authoring to relocated exported Player E2E
+        run: >-
+          python scripts/r23f_acceptance.py
+          --revision ${{ github.sha }}
+          --platform ${{ runner.os }}
+          --output r23f-journey.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r23f-journey-${{ runner.os }}
+          path: r23f-journey.json
+          if-no-files-found: error
+          retention-days: 14
+
+  r23f-candidate:
+    name: R23.F 5.5 RC rehearsal and blocked publish decision
+    needs: [r23e-dossier, r23f-authoring-player]
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: r23f-journey-*
+          path: r23f-evidence
+          merge-multiple: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: r23e-release-dossier
+          path: r23f-upstream
+      - name: Verify every OS and R23.E ledger share exact Git SHA
+        run: >-
+          python scripts/r23f_release_candidate.py
+          --revision ${{ github.sha }}
+          --journey-directory r23f-evidence
+          --r23e r23f-upstream/r23e-release-dossier.json
+          --output r23f-rc0-NO-GO.json
+      - name: Preserve release rehearsal, never create Git tag or publish release
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r23f-rc0-not-certified
+          path: r23f-rc0-NO-GO.json
           if-no-files-found: warn
 
   relocated-player:
