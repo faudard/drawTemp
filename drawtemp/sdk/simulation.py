@@ -182,6 +182,27 @@ class Simulation:
         return self._apply("party_set_active", hero_ids,
                            expected_revision=expected_revision)
 
+    def rpg_available(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "rpg_available")
+        return freeze(self._session.rpg_available())
+
+    def rpg_state(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "rpg_state")
+        if self._session.mode != "rpg":
+            return None
+        return freeze(self._session.rpg_state())
+
+    def rpg_start(self, encounter_id, *, expected_revision=None):
+        return self._apply("rpg_start", encounter_id,
+                           expected_revision=expected_revision)
+
+    def rpg_action(self, action, *, expected_revision=None):
+        return self._apply("rpg_action", action,
+                           expected_revision=expected_revision)
+
+    def rpg_finish(self, *, expected_revision=None):
+        return self._apply("rpg_finish", expected_revision=expected_revision)
+
     def roguelite_state(self, *, expected_revision=None):
         """Read-only deterministic R34 run view (not an alternate save schema)."""
         self._check_revision(expected_revision, 'roguelite_state')
