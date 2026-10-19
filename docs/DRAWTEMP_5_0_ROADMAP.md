@@ -13,6 +13,8 @@ Ce document définit la **cible DrawTemp 5.0**, et non l'état d'avancement des 
 
 **Document de référence pour la suite :** [DrawTemp 5.0 → 6.0 — roadmap détaillée, sous-lots, dépendances, critères de tests et plan de PR](DRAWTEMP_5_0_TO_6_0_DETAILED_ROADMAP.md).
 
+**Extension stratégique multi-genres (proposée, sans changer les lots historiques R0–R24) :** [Creator Studio 2D/2.5D — RPG tactique, action-aventure à exploration libre, RPG classique, jeux narratifs et hybrides ; R25–R30, cible 6.0–7.0](DRAWTEMP_MULTI_GENRE_CREATOR_ROADMAP.md). L'isométrie tactique/CT reste supportée, mais n'est plus l'unique genre visé ; profil de jeu, simulation et caméra devront pouvoir varier sans dupliquer le Core, les données ni le renderer.
+
 Le présent document **conserve intégralement les contrats R0–R16** ; l'annexe ajoute **106 sous-lots R17–R24** et un plan de PR incrémentales. Ne pas considérer les versions 5.1–6.0 ci-dessous comme des versions livrées. La priorité immédiate est l'intégrité de master et la certification du vertical slice, **avant** l'ajout de nouveaux ateliers.
 
 ### Actualisation GitHub du 15 octobre 2026 (contrôle ponctuel)
