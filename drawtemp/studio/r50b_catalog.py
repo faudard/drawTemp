@@ -146,6 +146,14 @@ def _authoring_rehearsal(content_path: Path, minigame: str) -> dict:
     if not (audit["preflight_passed"] and audit["game_session_roundtrip"]
             and audit["author_documents_unchanged"]):
         raise CatalogError("GameSession replay or preflight did not pass")
+    # R50.B second-stage smoke: exercise the Player's real persistence facade.
+    # No GUI, native executable or rights certification is claimed.
+    from drawtemp.studio.r50b_player_journey import check_player_journey
+    player = check_player_journey(content_path, kind=minigame)
+    if (not player["player_intent_persisted"] or
+            not player["player_save_reload_equal"] or
+            not player["authored_documents_unchanged"]):
+        raise CatalogError("PlayerController did not preserve the authored game")
     return {
         "transactional_edit": True,
         "undo_redo": True,
@@ -154,6 +162,10 @@ def _authoring_rehearsal(content_path: Path, minigame: str) -> dict:
         "gamesession_checkpoint_roundtrip": True,
         "checkpoint_digest": audit["checkpoint_digest"],
         "gameplay": audit["gameplay"],
+        "headless_player_controller_tested": True,
+        "player_save_reload_equal": player["player_save_reload_equal"],
+        "player_intent": player["gameplay"],
+        "player_checkpoint_digest": player["checkpoint_digest"],
         "native_player_tested": False,
         "qt_onscreen_tested": False,
         "standalone_export_tested": False,
