@@ -138,13 +138,24 @@ class DungeonStudio:
                          if x in (left, right) or y in (top, bottom)}
                 if occupied.intersection(walls):
                     raise RuleError("Room wall would cover an actor")
+            occupied_ids = {row["id"] for group in ("units", "objects")
+                            for row in mission[group]}
+            door_id = "room_door"
+            suffix = 2
+            while door_id in occupied_ids:
+                door_id = "room_door_" + str(suffix)
+                suffix += 1
             for x, y in footprint:
                 wall = x in (left, right) or y in (top, bottom)
                 tiles[(x, y)] = {
                     "pos": [x, y], "surface": "stone",
-                    "feature": "stone_wall" if wall else "",
+                    "feature": "stone_wall" if wall and (x, y) != door else "",
                     "blocked": wall,
                 }
+            # R1 tactical door: a real closed, locked passage, not a merely
+            # cosmetic arch. The switch may be authored outside this room.
+            mission["objects"].append({
+                "id": door_id, "kind": "door", "pos": list(door), "locked": True})
             _write_tiles(mission, tiles)
             return data
         return self._change(edit, "build-room")
@@ -153,6 +164,8 @@ class DungeonStudio:
                      locked=True):
         """Place existing battle-interactive objects; reuse R1 validation."""
         identifier = _identifier(identifier)
+        if type(locked) is not bool:
+            raise RuleError("Door locked must be a boolean")
         if kind not in ("door", "switch", "chest"):
             raise RuleError("Unsupported puzzle object kind")
         def edit(data):
