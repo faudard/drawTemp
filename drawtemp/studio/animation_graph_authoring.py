@@ -9,40 +9,10 @@ from copy import deepcopy
 
 from drawtemp.sdk.authoring import AuthoringSession
 from sporebound.animation_graph import (
-    NAMESPACE, AnimationGraphError, validate_controller,
+    NAMESPACE, MAX_CONTROLLERS, AnimationGraphError, validate_controller,
+    controllers_from_project,
 )
 from sporebound.assets import AssetRegistry
-
-MAX_CONTROLLERS = 16
-
-
-def controllers_from_project(project):
-    if hasattr(project, "to_dict"):
-        project = project.to_dict()
-    if type(project) is not dict:
-        raise AnimationGraphError("invalid_project", "Expected GameProject object")
-    extension = project.get("extensions", {}).get(NAMESPACE)
-    if extension is None:
-        return []
-    if (type(extension) is not dict or
-            set(extension) != {"schema_version", "data", "references"} or
-            type(extension["schema_version"]) is not int or
-            extension["schema_version"] != 1 or
-            extension["references"] != [] or
-            type(extension["data"]) is not dict or
-            set(extension["data"]) != {"controllers"} or
-            type(extension["data"]["controllers"]) is not list):
-        raise AnimationGraphError("invalid_storage", "R36 extension needs explicit migration")
-    controllers = extension["data"]["controllers"]
-    if len(controllers) > MAX_CONTROLLERS:
-        raise AnimationGraphError("controller_budget", "At most 16 animation controllers")
-    registry = AssetRegistry(project.get("assets") or None)
-    validated = [validate_controller(row, registry) for row in controllers]
-    identifiers = [row["id"] for row in validated]
-    if len(set(identifiers)) != len(identifiers):
-        raise AnimationGraphError("duplicate_controller", "Controller IDs must be unique")
-    return validated
-
 
 class AnimationControllerAuthoring:
     def __init__(self, session):
