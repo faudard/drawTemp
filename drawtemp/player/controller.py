@@ -35,6 +35,7 @@ class PlayerController:
         self.inspected_skill = "attack"
         self._cinematic_clip = None
         self._cinematic_transport = None
+        self._cinematic_registry = None
 
     def _path(self, slot):
         if type(slot) is not int or not 1 <= slot <= self.project.save_slots:
@@ -529,8 +530,8 @@ class PlayerController:
             base["screen"] = "campaign"
         clip = self._sync_cinematic()
         if clip is not None:
-            from sporebound.assets import AssetRegistry
-            registry = AssetRegistry(self.project.assets if self.project.assets else None)
+            if self._cinematic_registry is None:
+                self._cinematic_registry = self.project.asset_registry()
             project_file = getattr(self, "asset_project_path", None)
             asset_root = Path(project_file).parent if project_file is not None else None
             position = self._cinematic_transport.read()
@@ -538,7 +539,7 @@ class PlayerController:
                 "id": clip["id"], "title": clip["name"],
                 "durationMs": clip["duration_ms"],
                 "playing": self._cinematic_transport.playing,
-                "frame": frame_payload(clip, position, registry=registry,
+                "frame": frame_payload(clip, position, registry=self._cinematic_registry,
                                        asset_root=asset_root),
             }
         return base
