@@ -197,7 +197,7 @@ class StudioWindow(QMainWindow):
         title.setFont(font)
         panel.addWidget(title)
         panel.addWidget(QLabel("Projet Jeanne • édition sans JSON • Content / GameProject partagés"))
-        for group in (("Créer", ("maps", "construction", "actors", "database", "events")),
+        for group in (("Créer", ("profiles", "gameplay", "maps", "construction", "actors", "database", "events")),
                       ("Organiser", ("campaigns", "cinematics", "analysis", "publication"))):
             panel.addWidget(QLabel(group[0]))
             buttons = QHBoxLayout()
@@ -598,6 +598,9 @@ class StudioWindow(QMainWindow):
         selection.blockSignals(False)
         self.last_revision = snapshot.revision
         self._refresh_plugins(snapshot)
+        for name in ("profiles", "gameplay"):
+            if name in self._models:
+                self._models[name].refresh()
         self._show_inspector()
         self._update_title()
         self.commands["undo"].setEnabled(snapshot.can_undo)
@@ -918,7 +921,15 @@ class StudioWindow(QMainWindow):
             if identifier == "actors":
                 child.tree.setCurrentItem(child.tree.topLevelItem(1))
             return
-        if identifier == "maps":
+        if identifier == "profiles":
+            from drawtemp.studio.profile_editor_qt import ProfileEditorWidget
+            child = ProfileEditorWidget(self.session)
+            child.updated.connect(self.refresh)
+        elif identifier == "gameplay":
+            from drawtemp.studio.genre_rules_qt import GenreRulesWorkspace
+            child = GenreRulesWorkspace(self.session)
+            child.updated.connect(self.refresh)
+        elif identifier == "maps":
             from drawtemp.studio.map_authoring import MapStudio
             from drawtemp.studio.map_editor import MapWindow
             child = MapWindow(MapStudio(self.session))
@@ -943,7 +954,7 @@ class StudioWindow(QMainWindow):
             child = self._publication_page()
         else:
             child = self._overview(identifier)
-        if identifier in ("maps", "database", "campaigns"):
+        if identifier in ("profiles", "gameplay", "maps", "database", "campaigns"):
             self._models[identifier] = child
             # Embedded editors must never swap the shared AuthoringSession:
             # opening/saving a project is a shell responsibility.
