@@ -5,6 +5,8 @@ mutation or timer; preview uses the same validation as Player load.
 """
 from __future__ import annotations
 
+import json
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QBrush, QPen
 from PySide6.QtWidgets import (
@@ -14,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from drawtemp.studio.narrative_workbench_r42 import NarrativeWorkbench
+from drawtemp.studio.narrative_debugger_r42 import NarrativeDebugger
 from drawtemp.sdk.authoring import AuthoringError
 
 
@@ -76,6 +79,7 @@ class NarrativeStudioDialog(QDialog):
         self._selected = ''
         self._plan = None
         self._dirty = False
+        self.debugger = None
         self.setObjectName('r42-narrative-dialog')
         self.setWindowTitle('DrawTemp · Narrative Studio R42.B1')
         self.resize(1160, 780)
@@ -143,6 +147,27 @@ class NarrativeStudioDialog(QDialog):
         split.addWidget(editor)
         split.setSizes([480, 680])
         root.addWidget(split, 1)
+        debugbar = QHBoxLayout()
+        self.debug_buttons = {}
+        for key, title, action in (
+            ('start', 'Démarrer le debugger', self.debug_start),
+            ('break', 'Point d’arrêt', self.debug_breakpoint),
+            ('next', 'Pas suivant', self.debug_step),
+            ('choose', 'Tester un choix', self.debug_choose),
+            ('reset', 'Arrêter le debugger', self.debug_reset),
+        ):
+            button = QPushButton(title)
+            button.setObjectName('r42-debug-' + key)
+            button.clicked.connect(action)
+            debugbar.addWidget(button)
+            self.debug_buttons[key] = button
+        root.addLayout(debugbar)
+        self.debug_output = QPlainTextEdit()
+        self.debug_output.setObjectName('r42-debug-output')
+        self.debug_output.setAccessibleName('Trace du debugger narratif isolé')
+        self.debug_output.setReadOnly(True)
+        self.debug_output.setMaximumHeight(170)
+        root.addWidget(self.debug_output)
         self.refresh()
 
     def _invalidate(self, *_):
@@ -170,10 +195,15 @@ class NarrativeStudioDialog(QDialog):
         self.buttons['apply'].setEnabled(False)
         self._plan = None
         self._dirty = False
+        if self.debugger is not None and (
+                self.debugger.source_revision != self.workbench.session.revision):
+            self.debugger = None
+            self.debug_output.setPlainText(
+                'Le projet a changé : debugger arrêté. Démarrez une nouvelle simulation.')
         self._display_selected()
 
     def select_scene(self, scene_id):
-        if self._dirty:
+        if self._dirty or self._plan is not None:
             answer = QMessageBox.question(
                 self, 'Modifications non appliquées',
                 'Abandonner les lignes non appliquées ?',
@@ -391,3 +421,103 @@ class NarrativeStudioDialog(QDialog):
             self.updated.emit()
         except AuthoringError as exc:
             QMessageBox.warning(self, 'Rétablir', str(exc))
+
+    def debug_start(self):
+        """Create an isolated Simulation from the current committed project."""
+        if self._dirty or self._plan is not None:
+            QMessageBox.warning(self, 'Debugger',
+                                'Appliquez ou abandonnez les modifications avant de tester.')
+            return
+        snapshot = self.workbench.session.snapshot().to_dict()
+        campaigns = [row['id'] for row in snapshot['project']['campaigns']]
+        if not campaigns:
+            QMessageBox.warning(self, 'Debugger', 'Aucune campagne configurée.')
+            return
+        campaign, ok = QInputDialog.getItem(
+            self, 'Debugger narratif', 'Campagne', campaigns, 0, False)
+        if not ok:
+            return
+        try:
+            self.debugger = NarrativeDebugger(self.workbench.session, campaign)
+            self.debug_render()
+        except Exception as exc:
+            self.debugger = None
+            QMessageBox.warning(self, 'Debugger narratif', str(exc))
+
+    def debug_reset(self):
+        self.debugger = None
+        self.debug_output.setPlainText('Simulation isolée arrêtée.')
+
+    def debug_render(self):
+        if self.debugger is None:
+            return
+        try:
+            report = self.debugger.report()
+            self.debug_output.setPlainText(json.dumps({
+                'scène': report['scene'],
+                'réplique': report['line'],
+                'pause_avant_effet': report['paused_on'],
+                'choix': [{'id': choice['id'],
+                           'autorisé': choice['available'],
+                           'condition': choice['condition']}
+                          for choice in report['choices']],
+                'variables': report['flags'],
+                'or': report['gold'],
+                'dernière_transition': (report['events'][-1]
+                                       if report['events'] else None),
+                'décisions': report['history'],
+                'isolé': report['isolated'],
+                'replay_certifié': report['replay_verified'],
+            }, ensure_ascii=False, indent=2))
+            if report['scene'] and not self._dirty and self._plan is None:
+                self.graph.draw_graph(self.workbench.graph(), report['scene'])
+        except Exception as exc:
+            QMessageBox.warning(self, 'Debugger narratif', str(exc))
+
+    def debug_breakpoint(self):
+        if self.debugger is None:
+            return
+        doc = self.workbench.document()
+        scene = next((row for row in doc.get('scenes', [])
+                      if row['id'] == self._selected), None)
+        if scene is None:
+            return
+        choices = [row['id'] for row in scene['choices']]
+        chosen, ok = QInputDialog.getItem(
+            self, 'Point d’arrêt', 'Choix avant ses effets', choices, 0, False)
+        if not ok:
+            return
+        try:
+            key = (self._selected, chosen)
+            enabled = key not in self.debugger.breakpoints
+            self.debugger.breakpoint(*key, enabled=enabled)
+            self.debug_render()
+        except Exception as exc:
+            QMessageBox.warning(self, 'Point d’arrêt', str(exc))
+
+    def debug_step(self):
+        if self.debugger is None:
+            return
+        try:
+            self.debugger.step()
+            self.debug_render()
+        except Exception as exc:
+            QMessageBox.warning(self, 'Pas narratif', str(exc))
+
+    def debug_choose(self):
+        if self.debugger is None:
+            return
+        try:
+            options = [row['id'] for row in self.debugger.inspect()['choices']
+                       if row['available']]
+            if not options:
+                QMessageBox.information(
+                    self, 'Debugger', 'Avancez les répliques ou vérifiez les conditions.')
+                return
+            choice, ok = QInputDialog.getItem(
+                self, 'Tester un choix', 'Choix disponible', options, 0, False)
+            if ok:
+                self.debugger.choose(choice)
+                self.debug_render()
+        except Exception as exc:
+            QMessageBox.warning(self, 'Choix narratif', str(exc))
