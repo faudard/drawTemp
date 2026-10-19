@@ -218,6 +218,19 @@ class PlayerController:
     def explore_wait(self):
         return self._apply(self.session.explore_wait)
 
+    def route_realtime_state(self):
+        """Read-only routed free-movement view; no implicit state mutation."""
+        require(self.session is not None, "No campaign loaded")
+        return self.session.route_realtime_state()
+
+    def route_realtime_step(self, dx=0, dy=0):
+        """Commit one deterministic R25 exploration tick to the Player slot."""
+        return self._apply(self.session.route_realtime_step, dx, dy)
+
+    def route_transition(self, link_id):
+        """Commit R25 scene navigation, including real CT start, as one intent."""
+        return self._apply(self.session.route_transition, link_id)
+
     def explore_actor(self, actor_id, action):
         return self._apply(self.session.explore_actor, actor_id, action)
 
