@@ -368,6 +368,28 @@ class PlayerController:
                              expected_revision=state.revision)
         return self._changed()
 
+    def puzzle_action(self, object_id):
+        """Commit only the revision-checked contextual canonical command.
+
+        Qt sends an object ID, never an unchecked push direction or door
+        policy. The actual engine remains authoritative at execution time.
+        """
+        state = self._current()
+        if state.battle is None or state.battle["result"] or state.scene:
+            raise ValueError("No actionable puzzle battle")
+        projection = self.session.tactical_presentation(
+            self.selected, self.inspected_skill,
+            expected_revision=state.revision)
+        from drawtemp.sdk.simulation import thaw
+        puzzle = thaw(projection)["puzzle"]
+        command = next(
+            (item["command"] for item in puzzle["actions"]
+             if item["id"] == object_id and item["enabled"]), None)
+        if command is None:
+            raise ValueError("Puzzle action unavailable or out of reach")
+        self.session.execute(command, expected_revision=state.revision)
+        return self._changed()
+
     def inspect_skill(self, skill_id):
         state = self._current()
         battle = state.battle
@@ -566,16 +588,51 @@ class PlayerController:
                 "save_manager": self.saves.catalog(),
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
+                "journey": {"enabled": False, "stages": [], "completed": False},
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
-                "battle": {}, "tactical": {}, "living_world": None, "cinematic": {}, "revision": 0,
+                "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
+                "living_world": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
                 "gear": {"equipped": {}, "inventory": []}}
+        if self.campaign_id.endswith("_journey"):
+            campaign = self.project.campaign(self.campaign_id)
+            if campaign is not None:
+                base["title"] = campaign["name"]
+                base["subtitle"] = campaign["description"]
         if self.session is None or self.show_title:
             return base
         snapshot = self._current()
         base["revision"] = snapshot.revision
         base["missions"] = list(snapshot.missions)
         progress = thaw(snapshot.progress)
+        # R27.D campaign journey: read-only view from the canonical Campaign
+        # snapshot. Never store a second progress ledger or route outside R1.
+        if self.campaign_id.endswith("_journey"):
+            prefix = self.campaign_id[:-len("_journey")]
+            stages = (
+                ("village", "Village"), ("dungeon", "Temple"),
+                ("boss", "Gardien"), ("return", "Retour"),
+            )
+            if all(prefix + "_" + stage in self.content.missions
+                   for stage, _label in stages):
+                completed = set(progress["completed"])
+                unlocked = set(progress["unlocked"])
+                rows = [{
+                    "id": prefix + "_" + stage, "label": label,
+                    "completed": prefix + "_" + stage in completed,
+                    "available": prefix + "_" + stage in snapshot.missions,
+                    "unlocked": prefix + "_" + stage in unlocked,
+                } for stage, label in stages]
+                base["journey"] = {
+                    "enabled": True, "stages": rows,
+                    "completed": (
+                        rows[-1]["completed"] and
+                        progress.get("story_flags", {}).get(
+                            prefix + "_return_cleared") is True),
+                }
+                campaign = self.project.campaign(self.campaign_id)
+                base["title"] = campaign["name"]
+                base["subtitle"] = campaign["description"]
         equipped = progress.get("heroes", {}).get("jeanne", {}).get("equipment", {})
         stock = progress.get("inventory", {})
         base["gear"] = {
@@ -604,6 +661,8 @@ class PlayerController:
                 self.selected, self.inspected_skill,
                 expected_revision=snapshot.revision)
             base["tactical"] = thaw(projection) if projection is not None else {}
+            base["puzzle"] = base["tactical"].get(
+                "puzzle", {"enabled": False, "actions": [], "status": []})
             battle = thaw(snapshot.battle)
             # The renderer must never receive RNG state, full journals, or rules.
             base["battle"] = {key: battle.get(key) for key in (

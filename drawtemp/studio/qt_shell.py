@@ -427,6 +427,7 @@ class StudioWindow(QMainWindow):
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
+        self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
@@ -478,6 +479,7 @@ class StudioWindow(QMainWindow):
         review_branch.triggered.connect(self._semantic_merge_dialog)
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r30_scale"])
+        tools_menu.addAction(self.commands["r30_assist"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r35_world"])
@@ -603,6 +605,14 @@ class StudioWindow(QMainWindow):
         """Read-only CPU evidence viewer; profiling itself runs headless."""
         from drawtemp.studio.r30_scale_qt import R30ScaleDashboard
         R30ScaleDashboard(self).exec()
+
+    def open_assist_generation(self):
+        """R30.G deterministic, optional Content v1 assistant; shared session."""
+        from drawtemp.studio.r30_assist_qt import R30AssistDialog
+        prior = self.session.revision
+        R30AssistDialog(self.session, parent=self).exec()
+        if self.session.revision != prior:
+            self.refresh()
 
     def open_procgen(self):
         """Read-only procedural preview bound to canonical Studio snapshot."""

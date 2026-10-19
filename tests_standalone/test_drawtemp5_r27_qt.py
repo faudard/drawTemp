@@ -88,6 +88,30 @@ class R27DungeonDockQtTests(unittest.TestCase):
         finally:
             window.close()
 
+    def test_journey_wizard_is_reachable_from_real_studio_dock(self):
+        from PySide6.QtWidgets import QPushButton
+        from drawtemp.studio.map_editor import MapWindow
+        from drawtemp.studio.dungeon_journey import build_dungeon_journey
+        window = MapWindow(MapStudio.reference())
+        try:
+            window.mode.setCurrentIndex(2)
+            dock = window.dungeon
+            button = dock.findChild(QPushButton, "r27_build_journey")
+            self.assertIsNotNone(button)
+            original = window.studio.snapshot()
+            created = build_dungeon_journey(window.studio, prefix="qttrip")
+            window.refresh_maps()
+            self.assertEqual(window.studio.mission_id,
+                             created["missions"]["village"])
+            self.assertIn(created["campaign_id"],
+                          {c["id"] for c in
+                           window.studio.snapshot()["project"]["campaigns"]})
+            self.assertEqual(window.studio.snapshot()["revision"],
+                             original["revision"] + 1)
+        finally:
+            window.hide()
+            window.deleteLater()
+
 
 if __name__ == "__main__":
     unittest.main()
