@@ -118,7 +118,7 @@ class R35TransferTests(unittest.TestCase):
         sdk = Simulation.new(content, project, "main")
         before = sdk.recording()
         state = sdk.living_world_state(scene="arrival")
-        self.assertEqual(state["npcs"][0]["pos"], [1, 1])
+        self.assertEqual(list(state["npcs"][0]["pos"]), [1, 1])
         self.assertEqual(sdk.recording(), before)
         stage = {
             "width": 4, "height": 4, "blocked": [[2, 1]],
