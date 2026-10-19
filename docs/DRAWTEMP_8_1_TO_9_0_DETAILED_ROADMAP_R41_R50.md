@@ -318,6 +318,8 @@ Les familles de références (FFT, Zelda, JRPG classiques, etc.) ne sont que des
 
 **Suivi R49.B1 — UX Qt incrémentale, non certifiante :** [focus par atelier, navigation clavier et préflight Creator lisible](drawtemp5/R49B1_WORKSPACE_CREATOR_UX.md). Il conserve les modèles existants, laisse indisponibles les profils non intégrés et ne clôt ni l'inspecteur multi-ateliers ni le retour du Player. R49.B2/B3 et le gate R49.C restent ouverts.
 
+**Suivi R49.B2 — inspecteur et références, non certifiant :** [audit des références typées et protection des brouillons](drawtemp5/R49B2_INSPECTOR_INTEGRITY.md). Le scanner est advisory et borné, les erreurs sources navigables, mais ne remplace ni validation canonique complète ni certification des ateliers R41–R48. Le retour Playtest R49.B3 et R49.C restent ouverts.
+
 **Gate R49 :** Un auteur tiers crée mini-jeu depuis template, modifie cartes/règles/dialogues, lance playtest et exporte sans JSON; erreurs P0 d'UX et commandes inactives supprimées.
 
 **Vertical slice :** VS-49 — Premier jeu en Studio : nouveau projet → scène → action → export.
