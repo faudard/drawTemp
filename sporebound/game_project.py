@@ -176,6 +176,11 @@ class GameProject:
         validate_game_modes(self.game_modes, content, self)
         from .scene_router import validate_scene_routes
         validate_scene_routes(self.scene_routes, content, self)
+        # R44.A: optional world atlas metadata; R25 remains sole route authority.
+        from .world_graph44 import EXTENSION as WORLD_GRAPH_EXTENSION, validate_world_graph
+        if WORLD_GRAPH_EXTENSION in self.extensions:
+            validate_world_graph(self.extensions[WORLD_GRAPH_EXTENSION]["data"],
+                                 content, self)
         require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
                 'Invalid battle support rules')
         for spec in self.battle_support:
