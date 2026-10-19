@@ -1,0 +1,52 @@
+name: DrawTemp R50.B Creator Catalog (non-certifying)
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/r50b_catalog.py'
+      - 'drawtemp/studio/r50b_catalog_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r50b_catalog.py'
+      - 'docs/drawtemp9/R50_B_CREATOR_CATALOG.md'
+      - '.github/workflows/drawtemp-r50b-creator-catalog.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/studio/r50b_catalog.py'
+      - 'drawtemp/studio/r50b_catalog_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r50b_catalog.py'
+      - 'docs/drawtemp9/R50_B_CREATOR_CATALOG.md'
+      - '.github/workflows/drawtemp-r50b-creator-catalog.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  headless-and-offscreen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install project (Qt optional on Python 3.12)
+        shell: bash
+        run: |
+          if [ "${{ matrix.python }}" = "3.12" ]; then
+            python -m pip install '.[qt6]'
+          else
+            python -m pip install .
+          fi
+      - name: Compile R50.B modules and Qt integration
+        run: |
+          python -m compileall -q drawtemp/studio/r50b_catalog.py drawtemp/studio/r50b_catalog_qt.py drawtemp/studio/qt_shell.py tests_standalone/test_r50b_catalog.py
+      - name: Authoring / replay / Qt offscreen regression
+        run: |
+          python -m unittest -v             tests_standalone.test_r50b_catalog             tests_standalone.test_r28e_minigames_certification
