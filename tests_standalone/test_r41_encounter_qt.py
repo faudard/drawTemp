@@ -41,11 +41,11 @@ class EncounterQtTests(unittest.TestCase):
         dialog.apply()
         self.assertEqual(editor.revision, 1)
         self.assertEqual(editor.snapshot().to_dict()["project"][
-            "extensions"]["drawtemp.party_rpg"]["data"]["encounters"][
+            "extensions"]["drawtemp.partyrpg"]["data"]["encounters"][
                 "sparring"]["reward_gold"], 23)
         editor.undo()
         self.assertEqual(editor.snapshot().to_dict()["project"][
-            "extensions"]["drawtemp.party_rpg"]["data"]["encounters"][
+            "extensions"]["drawtemp.partyrpg"]["data"]["encounters"][
                 "sparring"]["reward_gold"], 17)
 
 
