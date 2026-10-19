@@ -100,7 +100,24 @@ class AdvancedAI:
                                  agent["policies"])
 
     def remember(self, actor_id, changes, *, tick):
-        self.agent(actor_id)
+        agent = self.agent(actor_id)
+        if "sensor" in agent and type(changes) is dict:
+            if "suspicion" in changes:
+                require(type(changes["suspicion"]) is int
+                        and 0 <= changes["suspicion"] <= 3,
+                        "R37 sensor suspicion must be an integer in 0..3")
+            for field in ("alert", "heard_noise"):
+                if field in changes:
+                    require(type(changes[field]) is bool,
+                            "R37 sensor alert/sound state must be boolean")
+            for field in ("last_known_x", "last_known_y"):
+                if field in changes:
+                    require(type(changes[field]) is int
+                            and 0 <= changes[field] < 32,
+                            "R37 remembered coordinates must be grid cells")
+            if "observation_kind" in changes:
+                require(changes["observation_kind"] in ("none", "seen", "heard"),
+                        "Invalid R37 observation source")
         require(len(self.history) < MAX_WRITES,
                 "R37 AI blackboard write ledger is full")
         require(not self.history or type(tick) is int
