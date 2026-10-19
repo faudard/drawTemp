@@ -65,6 +65,8 @@ class R27DungeonDockQtTests(unittest.TestCase):
             window.mode.setCurrentIndex(2)
             dock = window.dungeon
             dock.build_room()
+            window.studio.paint([(8, 8)], "goal")
+            window.refresh()
             dock.kind.setCurrentIndex(dock.kind.findData("key"))
             dock.link.setCurrentIndex(dock.link.findData("room_door"))
             dock.identifier.setText("key_ui")
