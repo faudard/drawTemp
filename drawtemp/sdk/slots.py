@@ -80,10 +80,12 @@ class PlayerSlotStore:
         if session.recording()["campaign_id"] != self.campaign_id:
             raise SlotError("wrong_campaign", "Cannot save another campaign")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._safe(self.path)
-        self._safe(self.backup)
-        self._safe(self.damaged)
         with session_writer_lock(self.path):
+            # Validate filesystem targets *after* acquiring the writer lock:
+            # the slot may have been swapped while waiting to enter.
+            self._safe(self.path)
+            self._safe(self.backup)
+            self._safe(self.damaged)
             if self.path.exists():
                 # Never promote a corrupt primary to the only good backup.
                 self._load(self.path)
@@ -109,10 +111,10 @@ class PlayerSlotStore:
     def restore_backup(self):
         """Explicit user action, preserving corrupt primary bytes as evidence."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._safe(self.path)
-        self._safe(self.backup)
-        self._safe(self.damaged)
         with session_writer_lock(self.path):
+            self._safe(self.path)
+            self._safe(self.backup)
+            self._safe(self.damaged)
             if not self.backup.is_file():
                 raise SlotError("backup_missing", "No backup to restore")
             loaded = self._load(self.backup)
@@ -121,9 +123,22 @@ class PlayerSlotStore:
                 try:
                     self._load(self.path)
                 except (RuleError, OSError, ValueError):
+                    # A previous restore may have crashed after archiving the
+                    # bad primary but before publishing the verified backup.
+                    # Re-use ONLY identical evidence; different corruption
+                    # must not overwrite the existing forensic copy.
+                    damaged_bytes = self.path.read_bytes()
                     if self.damaged.exists():
-                        raise SlotError("evidence_exists", "Damaged copy already exists")
-                    write_bytes(self.damaged, self.path.read_bytes())
+                        if self.damaged.read_bytes() != damaged_bytes:
+                            raise SlotError("evidence_exists",
+                                            "A different damaged copy already exists")
+                    else:
+                        write_bytes(self.damaged, damaged_bytes)
+                else:
+                    # Manual-slot callers (not only autosave UI) must never
+                    # silently downgrade a still-valid checkpoint.
+                    raise SlotError("primary_valid",
+                                    "Refusing to replace a valid primary with an older backup")
             write_bytes(self.path, raw)
             verified = self._load(self.path)
             if verified.recording() != loaded.recording():
