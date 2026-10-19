@@ -229,6 +229,34 @@ class VisualLogicQtTests(unittest.TestCase):
         finally:
             view.close()
 
+    def test_export_campaign_qt_requires_committed_variable_and_supports_undo(self):
+        from PySide6.QtWidgets import QInputDialog
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        from sporebound.logic_campaign_bridge import EXTENSION
+        session = new_session()
+        draft = LogicGraphDraft.new(MISSION, "qt_export", source_revision=0)
+        draft.add_variable_after("message", "r31_test_quest", value=True)
+        draft.apply(session)
+        view = LogicGraphDialog(session)
+        try:
+            index = view.graphs.findData("qt_export")
+            self.assertGreaterEqual(index, 0)
+            view.graphs.setCurrentIndex(index)
+            with patch.object(QInputDialog, "getItem",
+                              side_effect=[("r31_test_quest", True),
+                                           ("victory", True)]), \
+                 patch.object(QInputDialog, "getText",
+                              return_value=("r31_reward", True)):
+                self.assertTrue(view.export_campaign_flag())
+            self.assertEqual(session.revision, 2)
+            bridge = session.snapshot().to_dict()["project"]["extensions"][EXTENSION]
+            self.assertEqual(bridge["data"]["bindings"][0]["target"],
+                             "r31_reward")
+            view.undo()
+            self.assertNotIn(EXTENSION, session.snapshot().to_dict()["project"]["extensions"])
+        finally:
+            view.close()
+
     def test_typed_variable_qt_editor_and_native_preview(self):
         from PySide6.QtWidgets import QInputDialog
         from drawtemp.studio.logic_graph_qt import LogicGraphDialog
