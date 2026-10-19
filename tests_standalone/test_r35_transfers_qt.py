@@ -49,7 +49,6 @@ class TransferAuthoringQtTests(unittest.TestCase):
         self.assertIn("a_b", dialog.transfer_list.item(0).text())
         dialog.transfer_list.setCurrentRow(0)
         dialog._remove_transfer()
-        self.assertNotIn("transfers", {})  # Catalogue now empty, never applied.
         self.assertEqual(dialog.document["transfers"], [])
         self.assertEqual(authoring.revision, 0)
         dialog.close()
