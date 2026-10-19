@@ -76,16 +76,17 @@ class FormulaGraphQtTests(unittest.TestCase):
             dialog.mode_checks["TACTICAL_CT"].setChecked(False)
             dialog.mode_checks["ACTION_REALTIME"].setChecked(True)
             dialog.resource.setCurrentText("stamina")
-            with patch.object(FormulaGraphDialog, "exec",
-                              return_value=QDialog.Accepted):
-                with patch.object(FormulaGraphDialog, "__init__",
-                                  autospec=True, side_effect=None) as ctor:
-                    pass
-            # Integration without UI mocking: emulate dialog's published
-            # validated AST and verify parent preview/apply remains sole owner.
-            draft = dialog.draft
-            draft.document["effects"][0]["formula"] = constructed
-            dialog._load_effect(0)
+            # Trigger the real parent command; only Qt's modal event loop
+            # is stubbed to return the already validated child result.
+            def approve(child):
+                child.result_formula = deepcopy(constructed)
+                return QDialog.Accepted
+
+            with patch.object(FormulaGraphDialog, "exec", approve):
+                self.assertTrue(dialog.edit_formula_graph())
+            self.assertEqual(self.session.revision, 0)
+            self.assertEqual(
+                dialog.draft.document["effects"][0]["formula"], constructed)
             self.assertTrue(dialog.preview_balance(),
                             dialog.report.toPlainText())
             self.assertFalse(dialog.apply_button.isEnabled())
