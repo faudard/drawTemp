@@ -38,6 +38,20 @@ ApplicationWindow {
     property color gold: "#e7c78b"
     property bool tacticalOverlayEnabled: true
 
+    // Non-puzzle maps keep their legacy tactical interactions unchanged.
+    function legacyInteractions() {
+        var objects = (playerData.battle && playerData.battle.objects) || []
+        if (!playerData.puzzle.enabled) return objects
+        var legacy = []
+        for (var i = 0; i < objects.length; ++i) {
+            var kind = objects[i].kind
+            if (kind !== "door" && kind !== "switch" && kind !== "chest" &&
+                kind !== "key" && kind !== "plate" && kind !== "block")
+                legacy.push(objects[i])
+        }
+        return legacy
+    }
+
     function activeSkills() {
         var units = (playerData.battle && playerData.battle.units) || []
         for (var i = 0; i < units.length; ++i)
@@ -826,13 +840,55 @@ ApplicationWindow {
                             }
                         }
                         Label {
-                            visible: root.playerData.screen === "battle"
+                            visible: root.playerData.screen === "battle" &&
+                                     root.playerData.puzzle.enabled
+                            text: "ÉNIGME · ACTIONS À PORTÉE"
+                            color: root.gold
+                            font.bold: true
+                        }
+                        Repeater {
+                            model: root.playerData.screen === "battle" &&
+                                   root.playerData.puzzle.enabled ?
+                                   root.playerData.puzzle.actions : []
+                            Button {
+                                Layout.fillWidth: true
+                                objectName: "r27PuzzleAction"
+                                text: (modelData.selected ? "◆ " : "") +
+                                      modelData.label +
+                                      (!modelData.enabled && modelData.reason ?
+                                       " — " + modelData.reason : "")
+                                enabled: modelData.enabled && !root.inputLocked
+                                onClicked: player.puzzleAction(modelData.id)
+                                Accessible.description: modelData.reason || modelData.label
+                            }
+                        }
+                        Label {
+                            visible: root.playerData.screen === "battle" &&
+                                     root.playerData.puzzle.enabled
+                            text: "ÉTAT DE L'ÉNIGME · SAUVEGARDE CANONIQUE"
+                            color: root.gold
+                            font.bold: true
+                        }
+                        Repeater {
+                            model: root.playerData.screen === "battle" &&
+                                   root.playerData.puzzle.enabled ?
+                                   root.playerData.puzzle.status : []
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: root.muted
+                                text: modelData.label + " : " + modelData.detail
+                            }
+                        }
+                        Label {
+                            visible: root.playerData.screen === "battle" &&
+                                     !root.playerData.puzzle.enabled
                             text: "INTERACTIONS"
                             color: root.gold
                         }
                         Repeater {
                             model: root.playerData.screen === "battle" ?
-                                   (root.playerData.battle.objects || []) : []
+                                   root.legacyInteractions() : []
                             Button {
                                 Layout.fillWidth: true
                                 text: modelData.kind + " · " + modelData.id
