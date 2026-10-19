@@ -74,7 +74,5 @@ pas encore câblé dans cette fenêtre QML. Les triggers
 `before_mission`, `after_mission` et `tactical_event` ne sont **pas**
 pris en charge par cet overlay ; il n'affiche que `scene`.
 
-La CI headless couvre les invariants du moteur/Player. Le smoke
-visuel Qt, les métriques GPU et le test utilisateur complet de R20.D
-restent nécessaires. Ne pas confondre CI verte (à confirmer) et
+Le [lot R20.D](R20_D_E2E_AND_DEMO_RELEASE.md) ajoute des parcours complets de la nouvelle partie jusqu'à Vaucouleurs, un smoke Qt offscreen et la préparation de démo. Les métriques GPU sur écran réel, les licences et la validation utilisateur complète restent nécessaires. Ne pas confondre CI verte (à confirmer) et
 certification de livraison.
