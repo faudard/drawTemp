@@ -144,6 +144,14 @@ class GameProject:
             validate_roguelite_spec(
                 self.extensions[ROGUELITE_EXTENSION]["data"],
                 content=content, project=self)
+        # R37.B opt-in AI policies share the canonical GameProject envelope.
+        from .advanced_ai import EXTENSION as ADVANCED_AI_EXTENSION, validate_advanced_ai
+        if ADVANCED_AI_EXTENSION in self.extensions:
+            from .living_world import EXTENSION as LIVING_WORLD_EXTENSION
+            world = self.extensions.get(LIVING_WORLD_EXTENSION)
+            validate_advanced_ai(
+                self.extensions[ADVANCED_AI_EXTENSION]["data"],
+                living_world=world["data"] if world is not None else None)
         from .campaign_flow import validate_flow
         validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
