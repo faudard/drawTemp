@@ -9,7 +9,7 @@ import os
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("QSG_RHI_BACKEND", "software")
+os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
 HAS_QT = importlib.util.find_spec("PySide6") is not None
 
