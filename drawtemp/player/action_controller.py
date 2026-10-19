@@ -50,6 +50,7 @@ class ActionPlayerController:
         self.save_path = Path(save_path) if save_path is not None else None
         self.runtime = ActionRuntime(self.scene)
         self.fx = CommittedFxDirector()
+        self.fx_warning = ""
         self.paused = False
         self.message = "Explorez la prairie. Ouvrez le coffre avant la porte."
         self.events = ()
@@ -79,6 +80,7 @@ class ActionPlayerController:
         snapshot["message"] = self.message
         snapshot["events"] = deepcopy(self.events)
         snapshot["fx"] = self.fx.snapshot()
+        snapshot["fx_warning"] = self.fx_warning
         return snapshot
 
     def step(self, dx=0, dy=0, *, attack=False, dodge=False, guard=False,
@@ -92,7 +94,14 @@ class ActionPlayerController:
             "interact": target,
         })
         self.events = deepcopy(events)
-        self.fx.observe(self.runtime.snapshot(), events)
+        try:
+            self.fx.observe(self.runtime.snapshot(), events)
+            self.fx_warning = ""
+        except (ValueError, TypeError) as exc:
+            # R36 FX is optional: a presentation fault must never abort a
+            # committed action or poison its canonical replay/save.
+            self.fx.reset(self.runtime.tick)
+            self.fx_warning = "R36 VFX disabled for this tick: " + str(exc)
         if events:
             self.message = " · ".join(event["kind"].replace("_", " ")
                                       for event in events[-3:])
@@ -115,6 +124,7 @@ class ActionPlayerController:
         verified = ActionRuntime.load(self.save_path, expected_scene=self.scene)
         self.runtime = verified
         self.fx.reset(self.runtime.tick)
+        self.fx_warning = ""
         self.paused = False
         self.events = ()
         self.message = "Point de sauvegarde action vérifié et rechargé."
@@ -128,12 +138,14 @@ class ActionPlayerController:
             if verified.hero["alive"]:
                 self.runtime = verified
                 self.fx.reset(self.runtime.tick)
+                self.fx_warning = ""
                 self.paused = False
                 self.events = ()
                 self.message = "Réapparition au point de sauvegarde."
                 return self.state()
         self.runtime = ActionRuntime(self.scene)
         self.fx.reset(self.runtime.tick)
+        self.fx_warning = ""
         self.paused = False
         self.events = ()
         self.message = "Retour au départ de la scène."
