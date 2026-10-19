@@ -112,6 +112,14 @@ class GameSession:
                         set(self.project.exploration) | set(self.content.missions),
                         exploration=self.project.exploration)
             if spec is not None else None)
+        # R37.B: opt-in AI memory belongs to the canonical session, not a
+        # parallel engine or the renderer. Legacy projects remain unchanged.
+        from .advanced_ai import EXTENSION as ADVANCED_AI_EXTENSION, AdvancedAI
+        ai_spec = self.project.extensions.get(ADVANCED_AI_EXTENSION)
+        self._advanced_ai = (
+            AdvancedAI(ai_spec["data"],
+                       living_world=spec["data"] if spec is not None else None)
+            if ai_spec is not None else None)
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -225,6 +233,71 @@ class GameSession:
         return self._living_world.transact(
             self.progress, self.progress.story_flags, self.route_scene,
             shop_id, item_id, action, quantity, transaction_id)
+
+    def ai_state(self, actor_id=None):
+        """R37.B detached, opt-in memory inspection (no tactical mutation)."""
+        require(self._advanced_ai is not None, "R37 advanced AI is not enabled")
+        return self._advanced_ai.state(actor_id)
+
+    def ai_decision_context(self, actor_id):
+        """Derive observable facts from canonical CT or R35 exploration state.
+
+        Never trust client-supplied facts for authoritative decision previews.
+        No new AI simulation clock, LOS claims or campaign mutations.
+        """
+        require(self._advanced_ai is not None, "R37 advanced AI is not enabled")
+        agent = self._advanced_ai.agent(actor_id)
+        if agent["mode"] == "ct":
+            require(self.mode == "battle" and self.battle is not None,
+                    "CT AI requires an active tactical battle")
+            actor = self.battle.unit(actor_id)
+            require(actor.alive, "CT AI actor is not alive")
+            from .model import distance
+            opponents = sorted((unit for unit in self.battle.units
+                                if unit.alive and unit.team != actor.team),
+                               key=lambda unit: unit.id)
+            facts = {"hp": actor.hp, "enemy_visible": bool(opponents)}
+            if opponents:
+                facts["distance"] = min(distance(actor.pos, foe.pos)
+                                        for foe in opponents)
+            tick = self.battle.tick
+        else:
+            require(self.mode == "campaign" and self._living_world is not None
+                    and self.scene_router.enabled
+                    and self.route_scene in self.project.exploration
+                    and not self.progress.story_pending,
+                    "Realtime AI requires an active R35 exploration scene")
+            pose = self._living_world.npc_pose(actor_id, self.progress.story_flags)
+            same_scene = pose["scene"] == self.route_scene
+            facts = {"activity": pose["activity"], "same_scene": same_scene}
+            if same_scene and pose.get("pos") is not None:
+                player = self.exploration.state(
+                    self.progress, self.route_scene)["position"]
+                npc = pose["pos"]
+                facts["distance"] = abs(npc[0] - player[0]) + abs(npc[1] - player[1])
+            tick = self._living_world.ticks
+        board = self._advanced_ai.state(actor_id)
+        require(board["updated_tick"] <= tick,
+                "R37 blackboard is newer than the canonical game clock")
+        return {"schema_version": 1, "actor_id": actor_id,
+                "mode": agent["mode"], "tick": tick,
+                "seed": self.seed, "facts": facts}
+
+    def ai_decision_preview(self, actor_id):
+        """Read-only R37 policy explanation. Never invoke Battle.execute."""
+        return self._advanced_ai.preview(self.ai_decision_context(actor_id))
+
+    def ai_remember(self, actor_id, changes):
+        """Journal bounded R35 NPC memory against its authoritative world tick.
+
+        CT policy inspection is supported; writable CT memory awaits an
+        encounter-scoped replay adapter in R37.C to avoid tick-reset hazards.
+        """
+        context = self.ai_decision_context(actor_id)
+        require(context["mode"] == "realtime",
+                "CT memory writes require a future encounter-scoped adapter")
+        return self._advanced_ai.remember(actor_id, changes,
+                                          tick=context["tick"])
 
     def route_state(self):
         """Return the active exploration state from canonical Campaign flags."""
@@ -978,6 +1051,8 @@ class GameSession:
                 "journal": self._rt_journal.recording()}
         if self._living_world is not None:
             data["living_world"] = self._living_world.snapshot()
+        if self._advanced_ai is not None:
+            data["advanced_ai"] = self._advanced_ai.recording()
         if self._roguelite is not None:
             data["roguelite"] = self._roguelite.recording()
         if self.siege_id is not None:
@@ -1005,7 +1080,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "roguelite", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "living_world", "advanced_ai", "roguelite", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1249,6 +1324,25 @@ class GameSession:
         # World map travel is optional, but an existing cursor must never be
         # accepted from a malformed or inaccessible persisted route.
         session.world_state()
+        # Reconstruct each snapshot from its write ledger after the canonical
+        # combat / realtime clocks have been verified and loaded.
+        if session._advanced_ai is not None:
+            require("advanced_ai" in data,
+                    "R37 configured project checkpoint is missing AI state")
+            session._advanced_ai.restore(data["advanced_ai"])
+            for actor_id, agent in session._advanced_ai.agents.items():
+                updated = session._advanced_ai.blackboards[actor_id]["updated_tick"]
+                if agent["mode"] == "realtime":
+                    require(session._living_world is not None
+                            and updated <= session._living_world.ticks,
+                            "R37 AI memory exceeds replayed world time")
+                elif session.mode == "battle" and session.battle is not None:
+                    if any(unit.id == actor_id for unit in session.battle.units):
+                        require(updated <= session.battle.tick,
+                                "R37 CT memory exceeds replayed battle time")
+        else:
+            require("advanced_ai" not in data,
+                    "Unexpected R37 memory in legacy checkpoint")
         return session
 
     @classmethod
