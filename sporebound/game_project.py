@@ -116,6 +116,12 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        if "drawtemp.metroidvania" in self.extensions:
+            from .metroidvania import validate_metroidvania
+            validate_metroidvania(
+                self.extensions["drawtemp.metroidvania"]["data"],
+                scene_ids=self.exploration,
+            )
         from .living_world import EXTENSION, validate_living_world
         if EXTENSION in self.extensions:
             validate_living_world(
