@@ -480,11 +480,12 @@ class MapWindow(QMainWindow):
         if self.pending_generation is None:
             QMessageBox.information(self, "Génération", "Prévisualisez d'abord le terrain.")
             return
+        preview = self.pending_generation
+        changed = len(preview.cells)
         result = self._safe(
-            lambda: self.studio.commit_generation(self.pending_generation)
+            lambda: self.studio.commit_generation(preview)
         )
         if result is not None:
-            changed = len(self.pending_generation.cells)
             self.cancel_generation()
             self.statusBar().showMessage(
                 f"{changed} cases générées en une transaction. Ctrl+Z annule le tout."
