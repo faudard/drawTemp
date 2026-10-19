@@ -145,6 +145,74 @@ class R27DungeonJourneyTests(unittest.TestCase):
                 GameSession.load(checkpoint, self.content, self.project)
                 .recording(), session.recording())
 
+    def test_full_four_mission_journey_with_actual_boss_combat_and_homecoming(self):
+        session = self.session()
+        self._leave_village(session)
+        session.start_mission(self.ids["dungeon"])
+        self._next_hero(session)
+        session.execute({"kind": "interact", "object": "amber_amber_key"})
+        session.execute({"kind": "end"})
+        self._next_hero(session)
+        session.execute({"kind": "move", "cell": [7, 2]})
+        session.execute({"kind": "interact", "object": "room_door"})
+        session.execute({"kind": "end"})
+        self._next_hero(session)
+        session.execute({"kind": "move", "cell": [8, 5]})
+        self._return(session)
+
+        session.start_mission(self.ids["boss"])
+        for _ in range(120):
+            if session.finalized:
+                break
+            current = session.battle.active
+            self.assertIsNotNone(current)
+            if current.team == "enemy":
+                session.ai_turn()
+                continue
+            enemy = next(unit for unit in session.battle.units
+                         if unit.team == "enemy" and unit.alive)
+            separation = distance(current.pos, enemy.pos)
+            if separation > 1 and not current.moved:
+                paths = session.battle.reachable(current)
+                candidates = sorted(
+                    (distance(cell, enemy.pos), cost, cell)
+                    for cell, (cost, _path) in paths.items()
+                    if cell != current.pos
+                    and distance(cell, enemy.pos) < separation)
+                if candidates:
+                    session.execute({"kind": "move",
+                                     "cell": list(candidates[0][2])})
+            if (not session.finalized and not current.acted
+                    and distance(current.pos, enemy.pos) <= 1):
+                session.execute({"kind": "act", "skill": "attack",
+                                 "cell": list(enemy.pos)})
+            if not session.finalized:
+                session.execute({"kind": "end"})
+        self.assertTrue(session.finalized, "Boss battle did not finish")
+        self.assertEqual(session.battle.result, "victory",
+                         "Boss must be defeated by legitimate combat")
+        self._return(session)
+        self.assertEqual(session.available_missions(),
+                         [self.ids["return"]])
+        session.start_mission(self.ids["return"])
+        self._next_hero(session)
+        session.execute({"kind": "move", "cell": [2, 14]})
+        self._return(session)
+        status = journey_status(session, self.campaign, prefix="amber")
+        self.assertTrue(status["completed"])
+        self.assertTrue(all(row["completed"]
+                            for row in status["stages"].values()))
+        self.assertEqual(len(status["consequences"]), 4)
+        self.assertEqual(session.progress.gold, 160)
+        with TemporaryDirectory() as folder:
+            final = Path(folder) / "homecoming.json"
+            session.save(final)
+            recovered = GameSession.load(final, self.content, self.project)
+            self.assertEqual(
+                journey_status(recovered, self.campaign, prefix="amber"),
+                status)
+            self.assertEqual(recovered.recording(), session.recording())
+
     def test_second_campaign_is_isolated_from_original_story_and_unlocks(self):
         original = self.project.new_game("main", self.content)
         self.assertNotIn(self.ids["village"], original.unlocked)
