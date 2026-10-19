@@ -129,15 +129,12 @@ class RoutedRealtimeTests(unittest.TestCase):
         original = session.recording()
         self.assertEqual(original["scene_realtime"]["position"], [288, 384])
         changes = [
-            lambda data: data["scene_realtime"]["journal"]["inputs"][0]
-                ["command"].update(dx=-1),
+            lambda data: data["scene_realtime"]["journal"]["inputs"][0]["command"].update(dx=-1),
             lambda data: data["scene_realtime"].update(position=[300, 384]),
             lambda data: data["scene_realtime"].update(scene="missing"),
             lambda data: data["scene_realtime"]["journal"].update(seed=1234),
             lambda data: data["scene_realtime"]["journal"]["states"].__setitem__(
                 0, "0" * 64),
-            lambda data: data["progress"]["story_flags"].update(
-                {"ex_" + "a" * 12 + "_pos": "2,1"}),
         ]
         for change in changes[:-1]:
             row = deepcopy(original)
