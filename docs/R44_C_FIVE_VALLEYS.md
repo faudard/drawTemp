@@ -25,9 +25,10 @@ L'émetteur refuse de remplacer un dossier existant. Le projet généré n'inclu
 ## Gate R44 restant
 
 - [ ] Vérifier les tests headless, anciens replays/saves et Qt onscreen sur CI active.
-- [ ] Adapter **la vraie interface Player** aux scènes R25/R44 (interaction, navigation, scène active), puis recharger une partie dans le Player natif.
+- [x] Raccorder les commandes des objets et passages R25/R44 à `Simulation`, `PlayerController`, `PlayerBridge` et `Main.qml` via R44.D (implémentation non certifiée).
+- [ ] Exécuter avec succès `--gui-world-journey` et vérifier le slot/reload dans le Player Qt natif.
 - [ ] Qualifier cinq régions graphiquement avec sprites/FX licites, picking et viewport réellement partagé.
 - [ ] Exporter et réexécuter sur trois OS propres, budget de chargement mesuré et QA clavier/GPU.
 - [ ] Vérifier les contre-exemples de portes/clés en jouabilité, pas seulement la connectivité du graphe.
 
-La démo fournit la preuve **au niveau GameSession** et un pair Content/GameProject utilisable pour le futur Player; le Player Qt existant ne prend pas encore en charge la totalité de ce parcours. R44.C n'est donc pas livré intégralement.
+La démo R44.C fournit le parcours côté GameSession et le pair Content/GameProject. R44.D expose maintenant ce parcours depuis le Player Qt, sans certification d'exécution GUI, GPU ou export natif. R44 reste en brouillon.
