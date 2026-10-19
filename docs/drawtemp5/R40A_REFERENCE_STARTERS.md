@@ -15,7 +15,7 @@ templates, and can be opened in the existing AuthoringSession.
 |---|---|---|---|
 | r40-srpg | Jeanne / SRPG | CT mission, lever and narrative | Full siege path, historical saves, certified Player |
 | r40-adventure | Original action-adventure | Three routed scenes, persistent waystone gates and real fixed-tick movement | Full puzzles/boss action combat, packaged Player/export |
-| r40-metroidvania | Original metroidvania | Three routed scenes, static double-jump preflight; jump runtime not connected | Physics/jump ability integration, boss and Player/export |
+| r40-metroidvania | Original metroidvania | Three R25 routed scenes + optional R32 physical feather/double jump high portal | Physical-route completion without narrative bypass, boss and Player/export |
 | r40-roguelite | Original roguelite | R34 seeded layout, GameSession run/meta/replay | Physical rooms, visual debugger and standalone Player |
 
 No competing engine, GameProject schema, quest registry, save owner or art
@@ -59,11 +59,11 @@ the citadel, reaches a real exit and restores the checkpoint. Locomotion uses
 the R25 integer fixed-tick runtime (60 Hz); this is not a boss or an action
 combat demonstration.
 
-The metroidvania source smoke tests two **different** contracts: a bounded R33
-ability-graph proof and the R25 narrative waypoint routes. The ability pickup
-has **not** been wired into R32 side-view jump physics or the route conditions.
-Consequently the source journey is not a physical metroidvania and cannot
-close the R40.4 gate.
+The initial metroidvania source smoke checks the bounded R33 ability graph
+and the R25 narrative routes. **R40.B.3 adds a separate opt-in physical
+R32 pickup/double-jump path** using the same GameSession and save schema.
+The narrative shortcut, boss fight and final Player remain uncertified,
+so this still cannot close the R40.4 release gate.
 
 ## R40.B.1 — Evidence-producing headless source audit
 
@@ -118,8 +118,9 @@ Commands:
 **Certification exclusions:** direct controller and offscreen QML tests are
 not human-visible Studio editing, hardware frame-time measurement, fully
 authored original boss encounters, licensed final graphics or installed
-Player bundles. The metroidvania static double-jump graph remains separate
-from physical side-view control and cannot qualify as completed gameplay.
+Player bundles. Although R40.B.3 adds a real physical ability route in
+the R32 preview, the narrative shortcut and missing boss/production Player
+still prevent completed-metroidvania certification.
 R40.12 stays **NO-GO** even if all these tests are green.
 
 ## R40.B.3 — Authored physical R32/R33 metroidvania preview
