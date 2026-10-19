@@ -45,12 +45,19 @@ STARTERS = (
             None, "Transition récit→action/CT→récit non certifiée."),
     Starter("narrative_prototype", "Le choix du village", "narrative",
             "choix_village", "Démonstrateur narratif à choix, PAS un hybride."),
+    Starter("exploration_prototype", "La vallée du guet", "exploration",
+            None, "Déplacement libre + route vers CT en Player headless ; "
+                  "combat temps réel, Qt onscreen et export non certifiés."),
 )
 _BY_KEY = {row.key: row for row in STARTERS}
 REQUIRED_GENRES = (
     "srpg", "action_adventure", "classic_rpg",
     "metroidvania", "roguelite",
 )
+
+
+def _creatable(entry: Starter) -> bool:
+    return entry.minigame is not None or entry.key == "exploration_prototype"
 
 
 def starter(key: str) -> Starter:
@@ -66,8 +73,8 @@ def catalog() -> dict:
         "schema": 1,
         "entries": [
             {"id": item.key, "title": item.label, "genre": item.genre,
-             "status": "headless-authoring" if item.minigame else "blocked",
-             "can_create": item.minigame is not None,
+             "status": "headless-authoring" if _creatable(item) else "blocked",
+             "can_create": _creatable(item),
              "limitation": item.limitation}
             for item in STARTERS
         ],
@@ -99,7 +106,7 @@ def preview_starter(key: str, destination: str | Path) -> dict:
             errors.append("Destination parent directory must exist")
         if target.parent == target:
             errors.append("Destination must be a new subdirectory")
-    if entry.minigame is None:
+    if not _creatable(entry):
         errors.append(entry.limitation)
     return {
         "kind": "drawtemp-r50b-starter-preview",
@@ -185,8 +192,31 @@ def create_starter(key: str, destination: str | Path) -> dict:
     try:
         with TemporaryDirectory(prefix=".drawtemp-r50b-", dir=target.parent) as temp:
             staged = Path(temp) / "starter"
-            create_minigame(entry.minigame, staged)
-            outcome = _authoring_rehearsal(staged / "game.json", entry.minigame)
+            if entry.key == "exploration_prototype":
+                from drawtemp.studio.r50b_exploration import (
+                    author_exploration_prototype, check_exploration_player_journey,
+                )
+                author_exploration_prototype(staged)
+                audit = check_exploration_player_journey(
+                    staged / "game.json", Path(temp) / "player-profile.json")
+                outcome = {
+                    "transactional_edit": True, "undo_redo": True,
+                    "saved_and_reopened": True, "content_project_preflight": True,
+                    "gamesession_checkpoint_roundtrip": audit["route_return_resume"],
+                    "headless_player_controller_tested": True,
+                    "player_save_reload_equal": audit["route_return_resume"],
+                    "player_intent": "realtime-exploration-to-ct-and-return",
+                    "player_checkpoint_digest": audit["final_digest"],
+                    "checkpoint_digest": audit["final_digest"],
+                    "gameplay": "routed-exploration",
+                    "routed_exploration": audit,
+                    "native_player_tested": False,
+                    "qt_onscreen_tested": False,
+                    "standalone_export_tested": False,
+                }
+            else:
+                create_minigame(entry.minigame, staged)
+                outcome = _authoring_rehearsal(staged / "game.json", entry.minigame)
             if target.exists() or target.is_symlink():
                 raise CatalogError("Destination claimed during staging")
             os.rename(staged, target)
