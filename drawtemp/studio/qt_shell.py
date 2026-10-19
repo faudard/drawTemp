@@ -27,6 +27,9 @@ from drawtemp.studio.inspector_model import (
     InspectorError, common_value, edit_properties, shared_specs,
 )
 from drawtemp.studio.resource_links import connections
+from drawtemp.studio.plugins import (
+    StudioPluginError, StudioPluginRegistry, read_studio_manifest,
+)
 
 log = logging.getLogger(__name__)
 WORKSPACES = ("project", "maps", "actors", "database", "events",
@@ -157,6 +160,9 @@ class StudioWindow(QMainWindow):
         self._selected = ()
         self.pages = {}
         self.commands = {}
+        self.plugins = StudioPluginRegistry()
+        self._plugin_docks = {}
+        self._plugin_fields = {}
         self.setObjectName("drawtemp-r2-main")
         self.setWindowTitle("DrawTemp 5.0 • Studio")
         self.resize(1440, 900)
@@ -367,6 +373,11 @@ class StudioWindow(QMainWindow):
             action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
+        plugin_menu = tools_menu.addMenu("Plugins Studio")
+        load_plugin = plugin_menu.addAction("Charger un manifeste…")
+        load_plugin.triggered.connect(self._load_plugin_dialog)
+        disable_plugin = plugin_menu.addAction("Désactiver un plugin…")
+        disable_plugin.triggered.connect(self._disable_plugin_dialog)
         shortcuts = tools_menu.addAction("Configurer un raccourci…")
         shortcuts.triggered.connect(self.configure_shortcut)
         # Localization applies to global workspace labels; legacy editors
@@ -561,6 +572,7 @@ class StudioWindow(QMainWindow):
                                          QItemSelectionModel.Rows)
         selection.blockSignals(False)
         self.last_revision = snapshot.revision
+        self._refresh_plugins(snapshot)
         self._show_inspector()
         self._update_title()
         self.commands["undo"].setEnabled(snapshot.can_undo)
@@ -860,6 +872,133 @@ class StudioWindow(QMainWindow):
                 listing.addItem(item.title + "  [" + item.resource_id + "]")
         layout.addWidget(listing)
         return page
+
+    # R24.B: only the host creates widgets and commits edits. A plugin is
+    # inert JSON; it never owns a QWidget, callback, model or Editor session.
+    def install_plugin_manifest(self, path, *, grants):
+        manifest = read_studio_manifest(path)
+        plugin_id = manifest["id"]
+        self.plugins.install(manifest)
+        try:
+            self.plugins.enable(plugin_id, grants=grants)
+            self._mount_plugin(plugin_id)
+            self._refresh_plugins(self.session.snapshot())
+        except Exception as exc:
+            self.plugins.quarantine(plugin_id, exc)
+            self._unmount_plugin(plugin_id)
+            raise
+        return plugin_id
+
+    def _mount_plugin(self, plugin_id):
+        status = self.plugins.status(plugin_id)
+        if not status["enabled"]:
+            raise StudioPluginError("permission_denied", "Plugin is disabled")
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        contributions = self.plugins.definition(plugin_id)
+        for panel in contributions["panels"]:
+            heading = QLabel(panel["title"])
+            heading.setTextFormat(Qt.PlainText)
+            layout.addWidget(heading)
+            description = QLabel(panel["description"])
+            description.setTextFormat(Qt.PlainText)
+            description.setWordWrap(True)
+            layout.addWidget(description)
+            for field in panel["fields"]:
+                label = QLabel()
+                label.setTextFormat(Qt.PlainText)
+                label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                label.setAccessibleName("Plugin " + panel["id"] + " " + field)
+                layout.addWidget(label)
+                self._plugin_fields[(plugin_id, panel["id"], field)] = label
+        for template in contributions["templates"]:
+            button = QPushButton(template["label"])
+            button.setAccessibleName("Plugin " + plugin_id + " " + template["id"])
+            button.clicked.connect(
+                lambda _checked=False, pid=plugin_id, tid=template["id"]:
+                self._apply_plugin_template(pid, tid))
+            layout.addWidget(button)
+        layout.addStretch(1)
+        dock = self._dock("Plugin : " + status["name"],
+                          "r24-plugin-" + plugin_id, host, Qt.RightDockWidgetArea)
+        self._plugin_docks[plugin_id] = dock
+        dock.show()
+
+    def _unmount_plugin(self, plugin_id):
+        dock = self._plugin_docks.pop(plugin_id, None)
+        if dock is not None:
+            self.removeDockWidget(dock)
+            dock.hide()
+            dock.deleteLater()
+        for key in tuple(self._plugin_fields):
+            if key[0] == plugin_id:
+                del self._plugin_fields[key]
+
+    def _plugin_failure(self, plugin_id, exc):
+        self.plugins.quarantine(plugin_id, exc)
+        self._unmount_plugin(plugin_id)
+        message = "Plugin " + plugin_id + " désactivé : " + str(exc)
+        self.problems.addItem(message)
+        self.statusBar().showMessage(message)
+        log.warning("%s", message)
+
+    def _refresh_plugins(self, snapshot):
+        for plugin_id, dock in tuple(self._plugin_docks.items()):
+            try:
+                panels = self.plugins.definition(plugin_id)["panels"]
+                for panel in panels:
+                    state = self.plugins.panel_state(plugin_id, panel["id"], snapshot)
+                    for field, value in state["fields"]:
+                        label = self._plugin_fields[(plugin_id, panel["id"], field)]
+                        label.setText(field + " : " + str(value))
+            except Exception as exc:
+                self._plugin_failure(plugin_id, exc)
+
+    def _apply_plugin_template(self, plugin_id, template_id):
+        try:
+            self.plugins.apply_template(
+                plugin_id, template_id, self.session,
+                expected_revision=self.session.revision)
+            self.refresh()
+        except (StudioPluginError, AuthoringError, ValueError) as exc:
+            message = "Plugin " + plugin_id + " : " + str(exc)
+            self.problems.addItem(message)
+            self.statusBar().showMessage(message)
+        except Exception as exc:
+            self._plugin_failure(plugin_id, exc)
+
+    def _load_plugin_dialog(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Manifeste de plugin Studio", "", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            manifest = read_studio_manifest(path)
+            permissions = manifest["permissions"]
+            accepted = QMessageBox.question(
+                self, "Autorisations du plugin",
+                manifest["name"] + "\n\nPermissions demandées :\n" +
+                "\n".join("• " + permission for permission in permissions) +
+                "\n\nAutoriser ce manifeste dans cette session Studio ?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if accepted != QMessageBox.Yes:
+                return
+            self.install_plugin_manifest(path, grants=permissions)
+        except (StudioPluginError, ValueError, OSError) as exc:
+            self.report_error(exc)
+
+    def _disable_plugin_dialog(self):
+        active = [status for status in self.plugins.statuses() if status["enabled"]]
+        if not active:
+            self.statusBar().showMessage("Aucun plugin actif")
+            return
+        names = [status["id"] for status in active]
+        selected, accepted = QInputDialog.getItem(
+            self, "Plugins Studio", "Désactiver le plugin", names, 0, False)
+        if accepted:
+            self.plugins.disable(selected)
+            self._unmount_plugin(selected)
+            self.statusBar().showMessage("Plugin désactivé : " + selected)
 
     def report_error(self, error):
         log.warning("R2 Studio: %s", error)
