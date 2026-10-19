@@ -544,14 +544,96 @@ ApplicationWindow {
             visible: root.playerData.screen === "rpg_battle"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 12
-            function activeSkills() {
-                var data = root.playerData.rpg || ({})
-                var rows = data.actors || []
-                for (var i = 0; i < rows.length; ++i)
-                    if (rows[i].id === data.active) return rows[i].skills || []
-                return []
+            spacing: 10
+
+            function activeActor() {
+                var actors = root.playerData.rpg.actors || []
+                for (var i = 0; i < actors.length; ++i)
+                    if (actors[i].id === root.playerData.rpg.active) return actors[i]
+                return ({})
             }
+            function activeSkills() {
+                return activeActor().skills || []
+            }
+            function eligibleTargets() {
+                var kind = r41Action.currentValue || "attack"
+                var actors = root.playerData.rpg.actors || []
+                var caster = activeActor()
+                var result = []
+                if (kind === "guard" || kind === "flee") return result
+                var skill = (root.playerData.rpg.skill_catalog || {})[r41Skill.currentText] || ({})
+                var allies = kind === "item" ||
+                             (kind === "skill" && (skill.target === "ally" || skill.target === "self"))
+                for (var i = 0; i < actors.length; ++i) {
+                    var actor = actors[i]
+                    if (actor.hp <= 0) continue
+                    if (allies && actor.team !== caster.team) continue
+                    if (!allies && actor.team === caster.team) continue
+                    if (kind === "item" && actor.hp >= actor.max_hp) continue
+                    if (kind === "skill" && skill.target === "self" && actor.id !== caster.id)
+                        continue
+                    result.push(actor)
+                }
+                return result
+            }
+            function submit() {
+                if (root.inputLocked || root.playerData.rpg.result) return
+                var kind = r41Action.currentValue || "attack"
+                if (kind === "skill" && !r41Skill.currentText) return
+                if (kind === "item" && !(root.playerData.rpg.inventory.potion > 0)) return
+                if (kind !== "guard" && kind !== "flee" && r41Target.count === 0) return
+                player.rpgAction(kind, r41Target.currentValue || "",
+                                 kind === "skill" ? r41Skill.currentText : "")
+            }
+            function cycleTarget(delta) {
+                if (r41Target.count > 0)
+                    r41Target.currentIndex = (r41Target.currentIndex +
+                                              delta + r41Target.count) % r41Target.count
+            }
+
+            // Scoped shortcuts do not intercept the CT Player or exploration.
+            Shortcut {
+                sequence: "A"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: r41Action.currentIndex = 0
+            }
+            Shortcut {
+                sequence: "G"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: r41Action.currentIndex = 1
+            }
+            Shortcut {
+                sequence: "S"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: r41Action.currentIndex = 2
+            }
+            Shortcut {
+                sequence: "I"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: r41Action.currentIndex = 3
+            }
+            Shortcut {
+                sequence: "F"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: r41Action.currentIndex = 4
+            }
+            Shortcut {
+                sequence: "Ctrl+Left"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: rpgBattle.cycleTarget(-1)
+            }
+            Shortcut {
+                sequence: "Ctrl+Right"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: rpgBattle.cycleTarget(1)
+            }
+            Shortcut {
+                sequence: "Return"
+                enabled: rpgBattle.visible && !root.inputLocked
+                onActivated: root.playerData.rpg.result ?
+                    player.finishRpgEncounter() : rpgBattle.submit()
+            }
+
             Label {
                 text: "RPG CLASSIQUE · " + (root.playerData.rpg.id || "") +
                       " · Tour " + (root.playerData.rpg.round || 1)
@@ -599,63 +681,72 @@ ApplicationWindow {
                 }
             }
             Label {
-                text: "Cible (allié ou ennemi suivant l'action)"
+                text: "Action : A attaque · G garde · S compétence · I potion · F fuite"
                 color: root.muted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
             }
             ComboBox {
-                id: r41Target
-                objectName: "r41-target-picker"
+                id: r41Action
+                objectName: "r41-action-picker"
+                Accessible.name: "Action du héros actif"
                 Layout.fillWidth: true
-                model: root.playerData.rpg.actors || []
-                textRole: "name"
-                valueRole: "id"
+                model: [
+                    { "label": "Attaque", "kind": "attack" },
+                    { "label": "Garde", "kind": "guard" },
+                    { "label": "Compétence", "kind": "skill" },
+                    { "label": "Potion", "kind": "item" },
+                    { "label": "Fuir", "kind": "flee" }
+                ]
+                textRole: "label"
+                valueRole: "kind"
                 enabled: !root.playerData.rpg.result
             }
-            Label { text: "Compétence disponible"; color: root.muted }
+            Label {
+                text: "Compétence"
+                color: root.muted
+                visible: r41Action.currentValue === "skill"
+            }
             ComboBox {
                 id: r41Skill
                 objectName: "r41-skill-picker"
                 Layout.fillWidth: true
                 model: rpgBattle.activeSkills()
+                visible: r41Action.currentValue === "skill"
                 enabled: !root.playerData.rpg.result && count > 0
+                Accessible.name: "Compétence du héros actif"
             }
-            RowLayout {
+            Label {
+                text: "Cible · Ctrl+← / Ctrl+→ pour changer"
+                color: root.muted
+                visible: r41Target.count > 0
+            }
+            ComboBox {
+                id: r41Target
+                objectName: "r41-target-picker"
                 Layout.fillWidth: true
-                Button {
-                    text: "Attaquer"
-                    objectName: "r41-attack"
-                    enabled: !root.playerData.rpg.result
-                    onClicked: player.rpgAction("attack", r41Target.currentValue || "", "")
-                }
-                Button {
-                    text: "Garder"
-                    objectName: "r41-guard"
-                    enabled: !root.playerData.rpg.result
-                    onClicked: player.rpgAction("guard", "", "")
-                }
-                Button {
-                    text: "Compétence"
-                    objectName: "r41-skill"
-                    enabled: !root.playerData.rpg.result && r41Skill.count > 0
-                    onClicked: player.rpgAction(
-                        "skill", r41Target.currentValue || "", r41Skill.currentText)
-                }
-                Button {
-                    text: "Potion"
-                    objectName: "r41-potion"
-                    enabled: !root.playerData.rpg.result
-                    onClicked: player.rpgAction("item", r41Target.currentValue || "", "")
-                }
-                Button {
-                    text: "Fuir"
-                    objectName: "r41-flee"
-                    enabled: !root.playerData.rpg.result
-                    onClicked: player.rpgAction("flee", "", "")
-                }
+                model: rpgBattle.eligibleTargets()
+                textRole: "name"
+                valueRole: "id"
+                enabled: !root.playerData.rpg.result && count > 0
+                visible: count > 0
+                Accessible.name: "Cible vivante et compatible avec l'action"
+            }
+            Button {
+                objectName: "r41-rpg-submit"
+                text: "Valider l'action · Entrée"
+                Layout.fillWidth: true
+                enabled: !root.playerData.rpg.result &&
+                         (r41Action.currentValue === "guard" ||
+                          r41Action.currentValue === "flee" ||
+                          (r41Target.count > 0 &&
+                           (r41Action.currentValue !== "item" ||
+                            root.playerData.rpg.inventory.potion > 0)))
+                onClicked: rpgBattle.submit()
             }
             Button {
                 objectName: "r41-finish"
-                text: "Retourner à la campagne"
+                text: "Retour à l'exploration / campagne · Entrée"
                 visible: Boolean(root.playerData.rpg.result)
                 Layout.alignment: Qt.AlignHCenter
                 onClicked: player.finishRpgEncounter()
@@ -734,6 +825,31 @@ ApplicationWindow {
                             font.pixelSize: 20 * root.textScale
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
+                        }
+                        ColumnLayout {
+                            objectName: "r41-routed-encounters"
+                            visible: root.playerData.screen === "exploration" &&
+                                     (root.playerData.rpg_available || []).length > 0
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Label {
+                                text: "RENCONTRES RPG DANS CETTE SCÈNE"
+                                color: root.gold
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                            Repeater {
+                                model: root.playerData.rpg_available || []
+                                Button {
+                                    objectName: "r41-start-" + modelData
+                                    text: "Combattre · " + modelData
+                                    Layout.fillWidth: true
+                                    enabled: !root.inputLocked
+                                    Accessible.name: "Commencer la rencontre RPG " + modelData
+                                    onClicked: player.startRpgEncounter(modelData)
+                                }
+                            }
                         }
                         ColumnLayout {
                             id: r41PartyHud
