@@ -176,6 +176,7 @@ class StudioWindow(QMainWindow):
         self._make_problems_dock()
         self._build_commands()
         self._build_menus()
+        self.set_language(str(self.settings.value("language", "fr")))
         self._refresh_recent_menu()
         self._activate("project")
 
