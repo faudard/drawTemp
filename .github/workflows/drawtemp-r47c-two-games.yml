@@ -6,6 +6,7 @@ on:
       - 'drawtemp/sdk/modding.py'
       - 'drawtemp/studio/r47_mods_qt.py'
       - 'tests_standalone/test_drawtemp_r47c_two_games.py'
+      - 'tests_standalone/test_drawtemp_r47d_versions.py'
       - 'examples/mods/**'
       - 'docs/drawtemp5/R47C_TWO_GAMES_INTEGRATION.md'
       - '.github/workflows/drawtemp-r47c-two-games.yml'
@@ -40,6 +41,7 @@ jobs:
         run: >-
           python -m unittest
           tests_standalone.test_drawtemp_r47c_two_games
+          tests_standalone.test_drawtemp_r47d_versions
           tests_standalone.test_drawtemp_r47a_modding
           tests_standalone.test_drawtemp_r30_creator
           tests_standalone.test_drawtemp5_r15_creator
