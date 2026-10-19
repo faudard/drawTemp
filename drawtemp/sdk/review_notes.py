@@ -102,13 +102,14 @@ def _check_record(entry, number, prior):
     if (not isinstance(entry, dict) or set(entry) != _FIELDS or
             type(entry["schema"]) is not int or entry["schema"] != SCHEMA or
             type(entry["sequence"]) is not int or entry["sequence"] != number or
-            entry["previous"] != prior or entry["kind"] not in _EVENTS or
+            entry["previous"] != prior or
+            not isinstance(entry["kind"], str) or entry["kind"] not in _EVENTS or
             not all(isinstance(entry[field], str) and _SHA.fullmatch(entry[field])
                     for field in ("node", "document", "digest")) or
             not isinstance(entry["anchor"], str) or
             not (1 <= len(entry["anchor"]) <= 180) or
             not isinstance(entry["author"], str) or
-            not 1 <= len(entry["author"]) <= 80 or
+            not 1 <= len(entry["author"].strip()) <= 80 or
             not isinstance(entry["text"], str) or
             len(entry["text"]) > 2000 or
             (entry["kind"] == "comment" and not entry["text"].strip()) or
@@ -148,6 +149,8 @@ def _read(path):
             raise ReviewNoteError("size_limit", "Review log has too many or oversized records")
         try:
             entry = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_pairs)
+        except ReviewNoteError:
+            raise
         except (UnicodeError, ValueError) as exc:
             raise ReviewNoteError("invalid_event", str(exc)) from exc
         _check_record(entry, len(rows) + 1, prior)
