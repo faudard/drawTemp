@@ -32,7 +32,7 @@ class ProcGenPreviewDialog(QDialog):
         self.setWindowTitle("R34 — Donjons procéduraux (aperçu uniquement)")
         self.resize(950, 650)
         self._content, self._project = content, project
-        self._library = validate_library(library or demo_library(),
+        self._library = validate_library(library if library is not None else demo_library(),
                                          content=content, project=project)
         self._last_layout = None
         self._last_recipe = None
@@ -240,7 +240,11 @@ class ProcGenPreviewDialog(QDialog):
 
     def export_repro(self) -> None:
         # Invalid or superseded previews must never be exported as successful.
-        if (self._last_layout is None or self._last_recipe != self._recipe()
+        try:
+            current_recipe = self._recipe()
+        except ProcGenError:
+            current_recipe = None
+        if (self._last_layout is None or self._last_recipe != current_recipe
                 or self._last_biome != self.biome.currentText()):
             if self.preview() is None:
                 QMessageBox.warning(self, "Export refusé", "Génération invalide")
