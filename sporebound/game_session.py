@@ -354,6 +354,12 @@ class GameSession:
                    if event["kind"] == "trigger_enter"}
         for pickup in candidates & entered:
             self.progress.story_flags["r33_pickup_" + pickup] = True
+        if "waystone" in entered:
+            from .exploration import _key
+            authored = self.project.exploration.get(room, {}).get(
+                "interactions", [])
+            if any(point["id"] == "waystone" for point in authored):
+                self.progress.story_flags[_key(room, "waystone")] = True
 
     def _active_platform(self):
         from .platform_physics import PlatformPhysics
