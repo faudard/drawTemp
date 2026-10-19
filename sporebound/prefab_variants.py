@@ -151,6 +151,7 @@ def validate_prefab_extensions(envelope, content):
                 "Invalid prefab variant metadata")
         require(v["id"] not in keys, "Duplicate prefab variant ID")
         keys.add(v["id"])
+        keys_seen = set()
         for patch in v["overrides"]:
             require(type(patch) is dict and set(patch) ==
                     {"section", "id", "field", "value"} and
@@ -158,6 +159,14 @@ def validate_prefab_extensions(envelope, content):
                     patch["field"] in FIELDS[patch["section"]],
                     "Invalid persisted prefab override")
             _id(patch["id"], "Prefab member ID")
+            patch_key = (patch["section"], patch["id"], patch["field"])
+            value = patch["value"]
+            require(patch_key not in keys_seen and
+                    ((type(value) is str and 1 <= len(value.strip()) <= 80)
+                     or (type(value) is int and 0 <= value <= 10000)
+                     or type(value) is bool),
+                    "Duplicate or unsupported persisted override")
+            keys_seen.add(patch_key)
     existing_instances, occupied = set(), set()
     for instance in instances:
         require(type(instance) is dict and set(instance) == {
@@ -176,7 +185,8 @@ def validate_prefab_extensions(envelope, content):
         require(instance["id"] not in existing_instances, "Duplicate prefab instance ID")
         existing_instances.add(instance["id"])
         mapping = instance["mapping"]
-        require(type(mapping) is dict and set(mapping) == set(FIELDS),
+        require(type(mapping) is dict and set(mapping) == set(FIELDS)
+                and type(mapping["groups"]) is dict and bool(mapping["groups"]),
                 "Malformed prefab instance member mapping")
         mission = content.missions[mission_id]
         available = {
@@ -194,6 +204,9 @@ def validate_prefab_extensions(envelope, content):
                 require(placed_id in available[section] and handle not in occupied,
                         "Prefab instance member was deleted or claimed twice")
                 occupied.add(handle)
+        require(instance["variant_sha256"] ==
+                _sha(_stored(data, instance["variant_id"])),
+                "Prefab instance references a stale variant revision")
         require(type(instance["overrides"]) is list and
                 len(instance["overrides"]) <= MAX_OVERRIDES,
                 "Invalid instance overrides")
