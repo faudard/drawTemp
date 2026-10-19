@@ -157,6 +157,38 @@ class TwoGamesTwoModsTests(unittest.TestCase):
                 self.assertTrue(registry.audit_project(
                     session.snapshot(), expected_pins=pins)["compatible"])
 
+    def test_version_roundtrip_two_games_keeps_replays_and_project_bytes(self):
+        for template in ("tactical", "asterion"):
+            with self.subTest(game=template):
+                game_dir, registry, docs, archives, pins, editor = self._apply_pair(template)
+                source = (game_dir / "game.game.json").read_bytes()
+                mod_id = docs[0]["id"]
+                previous_sha = pins[mod_id]
+                newer = deepcopy(docs[0])
+                newer["version"] = "1.1.0"
+                upgraded = registry.replace_version(
+                    mod_id, newer, project=editor.snapshot())
+                self.assertEqual(upgraded["version"], "1.1.0")
+                self.assertEqual((game_dir / "game.game.json").read_bytes(), source)
+                self.assertFalse(registry.status(mod_id)["enabled"])
+                stale = registry.audit_project(editor.snapshot(), expected_pins=pins)
+                self.assertFalse(stale["compatible"])
+                self.assertIn("manifest_changed", stale["errors"][0])
+                pins[mod_id] = registry.status(mod_id)["manifest_sha256"]
+                self.assertTrue(registry.audit_project(
+                    editor.snapshot(), expected_pins=pins)["compatible"])
+                reverted = registry.replace_version(
+                    mod_id, docs[0], project=editor.snapshot(),
+                    allow_downgrade=True)
+                self.assertTrue(reverted["downgraded"])
+                self.assertEqual(registry.status(mod_id)["manifest_sha256"], previous_sha)
+                self.assertEqual((game_dir / "game.game.json").read_bytes(), source)
+                content, game = typed_pair(editor.snapshot())
+                recording = GameSession.new(
+                    content, game, game.campaigns[0]["id"], seed=47).recording()
+                self.assertEqual(verify_recording(
+                    recording, content, game).recording(), recording)
+
     def test_pack_changed_after_install_fails_closed_on_audit(self):
         create_template("tactical", self.root / "tactical")
         session = AuthoringSession.open(self.root / "tactical/game.json")
