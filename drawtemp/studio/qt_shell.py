@@ -1183,8 +1183,10 @@ class StudioWindow(QMainWindow):
         self.settings.setValue("onboarding/hidden", False)
         self.navigate("project")
         self._update_guide()
-        self.home_scroll.ensureWidgetVisible(self.guide_next_button)
-        self.guide_next_button.setFocus(Qt.ShortcutFocusReason)
+        target = (self.guide_next_button if self.guide_next_button.isEnabled()
+                  else self.guide_list)
+        self.home_scroll.ensureWidgetVisible(target)
+        target.setFocus(Qt.ShortcutFocusReason)
 
     def hide_guide(self):
         self._onboarding_hidden = True
