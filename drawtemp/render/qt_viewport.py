@@ -7,7 +7,8 @@ import argparse
 from pathlib import Path
 import sys
 
-from .iso_scene import Camera, IsoProjection, pick, render_items, scene_from_mission
+from .iso_scene import (Camera, IsoProjection, TopDownProjection, pick,
+                        render_items, scene_from_mission)
 from .event_overlay import project_event_markers
 from .tile_chunks import TileChunkIndex
 from .visual_compositor import actor_visual_position, automatic_cutaway
@@ -24,8 +25,10 @@ def default_atlas_url():
 
 def make_controller(scene, atlas_url=None, *, assets=None,
                     character_pack=None, character_variant=None,
-                    character_packs=None):
+                    character_packs=None, projection_mode="isometric"):
     """Shared R3 renderer with optional R7 character pack, no gameplay changes."""
+    if projection_mode not in ("isometric", "top_down"):
+        raise ValueError("Unsupported R3 projection mode")
     from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QElapsedTimer
     from drawtemp.assets.character_runtime import CharacterPack
     from drawtemp.assets.characters import ACTIONS
@@ -40,7 +43,9 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             super().__init__()
             self.scene = scene
             self.camera = Camera()
-            self.projection = IsoProjection()
+            self.projection = (TopDownProjection() if projection_mode == "top_down"
+                               else IsoProjection())
+            self.projection_mode = projection_mode
             self.selection = None
             self._building_level = 0
             self._building_cutaway = False
@@ -194,7 +199,10 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             provider = make_image_provider(self._batch)
             engine.addImageProvider("drawtemp-tiles", provider)
             self._image_provider = provider  # Qt owns it while engine is live.
-            self._batch_enabled = True
+            # R3 raster batch atlas geometry is isometric; never paint diamond
+            # tile textures into top-down scenes. Both projections still use
+            # the same renderer controller/culling/scene records.
+            self._batch_enabled = self.projection_mode == "isometric"
             self.refresh()
 
         @Property(bool, notify=sceneChanged)
@@ -307,6 +315,10 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self._event_markers = staged
             self._event_selected = selected_id
             self.sceneChanged.emit()
+
+        @Property(str, constant=True)
+        def projectionMode(self):
+            return self.projection_mode
 
         @Property("QVariantMap", notify=cameraChanged)
         def cameraState(self):
@@ -512,8 +524,12 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                 0 <= y < self.scene["height"]) else None
             self.refresh()
 
-        def replace_scene(self, new_scene):
-            """Keep zoom/pan through edits and turns, recenter for a new map."""
+        def replace_scene(self, new_scene, *, follow_world=None):
+            """Replace detached R3 rows and optionally track a fractional actor.
+
+            Follow and scene updates share one refresh, preventing a redundant
+            full terrain pass on each action tick.
+            """
             changed = (self.scene["mission"] != new_scene["mission"] or
                        self.scene["width"] != new_scene["width"] or
                        self.scene["height"] != new_scene["height"])
@@ -526,14 +542,22 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self.overlays = {}  # Never carry stale tactical previews across turns.
             if changed:
                 self.active_level = 0
-            if changed:
                 self._index = TileChunkIndex(new_scene)
                 self._batch.reset(self._index)
-                self.center_scene()
             else:
                 dirty = self._index.update(new_scene)
                 self._batch.invalidate(dirty)
-                self.refresh()
+            if follow_world is not None:
+                if (not isinstance(follow_world, (tuple, list))
+                        or len(follow_world) != 2):
+                    raise ValueError("Expected [x,y] camera target")
+                sx, sy = self.projection.project(*follow_world)
+                self.camera.center(sx, sy)
+            elif changed:
+                sx, sy = self.projection.project((self.scene["width"] - 1) / 2,
+                                                 (self.scene["height"] - 1) / 2)
+                self.camera.center(sx, sy)
+            self.refresh()
 
     return RendererController()
 
