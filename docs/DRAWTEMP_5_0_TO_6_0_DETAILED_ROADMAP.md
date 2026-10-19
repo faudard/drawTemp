@@ -167,6 +167,8 @@
 
 **Références de production :** [R20.A — contrat narratif canonique](jeanne/R20_ACT_I_PRODUCTION_CONTRACT.md), [R20.B — exploration Acte I](jeanne/R20_B_PLAYABLE_VILLAGE_FOREST_REFUGE.md) et [R20.C — cinématiques et embranchements sauvegardés](jeanne/R20_C_CINEMATICS_AND_PERSISTENCE.md). R20.B et R20.C restent deux **GameProject distincts** afin de préserver les sauvegardes antérieures ; leur UX Player, tests GPU et certification restent ouverts.
 
+**R20.D — parcours E2E et gate de distribution :** quatre parcours prologue→fin, vrais combats/sauvegardes et smoke Qt offscreen. Le package de démo R15 reste conditionnel : licences, tests machine propre, retours externes et certification demeurent à prouver.
+
 **Gate R20 :** trois missions narratives liées au minimum, une bifurcation réellement persistante, une fin d'acte identifiable, et un joueur externe peut tout terminer sans Studio ni compréhension des formats. La qualité narrative est revue humainement, pas « prouvée » par des tests de graphe seuls.
 
 ## 7. R21 — Tactical RPG & Castle Siege 2.0 (5.4)
