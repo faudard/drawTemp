@@ -103,6 +103,29 @@ class R37PerceptionTests(unittest.TestCase):
         self.assertFalse(blocked["reachable"])
         self.assertIsNone(blocked["next_step"])
 
+    def test_reject_duplicate_obstacle_and_tampered_sensor_memory_atomically(self):
+        stage = {"width": 3, "height": 3,
+                 "blocked": [[1, 1], [1, 1]]}
+        with self.assertRaises(RuleError):
+            perceive_grid(stage, [0, 0], [2, 2], sensor())
+        stage["blocked"] = [[99, 99]]
+        with self.assertRaises(RuleError):
+            perceive_grid(stage, [0, 0], [2, 2], sensor())
+        content, project = fixture()
+        game = GameSession.new(content, project, "main")
+        initial = game.recording()
+        for changes in (
+            {"suspicion": True},
+            {"suspicion": "high"},
+            {"suspicion": 9},
+            {"last_known_x": -1},
+            {"alert": 1},
+            {"observation_kind": "python"},
+        ):
+            with self.subTest(changes=changes), self.assertRaises(RuleError):
+                game.ai_remember("traveler", changes)
+            self.assertEqual(game.recording(), initial)
+
     def test_strict_sensor_and_project_authoring(self):
         valid = sensor()
         for transform in (
