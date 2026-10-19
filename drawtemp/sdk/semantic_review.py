@@ -47,6 +47,7 @@ class MergePreview:
     content: dict | None
     project: dict | None
     local_fingerprint: str
+    candidate_fingerprint: str | None
 
     @property
     def can_apply(self) -> bool:
@@ -174,6 +175,7 @@ def preview_merge(base_content, base_project,
         deepcopy(content) if not conflicts else None,
         deepcopy(project) if not conflicts else None,
         fingerprint_pair(l_content, l_project),
+        fingerprint_pair(content, project) if not conflicts else None,
     )
 
 
@@ -185,6 +187,8 @@ def stage_merge(session, preview: MergePreview, *, expected_revision: int):
     """
     if not isinstance(preview, MergePreview) or not preview.can_apply:
         raise ValueError("Unresolved or invalid merge preview")
+    if fingerprint_pair(preview.content, preview.project) != preview.candidate_fingerprint:
+        raise ValueError("Merge candidate changed after review")
     snapshot = session.snapshot()
     if (snapshot.revision != expected_revision or
             fingerprint_pair(snapshot.to_dict()["content"],
