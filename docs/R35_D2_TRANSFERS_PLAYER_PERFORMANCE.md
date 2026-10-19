@@ -39,6 +39,7 @@ L'extension `GameProject.extensions["org.drawtemp.livingworld"]["data"]` peut d�
 - `sporebound.living_world_transfers.compile_legs` compile les trajectoires à partir des scènes canoniques et conserve un cache de géométrie par trajet partagé. Les requêtes `LivingWorld.view` et `npc_pose` ne relancent plus de BFS, même hors focus.
 - L'index interne `_npc_by_id` accélère la recherche d'un PNJ : lecture du monde bornée par le nombre de PNJ et d'arrêts, sans scan de toute la population pour chaque PNJ.
 - Limites : 256 PNJ, 32 arrêts/PNJ, 64 portails, scènes 32 × 32, au plus 2048 entrées sur les historiques de commerce existants. Une compilation de grandes routes peut être coûteuse **au chargement**, mais pas dans la boucle de rendu.
+- Le banc `python -m tools.bench_r35_living_world` construit 256 PNJ et relève le temps d'initialisation, les latences p50/p95/p99 de `view` sur 200 échantillons, et les pics `tracemalloc`. Il imprime du JSON reproductible, sans inventer de budget ni de mesure effectuée. Comparer les sorties uniquement après avoir indiqué le commit, la version Python, le matériel et la charge de la machine. Ce banc est headless : il ne mesure ni FPS ni coût GPU.
 - Aucun chiffre p95/p99 CPU, consommation mémoire ou FPS n'est revendiqué en l'absence de banc exécuté et d'un matériel de référence ; le gate R35.10 requiert encore ces mesures.
 
 ## Intégration dans le Player Qt
