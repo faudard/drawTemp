@@ -175,6 +175,17 @@ class PlayerController:
         self.session.explore_move(dx, dy, expected_revision=state.revision)
         return self._changed()
 
+    def world_wait(self, ticks=1):
+        """R35 player clock action, never an implicit renderer tick."""
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("World clock can advance only during exploration")
+        if self.session.living_world_state() is None:
+            raise ValueError("Living world is not configured")
+        self.session.living_world_advance(ticks,
+                                          expected_revision=state.revision)
+        return self._changed()
+
     def explore_interact(self, point_id):
         state = self._current()
         if not state.exploration or state.exploration["completed"]:
@@ -486,7 +497,7 @@ class PlayerController:
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
-                "battle": {}, "tactical": {}, "revision": 0,
+                "battle": {}, "tactical": {}, "living_world": None, "revision": 0,
                 "pending_target": {},
                 "gear": {"equipped": {}, "inventory": []}}
         if self.session is None or self.show_title:
@@ -508,6 +519,11 @@ class PlayerController:
         }
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
+        if self.session.living_world_state() is not None:
+            current = base["exploration"].get("scene_id")
+            base["living_world"] = thaw(self.session.living_world_state(
+                scene=current)) if current is not None else thaw(
+                    self.session.living_world_state())
         if snapshot.battle:
             # Selection is a UI concern and can outlive a previous mission.
             width, height = snapshot.battle["width"], snapshot.battle["height"]
