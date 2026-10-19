@@ -56,6 +56,36 @@ class R27DungeonDockQtTests(unittest.TestCase):
         finally:
             window.close()
 
+    def test_puzzle_graph_key_authoring_and_visual_selection(self):
+        from drawtemp.studio.map_editor import MapWindow
+        window = MapWindow(MapStudio.reference())
+        try:
+            window.studio.create("r27_key_gui", "Salle des clés", 16, 16)
+            window.refresh_maps()
+            window.mode.setCurrentIndex(2)
+            dock = window.dungeon
+            dock.build_room()
+            dock.kind.setCurrentIndex(dock.kind.findData("key"))
+            dock.link.setCurrentIndex(dock.link.findData("room_door"))
+            dock.identifier.setText("key_ui")
+            dock.object_x.setValue(7)
+            dock.object_y.setValue(2)
+            dock.place_object()
+            mission = window.studio.mission()
+            key = next(o for o in mission["objects"] if o["id"] == "key_ui")
+            self.assertEqual(key["link"], "room_door")
+            row = next(dock.graph.topLevelItem(index)
+                       for index in range(dock.graph.topLevelItemCount())
+                       if dock.graph.topLevelItem(index).text(0) == "key_ui")
+            self.assertIn("room_door", row.text(2))
+            dock.select_graph_node(row, 0)
+            self.assertEqual((dock.object_x.value(), dock.object_y.value()),
+                             (7, 2))
+            dock.show_report()
+            self.assertIn("Trajet témoin", dock.report.toPlainText())
+        finally:
+            window.close()
+
 
 if __name__ == "__main__":
     unittest.main()
