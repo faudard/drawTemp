@@ -25,6 +25,15 @@ def validate_gate_params(kind, params):
         _exact(params, {"kind", "ticks"}, "wait params")
         if params["kind"] != "ticks" or type(params["ticks"]) is not int or not 1 <= params["ticks"] <= 10000:
             _fail("invalid_wait", "Wait requires an integer of 1..10000 logical ticks")
+    elif kind == "check":
+        _exact(params, {"kind", "name", "operator", "value"}, "variable check")
+        if params["kind"] != "logic_compare":
+            _fail("invalid_compare", "Unexpected variable comparison kind")
+        from sporebound.logic_variables import validate_compare
+        validate_compare(None, {"condition": "logic_compare",
+                                "name": params["name"],
+                                "operator": params["operator"],
+                                "value": params["value"]})
     elif kind == "flag":
         _exact(params, {"kind", "event_id"}, "journal flag params")
         ref = params["event_id"]
@@ -47,13 +56,18 @@ def ordered_sequence(graph):
         _id(node["id"], "node id")
         if node["id"] in nodes:
             _fail("duplicate_node", "Duplicate node ID")
-        if node["kind"] in ("wait", "flag"):
+        if node["kind"] in ("wait", "flag", "check"):
+            if node["kind"] == "check" and graph["schema_version"] != 4:
+                _fail("unsupported_schema", "Mutable comparisons require schema v4")
             validate_gate_params(node["kind"], node["params"])
         else:
             _validate_params(node["kind"], node["params"])
+            if (graph["schema_version"] == 3 and node["kind"] == "action"
+                    and node["params"].get("kind") in ("logic_set", "logic_add")):
+                _fail("unsupported_schema", "Mutable variables require schema v4")
         nodes[node["id"]] = node
-    if not 4 <= len(nodes) <= MAX_NODES:
-        _fail("node_budget", "R31.E sequence requires 4..64 nodes")
+    if not 2 <= len(nodes) <= MAX_NODES:
+        _fail("node_budget", "R31.E/F sequence requires 2..64 nodes")
     entry = graph["entry"]
     if entry not in nodes or nodes[entry]["kind"] != "event":
         _fail("invalid_entry", "Sequence requires a canonical event entry")
@@ -92,9 +106,9 @@ def ordered_sequence(graph):
     prior = "event"
     for node in ordered[1:]:
         kind = node["kind"]
-        if kind in ("wait", "flag"):
+        if kind in ("wait", "flag", "check"):
             if prior != "action":
-                _fail("empty_stage", "Wait/flag must follow an action stage")
+                _fail("empty_stage", "Wait/flag/check must follow an action stage")
             stages += 1
         elif kind == "action":
             pass
@@ -103,8 +117,8 @@ def ordered_sequence(graph):
         prior = kind
     if prior != "action":
         _fail("empty_stage", "A wait or flag needs at least one subsequent action")
-    if stages <= 1:
-        _fail("invalid_sequence", "Sequence must contain a wait or journal flag")
+    if stages <= 1 and graph["schema_version"] == 3:
+        _fail("invalid_sequence", "Schema v3 needs a wait or journal flag")
     if stages > MAX_STAGES:
         _fail("stage_budget", "A graph compiles to at most 16 native R9 stages")
     return ordered
@@ -115,7 +129,7 @@ def sequence_stages(graph):
     ordered = ordered_sequence(graph)
     stages = []
     segment = {"action_nodes": [], "gating_node": None,
-               "wait_ticks": None, "flag_id": None}
+               "wait_ticks": None, "flag_id": None, "comparison": None}
     for node in ordered[1:]:
         if node["kind"] == "action":
             segment["action_nodes"].append(node["id"])
@@ -123,7 +137,10 @@ def sequence_stages(graph):
             stages.append(segment)
             segment = {"action_nodes": [], "gating_node": node["id"],
                        "wait_ticks": node["params"]["ticks"] if node["kind"] == "wait" else None,
-                       "flag_id": node["params"]["event_id"] if node["kind"] == "flag" else None}
+                       "flag_id": node["params"]["event_id"] if node["kind"] == "flag" else None,
+                       "comparison": {key: deepcopy(value) for key, value in
+                                      node["params"].items() if key != "kind"}
+                                     if node["kind"] == "check" else None}
     stages.append(segment)
     return stages
 
@@ -163,11 +180,17 @@ def compile_sequence_triggers(graph):
             cond["after"] = after
             if segment["wait_ticks"] is not None:
                 cond["delay_ticks"] = segment["wait_ticks"]
+            if segment["comparison"] is not None:
+                cond["when"] = {"condition": "logic_compare",
+                                **deepcopy(segment["comparison"])}
         actions = []
         for node_id in segment["action_nodes"]:
             payload = by_node[node_id]["params"]
-            actions.append(event_composer.action(
-                payload["kind"], **{key: deepcopy(value) for key, value in payload.items()
-                                    if key != "kind"}))
+            if payload["kind"] in ("logic_set", "logic_add"):
+                actions.append(deepcopy(payload))
+            else:
+                actions.append(event_composer.action(
+                    payload["kind"], **{key: deepcopy(value) for key, value in payload.items()
+                                        if key != "kind"}))
         native.append({"id": ids[index], **cond, "actions": actions})
     return native
