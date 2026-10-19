@@ -23,7 +23,7 @@ ROLE_ACTIONS = {
     "archer": ("idle", "walk", "attack", "hit", "death"),
     "spearman": ("idle", "walk", "attack", "block", "hit", "death"),
     "knight": ("idle", "walk", "attack", "block", "hit", "death"),
-    "healer": ("idle", "walk", "magic", "hit", "death"),
+    "healer": ("idle", "walk", "attack", "magic", "hit", "death"),
     "officer": ("idle", "walk", "attack", "magic", "hit", "death"),
     "boss": ("idle", "walk", "attack", "magic", "block", "hit", "death"),
 }
