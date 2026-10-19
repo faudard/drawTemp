@@ -328,6 +328,21 @@ class MapStudio:
                                       include_entities=include_entities)
         return self.commit_region(preview)
 
+    def preview_generation(self, *, seed, biome, coverage=75, cells=None):
+        """Prepare a seed-stable biome preview on the current map/selection."""
+        from .map_generation import prepare_generation
+        return prepare_generation(self, seed=seed, biome=biome,
+                                  coverage=coverage, cells=cells)
+
+    def commit_generation(self, preview):
+        """Commit the exact preview as one R1 transaction and one Undo step."""
+        from .map_generation import commit_generation
+        return commit_generation(self, preview)
+
+    def generate(self, *, seed, biome, coverage=75, cells=None):
+        return self.commit_generation(self.preview_generation(
+            seed=seed, biome=biome, coverage=coverage, cells=cells))
+
     def structure(self, name, anchor):
         if name not in ("Maison", "Pont", "Tour", "Ruines", "Escalier", "Rempart"):
             raise RuleError("Unknown structure")
