@@ -193,7 +193,8 @@ def catalog_from_project(project):
     entry = extensions.get(NAMESPACE)
     if entry is None:
         return {"version": VERSION, "abilities": []}
-    if (type(entry) is not dict or entry.get("schema_version") != 1 or
+    if (type(entry) is not dict or type(entry.get("schema_version")) is not int or
+            entry["schema_version"] != VERSION or
             set(entry) - {"schema_version", "data", "references"} or
             "data" not in entry or
             ("references" in entry and entry["references"] != [])):
