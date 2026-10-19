@@ -25,7 +25,7 @@ def _identifier(value):
                     for c in value))
 
 
-def validate_living_world(spec, scene_ids):
+def validate_living_world(spec, scene_ids, *, exploration=None):
     """Validate optional R35 authoring data against canonical scene identities."""
     required = {"version", "start_minute", "ticks_per_minute",
                 "clock_policy", "npcs"}
@@ -58,7 +58,7 @@ def validate_living_world(spec, scene_ids):
         for stop in schedule:
             require(type(stop) is dict
                     and {"minute", "scene", "activity"} <= set(stop)
-                    <= {"minute", "scene", "activity", "when"},
+                    <= {"minute", "scene", "activity", "when", "pos"},
                     "Malformed NPC schedule stop")
             minute = stop["minute"]
             require(type(minute) is int and previous < minute < 1440,
@@ -117,15 +117,18 @@ def validate_living_world(spec, scene_ids):
                 "Daily quest has invalid hours or rewards")
     from .living_world_commerce import validate_shops
     validate_shops(spec, scene_ids)
+    from .living_world_navigation import validate_npc_navigation
+    validate_npc_navigation(spec, exploration if exploration is not None else {})
 
 
 class LivingWorld:
     """Integer-time projection for all scenes, including scenes outside focus."""
 
-    def __init__(self, spec, scene_ids):
-        validate_living_world(spec, scene_ids)
+    def __init__(self, spec, scene_ids, *, exploration=None):
+        validate_living_world(spec, scene_ids, exploration=exploration)
         self.spec = deepcopy(spec)
         self.scene_ids = frozenset(scene_ids)
+        self.exploration = deepcopy(exploration or {})
         self.ticks = 0
         self.reputation = {f["id"]: f["initial"]
                            for f in self.spec.get("factions", [])}
@@ -278,19 +281,17 @@ class LivingWorld:
         self.claimed[quest_id] = self.day
         return True
 
-    def npc_status(self, npc_id, story_flags):
+    def npc_pose(self, npc_id, story_flags):
+        """Collision-aware projection; no mutation or frame-clock dependence."""
         require(type(story_flags) is dict, "Story flags must be a mapping")
         npc = next((n for n in self.spec["npcs"] if n["id"] == npc_id), None)
         require(npc is not None, "Unknown NPC")
-        eligible = [stop for stop in npc["schedule"]
-                    if "when" not in stop
-                    or story_flags.get(stop["when"]["flag"], False)
-                    is stop["when"]["eq"]]
-        if not eligible:
-            return None, "unavailable"
-        stop = next((row for row in reversed(eligible)
-                     if row["minute"] <= self.minute), eligible[-1])
-        return stop["scene"], stop["activity"]
+        from .living_world_navigation import resolve_npc
+        return resolve_npc(npc, story_flags, self.minute, self.exploration)
+
+    def npc_status(self, npc_id, story_flags):
+        pose = self.npc_pose(npc_id, story_flags)
+        return pose["scene"], pose["activity"]
 
     def view(self, story_flags, *, scene=None):
         """Detached world projection, including remote scenes."""
@@ -300,10 +301,9 @@ class LivingWorld:
         rows = []
         current = self.minute
         for npc in self.spec["npcs"]:
-            location, activity = self.npc_status(npc["id"], story_flags)
-            if scene is None or location == scene:
-                rows.append({"id": npc["id"], "scene": location,
-                             "activity": activity})
+            pose = self.npc_pose(npc["id"], story_flags)
+            if scene is None or pose["scene"] == scene:
+                rows.append({"id": npc["id"], **pose})
         data = {"version": VERSION, "day": self.day,
                 "minute": current, "ticks": self.ticks, "npcs": rows}
         if "factions" in self.spec:
